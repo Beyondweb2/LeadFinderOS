@@ -5,12 +5,14 @@ import {
   advanceHookState,
   buildHookReportSummary,
   evaluateHookQuestion,
+  geminiNamedAllThree,
   hookReportCopy,
   initialHookState,
   planHookQuestions,
   type HookState,
 } from '../src/lib/hookAudit.ts';
 import { BASELINE_QUESTIONS, BASELINE_RUNS, OUTREACH_HOOK_QUESTIONS } from '../src/lib/auditQuestionCounts.ts';
+import { autoMarkHookLeadNotInterested } from '../supabase/functions/_shared/hook-not-interested.ts';
 
 let failures = 0;
 function ok(value: unknown, message: string) {
@@ -55,22 +57,23 @@ function drive(results: Array<Record<string, unknown> | null>) {
   return { state, queued, runsCreated };
 }
 
-/* A. Gap on Q1 (ChatGPT misses, Gemini misses too) */
+/* A. Gap on Q1 (Gemini misses — the deciding engine; ChatGPT also misses here) */
 {
   const r = drive([{ chatgpt: cell(false), gemini: cell(false) }]);
   ok(r.queued.length === 1, 'A: only Q1 was queued — Q2/Q3 never reached the provider');
   ok(r.runsCreated === 1, 'A: one audit run');
   ok(r.state.stop_reason === 'visibility_gap_found', 'A: stop reason is visibility_gap_found');
-  ok(r.state.gap?.question === planned[0] && r.state.gap?.engine === 'chatgpt' && r.state.gap?.question_index === 0, 'A: the exact gap question and engine are preserved');
-  ok(JSON.stringify(r.state.gap?.named_instead) === JSON.stringify(['Sparks Ltd', 'Volt Electrical']) && r.state.gap?.citations.length === 1, 'A: businesses named instead and citations are preserved');
+  ok(r.state.gap?.question === planned[0] && r.state.gap?.engine === 'gemini' && r.state.gap?.question_index === 0, 'A: the exact gap question is preserved and the gap is attributed to Gemini, the deciding engine');
+  ok(JSON.stringify(r.state.gap?.named_instead) === JSON.stringify(['Sparks Ltd', 'Volt Electrical']) && r.state.gap?.citations.length === 1, 'A: businesses named instead and citations are preserved, read from Gemini\'s own answer');
   ok(r.state.gap?.target_named === false, 'A: the target is recorded as not named');
 }
 
-/* B. Q1 pass, gap on Q2 */
+/* B. Q1 pass, gap on Q2 — Gemini misses Q2 (ChatGPT named it, which must not save the question) */
 {
-  const r = drive([{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(false), gemini: cell(true) }]);
+  const r = drive([{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(false) }]);
   ok(r.queued.length === 2 && r.queued[1] === planned[1], 'B: Q1 then Q2 executed, Q3 never queued');
-  ok(r.state.gap?.question_index === 1 && r.state.gap?.question === planned[1], 'B: the gap is Q2');
+  ok(r.state.gap?.question_index === 1 && r.state.gap?.question === planned[1] && r.state.gap?.engine === 'gemini', 'B: the gap is Q2, attributed to Gemini even though ChatGPT named them');
+  ok(JSON.stringify(r.state.gap?.named_on_engines) === JSON.stringify(['chatgpt']), 'B: ChatGPT naming them on the gap question is retained as the truthful qualifier, not discarded');
   ok(r.state.named_in.length === 1 && r.state.named_in[0].question === planned[0], 'B: Q1 is recorded as named, for the "found in the first search" line');
   ok(r.state.executed === 2 && r.runsCreated === 1, 'B: two questions, one run');
 }
@@ -100,20 +103,48 @@ function drive(results: Array<Record<string, unknown> | null>) {
   ok(summary!.questionsTested === 3 && summary!.maxQuestions === 3, 'D: 3 of up to 3 tested is exposed as counts, not a score');
 }
 
-/* E. Multi-engine mixed: ChatGPT misses, Gemini names */
+/* E. A ChatGPT-only gap must NOT stop Gemini's progression (Paul, 2026-09-21 — task case 2).
+   Gemini named all three; ChatGPT missed Q1. The hook must still ask Q2 AND Q3 — a "named" verdict
+   from Gemini on Q1 is not something drive() can be told to stop after, since the plan itself has
+   three questions and Gemini keeps naming them; asserting Q2 ran is what matters here. The report
+   must still show the real ChatGPT miss on Q1 — it just never gets to be THE reason anything stopped. */
 {
-  const r = drive([{ chatgpt: cell(false, ['Sparks Ltd']), gemini: cell(true) }]);
-  ok(r.queued.length === 1 && r.state.stop_reason === 'visibility_gap_found', 'E: stops after Q1');
-  ok(r.state.gap?.engine === 'chatgpt', 'E: the gap engine is ChatGPT');
-  ok(JSON.stringify(r.state.gap?.named_on_engines) === JSON.stringify(['gemini']), 'E: Gemini naming them is retained as the qualifier');
+  const r = drive([
+    { chatgpt: cell(false, ['Sparks Ltd']), gemini: cell(true) },
+    { chatgpt: cell(true), gemini: cell(true) },
+    { chatgpt: cell(true), gemini: cell(true) },
+  ]);
+  ok(r.queued.length === 3 && r.queued[1] === planned[1], 'E: a ChatGPT-only miss on Q1 does not stop the hook — Q2 still ran because Gemini named them');
+  ok(r.state.gap === null && r.state.stop_reason === 'max_questions_reached', 'E: no gap is recorded — Gemini itself never missed, so the hook ran to the ceiling');
+  ok(r.state.named_in.length === 3, 'E: all three questions are recorded as named by the deciding engine');
   const summary = buildHookReportSummary({
-    state: r.state, rows: [{ question: planned[0], status: 'done', result: { chatgpt: cell(false, ['Sparks Ltd']), gemini: cell(true) } }],
+    state: r.state,
+    rows: [
+      { question: planned[0], status: 'done', result: { chatgpt: cell(false, ['Sparks Ltd']), gemini: cell(true) } },
+      { question: planned[1], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
+      { question: planned[2], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
+    ],
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+  });
+  ok(summary!.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === false, 'E: the report still shows the real ChatGPT miss on Q1, truthfully — never discarded');
+  ok(summary!.tested[0].perEngine.find((p) => p.engine === 'gemini')?.named === true, "E: and Gemini's real Q1 answer alongside it");
+}
+
+/* E2. A genuine Gemini gap on the SAME shape still stops the hook and is attributed to Gemini,
+   with ChatGPT's naming kept as the truthful "named on" qualifier (the mirror of E). */
+{
+  const r = drive([{ chatgpt: cell(true), gemini: cell(false, ['Sparks Ltd']) }]);
+  ok(r.queued.length === 1 && r.state.stop_reason === 'visibility_gap_found', 'E2: a genuine Gemini miss stops the hook after Q1');
+  ok(r.state.gap?.engine === 'gemini', 'E2: the gap engine is Gemini, the deciding engine');
+  ok(JSON.stringify(r.state.gap?.named_on_engines) === JSON.stringify(['chatgpt']), 'E2: ChatGPT naming them is retained as the truthful qualifier');
+  const summary = buildHookReportSummary({
+    state: r.state, rows: [{ question: planned[0], status: 'done', result: { chatgpt: cell(true), gemini: cell(false, ['Sparks Ltd']) } }],
     engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
   });
   const copy = hookReportCopy(summary!, 'Kirkbride Electrical');
-  ok(copy.lede.startsWith('We asked ChatGPT:') && copy.headline === 'We found a visibility gap.', 'E: the report names ChatGPT, not "AI"');
-  ok(summary!.gap?.namedOnEngineLabels.join() === 'Gemini', 'E: the report can say Gemini did name them — no universal "AI never recommends you" claim');
-  ok(summary!.tested[0].perEngine.find((p) => p.engine === 'gemini')?.named === true, 'E: per-engine result shows Gemini named them');
+  ok(copy.lede.startsWith('We asked Gemini:') && copy.headline === 'We found a visibility gap.', 'E2: the report names Gemini, the engine that actually decided the gap');
+  ok(summary!.gap?.namedOnEngineLabels.join() === 'ChatGPT', 'E2: the report can say ChatGPT did name them — no universal "AI never recommends you" claim');
+  ok(summary!.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === true, 'E2: per-engine result still shows ChatGPT named them');
 }
 
 /* F. Provider failure on Q1 */
@@ -125,10 +156,109 @@ function drive(results: Array<Record<string, unknown> | null>) {
   const step = advanceHookState(initialHookState(planned), 0, evalFailed);
   ok(step.action === 'stop' && step.state.stop_reason === 'provider_failure' && step.state.gap === null, 'F: a terminal provider failure stops truthfully — never a gap, never Q2');
   ok(buildHookReportSummary({ state: step.state, rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) === null, 'F: no hook summary is shown for a provider failure — the ordinary rendering handles the failed run');
-  // Mixed: one engine failed, the other answered and named → named (the failed engine is absent, not a gap)
-  ok(evaluateHookQuestion({ chatgpt: failedCell(), gemini: cell(true) }, ENGINES).outcome === 'named', 'F: an engine with no answer never decides a gap');
-  // A SERP block in the cell map is ignored: only scored engines are judged.
-  ok(evaluateHookQuestion({ google_organic: cell(false), chatgpt: cell(true) }, ENGINES).outcome === 'named', 'only scored engines decide a gap');
+  // ChatGPT failed to answer at all; Gemini (the deciding engine) answered and named → named.
+  ok(evaluateHookQuestion({ chatgpt: failedCell(), gemini: cell(true) }, ENGINES).outcome === 'named', 'F: ChatGPT having no answer never blocks Gemini\'s "named" from deciding');
+  // A SERP block in the cell map is ignored: only scored engines are judged, and Gemini still decides.
+  ok(evaluateHookQuestion({ google_organic: cell(false), chatgpt: cell(true), gemini: cell(true) }, ENGINES).outcome === 'named', 'an unscored engine block is ignored; Gemini still decides');
+  // Gemini itself gave no evaluable answer → provider failure, whatever ChatGPT did.
+  ok(evaluateHookQuestion({ chatgpt: cell(true), gemini: failedCell() }, ENGINES).outcome === 'no_valid_answer', 'F: a failed/empty Gemini answer is a provider failure even when ChatGPT answered and named');
+  ok(evaluateHookQuestion({ chatgpt: cell(true) }, ENGINES).outcome === 'no_valid_answer', 'F: a missing Gemini block entirely is a provider failure, never inferred as "named" from ChatGPT alone');
+}
+
+/* ── N. END-TO-END: THE TEN RECONCILIATION SCENARIOS (Paul, 2026-09-21 revision) ────────────────
+   Progression (drive) and qualification (geminiNamedAllThree) exercised TOGETHER, exactly the
+   scenarios the revision was asked to reconcile. `settled(r)` turns a drive() result's rows back
+   into the {status, result} shape geminiNamedAllThree reads — the same shape the queue processor
+   passes it from real ai_audit_queue rows. */
+function settled(r: ReturnType<typeof drive>, results: Array<Record<string, unknown>>) {
+  return r.queued.map((_q, i) => ({ status: 'done', result: results[i] }));
+}
+
+// 1. Q1 Gemini miss → only 1 question executed, never 3/3, never qualifies.
+{
+  const results = [{ chatgpt: cell(true), gemini: cell(false) }];
+  const r = drive(results);
+  ok(r.queued.length === 1, '1: only Q1 executed');
+  ok(geminiNamedAllThree(settled(r, results)) === false, '1: not 3/3 — no Not Interested update');
+}
+
+// 2. Q1 Gemini hit, ChatGPT miss → Q2 MUST execute. (A third result is supplied so the drive
+//    completes rather than hitting an undefined "Q4" — the plan always has three questions and
+//    Gemini keeps naming them; the assertion only cares that Q2 is among the executed questions.)
+{
+  const r = drive([{ chatgpt: cell(false), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }]);
+  ok(r.queued.length >= 2 && r.queued[1] === planned[1], '2: Q2 executed despite the ChatGPT miss on Q1');
+}
+
+// 3. Q1/Q2 Gemini hit, ChatGPT misses either one → Q3 MUST execute.
+{
+  const r = drive([
+    { chatgpt: cell(false), gemini: cell(true) },
+    { chatgpt: cell(true), gemini: cell(true) },
+    { chatgpt: cell(true), gemini: cell(true) },
+  ]);
+  ok(r.queued.length === 3 && r.state.executed === 3, '3: Q3 executed despite a ChatGPT miss on Q1');
+}
+
+// 4. Gemini hit, hit, miss → 3 questions execute, never 3/3, no update.
+{
+  const results = [{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(false) }];
+  const r = drive(results);
+  ok(r.queued.length === 3 && r.state.executed === 3, '4: three questions executed');
+  ok(geminiNamedAllThree(settled(r, results)) === false, '4: Gemini missed Q3 — not 3/3, no Not Interested update');
+}
+
+// 5. Gemini hit, hit, hit; ChatGPT hit, miss, miss → still mark Not Interested.
+{
+  const results = [{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(false), gemini: cell(true) }, { chatgpt: cell(false), gemini: cell(true) }];
+  const r = drive(results);
+  ok(r.queued.length === 3 && r.state.executed === 3 && r.state.stop_reason === 'max_questions_reached', '5: all three executed to completion despite two ChatGPT misses');
+  ok(geminiNamedAllThree(settled(r, results)) === true, '5: Gemini 3/3 qualifies regardless of ChatGPT');
+}
+
+// 6. Gemini hit, hit, hit; ChatGPT all hit → mark Not Interested.
+{
+  const results = [{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }];
+  const r = drive(results);
+  ok(geminiNamedAllThree(settled(r, results)) === true, '6: Gemini 3/3 with ChatGPT also 3/3 — qualifies');
+}
+
+// 7. A missing/failed Gemini result at any point must not count as 3/3.
+for (const badIndex of [0, 1, 2]) {
+  const results = [{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }];
+  results[badIndex] = { chatgpt: cell(true), gemini: failedCell() };
+  // Drive only as far as the bad Gemini answer allows (a failure at index 0/1 stops the hook there).
+  const r = drive(results);
+  const rows = settled(r, results);
+  ok(geminiNamedAllThree(rows) === false, `7: a failed Gemini answer at question ${badIndex + 1} is never counted as 3/3`);
+}
+
+// 8. Non-hook audits are structurally unchanged — asserted as a source-shape guard below (M),
+//    since geminiNamedAllThree/evaluateHookQuestion are only ever reached via results.hook.
+
+// 9. The report still retains BOTH engines' real answers even when only Gemini decided progression.
+{
+  const r = drive([{ chatgpt: cell(false), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(false), gemini: cell(true) }]);
+  const summary = buildHookReportSummary({
+    state: r.state,
+    rows: [
+      { question: planned[0], status: 'done', result: { chatgpt: cell(false), gemini: cell(true) } },
+      { question: planned[1], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
+      { question: planned[2], status: 'done', result: { chatgpt: cell(false), gemini: cell(true) } },
+    ],
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+  })!;
+  ok(summary.tested.length === 3, '9: all three questions appear in the report');
+  ok(summary.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === false, '9: Q1\'s real ChatGPT miss is shown, truthfully');
+  ok(summary.tested[2].perEngine.find((p) => p.engine === 'chatgpt')?.named === false, '9: Q3\'s real ChatGPT miss is shown too, truthfully');
+  ok(summary.tested.every((t) => t.perEngine.find((p) => p.engine === 'gemini')?.named === true), '9: Gemini\'s real (all-named) answers are shown throughout');
+}
+
+// 10. No fourth question can ever execute, even when Gemini names the business on Q3.
+{
+  const r = drive([{ chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }, { chatgpt: cell(true), gemini: cell(true) }]);
+  ok(r.queued.length === 3, '10: exactly three questions queued, never a fourth');
+  ok(r.state.stop_reason === 'max_questions_reached', '10: the hook stops at the ceiling instead of asking again');
 }
 
 /* Copy for gap on Q2 / Q3 */
@@ -217,5 +347,130 @@ ok(html.includes('export function renderHookSection(') && html.includes('d.hook 
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
 const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf('export function renderReportHtml('));
 ok(!/\d+%|out of \$\{|showed up in AI search/.test(hookSection), 'the hook section never prints a percentage or an "N out of M answers" score');
+
+/* ── K. GEMINI-ONLY 3/3 AUTO "NOT INTERESTED" (Paul, 2026-09-21) ─────────────────────────────────
+   geminiNamedAllThree is deliberately independent of the hook's own stop/gap logic above — it
+   reads the three settled rows on its own terms, Gemini's cell only. ChatGPT's presence, absence
+   or failure must never move this answer. */
+const done = (result: Record<string, unknown>) => ({ status: 'done', result });
+
+// 1/2/3: fewer than three executed rows (Q1/Q2/Q3 miss stops the hook early) never qualify.
+ok(geminiNamedAllThree([done({ gemini: cell(false), chatgpt: cell(false) })]) === false, '1: Q1 Gemini miss (1 row) — never 3/3');
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: cell(false) })]) === false, '2: Q1 hit + Q2 miss (2 rows) — never 3/3');
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: cell(true) }), done({ gemini: cell(false) })]) === false, '3: Q1+Q2 hit, Q3 miss — not 3/3');
+
+// 4: all three genuinely named on Gemini.
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: cell(true) }), done({ gemini: cell(true) })]) === true, '4: Gemini named on all three — qualifies');
+
+// 5: a Gemini error/timeout/unavailable answer on any of the three is never counted as a hit.
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: failedCell() }), done({ gemini: cell(true) })]) === false, '5a: an empty/failed Gemini cell on Q2 blocks qualification');
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: cell(true) }), { status: 'failed', result: null }]) === false, '5b: a failed queue row on Q3 blocks qualification');
+ok(geminiNamedAllThree([done({ gemini: cell(true) }), done({ gemini: cell(true) }), done({ chatgpt: cell(true) })]) === false, '5c: a missing Gemini block entirely (no engine cell) blocks qualification');
+
+// 6: ChatGPT 3/3 but Gemini not 3/3 — ChatGPT never decides this.
+ok(geminiNamedAllThree([
+  done({ chatgpt: cell(true), gemini: cell(true) }),
+  done({ chatgpt: cell(true), gemini: cell(true) }),
+  done({ chatgpt: cell(true), gemini: cell(false) }),
+]) === false, '6: ChatGPT 3/3 does not compensate for a Gemini miss on Q3');
+ok(geminiNamedAllThree([
+  done({ chatgpt: cell(false), gemini: cell(true) }),
+  done({ chatgpt: cell(false), gemini: cell(true) }),
+  done({ chatgpt: cell(false), gemini: cell(true) }),
+]) === true, '6b: ChatGPT missing/failing on all three still qualifies on Gemini alone — ChatGPT cannot veto it either');
+
+// 7: a non-hook audit never reaches geminiNamedAllThree in production — the queue only calls it
+// inside `if (isHookState(results.hook) ...)`, asserted below as a source-shape guard.
+
+/* ── L. THE LEAD WRITE ITSELF: resolution, the exact status, and the terminal-state guard ──────
+   A tiny fake Supabase client that behaves like Postgres would under the code's own `.not(...)`
+   predicate, so the test tracks PROTECTED_LEAD_STATUSES from the source rather than duplicating
+   the list. */
+type FakeLead = { id: string; status: string; is_potential_work: boolean | null };
+function fakeService(opts: { auditLeadId?: string | null; auditError?: string; lead?: FakeLead | null }) {
+  function chain(table: string) {
+    const calls: Array<[string, unknown[]]> = [];
+    const resolve = () => {
+      if (table === 'ai_audits') {
+        if (opts.auditError) return { data: null, error: { message: opts.auditError } };
+        return { data: opts.auditLeadId === undefined ? null : { lead_id: opts.auditLeadId }, error: null };
+      }
+      // outreach_leads: simulate the conditional UPDATE ... WHERE id = ? AND status NOT IN (...) AND (is_potential_work IS NULL OR = false)
+      const lead = opts.lead;
+      if (!lead) return { data: [], error: null };
+      const eqId = calls.find((c) => c[0] === 'eq' && c[1][0] === 'id')?.[1][1];
+      if (eqId !== lead.id) return { data: [], error: null };
+      const notIn = calls.find((c) => c[0] === 'not');
+      const protectedList = notIn ? String(notIn[1][2]).replace(/^\(|\)$/g, '').split(',') : [];
+      if (protectedList.includes(lead.status)) return { data: [], error: null };
+      if (lead.is_potential_work === true) return { data: [], error: null };
+      return { data: [{ id: lead.id }], error: null };
+    };
+    const api: Record<string, unknown> = {
+      select: (...a: unknown[]) => { calls.push(['select', a]); return api; },
+      update: (...a: unknown[]) => { calls.push(['update', a]); return api; },
+      eq: (...a: unknown[]) => { calls.push(['eq', a]); return api; },
+      not: (...a: unknown[]) => { calls.push(['not', a]); return api; },
+      or: (...a: unknown[]) => { calls.push(['or', a]); return api; },
+      maybeSingle: async () => resolve(),
+      then: (onFulfilled: (v: unknown) => unknown) => Promise.resolve(resolve()).then(onFulfilled),
+    };
+    return api;
+  }
+  return { from: chain };
+}
+
+const threeGeminiHits = [done({ gemini: cell(true) }), done({ gemini: cell(true) }), done({ gemini: cell(true) })];
+
+// Top-level await: this file is an ES module (package.json "type": "module"), and these checks
+// exercise real async IO through the fake client, so they must resolve before the failure count
+// below is read — a fire-and-forget async block here would let the final throw run first.
+await (async () => {
+  // 4 (write side): a genuinely qualifying lead, still active, gets moved.
+  {
+    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
+    ok(outcome.applied === true && outcome.leadId === 'lead-1', '4 (write): a 3/3 Gemini hook on an active lead is applied');
+  }
+  // Not 3/3 → never calls through to a lead write, never guesses.
+  {
+    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', [done({ gemini: cell(true) }), done({ gemini: cell(false) })]);
+    ok(outcome.applied === false && outcome.reason === 'gemini_not_3_of_3', 'not 3/3 → never applied');
+  }
+  // 8: missing/ambiguous lead association — never update another lead, never guess.
+  {
+    const svc = fakeService({ auditLeadId: null, lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
+    ok(outcome.applied === false && outcome.reason === 'audit_has_no_lead', '8a: an audit with no lead_id is left alone');
+  }
+  {
+    const svc = fakeService({});
+    const outcome = await autoMarkHookLeadNotInterested(svc, null, threeGeminiHits);
+    ok(outcome.applied === false && outcome.reason === 'no_audit_id', '8b: no audit id at all — never looked up, never guessed');
+  }
+  {
+    const svc = fakeService({ auditError: 'timeout' });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
+    ok(outcome.applied === false && outcome.reason.startsWith('audit_lookup_failed'), '8c: an unreadable audit->lead lookup is reported, not guessed past');
+  }
+  // 9: a lead already in a manual/paid/terminal state, or starred Interested, is left untouched.
+  for (const status of ['payment_received', 'in_delivery', 'completed', 'refunded', 'closed', 'opted_out', 'price_given', 'already_visible', 'not_interested']) {
+    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status, is_potential_work: null } });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
+    ok(outcome.applied === false, `9: a lead already "${status}" is never overwritten by the auto-classification`);
+  }
+  {
+    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: true } });
+    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
+    ok(outcome.applied === false, '9b: a lead starred Interested (is_potential_work) is never auto-marked not interested');
+  }
+})();
+
+/* ── M. Source-shape guards for the write path and the isolation from every other audit type ──── */
+const notInterested = readFileSync(resolve(root, 'supabase/functions/_shared/hook-not-interested.ts'), 'utf8');
+ok(/status: "not_interested", is_potential_work: false/.test(notInterested), 'M: the write is the EXACT statusUpdatePatch(\'not_interested\') shape — no parallel status invented');
+ok(queue.includes('isHookState((results as Row).hook) && (results as Row).hook.executed === 3 && rows.length === 3'), 'M: the queue only ever calls the auto-classifier for a genuine hook run with all three questions settled — every other audit type (Quick Check, Full Measurement, paid baseline, remeasure, manual/bulk) never populates results.hook and is structurally excluded');
+ok(queue.includes('autoMarkHookLeadNotInterested(service, runRow?.audit_id, rows)'), 'M: the write happens after the SAME atomic finalise claim as the crawl side-effect — fires once per run, not once per tick');
 
 if (failures) throw new Error(`${failures} adaptive hook checks failed`);

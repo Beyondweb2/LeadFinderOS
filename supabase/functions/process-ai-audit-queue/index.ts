@@ -14,11 +14,12 @@ import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
+import { autoMarkHookLeadNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
-import { advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
+import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -993,6 +994,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       const evaluation = evaluateHookQuestion(
         lastRow.status === "done" && lastRow.result && typeof lastRow.result === "object" ? lastRow.result as Record<string, unknown> : null,
         engineOrder.filter((e) => DEFAULT_ENGINES.includes(e)),
+        HOOK_DECIDING_ENGINE, // explicit: Gemini alone decides continue/stop — ChatGPT is stored and reported, never consulted here (Paul, 2026-09-21)
       );
       const step = advanceHookState(hookPrev, lastIdx, evaluation);
       if (step.action === "next" && step.nextQuestion) {
@@ -1111,6 +1113,20 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (!Array.isArray(flipped) || flipped.length === 0) continue; // another poller already claimed this run
     finalised++;
     processingRuns.push({ runId, auditId: runRow?.audit_id as string, finalStatus: runStatus, allFailed });
+
+    /* ── AUTO "NOT INTERESTED" ON A 3/3 GEMINI HOOK (2026-09-21, _shared/hook-not-interested.ts) ──
+       Fires ONCE per run's completion (same atomic transition winner as the crawl below), only for
+       a hook run whose three questions all settled with Gemini genuinely naming the business — see
+       geminiNamedAllThree (src/lib/hookAudit.ts) for the exact, ChatGPT-independent rule. Every
+       other audit type never reaches here with a `results.hook`, so this is inert for them. */
+    if (isHookState((results as Row).hook) && (results as Row).hook.executed === 3 && rows.length === 3) {
+      const outcome = await autoMarkHookLeadNotInterested(service, runRow?.audit_id, rows);
+      if (outcome.applied) {
+        console.log(`[process-ai-audit-queue] hook run ${runId}: Gemini named the business in all 3 questions — lead ${outcome.leadId} auto-marked not interested`);
+      } else if (outcome.reason !== "gemini_not_3_of_3") {
+        console.log(`[process-ai-audit-queue] hook run ${runId}: not auto-marking not interested — ${outcome.reason}`);
+      }
+    }
 
     /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
        Every audit that finalises crawls its lead's site — complete, capped OR failed, because the

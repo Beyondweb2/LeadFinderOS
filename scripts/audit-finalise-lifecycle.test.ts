@@ -192,12 +192,16 @@ const ENGINES = ['chatgpt', 'gemini'] as const;
 const cell = (named: boolean) => ({ named, answer_text: 'Here are some options.', competitors: ['A Ltd', 'B Ltd', 'C Ltd'], citations: [] });
 const planned = ['recommend a good electrician in Doncaster', 'best electricians in Doncaster', 'emergency electrician Doncaster'];
 {
+  /* ⛔ GEMINI DECIDES (2026-09-21): a ChatGPT-only gap (Gemini named it) must NOT stop the hook —
+     see src/lib/hookAudit.ts's evaluateHookQuestion and hook-audit-adaptive.test.ts for the full
+     progression matrix. This fixture is the other way round: Gemini itself misses (ChatGPT named
+     them), which IS a genuine stopping gap, attributed to Gemini. */
   let state: HookState = initialHookState(planned);
-  const step = advanceHookState(state, 0, evaluateHookQuestion({ chatgpt: cell(false), gemini: cell(true) }, ENGINES));
+  const step = advanceHookState(state, 0, evaluateHookQuestion({ chatgpt: cell(true), gemini: cell(false) }, ENGINES));
   state = step.state;
-  ok(step.action === 'stop' && state.stop_reason === 'visibility_gap_found' && state.gap?.engine === 'chatgpt', '8: ChatGPT misses, Gemini names → stop after Q1 with a ChatGPT-specific gap');
-  ok(JSON.stringify(state.gap?.named_on_engines) === JSON.stringify(['gemini']), '8: the Gemini naming is preserved as the qualifier');
-  ok(hookForbidsAbsenceCopy(state) === false, '8: a real gap does NOT forbid absence copy — the message may say ChatGPT did not name them');
+  ok(step.action === 'stop' && state.stop_reason === 'visibility_gap_found' && state.gap?.engine === 'gemini', '8: Gemini misses (ChatGPT named them) → stop after Q1 with a Gemini-specific gap — Gemini decides, never ChatGPT');
+  ok(JSON.stringify(state.gap?.named_on_engines) === JSON.stringify(['chatgpt']), '8: the ChatGPT naming is preserved as the qualifier');
+  ok(hookForbidsAbsenceCopy(state) === false, '8: a real gap does NOT forbid absence copy — the message may say Gemini did not name them');
 }
 {
   let state: HookState = initialHookState(planned);
