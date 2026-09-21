@@ -36,6 +36,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../src/lib/auditPlan.ts";
 import { reconcileSelection, selectAll, selectedQuestions } from "../src/lib/questionSelection.ts";
+import { buildAuditRunRequest } from "../src/lib/auditQuestionContext.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -145,6 +146,24 @@ ok(/const totalResponses = expectedResponses\(runQuestions\.length, runCount, en
 ok(/questions selected/.test(ui), "the live selected count is rendered");
 ok(/Expected AI responses/.test(ui), "…beside the expected-response total");
 ok(/questionCount: clean\.length,/.test(ui), "the count POSTED is the count being posted, never the wizard's target");
+
+/* ⛔ A STATED RUN COUNT MUST TRAVEL, AND 1 IS A STATED RUN COUNT. buildAuditRunRequest omitted
+   run_count unless it was > 1, which was correct only while the server's absent-default was a
+   single run. The moment DISCOVERY_DEFAULT_RUNS became 3, "1" travelling as an absence came back
+   as three runs and three times the Apify bill — the absent-value-as-a-real-one fault, on a
+   spending path. These assert the WIRE, not the screen. */
+const wireCtx = {
+  business_name: "Acme Locks", business_category: "locksmith", website: "https://acme.test",
+  primary_location: "Wisbech", services: [], service_areas: [], specialisms: [], country: "GB",
+};
+const wireQs = ["who fixes locks in Wisbech?"];
+const wireFor = (runCount: number) =>
+  buildAuditRunRequest(wireCtx, { questionCount: 1, purpose: "discovery", questions: wireQs, runCount });
+for (const n of [DISCOVERY_MIN_RUNS, 2, DISCOVERY_MAX_RUNS]) {
+  ok(wireFor(n).run_count === n, `a discovery run count of ${n} is SENT to the server as run_count=${n}`);
+}
+ok(buildAuditRunRequest(wireCtx, { questionCount: 1, questions: wireQs }).run_count === undefined,
+   "…while a caller that never had the dial still sends nothing, and gets the server's default");
 
 console.log("\n── THE SELECTION SURVIVES EDITING, WHICH IS THE PART THAT SILENTLY GOES WRONG ──");
 const qs = ["a", "b", "c", "d"];

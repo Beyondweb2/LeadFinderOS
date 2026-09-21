@@ -199,8 +199,11 @@ for (const n of [1, 2, 3]) {
     questions: nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40),
   });
   ok((r.questions as string[]).length === 40, `${n} run(s): all 40 questions travel`);
-  ok(n === 1 ? r.run_count === undefined : r.run_count === n,
-     n === 1 ? '1 run sends no run_count — the server default IS one' : `${n} runs sends run_count ${n}`);
+  /* ⛔ 1 IS SENT, NOT OMITTED. This asserted the opposite while the server's absent-default was a
+     single run, so "1" and "unstated" were the same request. Discovery's default is now
+     DISCOVERY_DEFAULT_RUNS (3): omitting a stated 1 would come back as three runs and three times
+     the Apify bill. A stated dial travels. */
+  ok(r.run_count === n, `${n} run${n === 1 ? '' : 's'} sends run_count ${n}`);
 }
 const set40 = nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40);
 const shapes = [1, 2, 3].map((n) => (buildAuditRunRequest(FINDABLE, {
