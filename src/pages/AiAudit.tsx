@@ -46,6 +46,7 @@ import {
 import { tradeWord } from '@/lib/trade';
 import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
+import { readFunctionErrorBody, functionErrorSentence, functionErrorWrapper } from '@/lib/functionError';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
 import {
@@ -1443,17 +1444,29 @@ const AiAudit = () => {
           overrideDistance,
         }),
       });
+      /* ⛔ THE REFUSAL IS IN THE BODY, NEVER IN error.message. Every designed refusal here is a
+         non-2xx (409 for the distance block, the town gate, baseline_not_frozen; 400/403 for the
+         rest), and supabase-js answers a non-2xx with data === null and the same wrapper string
+         every time — "Edge Function returned a non-2xx status code". So reading `data` and
+         `error.message` made BOTH of the branches below blind: the distance dialog could never
+         open, and a paying client refused with "This client has no recorded baseline. The full
+         measure runs after the baseline freezes, never before it." showed the operator the wrapper
+         instead. Read ONCE, here — the body is a stream and a second reader gets nothing. */
+      const refusal = error ? await readFunctionErrorBody(error) : null;
+      const refused = (refusal?.error ?? data?.error) as string | undefined;
       /* ⛔ NOT AN ERROR TO THROW. It is a question to put to the operator, so it opens the dialog
          and returns rather than landing in the generic catch as a red toast with a machine string. */
-      if (!error && data?.error === 'business_not_in_town') {
+      if (refused === 'business_not_in_town') {
+        const block = refusal ?? (data as Record<string, unknown>);
         setDistanceBlock({
-          message: String(data.message ?? ''),
-          km: Number(data.distance_km) || 0,
-          town: String(data.town ?? ''),
+          message: String(block?.message ?? ''),
+          km: Number(block?.distance_km) || 0,
+          town: String(block?.town ?? ''),
         });
         return;
       }
-      if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'run failed');
+      if (error) throw new Error(functionErrorSentence(refusal, functionErrorWrapper(error)));
+      if (!data?.ok) throw new Error(functionErrorSentence(data as Record<string, unknown>, 'run failed'));
       // Persist the operator's typed audit inputs BACK to the lead, so the next audit / bulk
       // audit prefills instead of re-asking (~80% of leads have no search_keyword/location).
       // Write-back only when the audit came from a lead and the value differs (or the lead's is

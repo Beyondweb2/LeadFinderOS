@@ -295,3 +295,40 @@ classifies the fault ("You have …" — quota, rate limit or key? — now 400 c
 
 ---
 
+
+## "Edge Function returned a non-2xx status code" hid a designed refusal (2026-09-21)
+
+Paul pressed **Confirm & run** on a Full Measurement for **MCLocksmiths centre** (lead
+`6d0585ac-b4a3-463b-8150-c59c3dd0f0e5`, `amount_paid = 99`). The screen said *"Couldn't start the
+audit — Edge Function returned a non-2xx status code"*.
+
+Nothing was broken. `create-ai-audit` refused exactly as §19 says it must: the lead is PAID and its
+`baseline_audit_id` is NULL, so the order gate fired —
+
+```
+409  { ok:false, error:"baseline_not_frozen",
+       detail:"This client has no recorded baseline. The full measure runs after the
+               baseline freezes, never before it." }
+```
+
+— and recorded itself in `client_error_reports` at **17:00:35Z**. No audit, run or queue row was
+created; the refusal is before every insert. The reason there is no baseline: the client's
+`onboarding_responses` row (`f1406d3d…`, paid, 2026-09-17) has `baseline_status = NULL`, i.e.
+`needs_questions`, so `startPaidBaseline` has been returning `skipped: needs_baseline_questions`
+every 30-second tick. **The paid baseline is drafted and approved on the Baseline screen; the AI
+Audit wizard's Full Measurement is a different, later thing and cannot substitute for it.**
+
+⛔ **THE BUG WAS THE SCREEN, NOT THE GATE — AND IT IS A SHAPE, NOT AN INSTANCE.**
+`supabase.functions.invoke` answers **every** non-2xx with `data === null` and one wrapper string.
+So `if (!error && data?.error === 'business_not_in_town')` in `confirmAndRun` was branching on a
+field that is never populated on a refusal: **the distance-override dialog could never open either**,
+and had not since the day it was written. The refusal's real body — machine token in `error`, human
+sentence in `detail` — is only reachable through `error.context`.
+
+Fixed by reading the body ONCE (`readFunctionErrorBody`) and choosing the sentence with
+`functionErrorSentence` (**`detail` → `message` → `error` → wrapper**; showing the token is the
+catch-all-error fault in a different hat). `scripts/function-error-body.test.ts` drives both rules,
+including that the body is a stream and a second reader must degrade rather than throw.
+
+⚠️ Still unfixed on the same screen: `runPreview` throws `error?.message` the same way. Left alone
+deliberately — the brief was the Confirm & run path.

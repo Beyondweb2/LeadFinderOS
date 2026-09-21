@@ -25,34 +25,64 @@ interface FunctionsError {
 
 const FALLBACK = 'The server rejected that, and did not say why.';
 
-/**
- * Pull the most useful message available out of a functions.invoke() error.
- *
- * Order of preference: the body's `error` field, then its `message`, then the raw body text if it
- * is short enough to be a message rather than a page, then supabase-js's wrapper string.
- */
-export async function readFunctionError(err: unknown): Promise<string> {
+/** The refusal an edge function actually wrote, parsed. `error` is the machine token the caller
+ *  branches on; `detail` / `message` are the sentence a person reads. */
+export type FunctionErrorBody = Record<string, unknown>;
+
+/** supabase-js's own string, or the floor when it has none. */
+export function functionErrorWrapper(err: unknown): string {
   const e = (err ?? {}) as FunctionsError;
-  const wrapper = typeof e.message === 'string' && e.message.trim() ? e.message.trim() : FALLBACK;
+  return typeof e.message === 'string' && e.message.trim() ? e.message.trim() : FALLBACK;
+}
 
+/**
+ * The PARSED body of a functions.invoke() failure, or null when there isn't one.
+ *
+ * ⛔ THE BODY CAN ONLY BE READ ONCE. A caller that needs both the machine token (to branch on) and
+ * the sentence (to show) calls this ONCE and passes the result to functionErrorSentence — calling
+ * both readers on the same error gives the second one an already-consumed stream.
+ */
+export async function readFunctionErrorBody(err: unknown): Promise<FunctionErrorBody | null> {
+  const e = (err ?? {}) as FunctionsError;
   const ctx = e.context as { text?: () => Promise<string> } | undefined;
-  if (!ctx || typeof ctx.text !== 'function') return wrapper;
-
+  if (!ctx || typeof ctx.text !== 'function') return null;
   try {
     const raw = (await ctx.text())?.trim();
-    if (!raw) return wrapper;
+    if (!raw) return null;
     try {
-      const parsed = JSON.parse(raw) as { error?: unknown; message?: unknown };
-      const fromBody = [parsed?.error, parsed?.message]
-        .find((v) => typeof v === 'string' && v.trim()) as string | undefined;
-      if (fromBody) return fromBody.trim();
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as FunctionErrorBody;
     } catch {
       /* Not JSON. A short plain-text body is still a better answer than the wrapper; a long one is
          an HTML error page, which would be worse than saying nothing useful. */
-      if (raw.length <= 300 && !raw.startsWith('<')) return raw;
+      if (raw.length <= 300 && !raw.startsWith('<')) return { message: raw };
     }
   } catch {
-    /* The body can only be read once, and something else may already have consumed it. */
+    /* Something else already consumed the stream. */
   }
-  return wrapper;
+  return null;
+}
+
+/**
+ * The best sentence in a parsed refusal body.
+ *
+ * ⛔ `detail` AND `message` OUTRANK `error`. create-ai-audit's refusals carry a machine token in
+ * `error` ("baseline_not_frozen") and the sentence a person needs in `detail` ("This client has no
+ * recorded baseline…"). Showing the token is the catch-all-error fault in a different hat.
+ */
+export function functionErrorSentence(body: FunctionErrorBody | null, wrapper: string): string {
+  const pick = [body?.detail, body?.message, body?.error]
+    .find((v) => typeof v === 'string' && v.trim()) as string | undefined;
+  return pick ? pick.trim() : wrapper;
+}
+
+/**
+ * Pull the most useful message available out of a functions.invoke() error.
+ *
+ * ⚠️ Reads the body — see readFunctionErrorBody. Use that one instead when you also need to branch
+ * on the token.
+ */
+export async function readFunctionError(err: unknown): Promise<string> {
+  const wrapper = functionErrorWrapper(err);
+  return functionErrorSentence(await readFunctionErrorBody(err), wrapper);
 }
