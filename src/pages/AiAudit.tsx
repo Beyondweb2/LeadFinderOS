@@ -120,7 +120,7 @@ const countForMode = (m: AuditMode, raw: number) =>
 const defaultCountForMode = (m: AuditMode) =>
   m === 'full' ? FULL_MEASURE_COUNT : m === 'discovery' ? DISCOVERY_COUNT : DEFAULT_QUESTION_COUNT;
 
-/** Quick (3-5, x1) · Full measurement (20 x 3) · Discovery (40 x 1-3). */
+/** Quick (3-5, x1) · Full measurement (20 x 3) · Discovery (1-80 x 1-3, default 40 x 3). */
 type AuditMode = 'quick' | 'full' | 'discovery';
 /** The run options a Discovery audit offers, and what each one buys. The server validates against
  *  the same bounds, so the screen cannot offer a number the queue will not run. */
@@ -2745,7 +2745,7 @@ const AiAudit = () => {
 
                 {/* ── MODE: Quick check · Full measurement · Discovery ───────────────────────────
                     Quick is unchanged (3–5 questions, one run). Full is the deliberate before/after
-                    gather, 20 × 3. Discovery (2026-09-20) is 40 × 1 — breadth, not confidence: it
+                    gather, 20 × 3. Discovery is 1–80 × 1–3, default 40 × 3 (Paul, 2026-09-21) — it
                     finds where a business appears and where it is missing, and a gap it turns up is
                     a lead to follow rather than a measurement. Each hint states its own count and
                     runs, because those two numbers ARE the difference between the three. */}

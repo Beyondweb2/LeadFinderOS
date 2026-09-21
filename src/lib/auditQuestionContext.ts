@@ -50,7 +50,8 @@ export function normalizeAuditList(value: unknown): string[] {
 
 type AuditRequestOptions = {
   questionCount: number;
-  /** 'discovery' is the manual 40 x 1 breadth scan; absent = an ordinary wizard audit. */
+  /** 'discovery' is the manual breadth scan, 1-80 questions x 1-3 runs; absent = an ordinary
+   *  wizard audit. */
   purpose?: 'baseline' | 'measurement' | 'discovery';
   /** Explicit override; otherwise the context's own market_model is used. */
   businessScope?: MarketModel;

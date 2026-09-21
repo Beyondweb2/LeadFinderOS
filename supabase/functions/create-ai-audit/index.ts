@@ -412,7 +412,8 @@ Deno.serve(async (req) => {
        It also forces the SEO skip on every run (see skipSeo), so runs 2 and 3 cannot buy the scan
        run 1 deliberately declined. */
     const isFreeCheck: boolean = isInternal && body.purpose === FREE_CHECK_AUDIT_PURPOSE;
-    /* DISCOVERY — operator-callable, like the full measure. 40 questions, ONE run, manual only.
+    /* DISCOVERY — operator-callable, like the full measure. 1..80 questions (default 40) x 1..3
+       runs (default 3), manual only. The dials are validated immediately below.
        ⛔ EXPLICIT, NEVER INFERRED FROM THE COUNT. `question_count === 40` is not the marker and
        must not become one: the generator's absolute ceiling is also 40, so any caller that ever
        asks for the maximum would silently become a discovery audit. The purpose is the marker,
