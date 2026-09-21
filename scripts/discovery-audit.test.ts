@@ -12,7 +12,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  DISCOVERY_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_MAX_RUNS, FULL_MEASURE_QUESTIONS, BASELINE_QUESTIONS, BASELINE_RUNS,
+  DISCOVERY_QUESTIONS, DISCOVERY_MIN_QUESTIONS, DISCOVERY_MAX_QUESTIONS,
+  DISCOVERY_DEFAULT_RUNS, DISCOVERY_MIN_RUNS, DISCOVERY_MAX_RUNS,
+  FULL_MEASURE_QUESTIONS, BASELINE_QUESTIONS, BASELINE_RUNS,
   OUTREACH_HOOK_QUESTIONS, WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from '../src/lib/auditQuestionCounts.ts';
@@ -70,16 +72,22 @@ const HYBRID = {
 const TOWNS = ['doncaster', 'leeds', 'rotherham', 'chiang mai', 'london', 'manchester'];
 const namesATown = (q: string) => TOWNS.some((t) => q.toLowerCase().includes(t));
 
-/* ── THE INVARIANT: 40 × 1 ────────────────────────────────────────────────────────────────────── */
-console.log('\n-- the two numbers that define discovery --');
-ok(DISCOVERY_QUESTIONS === 40, 'DISCOVERY_QUESTIONS is 40');
-ok(DISCOVERY_RUNS === 1, 'DISCOVERY_RUNS is 1 — stated, not inferred from an absent value');
-ok(DISCOVERY_QUESTIONS <= GENERATOR_ABSOLUTE_MAX_QUESTIONS,
-   'and 40 sits at or under the generator’s named absolute ceiling, so nothing is silently truncated');
-ok(/const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_QUESTIONS;/.test(fn)
-   && /const DISCOVERY_MAX_QUESTION_COUNT = DISCOVERY_QUESTIONS;/.test(fn)
+/* ── THE DIALS: 1..80 × 1..3, DEFAULT 40 × 3 ───────────────────────────────────
+   🔴 IT WAS A FIXED 40 × 1 UNTIL 2026-09-21. The numbers moved on Paul's decision that discovery
+   is THE flexible opportunity/research audit; what did NOT move is the property that made the
+   fixed version safe — the screen and the server read the same bounds, and no ceiling sits above
+   what the generator will actually produce (the batching section below). */
+console.log('\n-- the numbers that define discovery --');
+ok(DISCOVERY_QUESTIONS === 40, 'DISCOVERY_QUESTIONS is 40 — now the DEFAULT, not the only value');
+ok(DISCOVERY_MIN_QUESTIONS === 1 && DISCOVERY_MAX_QUESTIONS === 80, 'the question dial is 1..80');
+ok(DISCOVERY_MIN_QUESTIONS <= DISCOVERY_QUESTIONS && DISCOVERY_QUESTIONS <= DISCOVERY_MAX_QUESTIONS,
+   'the default sits inside its bounds');
+ok(DISCOVERY_DEFAULT_RUNS === 3, 'DISCOVERY_DEFAULT_RUNS is 3 — stated, not inferred from an absent value');
+ok(DISCOVERY_MIN_RUNS === 1, 'the run dial floors at 1');
+ok(/const DISCOVERY_MIN_QUESTION_COUNT = DISCOVERY_MIN_QUESTIONS;/.test(fn)
+   && /const DISCOVERY_MAX_QUESTION_COUNT = DISCOVERY_MAX_QUESTIONS;/.test(fn)
    && /const DISCOVERY_DEFAULT_QUESTION_COUNT = DISCOVERY_QUESTIONS;/.test(fn),
-   'the server’s min, max and default all derive from the one shared constant');
+   'the server’s min, max and default all derive from the shared constants');
 
 /* ⛔ THE RUN COUNT. 1 by default, operator-selectable to DISCOVERY_MAX_RUNS, and CLAMPED ON THE
    SERVER — the browser states a preference, it does not grant one. */
@@ -91,10 +99,9 @@ ok(/\(isMeasurement \|\| isRemeasure\) \? MEASUREMENT_RUNS/.test(runsExpr),
    'and the measurement/replay 3-run rule beside it is untouched');
 const clampExpr = (fn.match(/const discoveryRuns = isDiscovery[\s\S]*?;\n/) ?? [''])[0];
 ok(clampExpr.length > 0, 'found the run-count clamp in source');
-ok(/Math\.min\(DISCOVERY_MAX_RUNS/.test(clampExpr) && /Math\.max\(1/.test(clampExpr),
-   'the server clamps whatever arrives into 1..DISCOVERY_MAX_RUNS');
-ok(/DISCOVERY_RUNS/.test(clampExpr) && /body\.run_count/.test(clampExpr),
-   'it reads body.run_count and defaults to DISCOVERY_RUNS when absent');
+ok(/clampDiscoveryRuns\(body\.run_count\)/.test(clampExpr),
+   'the server clamps whatever arrives with the SHARED clamp — 1..DISCOVERY_MAX_RUNS, default DISCOVERY_DEFAULT_RUNS');
+ok(/body\.run_count/.test(clampExpr), 'it reads body.run_count and nothing else');
 ok(!/question_count|questionCount/.test(clampExpr),
    'and the run count is never inferred from the question count');
 
@@ -192,8 +199,11 @@ for (const n of [1, 2, 3]) {
     questions: nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40),
   });
   ok((r.questions as string[]).length === 40, `${n} run(s): all 40 questions travel`);
-  ok(n === 1 ? r.run_count === undefined : r.run_count === n,
-     n === 1 ? '1 run sends no run_count — the server default IS one' : `${n} runs sends run_count ${n}`);
+  /* ⛔ 1 IS SENT, NOT OMITTED. This asserted the opposite while the server's absent-default was a
+     single run, so "1" and "unstated" were the same request. Discovery's default is now
+     DISCOVERY_DEFAULT_RUNS (3): omitting a stated 1 would come back as three runs and three times
+     the Apify bill. A stated dial travels. */
+  ok(r.run_count === n, `${n} run${n === 1 ? '' : 's'} sends run_count ${n}`);
 }
 const set40 = nationalFallbackQuestions('AI visibility service', FINDABLE_CTX, 40);
 const shapes = [1, 2, 3].map((n) => (buildAuditRunRequest(FINDABLE, {
@@ -279,11 +289,12 @@ ok(/auditMode === 'discovery' \? 'discovery' : null/.test(read('src/pages/AiAudi
 console.log('\n-- the wizard offers three modes and says what each one costs in runs --');
 ok(/label="Discovery"/.test(ui), 'the Discovery option is rendered');
 ok(/label="Quick check"/.test(ui) && /label="Full measurement"/.test(ui), 'beside Quick check and Full measurement');
-ok(/\$\{DISCOVERY_COUNT\} questions × \$\{DISCOVERY_RUNS\}/.test(ui),
-   'its hint states 40 x 1 from the constants, never as typed numbers');
+ok(/up to \$\{DISCOVERY_MAX_QUESTIONS\} questions × up to \$\{DISCOVERY_MAX_RUNS\}/.test(ui),
+   'its hint states the ceilings from the constants, never as typed numbers');
 ok(/broad opportunity scan/.test(ui), 'and describes it as a breadth scan');
 ok(!/provider cells/i.test(ui), 'no "120 provider cells" style jargon on the card');
-ok(/Breadth, not confidence/.test(ui), 'the explainer says plainly that one ask is not a measurement');
+ok(/Breadth first/.test(ui) && /not as a measurement/.test(ui),
+   'the explainer still says plainly that discovery is not a measurement');
 ok(/type AuditMode = 'quick' \| 'full' \| 'discovery';/.test(ui), 'three modes, one type');
 ok(/discovery/.test(strip(read('src/components/audit/AuditPills.tsx'))),
    'and the audit list labels a discovery row truthfully');

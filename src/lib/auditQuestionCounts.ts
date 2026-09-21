@@ -67,32 +67,46 @@ export const BASELINE_RUNS = 3;
 export const FULL_MEASURE_QUESTIONS = 20;
 
 /**
- * DISCOVERY — the manual breadth scan. 40 questions x ONE run, operator-triggered from the AI
- * Audit page and available nowhere else.
+ * DISCOVERY — the manual breadth scan, and THE flexible opportunity/research audit (Paul,
+ * 2026-09-21). Operator-triggered from the AI Audit page and available nowhere else:
+ * 1..80 questions (default 40) x 1..3 runs (default 3), with the operator picking which of the
+ * generated questions actually run.
  *
  * WHAT IT IS FOR: finding where a business appears, where it is missing, which competitors and
  * sources keep coming up, and which topics or intents deserve a closer look. Breadth, on purpose.
  *
- * ⛔ IT IS NOT A MEASUREMENT AND MUST NEVER BE READ AS ONE. One ask per question per engine is a
- * single sample, and the variance in this database is brutal — one business swung 0 -> 0.5 -> 0 ->
- * 0.5 -> 0.6 across five identical runs with no work done (see BASELINE_QUESTIONS). Discovery buys
- * COVERAGE with the runs the baseline spends on CONFIDENCE. A gap it finds is a lead to follow,
+ * ⛔ IT IS NOT A MEASUREMENT AND MUST NEVER BE READ AS ONE, whatever it is dialled to. Even at
+ * three runs it is not compared to anything, it never claims a baseline pointer, and the variance
+ * in this database is brutal — one business swung 0 -> 0.5 -> 0 -> 0.5 -> 0.6 across five
+ * identical runs with no work done (see BASELINE_QUESTIONS). A gap it finds is a lead to follow,
  * not a finding; validating one means measuring it properly afterwards.
  *
- * ⛔ AND IT DOES NOT CHANGE THE PAID BASELINE OR THE FULL MEASURE. Both stay at 20 x 3. Paul's
- * decision 2026-09-20 was explicitly to add a third manual option rather than raise the global
- * count, because raising it doubles the Apify bill on every paying client's measurement.
+ * ⛔ AND IT STILL DOES NOT CHANGE THE PAID BASELINE OR THE FULL MEASURE. Both stay at 20 x 3.
+ * Paul's decision 2026-09-20 was to add a third manual option rather than raise the global count,
+ * because raising it doubles the Apify bill on every paying client's measurement — and his
+ * decision 2026-09-21 was that THIS is the audit that gets the dials, for exactly the same reason.
  *
- * ⛔ 40 IS THE GENERATOR'S ABSOLUTE CEILING, not a number above it. One model call, one set.
+ * ⛔ THE CEILING IS ABOVE ONE MODEL CALL, AND THAT IS ONLY HONEST BECAUSE GENERATION IS BATCHED.
+ * `planGenerationBatches` (src/lib/auditPlan.ts) splits any target above
+ * GENERATOR_ABSOLUTE_MAX_QUESTIONS into calls that each sit under it. This was the original sin of
+ * the old 10..75 full-measure dial — a policy ceiling the generator silently clamped — so never
+ * raise DISCOVERY_MAX_QUESTIONS without checking the batching still covers it.
  */
 export const DISCOVERY_QUESTIONS = 40;
-/** ONE, the DEFAULT. Stated as a constant so "40 x 1" is a fact a test can read, not a missing
- *  value, and so a request that omits the run count still means one run. */
-export const DISCOVERY_RUNS = 1;
+/** The operator's bounds. 1 is allowed: a one-question look is a cheap, honest thing to want. */
+export const DISCOVERY_MIN_QUESTIONS = 1;
+export const DISCOVERY_MAX_QUESTIONS = 80;
+/** THREE, the DEFAULT (Paul, 2026-09-21; it was 1 while discovery was a fixed 40 x 1). Stated as a
+ *  constant so the default is a fact a test can read rather than a missing value, and so a request
+ *  that omits the run count means the same thing as the screen's own default rather than the
+ *  cheapest possible thing. */
+export const DISCOVERY_DEFAULT_RUNS = 3;
+/** ONE. The floor, named so a validator reads a constant rather than a literal. */
+export const DISCOVERY_MIN_RUNS = 1;
 /**
  * ⛔ THE MOST RUNS A DISCOVERY AUDIT MAY ASK FOR — operator-chosen, 1 to 3 (Paul, 2026-09-20).
  *
- * WHY MORE THAN ONE IS WORTH OFFERING: asking the SAME 40 questions three times turns each one
+ * WHY MORE THAN ONE IS WORTH OFFERING: asking the SAME questions three times turns each one
  * into "named 2 of 3" rather than a coin flip, which is the difference between "the engines do not
  * know this business" and "the engines are inconsistent about it" — fragmentation, the thing
  * discovery is looking for.
@@ -111,9 +125,10 @@ export const DISCOVERY_MAX_RUNS = 3;
  * policy maximum silently changed nothing: a 40-question request generated 20. A cap that is not
  * named cannot be reasoned about, and a policy ceiling above it is a lie the screen tells.
  *
- * THE RULE, pinned by scripts/question-ceilings.test.ts: every POLICY ceiling in this file and in
- * create-ai-audit is <= this number. Raise this first if a policy ever needs to go higher, and the
- * test says so rather than the generator quietly truncating.
+ * THE RULE, pinned by scripts/question-ceilings.test.ts: every POLICY ceiling served by ONE
+ * generator call is <= this number. DISCOVERY_MAX_QUESTIONS (80) is the single exception, and it
+ * is allowed ONLY because `planGenerationBatches` splits it into calls that each sit at or under
+ * this cap — the test asserts the batch planner, never an exemption.
  *
  * 40 leaves room above FULL_MEASURE_QUESTIONS (20) for the money/standard two-call split, which
  * over-requests each half and slices, without letting an absurd request reach the model.

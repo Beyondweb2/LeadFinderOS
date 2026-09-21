@@ -50,7 +50,8 @@ export function normalizeAuditList(value: unknown): string[] {
 
 type AuditRequestOptions = {
   questionCount: number;
-  /** 'discovery' is the manual 40 x 1 breadth scan; absent = an ordinary wizard audit. */
+  /** 'discovery' is the manual breadth scan, 1-80 questions x 1-3 runs; absent = an ordinary
+   *  wizard audit. */
   purpose?: 'baseline' | 'measurement' | 'discovery';
   /** Explicit override; otherwise the context's own market_model is used. */
   businessScope?: MarketModel;
@@ -94,9 +95,15 @@ function baseRequest(context: AuditQuestionContext, options: AuditRequestOptions
     ...(audience ? { target_audience: audience } : {}),
     service_areas: areas,
     question_count: options.questionCount,
-    /* Sent only when a caller asked for it, so every request written before discovery had a run
-       count still means one run on the server's own default. */
-    ...(typeof options.runCount === 'number' && options.runCount > 1 ? { run_count: Math.round(options.runCount) } : {}),
+    /* ⛔ SENT WHENEVER THE CALLER STATED ONE, INCLUDING 1. This was `> 1` while the server's
+       absent-default was a single run, so omitting it and asking for one meant the same thing.
+       They stopped meaning the same thing the day discovery's default became DISCOVERY_DEFAULT_RUNS
+       (3): a stated 1 that travels as an absence comes back as three runs and three times the
+       Apify bill, with nothing on the screen saying so. A stated value is sent; absence is left to
+       the callers that never had the dial. */
+    ...(typeof options.runCount === 'number' && Number.isFinite(options.runCount) && options.runCount >= 1
+      ? { run_count: Math.round(options.runCount) }
+      : {}),
     ...(options.purpose === 'measurement' ? { skip_seo: true } : {}),
   };
 }

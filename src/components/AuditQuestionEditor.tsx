@@ -23,12 +23,23 @@ export function applyAuditQuestionPaste(current: readonly string[], pasted: stri
   return mode === 'replace' ? parsed : cleanAuditQuestions([...current, ...parsed]);
 }
 
-export function AuditQuestionEditor({ questions, onChange, disabled = false, busy = false }: {
+/* ⛔ SELECTION IS OPT-IN AND LIVES IN THE PARENT. A discovery audit lets the operator pick which
+   of the generated questions to run (1..80 of them), and the obvious shortcut — delete the ones you
+   do not want — loses them for good, so re-picking means regenerating the lot. So the checkbox
+   column appears only when the parent passes `selected`; every other caller renders exactly the
+   editor it rendered before, with no checkbox and no selection state to get out of step.
+   The index is the identity: two questions can be edited into the same string mid-edit, and a
+   selection keyed on text would silently merge them. */
+export function AuditQuestionEditor({ questions, onChange, disabled = false, busy = false, selected, onToggle }: {
   questions: string[];
   onChange: (questions: string[]) => void;
   disabled?: boolean;
   busy?: boolean;
+  /** Indexes of the questions that will actually be run. Omit for no selection column. */
+  selected?: ReadonlySet<number>;
+  onToggle?: (index: number, next: boolean) => void;
 }) {
+  const selectable = !!selected && !!onToggle;
   const [paste, setPaste] = useState('');
   const parsed = parseQuestionPaste(paste);
   const apply = (mode: 'replace' | 'append') => {
@@ -39,6 +50,14 @@ export function AuditQuestionEditor({ questions, onChange, disabled = false, bus
   return <div className="space-y-3">
     <div className="space-y-2">
       {questions.map((question, index) => <div key={index} className="flex items-center gap-2">
+        {selectable && <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-primary"
+          aria-label={`Include question ${index + 1}`}
+          checked={selected!.has(index)}
+          disabled={disabled || busy}
+          onChange={(event) => onToggle!(index, event.target.checked)}
+        />}
         <Input aria-label={`Question ${index + 1}`} value={question} disabled={disabled || busy} onChange={(event) => onChange(editAuditQuestion(questions, index, event.target.value))}/>
         {!disabled && <Button type="button" variant="ghost" size="icon" disabled={busy} onClick={() => onChange(removeAuditQuestion(questions, index))} title="Remove question"><Trash2 className="h-4 w-4"/></Button>}
       </div>)}

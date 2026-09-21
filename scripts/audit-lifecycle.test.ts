@@ -107,7 +107,7 @@ ok(prefillFromAudit({ business_scope: 'nonsense' }).businessScope === null, 'an 
 ok(prefillFromAudit(null).businessName === '', 'and a missing row does not throw');
 
 console.log('\n   D. the operator may change everything');
-ok(/setAuditMode\('quick'\); setQuestionCount\(defaultCountForMode\('quick'\)\); setDiscoveryRuns\(DISCOVERY_RUNS\);/.test(ui),
+ok(/setAuditMode\('quick'\); setQuestionCount\(defaultCountForMode\('quick'\)\); setDiscoveryRuns\(DISCOVERY_DEFAULT_RUNS\);/.test(ui),
    'mode, count and discovery runs are RESET to defaults, so the previous audit cannot decide the new one');
 ok(/setQuestions\(\[\]\); setPreviewMoney\(\[\]\); setUnitCost\(0\);/.test(ui),
    'and the question list is cleared — the wizard generates fresh at the review step');
