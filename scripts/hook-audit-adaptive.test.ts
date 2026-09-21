@@ -95,7 +95,7 @@ function drive(results: Array<Record<string, unknown> | null>) {
   const summary = buildHookReportSummary({
     state: r.state,
     rows: planned.map((q) => ({ question: q, status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } })),
-    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   });
   const copy = hookReportCopy(summary!, 'Kirkbride Electrical');
   ok(copy.headline === 'Strong initial AI visibility', 'D: the report uses the strong-initial-visibility wording');
@@ -125,7 +125,7 @@ function drive(results: Array<Record<string, unknown> | null>) {
       { question: planned[1], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
       { question: planned[2], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
     ],
-    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   });
   ok(summary!.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === false, 'E: the report still shows the real ChatGPT miss on Q1, truthfully — never discarded');
   ok(summary!.tested[0].perEngine.find((p) => p.engine === 'gemini')?.named === true, "E: and Gemini's real Q1 answer alongside it");
@@ -140,7 +140,7 @@ function drive(results: Array<Record<string, unknown> | null>) {
   ok(JSON.stringify(r.state.gap?.named_on_engines) === JSON.stringify(['chatgpt']), 'E2: ChatGPT naming them is retained as the truthful qualifier');
   const summary = buildHookReportSummary({
     state: r.state, rows: [{ question: planned[0], status: 'done', result: { chatgpt: cell(true), gemini: cell(false, ['Sparks Ltd']) } }],
-    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   });
   const copy = hookReportCopy(summary!, 'Kirkbride Electrical');
   ok(copy.lede.startsWith('We asked Gemini:') && copy.headline === 'We found a visibility gap.', 'E2: the report names Gemini, the engine that actually decided the gap');
@@ -156,7 +156,7 @@ function drive(results: Array<Record<string, unknown> | null>) {
   ok(evalEmpty.outcome === 'no_valid_answer', 'F: empty answers are not a gap');
   const step = advanceHookState(initialHookState(planned), 0, evalFailed);
   ok(step.action === 'stop' && step.state.stop_reason === 'provider_failure' && step.state.gap === null, 'F: a terminal provider failure stops truthfully — never a gap, never Q2');
-  ok(buildHookReportSummary({ state: step.state, rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) === null, 'F: no hook summary is shown for a provider failure — the ordinary rendering handles the failed run');
+  ok(buildHookReportSummary({ state: step.state, rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors }) === null, 'F: no hook summary is shown for a provider failure — the ordinary rendering handles the failed run');
   // ChatGPT failed to answer at all; Gemini (the deciding engine) answered and named → named.
   ok(evaluateHookQuestion({ chatgpt: failedCell(), gemini: cell(true) }, ENGINES).outcome === 'named', 'F: ChatGPT having no answer never blocks Gemini\'s "named" from deciding');
   // A SERP block in the cell map is ignored: only scored engines are judged, and Gemini still decides.
@@ -247,7 +247,7 @@ for (const badIndex of [0, 1, 2]) {
       { question: planned[1], status: 'done', result: { chatgpt: cell(true), gemini: cell(true) } },
       { question: planned[2], status: 'done', result: { chatgpt: cell(false), gemini: cell(true) } },
     ],
-    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   })!;
   ok(summary.tested.length === 3, '9: all three questions appear in the report');
   ok(summary.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === false, '9: Q1\'s real ChatGPT miss is shown, truthfully');
@@ -267,12 +267,12 @@ for (const badIndex of [0, 1, 2]) {
   const s2 = buildHookReportSummary({
     state: { ...initialHookState(planned), executed: 2, stop_reason: 'visibility_gap_found', named_in: [{ question_index: 0, question: planned[0], engines: ['chatgpt', 'gemini'] }],
       gap: { question_index: 1, question: planned[1], engine: 'gemini', target_named: false, named_instead: ['A Ltd'], citations: [], named_on_engines: [], answer_excerpt: '' } },
-    rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   })!;
   const c2 = hookReportCopy(s2, 'Kirkbride Electrical');
   ok(c2.headline === 'We found a visibility gap on the second search.', 'Q2 gap headline says second search');
   ok(c2.earlier === 'Kirkbride Electrical was found in the first search, but not in this one.', 'Q2 gap explains the first search named them');
-  ok(c2.count.startsWith('Gap found after 2 searches'), 'count is descriptive ("Gap found after 2 searches"), not a percentage');
+  ok(c2.count === 'Visibility gap found after 2 searches.', 'count is descriptive ("Visibility gap found after 2 searches."), not a percentage, and never exposes "up to 3"');
   const c3 = hookReportCopy({ ...s2, questionsTested: 3, gap: { ...s2.gap!, questionIndex: 2 } }, 'Kirkbride Electrical');
   ok(c3.headline === 'We found a visibility gap on the third search.' && /earlier searches/.test(c3.earlier ?? ''), 'Q3 gap headline and earlier-searches line');
 }
@@ -305,8 +305,8 @@ ok(outreachAudit.includes('hook_audit: true,'), 'the drip pre-send audit sends t
 ok(/hook_audit: true,\s*fresh_audit: true,/.test(inbox), 'F: the Inbox re-run sends the explicit hook marker AND fresh_audit');
 ok(/const freshAudit: boolean = body\.fresh_audit === true && \(isInternal \|\| hookAuditRequested\);/.test(createAudit), 'fresh_audit and hook_audit stay separate flags; a declared hook may ask for freshness');
 // H: the report keys on the persisted hook state, not on the question count.
-ok(buildHookReportSummary({ state: undefined, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(false) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) === null, 'H: a one-question ordinary run with no hook state gets the normal report, never the hook UX');
-ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, stop_reason: 'max_questions_reached' }, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(true) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead }) !== null, 'H: hook state present → hook UX');
+ok(buildHookReportSummary({ state: undefined, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(false) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors }) === null, 'H: a one-question ordinary run with no hook state gets the normal report, never the hook UX');
+ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, stop_reason: 'max_questions_reached' }, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(true) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors }) !== null, 'H: hook state present → hook UX');
 ok(createAudit.includes('questions = planHookQuestions(questions, { town: locationText });') && createAudit.includes('hookState = initialHookState(questions);'), 'create-ai-audit plans and orders the hook questions');
 ok(createAudit.includes('(hookState ? questions.slice(0, 1) : questions).map('), 'create-ai-audit queues ONLY Q1 for a hook; every other audit still fans out in full');
 ok(createAudit.includes('if (hookState) runResults.hook = hookState;'), 'the plan lives on the run (results.hook) — no migration');
@@ -343,7 +343,7 @@ ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookA
 
 // Report: the hook summary is attached by the builder and rendered by its own section.
 ok(report.includes('hook: buildHookReportSummary({') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
-ok(report.includes('namedInstead: (gap) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
+ok(report.includes('namedInstead: (competitors) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
 ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
 const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf('export function renderReportHtml('));
@@ -382,7 +382,7 @@ const gapRows = (engine: 'gemini' | 'chatgpt', competitors: string[]) => [
 const buildAndRender = (engine: 'gemini' | 'chatgpt', namedInsteadList: string[] = ['Sparks Ltd', 'Volt Electrical']) => {
   const summary = buildHookReportSummary({
     state: gapState(engine, namedInsteadList), rows: gapRows(engine, namedInsteadList),
-    engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
+    engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   });
   return renderHookSection(summary!, 'Doncaster Sparks Ltd');
 };
@@ -420,15 +420,18 @@ ok(geminiHtml.includes('class="cc-callout"') && geminiHtml.includes('Doncaster S
 // truthful logic: no gap → no callout, no fabricated "wasn't named" claim.
 const namedState: HookState = { version: 1, planned: ['q1'], next_index: 1, executed: 1, stop_reason: 'max_questions_reached', gap: null, named_in: [{ question_index: 0, question: 'q1', engines: ['gemini'] }] };
 const namedRows = [{ question: 'q1', status: 'done', result: { gemini: cell(true) } }];
-const namedSummary = buildHookReportSummary({ state: namedState, rows: namedRows, engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead });
+const namedSummary = buildHookReportSummary({ state: namedState, rows: namedRows, engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors });
 const namedHtml = renderHookSection(namedSummary!, 'Doncaster Sparks Ltd');
 ok(!namedHtml.includes('class="chatcard"') && !namedHtml.includes('cc-callout'), 'N6: a fully-named result never renders the missed-result box or red line');
 ok(namedHtml.includes('hook-head ok'), 'the fully-named headline still renders');
 
-// N7: missing/no competitors never invent a name — the truthful fallback line renders instead.
+// N7: missing/no competitors never invent a name — the "AI named" block is omitted entirely
+// (2026-09-21: the earlier "Other businesses were suggested." fallback read as an invented claim).
 const noCompetitorsHtml = buildAndRender('gemini', []);
-ok(noCompetitorsHtml.includes('Other businesses were suggested.'), 'N7: no extracted competitors → the truthful fallback line, never a fabricated name');
+ok(!noCompetitorsHtml.includes('Other businesses were suggested.'), 'N7: the old fabricated-sounding fallback line is gone');
+ok(!noCompetitorsHtml.includes('AI named'), 'N7: the "AI named" block is omitted entirely when nothing was extracted, not filled with a guess');
 ok(!(noCompetitorsHtml.match(/<li>/g) ?? []).length, 'N7: no <li> competitor entries appear when none were extracted');
+ok(noCompetitorsHtml.includes('class="cc-callout"'), 'N7: the truthful red not-named line still renders even with no competitor list');
 
 // Everything else in the hook section still renders (no broader redesign).
 ok(geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-count') && geminiHtml.includes('hook-caveat'), 'the eyebrow, count and caveat all still render beside the simplified box');

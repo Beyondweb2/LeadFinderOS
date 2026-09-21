@@ -731,9 +731,11 @@ const engineAvatar = (label: string) => isOai(label) ? `<div class="cc-avatar cc
  *  capped by auditReport.ts's caller; never re-parsed from the raw answer here), and the truthful
  *  named/not-named result. `answerExcerpt` still exists on the stored gap for anything that wants
  *  the full text later; this box simply no longer reads it.
- *  ⛔ NEVER FABRICATED: an empty competitor list renders the truthful fallback line, never an
- *  invented name. Deduplicated case-insensitively (a single answer can repeat a name) and capped to
- *  5 defensively, on top of the 5-cap already applied upstream. */
+ *  ⛔ NEVER FABRICATED: an empty competitor list OMITS the "AI named" block entirely (2026-09-21,
+ *  Paul — the earlier "Other businesses were suggested." fallback read as an invented claim when in
+ *  fact NO name had been extracted). The red "wasn't named" line already states the one fact that
+ *  IS true in that case, so nothing else is said. Deduplicated case-insensitively (a single answer
+ *  can repeat a name) and capped to 5 defensively, on top of the 5-cap already applied upstream. */
 function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string): string {
   if (!g) return "";
   const seen = new Set<string>();
@@ -743,9 +745,13 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
     seen.add(key);
     return true;
   }).slice(0, 5);
-  const namedBlock = competitors.length
-    ? `<p class="cc-label">AI named</p><ol class="cc-list">${competitors.map((n) => `<li>${esc(n)}</li>`).join("")}</ol>`
-    : `<p class="cc-atext">Other businesses were suggested.</p>`;
+  const namedRow = competitors.length
+    ? `
+          <div class="cc-arow">
+            ${engineAvatar(g.engineLabel)}
+            <div class="cc-a"><p class="cc-label">AI named</p><ol class="cc-list">${competitors.map((n) => `<li>${esc(n)}</li>`).join("")}</ol></div>
+          </div>`
+    : "";
   return `
       <section class="chatcard">
         <div class="cc-head">
@@ -753,11 +759,7 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
         </div>
         <div class="cc-body">
           <p class="cc-label">Question</p>
-          <div class="cc-q-plain">&ldquo;${esc(g.question)}&rdquo;</div>
-          <div class="cc-arow">
-            ${engineAvatar(g.engineLabel)}
-            <div class="cc-a">${namedBlock}</div>
-          </div>
+          <div class="cc-q-plain">&ldquo;${esc(g.question)}&rdquo;</div>${namedRow}
         </div>
         <div class="cc-callout"><span class="cc-bang">!</span>${esc(businessName)} wasn&rsquo;t named.</div>
       </section>`;

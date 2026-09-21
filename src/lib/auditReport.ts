@@ -1236,7 +1236,7 @@ export function buildReportData(
       rows: queueRows,
       engineOrder: SCORED_ENGINES,
       engineLabel: (e) => ENGINE_LABELS[e] ?? e,
-      namedInstead: (gap) => rivalsSuppressed ? [] : gap.named_instead.filter((n) => !isProvableJunkName(n)).slice(0, 5),
+      namedInstead: (competitors) => rivalsSuppressed ? [] : competitors.filter((n) => !isProvableJunkName(n)).slice(0, 5),
     }),
     questionBreakdown,
     questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows

@@ -285,21 +285,39 @@ export interface HookReportSummary {
  * Build the report summary from the persisted state and the run's settled queue rows. Returns null
  * unless the hook has STOPPED for a reportable reason — a hook still running has nothing to say,
  * and a provider failure falls back to the ordinary rendering, which already handles failed runs.
- * `namedInstead` is supplied by the caller so competitor-cleanliness rules stay in one place.
- */
+ *
+ * ⛔ `namedInstead` READS THE ROWS, NEVER `state.gap.named_instead` (2026-09-21 — the reason the
+ * hook report's competitor list was always empty, live-verified on z8q2ty). `evaluateHookQuestion`
+ * captures `named_instead` from `cell.competitors` at the moment a question settles — but
+ * `cell.competitors` is ALWAYS `[]` at that point (`_shared/enrichment/ai-search.ts`'s
+ * `normalizeEngineBlock`: "ALWAYS EMPTY AT SCAN TIME"). The canonical LLM extraction
+ * (`extract-competitors`) only runs LATER, at the run's transition to terminal — structurally
+ * AFTER `process-ai-audit-queue` has already evaluated the hook step and persisted its gap. So the
+ * stored `gap.named_instead` is a permanent, empty snapshot for every hook gap that has ever
+ * existed; it is never revisited once extraction actually completes.
+ * The fix reads the SAME rows `tested` already reads (settled at REPORT-RENDER time, long after
+ * extraction has run) and pulls the gap's own question+engine cell's `competitors` — the same
+ * canonical, already-cleaned array `extract-competitors` wrote back into `ai_audit_queue`/
+ * `ai_audit_runs.results.questions[].engines[].competitors`. Nothing here re-parses the raw answer
+ * or invents a second extractor; it only re-points the report at data that already existed and was
+ * simply never read. `namedInstead` is still supplied by the caller so competitor-cleanliness
+ * rules stay in one place. */
 export function buildHookReportSummary(input: {
   state: unknown;
   rows: Array<{ question: string; status?: string | null; result?: unknown }>;
   engineOrder: readonly string[];
   engineLabel: (engine: string) => string;
-  namedInstead: (gap: HookGap) => string[];
+  namedInstead: (competitors: string[]) => string[];
 }): HookReportSummary | null {
   const { state } = input;
   if (!isHookState(state) || !state.stop_reason || state.stop_reason === 'provider_failure') return null;
   const byQuestion = new Map(input.rows.map((r) => [r.question.trim().toLowerCase(), r]));
-  const tested = state.planned.slice(0, state.executed).map((question, i) => {
+  const cellsFor = (question: string): Record<string, unknown> | null => {
     const row = byQuestion.get(question.trim().toLowerCase());
-    const cells = row?.status === 'done' && row.result && typeof row.result === 'object' ? row.result as Record<string, unknown> : null;
+    return row?.status === 'done' && row.result && typeof row.result === 'object' ? row.result as Record<string, unknown> : null;
+  };
+  const tested = state.planned.slice(0, state.executed).map((question, i) => {
+    const cells = cellsFor(question);
     return {
       question,
       isGap: state.gap?.question_index === i,
@@ -310,6 +328,12 @@ export function buildHookReportSummary(input: {
       })),
     };
   });
+  const gapCompetitors = (): string[] => {
+    if (!state.gap) return [];
+    const cells = cellsFor(state.gap.question);
+    const cell = cells ? cells[state.gap.engine] : null;
+    return hasAnswer(cell) ? stringList((cell as HookEngineCell).competitors) : [];
+  };
   return {
     questionsTested: state.executed,
     maxQuestions: HOOK_MAX_QUESTIONS,
@@ -319,7 +343,7 @@ export function buildHookReportSummary(input: {
       question: state.gap.question,
       engine: state.gap.engine,
       engineLabel: input.engineLabel(state.gap.engine),
-      namedInstead: input.namedInstead(state.gap),
+      namedInstead: input.namedInstead(gapCompetitors()),
       citations: state.gap.citations,
       namedOnEngineLabels: state.gap.named_on_engines.map(input.engineLabel),
       answerExcerpt: typeof state.gap.answer_excerpt === 'string' ? state.gap.answer_excerpt : '',
@@ -345,14 +369,15 @@ export function hookReportCopy(summary: HookReportSummary, businessName: string)
   const eyebrow = 'Quick AI Visibility Check';
   const caveat = 'This is a quick snapshot, not your full AI visibility measurement.';
   const n = summary.questionsTested;
-  const count = `${n} of up to ${summary.maxQuestions} ${n === 1 ? 'search' : 'searches'} tested`;
   if (!summary.gap) {
+    // No gap wording here (Paul, 2026-09-21) — the business was named on every search tested, so
+    // "gap found" language would be false. Never exposes "up to maxQuestions" either.
     return {
       eyebrow,
       headline: 'Strong initial AI visibility',
       lede: `${businessName} was named across the ${n === 3 ? 'three' : n === 2 ? 'two' : String(n)} ${n === 1 ? 'search' : 'searches'} tested. This is still only a quick snapshot rather than a full visibility baseline.`,
       earlier: null,
-      count,
+      count: `Checked ${n} ${n === 1 ? 'search' : 'searches'}.`,
       caveat,
     };
   }
@@ -364,5 +389,10 @@ export function hookReportCopy(summary: HookReportSummary, businessName: string)
   const earlier = g.questionIndex === 0
     ? null
     : `${businessName} was found in the ${g.questionIndex === 1 ? 'first search' : 'earlier searches'}, but not in this one.`;
-  return { eyebrow, headline, lede, earlier, count: `Gap found after ${n} ${n === 1 ? 'search' : 'searches'} · ${count}`, caveat };
+  /* ⛔ NEVER "1 of up to 3 search tested" (2026-09-21, Paul — read as awkward/technical). Simple,
+     customer-facing, executed-count only: never exposes the question ceiling. */
+  const count = n === 1
+    ? 'Visibility gap found on the first search.'
+    : `Visibility gap found after ${n} searches.`;
+  return { eyebrow, headline, lede, earlier, count, caveat };
 }
