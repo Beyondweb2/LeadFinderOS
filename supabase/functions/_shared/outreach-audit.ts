@@ -24,6 +24,17 @@
 
 import { interleaveByCampaign } from "./campaign-interleave.ts";
 import { AUDIT_DERIVED_VARS } from "../../../src/lib/templateRouting.ts";
+import { isAggregatorUrl } from "./aggregators.ts";
+
+/* A DIRECTORY OR SOCIAL URL IS NOT A WEBSITE (same rule as whatsapp-inbound.ts's ownWebsite —
+ * 2026-09-21: this lane was sending the raw lead.website straight to create-ai-audit, so a lead
+ * whose only "website" is a Facebook/Fresha page had that page crawled and reported on as if it
+ * were their own site, producing meaningless or misleading "what's stopping AI reading your site"
+ * findings on the hook report it feeds). */
+function ownWebsite(raw: string | null | undefined): string | null {
+  const w = (raw ?? "").trim();
+  return w && !isAggregatorUrl(w) ? w : null;
+}
 
 /** Questions per outreach audit. Three is what the outreach lane has always asked and what the
  *  measured cost below is based on. */
@@ -276,8 +287,8 @@ export async function fireOutreachAudit(
         business_type: businessType,
         location_text: locationText,
         country: lead.country ?? null,
-        website: lead.website ?? null,
-        has_website: !!(lead.website ?? "").trim(),
+        website: ownWebsite(lead.website),
+        has_website: ownWebsite(lead.website) !== null,
         question_count: OUTREACH_AUDIT_QUESTIONS,
         /* hook_audit: the EXPLICIT hook marker (2026-09-20). This is the genuine prospecting audit,
            so it runs adaptively — Q1, stop on the first visibility gap, else Q2, else Q3 — and its

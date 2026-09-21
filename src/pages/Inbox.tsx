@@ -10,6 +10,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { supabase } from '@/integrations/supabase/client';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
+import { isAggregatorUrl } from '@/lib/aggregators';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { assessOnboardingLink } from '@/components/OnboardingLinkCard';
 import { LeadDetailFromInbox } from '@/components/LeadDetailFromInbox';
@@ -1112,8 +1113,13 @@ const Inbox = () => {
         business_type: bizType,
         location_text: loc,
         country: activeLead.country ?? null,
-        website: activeLead.website || undefined,
-        has_website: !!activeLead.website,
+        /* A DIRECTORY OR SOCIAL URL IS NOT A WEBSITE (2026-09-21) — this call used to send the raw
+           lead.website straight through, so a lead whose only "website" is a Facebook/Fresha page
+           had that page crawled as if it were their own site, producing a meaningless or misleading
+           "what's stopping AI reading your site" finding on the hook report this button feeds.
+           Same isAggregatorUrl rule create-ai-audit's own first-reply path already applies. */
+        website: (activeLead.website && !isAggregatorUrl(activeLead.website)) ? activeLead.website : undefined,
+        has_website: !!(activeLead.website && !isAggregatorUrl(activeLead.website)),
         queue_pitch_on_complete: true,
         // Stated, not inherited. This used to send nothing and rely on create-ai-audit's shared
         // default happening to be 3; one edit to that default would have silently multiplied the

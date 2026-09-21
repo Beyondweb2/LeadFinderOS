@@ -344,18 +344,21 @@ ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookA
 // Report: the hook summary is attached by the builder and rendered by its own section.
 ok(report.includes('hook: buildHookReportSummary({') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
 ok(report.includes('namedInstead: (gap) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
-ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
+ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
 const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf('export function renderReportHtml('));
 ok(!/\d+%|out of \$\{|showed up in AI search/.test(hookSection), 'the hook section never prints a percentage or an "N out of M answers" score');
 
-/* ── M. THE MODEL/EVIDENCE BOX, restored (2026-09-21 regression) ────────────────────────────────
-   renderHookSection dropping `chatCard` (the AI model/result box) for every hook report when the
-   hook became adaptive (commit 11129185) is exercised here as an actual RENDER test — build a real
-   HookReportSummary via buildHookReportSummary and inspect renderHookSection's HTML output,
-   not just the source text. */
+/* ── N. THE MODEL/EVIDENCE BOX — restored (2026-09-21), then simplified the same day ─────────────
+   Two changes exercised together as RENDER tests (build a real HookReportSummary via
+   buildHookReportSummary, inspect renderHookSection's actual HTML output, not just source text):
+     1. the separate pink `.hook-card` block (a second "we asked / answered with other suggestions /
+        wasn't named") is GONE — the model/evidence box directly under the heading is now the only
+        place that narrative appears.
+     2. the box no longer quotes the model's raw answer text — only the engine, the exact question,
+        the STRUCTURED competitor list (namedInstead), and the red not-named result line. */
 const gapAnswer = 'Try Sparks Ltd or Volt Electrical for a fast callout in Doncaster.';
-const gapState = (engine: 'gemini' | 'chatgpt', answerExcerpt: string): HookState => ({
+const gapState = (engine: 'gemini' | 'chatgpt', namedInsteadList: string[] = ['Sparks Ltd', 'Volt Electrical']): HookState => ({
   version: 1,
   planned: ['Can you recommend a good electrician in Doncaster, UK?'],
   next_index: 1,
@@ -366,56 +369,69 @@ const gapState = (engine: 'gemini' | 'chatgpt', answerExcerpt: string): HookStat
     question: 'Can you recommend a good electrician in Doncaster, UK?',
     engine,
     target_named: false,
-    named_instead: ['Sparks Ltd', 'Volt Electrical'],
+    named_instead: namedInsteadList,
     citations: [],
     named_on_engines: [],
-    answer_excerpt: answerExcerpt,
+    answer_excerpt: gapAnswer,
   },
   named_in: [],
 });
-const gapRows = (engine: 'gemini' | 'chatgpt', answer: string) => [
-  { question: 'Can you recommend a good electrician in Doncaster, UK?', status: 'done', result: { [engine]: cell(false, ['Sparks Ltd', 'Volt Electrical'], answer) } },
+const gapRows = (engine: 'gemini' | 'chatgpt', competitors: string[]) => [
+  { question: 'Can you recommend a good electrician in Doncaster, UK?', status: 'done', result: { [engine]: cell(false, competitors, gapAnswer) } },
 ];
-const buildAndRender = (engine: 'gemini' | 'chatgpt', answerExcerpt: string) => {
+const buildAndRender = (engine: 'gemini' | 'chatgpt', namedInsteadList: string[] = ['Sparks Ltd', 'Volt Electrical']) => {
   const summary = buildHookReportSummary({
-    state: gapState(engine, answerExcerpt), rows: gapRows(engine, gapAnswer),
+    state: gapState(engine, namedInsteadList), rows: gapRows(engine, namedInsteadList),
     engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead,
   });
-  return renderHookSection(summary!, 'Doncaster Sparks Ltd', '21 Sep 2026');
+  return renderHookSection(summary!, 'Doncaster Sparks Ltd');
 };
 
-// M1: a Gemini gap renders the Gemini model box — its own mark, not ChatGPT's.
-const geminiHtml = buildAndRender('gemini', gapAnswer);
-ok(geminiHtml.includes('class="chatcard"'), 'M1: the model/evidence box is back for a Gemini gap');
-ok(geminiHtml.includes('cc-mark--gem') && !geminiHtml.includes('cc-mark--oai'), 'M1: it carries the Gemini mark, not ChatGPT’s');
-ok(geminiHtml.includes('>Gemini<'), 'M1: the engine label reads Gemini');
+// N1: the old duplicate pink narrative block is gone — no .hook-card, no "We asked X:" prose,
+// no "answered with other suggestions" line repeated above the box.
+const geminiHtml = buildAndRender('gemini');
+ok(!geminiHtml.includes('class="hook-card"'), 'N1: the separate pink duplicate block no longer renders');
+ok(!geminiHtml.includes('We asked') && !geminiHtml.includes('answered with other suggestions'), 'N1: the duplicated "we asked / answered with other suggestions" prose is gone');
+ok(geminiHtml.includes('We found a visibility gap'), 'N1: the section heading itself is kept');
 
-// M2: a ChatGPT gap renders the ChatGPT model box.
-const chatgptHtml = buildAndRender('chatgpt', gapAnswer);
-ok(chatgptHtml.includes('class="chatcard"'), 'M2: the model/evidence box also renders for a ChatGPT gap');
-ok(chatgptHtml.includes('cc-mark--oai') && !chatgptHtml.includes('cc-mark--gem'), 'M2: it carries the ChatGPT mark, not Gemini’s');
-ok(chatgptHtml.includes('>ChatGPT<'), 'M2: the engine label reads ChatGPT');
+// N2/N3: the model box renders the engine name and the exact question.
+ok(geminiHtml.includes('class="chatcard"'), 'the model/evidence box renders');
+ok(geminiHtml.includes('cc-mark--gem') && !geminiHtml.includes('cc-mark--oai'), 'N2: it carries the Gemini mark for a Gemini gap, not ChatGPT’s');
+ok(geminiHtml.includes('>Gemini<'), 'N2: the engine label reads Gemini');
+const chatgptHtml = buildAndRender('chatgpt');
+ok(chatgptHtml.includes('cc-mark--oai') && !chatgptHtml.includes('cc-mark--gem'), 'N2: a ChatGPT gap carries the ChatGPT mark instead');
+ok(chatgptHtml.includes('>ChatGPT<'), 'N2: the engine label reads ChatGPT');
+ok(geminiHtml.includes('Can you recommend a good electrician in Doncaster, UK?'), 'N3: the exact question asked is shown verbatim');
 
-// M3: named/not-named state is correct — the box only ever appears on the NOT-named (gap) path;
-// a hook that never hit a gap (fully named) shows no evidence box, same as before this fix.
+// N4: structured competitors render as a short, deduplicated list — from namedInstead (the
+// already-cleaned, already-capped extraction), never re-parsed from the raw answer.
+ok(geminiHtml.includes('<li>Sparks Ltd</li>') && geminiHtml.includes('<li>Volt Electrical</li>'), 'N4: the structured competitor names render as a list');
+const dupedHtml = buildAndRender('gemini', ['Sparks Ltd', 'sparks ltd ', 'Volt Electrical']);
+ok((dupedHtml.match(/<li>/g) ?? []).length === 2, 'N4: a case/whitespace duplicate is deduplicated to one entry');
+const manyHtml = buildAndRender('gemini', ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+ok((manyHtml.match(/<li>/g) ?? []).length <= 5, 'N4: the visible list is capped to a reasonable amount (<=5)');
+
+// N5: the long raw answer text is NOT dumped into the report anywhere.
+ok(!geminiHtml.includes(esc(gapAnswer)), 'N5: the raw stored answer text is never rendered into the report');
+
+// N6: "[Business] wasn't named." renders in red (the .cc-callout/.cc-bang treatment) for a real gap.
+ok(geminiHtml.includes('class="cc-callout"') && geminiHtml.includes('Doncaster Sparks Ltd wasn&rsquo;t named.'), 'N6: the red not-named result line renders with the real business name');
+// The fully-named ("ok") branch must never show this red missed-result state — preserve existing
+// truthful logic: no gap → no callout, no fabricated "wasn't named" claim.
 const namedState: HookState = { version: 1, planned: ['q1'], next_index: 1, executed: 1, stop_reason: 'max_questions_reached', gap: null, named_in: [{ question_index: 0, question: 'q1', engines: ['gemini'] }] };
 const namedRows = [{ question: 'q1', status: 'done', result: { gemini: cell(true) } }];
 const namedSummary = buildHookReportSummary({ state: namedState, rows: namedRows, engineOrder: ENGINES, engineLabel: label, namedInstead: (g) => g.named_instead });
-const namedHtml = renderHookSection(namedSummary!, 'Doncaster Sparks Ltd', '21 Sep 2026');
-ok(!namedHtml.includes('class="chatcard"'), 'M3: no gap → no fabricated model box; the fully-named branch is untouched');
-ok(namedHtml.includes('hook-head ok'), 'M3: the fully-named headline still renders');
+const namedHtml = renderHookSection(namedSummary!, 'Doncaster Sparks Ltd');
+ok(!namedHtml.includes('class="chatcard"') && !namedHtml.includes('cc-callout'), 'N6: a fully-named result never renders the missed-result box or red line');
+ok(namedHtml.includes('hook-head ok'), 'the fully-named headline still renders');
 
-// M4: the actual stored answer text is used verbatim — never a summary, never invented wording.
-ok(geminiHtml.includes(esc(gapAnswer)), 'M4: the box shows the real stored answer text, verbatim');
+// N7: missing/no competitors never invent a name — the truthful fallback line renders instead.
+const noCompetitorsHtml = buildAndRender('gemini', []);
+ok(noCompetitorsHtml.includes('Other businesses were suggested.'), 'N7: no extracted competitors → the truthful fallback line, never a fabricated name');
+ok(!(noCompetitorsHtml.match(/<li>/g) ?? []).length, 'N7: no <li> competitor entries appear when none were extracted');
 
-// M5: a gap with no stored excerpt (e.g. a row from before this field existed) renders NOTHING for
-// the box rather than fabricating content — the rest of the hook section is untouched.
-const emptyExcerptHtml = buildAndRender('gemini', '');
-ok(!emptyExcerptHtml.includes('class="chatcard"'), 'M5: an empty/missing answer excerpt never fabricates a model box');
-ok(emptyExcerptHtml.includes('class="hook-card"') && emptyExcerptHtml.includes('hook-miss'), 'M5: the existing hook-card/miss copy still renders even with no evidence box');
-
-// M6: every existing hook section stays intact alongside the restored box (no redesign).
-ok(geminiHtml.includes('class="hook-card"') && geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-miss') && geminiHtml.includes('hook-count') && geminiHtml.includes('hook-caveat'), 'M6: header, red-gap card, count and caveat all still render beside the restored box');
+// Everything else in the hook section still renders (no broader redesign).
+ok(geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-count') && geminiHtml.includes('hook-caveat'), 'the eyebrow, count and caveat all still render beside the simplified box');
 
 /* ── K. GEMINI-ONLY 3/3 AUTO "NOT INTERESTED" (Paul, 2026-09-21) ─────────────────────────────────
    geminiNamedAllThree is deliberately independent of the hook's own stop/gap logic above — it

@@ -311,6 +311,9 @@ Deno.serve(async (req) => {
     if (runCrawl?.status === "complete" && (runCrawl.version ?? 0) >= CRAWL_CHECK_VERSION && runCrawl.signals) {
       const faults = buildFaultLines(runCrawl.signals);
       if (faults.length) data.crawlFaults = faults;
+      // A fetchable site is "checked" whether or not it turned up a fault — see crawlChecked's doc
+      // comment (aiAuditReportHtml.ts). fetchFailed means we never actually read the site.
+      if (!runCrawl.signals.fetchFailed) data.crawlChecked = true;
     }
     if (leadId) {
       const { data: cc } = await service
@@ -326,6 +329,7 @@ Deno.serve(async (req) => {
       if (fresh && currentVer && sig) {
         const faults = buildFaultLines(sig);
         if (faults.length && !data.crawlFaults) data.crawlFaults = faults;
+        if (!sig.fetchFailed && !data.crawlChecked) data.crawlChecked = true;
       }
       /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
          the section is there on the next open. Fire-and-forget via waitUntil — never blocks this
