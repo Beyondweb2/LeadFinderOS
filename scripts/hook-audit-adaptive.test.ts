@@ -143,7 +143,7 @@ function drive(results: Array<Record<string, unknown> | null>) {
     engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   });
   const copy = hookReportCopy(summary!, 'Kirkbride Electrical');
-  ok(copy.lede.startsWith('We asked Gemini:') && copy.headline === 'We found a visibility gap.', 'E2: the report names Gemini, the engine that actually decided the gap');
+  ok(copy.headline === "AI isn't recommending you for this search yet.", 'E2: the Q1-gap verdict headline renders (the gap engine is asserted directly above via r.state.gap.engine)');
   ok(summary!.gap?.namedOnEngineLabels.join() === 'ChatGPT', 'E2: the report can say ChatGPT did name them — no universal "AI never recommends you" claim');
   ok(summary!.tested[0].perEngine.find((p) => p.engine === 'chatgpt')?.named === true, 'E2: per-engine result still shows ChatGPT named them');
 }
@@ -269,12 +269,12 @@ for (const badIndex of [0, 1, 2]) {
       gap: { question_index: 1, question: planned[1], engine: 'gemini', target_named: false, named_instead: ['A Ltd'], citations: [], named_on_engines: [], answer_excerpt: '' } },
     rows: [], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors,
   })!;
+  // A gap on Q2/Q3 (business WAS named earlier) never overstates to "AI never recommends you" —
+  // the non-Q1 headline is the same truthful, non-overstated wording either way (2026-09-21).
   const c2 = hookReportCopy(s2, 'Kirkbride Electrical');
-  ok(c2.headline === 'We found a visibility gap on the second search.', 'Q2 gap headline says second search');
-  ok(c2.earlier === 'Kirkbride Electrical was found in the first search, but not in this one.', 'Q2 gap explains the first search named them');
-  ok(c2.count === 'Visibility gap found after 2 searches.', 'count is descriptive ("Visibility gap found after 2 searches."), not a percentage, and never exposes "up to 3"');
+  ok(c2.headline === "AI isn't recommending you consistently yet.", 'Q2 gap headline never overstates — "consistently", not "never"');
   const c3 = hookReportCopy({ ...s2, questionsTested: 3, gap: { ...s2.gap!, questionIndex: 2 } }, 'Kirkbride Electrical');
-  ok(c3.headline === 'We found a visibility gap on the third search.' && /earlier searches/.test(c3.earlier ?? ''), 'Q3 gap headline and earlier-searches line');
+  ok(c3.headline === "AI isn't recommending you consistently yet.", 'Q3 gap headline uses the same non-overstated wording');
 }
 
 /* ── Source-shape guards: the wiring the pure functions cannot see ─────────────────────────── */
@@ -392,7 +392,11 @@ const buildAndRender = (engine: 'gemini' | 'chatgpt', namedInsteadList: string[]
 const geminiHtml = buildAndRender('gemini');
 ok(!geminiHtml.includes('class="hook-card"'), 'N1: the separate pink duplicate block no longer renders');
 ok(!geminiHtml.includes('We asked') && !geminiHtml.includes('answered with other suggestions'), 'N1: the duplicated "we asked / answered with other suggestions" prose is gone');
-ok(geminiHtml.includes('We found a visibility gap'), 'N1: the section heading itself is kept');
+// The generic, technical-sounding "We found a visibility gap." heading was itself replaced
+// 2026-09-21 (page 1 of the old baseline PDF is the visual reference) with a stronger,
+// non-overstated customer-facing verdict — see the O-series tests below for the exact wording.
+ok(!geminiHtml.includes('We found a visibility gap.'), 'N1: the old generic/technical heading wording is gone');
+ok(geminiHtml.includes('class="hook-vk"') || geminiHtml.includes('hook-vk'), 'N1: the section still carries a "the verdict" label above the headline');
 
 // N2/N3: the model box renders the engine name and the exact question.
 ok(geminiHtml.includes('class="chatcard"'), 'the model/evidence box renders');
@@ -434,7 +438,7 @@ ok(!(noCompetitorsHtml.match(/<li>/g) ?? []).length, 'N7: no <li> competitor ent
 ok(noCompetitorsHtml.includes('class="cc-callout"'), 'N7: the truthful red not-named line still renders even with no competitor list');
 
 // Everything else in the hook section still renders (no broader redesign).
-ok(geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-count') && geminiHtml.includes('hook-caveat'), 'the eyebrow, count and caveat all still render beside the simplified box');
+ok(geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-vk') && geminiHtml.includes('hook-caveat'), 'the eyebrow, "the verdict" label and caveat all still render beside the simplified box');
 
 /* ── K. GEMINI-ONLY 3/3 AUTO "NOT INTERESTED" (Paul, 2026-09-21) ─────────────────────────────────
    geminiNamedAllThree is deliberately independent of the hook's own stop/gap logic above — it

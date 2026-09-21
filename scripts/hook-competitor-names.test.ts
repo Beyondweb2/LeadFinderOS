@@ -178,19 +178,22 @@ console.log('── 8: when extraction genuinely found nothing, no name is inven
   ok(html.includes('class="cc-callout"') && html.includes(esc('Inclusive Driving') + ' wasn&rsquo;t named.'), '8: the truthful red not-named line still renders');
 }
 
-console.log('── 9/10/11: simple, customer-facing visibility-gap wording by executed count ──');
+console.log('── 9/10/11: the non-overstated verdict headline by which question the gap was on (2026-09-21) ──');
 {
+  // A Q1 miss earns the stronger, still-truthful "for this search yet" — there is no earlier
+  // success to be inconsistent with. A Q2/Q3 miss (the business WAS named earlier) never
+  // overstates to "AI never recommends you" — it says "consistently" instead.
   const s1 = buildHookReportSummary({
     state: realGapState(), rows: realRows(REAL_EXTRACTED_COMPETITORS),
     engineOrder: ENGINES, engineLabel: label, namedInstead: (c) => c,
   })!;
-  ok(hookReportCopy(s1, 'Inclusive Driving').count === 'Visibility gap found on the first search.', '9: 1 executed search renders the exact "first search" wording');
+  ok(hookReportCopy(s1, 'Inclusive Driving').headline === "AI isn't recommending you for this search yet.", '9: a Q1 (first search) gap renders the "for this search yet" verdict');
   const gapOnQ2: HookState = { ...realGapState(), executed: 2, gap: { ...realGapState().gap!, question_index: 1 } };
   const s2 = buildHookReportSummary({ state: gapOnQ2, rows: realRows(REAL_EXTRACTED_COMPETITORS), engineOrder: ENGINES, engineLabel: label, namedInstead: (c) => c })!;
-  ok(hookReportCopy(s2, 'Inclusive Driving').count === 'Visibility gap found after 2 searches.', '10: 2 executed searches render "after 2 searches"');
+  ok(hookReportCopy(s2, 'Inclusive Driving').headline === "AI isn't recommending you consistently yet.", '10: a Q2 gap renders the non-overstated "consistently yet" verdict, never "never"');
   const gapOnQ3: HookState = { ...realGapState(), executed: 3, gap: { ...realGapState().gap!, question_index: 2 } };
   const s3 = buildHookReportSummary({ state: gapOnQ3, rows: realRows(REAL_EXTRACTED_COMPETITORS), engineOrder: ENGINES, engineLabel: label, namedInstead: (c) => c })!;
-  ok(hookReportCopy(s3, 'Inclusive Driving').count === 'Visibility gap found after 3 searches.', '11: 3 executed searches render "after 3 searches"');
+  ok(hookReportCopy(s3, 'Inclusive Driving').headline === "AI isn't recommending you consistently yet.", '11: a Q3 gap renders the same non-overstated "consistently yet" verdict');
 }
 
 console.log('── 12: the old awkward "1 of up to 3 search tested" wording is gone everywhere ──');

@@ -187,13 +187,6 @@ export interface AiAuditReportData {
    *  own number. Built from the lead's STORED crawl-check by render-audit-report (buildFaultLines).
    *  Absent/empty, or a site that couldn't be fetched → the section does not render (Paul, 2026-09-16). */
   crawlFaults?: CrawlFault[];
-  /** True when a fresh, current-version, FETCHABLE crawl-check result exists for this lead —
-   *  regardless of whether it found any faults (2026-09-21, for the hook report's "we also checked
-   *  your website" section). Distinguishes "we checked and it's clean" (true, crawlFaults empty) from
-   *  "we haven't checked yet / couldn't reach the site" (false) — `crawlFaults` alone cannot, since a
-   *  clean site and an unfetched one both leave it empty. Only the hook branch reads this; every
-   *  other report keeps `crawlFaults`' existing silent-on-empty behaviour untouched. */
-  crawlChecked?: boolean;
   /** The audit id, so the "Request a call" form can POST it (recipient + phone are derived
    *  server-side from it — the prospect sends nothing but this id). Absent → no call button. */
   auditId?: string;
@@ -774,42 +767,30 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
  *  that restoration, fed from the hook's own gap data. */
 export function renderHookSection(h: HookReportSummary, businessName: string): string {
   const c = hookReportCopy(h, businessName);
-  const tested = h.tested.map((t) => {
-    const eng = t.perEngine.map((pe) => `${esc(pe.label)}: <b>${pe.named === null ? "no answer" : pe.named ? "named you" : "didn&rsquo;t name you"}</b>`).join(" &middot; ");
-    return `<li class="${t.isGap ? "gap" : ""}"><span>&ldquo;${esc(t.question)}&rdquo;</span><span class="hook-eng">${eng}</span></li>`;
-  }).join("");
   if (!h.gap) {
     return `
     <!-- ADAPTIVE HOOK: no gap in the searches tested -->
     <section class="hook">
       <div class="hook-eyebrow">${esc(c.eyebrow)}</div>
+      <div class="hook-vk">The verdict</div>
       <h1 class="hook-head ok">${esc(c.headline)}</h1>
       <p class="hook-named">${esc(c.lede)}</p>
-      <p class="hook-count">${esc(c.count)}</p>
-      <ul class="hook-tested">${tested}</ul>
+      <p class="hook-caveat">${esc(c.caveat)}</p>
     </section>`;
   }
   const g = h.gap;
-  const qualifier = g.namedOnEngineLabels.length
-    ? `<p class="hook-earlier">${esc(g.namedOnEngineLabels.join(" and "))} did name ${esc(businessName)} for this search &mdash; this gap is specific to ${esc(g.engineLabel)}.</p>`
-    : "";
-  const cites = g.citations.length
-    ? `<p class="hook-cites">Sources ${esc(g.engineLabel)} drew on: ${g.citations.slice(0, 4).map((ci) => esc(ci.title || ci.url)).join("; ")}</p>`
-    : "";
   return `
-    <!-- ADAPTIVE HOOK: the missed search is the result. The model/evidence box IS the result — no
-         separate pink narrative block repeating "we asked / they answered / wasn't named" above it
-         (2026-09-21 — see renderHookEvidenceBox's doc comment). -->
+    <!-- ADAPTIVE HOOK (restored toward the original report layout, 2026-09-21 — page 1 of the
+         baseline PDF is the visual reference). Shows ONLY the failed search: no list of every
+         question tested, no earlier-successful-question line, no cross-engine qualifier, no
+         process/execution-count wording — the adaptive question count is internal methodology,
+         not something a prospect needs to see. The model/evidence box IS the result. -->
     <section class="hook">
       <div class="hook-eyebrow">${esc(c.eyebrow)}</div>
+      <div class="hook-vk">The verdict</div>
       <h1 class="hook-head">${esc(c.headline)}</h1>
       ${renderHookEvidenceBox(g, businessName)}
-      ${c.earlier ? `<p class="hook-earlier">${esc(c.earlier)}</p>` : ""}
-      ${qualifier}
-      ${cites}
-      <p class="hook-count">${esc(c.count)}</p>
       <p class="hook-caveat">${esc(c.caveat)}</p>
-      ${h.tested.length > 1 ? `<ul class="hook-tested">${tested}</ul>` : ""}
     </section>`;
 }
 
@@ -925,21 +906,32 @@ export function renderReportHtml(d: AiAuditReportData): string {
     : "";
 
   /* THE HOOK REPORT'S OWN WEBSITE SLOT (2026-09-21). A hook audit never buys the paid SEO scan
-     (SEO_SCAN_PURPOSES excludes it), so `seoSlot` already reduces to faultsSection/noWebsiteSection
-     for one — this only ADDS the one case `seoSlot` doesn't cover anywhere: a site that WAS actually
-     checked and came back clean. `seoSlot` stays silent on that (Paul's original rule, kept for every
-     other report type); the hook report says so, truthfully, because it is otherwise the only section
-     between the AI result and the pitch, and silence there reads as "we didn't check" rather than
-     "we checked and it's fine". Never invents a finding — `crawlChecked` is only ever true off a real,
-     fetchable, current-version crawl result (see its doc comment above). */
-  const hookCrawlSection = (d.crawlFaults && d.crawlFaults.length) ? faultsSection
-    : d.hasWebsite === false ? noWebsiteSection()
-    : d.crawlChecked ? `
-    <section class="why" style="border-top:1px solid var(--line)">
+     (SEO_SCAN_PURPOSES excludes it), so this covers the same two cases `seoSlot` does for every
+     other report — real findings, or no website at all — but with the old baseline PDF's card
+     treatment (below) instead of the ordinary report's unboxed .fault list. A clean or
+     never-completed crawl renders NOTHING, same rule as every other report type: Paul's original
+     "a site that couldn't be fetched yields no faults" silence, restored (a brief reassurance line
+     was tried here and reverted the same day — it read as a claim worth making on its own). */
+  const hookCrawlSection = (d.crawlFaults && d.crawlFaults.length) ? `
+    <!-- WEBSITE ISSUES, hook layout — the same card treatment page 1/3 of the old baseline PDF
+         uses ("Website issues we can fix": bordered card, dot + bold lead-in + detail), not the
+         ordinary report's unboxed .fault list. Reused classes (.seo/.find*), no new CSS. -->
+    <section class="seo">
       <div class="sec-eyebrow">Your website</div>
-      <div class="sec-title">We also checked your website</div>
-      <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">We didn&rsquo;t find a major technical issue on the pages checked.</p>
+      <div class="sec-title">Website issues we can fix</div>
+      <div class="seo-body">
+        <ul class="seo-findings">${d.crawlFaults.map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${f.minor ? "var(--amber)" : "var(--red)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("")}
+        </ul>
+      </div>
     </section>`
+    : d.hasWebsite === false ? noWebsiteSection()
+    /* ⛔ SILENCE, NOT REASSURANCE (2026-09-21, Paul — reverting the previous session's "we also
+       checked your website" line). A clean crawl or one that never completed both render nothing:
+       the earlier reassurance text read as a claim worth making on its own, when it isn't one. */
     : "";
 
   /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
@@ -1338,9 +1330,14 @@ ${REPORT_CHROME_CSS_CORE}
   /* The old pink .hook-card (a second "we asked / answered with other suggestions / wasn't named")
      was removed 2026-09-21 — the model/evidence box (.chatcard, .cc-*) directly below the heading now
      carries that narrative once, not twice. .hook-named survives for the fully-named ("ok") branch's
-     lede, which never used .hook-card. */
+     lede, which never used .hook-card. Same date: the question-list/qualifier/process-count
+     wording (.hook-earlier, .hook-count, .hook-tested, .hook-eng, .hook-cites) is gone along with
+     the elements that used it — the report shows only the failed search now (page 1 of the old
+     baseline PDF is the visual reference; it never listed every question tested either). */
   .hook-named{ font-size:14px; margin:0 0 12px; color:var(--ink); }
-  .hook-earlier, .hook-count{ font-size:13px; color:var(--muted); margin:0 0 4px; }
+  /* "The verdict" — same weight/spacing as the ordinary report's hero-verdict .vk, restored here
+     without needing its .hero-verdict flex-layout parent. */
+  .hook-vk{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; margin-bottom:8px; }
   /* Labels inside the restored model/evidence box ("Question", "AI named") — small, muted, uppercase,
      matching the eyebrow treatment used elsewhere in this document. The outer "Question" label sits
      directly in .cc-body (needs .cc-q's own 18px gutter); "AI named" sits inside the padded .cc-a
@@ -1352,12 +1349,6 @@ ${REPORT_CHROME_CSS_CORE}
      report's chatCard, which still uses .cc-q unchanged). */
   .cc-q-plain{ margin:0 18px 14px; background:var(--blue-tint); color:var(--ink); font-size:15px; font-weight:600; line-height:1.4; padding:10px 14px; border-radius:10px; }
   .hook-caveat{ font-size:13px; color:var(--muted); font-style:italic; margin:6px 0 0; }
-  .hook-tested{ margin:12px 0 0; padding:0; list-style:none; }
-  .hook-tested li{ display:flex; gap:10px; align-items:baseline; padding:8px 12px; border-radius:8px; font-size:14px; }
-  .hook-tested li.gap{ background:var(--red-tint); font-weight:700; }
-  .hook-tested .hook-eng{ font-size:12px; white-space:nowrap; color:var(--muted); }
-  .hook-tested .hook-eng b{ font-weight:700; }
-  .hook-cites{ font-size:12px; color:var(--muted); margin:4px 0 0; }
   .gb-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--red); font-weight:700; margin-bottom:7px; }
   .gb-sum{ margin:0 0 7px; font-size:14px; line-height:1.4; font-weight:400; color:var(--on-red-tint); }
   .gb-sum .gb-q{ color:var(--ink); font-weight:700; }

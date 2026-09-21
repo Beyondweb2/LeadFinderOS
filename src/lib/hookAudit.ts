@@ -352,47 +352,38 @@ export function buildHookReportSummary(input: {
   };
 }
 
-const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'];
-export function ordinalWord(index: number): string {
-  return ORDINALS[index] ?? `${index + 1}th`;
-}
-
-/** The words. Plain, platform-specific, never a percentage. Tested directly, rendered verbatim. */
+/** The words. Plain, platform-specific, never a percentage. Tested directly, rendered verbatim.
+ *
+ * 🔴 RESTORED TOWARD THE ORIGINAL REPORT DESIGN (2026-09-21, Paul — page 1 of the baseline PDF is
+ * the visual reference). Two things this used to say are gone for good:
+ *   · any "N of up to M searches" / "gap found after N searches" process wording — the adaptive
+ *     execution count is internal methodology, not something a prospect needs to see;
+ *   · the "found in the first search, but not this one" / "ChatGPT did name them" cross-question
+ *     qualifiers — the report shows ONLY the failed search, never the earlier successful one(s).
+ * `earlier` and `count` are gone from the return shape because nothing renders them any more. */
 export function hookReportCopy(summary: HookReportSummary, businessName: string): {
   eyebrow: string;
   headline: string;
   lede: string;
-  earlier: string | null;
-  count: string;
   caveat: string;
 } {
   const eyebrow = 'Quick AI Visibility Check';
   const caveat = 'This is a quick snapshot, not your full AI visibility measurement.';
   const n = summary.questionsTested;
   if (!summary.gap) {
-    // No gap wording here (Paul, 2026-09-21) — the business was named on every search tested, so
-    // "gap found" language would be false. Never exposes "up to maxQuestions" either.
     return {
       eyebrow,
       headline: 'Strong initial AI visibility',
       lede: `${businessName} was named across the ${n === 3 ? 'three' : n === 2 ? 'two' : String(n)} ${n === 1 ? 'search' : 'searches'} tested. This is still only a quick snapshot rather than a full visibility baseline.`,
-      earlier: null,
-      count: `Checked ${n} ${n === 1 ? 'search' : 'searches'}.`,
       caveat,
     };
   }
-  const g = summary.gap;
-  const headline = g.questionIndex === 0
-    ? 'We found a visibility gap.'
-    : `We found a visibility gap on the ${ordinalWord(g.questionIndex)} search.`;
-  const lede = `We asked ${g.engineLabel}: “${g.question}”`;
-  const earlier = g.questionIndex === 0
-    ? null
-    : `${businessName} was found in the ${g.questionIndex === 1 ? 'first search' : 'earlier searches'}, but not in this one.`;
-  /* ⛔ NEVER "1 of up to 3 search tested" (2026-09-21, Paul — read as awkward/technical). Simple,
-     customer-facing, executed-count only: never exposes the question ceiling. */
-  const count = n === 1
-    ? 'Visibility gap found on the first search.'
-    : `Visibility gap found after ${n} searches.`;
-  return { eyebrow, headline, lede, earlier, count, caveat };
+  /* ⛔ NEVER "AI never recommends you" (Paul, 2026-09-21) — a gap on question 2 or 3 means the
+     business WAS named earlier; "isn't recommending you consistently yet" is the truthful,
+     non-overstated claim. Only a Q1 miss (nothing to be inconsistent WITH yet) earns the stronger,
+     still-truthful "for this search yet" wording. */
+  const headline = summary.gap.questionIndex === 0
+    ? "AI isn't recommending you for this search yet."
+    : "AI isn't recommending you consistently yet.";
+  return { eyebrow, headline, lede: '', caveat };
 }

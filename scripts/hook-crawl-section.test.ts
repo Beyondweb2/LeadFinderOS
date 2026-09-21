@@ -48,30 +48,36 @@ const base: AiAuditReportData = {
   hook: hookGap,
 };
 
-console.log('── 8: a hook report with real crawl findings renders them ──');
+console.log('── 8: a hook report with real crawl findings renders them, old-baseline-PDF card style ──');
 {
   const html = renderReportHtml({
     ...base,
     crawlFaults: [{ title: 'AI can’t reach your site', detail: 'GPTBot is blocked from fetching your pages.', minor: false }],
   });
-  ok(html.includes('What&rsquo;s stopping AI reading your site') || html.includes('What’s stopping AI reading your site'), '8: the real fault section renders under the hook result');
+  // 2026-09-21: the hook report's crawl section was restyled to match the old baseline PDF's
+  // "Website issues we can fix" card (.seo/.find*), not the ordinary report's unboxed .fault list.
+  ok(html.includes('Website issues we can fix'), '8: the real fault section renders, using the restored card heading');
   ok(html.includes('GPTBot is blocked'), '8: the actual stored fault detail is shown, not a generic line');
-  ok(!html.includes('We also checked your website'), '8: the reassurance line does not ALSO render alongside real faults');
+  ok(html.includes('class="seo"') && html.includes('class="find"'), '8: it uses the bordered card treatment (.seo/.find), not the unboxed .fault list');
 }
 
 console.log('── 9: a hook report with no crawl data at all fabricates nothing ──');
 {
   const html = renderReportHtml({ ...base });
-  ok(!html.includes('stopping AI reading your site'), '9: no fault section when nothing was ever checked');
+  ok(!html.includes('Website issues we can fix'), '9: no fault section when nothing was ever checked');
   ok(!html.includes('We also checked your website'), '9: no "checked and clean" claim when we never actually checked');
   ok(!html.includes('major technical issue'), '9: no fabricated reassurance either — silence, not a guess');
 }
 
-console.log('── 9b: a hook report that WAS checked and found nothing gets the truthful reassurance line ──');
+console.log('── 9b: a clean crawl renders NOTHING — silence, not a reassurance line (2026-09-21, reverted) ──');
 {
-  const html = renderReportHtml({ ...base, crawlChecked: true });
-  ok(html.includes('We also checked your website'), '9b: the truthful "we checked" section renders');
-  ok(html.includes("didn&rsquo;t find a major technical issue") || html.includes("didn’t find a major technical issue"), '9b: the exact truthful line renders, no invented fault');
+  // The previous session's "we also checked your website — nothing major found" reassurance was
+  // itself reverted the same day: crawlChecked no longer exists on AiAuditReportData at all, and a
+  // report with crawlFaults explicitly empty must render no website section, matching every other
+  // report type's silent-on-clean/unchecked rule (Paul's original rule, restored).
+  const html = renderReportHtml({ ...base, crawlFaults: [] });
+  ok(!html.includes('We also checked your website'), '9b: the old reassurance line is gone for good');
+  ok(!html.includes('major technical issue'), '9b: no truthful-sounding claim is made about a clean crawl either — silence');
 }
 
 console.log('── 10: crawl scoped to the wrong lead/audit is never shown (render-side contract) ──');
