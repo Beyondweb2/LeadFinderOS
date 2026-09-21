@@ -295,3 +295,76 @@ classifies the fault ("You have …" — quota, rate limit or key? — now 400 c
 
 ---
 
+
+## "Edge Function returned a non-2xx status code" hid a designed refusal (2026-09-21)
+
+Paul pressed **Confirm & run** on a Full Measurement for **MCLocksmiths centre** (lead
+`6d0585ac-b4a3-463b-8150-c59c3dd0f0e5`, `amount_paid = 99`). The screen said *"Couldn't start the
+audit — Edge Function returned a non-2xx status code"*.
+
+Nothing was broken. `create-ai-audit` refused exactly as §19 says it must: the lead is PAID and its
+`baseline_audit_id` is NULL, so the order gate fired —
+
+```
+409  { ok:false, error:"baseline_not_frozen",
+       detail:"This client has no recorded baseline. The full measure runs after the
+               baseline freezes, never before it." }
+```
+
+— and recorded itself in `client_error_reports` at **17:00:35Z**. No audit, run or queue row was
+created; the refusal is before every insert. The reason there is no baseline: the client's
+`onboarding_responses` row (`f1406d3d…`, paid, 2026-09-17) has `baseline_status = NULL`, i.e.
+`needs_questions`, so `startPaidBaseline` has been returning `skipped: needs_baseline_questions`
+every 30-second tick. **The paid baseline is drafted and approved on the Baseline screen; the AI
+Audit wizard's Full Measurement is a different, later thing and cannot substitute for it.**
+
+⛔ **THE BUG WAS THE SCREEN, NOT THE GATE — AND IT IS A SHAPE, NOT AN INSTANCE.**
+`supabase.functions.invoke` answers **every** non-2xx with `data === null` and one wrapper string.
+So `if (!error && data?.error === 'business_not_in_town')` in `confirmAndRun` was branching on a
+field that is never populated on a refusal: **the distance-override dialog could never open either**,
+and had not since the day it was written. The refusal's real body — machine token in `error`, human
+sentence in `detail` — is only reachable through `error.context`.
+
+Fixed by reading the body ONCE (`readFunctionErrorBody`) and choosing the sentence with
+`functionErrorSentence` (**`detail` → `message` → `error` → wrapper**; showing the token is the
+catch-all-error fault in a different hat). `scripts/function-error-body.test.ts` drives both rules,
+including that the body is a stream and a second reader must degrade rather than throw.
+
+⚠️ Still unfixed on the same screen: `runPreview` throws `error?.message` the same way. Left alone
+deliberately — the brief was the Confirm & run path.
+
+## A discovery scan was shown as the paid client baseline (2026-09-21, MCLocksmiths centre)
+
+The Baseline screen said **"Client baseline · 80 questions · 3 runs · measured 21/09/2026"** and the
+lead cockpit offered the same audit as **"Baseline report"**. The audit was `50986aa3-…`, the
+client's 80-question **discovery** scan.
+
+⛔ **NOTHING HAD BEEN WRITTEN.** `outreach_leads.baseline_audit_id` was NULL throughout, and
+`claim_baseline_pointer` fires only on `audit_purpose = 'baseline'` — so a discovery audit is
+structurally incapable of being adopted, and `guard_baseline_pointer_immutable` would stop a
+real one being overwritten afterwards. `onBaselineFrozen` is gated on the same purpose, so nothing
+spent and no `remeasure_due_date` was filled. **Display only.**
+
+**What made it look frozen:** `advanceBaseline` freezes on `baseline_target_runs > 1` and nothing
+else — its own comment says "not a paid baseline audit", which is not what the line tests. A
+3-run discovery audit therefore gets `baseline_completed_at` and the `baseline` fold stamped on it.
+That is how discovery gets its multi-run summary and is correct; what is **not** correct is any
+reader treating `baseline_completed_at` as a baseline marker.
+
+⛔ **THE FAULT WAS THE NEGATIVE QUESTION, IN TWO PLACES.** Both screens computed
+`isInternalMeasurement(audit) ? 'internal' : 'Client baseline'` — so the `else` carried discovery,
+the free check and every ordinary outreach audit. `LeadDeliveryCockpit` compounded it with a
+`?? rows[0]` last rung that nominates *the newest audit* as the baseline, and an `isBaseline` flag
+computed from `baseline_target_runs != null`, which answers "is this multi-run", never "is this the
+baseline". The file's own header records fixing exactly this rung for full measures in 2026-09-13
+and leaving it open for everything else.
+
+**The rule is positive now and lives once** — `isClientBaseline` / `auditRoleLabel` in
+`src/lib/auditKind.ts`, asserted on `'baseline'`, with legacy multi-run rows (RG, Ronnie) included.
+`AuditPills` had a third hand-rolled copy of the same expression; it imports the shared one now.
+`auditKind` also grades `'discovery'` as its own kind so no screen infers it from a question count.
+
+⛔ **AND THE COUNT IS ENFORCED WHERE IT FREEZES.** `paid-baseline`'s `approve` action now demands
+exactly `BASELINE_QUESTIONS`; `save` still allows a 1–40 draft while the operator works. Approval
+is what the day-28 replay repeats verbatim, so approving 19 or 80 silently redefines the refund's
+measuring stick. `scripts/discovery-not-baseline.test.ts` drives all of it.

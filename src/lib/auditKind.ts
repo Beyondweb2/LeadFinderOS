@@ -65,8 +65,11 @@ export type AuditKind =
   | 'measurement'
   /** The free check: purpose 'free_check'. Multi-run, never a baseline, never ambiguous. */
   | 'free_check'
-  /** Any other RECORDED purpose ('audit', 'discovery', 'market', …): a hook, a wizard audit, a
-   *  discovery scan, a manual re-audit.
+  /** The breadth scan: purpose 'discovery'. Multi-run and multi-question by design, and NEVER the
+   *  client's baseline — it exists to CHOOSE the baseline's questions, not to be them. Graded apart
+   *  from 'ordinary' so no screen has to infer it from a question count. */
+  | 'discovery'
+  /** Any other RECORDED purpose ('audit', 'market', …): a hook, a wizard audit, a manual re-audit.
    *  Whatever its run count, it is neither a baseline nor a reason to hold one. */
   | 'ordinary'
   /** AMBIGUOUS — the one kind that refuses a spend: purpose 'baseline' with NO contract (a failed
@@ -121,6 +124,7 @@ export function auditKind(row: AuditKindRow): AuditKind {
     if (purpose === BASELINE_AUDIT_PURPOSE) return contract ? 'paid_baseline' : 'multi_run_unmarked';
     if (purpose === MEASUREMENT_AUDIT_PURPOSE || purpose === REMEASURE_AUDIT_PURPOSE) return 'measurement';
     if (purpose === FREE_CHECK_AUDIT_PURPOSE) return 'free_check';
+    if (purpose === DISCOVERY_AUDIT_PURPOSE) return 'discovery';
     return 'ordinary';
   }
 
@@ -259,4 +263,51 @@ export const SEO_SCAN_PURPOSES: ReadonlySet<string> = new Set([BASELINE_AUDIT_PU
 /** May an audit of this purpose buy the website scan? Null / unknown / absent → NO. */
 export function seoScanAllowed(auditPurpose: string | null | undefined): boolean {
   return typeof auditPurpose === 'string' && SEO_SCAN_PURPOSES.has(auditPurpose);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   IS THIS AUDIT THE PAYING CLIENT'S FROZEN BASELINE?
+
+   🔴 THE INCIDENT (2026-09-21, MCLocksmiths centre). The Baseline screen announced the client's
+   80-question DISCOVERY scan as "Client baseline · 80 questions · 3 runs · measured 21/09/2026",
+   and the lead cockpit offered it as "Baseline report". Nothing had been written: the lead's
+   `baseline_audit_id` was NULL the whole time and `claim_baseline_pointer` only ever fires on
+   `audit_purpose = 'baseline'`, so a discovery audit is structurally incapable of being adopted.
+   It was said, not stored — and a screen that says it is the baseline is how a discovery set ends
+   up replayed at day 28.
+
+   ⛔ IT WAS THE SHAPE, NOT THE INSTANCE. Both screens asked the NEGATIVE question — "is this an
+   internal measurement? no? then it is the client baseline" — so the `else` carried discovery, the
+   free check, and every ordinary outreach audit along with it. That is CLAUDE.md §6's absent-value
+   law: enumerate the case you want, never let the remainder stand in for it.
+
+   ⛔ SO THE RULE IS POSITIVE, AND IT LIVES HERE ONCE. AuditPills had already hand-rolled this exact
+   expression; a second copy in Baseline.tsx is how the two would have drifted. Assert on
+   'baseline', never on "not a measurement".
+
+   ⚠️ LEGACY ROWS ARE INCLUDED DELIBERATELY. A pre-2026-09-12 multi-run audit that is not flagged
+   `is_measurement` is RG's and Ronnie's baseline, and those are real client baselines with real
+   refund dates hanging off them. auditKind already grades them 'paid_baseline' /
+   'multi_run_unmarked'; both count here.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export function isClientBaseline(row: AuditKindRow | null | undefined): boolean {
+  if (!row) return false;
+  const kind = auditKind(row);
+  return kind === 'paid_baseline' || kind === 'multi_run_unmarked';
+}
+
+/** What an operator screen calls this audit. Never "Client baseline" unless isClientBaseline says
+ *  so — that is the whole point of the function above. */
+export const DISCOVERY_LABEL = 'Discovery scan (chooses the baseline questions)';
+export const CLIENT_BASELINE_LABEL = 'Client baseline';
+export const FREE_CHECK_LABEL = 'Free check';
+export const ORDINARY_AUDIT_LABEL = 'Audit (not a client baseline)';
+
+export function auditRoleLabel(row: AuditKindRow | null | undefined): string {
+  if (isClientBaseline(row)) return CLIENT_BASELINE_LABEL;
+  const kind = auditKind(row ?? {});
+  if (kind === 'measurement') return INTERNAL_MEASUREMENT_LABEL;
+  if (kind === 'discovery') return DISCOVERY_LABEL;
+  if (kind === 'free_check') return FREE_CHECK_LABEL;
+  return ORDINARY_AUDIT_LABEL;
 }

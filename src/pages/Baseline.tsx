@@ -21,7 +21,7 @@ import {
 } from '@/lib/baselineView';
 import { assessTradeFit, TRADE_FIT_LABEL, TRADE_FIT_REASON } from '@/lib/questionTradeFit';
 import { SEOHead } from '@/components/SEOHead';
-import { isInternalMeasurement, INTERNAL_MEASUREMENT_LABEL } from '@/lib/auditKind';
+import { isInternalMeasurement, isClientBaseline, auditRoleLabel } from '@/lib/auditKind';
 
 /**
  * OPERATOR VIEW of a paid client's baseline — /baseline/:auditId.
@@ -276,6 +276,12 @@ export default function Baseline() {
     return { report, byQuestion: new Map(report.questions.map((q) => [q.question, q.state])) };
   })();
   const internalOnly = isInternalMeasurement(audit);
+  /* ⛔ ASK THE POSITIVE QUESTION. `!internalOnly` is not "this is the client's baseline" — it is
+     "this is not a full measure", and discovery, the free check and every ordinary outreach audit
+     satisfy it. On 2026-09-21 that announced MCLocksmiths' 80-question discovery scan as their
+     client baseline. One rule, in src/lib/auditKind.ts, asserted on 'baseline'. */
+  const clientBaseline = isClientBaseline(audit);
+  const roleLabel = auditRoleLabel(audit);
   const opportunities = audit.baseline_completed_at && !internalOnly
     ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, audit.business_name ?? '', audit.location_text ?? '', audit.website ?? '') }))
     : [];
@@ -286,8 +292,8 @@ export default function Baseline() {
   return (
     <>
       <SEOHead
-        title={`${internalOnly ? INTERNAL_MEASUREMENT_LABEL : 'Baseline'} — ${audit.business_name ?? 'client'}`}
-        description={internalOnly ? 'Operator view of an internal measurement.' : "Operator view of a paid client's baseline."}
+        title={`${clientBaseline ? 'Baseline' : roleLabel} — ${audit.business_name ?? 'client'}`}
+        description={clientBaseline ? "Operator view of a paid client's baseline." : 'Operator view of an audit that is not a client baseline.'}
         noindex
       />
       <div className="mx-auto max-w-5xl space-y-4 py-4">
@@ -299,8 +305,8 @@ export default function Baseline() {
             <p className="text-xs text-muted-foreground">
               {/* What this audit IS, in the operator's words. The stored purpose stays 'measurement';
                   the label is the only thing that changed (Paul, 2026-09-13). */}
-              <span className={internalOnly ? 'font-semibold text-amber-500' : 'font-semibold'}>
-                {internalOnly ? INTERNAL_MEASUREMENT_LABEL : 'Client baseline'}
+              <span className={clientBaseline ? 'font-semibold' : 'font-semibold text-amber-500'}>
+                {roleLabel}
               </span>
               {' · '}{view.questions.length} questions · {view.runsCounted} runs
               {view.measuredAt && ` · measured ${new Date(view.measuredAt).toLocaleDateString('en-GB')}`}
@@ -336,7 +342,10 @@ export default function Baseline() {
               ⛔ NOT OFFERED FOR AN INTERNAL MEASUREMENT (2026-09-13). A full measure or a day-28
               replay has no client document: the public renderer refuses it and this button must
               not manufacture one. Same predicate as the renderer (src/lib/auditKind.ts). */}
-          {!internalOnly && (
+          {/* ⛔ AND THE CLIENT DOCUMENT IS OFFERED ONLY FOR A CLIENT BASELINE. Under `!internalOnly`
+              this button also appeared on a discovery scan, i.e. it offered to build a client report
+              out of an 80-question operator breadth scan. */}
+          {clientBaseline && (
             <Button variant="outline" size="sm" onClick={openReport} disabled={reportBusy}>
               {reportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
               {reportBusy ? 'Building…' : 'View client report'}
