@@ -48,6 +48,17 @@ export interface BaselineContract {
   areasMeasuredInFullMeasure?: string[];
   /** The question ceiling in force when this contract was written. */
   ceiling: number;
+  /** ⛔ THE REST OF THE SHAPE THE REPLAY MUST REPRODUCE (added 2026-09-21). The asked set lives in
+   *  the queue rows and is still the source of truth; these are the frozen copies, so a contract
+   *  can be read on its own and say what was measured rather than what today's defaults would do.
+   *  ABSENT on every contract written before that date, and absent means NOT RECORDED — never
+   *  "one run" or "no questions". A reader that needs a number for an older contract takes it from
+   *  ai_audits.baseline_target_runs and the queue, exactly as it did before these existed. */
+  runs?: number;
+  /** The engines every question was asked on, as queued. */
+  engines?: string[];
+  /** The questions as actually queued, in queued order — the order the replay repeats them in. */
+  askedQuestions?: string[];
   /** v1 ONLY — history. Seeding from the outreach hook was dropped on 2026-09-12: the hook is
    *  throwaway and never compared, so the baseline is generated fresh. */
   seededQuestions?: string[];

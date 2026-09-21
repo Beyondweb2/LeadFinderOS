@@ -90,8 +90,14 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   |---|---|---|---|
   | Hook / free check | 3 q × 1 run (free check 3 × 3) | `audit` / `free_check` | never |
   | Baseline | 12 q, home town, × 3 runs, frozen | `baseline` | the before side |
-  | Full measure | 20 q × 3 across home + areas, DISJOINT | `measurement` | never |
+  | Full measure | 1–80 q × 1–3 (default 20 × 3) across home + areas, DISJOINT | `measurement` | never |
   | Day-28 replay | the baseline's ASKED set verbatim × 3 | `remeasure` | the after side |
+  ⛔ **The full measure is operator-dialled since 2026-09-21: 1–80 questions × 1–3 runs** (default
+  20 × 3; `FULL_MEASURE_MIN/MAX_QUESTIONS`, `MEASUREMENT_MIN/MAX/DEFAULT_RUNS`). It is honest only
+  because generation is BATCHED (`planGenerationBatches`, each call ≤ `GENERATOR_ABSOLUTE_MAX_
+  QUESTIONS`); a full measure **refuses** an out-of-range request rather than clamping, the run
+  count is stored as `baseline_target_runs` and drives `advanceBaseline`, and the replay reuses the
+  baseline's run count. `docs/measurement.md` §32.
   Order is structural: the full measure starts only from `onBaselineFrozen`; a paying lead with no
   frozen baseline is refused (`409 baseline_not_frozen`). `outreach_leads.baseline_audit_id` /
   `remeasure_audit_id` are claimed by DB TRIGGERS, immutable once set; one replay per lead, ever.

@@ -89,7 +89,7 @@ ok(/\.eq\("audit_purpose", "measurement"\)/.test(sfm), "…and skips if a full m
 ok(!/await startFullMeasure\(service, audit\)/.test(baselineSrc), "normal paid fulfilment does not automatically start a full measure");
 
 console.log("\n── SOURCE: THE SERVER MAKES A MEASUREMENT DISJOINT AND ENFORCES THE ORDER ──");
-ok(/import \{ excludeAsked, overAskFor \} from "\.\.\/\.\.\/\.\.\/src\/lib\/fullMeasure\.ts";/.test(serverSrc), "create-ai-audit imports the pure helpers with an explicit .ts extension");
+ok(/import \{[^}]*excludeAsked[^}]*planGenerationBatches[^}]*\} from "\.\.\/\.\.\/\.\.\/src\/lib\/fullMeasure\.ts";/s.test(serverSrc), "create-ai-audit imports the pure helpers with an explicit .ts extension");
 ok(/const disjoint = \(qs: string\[\]\) => excludeAsked\(qs, baselineAsked\);/.test(serverSrc), "the exclusion is applied through excludeAsked");
 ok(/coverageDirective\(baselineAsked, businessType\)/.test(serverSrc), "…and the model is steered by a coverage directive built from the baseline's asked set");
 ok(/refuse\("baseline_not_frozen"/.test(serverSrc) && /isMeasurement && leadPaid && !\(pointer && pointerFrozen\)/.test(serverSrc), "a paying lead with no frozen baseline is refused with baseline_not_frozen");

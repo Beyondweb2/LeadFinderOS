@@ -7,7 +7,10 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
-import { excludeAsked, overAskFor } from "../../../src/lib/fullMeasure.ts";
+import {
+  excludeAsked, planGenerationBatches,
+  clampMeasurementRuns, isValidMeasurementRuns, isValidFullMeasureQuestionCount, expectedResponses,
+} from "../../../src/lib/fullMeasure.ts";
 import { fillToTarget, dedupeByIntent } from "../../../src/lib/questionFill.ts";
 import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import {
@@ -23,6 +26,11 @@ import {
   WIZARD_MAX_QUESTIONS,
   BASELINE_QUESTIONS,
   FULL_MEASURE_QUESTIONS,
+  FULL_MEASURE_MIN_QUESTIONS,
+  FULL_MEASURE_MAX_QUESTIONS,
+  MEASUREMENT_MIN_RUNS,
+  MEASUREMENT_MAX_RUNS,
+  MEASUREMENT_DEFAULT_RUNS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
 
@@ -71,19 +79,24 @@ const BASELINE_DEFAULT_QUESTION_COUNT = BASELINE_QUESTIONS;
    Reuses the whole pipeline — one ai_audit_queue row per question, both engines per row, drained
    by process-ai-audit-queue at <=24 in flight. Operator-JWT callable (the AI Audit page's Full
    mode) as well as internal.
-   ⛔ FIXED AT FULL_MEASURE_QUESTIONS — min, max and default are the SAME number, derived from the
-   shared policy module, so no caller can ask for a different size and the screen cannot offer one
-   the generator will not honour. It used to be 10..75 with a default of 40 while generateQuestions
-   hard-capped every call at 20 (now the NAMED GENERATOR_ABSOLUTE_MAX_QUESTIONS), so "40" was a
-   number the screen said and the queue never did.
+   ⛔ A DIAL AGAIN, 1..80 (Paul, 2026-09-21), AND IT IS HONEST BECAUSE THE GENERATION IS BATCHED.
+   It was fixed at one number because the screen used to offer 10..75 while generateQuestions
+   hard-capped every call at 20 (now the NAMED GENERATOR_ABSOLUTE_MAX_QUESTIONS, 40), so "40" was a
+   number the screen said and the queue never did. The ceiling below is only true because
+   `planGenerationBatches` splits a target above that per-CALL cap across several calls and
+   fillGenerated tops the pool up to the target — 80 means 80 queued rows or a LOGGED shortfall.
+   ⛔ AND AN OUT-OF-RANGE REQUEST IS REFUSED, NOT CLAMPED (see the measurement validation below).
+   Quietly running 80 as 20 is the silent-truncation fault the whole file is scarred by.
    ⛔ SEO IS FORCED OFF for this purpose (it is per-site, once, and would eat the run's budget). */
-const MEASUREMENT_MIN_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
-const MEASUREMENT_MAX_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
+const MEASUREMENT_MIN_QUESTION_COUNT = FULL_MEASURE_MIN_QUESTIONS;
+const MEASUREMENT_MAX_QUESTION_COUNT = FULL_MEASURE_MAX_QUESTIONS;
 const MEASUREMENT_DEFAULT_QUESTION_COUNT = FULL_MEASURE_QUESTIONS;
-/* ⛔ HOW MANY TIMES A FULL MEASUREMENT ASKS EACH QUESTION (per engine). 3 = the proven number the
-   paid baseline uses; frequency ("named 4 of 6") not a single lucky ask. Paul tunes this. Cost
-   scales ~linearly with it (more Apify runs). */
-const MEASUREMENT_RUNS = 3;
+/* ⛔ HOW MANY TIMES A FULL MEASUREMENT ASKS EACH QUESTION (per engine). Operator-selectable 1..3,
+   DEFAULT 3 — the proven number the paid baseline uses; frequency ("named 4 of 6") not a single
+   lucky ask. Cost scales ~linearly with it (more Apify runs), which is why 3 is a ceiling.
+   The chosen number is stored as baseline_target_runs and advanceBaseline drives the repeats from
+   it with the same questions, so it controls EXECUTION and not just the label. */
+const MEASUREMENT_RUNS = MEASUREMENT_DEFAULT_RUNS;
 
 /** Clamp an untrusted question-count into [min..max], defaulting to `def`. */
 function clampCount(
@@ -313,6 +326,47 @@ Deno.serve(async (req) => {
        It also forces the SEO skip on every run (see skipSeo), so runs 2 and 3 cannot buy the scan
        run 1 deliberately declined. */
     const isFreeCheck: boolean = isInternal && body.purpose === FREE_CHECK_AUDIT_PURPOSE;
+    /* ⛔ THE MEASUREMENT'S TWO DIALS ARE VALIDATED, NOT CLAMPED — INDEPENDENTLY OF THE SCREEN.
+       A stated value outside the bounds is a request we cannot honour, and honouring three
+       quarters of it silently is the fault that produced comparisons built on a subset. Only the
+       full measure refuses: every other purpose keeps its existing clamp, because their callers
+       are automations that have never stated an out-of-range value and a refusal there would turn
+       a working lane into a dead one. Absent → the default, which is not an invalid value.
+       ⚠️ The SUPPLIED-questions list is bounded by MAX_QUESTIONS below and already reported through
+       truncationReport; for a measurement that report is upgraded to a refusal too. */
+    const rawRuns = body.runs ?? body.measurement_runs ?? (isRemeasure ? body.baseline_target_runs : undefined);
+    if (isMeasurement) {
+      /* ⚠️ THE FULL MEASURE ONLY, for the question count. A replay's size is not the operator's
+         choice at all — it is however many questions the baseline asked, carried verbatim — so it
+         keeps the baseline bounds it has always had. Its RUN count is validated below, because
+         that one IS carried from the baseline and a wrong value would change the comparison. */
+      const statedCount = body.question_count ?? body.questionCount;
+      if (statedCount !== undefined && statedCount !== null && !isValidFullMeasureQuestionCount(
+        typeof statedCount === "number" ? statedCount : Number.NaN,
+      )) {
+        return json({
+          ok: false,
+          error: "question_count_out_of_range",
+          detail: `A full measurement asks between ${FULL_MEASURE_MIN_QUESTIONS} and ${FULL_MEASURE_MAX_QUESTIONS} questions; ${String(statedCount)} was asked for. Nothing was started.`,
+          min: FULL_MEASURE_MIN_QUESTIONS, max: FULL_MEASURE_MAX_QUESTIONS,
+        }, 400);
+      }
+    }
+    if ((isMeasurement || isRemeasure) && rawRuns !== undefined && rawRuns !== null && !isValidMeasurementRuns(
+      typeof rawRuns === "number" ? rawRuns : Number.NaN,
+    )) {
+      return json({
+        ok: false,
+        error: "runs_out_of_range",
+        detail: `A full measurement runs each question between ${MEASUREMENT_MIN_RUNS} and ${MEASUREMENT_MAX_RUNS} times; ${String(rawRuns)} was asked for. Nothing was started.`,
+        min: MEASUREMENT_MIN_RUNS, max: MEASUREMENT_MAX_RUNS,
+      }, 400);
+    }
+    /* THE CHOSEN RUN COUNT. Absent → MEASUREMENT_DEFAULT_RUNS (3), which is what every existing
+       internal caller gets without changing a line. A REPLAY reads it from the baseline it is
+       replaying (fireDueRemeasures passes the baseline's baseline_target_runs), so a baseline
+       measured over 2 runs is re-measured over 2 — never silently over 3. */
+    const measurementRuns = clampMeasurementRuns(rawRuns);
     const questionCount = (isBaseline || isRemeasure)
       ? clampCount(body.question_count ?? body.questionCount,
           BASELINE_MIN_QUESTION_COUNT, BASELINE_MAX_QUESTION_COUNT, BASELINE_DEFAULT_QUESTION_COUNT)
@@ -348,7 +402,9 @@ Deno.serve(async (req) => {
       : 0;
     const baselineTargetRuns = isBaseline
       ? Math.min(5, Math.max(1, typeof body.baseline_target_runs === "number" ? Math.round(body.baseline_target_runs) : 1))
-      : (isMeasurement || isRemeasure) ? MEASUREMENT_RUNS
+      /* THE OPERATOR'S (or the baseline's) CHOSEN RUN COUNT, validated above and clamped to 1..3.
+         Absent → MEASUREMENT_DEFAULT_RUNS, so every existing caller is unchanged. */
+      : (isMeasurement || isRemeasure) ? measurementRuns
       : internalTargetRuns;
     /* SILENT TRUNCATION WAS THE REAL BUG, not the number. The cap is a cost ceiling and stays, but
        quietly returning fewer questions than were asked for is how a before/after ends up built on a
@@ -361,6 +417,19 @@ Deno.serve(async (req) => {
     const droppedQuestions: string[] = suppliedQuestions ? suppliedQuestions.slice(MAX_QUESTIONS) : [];
     if (droppedQuestions.length) {
       console.error(`[create-ai-audit] TRUNCATED: ${suppliedQuestions!.length} supplied, cap ${MAX_QUESTIONS}, DROPPED ${droppedQuestions.length}: ${droppedQuestions.join(" | ")}`);
+    }
+    /* ⛔ A FULL MEASURE REFUSES RATHER THAN TRUNCATES (2026-09-21). The report below is honest, but
+       an operator who picked 81 questions and got an audit of 80 has an audit that is not the one
+       they configured, and the truncation is a line in a response nobody reads. Every other purpose
+       keeps the report-and-run behaviour: their callers are automations replaying a stored set,
+       where refusing would strand a paid deliverable over a cap it cannot control. */
+    if (isMeasurement && droppedQuestions.length) {
+      return json({
+        ok: false,
+        error: "too_many_questions",
+        detail: `${suppliedQuestions!.length} questions were sent and a full measurement asks at most ${MAX_QUESTIONS}. Nothing was started — deselect ${droppedQuestions.length} and send again.`,
+        max: MAX_QUESTIONS, supplied_count: suppliedQuestions!.length,
+      }, 400);
     }
     /* Spread into both responses. Conditional so a clean call stays clean — the keys are absent
        entirely when nothing was dropped, rather than a truncated:false a caller learns to ignore. */
@@ -619,12 +688,20 @@ Deno.serve(async (req) => {
       if (providedQuestions && providedQuestions.length) {
         qs = providedQuestions;
       } else if (isBaseline || isMeasurement) {
-        const mixed = await generateWithMoney(
+        /* ⚠️ BATCHED AND FILLED TO TARGET FOR A MEASUREMENT, because THIS preview IS the wizard's
+           generation step: what comes back is what the operator reviews and posts verbatim. An 80
+           that returned 40 here would be an 80 the operator never got to choose from, and a pool
+           that came back short would be a short audit nobody was told about. A baseline is one
+           batch and is filled the same way the real run fills it, so the review and the run agree. */
+        const mixed = await generateMeasurementSet(
           businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country,
-          questionCount, serviceAreaCoverage,
+          serviceAreaCoverage, isMeasurement, 0,
         );
-        qs = mixed.questions;
-        previewMoney = mixed.money;
+        qs = isMeasurement
+          ? fillGenerated("full measure preview", mixed.questions, questionCount, [],
+              { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country })
+          : mixed.questions;
+        previewMoney = mixed.money.filter((q) => qs.includes(q));
       } else {
         qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount);
       }
@@ -768,7 +845,10 @@ Deno.serve(async (req) => {
         const verdict = judgeRemeasure({
           proposed: providedQuestions,
           baselineAsked,
-          targetRuns: MEASUREMENT_RUNS,
+          /* THE RUNS THIS REPLAY WILL ACTUALLY DO — the baseline's number, not the default. It was
+             the constant, which made the verdict a claim about a configuration rather than about
+             this audit: a single-run replay would have been judged as a full measurement. */
+          targetRuns: measurementRuns,
           overrideReason: typeof body.question_change_reason === "string" ? body.question_change_reason : null,
         });
         if (!verdict.allow) return await refuse(verdict.reason, verdict.detail);
@@ -862,12 +942,12 @@ Deno.serve(async (req) => {
       let coverage = serviceAreaCoverage;
       /* ⛔ THE FULL MEASURE IS DISJOINT FROM THE BASELINE, IN TWO LAYERS. `coverage` asks the
          model to steer clear of the judged intents (the polite request); `excludeAsked` removes
-         any paraphrase that came back anyway (the guarantee); `overAskFor` asks for enough extra
-         that the target survives the filter, never above the generator's named ceiling. Every
-         other caller has an empty exclusion set and is byte-for-byte unchanged. */
+         any paraphrase that came back anyway (the guarantee); `planGenerationBatches` (inside
+         generateMeasurementSet) asks for enough extra that the target survives the filter, across
+         as many calls as the target needs. Every other caller has an empty exclusion set and is
+         byte-for-byte unchanged. */
       if (isMeasurement && baselineAsked.length) coverage = [coverage, coverageDirective(baselineAsked, businessType)].filter(Boolean).join("\n\n");
       const disjoint = (qs: string[]) => excludeAsked(qs, baselineAsked);
-      const ask = (n: number) => overAskFor(n, baselineAsked.length);
 
       if (areaAllocation.length > 1) {
         /* MULTI-TOWN FULL MEASURE. One LLM call per area, gpt-4o-mini — the Apify question runs
@@ -878,7 +958,7 @@ Deno.serve(async (req) => {
         for (const area of areaAllocation) {
           if (area.isMain) continue;
           try {
-            const mixed = await generateWithMoney(businessName, businessType, area.town, hasWebsite, specialisms, ask(area.questions), "local", country, area.questions, coverage, true);
+            const mixed = await generateMeasurementSet(businessName, businessType, area.town, hasWebsite, specialisms, area.questions, "local", country, coverage, true, baselineAsked.length);
             const kept = fillGenerated(`area "${area.town}"`, mixed.questions, area.questions, baselineAsked,
               { type: businessType, loc: area.town, hasWebsite, specialisms, scope: "local", country });
             perArea.push(...kept);
@@ -895,7 +975,7 @@ Deno.serve(async (req) => {
         if (providedQuestions?.length) {
           mainQs = disjoint(providedQuestions).slice(0, mainShare);
         } else {
-          const mixed = await generateWithMoney(businessName, businessType, locationText, hasWebsite, specialisms, ask(mainShare), businessScope, country, mainShare, coverage, true);
+          const mixed = await generateMeasurementSet(businessName, businessType, locationText, hasWebsite, specialisms, mainShare, businessScope, country, coverage, true, baselineAsked.length);
           mainQs = fillGenerated(`main town "${locationText}"`, mixed.questions, mainShare, baselineAsked,
             { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country });
           const keptMain = new Set(mainQs);
@@ -921,10 +1001,13 @@ Deno.serve(async (req) => {
           questions = isMeasurement ? disjoint(providedQuestions) : providedQuestions;
         } else if (isBaseline || isMeasurement) {
           /* THE PAID BASELINE (home town, fresh) / THE FULL MEASURE. Flagged money questions via
-             the two-call generator, so the before/after can include or exclude them by choice. */
-          const mixed = await generateWithMoney(
-            businessName, businessType, locationText, hasWebsite, specialisms, ask(questionCount),
-            businessScope, country, questionCount, coverage, true,
+             the two-call generator, so the before/after can include or exclude them by choice.
+             ⚠️ BATCHED: a target over the generator's per-call cap is asked for across several
+             calls. A baseline (<= 20) and a default-sized measure are ONE batch — the same call
+             with the same arguments as before, `ask()`'s over-ask planned inside the helper. */
+          const mixed = await generateMeasurementSet(
+            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessScope, country, coverage, true, baselineAsked.length,
           );
           /* ⛔ FILL, DON'T SLICE (2026-09-13): exclude → dedupe by intent → slice → top up from the
              templates. This is the site that queued AD Locksmithing's 11-of-12 baseline and
@@ -971,7 +1054,12 @@ Deno.serve(async (req) => {
       // Mark this as a multi-run paid baseline. Migration-tolerant: if the column is not
       // there yet the insert is retried without it, so a pending migration degrades to an
       // ordinary single-run audit instead of failing a paying customer's submission.
-      if (baselineTargetRuns > 1) auditRow.baseline_target_runs = baselineTargetRuns;
+      /* ⛔ A MEASUREMENT RECORDS ITS RUN COUNT EVEN WHEN IT IS 1. Everywhere else the column is
+         written only above 1, because null and 1 mean the same thing to advanceBaseline (`target >
+         1`) and writing 1 would have changed nothing. For a full measure they do NOT mean the same
+         thing: null is "nobody chose", 1 is "the operator chose one run", and a replay that reads
+         the configuration back must be able to tell those apart rather than defaulting to 3. */
+      if (baselineTargetRuns > 1 || isMeasurement || isRemeasure) auditRow.baseline_target_runs = baselineTargetRuns;
       /* ⛔ THE GUARANTEE GUARD. A Full Measurement reuses baseline_target_runs (multi-run), which is
          the SAME column the paid baseline keys on — so a measurement MUST be marked, or
          startPaidBaseline would see baseline_target_runs>1 on the lead and skip the real guarantee
@@ -1086,6 +1174,22 @@ Deno.serve(async (req) => {
        WITHOUT a schema change (results is jsonb). Inert to everything downstream: the queue's SEO
        step keys on results.seo and the report on results.seo.categories — neither reads this. */
     if (isMeasurement) runResults.measurement = true;
+    /* ⛔ THE CONFIGURATION THIS RUN WAS STARTED WITH, IN ITS OWN ROW. The questions are in the
+       queue rows and the run count is in ai_audits.baseline_target_runs, so this is not the source
+       of truth for either — it is the record that says what was ASKED FOR, so a run that ends up
+       short of its target can be told apart from one that was configured small. Written for every
+       purpose that has a chosen shape, kept beside `measurement` rather than inside it because
+       that flag is a boolean two readers already key on.
+       ⚠️ `questions` is the count AS QUEUED (after dedupe), `intended` is what was configured. */
+    if (isMeasurement || isRemeasure || baselineTargetRuns > 1) {
+      runResults.measurement_config = {
+        questions: questions.length,
+        intended_questions: questionCount,
+        runs: baselineTargetRuns,
+        engines: AUDIT_ENGINES,
+        expected_responses: expectedResponses(questions.length, baselineTargetRuns, AUDIT_ENGINES.length),
+      };
+    }
     /* Same schema-free mechanism (results is jsonb). A diagnostic carries counts:false so the
        comparison can refuse to COUNT it without refusing to run it. */
     if (remeasureNote) runResults.remeasure = remeasureNote;
@@ -1294,6 +1398,72 @@ async function generateWithMoney(
     console.warn(`[create-ai-audit] ${pooled.duplicates.length} intent-duplicate(s) between the money and standard calls dropped before slicing: ${pooled.duplicates.join(" | ")}`);
   }
   console.log(`[create-ai-audit] baseline mixed set: ${money.length} money + ${standard.length} standard of ${total} requested (share taken on ${moneySlots} slot(s)); ${pooled.questions.length} distinct`);
+  return { questions: pooled.questions, money };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   GENERATING MORE QUESTIONS THAN ONE CALL MAY ASK FOR — the full measure's 1..80.
+
+   ⛔ WHY IT CANNOT BE ONE CALL. generateQuestions clamps every call at GENERATOR_ABSOLUTE_MAX_
+   QUESTIONS (40) as its absurd-value guard. Asking it for 80 returns 40, and the caller's fill
+   would quietly top the rest up from templates — a screen saying 80 over a queue running 40 of
+   them generated, which is precisely the lie the fixed-at-20 decision was taken to end. So a
+   target above the per-call cap is asked for across several calls instead.
+
+   ⛔ THE BATCHES ARE NOT THE SAME CALL REPEATED. Each one is given the questions produced so far as
+   a coverage directive — the same machinery the baseline exclusion uses — so batch two is steered
+   off batch one's intents rather than paraphrasing them into the dedupe.
+
+   ⛔ THE MONEY SHARE IS TAKEN ONCE, ON THE WHOLE TARGET, BY THE FIRST BATCH. Taking it per batch
+   would give an 80-question measure three money shares; taking it on a batch's own size would size
+   it to 27 questions rather than 80. Later batches pass 0 slots, which is the plain single call.
+
+   One batch (every target at or under the cap, i.e. every baseline and every default-sized
+   measure) is the old call, argument for argument.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+async function generateMeasurementSet(
+  businessName: string,
+  businessType: string,
+  locationText: string,
+  hasWebsite: boolean,
+  specialisms: string,
+  /** The number the caller intends to KEEP. The over-ask for the exclusion filter is planned here. */
+  target: number,
+  scope: BusinessScope,
+  country: string | null,
+  coverage: string,
+  capHeads: boolean,
+  /** How many baseline questions will be filtered out of the pool (0 for everything but a measure). */
+  excludedCount: number,
+): Promise<{ questions: string[]; money: string[] }> {
+  const batches = planGenerationBatches(target, excludedCount);
+  if (batches.length <= 1) {
+    return await generateWithMoney(
+      businessName, businessType, locationText, hasWebsite, specialisms,
+      batches[0] ?? 0, scope, country, target, coverage, capHeads,
+    );
+  }
+  const questions: string[] = [];
+  const money: string[] = [];
+  for (let i = 0; i < batches.length; i++) {
+    const cov = questions.length
+      ? [coverage, coverageDirective(questions, businessType)].filter(Boolean).join("\n\n")
+      : coverage;
+    const part = await generateWithMoney(
+      businessName, businessType, locationText, hasWebsite, specialisms,
+      batches[i], scope, country, i === 0 ? target : 0, cov, capHeads,
+    );
+    questions.push(...part.questions);
+    money.push(...part.money);
+  }
+  /* Pooled and deduped ACROSS the batches before the caller slices, for the same reason
+     generateWithMoney dedupes across its own two calls: independent calls produce twins, and a
+     dedupe that runs after the slice is how a 20-question measure queued 18. */
+  const pooled = dedupeByIntent(questions);
+  if (pooled.duplicates.length) {
+    console.warn(`[create-ai-audit] batched generation: ${pooled.duplicates.length} intent-duplicate(s) across ${batches.length} batches dropped before slicing: ${pooled.duplicates.join(" | ")}`);
+  }
+  console.log(`[create-ai-audit] batched generation for ${target}: asked ${batches.join(" + ")} across ${batches.length} calls, ${pooled.questions.length} distinct`);
   return { questions: pooled.questions, money };
 }
 

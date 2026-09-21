@@ -1,5 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   THE FULL MEASURE — 20 questions x 3 runs, day 0, AFTER the baseline is frozen.
+   THE FULL MEASURE — the operator's chosen question count (1..80) x their chosen run count (1..3),
+   day 0, AFTER the baseline is frozen. FULL_MEASURE_QUESTIONS x MEASUREMENT_DEFAULT_RUNS is what
+   the automatic post-freeze start asks for and what the wizard opens on.
 
    What it is for: finding which questions, and which of the client's towns, are winnable, so we
    know where to build pages. What it is NOT: a comparison. The refund is judged on the frozen
@@ -21,7 +23,15 @@
 
    IMPORTED BY AN EDGE FUNCTION: relative imports with an explicit .ts extension only (CLAUDE.md §4).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { FULL_MEASURE_QUESTIONS, GENERATOR_ABSOLUTE_MAX_QUESTIONS } from './auditQuestionCounts.ts';
+import {
+  FULL_MEASURE_QUESTIONS,
+  FULL_MEASURE_MIN_QUESTIONS,
+  FULL_MEASURE_MAX_QUESTIONS,
+  MEASUREMENT_MIN_RUNS,
+  MEASUREMENT_MAX_RUNS,
+  MEASUREMENT_DEFAULT_RUNS,
+  GENERATOR_ABSOLUTE_MAX_QUESTIONS,
+} from './auditQuestionCounts.ts';
 import { allocateAreas, type AreaAllocation } from './baselineContract.ts';
 import { questionKey } from './seedGuard.ts';
 
@@ -53,9 +63,89 @@ export function overAskFor(wanted: number, excludedCount: number): number {
  * baseline used until 2026-09-12, at the measure's own ceiling. Four towns → 10 / 4 / 3 / 3.
  * No `mainFloor`: nothing in this measure is a refund test, so nothing needs protecting.
  */
-export function fullMeasureAllocation(homeTown: string, areas: readonly string[]): {
+export function fullMeasureAllocation(
+  homeTown: string,
+  areas: readonly string[],
+  /** The operator's chosen size for THIS measure. Defaults to the policy default so every existing
+   *  caller is unchanged; the wizard and the post-freeze starter pass what was actually asked for. */
+  ceiling: number = FULL_MEASURE_QUESTIONS,
+): {
   allocation: AreaAllocation[];
   dropped: string[];
 } {
-  return allocateAreas(homeTown, [...areas], FULL_MEASURE_QUESTIONS, 0);
+  return allocateAreas(homeTown, [...areas], clampFullMeasureQuestions(ceiling), 0);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+   THE TWO DIALS — size and repetition. Both are clamped HERE, by one function each, and both the
+   SPA and create-ai-audit import them, so the screen cannot offer a value the server refuses and
+   the server cannot refuse a value the screen showed as valid.
+
+   ⚠️ CLAMPING IS NOT VALIDATION. These exist so a persisted/garbled value resolves to something
+   sane; the server ALSO refuses an out-of-range value that was stated explicitly, rather than
+   quietly running a smaller audit than was asked for (the silent-truncation fault).
+   ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Clamp an untrusted question count into the full measure's bounds. Junk → the default. */
+export function clampFullMeasureQuestions(n: unknown): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : FULL_MEASURE_QUESTIONS;
+  return Math.min(FULL_MEASURE_MAX_QUESTIONS, Math.max(FULL_MEASURE_MIN_QUESTIONS, v));
+}
+
+/** True when `n` is a question count a full measure may actually be started with. */
+export function isValidFullMeasureQuestionCount(n: unknown): boolean {
+  return typeof n === 'number' && Number.isInteger(n)
+    && n >= FULL_MEASURE_MIN_QUESTIONS && n <= FULL_MEASURE_MAX_QUESTIONS;
+}
+
+/** Clamp an untrusted run count into 1..3. Junk → MEASUREMENT_DEFAULT_RUNS. */
+export function clampMeasurementRuns(n: unknown): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : MEASUREMENT_DEFAULT_RUNS;
+  return Math.min(MEASUREMENT_MAX_RUNS, Math.max(MEASUREMENT_MIN_RUNS, v));
+}
+
+/** True when `n` is a run count a full measure may actually be started with. */
+export function isValidMeasurementRuns(n: unknown): boolean {
+  return typeof n === 'number' && Number.isInteger(n)
+    && n >= MEASUREMENT_MIN_RUNS && n <= MEASUREMENT_MAX_RUNS;
+}
+
+/**
+ * HOW MANY AI ANSWERS THIS MEASURE WILL ASK FOR — questions × runs × engines.
+ *
+ * ⛔ THE SCREEN AND THE SERVER COMPUTE IT WITH THE SAME FUNCTION. A total quoted before the button
+ * is pressed is a spend promise; deriving it twice is how the two drift. `engines` is the length of
+ * the engine list the server actually queues (AUDIT_ENGINES), never a hardcoded 2.
+ */
+export function expectedResponses(questions: number, runs: number, engines: number): number {
+  const q = Math.max(0, Math.floor(Number(questions) || 0));
+  const r = Math.max(0, Math.floor(Number(runs) || 0));
+  const e = Math.max(0, Math.floor(Number(engines) || 0));
+  return q * r * e;
+}
+
+/**
+ * SPLIT A GENERATION TARGET INTO CALLS THE GENERATOR WILL HONOUR.
+ *
+ * ⛔ WHY THIS EXISTS. generateQuestions clamps EVERY call at GENERATOR_ABSOLUTE_MAX_QUESTIONS, so
+ * asking one call for 80 returns 40 and nothing says so — the exact fault that made the old
+ * 10..75 dial a lie. A target above the cap is asked for across several calls instead, each under
+ * it, with the questions produced so far fed back as a coverage directive so the calls do not
+ * simply repeat each other. The caller pools, dedupes by intent and fills to the target.
+ *
+ * The over-ask (one extra slot per excluded baseline question, same rule as `overAskFor`) is
+ * bounded at one generator call's worth: past that it buys nothing but latency.
+ *
+ * Returns the per-call sizes, largest first is NOT required — they are spread evenly so no call
+ * asks for a handful, which the model answers worse than a full batch.
+ */
+export function planGenerationBatches(target: number, excludedCount = 0): number[] {
+  const t = Math.max(0, Math.floor(Number(target) || 0));
+  if (t === 0) return [];
+  const over = Math.min(Math.max(0, Math.floor(Number(excludedCount) || 0)), GENERATOR_ABSOLUTE_MAX_QUESTIONS);
+  const total = t + over;
+  const batches = Math.ceil(total / GENERATOR_ABSOLUTE_MAX_QUESTIONS);
+  const base = Math.floor(total / batches);
+  const spare = total - base * batches;
+  return Array.from({ length: batches }, (_, i) => base + (i < spare ? 1 : 0));
 }

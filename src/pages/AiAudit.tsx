@@ -47,7 +47,13 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { shortReportUrl } from '@/lib/reportSlug';
 import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
-import { WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS } from '@/lib/auditQuestionCounts';
+import {
+  WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS,
+  FULL_MEASURE_QUESTIONS, FULL_MEASURE_MIN_QUESTIONS, FULL_MEASURE_MAX_QUESTIONS,
+  MEASUREMENT_MIN_RUNS, MEASUREMENT_MAX_RUNS, MEASUREMENT_DEFAULT_RUNS,
+} from '@/lib/auditQuestionCounts';
+import { clampFullMeasureQuestions, clampMeasurementRuns, expectedResponses } from '@/lib/fullMeasure';
+import { reconcileSelection, selectAll, selectedQuestions } from '@/lib/questionSelection';
 /* The LLM "playbook" (playbookHtml.ts + the generate-playbook edge function) was DELETED
    2026-09-09. It recommended Bing Places — zero citations across 10,615 — and ICAEW to an ACCA
    firm. The evidence-derived playbook at /playbook/:id is the only one now. */
@@ -88,13 +94,20 @@ const QUESTION_COUNT_OPTIONS = Array.from(
 const clampQuestionCount = (n: number) =>
   Math.min(MAX_QUESTION_COUNT, Math.max(MIN_QUESTION_COUNT, Math.round(n) || DEFAULT_QUESTION_COUNT));
 
-/* FULL MEASUREMENT mode — day 0, after the baseline is frozen: the winnability gather. ⛔ FIXED at
-   FULL_MEASURE_QUESTIONS, from the shared policy module create-ai-audit clamps against. There is
-   no dial: it was 10..75 (default 40) while the server's generator hard-capped every call at 20,
-   so the screen offered sizes the queue never ran. A persisted count from that era is clamped to
-   the fixed value on read (clampFullCount), so the first press after this deploy cannot send 40. */
-const FULL_MEASURE_COUNT = FULL_MEASURE_QUESTIONS;
-const clampFullCount = (_n: number) => FULL_MEASURE_COUNT;
+/* FULL MEASUREMENT mode — day 0, after the baseline is frozen: the winnability gather.
+   ⛔ A DIAL AGAIN, 1..80 questions × 1..3 runs (Paul, 2026-09-21). The bounds, the clamps and the
+   expected-responses sum all come from the shared modules create-ai-audit validates against, so
+   the screen cannot offer a size or a run count the server refuses, and the total quoted here is
+   computed by the same function the server records on the run.
+   ⛔ AND IT IS HONEST ONLY BECAUSE THE SERVER BATCHES ITS GENERATION. The reason this was a fixed
+   number between 2026-09-12 and today is that the old 10..75 dial sat over a generator that capped
+   every call at 20 — the screen offered sizes the queue never ran. Do not widen these bounds
+   without checking planGenerationBatches still covers them. */
+const FULL_MEASURE_DEFAULT_COUNT = FULL_MEASURE_QUESTIONS;
+const FULL_RUN_OPTIONS = Array.from(
+  { length: MEASUREMENT_MAX_RUNS - MEASUREMENT_MIN_RUNS + 1 },
+  (_, i) => MEASUREMENT_MIN_RUNS + i,
+);
 
 // value = the Country name stored/passed to the audit; the edge toCountryCode /
 // COUNTRY_TO_ISO2 map converts every name to lowercase ISO-2 uniformly. label = display.
@@ -196,6 +209,10 @@ interface PersistedWizard {
   specialisms: string;
   auditMode?: 'quick' | 'full';
   questionCount: number;
+  /** Full measurement only. Absent on a draft saved before 2026-09-21 → the default run count. */
+  fullRuns?: number;
+  /** Full measurement only: the indexes of `questions` that are ticked. Absent → all of them. */
+  selectedQuestionIndexes?: number[];
   questions: string[];
   previewMoney?: string[];
   unitCost: number;
@@ -293,15 +310,29 @@ const AiAudit = () => {
   const fullMode = auditMode === 'full';
   const [questionCount, setQuestionCount] = useState<number>(() => {
     const m = persisted?.auditMode ?? 'quick';
-    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
-    return m === 'full' ? clampFullCount(raw) : clampQuestionCount(raw);
+    const raw = persisted?.questionCount ?? (m === 'full' ? FULL_MEASURE_DEFAULT_COUNT : DEFAULT_QUESTION_COUNT);
+    return m === 'full' ? clampFullMeasureQuestions(raw) : clampQuestionCount(raw);
   });
+  /* HOW MANY TIMES EACH QUESTION IS ASKED, per engine. Full measurement only — a quick audit is one
+     run and always has been. Clamped on read so a garbled persisted value cannot send a 7. */
+  const [fullRuns, setFullRuns] = useState<number>(() => clampMeasurementRuns(persisted?.fullRuns ?? MEASUREMENT_DEFAULT_RUNS));
+  /* WHICH of the reviewed questions will actually be queued (full measurement only). Indexes, not
+     text — see questionSelection.ts. Quick mode never reads it and runs everything in the list,
+     exactly as before. */
+  const [selected, setSelected] = useState<Set<number>>(() => (
+    Array.isArray(persisted?.selectedQuestionIndexes)
+      ? new Set(persisted.selectedQuestionIndexes)
+      /* A draft saved before selection existed carries its questions and no ticks. Absent means
+         "not recorded", and the only safe reading of that is the one the operator last saw: every
+         question they reviewed was going to run. */
+      : selectAll(persisted?.questions ?? [])
+  ));
   /* Switch mode: reset the count to that mode's default and clear any previewed questions so the
      review step regenerates at the new count/purpose. Quick↔Full only; never touches a run in flight. */
   const switchAuditMode = useCallback((next: 'quick' | 'full') => {
     setAuditMode(next);
-    setQuestionCount(next === 'full' ? FULL_MEASURE_COUNT : DEFAULT_QUESTION_COUNT);
-    setQuestions([]); setPreviewMoney([]);
+    setQuestionCount(next === 'full' ? FULL_MEASURE_DEFAULT_COUNT : DEFAULT_QUESTION_COUNT);
+    setQuestions([]); setPreviewMoney([]); setSelected(new Set());
   }, []);
 
   // Existing-lead picker + saved audits
@@ -498,6 +529,41 @@ const AiAudit = () => {
   // engineCount double-counted it (the server-side estimate had the same bug).
   const estimatedCost = Number((questions.length * unitCost).toFixed(2));
 
+  /* ── THE FULL MEASUREMENT'S SUMMARY, DERIVED ─────────────────────────────────────────────────
+     `runQuestions` is the set that will actually be POSTED, so every number on screen — the count,
+     the expected responses, the estimate — is computed from the same list the button sends. The
+     quick path keeps its old behaviour (everything in the list runs, one run each).
+     ⚠️ `engineCount` is what the SERVER told us it queues, not a hardcoded 2 — a preview that has
+     not returned yet falls back to the scored engines, which is what it will be. */
+  const runQuestions = useMemo(
+    () => (fullMode ? selectedQuestions(questions, selected) : questions.map((q) => q.trim()).filter(Boolean)),
+    [fullMode, questions, selected],
+  );
+  const runCount = fullMode ? clampMeasurementRuns(fullRuns) : 1;
+  const engineTotal = engineCount || SCORED_ENGINES.length;
+  const totalResponses = expectedResponses(runQuestions.length, runCount, engineTotal);
+  /* The two reasons the button must stay disabled, named separately so the sentence beside it can
+     say which one is true rather than "invalid". Over 80 is reachable by pasting. */
+  const tooFewQuestions = runQuestions.length < FULL_MEASURE_MIN_QUESTIONS;
+  const tooManyQuestions = fullMode && runQuestions.length > FULL_MEASURE_MAX_QUESTIONS;
+
+  /* Selection travels with the list through every edit, add, remove and paste — see
+     questionSelection.ts. Quick mode has no selection, so the reconcile is skipped entirely. */
+  /* ⛔ NOT A SIDE EFFECT INSIDE A STATE UPDATER. Reconciling from within setQuestions' callback
+     would run twice under StrictMode's double-invoke and shift a removal's indexes twice. Both
+     setters are called from here, against the list currently on screen. */
+  const changeQuestions = useCallback((next: string[]) => {
+    setSelected((sel) => reconcileSelection(questions, next, sel));
+    setQuestions(next);
+  }, [questions]);
+  const toggleQuestion = useCallback((index: number, on: boolean) => {
+    setSelected((sel) => {
+      const out = new Set(sel);
+      if (on) out.add(index); else out.delete(index);
+      return out;
+    });
+  }, []);
+
   // Reveal the next step (monotonic — earlier answers stay revealed/editable).
   const reveal = (i: number) => setRevealed((r) => Math.max(r, i));
 
@@ -512,7 +578,7 @@ const AiAudit = () => {
   useEffect(() => {
     try {
       localStorage.setItem(wizardKey(user?.id), JSON.stringify({
-        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount,
+        revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, fullRuns, selectedQuestionIndexes: [...selected], questions, previewMoney, unitCost, engineCount,
       }));
       /* A draft now EXISTS on disk. Tracked in state (rather than re-reading storage at render time)
          so the "Resume draft" button below can appear and disappear truthfully. React bails out when
@@ -520,7 +586,7 @@ const AiAudit = () => {
       setDraftSaved(true);
     } catch { /* storage unavailable — persistence is best-effort */ }
     // `step` is deliberately NOT a dependency: this effect no longer branches on it (see above).
-  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, questions, previewMoney, unitCost, engineCount, user?.id]);
+  }, [revealed, mode, leadId, businessName, businessType, locationText, country, hasWebsite, website, businessScope, specialisms, auditMode, questionCount, fullRuns, selected, questions, previewMoney, unitCost, engineCount, user?.id]);
 
   /* SETTLED-QUESTION COUNTS for a set of runs — the ONE implementation of "2 of 3 done".
      The queue's terminal statuses are 'done' and 'failed' (NOT 'complete', which is a RUN
@@ -1271,7 +1337,11 @@ const AiAudit = () => {
         }),
       });
       if (error || !data?.ok) throw new Error(error?.message ?? data?.error ?? 'preview failed');
-      setQuestions(Array.isArray(data.questions) ? data.questions : []);
+      const generated = Array.isArray(data.questions) ? (data.questions as string[]) : [];
+      setQuestions(generated);
+      /* A freshly generated set arrives fully selected: the operator asked for N questions and got
+         them, so the default is to run them. Deselecting is the deliberate act, not selecting. */
+      setSelected(selectAll(generated));
       setPreviewMoney(Array.isArray(data.money_questions) ? (data.money_questions as string[]) : []);
       setUnitCost(typeof data.unit_cost_usd === 'number' ? data.unit_cost_usd : 0);
       setEngineCount(Array.isArray(data.engines) ? data.engines.length : SCORED_ENGINES.length);
@@ -1300,8 +1370,21 @@ const AiAudit = () => {
   const [distanceBlock, setDistanceBlock] = useState<{ message: string; km: number; town: string } | null>(null);
 
   const confirmAndRun = async (overrideDistance = false) => {
-    const clean = questions.map((q) => q.trim()).filter(Boolean);
-    if (clean.length === 0) { toast({ title: 'Add at least one question', variant: 'destructive' }); return; }
+    /* ⛔ THE SELECTED SET IS WHAT RUNS, AND IT IS THE SAME LIST EVERY NUMBER ON SCREEN WAS
+       COMPUTED FROM (runQuestions). A quick audit has no selection and sends the whole list, which
+       is what it has always done. */
+    const clean = runQuestions;
+    if (clean.length === 0) { toast({ title: 'Select at least one question', variant: 'destructive' }); return; }
+    /* The server refuses over the cap rather than truncating; refusing here too means the operator
+       is told before a round trip, and the two limits come from the same constant. */
+    if (fullMode && clean.length > FULL_MEASURE_MAX_QUESTIONS) {
+      toast({
+        title: `A full measurement runs at most ${FULL_MEASURE_MAX_QUESTIONS} questions`,
+        description: `${clean.length} are selected — deselect ${clean.length - FULL_MEASURE_MAX_QUESTIONS}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setRunning(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-ai-audit', {
@@ -1311,7 +1394,10 @@ const AiAudit = () => {
           website: website || undefined, lead_id: leadId || undefined,
           business_scope: businessScope || undefined,
           specialisms: specialisms || undefined,
-          question_count: questionCount,
+          /* ⛔ THE COUNT SENT IS THE COUNT BEING SENT. It used to be the wizard's target, which is
+             what was ASKED of the generator — so an operator who removed two questions posted 20
+             alongside a list of 18 and the server clamped the disagreement out of sight. */
+          question_count: clean.length,
           questions: clean,
           /* The money flag for the set being sent. Filtered to `clean` here as well as server-side,
              so an edited or removed question cannot arrive flagged. */
@@ -1321,7 +1407,10 @@ const AiAudit = () => {
           // Full measurement: the deliberate bulk gather. Server clamps to the measurement ceiling,
           // forces SEO off, and creates its OWN audit (not a run on an existing one) so start vs
           // re-measure stay comparable. The queue paces the run — this never fires all at once.
-          ...(fullMode ? { purpose: 'measurement', skip_seo: true } : {}),
+          /* `runs` is the operator's 1..3. The server validates it independently, stores it as
+             ai_audits.baseline_target_runs and advanceBaseline drives the repeats from THAT — so
+             the number chosen here decides execution, not just the summary above it. */
+          ...(fullMode ? { purpose: 'measurement', skip_seo: true, runs: runCount } : {}),
           ...(overrideDistance ? { override_distance: true } : {}),
         },
       });
@@ -2588,19 +2677,27 @@ const AiAudit = () => {
                       onClick={() => switchAuditMode('full')}
                       icon={<ListChecks className="h-4 w-4" />}
                       label="Full measurement"
-                      hint={`${FULL_MEASURE_COUNT} questions × 3 runs · where to build`}
+                      hint={`up to ${FULL_MEASURE_MAX_QUESTIONS} questions × up to ${MEASUREMENT_MAX_RUNS} runs · where to build`}
                     />
                   </div>
                 </div>
 
-                {/* Number of questions. Quick: WIZARD 3–5, operator's choice. Full: FIXED at
-                    FULL_MEASURE_QUESTIONS — no selector, the number is stated. The server derives
-                    its min, max and default from the same constant, so there is nothing to disagree. */}
+                {/* Number of questions. Quick: WIZARD 3–5, operator's choice. Full: 1..80, typed —
+                    a dropdown of 80 entries is worse than a box. Both bounds come from the shared
+                    policy module the server validates against. */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">How many questions?</Label>
                   <div className="flex items-center gap-3">
                     {fullMode ? (
-                      <span className="inline-flex h-9 w-24 items-center justify-center rounded-md border bg-muted/40 text-sm font-medium">{FULL_MEASURE_COUNT}</span>
+                      <Input
+                        type="number"
+                        className="w-24"
+                        min={FULL_MEASURE_MIN_QUESTIONS}
+                        max={FULL_MEASURE_MAX_QUESTIONS}
+                        value={questionCount}
+                        aria-label="How many questions to generate"
+                        onChange={(e) => setQuestionCount(clampFullMeasureQuestions(Number(e.target.value)))}
+                      />
                     ) : (
                       <Select
                         value={String(questionCount)}
@@ -2619,13 +2716,37 @@ const AiAudit = () => {
                   </div>
                   {fullMode && (
                     <p className="text-[11px] text-muted-foreground/80">
-                      A full measure asks {FULL_MEASURE_COUNT} questions across ChatGPT and Gemini, three runs each, and is
-                      <strong> paced through the queue</strong> (max ~24 running at once). It finds which questions
-                      and towns are winnable so we know where to build pages. It is never compared to anything —
-                      the refund is judged on the frozen baseline, not this. SEO scan is skipped.
+                      Between {FULL_MEASURE_MIN_QUESTIONS} and {FULL_MEASURE_MAX_QUESTIONS}. You pick which of them to run
+                      on the next step. The measure is <strong>paced through the queue</strong> (max ~24 running at once).
+                      It finds which questions and towns are winnable so we know where to build pages. It is never
+                      compared to anything — the refund is judged on the frozen baseline, not this. SEO scan is skipped.
                     </p>
                   )}
                 </div>
+
+                {/* ── RUNS PER QUESTION — full measurement only ────────────────────────────────
+                    A quick audit is one run and always has been. The number chosen here is stored
+                    as the audit's target run count and the queue's completion hook fires the
+                    repeats from it with the same questions, so it controls execution. */}
+                {fullMode && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Runs per question</Label>
+                    <div className="flex items-center gap-3">
+                      <Select value={String(fullRuns)} onValueChange={(v) => setFullRuns(clampMeasurementRuns(Number(v)))}>
+                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {FULL_RUN_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-[11px] text-muted-foreground">
+                        Each question is asked {fullRuns} time{fullRuns === 1 ? '' : 's'} on every engine.
+                        {fullRuns < MEASUREMENT_DEFAULT_RUNS
+                          ? ` Fewer than ${MEASUREMENT_DEFAULT_RUNS} is cheaper and noisier — one run cannot support a per-question claim.`
+                          : ' Three is the number the paid baseline uses.'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Generate → reveals the review step, which generates the questions */}
                 <div className="pt-1">
@@ -2664,15 +2785,60 @@ const AiAudit = () => {
                 </div>
               ) : (
                 <>
-                  <AuditQuestionEditor questions={questions} onChange={setQuestions} busy={running}/>
+                  <AuditQuestionEditor
+                    questions={questions}
+                    onChange={changeQuestions}
+                    busy={running}
+                    {...(fullMode ? { selected, onToggle: toggleQuestion } : {})}
+                  />
+                  {/* ── THE SUMMARY BEFORE THE BUTTON — full measurement only ──────────────────
+                      Everything here is derived from the SELECTED list, so it is a statement about
+                      the audit that is about to start rather than about the wizard's settings.
+                      The total is expectedResponses(), the same function the server records on the
+                      run, so the number quoted and the number recorded cannot drift. */}
+                  {fullMode && (
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Questions</span>
+                        <span className={`font-medium ${tooManyQuestions || tooFewQuestions ? 'text-destructive' : ''}`}>
+                          {runQuestions.length} / {FULL_MEASURE_MAX_QUESTIONS} questions selected
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Runs per question</span>
+                        <span className="font-medium">{runCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Engines</span>
+                        <span className="font-medium">{SCORED_ENGINES.map((e) => ENGINE_LABELS[e]).join(' + ')}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-1 mt-1">
+                        <span className="text-muted-foreground">Expected AI responses</span>
+                        <span className="font-semibold">
+                          {totalResponses} <span className="font-normal text-muted-foreground">({runQuestions.length} × {runCount} × {engineTotal})</span>
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button type="button" size="sm" variant="outline" disabled={running} onClick={() => setSelected(selectAll(questions))}>Select all</Button>
+                        <Button type="button" size="sm" variant="outline" disabled={running} onClick={() => setSelected(new Set())}>Deselect all</Button>
+                      </div>
+                      {tooManyQuestions && (
+                        <p className="text-destructive pt-1">
+                          Deselect {runQuestions.length - FULL_MEASURE_MAX_QUESTIONS} — a full measurement runs at most {FULL_MEASURE_MAX_QUESTIONS} questions.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pt-2">
                     <span className="text-xs text-muted-foreground">
-                      {questions.length} question{questions.length === 1 ? '' : 's'} · est. cost ~${estimatedCost.toFixed(2)}
+                      {runQuestions.length} question{runQuestions.length === 1 ? '' : 's'}
+                      {fullMode ? ` × ${runCount} run${runCount === 1 ? '' : 's'}` : ''} · est. cost ~$
+                      {(fullMode ? Number((runQuestions.length * runCount * unitCost).toFixed(2)) : estimatedCost).toFixed(2)}
                     </span>
                     {/* ⛔ ARROW, NOT A BARE REFERENCE. onClick={confirmAndRun} passes the click EVENT as the
                         first argument, which is truthy — the distance override would be ON for every
                         single audit and the guard would never fire once. */}
-                    <Button onClick={() => confirmAndRun()} disabled={running || questions.length === 0}>
+                    <Button onClick={() => confirmAndRun()} disabled={running || tooFewQuestions || tooManyQuestions}>
                       {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                       Confirm & run
                     </Button>

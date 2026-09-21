@@ -557,3 +557,80 @@ dashboard's Full Reset button are still live.
 
 ---
 
+
+## 32. ✅ THE FULL MEASURE IS A DIAL AGAIN — 1..80 QUESTIONS × 1..3 RUNS (2026-09-21)
+
+**Built, not deployed.** Paul asked for two controls on the Full Measurement Audit: how many
+questions, and how many runs of each. Tightly scoped to that audit — the outreach hook, the quick
+wizard, the paid baseline and the day-28 replay keep their shapes.
+
+### Why this is not simply undoing 2026-09-12
+
+§19 fixed the full measure at one number for a real reason: the screen offered 10..75 while
+`generateQuestions` hard-capped every call at 20, so "40" was a number the screen said and the
+queue never ran. **The dial is safe now only because the generation is batched.**
+`planGenerationBatches(target, excluded)` (`src/lib/fullMeasure.ts`) splits any target above
+`GENERATOR_ABSOLUTE_MAX_QUESTIONS` (40) into calls that each sit under it — 80 plans to 40+40 —
+feeding each batch the questions produced so far as a `coverageDirective` so the calls do not
+paraphrase each other, then pooling with `dedupeByIntent` and filling to target with
+`fillGenerated`. `scripts/question-ceilings.test.ts` no longer asserts "one fixed number"; it
+asserts that every ceiling above the per-call cap is reachable by batching, which is the property
+that actually failed in the first place.
+
+### The rules
+
+- **Bounds:** `FULL_MEASURE_MIN_QUESTIONS` 1 · `FULL_MEASURE_MAX_QUESTIONS` 80 ·
+  `FULL_MEASURE_QUESTIONS` 20 is now the DEFAULT. Runs: `MEASUREMENT_MIN_RUNS` 1 ·
+  `MEASUREMENT_MAX_RUNS` 3 · `MEASUREMENT_DEFAULT_RUNS` 3.
+- ⛔ **A full measure REFUSES an out-of-range request, it does not clamp it** —
+  `question_count_out_of_range`, `runs_out_of_range`, `too_many_questions`, all 400, nothing
+  started. The clamps (`clampFullMeasureQuestions`, `clampMeasurementRuns`) exist for a garbled
+  persisted value, never as the validation. Every other purpose keeps its clamp-and-report
+  behaviour: their callers are automations replaying a stored set, and refusing there would strand
+  a paid deliverable over a cap it cannot control.
+- ⛔ **The run count controls execution.** It is stored as `ai_audits.baseline_target_runs` at
+  creation and `advanceBaseline` fires the repeats from that column with the same questions. A
+  measurement now writes the column **even when it is 1** — null means "nobody chose", 1 means "one
+  run was chosen" — which is why `sweepStalledBaselines` gained `.gt("baseline_target_runs", 1)` in
+  its QUERY: those rows never finalise a `baseline` snapshot and would otherwise sit at the front
+  of its oldest-first window for ever.
+- **The total is one function.** `expectedResponses(questions, runs, engines)` computes the figure
+  the wizard quotes before the button and the figure the run records as
+  `results.measurement_config.expected_responses`. The engine count is `AUDIT_ENGINES.length`,
+  never a hardcoded 2.
+- **Selection, not deletion.** `src/lib/questionSelection.ts` holds the reconciliation: an edit
+  keeps the indexes, an append is selected, a removal shifts every later index down by one, and
+  anything else (a paste, a regenerate) selects all — the safe failure being "more than you meant",
+  which is visible in the count and refused at 81. Indexes, never text: two questions can be edited
+  into the same string mid-typing.
+- **The replay reuses the baseline's run count.** `fireDueRemeasures` reads the baseline's
+  `baseline_target_runs` and sends it; `judgeRemeasure` is told the runs the replay will actually
+  do rather than the constant, so a single-run replay is graded the quick diagnostic it is.
+- **The frozen contract records the shape:** `runs`, `engines` and `askedQuestions` (queued order)
+  on `BaselineContract`. Absent on every contract written before today, and absent means NOT
+  RECORDED — the queue rows and the live column stay the source of truth.
+
+### What was NOT changed, deliberately
+
+- **A full measure is still never a baseline and never compared** (Paul, 2026-09-12): disjoint from
+  the baseline by construction, `is_measurement` marked, `comparable: false` on the run. Paul's
+  brief spoke of "freezing a full measurement as a baseline"; the refund still rests on the paid
+  baseline's asked set and nothing else, and that decision was left standing.
+- **Run-level results were already retained** and needed no work: one `ai_audit_queue` row per
+  question per run, `poolRuns` (`src/lib/pooledRuns.ts`) folds them into named/answered cell counts
+  per question per engine ("2 of 3"), and `measurementRunGroups` groups a measurement by audit×day
+  with its run count. Nothing in this change collapses a run into a yes/no.
+
+### Deploy
+
+⚠️ **NOT DEPLOYED.** `create-ai-audit` and every function reaching `_shared/audit-baseline.ts` or
+`src/lib/fullMeasure.ts` must be redeployed together with the SPA push — walk the closure with
+`node scripts/check-import-graph.mjs --reached-by supabase/functions/_shared/audit-baseline.ts`
+and name them in the report.
+
+**Tests:** `scripts/full-measure-dials.test.ts` (new — the four working shapes, 81 and 4 refused,
+the totals, the selection reconciliation, the source assertions that the run count reaches
+execution and the replay reuses the baseline's); `question-ceilings` and `full-measure-shape`
+updated; `remeasure-schedule` updated for the `targetRuns` change.
+
+---

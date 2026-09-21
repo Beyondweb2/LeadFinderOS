@@ -111,7 +111,12 @@ ok(/!isBaseline && !isRemeasure && !townConfirmed && townGated\(lead\)/.test(ser
 /* Written as the named constant since 2026-09-13 (REMEASURE_AUDIT_PURPOSE in src/lib/auditKind.ts);
    the literal is accepted too so this cannot fail on a spelling the trigger still reads. */
 ok(/isRemeasure \? (?:"remeasure"|REMEASURE_AUDIT_PURPOSE)/.test(server), "audit_purpose = 'remeasure' is written — what the claim trigger and the unique index key on");
-ok(/judgeRemeasure\(\{\s*proposed: providedQuestions,\s*baselineAsked,\s*targetRuns: MEASUREMENT_RUNS/.test(server), "the replay is gated by judgeRemeasure against the ASKED set");
+/* ⛔ `targetRuns` IS THE NUMBER THIS REPLAY WILL ACTUALLY DO, NOT THE DEFAULT (changed 2026-09-21).
+   It was the MEASUREMENT_RUNS constant, which made the verdict a claim about a configuration
+   rather than about this audit: a single-run replay would have been judged as a full measurement
+   instead of the quick diagnostic judgeRemeasure exists to grade it as. The run count now comes
+   from the baseline being replayed (fireDueRemeasures sends it), so it must be the resolved value. */
+ok(/judgeRemeasure\(\{\s*proposed: providedQuestions,\s*baselineAsked,\s*targetRuns: measurementRuns,/.test(server), "the replay is gated by judgeRemeasure against the ASKED set, at the run count it will actually do");
 ok(/code === "23505"/.test(server) && /already_remeasured/.test(server), "a duplicate refused by the database is answered 409 already_remeasured, not 500");
 ok(/refuse\("already_remeasured"/.test(server) && /refuse\("no_baseline_recorded"/.test(server) && /refuse\("baseline_not_frozen"/.test(server), "the three named refusals exist and are recorded");
 ok(/measurementFlagFor\(isMeasurement \|\| isRemeasure\)/.test(server), "a replay is flagged is_measurement, so it can never be mistaken for a baseline");

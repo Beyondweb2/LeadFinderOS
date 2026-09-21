@@ -38,11 +38,11 @@ const MISSING_LABEL = (field: string): string =>
 const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
-import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
+import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS, MEASUREMENT_DEFAULT_RUNS } from "../../../src/lib/auditQuestionCounts.ts";
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
+import { fullMeasureAllocation, clampMeasurementRuns } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
 import { planReplay } from "../../../src/lib/baselineReplay.ts";
@@ -551,6 +551,10 @@ export async function startFullMeasure(service: Client, audit: FrozenBaseline): 
       ...(audit.business_scope ? { business_scope: audit.business_scope } : {}),
       purpose: "measurement",
       question_count: FULL_MEASURE_QUESTIONS,
+      /* ⛔ THE AUTOMATIC POST-FREEZE MEASURE STATES ITS RUN COUNT rather than inheriting a server
+         default. The operator can choose 1..3 in the wizard; this lane is not the operator, and a
+         number it never sent is a number that changes under it the day the default moves. */
+      runs: MEASUREMENT_DEFAULT_RUNS,
       skip_seo: true,
       /* The town came from the client's own questionnaire via the baseline — the same evidence the
          baseline's own exemption rests on. Without this a client Google cannot resolve is gated. */
@@ -642,12 +646,17 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
 
     const { data: base } = await service
       .from("ai_audits")
-      .select("id, user_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_completed_at")
+      /* ⛔ baseline_target_runs IS PART OF THE CONTRACT, NOT DECORATION. The replay used to be
+         posted with no run count at all and take create-ai-audit's measurement default (3). That
+         is right for every baseline measured over 3 runs and silently wrong for any other — a
+         2-run before compared against a 3-run after is not like-for-like, and nothing on the
+         screen would say which it was. The baseline's own number is what the replay reuses. */
+      .select("id, user_id, business_name, business_type, location_text, country, has_website, website, specialism, business_scope, baseline_completed_at, baseline_target_runs")
       .eq("id", pointer).maybeSingle();
     const b = base as {
       id: string; user_id: string; business_name: string | null; business_type: string | null; location_text: string | null;
       country: string | null; has_website: boolean | null; website: string | null; specialism: string | null; business_scope: string | null;
-      baseline_completed_at: string | null;
+      baseline_completed_at: string | null; baseline_target_runs: number | null;
     } | null;
     if (b && !b.baseline_completed_at) {
       await reportOnceAnHour(service, "remeasure_baseline_not_frozen", lead.id, "The day-28 date arrived but the baseline has not finished measuring.", { baseline_audit_id: pointer, due: lead.remeasure_due_date });
@@ -694,6 +703,10 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
         purpose: "remeasure",
         questions: plan.questions,           // the baseline's ASKED set, verbatim
         question_count: plan.asked,
+        /* The baseline's own run count, so the after side is measured exactly the way the before
+           side was. Absent on a pre-column baseline → the measurement default, which is what every
+           baseline in the database was actually run at. */
+        runs: clampMeasurementRuns(b!.baseline_target_runs ?? MEASUREMENT_DEFAULT_RUNS),
         skip_seo: true,
         town_confirmed: true,
         remeasure_context: {
@@ -742,7 +755,12 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
 export async function sweepStalledBaselines(service: Client, limit = 5): Promise<number> {
   const { data, error } = await service
     .from("ai_audits").select("id, baseline_target_runs")
-    .not("baseline_target_runs", "is", null)
+    /* ⛔ FILTERED IN THE QUERY, NOT ONLY IN MEMORY (2026-09-21). The `> 1` test below has always
+       been there, but the QUERY only asked for "not null" — and a single-run full measure now
+       records baseline_target_runs = 1 deliberately (null = nobody chose, 1 = one run was chosen).
+       Those rows never finalise a `baseline` snapshot, so they would sit at the front of this
+       oldest-first window for ever and starve the sweep of the unfinished baselines it exists for. */
+    .gt("baseline_target_runs", 1)
     .is("baseline", null)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -1029,6 +1047,16 @@ export async function startPaidBaseline(
         areasMeasuredInFullMeasure: rawAreas,
         ceiling: approvedQuestions.length,
         ...(moneyAsked.length ? { moneyQuestions: moneyAsked } : {}),
+        /* ⛔ THE SHAPE THE DAY-28 REPLAY MUST REPRODUCE, WRITTEN DOWN (2026-09-21). The asked set
+           and its order are the queue rows and stay the source of truth; these two are the rest of
+           the configuration, and until now neither was recorded anywhere a reader could find. The
+           replay reads the run count from ai_audits.baseline_target_runs (the live column); this
+           is the frozen copy, so a contract can be read on its own and say what was measured.
+           `askedQuestions` is the queued set in queued ORDER — the same strings planReplay reads,
+           frozen beside them so a comparison can be checked without the queue. */
+        runs: BASELINE_RUNS,
+        engines: [...SCORED_ENGINES],
+        askedQuestions: askedAll,
         createdAt: new Date().toISOString(),
       };
       const { error: cErr } = await service.from("ai_audits")

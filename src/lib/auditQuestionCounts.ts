@@ -53,10 +53,16 @@ export const BASELINE_RUNS = 3;
  * questions (and which of the client's towns) are winnable so we know where to build pages. It is
  * NEVER compared to anything: the refund is judged on the baseline's set and nothing else.
  *
- * ⛔ FIXED, NOT A DIAL. It was operator-selectable 10..75 (default 40) and that meant two things
- * disagreed: the screen offered 75 while the generator hard-capped every call at 20 (see
- * GENERATOR_ABSOLUTE_MAX_QUESTIONS below), so "40" produced whatever the two-call money split
- * happened to yield. One number, imported by the SPA and the edge function alike.
+ * ⛔ IT IS A DIAL AGAIN, 1..80 (Paul, 2026-09-21) — BUT ONLY BECAUSE THE GENERATION IS BATCHED.
+ * It was fixed at one number on 2026-09-12 for a real reason: the screen offered 75 while the
+ * generator hard-capped every call at 20 (now the named GENERATOR_ABSOLUTE_MAX_QUESTIONS, 40), so
+ * a "40" the screen said was never a 40 the queue ran. The ceiling below is honest only because
+ * `planGenerationBatches` (fullMeasure.ts) splits a target above the generator's per-CALL cap into
+ * several calls and the server fills to the target — so 80 means 80 queued rows, or a logged
+ * shortfall. Never raise FULL_MEASURE_MAX_QUESTIONS without checking that batching still holds.
+ *
+ * FULL_MEASURE_QUESTIONS is now the DEFAULT, not the only value: it is what the automatic
+ * post-freeze full measure asks for and what the wizard opens on.
  *
  * ⛔ DISJOINT FROM THE BASELINE BY CONSTRUCTION (Paul, 2026-09-12). A 12 x 3 baseline already gives
  * every judged question 6 answer cells against MIN_CELLS_FOR_QUESTION_CLAIM = 4, so it is a valid
@@ -65,6 +71,25 @@ export const BASELINE_RUNS = 3;
  * and never contains them (a measurement that contains the refund set is a comparable one).
  */
 export const FULL_MEASURE_QUESTIONS = 20;
+/** The operator's bounds on a full measure's question set. 1 is allowed: a one-question look is a
+ *  cheap, honest thing to want, and the run-count dial below is what decides whether it can
+ *  support a claim. 80 is the spend ceiling Paul set on 2026-09-21. */
+export const FULL_MEASURE_MIN_QUESTIONS = 1;
+export const FULL_MEASURE_MAX_QUESTIONS = 80;
+
+/**
+ * HOW MANY TIMES A FULL MEASURE ASKS EACH QUESTION, per engine. Operator-selectable 1..3, default
+ * 3 — the number the paid baseline uses, so a full measure reads as a FREQUENCY ("named 4 of 6")
+ * rather than one lucky ask. Cost scales ~linearly with it: every run is another Apify question
+ * run, which is why the maximum is a cost ceiling and not a preference.
+ *
+ * ⛔ THE SAME NUMBER DECIDES EXECUTION, not just the label. It is stored as
+ * ai_audits.baseline_target_runs at creation and advanceBaseline drives the repeats from it with
+ * the SAME questions — so a run count that is only in the UI is impossible by construction.
+ */
+export const MEASUREMENT_MIN_RUNS = 1;
+export const MEASUREMENT_MAX_RUNS = 3;
+export const MEASUREMENT_DEFAULT_RUNS = 3;
 
 /**
  * ⛔ THE GENERATOR'S ABSOLUTE CEILING — the most questions ONE model call may be asked for.
@@ -74,9 +99,10 @@ export const FULL_MEASURE_QUESTIONS = 20;
  * policy maximum silently changed nothing: a 40-question request generated 20. A cap that is not
  * named cannot be reasoned about, and a policy ceiling above it is a lie the screen tells.
  *
- * THE RULE, pinned by scripts/question-ceilings.test.ts: every POLICY ceiling in this file and in
- * create-ai-audit is <= this number. Raise this first if a policy ever needs to go higher, and the
- * test says so rather than the generator quietly truncating.
+ * THE RULE, pinned by scripts/question-ceilings.test.ts: every POLICY ceiling that is served by ONE
+ * generator call is <= this number. FULL_MEASURE_MAX_QUESTIONS (80) is the single exception and it
+ * is allowed ONLY because `planGenerationBatches` splits it into calls that each sit at or under
+ * this cap — the test asserts the batch planner, not an exemption.
  *
  * 40 leaves room above FULL_MEASURE_QUESTIONS (20) for the money/standard two-call split, which
  * over-requests each half and slices, without letting an absurd request reach the model.
