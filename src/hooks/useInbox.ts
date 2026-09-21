@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { groupInboxMessages, mergeInboxMessages, optionalInboxRows, patchInboxLead } from '@/lib/inboxCache';
+import { conversationLeadId, groupInboxMessages, mergeInboxMessages, optionalInboxRows, patchInboxLead } from '@/lib/inboxCache';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
@@ -503,7 +503,10 @@ export function useInbox() {
     for (const [key, msgs] of groups) {
       const last = msgs[msgs.length - 1];
       const lastInbound = [...msgs].reverse().find((m) => m.direction === 'inbound');
-      const leadId = msgs.find((m) => m.lead_id)?.lead_id ?? null;
+      // ⛔ NEWEST linked lead wins, not the first — a phone re-contacted under a later
+      // (duplicate) `outreach_leads` row has its audit/report tied to THAT lead, and picking
+      // the oldest strands the thread on a lead nothing was ever sent to (conversationLeadId).
+      const leadId = conversationLeadId(msgs);
       // Scope to the current user's OWN leads only: skip a thread with no linked
       // lead (Unassigned) or one whose lead this user doesn't own. This keeps the
       // Inbox to leads you own and stops no-op status writes on other reps' leads.

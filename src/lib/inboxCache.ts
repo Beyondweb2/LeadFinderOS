@@ -18,6 +18,19 @@ export function groupInboxMessages<T extends { user_id: string | null; phone: st
   return groups;
 }
 
+/** A conversation's lead is the MOST RECENT message that carries one, not the first. A phone can
+ *  be re-contacted under a newer (duplicate) lead row — the same number gets a fresh
+ *  `outreach_leads` id from a later import or re-add — and any audit/report since then was
+ *  generated against THAT lead, never the one first messaged. `msgs` must already be in
+ *  chronological (ascending) order, the same order `groupInboxMessages` preserves. */
+export function conversationLeadId<T extends { lead_id: string | null }>(msgs: T[]): string | null {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const id = msgs[i].lead_id;
+    if (id) return id;
+  }
+  return null;
+}
+
 export function patchInboxLead<T extends { id: string; phone: string | null }>(leads: T[], row: T & { is_archived?: boolean }): T[] {
   const remaining = leads.filter((lead) => lead.id !== row.id);
   return row.is_archived || !row.phone?.trim() ? remaining : [...remaining, row];
