@@ -37,6 +37,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { auditListQueryKey } from '@/types/auditBook';
+import { useQueryClient } from '@tanstack/react-query';
 import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
@@ -352,6 +354,9 @@ function InboundMedia({ message }: { message: WaMessage }) {
 const Inbox = () => {
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
+  // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
+  // here — Inbox itself is not on React Query (see useInbox.ts).
+  const queryClient = useQueryClient();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
   const navigate = useNavigate();
@@ -1126,6 +1131,10 @@ const Inbox = () => {
       toast({ title: "Couldn't start the audit", description: error?.message ?? data?.error ?? 'Try again', variant: 'destructive' });
       return;
     }
+    // The AiAudit page's list is its own React Query cache (staleTime 5 min, nothing else
+    // invalidates it) — without this, an audit fired from here sits invisible on that page
+    // until an unrelated refetch happens to land. Same key AiAudit.tsx's own creation paths use.
+    void queryClient.invalidateQueries({ queryKey: auditListQueryKey(user?.id) });
     toast({
       title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
       description: data.pitch_queued

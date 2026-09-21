@@ -99,3 +99,11 @@ export interface BusinessGroup {
 }
 export interface LeadOption { id: string; business_name: string; category: string | null; country: string | null; website: string | null; address: string | null; search_keyword?: string | null; search_location?: string | null; derived_town?: string | null }
 
+/** The AiAudit page's React Query key for the audit book — the one thing every audit-creation
+ *  path (the wizard, run-again, and Inbox's first-reply trigger) must invalidate on success, or a
+ *  newly created/updated audit sits behind the page's 5-minute staleTime until an unrelated
+ *  refetch happens to land. Shared so a caller outside AiAudit.tsx (Inbox.tsx) can invalidate the
+ *  exact same cache entry rather than guessing the key shape. Same pattern as coverageQueryKey in
+ *  src/lib/coverageFreshness.ts. */
+export const auditListQueryKey = (userId: string | null | undefined) => ['ai-audit-list', userId ?? null] as const;
+
