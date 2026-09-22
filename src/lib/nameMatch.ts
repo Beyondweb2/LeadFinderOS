@@ -185,10 +185,80 @@ export function nameMatches(haystack: string, businessName: string, ctx?: NameMa
     ? coreTokens
     : normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
   if (tokensContain(hay, needle)) return true;
+  /* ⛔ JOINED-OR-SPLIT SPELLING IS THE SAME NAME (2026-09-22). "MCLocksmiths centre" was written by
+     every AI answer as "MC Locksmiths" — one token stored, two in the answer — and eight clear
+     namings on one paid baseline read as "not named". The comparison below concatenates WHOLE
+     contiguous hay tokens and asks for equality with the concatenated needle: "mc"+"locksmiths" ==
+     "mclocksmiths", "m"+"c"+"locksmiths" == "mclocksmiths" (punctuation is already stripped), but
+     "mca"+"locksmiths" != and "locksmiths"+"canterbury" != . Whole-token boundaries are kept on the
+     hay side, so it can never match inside a longer word. It is a spelling tolerance for exactly
+     the needle the strict test would have accepted, not a looser needle. */
+  if (tokensContainJoined(hay, needle)) return true;
 
   /* ⛔ SECOND READING, NOT A REPLACEMENT. Reached only when the strict match has already failed, so
      nothing that matches today can stop matching. No context means no second reading at all. */
   if (!ctx || (!ctx.trade && !ctx.town)) return false;
   const shorter = distinctivePrefix(coreTokens, ctx);
-  return shorter ? tokensContain(hay, shorter) : false;
+  if (shorter && (tokensContain(hay, shorter) || tokensContainJoined(hay, shorter))) return true;
+  /* A single leading token can name the firm on its own only when it is long and distinctive:
+     "mclocksmiths" (12 alphabetic characters, not the trade, not the town) yes; "lewis" no — a
+     five-letter first name would match a rival "Lewis & Co". Compared joined, so "MC Locksmiths"
+     in the answer equals the stored "MCLocksmiths". */
+  const lone = loneDistinctiveToken(coreTokens, ctx);
+  return lone ? tokensContainJoined(hay, [lone]) : false;
+}
+
+/** Contiguous whole hay tokens whose concatenation equals the concatenated needle. */
+export function tokensContainJoined(hay: string[], needle: string[]): boolean {
+  const target = needle.join("");
+  if (!target) return false;
+  for (let i = 0; i < hay.length; i++) {
+    let acc = "";
+    for (let j = i; j < hay.length && acc.length < target.length; j++) {
+      acc += hay[j];
+      if (acc === target) return true;
+    }
+  }
+  return false;
+}
+
+const LONE_TOKEN_MIN_CHARS = 8;
+
+/** The first core token when it alone can name the firm: alphabetic, ≥ LONE_TOKEN_MIN_CHARS, and
+ *  neither the trade, the town, a legal form nor a service word. Null otherwise. */
+function loneDistinctiveToken(coreTokens: string[], ctx: NameMatchContext): string | null {
+  const first = coreTokens[0];
+  if (!first || !/^[a-z]+$/.test(first) || first.length < LONE_TOKEN_MIN_CHARS) return null;
+  const { noise, stems } = contextNoise(ctx);
+  if (noise.has(first) || sharesTradeStem(first, stems) || GENERIC_SERVICE_TOKENS.has(first) || GENERIC_NAME_TOKENS.has(first)) return null;
+  return first;
+}
+
+/**
+ * Can the ANSWER TEXT decide whether this business was named? Only when something in the name
+ * survives once the trade, the town and legal forms are taken away — "MCLocksmiths centre" leaves
+ * "mclocksmiths"; "Locksmiths Canterbury" leaves nothing, and a string test on it would match
+ * every answer about locksmiths in Canterbury. The same question `_shared/derivable.ts`'s
+ * nameIsJudgeable asks, kept here so this leaf stays dependency-free.
+ * ⚠️ Needs the trade or the town: with neither, a trade-and-town name cannot be recognised as one,
+ * so the caller must fall back to the stored verdicts instead.
+ */
+export function nameIsTextJudgeable(businessName: string, ctx: NameMatchContext): boolean {
+  if (!ctx || (!ctx.trade && !ctx.town)) return false;
+  const tokens = normalizeForMatch(businessName).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  const { noise, stems } = contextNoise(ctx);
+  const rest = tokens.filter((t) => !noise.has(t) && !sharesTradeStem(t, stems) && !GENERIC_NAME_TOKENS.has(t) && !GENERIC_SERVICE_TOKENS.has(t) && !NAME_STOPWORDS.has(t));
+  if (rest.join("").length < 4) return false;
+  return rest.some((t) => /^[a-z]{2,}$/.test(t));
+}
+
+/** The answer's prose only: URLs, bare domains and markdown link targets removed, so a cited
+ *  source address ("mc-locksmiths.com") can never read as the business being NAMED. */
+export function answerProse(answerText: string): string {
+  return String(answerText ?? "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, " $1 ")           // markdown links/images → their label
+    .replace(/https?:\/\/\S+/gi, " ")                       // absolute URLs
+    .replace(/\bwww\.\S+/gi, " ")                           // www.host
+    .replace(/\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|co\.uk|uk|org|net|io|biz|info)\b(\/\S*)?/gi, " "); // bare domains
 }

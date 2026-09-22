@@ -44,7 +44,7 @@ const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
 export const resultsPublicUrl = (remeasureAuditId: string) => `${REPORT_PUBLIC_ORIGIN}/results/${remeasureAuditId}`;
 
 export interface RemeasureBundle {
-  audit: { id: string; lead_id: string | null; business_name: string | null; website: string | null; location_text: string | null; audit_purpose: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null; created_at: string };
+  audit: { id: string; lead_id: string | null; business_name: string | null; business_type: string | null; website: string | null; location_text: string | null; audit_purpose: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null; created_at: string };
   lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null };
   baselineRuns: Array<{ id: string; status: string | null; created_at: string }>;
   replayRuns: Array<{ id: string; status: string | null; created_at: string }>;
@@ -58,7 +58,7 @@ export interface RemeasureBundle {
  *  not a pointed-at replay. Shared so the email and the page cannot compute different numbers. */
 export async function loadRemeasureBundle(service: Client, remeasureAuditId: string): Promise<{ bundle: RemeasureBundle | null; reason: string | null }> {
   const { data: a } = await service.from("ai_audits")
-    .select("id, lead_id, business_name, website, location_text, audit_purpose, baseline_target_runs, baseline_completed_at, created_at")
+    .select("id, lead_id, business_name, business_type, website, location_text, audit_purpose, baseline_target_runs, baseline_completed_at, created_at")
     .eq("id", remeasureAuditId).maybeSingle();
   const audit = a as RemeasureBundle["audit"] | null;
   if (!audit) return { bundle: null, reason: "no such audit" };
@@ -91,7 +91,12 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
     runsOf(lead.baseline_audit_id), runsOf(audit.id), rowsOf(lead.baseline_audit_id), rowsOf(audit.id),
   ]);
   const businessName = (audit.business_name ?? lead.business_name ?? "").trim();
-  const comparison = compareMeasurements(baselineRows, replayRows, { businessName, ownWebsite: audit.website ?? lead.website ?? "" });
+  /* Trade + town make the ANSWER TEXT the ruler on both sides (namedSignal.ts) — the same context
+     the internal baseline view and the client report use, so the refund is judged on one measure. */
+  const comparison = compareMeasurements(baselineRows, replayRows, {
+    businessName, ownWebsite: audit.website ?? lead.website ?? "",
+    trade: audit.business_type ?? null, town: audit.location_text ?? lead.derived_town ?? lead.search_location ?? null,
+  });
   const town = (audit.location_text ?? lead.derived_town ?? lead.search_location ?? "").trim() || null;
   return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms }, reason: null };
 }

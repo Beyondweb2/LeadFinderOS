@@ -135,10 +135,13 @@ export function buildBaselineView(
      the replay with the model and the baseline with the old string match is not a comparison, it
      is two different rulers, and that number decides a refund. compareMeasurements picks the mode
      once, for both sides — see namedSignal.ts. */
-  opts: { businessName?: string | null; measuredAt?: string | null; namedMode?: NamedMode } = {},
+  opts: { businessName?: string | null; trade?: string | null; town?: string | null; measuredAt?: string | null; namedMode?: NamedMode } = {},
 ): BaselineView {
   const businessName = (opts.businessName ?? '').trim();
   const namedMode: NamedMode = opts.namedMode ?? 'auto';
+  /* With trade or town the ANSWER TEXT is the ruler (namedSignal.ts); without them the stored
+     verdicts are, exactly as before. */
+  const namedCtx = businessName ? { businessName, trade: opts.trade ?? null, town: opts.town ?? null } : undefined;
   const runIds = new Set<string>();
   for (const r of rows) if (r.run_id) runIds.add(r.run_id);
 
@@ -171,7 +174,7 @@ export function buildBaselineView(
       if (er && typeof er === 'object') {
         // `answered` is not stored per row: an engine that returned a result answered.
         cur.answered += 1;
-        if (namedInMode(er, namedMode)) cur.named += 1;
+        if (namedInMode(er, namedMode, namedCtx)) cur.named += 1;
         if (Array.isArray(er.competitors)) {
           acc.competitorCells += 1;
           for (const raw of er.competitors) {

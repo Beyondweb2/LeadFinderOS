@@ -212,6 +212,10 @@ export default function Baseline() {
       setQueueRows(rows as unknown as QueueRow[]);
       setView(buildBaselineView(rows, {
         businessName: row.business_name,
+        /* Trade + town let the answer TEXT decide "named" (namedSignal.ts) — the same context the
+           report builder below is given, so summary and report read one ruler. */
+        trade: row.business_type,
+        town: row.location_text,
         measuredAt: row.baseline?.measured_at ?? row.baseline_completed_at ?? null,
       }));
     } catch (e) {

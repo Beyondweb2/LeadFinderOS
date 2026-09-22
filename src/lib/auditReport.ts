@@ -952,9 +952,11 @@ export function buildReportData(
      it degrades to "we measured what AI said about you" instead of naming nonsense.
      ⚠️ The verdict is DERIVED from the names, not read from a stamp — every audit before
      2026-08-28 has no stamp, and absence must not read as clean (competitorCleaning.ts). */
-  /* ownDomain is the client's own host, used only by the per-engine `cited` derivation below. The
-     per-engine `named`/`recommended` figures read cellNamed() and need no matcher context. */
+  /* ownDomain is the client's own host, used only by the per-engine `cited` derivation below.
+     namedCtx lets cellNamed() read the ANSWER TEXT as the ruler (namedSignal.ts) — the same context
+     the internal baseline view passes, so hero, per-question and per-engine counts agree with it. */
   const ownDomain = citationDomain(unwrapCitationUrl(ctx.ownWebsite ?? ''));
+  const namedCtx = { businessName: ctx.businessName, trade: ctx.businessType || null, town: ctx.locationText || null };
   const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results,
     { answeredCells: countAnsweredCells(queueRows) });
   /* ⚠️ `suppressNames`, NOT `verdict === 'dirty'`. The verdict is also dirty when the run holds NO
@@ -998,7 +1000,7 @@ export function buildReportData(
       for (const e of SCORED_ENGINES) {
         if (!r.result[e]) continue;
         liveTotal++;
-        if (cellNamed(r.result[e])) liveNamed++;
+        if (cellNamed(r.result[e], namedCtx)) liveNamed++;
       }
     }
   }
@@ -1031,7 +1033,7 @@ export function buildReportData(
     let n = 0;
     let t = 0;
     for (const r of queueRows) {
-      if (r.status === 'done' && r.result?.[engine]) { t++; if (cellNamed(r.result[engine])) n++; }
+      if (r.status === 'done' && r.result?.[engine]) { t++; if (cellNamed(r.result[engine], namedCtx)) n++; }
     }
     return { engine, named: n, total: t };
   }).filter((pe) => pe.total > 0).map((pe) => ({ label: ENGINE_LABELS[pe.engine] ?? pe.engine, named: pe.named, total: pe.total }));
@@ -1122,7 +1124,7 @@ export function buildReportData(
     // Client named-frequency across runs × SCORED engines — sums to the "named X of Y" headline.
     let namedCount = 0; let answers = 0;
     for (const r of rows) for (const e of SCORED_ENGINES) {
-      const er = r.result![e]; if (!er) continue; answers++; if (cellNamed(er)) namedCount++;
+      const er = r.result![e]; if (!er) continue; answers++; if (cellNamed(er, namedCtx)) namedCount++;
     }
     const namedYou = namedCount > 0;
 
@@ -1133,7 +1135,7 @@ export function buildReportData(
       const cm = new Map<string, string>();
       for (const r of rows) {
         const er = r.result![engine]; if (!er) continue;
-        ranCount++; if (cellNamed(er)) named++;
+        ranCount++; if (cellNamed(er, namedCtx)) named++;
         /* ⛔ RECOMMENDED vs CITED — DERIVED HERE, NOT STORED, AND `named` IS UNTOUCHED.
            The stored `named` is `prose OR a matching source title` (ai-search.ts), so a reader
            could not tell a real recommendation from a citation of the client's own site. Both
@@ -1151,7 +1153,7 @@ export function buildReportData(
            predicate in namedSignal.ts: the model's verdict where the extractor recorded one, the
            stored string match otherwise. `cited` stays its own, separate measure — being cited as
            a source is never "named". */
-        if (cellNamed(er)) recommended++;
+        if (cellNamed(er, namedCtx)) recommended++;
         if ((er.citations ?? []).some((c) => citationIsClient(c, ctx.businessName, ownDomain))) cited++;
         /* ⛔ COUNT WHAT AI ACTUALLY RETURNED, BEFORE FILTERING. `engRivals` is the KEPT list, and an
            empty kept list has three completely different causes: AI named nobody else, every name it
