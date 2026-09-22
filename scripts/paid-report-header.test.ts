@@ -5,7 +5,7 @@
    Run: npx tsx scripts/paid-report-header.test.ts
    ============================================================ */
 import { paidReportKind } from '../src/lib/reportKind.ts';
-import { renderReportHtml, type AiAuditReportData } from '../src/lib/aiAuditReportHtml.ts';
+import { engineVisibilitySentence, renderReportHtml, type AiAuditReportData } from '../src/lib/aiAuditReportHtml.ts';
 
 let failures = 0;
 function ok(cond: boolean, msg: string) {
@@ -118,9 +118,13 @@ console.log('\n── 6. THE REMEASUREMENT USES THE SAME VISUAL LANGUAGE ──'
   const rm = renderReportHtml({ ...mcl(), paidSummary: 'remeasure' });
   ok(rm.includes('Overall AI visibility') && /<div class="pv-pct">33%<\/div>/.test(rm),
     'a remeasurement gets the same percentage-first header');
-  /* Identical but for the HTML comment naming which kind it is — no second design to maintain. */
-  ok(rm.replace('PAID REMEASURE SUMMARY', 'PAID BASELINE SUMMARY') === paid,
-    'baseline and remeasurement render the same markup, byte for byte');
+  /* ⚠️ TWO DIFFERENCES NOW, AND BOTH ARE DELIBERATE: the HTML comment naming the kind, and the PILL,
+     which is the whole point of telling the client which document they are holding. Normalise
+     exactly those two and nothing else must differ — one design, two labels. */
+  const norm = (h: string) => h
+    .replace('PAID REMEASURE SUMMARY', 'PAID BASELINE SUMMARY')
+    .replace('<div class="pv-pill">Remeasurement</div>', '<div class="pv-pill">Baseline</div>');
+  ok(norm(rm) === paid, 'baseline and remeasurement render the same markup but for the kind label');
 }
 
 console.log('\n── 7. THE WITHHOLDING PATHS STILL WIN ──');
@@ -152,6 +156,79 @@ console.log('\n── 9. NO DATA IS CHANGED BY RENDERING ──');
   renderReportHtml({ ...input, paidSummary: 'baseline' });
   ok(JSON.stringify(input) === snapshot, 'the renderer mutates nothing it was given');
 }
+
+console.log('\n── 10. THE REPORT-TYPE PILL ──');
+{
+  ok(paid.includes('<div class="pv-pill">Baseline</div>'), 'a baseline says Baseline');
+  const rm = renderReportHtml({ ...mcl(), paidSummary: 'remeasure' });
+  ok(rm.includes('<div class="pv-pill">Remeasurement</div>'), 'a remeasurement says Remeasurement');
+  ok(!renderReportHtml(mcl()).includes('pv-pill"'), 'and no other report type gets one');
+}
+
+console.log('\n── 11. ENGINE IDENTITY COLOUR, NOT PERFORMANCE COLOUR ──');
+{
+  ok(/<div class="pv-card gpt">/.test(paid), 'ChatGPT carries the gpt identity class');
+  ok(/<div class="pv-card gem">/.test(paid), 'Gemini carries the gem identity class');
+  /* ⛔ THE ONE THAT MATTERS. Gemini is on 2% here; if the card were graded rather than identified it
+     would be red, and the client would read the colour as a verdict. */
+  const styles = paid.slice(paid.indexOf('.pv-card.gem'), paid.indexOf('.pv-card.gem') + 200);
+  ok(!/--red|#e11d2a/.test(styles), 'the low-scoring engine is NOT coloured red');
+  ok(paid.includes('--eng-gpt:#0f7a46') && paid.includes('--eng-gem:#5f3fa8'),
+    'the two identity colours are the measured-contrast pair (4.97:1 and 6.81:1 on their tints)');
+  /* The classes are assigned by ENGINE, so they do not follow the numbers. Flip the scores and the
+     colours must stay put. */
+  const flipped = renderReportHtml({
+    ...mcl(), paidSummary: 'baseline',
+    perEngine: [{ label: 'ChatGPT', named: 1, total: 60 }, { label: 'Gemini', named: 38, total: 60 }],
+  });
+  /* ⚠️ THE CARD BLOCK IS EXTRACTED, NOT WINDOWED. A fixed character window failed here because the
+     engine mark is a full inline SVG between the class and the percentage — the assertion was
+     measuring the length of a logo, not the pairing it meant to test. */
+  const cardBlock = (html: string, cls: 'gpt' | 'gem') => {
+    const i = html.indexOf(`<div class="pv-card ${cls}">`);
+    return i < 0 ? '' : html.slice(i, html.indexOf('</div>', html.indexOf('pv-card-sub', i)));
+  };
+  ok(/<div class="pv-card-pct">2%<\/div>/.test(cardBlock(flipped, 'gpt')),
+    'ChatGPT on 2% still gets the green identity — colour identifies the engine, never the result');
+  ok(/<div class="pv-card-pct">63%<\/div>/.test(cardBlock(flipped, 'gem')), 'and Gemini on 63% still gets purple');
+  /* And the right way round on the real data, so the extractor is proved in both directions. */
+  ok(/<div class="pv-card-pct">63%<\/div>/.test(cardBlock(paid, 'gpt'))
+    && /<div class="pv-card-pct">2%<\/div>/.test(cardBlock(paid, 'gem')),
+    'and MCL reads ChatGPT 63% / Gemini 2% in their own cards');
+}
+
+console.log('\n── 12. THE INTERPRETATION LINE — three bands and a floor ──');
+{
+  const s = (a: number, b: number) => engineVisibilitySentence([{ label: 'ChatGPT', pct: a }, { label: 'Gemini', pct: b }]);
+  ok(s(63, 2) === 'Visibility is much stronger in ChatGPT than in Gemini.', 'MCL: a 61-point gap reads "much stronger"');
+  ok(s(2, 63) === 'Visibility is much stronger in Gemini than in ChatGPT.', 'and it names whichever engine is actually higher');
+  ok(s(40, 20) === 'Visibility is somewhat stronger in ChatGPT than in Gemini.', 'a 20-point gap reads "somewhat stronger"');
+  ok(s(40, 35) === 'Visibility is currently similar across ChatGPT and Gemini.', 'a 5-point gap reads "similar"');
+  ok(s(8, 2) === 'The business has limited visibility across both measured engines.',
+    'both low → the sentence is about both, not about the gap between two small numbers');
+  ok(engineVisibilitySentence([{ label: 'ChatGPT', pct: 63 }]) === '', 'one engine → no sentence, there is nothing to compare');
+  ok(engineVisibilitySentence([]) === '', 'no engines → no sentence');
+  /* ⛔ NOTHING IS HARDCODED TO ANY CLIENT, and the wording stays neutral. */
+  ok(!s(63, 2).includes('MCLocksmiths'), 'no client name is baked into the rule');
+  for (const bad of ['good', 'poor', 'bad', 'excellent', 'guarantee', 'best', 'rank', 'score', 'grade']) {
+    ok(!s(63, 2).toLowerCase().includes(bad) && !s(40, 35).toLowerCase().includes(bad) && !s(8, 2).toLowerCase().includes(bad),
+      `no "${bad}" in any band — it describes, it does not grade`);
+  }
+  ok(paid.includes('Visibility is much stronger in ChatGPT than in Gemini.'), 'and it is rendered into the document');
+}
+
+console.log('\n── 13. THE MATHS IS UNTOUCHED BY THE REFINEMENT ──');
+ok(/<div class="pv-pct">33%<\/div>/.test(paid)
+  && /<div class="pv-card-pct">63%<\/div>/.test(paid)
+  && /<div class="pv-card-pct">2%<\/div>/.test(paid)
+  && paid.includes('39 of 120 measured answers')
+  && paid.includes('<div class="pv-card-sub">38 of 60</div>')
+  && paid.includes('<div class="pv-card-sub">1 of 60</div>'),
+  'MCL still reads 33% / 63% (38 of 60) / 2% (1 of 60)');
+
+console.log('\n── 14. SEPARATION FROM THE QUESTION TABLE ──');
+ok(paid.includes('<div class="pv-split"></div>'), 'a hairline divider sits between the summary and the table');
+ok(!renderReportHtml(mcl()).includes('pv-split"><'), 'and no other report type gets one');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
 process.exit(failures ? 1 : 0);

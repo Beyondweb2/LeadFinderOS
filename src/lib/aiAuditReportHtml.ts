@@ -635,6 +635,18 @@ export const REPORT_CHROME_CSS_CORE = `
     --panel-tint:#f8fafc; --panel-tint-2:#f1f5f9;
     --gold:#FFD13F; --on-gold:#3a2d05;
     --gold-tint:#fffaeb; --gold-line:#e6c968; --on-gold-tint:#8a6d1a; --on-gold-tint-2:#6b5a1e;
+    /* ── ENGINE IDENTITY COLOURS (paid summary only) ────────────────────────────────────────────
+       ⛔ THESE IDENTIFY AN ENGINE, THEY DO NOT GRADE A RESULT. Green is ChatGPT and purple is
+       Gemini whatever the numbers say — a client reading 2% next to a green card and 63% next to a
+       purple one must not conclude that green means good. Red is deliberately absent: Gemini's low
+       score is a measurement, not a failing, and colouring it red would grade it.
+       ⚠️ Contrast measured, not eyeballed: #0f7a46 on #eef8f2 is 4.97:1 and #5f3fa8 on #f4f1fb is
+       6.81:1 — both pass AA for normal text, never mind the 46px numerals they carry. */
+    --eng-gpt:#0f7a46; --eng-gpt-tint:#eef8f2; --eng-gpt-line:#cfe7da;
+    --eng-gem:#5f3fa8; --eng-gem-tint:#f4f1fb; --eng-gem-line:#ded5f2;
+    /* Secondary copy that must stay READABLE while reading as secondary. --faint is 2.54:1 on
+       white, which is decoration rather than text; size and spacing do the demoting instead. */
+    --muted-2:#6b7280;
     /* The welcome pack's code boxes were navy; charcoal now (--color-navy-800), site ink on it. */
     --mono-bg:#17181C; --mono-text:#F7F7F5; --mono-light-text:#1e293b;
     --video-bg:#000000;
@@ -809,6 +821,52 @@ export function renderHookSection(h: HookReportSummary, businessName: string): s
       ${renderHookEvidenceBox(g, businessName)}
       <p class="hook-caveat">${esc(c.caveat)}</p>
     </section>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   ONE PLAIN-ENGLISH LINE UNDER THE ENGINE CARDS (paid summary only).
+
+   ⛔ IT IS NOT A SCORE, A GRADE OR A RANKING, AND IT MUST NOT BECOME ONE. It says which engine names
+   the business more often and roughly how far apart the two are — nothing else. No "good", no
+   "poor", no letter, no band name, no promise, and no number the cards above do not already show.
+   ⛔ THREE BANDS AND A FLOOR. That is the entire rule. A finer scale would be inventing precision
+   the measurement does not carry: the noise band on this product is already 5 percentage points
+   (NOISE_BAND_PP), so a sentence that distinguished a 9-point gap from an 11-point one would be
+   describing noise in words.
+   ⚠️ LABELS COME FROM THE DATA. The sentence names whichever engines were actually measured, so a
+   report with different engines reads correctly without a change here.
+   ⚠️ Fewer than two engines → NO SENTENCE. There is nothing to compare, and "visibility is similar
+   across 1 engine" is a sentence about nothing.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Gap in percentage points below which two engines are described as similar. */
+export const READING_SIMILAR_PP = 10;
+/** Gap at or above which the difference is called "much stronger" rather than "stronger". */
+export const READING_STRONG_PP = 25;
+/** At or below this on BOTH engines, the honest sentence is about both, not about the gap. */
+export const READING_LOW_PCT = 10;
+
+/** The one interpretation line, or "" when there is nothing honest to say. */
+export function engineVisibilitySentence(
+  engines: Array<{ label: string; pct: number }>,
+): string {
+  if (!engines || engines.length < 2) return "";
+  const sorted = [...engines].sort((a, b) => b.pct - a.pct);
+  const hi = sorted[0];
+  const lo = sorted[sorted.length - 1];
+  /* The floor first: when nothing is showing up anywhere, the gap between two small numbers is not
+     the story and leading with it would overstate the stronger engine. */
+  if (hi.pct <= READING_LOW_PCT) {
+    return "The business has limited visibility across both measured engines.";
+  }
+  const gap = hi.pct - lo.pct;
+  if (gap < READING_SIMILAR_PP) {
+    return `Visibility is currently similar across ${hi.label} and ${lo.label}.`;
+  }
+  if (gap < READING_STRONG_PP) {
+    return `Visibility is somewhat stronger in ${hi.label} than in ${lo.label}.`;
+  }
+  return `Visibility is much stronger in ${hi.label} than in ${lo.label}.`;
 }
 
 export function renderReportHtml(d: AiAuditReportData): string {
@@ -1008,12 +1066,14 @@ export function renderReportHtml(d: AiAuditReportData): string {
      ⚠️ Percentages are computed per engine rather than read from the row: ReportEngineRow carries
      named/total only. Rounded the same way d.pct is, so 1 of 60 reads 2% in both places. */
   const paidSummarySection = (() => {
+    /* The engine identity class. Matched on the label the payload already carries. */
+    const engClass = (label: string) => label === "ChatGPT" ? "gpt" : label === "Gemini" ? "gem" : "";
     if (!d.paidSummary || d.measuring || d.nameNotJudgeable) return "";
     const engines = (d.perEngine ?? [])
       .filter((e) => (SCORED_LABELS as readonly string[]).includes(e.label) && e.total > 0)
       .map((e) => ({ label: e.label, named: e.named, total: e.total, pct: Math.round((e.named / e.total) * 100) }));
     const cards = engines.map((e) => `
-        <div class="pv-card">
+        <div class="pv-card ${engClass(e.label)}">
           <div class="pv-card-label">${engineMark(e.label)}${esc(e.label)}</div>
           <div class="pv-card-pct">${e.pct}%</div>
           <div class="pv-card-sub">${e.named} of ${e.total}</div>
@@ -1023,16 +1083,20 @@ export function renderReportHtml(d: AiAuditReportData): string {
     const working = d.questionsAsked && d.enginesUsed
       ? `${d.questionsAsked} question${d.questionsAsked === 1 ? "" : "s"} &times; ${d.enginesUsed} AI engine${d.enginesUsed === 1 ? "" : "s"}${(d.measurementRuns ?? 1) > 1 ? ` &times; ${d.measurementRuns} asks each` : ""}`
       : "";
+    const reading = engineVisibilitySentence(engines);
     return `
     <!-- PAID ${d.paidSummary.toUpperCase()} SUMMARY: percentage-first. Replaces the hero + chat card. -->
     <section class="pv">
+      <div class="pv-pill">${d.paidSummary === "remeasure" ? "Remeasurement" : "Baseline"}</div>
       <div class="pv-overall">
         <div class="pv-eyebrow">Overall AI visibility</div>
         <div class="pv-pct">${d.pct}%</div>
         <div class="pv-sub">${d.named} of ${d.total} measured ${plural(d.total, "answer")}${working ? ` &middot; ${working}` : ""}</div>
       </div>
       ${cards ? `<div class="pv-cards">${cards}</div>` : ""}
-    </section>`;
+      ${reading ? `<p class="pv-read">${esc(reading)}</p>` : ""}
+    </section>
+    <div class="pv-split"></div>`;
   })();
 
   const qOther = (d.questionBreakdown ?? []).filter((q) => !gp || q.question !== gp.question);
@@ -1383,17 +1447,40 @@ ${REPORT_CHROME_CSS_CORE}
      is selling a problem to a prospect; a client reading their own baseline does not need their
      result shouted at them in red, and a remeasurement that moved 2 points would change colour
      without changing meaning. */
-  .pv{ padding:16px 28px 22px; }
-  .pv-eyebrow{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:700; }
-  .pv-pct{ font-size:92px; line-height:.86; font-weight:900; letter-spacing:-.04em; color:var(--ink); margin-top:6px; }
-  .pv-sub{ font-size:13.5px; color:var(--muted); margin-top:8px; font-weight:500; }
-  .pv-cards{ display:flex; gap:14px; margin-top:20px; flex-wrap:wrap; }
-  .pv-card{ flex:1 1 200px; min-width:180px; border:1px solid var(--line); border-radius:12px;
-    background:var(--panel-tint); padding:14px 16px 16px; }
+  .pv{ padding:14px 28px 6px; }
+  /* The report-type pill: small, understated, and the one place the saturated brand gold appears
+     here — on a hairline chip where contrast is carried by the dark text, not by the gold. */
+  .pv-pill{ display:inline-block; font-size:10.5px; font-weight:900; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--on-gold-tint-2); background:var(--gold-tint);
+    border:1px solid var(--gold-line); border-radius:999px; padding:4px 11px; }
+  /* The overall result sits ON a warm panel rather than floating in white. Gold hairline, gold
+     tint, and a slightly heavier left edge so the panel reads as one object. */
+  .pv-overall{ margin-top:12px; background:var(--gold-tint); border:1px solid var(--gold-line);
+    border-left-width:4px; border-radius:14px; padding:18px 22px 20px; }
+  .pv-eyebrow{ font-size:12.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted);
+    font-weight:800; }
+  /* Smaller than the first pass (92px) and warm rather than navy, but still by far the biggest
+     thing on the page. #8a6d1a on #fffaeb is 4.70:1. */
+  .pv-pct{ font-size:76px; line-height:.9; font-weight:900; letter-spacing:-.04em;
+    color:var(--on-gold-tint); margin-top:4px; }
+  /* The working-out: smaller, lighter and pushed away from the number it explains. */
+  .pv-sub{ font-size:12px; line-height:1.5; color:var(--muted-2); margin-top:14px; font-weight:500; }
+  .pv-cards{ display:flex; gap:14px; margin-top:14px; flex-wrap:wrap; }
+  .pv-card{ flex:1 1 200px; min-width:180px; border:1px solid var(--line); border-radius:14px;
+    background:var(--panel-tint); padding:15px 17px 17px; }
+  /* Engine identity — tint, hairline and numeral all from the same pair. See the token note. */
+  .pv-card.gpt{ background:var(--eng-gpt-tint); border-color:var(--eng-gpt-line); }
+  .pv-card.gem{ background:var(--eng-gem-tint); border-color:var(--eng-gem-line); }
+  .pv-card.gpt .pv-card-label, .pv-card.gpt .pv-card-pct{ color:var(--eng-gpt); }
+  .pv-card.gem .pv-card-label, .pv-card.gem .pv-card-pct{ color:var(--eng-gem); }
   .pv-card-label{ display:flex; align-items:center; gap:7px; font-size:12px; font-weight:800;
     letter-spacing:.07em; text-transform:uppercase; color:var(--blue-2); }
   .pv-card-pct{ font-size:46px; line-height:1; font-weight:900; letter-spacing:-.03em; color:var(--ink); margin-top:9px; }
-  .pv-card-sub{ font-size:13px; color:var(--muted); margin-top:5px; font-weight:500; }
+  .pv-card-sub{ font-size:13px; color:var(--muted-2); margin-top:5px; font-weight:500; }
+  /* One plain-English line under the cards, derived from the two percentages. */
+  .pv-read{ font-size:14.5px; line-height:1.55; color:var(--ink); margin-top:16px; font-weight:500; max-width:62ch; }
+  /* Separation from the question table: space plus one hairline, nothing more. */
+  .pv-split{ height:1px; background:var(--line); margin:26px 28px 0; }
 
   /* HERO &mdash; balanced two-part: big number/label on the left, the verdict on the right */
   .hero{ display:flex; align-items:stretch; gap:26px; padding:14px 28px 20px; }
@@ -1687,7 +1774,13 @@ ${REPORT_CHROME_CSS_FOOT}
     .num{ font-size:72px; }
     /* 1b · Paid summary: the overall number shrinks, and the two engine cards stack into one column
        so each percentage keeps its own line rather than being squeezed side by side on a phone. */
-    .pv-pct{ font-size:68px; }
+    /* The score must not eat the viewport: at 375px a 76px numeral plus its panel already fills a
+       third of the screen, so it steps down again and the panel padding tightens with it. */
+    .pv-pct{ font-size:58px; }
+    .pv-overall{ padding:15px 16px 17px; border-radius:12px; }
+    .pv-eyebrow{ font-size:11.5px; letter-spacing:.09em; }
+    .pv-sub{ margin-top:11px; }
+    .pv-split{ margin-left:18px; margin-right:18px; }
     .pv-cards{ flex-direction:column; gap:12px; }
     /* ⛔ THE FLEX BASIS HAS TO BE RESET, NOT JUST THE MIN-WIDTH. A basis of 200px sizes along the
        MAIN axis, and the main axis is now the column — so each card took a 200px HEIGHT and
