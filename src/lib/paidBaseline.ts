@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { EdgeFunctionError, invokeEdge } from '@/lib/edgeInvoke';
 import type { PaidBaselineStatus } from './paidBaselineState';
 
 export type PaidBaseline = {
@@ -55,36 +55,20 @@ export async function invokePaidBaseline(
   leadId: string,
   extra: Record<string, unknown> = {},
 ): Promise<PaidBaseline> {
-  const { data, error } = await supabase.functions.invoke('paid-baseline', {
-    body: { action, lead_id: leadId, ...extra },
-  });
-  if (error) {
-    const context = (error as { context?: Response }).context;
-    let detail = '';
-    /* ⛔ THE SERVER'S OWN SENTENCE, KEPT SEPARATE FROM THE TOKEN. A refusal that can name the
-       specific number ("…exactly 20 questions, and 19 were approved") puts it in `detail`;
-       `error` is the machine token FRIENDLY_ERRORS keys on. Showing the token instead of the
-       sentence throws away the half that tells the operator what to do.
-       ⚠️ Assigned, never thrown from inside the try below — that catch exists to swallow a
-       non-JSON body and would swallow the throw with it. */
-    let sentence = '';
-    if (context) {
-      try {
-        const payload = await context.clone().json() as { error?: unknown; detail?: unknown; message?: unknown };
-        if (typeof payload?.detail === 'string' && payload.detail.trim()) sentence = payload.detail.trim();
-        detail = typeof payload?.error === 'string'
-          ? payload.error
-          : typeof payload?.message === 'string' ? payload.message : '';
-      } catch { /* retain the SDK error when the response is not JSON */ }
+  /* Through invokeEdge (src/lib/edgeInvoke.ts): a real session first, explicit Authorization, one
+     refresh-and-retry on 401, never the anon key. It throws EdgeFunctionError with the machine
+     token in `code` and the server's own sentence in `detail`.
+     ⛔ THE SERVER'S OWN SENTENCE WINS OVER THE TOKEN. A refusal that can name the specific number
+     ("…exactly 20 questions, and 19 were approved") puts it in `detail`; `code` is what
+     FRIENDLY_ERRORS keys on. Showing the token instead of the sentence throws away the half that
+     tells the operator what to do. */
+  try {
+    const data = await invokeEdge<{ baseline: PaidBaseline }>('paid-baseline', { action, lead_id: leadId, ...extra });
+    return data.baseline;
+  } catch (e) {
+    if (e instanceof EdgeFunctionError) {
+      throw new Error(e.detail || (e.code && (FRIENDLY_ERRORS[e.code] ?? e.code)) || 'Could not update the baseline');
     }
-    if (sentence) throw new Error(sentence);
-    if (detail) throw new Error(FRIENDLY_ERRORS[detail] ?? detail);
-    throw new Error(error.message || 'Could not update the baseline');
+    throw e instanceof Error ? e : new Error('Could not update the baseline');
   }
-  if (!data?.ok) {
-    const sentence = typeof data?.detail === 'string' && data.detail.trim() ? data.detail.trim() : '';
-    const code = typeof data?.error === 'string' ? data.error : '';
-    throw new Error(sentence || (code && (FRIENDLY_ERRORS[code] ?? code)) || 'Could not update the baseline');
-  }
-  return data.baseline as PaidBaseline;
 }

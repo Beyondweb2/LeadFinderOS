@@ -113,6 +113,39 @@ the two edited directly): **`paid-baseline`, `paid-client-hub`, `process-ai-audi
 (`process-ai-audit-queue`, `stripe-webhook`) BEFORE or WITH `paid-baseline`, so no caller runs the
 old unclaimed start beside the new claimed one. `paid-client-hub` has its `config.toml` entry now.
 
+## Follow-up the same day: 401s on /paid-clients while signed in, and "No paid clients yet."
+
+Paul opened /paid-clients at 02:16 UTC (53 minutes after his 01:23 approval) and got one 401 each
+from `paid-client-hub` and `submissions`, an unhandled rejection, and the empty-state card. The
+gateway log showed exactly those two 401s, one request each. Nothing about the deploy caused it:
+neither function's auth code changed and `paid-client-hub` was already `verify_jwt = true` by
+platform default. The exact response body could not be recovered (the analytics endpoint retains
+only minutes), so the mechanism is established from the installed libraries and reproduced by hand:
+
+- supabase-js `_getAccessToken` = `auth.getSession().session?.access_token ?? supabaseKey`. When the
+  stored access token has EXPIRED, auth-js `__loadSession` refreshes it first; if that refresh fails
+  for a *retryable* reason (this project's token endpoint runs 1–35 s; a backgrounded/mobile tab
+  runs no refresh ticker) auth-js keeps the session, fires no SIGNED_OUT, and answers
+  `session: null`. supabase-js then sends the **anon key**. The gateway accepts it (a valid JWT);
+  the handler's `getUser()` finds no user; 401 — `{"ok":false,"error":"unauthorized"}` from
+  paid-client-hub and `{"ok":false,"error":"Auth required"}` from submissions, both reproduced by
+  sending the anon key. React still holds `user` from useAuth, so the operator looks signed in.
+  A gateway rejection has a different body (`UNAUTHORIZED_LEGACY_JWT / Invalid JWT` for a bad or
+  expired token, `UNAUTHORIZED_INVALID_JWT_FORMAT` for a non-JWT bearer).
+- `PaidClients.load` had no catch (the unhandled rejection) and rendered `clients.length === 0`
+  as "No paid clients yet." — a failure painted as an empty list.
+- Its list spinner was a bare `animate-spin` Loader2 — the remaining white loader.
+
+**Fix.** `src/lib/edgeInvokeCore.ts` (pure) + `edgeInvoke.ts` (bound): every protected call
+resolves the session first (one explicit refresh if it is missing), sets `Authorization` itself so
+the anon key can never travel, refreshes once and retries once on a 401, and treats a 401 that
+survives a fresh token as a genuine sign-out (`signOut({scope:'local'})` → the existing
+ProtectedRoute → /auth flow). A refresh that cannot complete is a *transient* error to retry, never
+a sign-out and never "no data". Used by PaidClients, ClientHub, useSubmissions (with `retry` off
+for auth errors — the repeated-401 loop) and invokePaidBaseline. PaidClients waits for `useAuth`,
+has loading / error-with-retry / loaded states, and its spinner is `text-primary`.
+`scripts/edge-invoke-auth.test.ts` (21 checks) drives the invoker with a fake client.
+
 ## MCLocksmiths — what to do after deploy
 
 Open the hub → Start baseline → section A → type the services (nothing verified holds them) →

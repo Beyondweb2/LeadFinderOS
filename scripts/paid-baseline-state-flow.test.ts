@@ -86,7 +86,7 @@ async function main() {
     check('6. a thrown server refusal is surfaced verbatim', !thrown.ok && thrown.step === 'run' && thrown.error.includes('Apify monthly cap reached'));
     const legacy = await startApproved(fakeServer('legacy_skip').invoke, { status: 'approved', questions: twenty });
     check('6. an "approved but waiting" skip becomes a sentence naming the missing field', !legacy.ok && legacy.error === describeStartSkip('awaiting_questionnaire_2 (services)') && legacy.error.includes('services'));
-    check('6. the helper prefers the server detail sentence over the token', helper.includes("payload?.detail === 'string'") && helper.includes('if (sentence) throw new Error(sentence)'));
+    check('6. the helper prefers the server detail sentence over the token', read('src/lib/edgeInvokeCore.ts').includes("payload?.detail === 'string'") && helper.includes('e.detail || (e.code && (FRIENDLY_ERRORS[e.code] ?? e.code))'));
     check('6. run refusals carry a detail sentence and never mark the row failed', edge.includes('detail: describeStartSkip(started.skipped)') && !edge.includes('baseline_status: "failed"'));
     check('6. approve asks the engine’s own start gate before freezing', edge.includes('const refusal = contextRefusal(row, details);') && edge.includes('baseline_context_incomplete') && edge.includes('missingQuestionnaireFields'));
     check('6. the dialog shows the error inline, not only as a toast', count(hub, 'role="alert"') >= 2 && hub.includes('{error && <div role="alert"'));

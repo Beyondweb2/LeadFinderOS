@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, Clipboard, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -26,7 +26,9 @@ type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; audit: AnyRecord | n
    the poll is a READ of paid-client-hub — it can never start, approve or create anything. */
 export const HUB_POLL_MS = 15_000;
 
-const call = async (body: Record<string, unknown>) => { const { data, error } = await supabase.functions.invoke('paid-client-hub', { body }); if (error || !data?.ok) throw new Error(error?.message || data?.error || 'Request failed'); return data; };
+/* Through invokeEdge: a real session first, explicit Authorization, one refresh-and-retry on 401,
+   never the anon key (src/lib/edgeInvoke.ts). */
+const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
 const Stage = ({ title, children }: { title: string; children: ReactNode }) => <Card><CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{children}</CardContent></Card>;
 const values = (v: unknown) => Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v || '—');
 const copy = async (value: string) => { if (value) await navigator.clipboard.writeText(value); };
