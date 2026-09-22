@@ -150,31 +150,38 @@ console.log('\n── 7. A PENDING v2 CANNOT BE SENT ──');
     'exactly one approval switch exists');
 }
 
-console.log('\n── AND v2 GENUINELY CAN BE SELECTED ONCE APPROVED ──');
+console.log('\n── THE OTHER STATE OF THE SWITCH IS EXECUTED TOO ──');
 {
-  /* ⛔ THE APPROVED BRANCH IS EXECUTED, NOT REASONED ABOUT. Asserting "when the flag is true it
-     would use the split" by reading the source proves nothing about what runs. So the module is
-     compiled again with the one constant flipped and driven for real — the same code, the other
-     state. This is the branch that goes live the day Meta approves, and it is the one nobody would
-     otherwise test until a prospect received it. */
-  const tmp = path.join(ROOT, 'scripts', '.tmp-opener-approved.ts');
+  /* ⛔ WHICHEVER STATE IS NOT LIVE IS THE ONE NOBODY WOULD OTHERWISE TEST — so this compiles the
+     module again with the one constant INVERTED and drives it for real. Before approval that proved
+     the arm v2 would take; now that it is live, it proves the OFF SWITCH still works, which is the
+     thing Paul needs if the test has to be stopped in a hurry. Reading the source and reasoning
+     about the branch proves nothing about what runs. */
+  const live = INITIAL_OPENER_V2_APPROVED;
+  const tmp = path.join(ROOT, 'scripts', '.tmp-opener-flipped.ts');
   try {
-    fs.writeFileSync(tmp, read('src/lib/openerVariant.ts')
-      .replace('export const INITIAL_OPENER_V2_APPROVED = false;', 'export const INITIAL_OPENER_V2_APPROVED = true;'));
-    const approved = await import(`file://${tmp.replace(/\\/g, '/')}`) as typeof import('../src/lib/openerVariant.ts');
-    ok(approved.INITIAL_OPENER_V2_APPROVED === true, 'the flipped module really is approved');
+    fs.writeFileSync(tmp, read('src/lib/openerVariant.ts').replace(
+      `export const INITIAL_OPENER_V2_APPROVED = ${live};`,
+      `export const INITIAL_OPENER_V2_APPROVED = ${!live};`,
+    ));
+    const flipped = await import(`file://${tmp.replace(/\\/g, '/')}?t=${Date.now()}`) as typeof import('../src/lib/openerVariant.ts');
+    ok(flipped.INITIAL_OPENER_V2_APPROVED === !live, `the flipped module really is ${!live}`);
     const ids = [...Array(2000)].map(() => randomUUID());
-    const picked = ids.map((id) => approved.openerTemplateFor(INITIAL_OPENER_A, id));
-    const b = picked.filter((t) => t === INITIAL_OPENER_B).length;
-    const pct = (b / ids.length) * 100;
-    ok(new Set(picked).size === 2, 'both openers are now selected');
-    ok(pct > 45 && pct < 55, `${pct.toFixed(1)}% of leads are sent v2 once approved (want 45–55%)`);
-    /* Stability holds in the approved state too — the property that matters most once real leads
-       are being assigned. */
+    const picked = ids.map((id) => flipped.openerTemplateFor(INITIAL_OPENER_A, id));
+    if (!live) {
+      /* The approval branch, while it is not yet live. */
+      const pct = (picked.filter((t) => t === INITIAL_OPENER_B).length / ids.length) * 100;
+      ok(new Set(picked).size === 2, 'flipped ON: both openers are selected');
+      ok(pct > 45 && pct < 55, `flipped ON: ${pct.toFixed(1)}% get v2 (want 45–55%)`);
+    } else {
+      /* The stop switch, now that the A/B is live. */
+      ok(new Set(picked).size === 1 && picked[0] === INITIAL_OPENER_A,
+        'flipped OFF: all 2,000 leads fall back to the incumbent opener — the test can be stopped');
+    }
     const id = ids[0];
-    ok([...Array(20)].every(() => approved.openerTemplateFor(INITIAL_OPENER_A, id) === picked[0]),
-      'and the same lead still keeps the same arm across twenty re-queues');
-    ok(approved.openerTemplateFor('audit_reply', id) === 'audit_reply',
+    ok([...Array(20)].every(() => flipped.openerTemplateFor(INITIAL_OPENER_A, id) === picked[0]),
+      'and the answer is still stable per lead in that state');
+    ok(flipped.openerTemplateFor('audit_reply', id) === 'audit_reply',
       'while every other template is still returned untouched');
   } finally {
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp);

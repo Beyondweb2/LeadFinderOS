@@ -31,18 +31,23 @@ export const INITIAL_OPENER_A = 'initial_contact';
 export const INITIAL_OPENER_B = 'initial_opener_v2';
 
 /**
- * 🔴 FLIP THIS TO `true` ONLY WHEN META SHOWS initial_opener_v2 AS APPROVED.
+ * 🟢 APPROVED AT META 2026-09-22 (Paul confirmed from WhatsApp Manager). The A/B is LIVE: newly
+ * queued leads are split ~50/50 between the two openers from this moment.
  *
- * While false:
- *   · every queued lead gets INITIAL_OPENER_A, so the split is inert and no send can fail;
- *   · INITIAL_OPENER_B is absent from the operator's send picker, so it cannot be hand-sent either.
+ * While this was false:
+ *   · every queued lead got INITIAL_OPENER_A, so the split was inert and no send could fail;
+ *   · the picker label carried a PENDING warning so it could not be hand-picked unwarned.
+ * Both behaviours are driven by this one constant, so flipping it turned the test on and cleared
+ * the warning together.
  *
- * ⚠️ It is NOT inferred from anything. Meta's approval state is not mirrored into this database and
- * a send is the only thing that discovers it, so the honest answer is a switch a human sets after
- * looking — never a guess, and never "try it and see", which costs a real message to a real
- * prospect and burns the first impression this test is trying to measure.
+ * ⚠️ IT IS NOT INFERRED FROM ANYTHING, AND MUST NOT BECOME SO. Meta's approval state is not mirrored
+ * into this database and a send is the only thing that discovers it, so the honest answer is a
+ * switch a human sets after looking — never a guess, and never "try it and see", which costs a real
+ * message to a real prospect and burns the first impression this test exists to measure.
+ * ⚠️ TO STOP THE TEST, set this back to false: every lead returns to the incumbent opener
+ * immediately, no rows change, and the leads already sent v2 keep their record of it.
  */
-export const INITIAL_OPENER_V2_APPROVED = false;
+export const INITIAL_OPENER_V2_APPROVED = true;
 
 /** Both arms, display order: the incumbent first. */
 export const INITIAL_OPENERS = [INITIAL_OPENER_A, INITIAL_OPENER_B] as const;
