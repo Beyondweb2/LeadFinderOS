@@ -1,6 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { attachPersistedQueueProgress } from "../../../src/lib/baselineProgress.ts";
 import { isUpstreamOutage, resolveOperator } from "../_shared/operator-auth.ts";
+import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { WEBSITE_BUILD_STATUSES } from "../../../src/lib/websiteBuildPrompt.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -12,6 +16,77 @@ const array = (v: unknown) => Array.isArray(v) ? v.filter((x): x is string => ty
    refused the whole query with 42703 and, because the error was never read, the hub showed "No
    planned pages yet" for every client. */
 const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
+
+/* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
+   `website_build`, which its own migration adds. */
+const HUB_LEAD_COLUMNS =
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build";
+
+/* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
+   CLIENT stated; nothing is derived and nothing is operator workflow. */
+const HUB_ONBOARDING_COLUMNS =
+  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete";
+
+/* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
+   than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */
+const HUB_AUDIT_COLUMNS =
+  "id,baseline_completed_at,short_code,created_at,audit_purpose,business_name,business_type,location_text,specialism,website,has_website,baseline_target_runs,is_measurement";
+
+/* ⛔ THE SAVED SHAPE IS AN ALLOWLIST, NOT WHATEVER THE BROWSER SENDS. website_build is a jsonb
+   column; without this, a client could post any object into it. Seven known string keys, an
+   enumerated status, and lengths capped so a paste cannot bloat the row. */
+const WEBSITE_BUILD_KEYS = ["repo_url", "local_repo_path", "preview_url", "production_url", "canonical_domain", "notes"] as const;
+function normaliseWebsiteBuild(raw: unknown): Record<string, string> {
+  const o = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+  const out: Record<string, string> = {};
+  for (const k of WEBSITE_BUILD_KEYS) {
+    const v = text(o[k]).slice(0, k === "notes" ? 8000 : 500);
+    if (v) out[k] = v;
+  }
+  const status = text(o.status);
+  /* ⛔ An unrecognised status is dropped, never stored. The reader would fall it back to
+     'not_started' anyway; storing a token nothing reads is how a column starts lying. */
+  if ((WEBSITE_BUILD_STATUSES as readonly string[]).includes(status)) out.status = status;
+  return out;
+}
+
+/** The completed baseline's report payload, built with the SAME shared logic the client report and
+ *  the welcome pack use — so the rebuild prompt's figures cannot disagree with the report Paul sends.
+ *  Paginated: PostgREST truncates silently at db-max-rows. */
+// deno-lint-ignore no-explicit-any
+async function buildBaselineReport(service: any, audit: Record<string, unknown>, lead: Record<string, unknown>) {
+  const { data: run } = await service.from("ai_audit_runs")
+    .select("id, audit_id, run_number, status, mention_rate, results, created_at")
+    .eq("audit_id", audit.id).order("run_number", { ascending: false }).limit(1).maybeSingle();
+  if (!run) return null;
+  const { data: allRuns } = await service.from("ai_audit_runs").select("id").eq("audit_id", audit.id);
+  const runIds = ((allRuns ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const rows: QueueRow[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await service.from("ai_audit_queue").select("id, question, status, result")
+      .in("run_id", runIds.length ? runIds : [run.id]).order("id").range(from, from + page - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as QueueRow[];
+    rows.push(...batch);
+    if (batch.length < page) break;
+  }
+  const ownWebsite = text(audit.website) || text(lead.website);
+  const report = buildReportData(rows, run as RunRow, {
+    businessName: text(audit.business_name),
+    businessType: text(audit.business_type),
+    locationText: text(audit.location_text),
+    specialisms: text(audit.specialism),
+    isAggregatorUrl,
+    ownWebsite,
+    hasWebsite: ownWebsite ? true : (lead.place_id ? false : null),
+    seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
+  });
+  /* ⛔ NEVER the internal view. Winnability must not leave the report module even into a prompt that
+     an operator reads — the prompt is pasted into another agent's context and travels. */
+  if (report) report.internal = false;
+  return report;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -46,7 +121,7 @@ Deno.serve(async (req) => {
     if (action === "get") {
       const leadId = text(body.lead_id);
       const { data: lead, error } = await service.from("outreach_leads")
-        .select("id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for")
+        .select(HUB_LEAD_COLUMNS)
         .eq("id", leadId).eq("user_id", user.id).maybeSingle();
       if (error) throw error;
       if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
@@ -55,14 +130,14 @@ Deno.serve(async (req) => {
          because outreach_leads.baseline_audit_id is set by the claim trigger on audit_purpose =
          'baseline' alone. */
       const { data: onboarding, error: onboardingErr } = await service.from("onboarding_responses")
-        .select("id,confirmed_location,services,services_list,areas_list,areas_wanted,contact_email,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,gbp_consent,gbp_manager_email")
+        .select(HUB_ONBOARDING_COLUMNS)
         .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (onboardingErr) throw onboardingErr;
       const auditId = (lead as Record<string, unknown>).baseline_audit_id as string | null;
       let audit: unknown = null, runs: Array<Record<string, unknown>> = [], pages: unknown[] = [];
       if (auditId) {
         const [a, r] = await Promise.all([
-          service.from("ai_audits").select("id,baseline_completed_at,short_code,created_at").eq("id", auditId).maybeSingle(),
+          service.from("ai_audits").select(HUB_AUDIT_COLUMNS).eq("id", auditId).maybeSingle(),
           /* ⚠️ ai_audit_runs has NO completed_at column (read back 2026-09-22). */
           service.from("ai_audit_runs").select("id,run_number,status,created_at").eq("audit_id", auditId).order("run_number"),
         ]);
@@ -80,6 +155,105 @@ Deno.serve(async (req) => {
       if (p.error) throw p.error;
       pages = p.data ?? [];
       return json({ ok: true, client: { lead, onboarding: onboarding ?? null, audit, runs, pages } });
+    }
+
+    /* ══ SECTION 5 — WEBSITE BUILD WORKFLOW STATE ════════════════════════════════════════════════
+       The ONLY write this hub makes outside create_manual, and it touches exactly one column on one
+       row the operator owns. ⛔ It cannot reach an audit, a baseline, a question set or Discovery:
+       the update names `website_build` and nothing else, so there is no shape of request that could
+       change a measurement. */
+    if (action === "save_website_build") {
+      const leadId = text(body.lead_id);
+      const patch = normaliseWebsiteBuild(body.website_build);
+      const { data: updated, error: saveErr } = await service.from("outreach_leads")
+        .update({ website_build: patch }).eq("id", leadId).eq("user_id", user.id)
+        .select("id,website_build").maybeSingle();
+      if (saveErr) throw saveErr;
+      if (!updated) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      return json({ ok: true, website_build: (updated as { website_build?: unknown }).website_build ?? {} });
+    }
+
+    /* ══ WELCOME PACK — the operator's Download button ════════════════════════════════════════════
+       Returns the SAME HTML the public findable.live/w/<code> page serves, because both go through
+       _shared/welcome-pack-render.ts and there is no second builder. The browser prints it through
+       the offscreen-iframe helper every other Findable document uses.
+       ⛔ READ ONLY. No audit is created, nothing is re-measured, nothing is written. */
+    if (action === "welcome_pack_html") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select("id,baseline_audit_id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const auditId = text((lead as { baseline_audit_id?: unknown }).baseline_audit_id);
+      if (!auditId) return json({ ok: false, error: "not_ready", detail: "The paid baseline has not run yet, so there is no welcome pack." }, 409);
+      const packed = await renderWelcomePack(service, auditId);
+      if (!packed.ok || !packed.html) {
+        return json({ ok: false, error: packed.error ?? "not_ready", detail: packed.detail ?? "The welcome pack is not ready yet." }, 409);
+      }
+      return json({ ok: true, html: packed.html });
+    }
+
+    /* ══ SECTION 5 — EVERYTHING THE REBUILD PROMPT IS GENERATED FROM ══════════════════════════════
+       Data only. The prompt TEXT is assembled in the browser (src/lib/websiteBuildPrompt.ts) at the
+       moment the button is pressed, so it always reflects the newest onboarding and baseline data
+       and no stale copy is ever stored.
+       ⛔ READ ONLY, and every source is fetched by an explicit column list. */
+    if (action === "rebuild_context") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select(HUB_LEAD_COLUMNS).eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+
+      const { data: onboarding, error: obErr } = await service.from("onboarding_responses")
+        .select(HUB_ONBOARDING_COLUMNS)
+        .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (obErr) throw obErr;
+
+      const baselineAuditId = text((lead as { baseline_audit_id?: unknown }).baseline_audit_id) || null;
+      let baselineAudit: unknown = null;
+      let report: unknown = null;
+      let baselineCompletedAt: string | null = null;
+      if (baselineAuditId) {
+        const { data: a, error: aErr } = await service.from("ai_audits").select(HUB_AUDIT_COLUMNS).eq("id", baselineAuditId).maybeSingle();
+        if (aErr) throw aErr;
+        baselineAudit = a ?? null;
+        baselineCompletedAt = (a as { baseline_completed_at?: string | null } | null)?.baseline_completed_at ?? null;
+        /* ⛔ ONLY A COMPLETED BASELINE PRODUCES BASELINE EVIDENCE. A half-finished run would put a
+           partial count into a document that tells Claude the measurement is final. */
+        if (a && baselineCompletedAt) report = await buildBaselineReport(service, a as Record<string, unknown>, lead as Record<string, unknown>);
+      }
+
+      /* DISCOVERY — verified prior context only, and ONLY as a lower-ranked fact source. It can
+         never replace the baseline: it is passed to the fact resolver as `discovery`, which loses
+         every tie, and its measurement numbers are not read at all. */
+      const { data: discovery } = await service.from("ai_audits")
+        .select("id,business_name,business_type,location_text,website,specialism,created_at,audit_purpose")
+        .eq("lead_id", leadId).eq("audit_purpose", "discovery")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      /* STORED CRAWL — read, never re-run. */
+      const { data: crawl } = await service.from("lead_crawl_checks")
+        .select("url,result,created_at").eq("lead_id", leadId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      const pagesRes = await service.from("client_pages").select(CLIENT_PAGES_COLUMNS).eq("lead_id", leadId).order("created_at", { ascending: false });
+      if (pagesRes.error) throw pagesRes.error;
+
+      return json({
+        ok: true,
+        context: {
+          lead,
+          onboarding: onboarding ?? null,
+          baseline_audit: baselineAudit,
+          baseline_audit_id: baselineAuditId,
+          baseline_completed_at: baselineCompletedAt,
+          report,
+          discovery_audit: discovery ?? null,
+          crawl: crawl ?? null,
+          pages: pagesRes.data ?? [],
+        },
+      });
     }
 
     if (action === "create_manual") {

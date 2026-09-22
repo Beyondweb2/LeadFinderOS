@@ -1,7 +1,11 @@
-import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml';
+/* ⛔ EXPLICIT .ts ON EVERY RELATIVE IMPORT. This module is now reached from an EDGE FUNCTION
+   (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
+   extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
+import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
   FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay,
-  GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer';
+  GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
+import type { BaselineSummary } from './baselineSummary.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -34,6 +38,27 @@ export interface WelcomePackInput {
   /** Everything the audit report needs. `hidePitch` is forced on below, so a caller cannot
    *  accidentally send a paying client the "Ready to get started?" CTA. */
   report: AiAuditReportData;
+  /** The verified client facts, ALREADY RESOLVED (src/lib/clientFacts.ts) and already reduced to
+   *  what a client may see. Every field is optional and a blank one is simply not printed — this
+   *  document never prints a label with a hole in it, and never guesses a value. */
+  facts?: WelcomePackFacts | null;
+  /** The completed paid baseline, folded (src/lib/baselineSummary.ts). Absent → the baseline page
+   *  is omitted entirely rather than rendered with an empty result. */
+  baseline?: BaselineSummary | null;
+}
+
+/** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
+ *  workflow state, no database ids, no winnability, no internal classifications. The public route
+ *  builds it from an explicit column list and scripts/welcome-pack-public-safety.test.ts pins that. */
+export interface WelcomePackFacts {
+  website?: string | null;
+  primaryLocation?: string | null;
+  category?: string | null;
+  services?: string[];
+  areas?: string[];
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
 }
 
 /** Small helper: a bold lead-in then the rest of a sentence, as the copy uses repeatedly. */
@@ -109,12 +134,24 @@ const PACK_CSS = `
   .wp-dont .wp-coltitle{ color:var(--red); }
   .wp-guar{ font-size:12px; font-weight:800; color:var(--blue-2); margin:16px 0 0; }
 
+  /* the facts grid on "your details" — a label/value pair per cell, never a table */
+  .wp-dl{ display:flex; flex-wrap:wrap; gap:10px 18px; margin:8px 0 0; }
+  .wp-dl > div{ flex:1 1 210px; min-width:190px; }
+  .wp-dt{ font-size:10.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:var(--blue-2); }
+  .wp-dd{ font-size:13.5px; color:var(--ink); line-height:1.45; word-break:break-word; margin:1px 0 0; }
+  /* the three headline numbers on the baseline page */
+  .wp-stats{ display:flex; gap:12px; flex-wrap:wrap; margin:10px 0 4px; }
+  .wp-stat{ flex:1 1 150px; min-width:140px; border:1px solid var(--line); border-radius:10px;
+    padding:11px 13px; background:var(--panel-tint); }
+  .wp-statnum{ font-size:24px; font-weight:900; color:var(--ink); line-height:1.1; }
+  .wp-statlab{ font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--blue-2); margin:3px 0 0; }
+
   @media (max-width:520px){ .wp-wrap{ padding:14px 18px 18px; } }
 `;
 
 const PACK_PRINT_CSS = `
   @media print{
-    .wp-row, .wp-box, .wp-box-navy, .wp-mono, .wp-mono-light, .wp-col{ break-inside:avoid; page-break-inside:avoid; }
+    .wp-row, .wp-box, .wp-box-navy, .wp-mono, .wp-mono-light, .wp-col, .wp-stat, .wp-dl > div{ break-inside:avoid; page-break-inside:avoid; }
   }
 `;
 
@@ -139,7 +176,18 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
 /* ── page bodies ──────────────────────────────────────────────────────────────────────────────
  * British English, no em dashes (the copy was supplied that way and is reproduced as given). */
 
-function coverPage(name: string): string {
+/* ⚠️ THE CONTENTS LIST IS DERIVED FROM THE PAGES THAT ARE ACTUALLY IN THE PACK, and numbered by
+   position. A hardcoded list was fine while the pack had one shape; it now has two (with and
+   without the client's own details and baseline result), and a contents page that promises a
+   section the document does not contain is a worse fault than no contents page at all. */
+function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): string {
+  const contents = [
+    ...(hasDetails ? [{ title: 'What we have on file', line: 'The details everything is built on. Please check them.' }] : []),
+    ...(hasBaseline ? [{ title: 'Where you stand today', line: 'Your baseline result, how we measured it, and what happens next.' }] : []),
+    { title: 'Your plan', line: 'What we do, how long it takes, and our money-back guarantee.' },
+    { title: 'Get more reviews', line: 'A five-minute setup, and the one thing that helps most that only you can do.' },
+    { title: 'Your baseline report', line: 'Where AI names you today, question by question. Your starting point, and what we measure the before-and-after against.' },
+  ];
   return `
       <div class="wp-eyebrow">Welcome pack</div>
       <h1 class="wp-h1">Welcome to Findable</h1>
@@ -163,28 +211,13 @@ function coverPage(name: string): string {
       </div>
       <h2 class="wp-h2">What&rsquo;s inside</h2>
       <div class="wp-rows">
-        <div class="wp-row">
-          <div class="wp-num">1</div>
+        ${contents.map((c, i) => `<div class="wp-row">
+          <div class="wp-num">${i + 1}</div>
           <div class="wp-rowbody">
-            <div class="wp-rowtitle">Your plan</div>
-            <p class="wp-rowline">What we do, how long it takes, and our money-back guarantee.</p>
+            <div class="wp-rowtitle">${c.title}</div>
+            <p class="wp-rowline">${c.line}</p>
           </div>
-        </div>
-        <div class="wp-row">
-          <div class="wp-num">2</div>
-          <div class="wp-rowbody">
-            <div class="wp-rowtitle">Get more reviews</div>
-            <p class="wp-rowline">A five-minute setup, and the one thing that helps most that only you can do.</p>
-          </div>
-        </div>
-        <div class="wp-row">
-          <div class="wp-num">3</div>
-          <div class="wp-rowbody">
-            <div class="wp-rowtitle">Your baseline report</div>
-            <p class="wp-rowline">Where AI names you today, question by question. Your starting point,
-            and what we measure the before-and-after against.</p>
-          </div>
-        </div>
+        </div>`).join('\n        ')}
       </div>
       <p style="margin-top:16px">Any questions at all, just reply to the email this came with.
       <b>Glad to have you with us.</b></p>
@@ -381,6 +414,135 @@ Thanks,
       </div>`;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   YOUR DETAILS — what Findable holds about the business, so the client can correct it early rather
+   than discover it wrong in a rebuilt website.
+
+   ⛔ ONLY VERIFIED VALUES, AND ONLY THE ONES THAT EXIST. Each row is emitted only when it has a
+   value: a blank row would either read as "we have nothing" (true, but the label alone does not say
+   so) or invite a guess. Nothing is defaulted, nothing is inferred from a neighbouring field.
+   ⛔ NOTHING OPERATOR-ONLY REACHES THIS PAGE. Its input is WelcomePackFacts, which has no field for
+   notes, workflow state or an internal classification, so there is no route for one to arrive.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+function detailsPage(name: string, facts: WelcomePackFacts): string {
+  const row = (label: string, value: string | null | undefined) => {
+    const v = String(value ?? '').trim();
+    return v ? `<div><div class="wp-dt">${esc(label)}</div><div class="wp-dd">${esc(v)}</div></div>` : '';
+  };
+  const list = (label: string, values: string[] | undefined) => row(label, (values ?? []).filter(Boolean).join(', '));
+  const rows = [
+    row('Business', name),
+    row('Website', facts.website),
+    row('Main location', facts.primaryLocation),
+    row('What you do', facts.category),
+    list('Services we measure you on', facts.services),
+    list('Areas you serve', facts.areas),
+    row('Main contact', facts.contactName),
+    row('Email', facts.email),
+    row('Phone', facts.phone),
+  ].filter(Boolean).join('\n        ');
+  return `
+      <div class="wp-eyebrow">Your details</div>
+      <h1 class="wp-h1">What we have on file</h1>
+      <p class="wp-sub">Please check this over</p>
+      <p>These are the details we hold for you, taken from what you told us when you signed up and
+      from your own website. Everything we do is built on them &mdash; the questions we test, the pages
+      we write, the profiles we tidy up. <b>If anything here is wrong or out of date, just reply and
+      tell us.</b></p>
+      <div class="wp-dl">
+        ${rows}
+      </div>
+      <p class="wp-note">Anything we don&rsquo;t have, we&rsquo;ve left out rather than guessed.</p>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   YOUR BASELINE — the measurement result, in a business owner's words, and what happens next.
+
+   ⛔ THE SAME FIGURES THE REPORT SHOWS, FROM THE SAME PAYLOAD. This page reads the folded summary of
+   the very report appended below it, so the two can never disagree.
+   ⛔ NO PROMISE OF A RECOMMENDATION OR A CITATION, HERE OR ANYWHERE. The wording says the work can
+   improve how often AI names them and that AI answers vary between runs. Anything stronger would be
+   a promise the engines make, not us.
+   ⛔ NO OPERATOR VOCABULARY. "absent", "fragile", "one-engine" and "winnability" do not appear; the
+   same facts are stated as sentences a business owner reads once and understands.
+   ⚠️ THE GUARANTEE SENTENCE IS THE SHARED CONSTANT, unhedged (CLAUDE.md §1).
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+function baselinePage(name: string, b: BaselineSummary): string {
+  const engines = b.perEngine.length
+    ? b.perEngine.map((e) => `${esc(e.label)} named you in ${e.named} of ${e.total} answers`).join(' &middot; ')
+    : '';
+  /* Counts, not labels. "Named every time we asked" is the same fact as `strong`, said once. */
+  const consistent = b.strong.length;
+  const sometimes = b.fragile.length;
+  const oneEngineOnly = b.oneEngine.length;
+  const never = b.absent.length;
+
+  const headline = b.nameNotJudgeable
+    ? `<p>Your business name is close enough to the words people search for that an automatic check
+       can&rsquo;t reliably tell a mention of <b>you</b> from a mention of the trade itself. So we
+       have not put a score on it. Everything else in this pack still applies, and we read your
+       results by hand.</p>`
+    : `<div class="wp-stats">
+        <div class="wp-stat"><div class="wp-statnum">${b.named} of ${b.total}</div><div class="wp-statlab">Answers that named you</div></div>
+        <div class="wp-stat"><div class="wp-statnum">${b.pct}%</div><div class="wp-statlab">Of everything we asked</div></div>
+        <div class="wp-stat"><div class="wp-statnum">${b.questionCount}</div><div class="wp-statlab">Questions, asked ${b.runs || 3}&times; each</div></div>
+      </div>
+      ${engines ? `<p>${engines}.</p>` : ''}`;
+
+  const shape = b.nameNotJudgeable ? '' : `
+      <h2 class="wp-h2">What that looks like question by question</h2>
+      <ul class="wp-ticks">
+        ${consistent ? `<li>${consistent} question${consistent === 1 ? '' : 's'} where AI named you every time we asked.</li>` : ''}
+        ${sometimes ? `<li>${sometimes} question${sometimes === 1 ? '' : 's'} where AI named you sometimes but not every time &mdash; you are on the edge of the answer there.</li>` : ''}
+        ${oneEngineOnly ? `<li>${oneEngineOnly} question${oneEngineOnly === 1 ? '' : 's'} where only one of the two AI tools named you.</li>` : ''}
+        ${never ? `<li>${never} question${never === 1 ? '' : 's'} where you were not named at all. These are the openings.</li>` : ''}
+      </ul>`;
+
+  return `
+      <div class="wp-eyebrow">Your baseline</div>
+      <h1 class="wp-h1">Where you stand today</h1>
+      <p class="wp-sub">Measured ${esc(b.completedLabel || 'on the date shown in your report')}</p>
+      <p>We asked ${b.questionCount} questions a real customer in your area might type, and we asked
+      each one ${b.runs || 3} times on each AI tool, so a single lucky or unlucky answer can&rsquo;t
+      move the number. This is your starting point.</p>
+      ${headline}
+      ${shape}
+      <div class="wp-box-navy">
+        <p class="wp-boxtitle">How we measured it</p>
+        <p>${b.questionCount} questions &middot; asked ${b.runs || 3} times each &middot; scored on
+        ${esc(b.engineLabels.join(' and ') || 'the AI tools named in your report')} &middot; judged in
+        your home town. The full question-by-question detail is in the report at the back of this pack.</p>
+      </div>
+      <h2 class="wp-h2">What happens next</h2>
+      <div class="wp-rows">
+        <div class="wp-row"><div class="wp-num">1</div><div class="wp-rowbody">
+          <div class="wp-rowtitle">Your baseline is locked</div>
+          <p class="wp-rowline">These exact questions are frozen. They are what we compare against later,
+          so the before-and-after is a like-for-like comparison and not a moved goalpost.</p></div></div>
+        <div class="wp-row"><div class="wp-num">2</div><div class="wp-rowbody">
+          <div class="wp-rowtitle">We do the work</div>
+          <p class="wp-rowline">Your website and the places AI actually reads, so your business is easy to
+          find, easy to understand and easy to describe correctly.</p></div></div>
+        <div class="wp-row"><div class="wp-num">3</div><div class="wp-rowbody">
+          <div class="wp-rowtitle">We measure again at four weeks</div>
+          <p class="wp-rowline">The same frozen questions, the same AI tools, the same method, the same
+          home town. Nothing about the test changes.</p></div></div>
+        <div class="wp-row"><div class="wp-num">4</div><div class="wp-rowbody">
+          <div class="wp-rowtitle">You get the before-and-after</div>
+          <p class="wp-rowline">Side by side, with the same working shown.</p></div></div>
+      </div>
+      <div class="wp-box">
+        <p class="wp-boxtitle">Being straight with you</p>
+        <p>AI answers are not fixed &mdash; ask the same question twice and the wording can change, which
+        is exactly why we ask everything several times and compare like for like. We can make your
+        business far easier for AI to find, read and describe correctly, and that is what moves the
+        number. What nobody can do is guarantee that a particular AI tool will recommend you or quote
+        your website on a particular day. We don&rsquo;t promise it, and we&rsquo;d be careful of
+        anyone who does.</p>
+      </div>
+      <p class="wp-guar">${esc(FINDABLE_GUARANTEE)}</p>`;
+}
+
 /** Pull one delimited block out of the report's own output, or throw. */
 function slice(html: string, open: RegExp, close: string, what: string): string {
   const m = html.match(open);
@@ -416,8 +578,13 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
         or <a href="mailto:${esc(FINDABLE_CONTACT_EMAIL)}?subject=${encodeURIComponent(`Findable - ${name}`)}">${esc(FINDABLE_CONTACT_EMAIL)}</a>.</div>
     </footer>`;
 
+  /* ⛔ A PAGE WITH NO DATA IS OMITTED, NEVER RENDERED EMPTY. `facts` and `baseline` are optional
+     because the legacy Outreach/Inbox button still builds a pack from a report alone; when they are
+     absent the pack is exactly the document it has always been. */
   const packPages = [
-    coverPage(name),
+    coverPage(name, !!input.facts, !!input.baseline),
+    ...(input.facts ? [detailsPage(name, input.facts)] : []),
+    ...(input.baseline ? [baselinePage(name, input.baseline)] : []),
     planPage1(name),
     planPage2(name),
     reviewsPage1(reviewLink),
