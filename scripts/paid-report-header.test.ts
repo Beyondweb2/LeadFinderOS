@@ -20,6 +20,30 @@ function ok(cond: boolean, msg: string) {
    that way on the first run. Same fault as the grep-hit-counts rule in CLAUDE.md §4. */
 const hasSummary = (html: string) => html.includes('<section class="pv">');
 const cards = (html: string) => (html.match(/<div class="pv-card-pct">/g) ?? []).length;
+
+/* ⛔ COUNT RENDERED ELEMENTS, NEVER RAW CLASS NAMES. Every one of these classes is also DECLARED in
+   the document's stylesheet, so a bare match over the whole file counts the CSS rule as if it were
+   a marker. That is not hypothetical: the production check reported "16 named / 24 not-named" when
+   the page actually rendered 15 and 23 — each count was the real figure plus its one CSS
+   declaration. These helpers slice the stylesheet off first and match opening tags. */
+const rendered = (html: string) => html.slice(html.lastIndexOf('</style>') + 8);
+/** Data rows only. The column header is <div class="qrow qrow-head">, deliberately not matched. */
+const dataRows = (html: string) => (rendered(html).match(/<div class="qrow">/g) ?? []).length;
+/** The question text of each rendered table row, in order. */
+const tableQuestions = (html: string) =>
+  [...rendered(html).matchAll(/<div class="qrow"><span class="qrow-q">([\s\S]*?)<\/span>/g)]
+    .map((m) => m[1].replace(/&#8217;|&rsquo;/g, '’').replace(/&amp;/g, '&'));
+/** The per-engine result cells actually drawn: named / not-named / engine did not answer. */
+const markers = (html: string) => {
+  const b = rendered(html);
+  return {
+    yes: (b.match(/<span class="qm qm-yes"/g) ?? []).length,
+    no: (b.match(/<span class="qm qm-no"/g) ?? []).length,
+    na: (b.match(/<span class="qm qm-na"/g) ?? []).length,
+  };
+};
+/** The fixture's gutPunch question — the one the chat card shows, and the one that used to vanish. */
+const CARD_Q = 'Who are the best locksmiths in Canterbury?';
 /* ⛔ AND THE HELPERS ARE THEMSELVES CHECKED, because a helper that always returns false makes every
    "it is absent" assertion pass without testing anything — which is exactly what happened when a
    patch script stripped the quotes out of these two lines. */
@@ -101,16 +125,51 @@ console.log('\n── 4. EVERY OTHER REPORT IS UNCHANGED ──');
   ok(before === again, 'and it is deterministic — same input, same bytes');
 }
 
-console.log('\n── 5. THE QUESTION LIST STILL RENDERS, IDENTICALLY, IN BOTH SHAPES ──');
+console.log('\n── 5. EVERY FROZEN QUESTION REACHES A PAID REPORT ──');
 {
-  const rows = (html: string) => (html.match(/<div class="qrow">/g) ?? []).length;
+  /* 🔴 THIS SECTION USED TO ASSERT THE BUG. It read "paid: the same exclusion rule still applies
+     (1 row)" and passed, which is how a 20-question frozen baseline shipped as a 19-row client
+     report. The rule it was describing exists to stop the chat card's question being printed twice;
+     the paid branch has no chat card, so there was nothing to avoid repeating and the question
+     simply vanished. */
   const before = renderReportHtml(mcl());
-  /* The non-paid document excludes the question the chat card already showed; the paid one has no
-     card, so it shows all of them. That is the only difference, and it is the intended one. */
-  ok(rows(before) === 1, 'non-paid: the card question is excluded from the list (1 row)');
-  ok(rows(paid) === 1, 'paid: the same exclusion rule still applies (1 row)');
+  ok(dataRows(before) === 1, 'non-paid: the card question is excluded from the table (1 of 2 rows)');
+  ok(before.includes(CARD_Q) && !tableQuestions(before).includes(CARD_Q),
+    'non-paid: and it is on the page — in the chat card, not the table, so nothing reads twice');
+  ok(dataRows(paid) === 2, 'paid: BOTH fixture questions render (2 rows)');
+
+  /* The property, not the number: every question in the payload reaches the table. */
+  const shown = tableQuestions(paid);
+  const all = (mcl().questionBreakdown ?? []).map((q) => q.question);
+  ok(all.every((q) => shown.includes(q)),
+    `paid: every questionBreakdown question appears (${shown.length} of ${all.length})`);
+  ok(shown.includes(CARD_Q), 'paid: including the one pickGutPunch selected — the question that used to vanish');
   ok(paid.includes('Who offers auto locksmith services in Canterbury?'), 'the question text is rendered');
-  ok(paid.includes('qm-yes') && paid.includes('qm-no'), 'and the per-engine named markers still render');
+  ok(markers(paid).yes > 0 && markers(paid).no > 0, 'and the per-engine named markers still render');
+}
+
+console.log('\n── 5b. THE REAL MCL BASELINE SHAPE: 20 QUESTIONS, 40 CELLS ──');
+{
+  /* The live baseline's actual shape, as a fixture: 20 questions, every engine answered every one,
+     16 named cells and 24 not-named (verified against production on 2026-09-22). This is the
+     regression that the 19-row report would have failed. */
+  const qs = Array.from({ length: 20 }, (_, i) => ({
+    question: `Frozen question ${i + 1}?`,
+    namedYou: i < 12, namedCount: i < 12 ? 2 : 0, answers: 6, rivals: [], citations: [],
+    /* 16 named cells across 40: both engines on the first 4, ChatGPT only on the next 8. */
+    perEngine: [
+      { label: 'ChatGPT', ran: true, named: i < 12 ? 1 : 0, rivals: [], citations: [] },
+      { label: 'Gemini', ran: true, named: i < 4 ? 1 : 0, rivals: [], citations: [] },
+    ],
+  }));
+  const big = renderReportHtml({ ...mcl(), paidSummary: 'baseline', questionBreakdown: qs as never });
+  ok(dataRows(big) === 20, `20 frozen questions produce 20 rendered rows (got ${dataRows(big)})`);
+  const m = markers(big);
+  ok(m.yes + m.no + m.na === 40, `20 questions x 2 scored engines = 40 result cells (got ${m.yes + m.no + m.na})`);
+  ok(m.yes === 16, `named cells: 16 (got ${m.yes})`);
+  ok(m.no === 24, `not-named cells: 24 (got ${m.no})`);
+  ok(m.na === 0, `no-answer cells: 0 (got ${m.na})`);
+  ok(qs.every((q) => tableQuestions(big).includes(q.question)), 'and not one of the 20 is missing');
 }
 
 console.log('\n── 6. THE REMEASUREMENT USES THE SAME VISUAL LANGUAGE ──');
