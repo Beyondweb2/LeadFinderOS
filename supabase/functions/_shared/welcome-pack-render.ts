@@ -153,6 +153,11 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
      on anything a customer can open; `hidePitch` is forced inside buildWelcomePackHtml. */
   report.internal = false;
 
+  /* The pack's back half IS this client's paid baseline report, and readiness above has already
+     proved it: the lead claims this audit and its purpose is 'baseline'. So it gets the same
+     percentage-first top the client sees at /r/<code> — one document, one presentation. */
+  report.paidSummary = 'baseline';
+
   /* 5) the facts, resolved by the one ranked resolver, then REDUCED to the client-safe shape. The
         reduction is what stops an operator-only field ever reaching the document even if the
         resolver grows one later. */
