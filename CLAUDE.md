@@ -480,6 +480,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **`ai_site_findings_v2`'s {{6}} excludes `missingH1`/`noJsonLd` deliberately** — a weak finding on
   WhatsApp reads as a scan, so a lead with only weak faults gets NO message rather than a padded one.
   It also refuses a no-website and a clean-crawl lead, which `audit_followup_fault` accepts.
+- ⛔ **Never assert how an AI model decides.** We can see what is on a site; we cannot see why Gemini
+  or ChatGPT named someone else. "AI reads those as one page", "AI does not run JavaScript", "it has
+  read everyone else's site and not yours" are all claims about an unobserved process — a prospect
+  who knows more than we do spots one instantly. Write "can make it harder", "may mean", "gives AI
+  less information to work with". `site-findings.test.ts` blocks both scanner phrasing and absolute
+  claims; every finding is WHAT I SAW → WHAT IT MEANS → WHY IT MAY MAKE AI VISIBILITY HARDER.
 - **The send window binds the QUEUE only** (07:00–21:30 London); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
 - **`mode: "dry_run"`** on `send-whatsapp-message` builds the real payload and stops before the Graph

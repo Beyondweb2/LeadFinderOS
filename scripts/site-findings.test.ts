@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import {
   AI_SITE_FINDINGS_V2,
   AI_SITE_FINDINGS_V2_APPROVED,
+  COMFORTABLE_THREE_CHARS,
   MAX_FINDINGS_CHARS,
   MAX_SITE_FINDINGS,
   buildSiteFindings,
@@ -60,6 +61,12 @@ const only = (patch: Partial<CrawlSignals>): CrawlSignals => ({
 });
 const CLEAN = only({});
 const fresh = (signals: CrawlSignals) => ({ result: { version: CRAWL_CHECK_VERSION, status: 'complete', signals }, createdAtMs: Date.now(), complete: true });
+
+/* The transitions the joiner may use. Declared ONCE so "did a transition appear" and "how many
+   findings are in here" cannot drift apart from each other or from the module. */
+const SECOND_TRANSITION_RE = /There's another thing too\.|I also noticed this\.|The other thing that stood out is this\./;
+const THIRD_TRANSITION_RE = /There's one more thing as well\.|One last thing I spotted\.|And there's this too\./;
+const countFindings = (v) => 1 + (SECOND_TRANSITION_RE.test(v) ? 1 : 0) + (THIRD_TRANSITION_RE.test(v) ? 1 : 0);
 
 console.log('── 1. THE NAME AND THE SWITCH ──');
 ok(AI_SITE_FINDINGS_V2 === NAME, 'the constant is the Meta-registered name, exactly');
@@ -181,6 +188,58 @@ for (const c of candidateFindings(ALL)) {
     `${c.kind}: more than one sentence — what I found, what it means, why it matters`);
 }
 
+console.log('── …and NO CLAIM ABOUT HOW AI DECIDES, because we cannot see that ──');
+/* 🔴 THE SECOND HALF OF THE POINT. Scanner phrasing makes a message sound automated; an ASSERTION
+   about a process we have never observed makes it sound like a guess, and a prospect who knows more
+   than we do about these systems spots it in one line. Every phrase here was in the first version of
+   this file, or is the obvious way to write the same overreach. */
+const UNSUPPORTED = [
+  [/does ?n[o']t run (javascript|that)/i, 'asserts what a model does or does not execute'],
+  [/AI (does|doesn|do)\b[^.]*\bjavascript/i, 'same claim, other phrasing'],
+  [/read everyone else|everyone else's site/i, 'claims to know what AI has read'],
+  [/reads? (those|them|these) as one page/i, 'claims de-duplication behaviour we have never measured'],
+  [/(treats?|merges?) (those|them|these) (as|into) one/i, 'same claim, other phrasing'],
+  [/nothing (specific )?to repeat back|to quote you from/i, 'claims what a model can or cannot produce'],
+  [/when (somebody|someone) asks it to recommend[^.]*turned away/i, 'narrates an AI request path we do not observe'],
+  [/AI is deciding who to name/i, 'asserts an internal decision process'],
+  [/\bwill (not )?(get|be) (named|recommended|picked)/i, 'predicts an outcome we cannot promise'],
+  [/\bstops? (you|your business) (from )?(being|getting)/i, 'absolute causal claim'],
+  [/\bprevents?\b/i, 'absolute causal claim'],
+  [/\bguarantee/i, 'a promise this message must never make'],
+  [/\bcannot tell\b|\bcan't tell\b/i, 'asserts a model capability limit as fact'],
+  [/\bblank page\b/i, 'describes what a model sees rather than what we measured'],
+] as const;
+for (const c of candidateFindings(ALL)) {
+  const hit = UNSUPPORTED.find(([re]) => re.test(c.text));
+  ok(!hit, `${c.kind}: no unsupported AI-decision claim${hit ? ` — ${hit[1]} (${hit[0]})` : ''}`);
+}
+for (const c of candidateFindings(only({ thinPages: 1, searchBlocked: ['OAI-SearchBot'] }))) {
+  const hit = UNSUPPORTED.find(([re]) => re.test(c.text));
+  ok(!hit, `${c.kind} (singular): no unsupported AI-decision claim${hit ? ` — ${hit[1]}` : ''}`);
+}
+for (const seed of ['a', 'b', 'c', 'd']) {
+  const v = buildSiteFindings(ALL, { seed }) ?? '';
+  const hit = UNSUPPORTED.find(([re]) => re.test(v));
+  ok(!hit, `seed "${seed}": assembled message makes no unsupported claim${hit ? ` — ${hit[1]}` : ''}`);
+}
+
+console.log('── …and every finding HEDGES its third clause ──');
+/* "can make it harder", "may mean", "gives AI less information to work with" — what the evidence
+   actually supports, and also what a careful person sounds like. */
+const HEDGES = /\b(may|can|might|could)\b|less information|less clear|harder/i;
+for (const c of candidateFindings(ALL)) {
+  ok(HEDGES.test(c.text), `${c.kind}: hedged rather than absolute`);
+}
+
+console.log('── …and no finding opens with a transition or a bare number ──');
+for (const c of candidateFindings(ALL)) {
+  /* Any finding can be FIRST, so a transition belongs to the joiner, never to the text. */
+  ok(!/^(There's another|I also noticed|The other thing|One last|And there)/.test(c.text),
+    `${c.kind}: does not open with a transition`);
+  /* ⛔ A bare number as the first thing a person reads is a scanner talking. */
+  ok(!/^d/.test(c.text.trim()), `${c.kind}: does not open with a number`);
+}
+
 console.log('── 5. WHICH FINDINGS, AND HOW MANY ──');
 ok(MAX_SITE_FINDINGS === 3, 'at most three findings');
 const chosen = candidateFindings(ALL);
@@ -190,6 +249,36 @@ ok(chosen[1].kind === 'unreadable_homepage', '…then a homepage AI cannot read'
 ok(chosen[2].kind === 'duplicate_pages', '…then duplicated town/service pages');
 ok(chosen[3].kind === 'thin_pages', '…then thin pages');
 ok((buildSiteFindings(ALL, { seed: 'a' }) ?? '').includes('69'), 'the chosen findings carry THIS lead\'s real numbers');
+
+console.log('── …TWO is the normal message; a third only when it comfortably fits ──');
+/* Two findings is what a person reads on a phone between jobs; the third turns it into a list, and a
+   third that only just squeezes under the Meta cap is exactly the one that does. So the third is held
+   to a tighter bar, and the WEAKEST finding is dropped rather than the wording being compressed. */
+ok(COMFORTABLE_THREE_CHARS < MAX_FINDINGS_CHARS, 'the third finding is held to a tighter bar than the hard cap');
+for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
+  const v = buildSiteFindings(ALL, { seed }) ?? '';
+  const n = countFindings(v);
+  ok(n >= 1 && n <= 3, `seed "${seed}": ${n} findings, never more than three`);
+  if (n === 3) ok(v.length <= COMFORTABLE_THREE_CHARS, `seed "${seed}": a third was taken only because it fits comfortably`);
+  if (n === 2) ok(v.length <= MAX_FINDINGS_CHARS, `seed "${seed}": two findings, within the cap`);
+}
+/* 🔴 AND HERE IS WHAT THAT ACTUALLY SHIPS, STATED RATHER THAN IMPLIED. Each finding is a three-clause
+   explanation of about 230-320 characters, so THREE of them plus their transitions is ~800 and never
+   clears the comfortable bar. With the current wording the message is therefore always ONE or TWO
+   findings, and MAX_SITE_FINDINGS is the structural ceiling rather than a target.
+   ⚠️ That is a property of the LENGTH RULE, not a hard "never three": if the wording is ever
+   shortened, three becomes reachable with no code change. This test says which of those is true
+   today so nobody reads the constant and assumes the other. */
+const shortest = buildSiteFindings(only({
+  searchBlocked: ['OAI-SearchBot'],
+  duplicates: { clusterSize: 3, sampleSize: 8, similarityPct: 90 },
+  thinPages: 2,
+}), { seed: 'a' }) ?? '';
+ok(countFindings(shortest) === 2, 'even the three SHORTEST findings ship as two — the third does not clear the bar');
+ok(shortest.length <= MAX_FINDINGS_CHARS, '…and what does ship is inside the cap');
+/* The dropped one is the WEAKEST, so the strongest thing found always survives. */
+ok(shortest.includes('OAI-SearchBot'), '…and the finding that survives is the strongest one');
+ok(!shortest.includes(String(THIN_WORDS)), '…while the weakest is the one dropped');
 
 console.log('── …and the weak ones are never said at all ──');
 /* 🔴 missingH1 and noJsonLd are real and belong in the report. In a WhatsApp message they are the
@@ -205,7 +294,7 @@ ok(candidateFindings({ ...ALL, thinPages: 0 }).length === 3,
 console.log('── …one strong finding is used alone rather than padded ──');
 const oneOnly = buildSiteFindings(only({ duplicates: { clusterSize: 5, sampleSize: 8, similarityPct: 93 } }), { seed: 'a' });
 ok(!!oneOnly, 'a single strong finding still produces a message');
-ok(!/There is another thing|I also noticed|other thing that stood out/.test(oneOnly ?? ''),
+ok(!SECOND_TRANSITION_RE.test(oneOnly ?? '') && !THIRD_TRANSITION_RE.test(oneOnly ?? ''),
   '…with NO transition, because there is nothing to transition to');
 ok((oneOnly ?? '').includes('5') && (oneOnly ?? '').includes('93'), '…and it carries its own numbers');
 
@@ -235,8 +324,7 @@ ok(variants.size > 1, 'different leads do not all get byte-identical wording');
 ok(buildSiteFindings(ALL, { seed: 'x' }) === buildSiteFindings(ALL, { seed: 'x' }),
   'the SAME lead always reads the same message — a re-send never reshuffles its wording');
 const two = buildSiteFindings({ ...ALL, duplicates: null, thinPages: 0 }, { seed: 'a' }) ?? '';
-ok(/There is another thing too\.|I also noticed something else\.|The other thing that stood out was this\./.test(two),
-  'the second finding is introduced by a transition, not concatenated');
+ok(SECOND_TRANSITION_RE.test(two), 'the second finding is introduced by a transition, not concatenated');
 
 console.log('── 7. NO FABRICATED ANYTHING ──');
 /* ⛔ The competitor names are {{3}}-{{5}} and they come from the audit, never from here. This module

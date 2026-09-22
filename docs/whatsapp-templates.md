@@ -551,7 +551,27 @@ audit_followup_fault, initial_opener_v2 or the opener A/B changes either way.
 
 **{{6}} is built from signals the crawl check already stores — no new crawler, no new fetch, no new
 query.** `buildSiteFindings` reads `CrawlSignals` and writes each finding as
-WHAT I FOUND → WHAT IT MEANS → WHY IT AFFECTS AI.
+**WHAT I SAW → WHAT THAT MEANS IN NORMAL ENGLISH → WHY IT MAY MAKE AI VISIBILITY HARDER.**
+
+⛔ **Every third clause is hedged, and that is accuracy rather than timidity.** We can see what is on
+a site. We cannot see why Gemini or ChatGPT named somebody else. The first version of this generator
+asserted an internal decision process — *"it has read everyone else's site and not yours"*, *"AI
+reads those as one page"*, *"AI does not run JavaScript"*, *"nothing specific to repeat back"* — none
+of which we or anyone outside those companies has observed. A prospect who knows more than we do
+spots it in one line, and the message stops being a person who looked at their site and becomes
+somebody guessing. The supported register is "can make it harder", "may mean", "gives AI less
+information to work with". The test carries a blocklist of both scanner phrasing **and** absolute
+AI-decision claims, run over every candidate string rather than the two a single seed happens to pick.
+
+⛔ **No finding opens with a transition or a bare number.** Any of them can be first, so "the other
+thing that stood out" belongs to the joiner; and "68 characters" as the first thing a person reads is
+a scanner talking, so the measurement earns its place mid-sentence after the plain-English point.
+
+⚠️ **Two findings is the normal message.** A third is held to `COMFORTABLE_THREE_CHARS = 720`, well
+under the hard cap, and the weakest is **dropped** rather than the wording compressed. Each finding
+is a three-clause explanation of ~230–320 characters, so with the current wording three never clears
+that bar — every shipped message is one or two findings, and `MAX_SITE_FINDINGS` is the structural
+ceiling rather than a target. Shorten the wording and three becomes reachable with no code change.
 
 ⛔ **Only four of the six signals are eligible**: `searchBlocked`, `clientRendered`, `duplicates`,
 `thinPages`. `missingH1` and `noJsonLd` are excluded — they are real, they belong in the report, and

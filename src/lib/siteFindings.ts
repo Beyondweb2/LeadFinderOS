@@ -15,12 +15,21 @@
    ⛔ PURE, AND EDGE-REACHABLE. No fetch, no DOM, no React, no platform globals — the edge functions
       import it with a relative `.ts` path exactly as they import crawlCheck.ts (CLAUDE.md §3).
 
-   🔴 THE SHAPE OF EVERY FINDING IS FIXED: WHAT I FOUND → WHAT IT MEANS → WHY IT AFFECTS AI. A
-      tradesperson has to understand the point without knowing a single one of our words. "XML
+   🔴 THE SHAPE OF EVERY FINDING IS FIXED:
+        WHAT I SAW → WHAT THAT MEANS IN NORMAL ENGLISH → WHY IT MAY MAKE AI VISIBILITY HARDER
+      A tradesperson has to understand the point without knowing a single one of our words. "XML
       sitemap mismatch detected" tells them nothing and makes them feel sold to; "anything following
-      it is being sent towards the wrong site" tells them what is actually happening. Every string
-      below is written to that rule, and scripts/site-findings.test.ts fails the build if a
-      scanner-style phrase reappears.
+      it is being sent towards the wrong site" tells them what is actually happening. Where a
+      technical word is unavoidable it is explained in the same breath, never left standing.
+
+   🔴 AND THE THIRD CLAUSE IS ALWAYS HEDGED, BECAUSE THE HONEST VERSION IS HEDGED. We can see what is
+      on a site. We cannot see why Gemini or ChatGPT named somebody else — so "can make it harder",
+      "may mean", "gives AI less information to work with". The first version of this file asserted
+      an internal decision process ("it has read everyone else's site and not yours", "AI reads
+      those as one page", "AI does not run JavaScript"), which is not something we or anyone outside
+      those companies has observed. A prospect who knows more than we do spots it immediately, and
+      the message stops being a person who looked at their site and becomes somebody guessing.
+      scripts/site-findings.test.ts fails the build on both scanner phrasing and absolute claims.
 
    ⛔ NO NEWLINES, EVER, AND THAT IS META'S RULE NOT A STYLE CHOICE. A template parameter containing
       a newline, a tab, or 4+ consecutive spaces is rejected with #132018 and the WHOLE send dies —
@@ -74,6 +83,25 @@ export const MAX_SITE_FINDINGS = 3;
  */
 export const MAX_FINDINGS_CHARS = 900;
 
+/**
+ * The length a THIRD finding has to fit inside to be worth including.
+ *
+ * ⛔ TWO FINDINGS IS THE NORMAL MESSAGE, NOT THE FALLBACK. Three is only taken when it comfortably
+ * fits — comfortably meaning this, well under the hard cap, rather than "technically under it".
+ * Somebody reading a cold WhatsApp on a phone between jobs gets through two things that sound like a
+ * person looked; the third turns it into a list, and a third that only just squeezes under the Meta
+ * limit is exactly the one that does. The weakest finding is DROPPED rather than the wording being
+ * squeezed — compressed copy is how this stops sounding like Paul and starts sounding like a tool.
+ *
+ * ⚠️ WHAT THAT MEANS TODAY, SO THE CONSTANT ABOVE IS NOT MISREAD: each finding is a three-clause
+ * explanation of roughly 230-320 characters, so three of them plus their transitions comes to about
+ * 800 and never clears this bar. **With the current wording every message is one or two findings**,
+ * and MAX_SITE_FINDINGS is the structural ceiling rather than a target. That is a consequence of the
+ * LENGTH rule, not a hard "never three" — shorten the wording and three becomes reachable with no
+ * code change. scripts/site-findings.test.ts asserts which of those is true today.
+ */
+export const COMFORTABLE_THREE_CHARS = 720;
+
 /* ── Which signals are strong enough to say out loud ──────────────────────────────────────────── */
 
 /**
@@ -103,26 +131,49 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 /**
  * Turn the crawl signals into candidate findings, strongest first.
  *
- * Order is the same priority buildFaultLines uses, and for the same reason: a site AI cannot reach
- * or cannot read beats anything about how the pages are written. Each string carries this lead's own
- * number — never a generic phrase, because the number is what proves somebody looked.
+ * Order is the same priority buildFaultLines uses, and for the same reason: a site the AI tools may
+ * not be able to reach or read at all matters more than how its pages are written.
+ *
+ * 🔴 EVERY SENTENCE IS HEDGED, AND THAT IS ACCURACY RATHER THAN TIMIDITY. We can see what is on a
+ *    site. We CANNOT see why Gemini or ChatGPT named somebody else — nobody outside those companies
+ *    can, and the first version of this file said things like "it has read everyone else's site and
+ *    not yours" and "AI reads those as one page", which are confident descriptions of a process we
+ *    have never observed. A prospect who knows more than we do about how those systems work spots it
+ *    instantly, and the whole message stops being a person who looked at their site and becomes
+ *    somebody guessing. "can make it harder", "may mean", "gives AI less information to work with"
+ *    are what the evidence actually supports, and they are also what a careful tradesperson sounds
+ *    like. scripts/site-findings.test.ts fails the build if an absolute claim comes back.
+ *
+ * ⛔ NO FINDING OPENS WITH A TRANSITION. Any of them can be the first thing in the message, so "the
+ *    other thing that stood out" belongs to the joiner below, never to a finding's own text.
+ * ⛔ AND NONE OPENS WITH A BARE NUMBER. "68 characters" as the first thing a person reads is a
+ *    scanner talking. The measurement earns its place mid-sentence, after the plain-English point.
  */
 export function candidateFindings(s: CrawlSignals): SiteFinding[] {
   if (s.fetchFailed) return [];   // could not read the site at all — we have nothing to say about it
   const out: SiteFinding[] = [];
 
+  /* ⛔ ONLY THE SEARCH CRAWLERS, AND ONLY THE ONES THE STORED SIGNAL ACTUALLY NAMES. searchBlocked
+     is derived from real fetches by the crawlers that fetch a page for an AI search tool. Training
+     crawlers (GPTBot, ClaudeBot, CCBot) are never in it and must never be described as controlling
+     search visibility — blocking those is a common, legitimate choice that does not stop a business
+     being cited, and saying otherwise would be telling a prospect to undo a decision for no gain. */
   if (s.searchBlocked.length) {
     const list = s.searchBlocked.join(', ');
+    const one = s.searchBlocked.length === 1;
     out.push({
       kind: 'crawler_blocked',
-      text: `Your site is blocking ${list}. ${plural(s.searchBlocked.length, 'That is one of the crawlers', 'Those are the crawlers')} AI sends out to read a page when somebody asks it to recommend someone local, and ${plural(s.searchBlocked.length, 'it is', 'they are')} getting turned away at the door. So when AI is deciding who to name, it has read everyone else's site and not yours.`,
+      text: `I had a look at how the site is being accessed as well. ${list} ${plural(s.searchBlocked.length, 'is', 'are')} being blocked from reading it, and ${one ? 'that is one of the crawlers' : 'those are crawlers'} the AI search tools use, so they may not be able to read your pages as reliably as Google can. That gives them less information from your own website to work with.`,
     });
   }
 
   if (s.clientRendered?.flagged) {
     out.push({
       kind: 'unreadable_homepage',
-      text: `When AI fetches your homepage it only gets about ${s.clientRendered.visibleChars} characters of actual words out of it. The rest of the page gets built afterwards by code that runs in a visitor's browser, and AI does not run that, so what it is reading is close to a blank page. It cannot tell what you do or where you work from that.`,
+      /* The character count is real and it is this lead's own, so it stays — but AFTER the point it
+         supports. And "some crawlers can end up seeing" is the honest version: we measured what one
+         fetch returned, we did not watch a model read it. */
+      text: `There is not much of the homepage actually there when it first loads. A lot of the content gets added afterwards by the browser, so some crawlers can end up seeing a much thinner version of the page than a normal visitor does — ours read about ${s.clientRendered.visibleChars} characters of text. That can make it harder to pick up what you do and where you work.`,
     });
   }
 
@@ -130,14 +181,21 @@ export function candidateFindings(s: CrawlSignals): SiteFinding[] {
     const n = s.duplicates.clusterSize;
     out.push({
       kind: 'duplicate_pages',
-      text: `You have got ${n} pages that are about ${s.duplicates.similarityPct}% the same as each other, with the town or the service swapped and the rest of the wording left alone. AI reads those as one page rather than ${n}, so none of them are giving it any real evidence that you actually work in those places.`,
+      /* ⚠️ NOT "AI reads those as one page". That is a claim about de-duplication behaviour we have
+         never measured. What we can say is what is on the pages and what it does not add. */
+      text: `There are ${n} pages on there that are very similar to each other, around ${s.duplicates.similarityPct}% the same, with mainly the town or the service changed. So although there are plenty of pages, they may not be giving AI much different information about why you are relevant in each area.`,
     });
   }
 
   if (s.thinPages > 0) {
     out.push({
       kind: 'thin_pages',
-      text: `${s.thinPages} of your pages ${plural(s.thinPages, 'has', 'have')} less than ${THIN_WORDS} words on ${plural(s.thinPages, 'it', 'them')}. There is not enough written there for AI to lift an answer out of, so even when it does find the page it has got nothing specific about you to repeat back to whoever asked.`,
+      /* ⚠️ NOT "not enough for AI to quote you from". A word count is a description of the page, not
+         a rule about what gets recommended, and no threshold we hold is a threshold anyone else
+         uses. THIN_WORDS is named rather than written out (CLAUDE.md §4: never a cap in prose). */
+      text: s.thinPages === 1
+        ? `One of the service pages is very light on actual information as well — it is under ${THIN_WORDS} words. It mentions the service, but there may not be much detail there for AI to use if somebody asks a specific question about it.`
+        : `A few of the service pages are very light on actual information as well — ${s.thinPages} of them are under ${THIN_WORDS} words. They mention the service, but there may not be much detail there for AI to use if somebody asks a specific question about it.`,
     });
   }
 
@@ -151,15 +209,15 @@ export function candidateFindings(s: CrawlSignals): SiteFinding[] {
    avoid. With the SAME transition every time it reads as a mail merge the second time anyone
    compares two messages — and prospects in one town do talk to each other. */
 const SECOND_TRANSITIONS = [
-  'There is another thing too.',
-  'I also noticed something else.',
-  'The other thing that stood out was this.',
+  "There's another thing too.",
+  "I also noticed this.",
+  "The other thing that stood out is this.",
 ] as const;
 
 const THIRD_TRANSITIONS = [
-  'And there is one more.',
-  'One last thing as well.',
-  'The other thing I spotted was this.',
+  "There's one more thing as well.",
+  "One last thing I spotted.",
+  "And there's this too.",
 ] as const;
 
 /* FNV-1a, 32-bit — a few lines, no dependency, byte-stable across engines, so the same lead always
@@ -221,10 +279,14 @@ export function buildSiteFindings(
   /* Drop the WEAKEST finding, not the newest sentence, until it fits. The findings are already in
      priority order, so shortening from the end always keeps the strongest thing we found — and the
      result is always whole sentences. Truncating instead would cut a finding mid-explanation, which
-     is the one thing worse than not mentioning it. */
+     is the one thing worse than not mentioning it.
+     ⛔ AND THE THIRD HAS A TIGHTER BAR THAN THE SECOND. Two findings is the normal message; a third
+     is included only when the whole thing still reads short. Everything from two down is held to the
+     hard Meta cap alone, because at that point there is nothing left to drop. */
   for (let n = Math.min(max, all.length); n >= 1; n--) {
     const value = assemble(all.slice(0, n));
-    if (value.length <= MAX_FINDINGS_CHARS || n === 1) return value;
+    const limit = n >= 3 ? COMFORTABLE_THREE_CHARS : MAX_FINDINGS_CHARS;
+    if (value.length <= limit || n === 1) return value;
   }
   return null;
 }
