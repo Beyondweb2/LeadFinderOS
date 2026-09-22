@@ -423,3 +423,30 @@ absent (backfill + trigger mean it never is). findable-site fronts it with `func
 return the noindex 404 shell. Deployed by hand: `render-audit-report`, `send-whatsapp-message`,
 `process-whatsapp-queue`, `process-ai-audit-queue`, `submissions`, `findable-checkout` (the six that
 reach `reportSlug.ts`), plus findable-site.
+
+## §33. Two rulers for "named" in the internal baseline view (MCLocksmiths, 2026-09-22)
+
+The internal baseline view (`/baseline/:auditId`) printed per-engine summaries such as "Gemini 1/3"
+over a detail line "Named in the answer — 0 of 3" for the same three cells. The summary
+(`buildBaselineView`, `c.named/c.runs`) and the hero read `cellNamed()` — the model's `self_named`
+verdict where extract-competitors recorded one, the stored string `named` otherwise. The detail line
+(`auditReport.ts` `perEngine.recommended`, rendered by `aiAuditReportHtml.ts`) read a raw
+`nameMatches(answer_text)`, a third ruler. Fixed by reading `cellNamed()` for `recommended` too;
+`cited` stays its own measure. `scripts/named-one-ruler.test.ts` drives both derivations from the
+same three-run cells.
+
+**MCLocksmiths audit `50880751`, all 120 cells recomputed.** Canonical (what both halves now show):
+ChatGPT 32, Gemini 2, **34 of 120 = 28%** — the existing headline was already the canonical figure.
+Four questions disagreed between summary and detail before the fix: auto locksmith Canterbury
+(Gemini 1 vs 0), Ramsgate (ChatGPT 1 vs 0), emergency locksmith Herne Bay (ChatGPT 2 vs 1), house
+lockout Canterbury (ChatGPT 2 vs 3). The other 16 agreed.
+
+**A separate finding, NOT changed here — the ruler's own accuracy on this audit.** Reading the 120
+answer texts by eye (any "MC Locksmiths" / "MCLocksmiths centre" / "Morgan C." mention) gives
+ChatGPT 38, Gemini 1, **39 of 120 = 33%**. The gap is the evidence, not the rendering: the model
+verdict is wrong in 7 cells (false NO on Herne Bay r2, house-lockout r3, Faversham r1, Broadstairs
+r3, Dover r3 — each names "MC Locksmiths" in prose; false YES on break-in r3 and auto-locksmith
+Gemini r2 — no mention at all), and the string fallback misses the "MC Locksmiths" spelling (the
+stored name is "MCLocksmiths centre") on Faversham r2 and Ramsgate r2. Run 2 has no model verdict
+on 12 of 40 cells (the extractor did not read it). Correcting either ruler is a classification
+change on frozen evidence and was deliberately not made; Paul's call.

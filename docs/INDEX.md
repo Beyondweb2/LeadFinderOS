@@ -43,6 +43,7 @@
 | §24 | 24. ✅ THE PAYMENT EMAIL SAID "NOT PAID", AND THE FOUR-WEEK RESULTS NOW HAVE A SENDER (2026-09-13, late afternoon) | `docs/measurement.md` |
 | §25 | 25. 🔴 THE FOUR-MINUTE GAP BETWEEN REPEAT RUNS WAS NEVER A SAMPLING SAFEGUARD (2026-09-13, evening) | `docs/measurement.md` |
 | — | The paid-baseline state flow — approve once, claim once, one poller (MCLocksmiths, 2026-09-22) | `docs/paid-baseline-flow.md` |
+| §33 | 33. Two rulers for "named" in the internal baseline view (MCLocksmiths, 2026-09-22) | `docs/reports.md` |
 | §26 | 26. ✅ THE PRICE IS ONE SHAPE WITH TWO HALVES — swept both repos (2026-09-14) | `docs/business-and-offer.md` |
 | §27 | 27. 🔴 THE NAME THAT SCORES ITSELF — §6b's gate restored and wired (2026-09-15) | `docs/reports.md` |
 | §28 | 28. ✅ findable-site CREDIBILITY PASS — the control claims are gone (2026-09-15) | `docs/findable-site.md` |
