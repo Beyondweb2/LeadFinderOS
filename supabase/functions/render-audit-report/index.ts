@@ -19,6 +19,7 @@ import { showOffer } from "../../../src/lib/buyOffer.ts";
 import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboarding-followup.ts";
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import { paidReportKind } from "../../../src/lib/reportKind.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
@@ -212,17 +213,25 @@ Deno.serve(async (req) => {
            ever looked → null, and the report says nothing about their website.
        Fully guarded: a failed read leaves amountPaid 0 (the offer shows — a prospect seeing no
        offer is a lost sale) and the website unknown (silence, never a guess). */
+    let leadBaselineAuditId: string | null = null;
+    let leadRemeasureAuditId: string | null = null;
     let amountPaid = 0;
     let leadWebsite = "";
     let leadPlaceId: string | null = null;
     const leadId = (audit as { lead_id?: string | null }).lead_id ?? null;
     if (leadId) {
       const { data: lead } = await service
-        .from("outreach_leads").select("amount_paid, website, place_id").eq("id", leadId).maybeSingle();
-      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null } | null;
+        /* ⚠️ baseline_audit_id / remeasure_audit_id ARE READ FOR ONE REASON: the three clients who
+           paid before audit_purpose existed (2026-09-12) carry NULL on their baseline rows, and the
+           lead claiming an audit is the only evidence those are paid baselines. Both columns are set
+           by DB triggers and are immutable once set (src/lib/reportKind.ts). */
+        .from("outreach_leads").select("amount_paid, website, place_id, baseline_audit_id, remeasure_audit_id").eq("id", leadId).maybeSingle();
+      const l = lead as { amount_paid?: unknown; website?: string | null; place_id?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null } | null;
       amountPaid = Number(l?.amount_paid ?? 0) || 0;
       leadWebsite = String(l?.website ?? "").trim();
       leadPlaceId = l?.place_id ? String(l.place_id) : null;
+      leadBaselineAuditId = l?.baseline_audit_id ? String(l.baseline_audit_id) : null;
+      leadRemeasureAuditId = l?.remeasure_audit_id ? String(l.remeasure_audit_id) : null;
     }
     const auditWebsite = String(audit.website ?? "").trim();
     const ownWebsite = auditWebsite || leadWebsite;
@@ -261,6 +270,19 @@ Deno.serve(async (req) => {
        to decide when to email, so the link and the email agree (including the stall release). */
     const state = measuringState(runRows, (audit as { baseline_target_runs?: unknown }).baseline_target_runs);
     if (state.measuring) data.measuring = { runsDone: state.runsDone, runsTarget: state.runsTarget };
+
+    /* ══ PAID BASELINE / REMEASUREMENT — THE PERCENTAGE-FIRST TOP ═══════════════════════════════
+       Set ONLY for those two client documents (src/lib/reportKind.ts, a positive allowlist on the
+       recorded purpose, with the lead's immutable claim covering the legacy NULL rows). Every other
+       report — Discovery, hook, free check, ordinary re-audit, market — leaves it undefined and
+       renders byte-identically to before. */
+    const kind = paidReportKind({
+      auditId: audit.id,
+      auditPurpose: (audit as { audit_purpose?: string | null }).audit_purpose ?? null,
+      leadBaselineAuditId,
+      leadRemeasureAuditId,
+    });
+    if (kind) data.paidSummary = kind;
 
     data.showOffer = showOffer({ auditId: audit.id, amountPaid });
 

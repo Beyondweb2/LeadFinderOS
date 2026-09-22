@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
+import { paidReportKind } from '@/lib/reportKind';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { buildReportData, classifyWinnability, seoStyleForAudit, type EngineMap, type QueueRow, type RunRow } from '@/lib/auditReport';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
@@ -159,6 +160,16 @@ export default function Baseline() {
         seoStyle: seoStyleForAudit(audit.baseline_target_runs, audit.is_measurement),
         ownWebsite: audit.website ?? '',
       });
+      /* The operator's view of a paid baseline shows the SAME top the client sees, so this page and
+         findable.live/r/<code> cannot disagree about what the report looks like. Legacy rows with no
+         recorded purpose are covered by the lead's claim on the public route; here the audit row is
+         all this page has, so an unmarked legacy baseline keeps the existing header in the internal
+         view only. */
+      const paidKind = paidReportKind({
+        auditId: audit.id,
+        auditPurpose: (audit as { audit_purpose?: string | null }).audit_purpose ?? null,
+      });
+      if (paidKind) data.paidSummary = paidKind;
       if (!data) {
         toast({ title: 'No completed results to report yet', variant: 'destructive' });
         return;
