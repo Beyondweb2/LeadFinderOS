@@ -116,6 +116,7 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
+import { openerTemplateFor } from '@/lib/openerVariant';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
@@ -1299,8 +1300,18 @@ export function OutreachTable({
       }
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
       // Capture the pre-queue status so cancelling restores it (not a wipe to not_contacted).
+      /* ⚖️ THE INITIAL-OPENER A/B, AND THE ONLY PLACE IT IS APPLIED. openerTemplateFor returns the
+         operator's choice untouched for every template except the incumbent opener, and splits that
+         one ~50/50 by a hash of the LEAD ID — so cancelling and re-queueing, a retry, or re-running
+         this dialog all land the lead back on the arm it already had. Nothing is drawn at random and
+         nothing new is stored: the arm IS `whatsapp_template`, which this write already persists.
+         ⛔ While INITIAL_OPENER_V2_APPROVED is false this returns the incumbent for everybody, so a
+         template Meta has not approved can never be queued.
+         ⚠️ Deliberately NOT applied in WhatsAppLeadControls — that one is documented as "the
+         operator's OWN choice, never a substitute", and a per-lead picker is not new outreach. */
       const patch: Partial<OutreachLead> = {
-        status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template,
+        status: 'queued', queued_at: now, whatsapp_attempts: 0,
+        whatsapp_template: openerTemplateFor(template, id),
         previous_status: lead?.status ?? null,
         line_type: lineType, // cache the offline result
         contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)

@@ -69,6 +69,12 @@ const initialContactBody = (b: string, _u: string) =>
 
 Cheers`;
 
+/* initial_opener_v2 - the A/B variant, submitted to Meta 2026-09-22. The registered body, byte for
+   byte. NO VARIABLES: the signature takes the same two arguments every body in this map does, and
+   ignores both, because the template has nothing to fill. Mirrors whatsapp-send.ts. */
+const initialOpenerV2Body = (_b: string, _u: string) =>
+  'Hey, are you taking on more jobs atm? Cheers';
+
 /** What initial_contact said before 2026-09-15 — kept so those transcripts stay true. */
 const initialContactBodyPre20260915 = (b: string, _u: string) =>
   `Hi, is this the right number for ${b || 'your business'}? Cheers`;
@@ -386,6 +392,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   booking_switch_barbers: bookingSwitchBarbersBody,
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
+  initial_opener_v2: initialOpenerV2Body,
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

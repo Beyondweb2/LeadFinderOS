@@ -85,6 +85,15 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
   // Opener — ONE variable: {{1}} = business name. NO url. vars MUST stay ["name"] so
   // templateBodyParams sends exactly one param (Meta rejects a param-count mismatch).
   initial_contact: { lang: "en", vars: ["name"] },
+  /* initial_opener_v2 — the SECOND cold opener, for the A/B against initial_contact
+     (src/lib/openerVariant.ts). SUBMITTED TO META 2026-09-22; INITIAL_OPENER_V2_APPROVED gates
+     whether anything can select it, so being listed here before approval cannot send it.
+     ⛔ ZERO VARIABLES. The registered body is "Hey, are you taking on more jobs atm? Cheers" — no
+     {{1}}, no name, no url. vars MUST stay [] so templateBodyParams sends no parameters at all;
+     Meta rejects a param-count mismatch, and its sibling initial_contact sends exactly one.
+     ⚠️ Carrying no name is also why it is NOT in IDENTIFY_NAME_TEMPLATES and why the queue's
+     no_business_name guard never applies to it — there is no name in the copy to get wrong. */
+  initial_opener_v2: { lang: "en", vars: [] },
   // Reply-to-a-reply: 4 vars — {{1}} trade, {{2}} competitors, {{3}} business name, {{4}} report link.
   // Vars resolved server-side per-lead from the lead's own completed audit (see resolveAuditReplyVars).
   audit_reply: { lang: "en", vars: ["trade", "competitors", "name", "url"] },
@@ -343,6 +352,10 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
    The shortening happens in renderTemplateBody / templateBodyParams, not here. */
 const initialContactBody = (b: string, _u: string) =>
   `Hi, is this ${b || "your business"}?\n\nCheers`;
+
+/* initial_opener_v2 — the A/B variant. The Meta-registered body, byte for byte. It takes no
+   arguments because the template takes no variables: there is nothing to fill and nothing to trim. */
+const initialOpenerV2Body = () => "Hey, are you taking on more jobs atm? Cheers";
 
 // audit_reply — reply to a lead who replied. b={{3}} business, u={{4}} report link,
 // trade={{1}}, competitors={{2}}. Keep in sync with the Meta-registered audit_reply body.
@@ -702,6 +715,7 @@ export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl:
   // The "fresha/booksy take a cut" angle — URL-first body.
   barber_fresha_booksy: barberFreshaBooksyBody,
   initial_contact: initialContactBody,
+  initial_opener_v2: () => initialOpenerV2Body(),
   audit_reply: auditReplyBody,
   video_template: videoTemplateBody,
   competitor_hook: competitorHookBody,

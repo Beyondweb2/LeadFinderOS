@@ -178,6 +178,11 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   audit_followup_fault: 'Audit follow-up + fault (names a site fault + report)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
+  /* ⚠️ UNCONDITIONAL, unlike its entry in the picker. This map names a message that has ALREADY been
+     sent, so it must carry every template that could ever appear in a thread — gating it on the
+     approval switch would make a real past message render as the bare word "Template" the moment
+     the switch was turned back off. Picker = the future; this = the past. */
+  initial_opener_v2: 'Initial contact v2 (opener A/B variant)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
