@@ -67,7 +67,10 @@ ok((fn.match(/function unavailable\(/g) ?? []).length === 1, 'one refusal page, 
 
 console.log('\n── 6f. NOINDEX, ON THE ROUTE AND IN THE DOCUMENT ──');
 ok(/x-robots-tag/.test(fn) && /noindex/.test(fn), 'the response carries a noindex robots header');
-ok(/robots["'][^>]*noindex|name="robots" content="noindex/.test(packHtml), 'the document carries its own robots meta');
+/* 🔴 Cloudflare STRIPS x-robots-tag on findable.live (measured on production for BOTH /w/ and /r/),
+   so the meta is the only protection that travels and it must be the full one. */
+ok(/<meta name="robots" content="noindex, nofollow, noarchive, nosnippet"\/>/.test(packHtml),
+  'the document carries the FULL robots meta — noarchive and nosnippet included');
 
 console.log('\n── 6g. ONE BUILDER FOR BOTH DELIVERIES ──');
 const hub = read('supabase/functions/paid-client-hub/index.ts');

@@ -596,7 +596,13 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
+<!-- 🔴 THE META IS THE ONLY PROTECTION THAT ACTUALLY TRAVELS. Both this route and /r/ set an
+     x-robots-tag header upstream and Cloudflare STRIPS it (measured on production 2026-09-22: the
+     header is absent from findable.live/w/ AND findable.live/r/, on both of which upstream sets
+     it). So the document's own meta is doing the whole job, and it now matches the report's —
+     noarchive and nosnippet included, because a cached copy or a search snippet naming a client's
+     measured invisibility and their rivals is the same disclosure by another name. -->
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet"/>
 <title>Findable Welcome Pack - ${esc(name)}</title>
 <style>
 ${reportCss}
