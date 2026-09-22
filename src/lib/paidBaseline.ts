@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { PaidBaselineStatus } from './paidBaselineState';
 
 export type PaidBaseline = {
   onboarding_id: string;
@@ -16,7 +17,9 @@ export type PaidBaseline = {
   };
   crawl_context_at?: string | null;
   crawl_context_source?: 'run' | 'lead' | null;
-  status: 'needs_questions' | 'needs_approval' | 'approved' | 'running' | 'complete' | 'failed';
+  /** The Discovery scan whose stored business facts were reused as context, when one exists. */
+  discovery_context?: { audit_id: string; created_at: string | null } | null;
+  status: PaidBaselineStatus;
   questions: string[];
   approved_at: string | null;
   audit_id?: string;
@@ -32,12 +35,16 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   questions_must_be_between_1_and_40: 'Add between 1 and 40 questions before saving.',
   questions_required: 'Add at least one question before approving the baseline.',
   baseline_question_count: 'A paid baseline is exactly 20 questions. Adjust the set before approving.',
+  baseline_context_incomplete: 'Complete the client context (section A) and save it before approving.',
+  baseline_questions_locked: 'The approved question set is frozen and cannot be edited.',
   question_generation_failed: 'Question generation failed. Please retry.',
   no_questions_generated: 'No usable questions were generated. Please retry.',
   baseline_state_changed: 'Baseline setup changed in another session. Reload it and try again.',
   paid_onboarding_update_conflict: 'The paid onboarding record changed or could not be updated. Reload and try again.',
   lead_update_conflict: 'The linked client record changed or could not be updated. Reload and try again.',
   baseline_request_failed: 'Could not load or update baseline setup. Please retry.',
+  baseline_start_refused: 'The baseline could not start. Check the client context and try again.',
+  baseline_start_failed: 'The baseline did not start. The approved questions are kept; try again.',
   no_business_type: 'Add a business category before starting the baseline.',
   no_location: 'Add a primary location before starting the baseline.',
 };
@@ -74,6 +81,10 @@ export async function invokePaidBaseline(
     if (detail) throw new Error(FRIENDLY_ERRORS[detail] ?? detail);
     throw new Error(error.message || 'Could not update the baseline');
   }
-  if (!data?.ok) throw new Error(data?.error || 'Could not update the baseline');
+  if (!data?.ok) {
+    const sentence = typeof data?.detail === 'string' && data.detail.trim() ? data.detail.trim() : '';
+    const code = typeof data?.error === 'string' ? data.error : '';
+    throw new Error(sentence || (code && (FRIENDLY_ERRORS[code] ?? code)) || 'Could not update the baseline');
+  }
   return data.baseline as PaidBaseline;
 }

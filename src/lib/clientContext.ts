@@ -1,4 +1,6 @@
-export type ContextSource = 'onboarding' | 'lead' | 'website';
+/** 'discovery' = facts the operator typed into an earlier Discovery scan of the same lead (stored on
+ *  its ai_audits row). Verified operator input, so it ranks above the website crawl. */
+export type ContextSource = 'onboarding' | 'lead' | 'discovery' | 'website';
 import { CRAWL_CHECK_VERSION, CRAWL_FRESH_MS } from './crawlCheck.ts';
 
 export type ClientContext = {
@@ -64,24 +66,29 @@ function add(values: string[], sources: Record<string, ContextSource[]>, raw: un
 export function mergeClientContext(input: {
   onboarding?: { business_name?: unknown; business_category?: unknown; confirmed_location?: unknown; services?: unknown; services_list?: unknown; areas_list?: unknown; areas_wanted?: unknown; specialisms?: unknown; website?: unknown; country?: unknown } | null;
   lead?: { business_name?: unknown; search_location?: unknown; derived_town?: unknown; website?: unknown; category?: unknown; search_keyword?: unknown; services_included?: unknown; specialisms?: unknown; country?: unknown } | null;
+  /** The newest Discovery scan's stored business facts (ai_audits: business_type, location_text,
+   *  website, specialism). Never its questions — Discovery is separate research. */
+  discovery?: { business_type?: unknown; location_text?: unknown; website?: unknown; specialism?: unknown } | null;
   crawl?: CrawlInfo;
 }): ClientContext {
   const onboarding = input.onboarding ?? {};
   const lead = input.lead ?? {};
+  const discovery = input.discovery ?? {};
   const service_sources: Record<string, ContextSource[]> = {};
   const area_sources: Record<string, ContextSource[]> = {};
   const services: string[] = [];
   const service_areas: string[] = [];
   const specialisms: string[] = [];
   const business_name = clean(onboarding.business_name) || clean(lead.business_name);
-  const primary_location = clean(onboarding.confirmed_location) || clean(lead.derived_town) || clean(lead.search_location);
-  const business_category = clean(onboarding.business_category) || clean(lead.category) || clean(lead.search_keyword) || clean(input.crawl?.category);
-  const website = clean(onboarding.website) || clean(lead.website);
+  const primary_location = clean(onboarding.confirmed_location) || clean(lead.derived_town) || clean(lead.search_location) || clean(discovery.location_text);
+  const business_category = clean(onboarding.business_category) || clean(lead.category) || clean(lead.search_keyword) || clean(discovery.business_type) || clean(input.crawl?.category);
+  const website = clean(onboarding.website) || clean(lead.website) || clean(discovery.website);
   const country = clean(onboarding.country) || clean(lead.country);
 
   add(services, service_sources, onboarding.services_list, 'onboarding');
   add(services, service_sources, onboarding.services, 'onboarding');
   add(services, service_sources, lead.services_included, 'lead');
+  add(services, service_sources, discovery.specialism, 'discovery');
   add(service_areas, area_sources, onboarding.areas_list, 'onboarding');
   add(service_areas, area_sources, onboarding.areas_wanted, 'onboarding');
   add(service_areas, area_sources, input.crawl?.towns, 'website');

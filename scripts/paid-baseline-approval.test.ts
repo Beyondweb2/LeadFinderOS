@@ -9,6 +9,7 @@ const root = resolve(import.meta.dirname, '..');
 const edge = readFileSync(resolve(root, 'supabase/functions/paid-baseline/index.ts'), 'utf8');
 const baseline = readFileSync(resolve(root, 'supabase/functions/_shared/audit-baseline.ts'), 'utf8');
 const hub = readFileSync(resolve(root, 'src/pages/ClientHub.tsx'), 'utf8');
+const flow = readFileSync(resolve(root, 'src/lib/paidBaselineFlow.ts'), 'utf8');
 const shown = Array.from({ length: 20 }, (_, i) => `Q${i + 1}`);
 const latest = cleanAuditQuestions(editAuditQuestion(shown, 2, 'Q3 latest edit'));
 const waiting = paidBaselineRunState({ skipped: 'awaiting_questionnaire_2 (services)' });
@@ -17,8 +18,9 @@ const running = paidBaselineRunState({ audit_id: 'audit-1' });
 const checks: Array<[string, boolean]> = [
   ['latest Q3 edit is the exact approved value', latest[2] === 'Q3 latest edit'],
   ['approval order remains exact', latest[0] === 'Q1' && latest[19] === 'Q20' && latest.length === 20],
-  ['approve consumes current submitted questions instead of stale stored draft', edge.includes('if (action === "approve") {\n      next = cleanQuestions(body.questions);')],
-  ['ClientHub saves and approves the same current ordered array', hub.includes("act('save', { questions: qs })") && hub.includes("act('approve', { questions: qs })")],
+  ['approve consumes current submitted questions instead of stale stored draft', edge.slice(edge.indexOf('if (action === "approve") {')).includes('next = cleanQuestions(body.questions);')],
+  /* 2026-09-22: approve → run through paidBaselineFlow.ts; the extra save round trip is gone. */
+  ['ClientHub approves the same current ordered array it shows', hub.includes('approveAndStart(invoke, cleanAuditQuestions(questions), onStep)') && flow.includes("invoke('approve', { questions: [...questions] })")],
   ['structured services satisfy the baseline questionnaire', missingQuestionnaireFields({ confirmed_location: 'Canterbury', services: '', services_list: ['Emergency entry'] }).length === 0],
   ['missing required category remains a useful refusal', edge.includes('started.error || started.skipped') && readFileSync(resolve(root, 'src/lib/paidBaseline.ts'), 'utf8').includes('Add a business category')],
   ['skipped start remains approved and truthful', waiting.status === 'approved' && waiting.start_note?.startsWith('awaiting_questionnaire_2') === true],

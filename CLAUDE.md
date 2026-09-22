@@ -251,6 +251,14 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   email's four-day-old audit). Enumerate the arrivals; drive every combination including the null one.
 - **A correctness decision must never read a client-side cache that races its own fetch** (the
   duplicate-openers incident). The database is the dedupe.
+- 🔴 **N callers that READ "does it exist yet?" and then spend will all spend.** The guard is one
+  conditional WRITE that only one caller can win (`approved → starting`, `startClaimFilter`); the
+  losers wait on the claimed state. Read-then-create is never idempotent under a 30-second backstop
+  (`docs/paid-baseline-flow.md`).
+- **A parent reload that flips a page-level `loading` flag unmounts every dialog under it** — a
+  mutation chain inside that dialog runs on detached and its errors reach nobody. Refresh in place;
+  never toggle the first-load spinner for a re-read. Chains go in a pure controller behind a
+  single-flight guard (`paidBaselineFlow.ts`).
 - **A conditionally-shown question owns its answer's LIFETIME** — hiding a field is not clearing it,
   and clearing state is not the same as not SENDING it (derive the payload from the show condition).
 - **Cutting question count saves money, not time** — questions run in parallel; the wall clock is one
@@ -550,6 +558,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   biggest markets the day it runs).
 - `run_number` is a read-then-write with no unique index — the stagger stays sequential until it has one.
 - Nothing sends the four-week results by WhatsApp (email only); the email itself waits on copy approval.
+- **The gate is red on `origin/main` itself (2026-09-22), none of it paid-baseline:** `typecheck:baseline`
+  has 3 errors above the list (`Inbox.tsx` ×2, `OutreachTable.tsx` — a Lucide `title` prop),
+  `check-edge-undefined` flags `page-generator/index.ts:898,903` (`user`), and `explain-offer`,
+  `new-site-tier`, `remeasure-results`, `onboarding-audit-fields` fail beside the four known-stale
+  suites (142/151). Fix or re-baseline in their own task; read the FAILED names.
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
@@ -576,6 +589,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 |---|---|
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
+| Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
 | The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
 | The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |
