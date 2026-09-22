@@ -65,6 +65,13 @@ verify_jwt = false
 [functions.render-audit-report]
 verify_jwt = false
 
+# The client's Welcome Pack at findable.live/w/<code>, fronted by a Cloudflare Pages Function.
+# Public and unauthenticated like render-audit-report: the handler is the gate. It refuses anything
+# that is not a COMPLETED PAID BASELINE claimed by a lead, so a Discovery audit's own short code
+# resolves to an audit row and is then refused. Read-only — it writes nothing.
+[functions.render-welcome-pack]
+verify_jwt = false
+
 [functions.findable-onboarding]
 verify_jwt = false
 

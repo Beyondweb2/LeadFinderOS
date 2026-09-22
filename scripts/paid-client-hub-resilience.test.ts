@@ -54,12 +54,14 @@ check('outage: the 500 fallback carries a sentence, and logs one line not a page
 // 3. Every column the hub selects exists (read back against the live schema 2026-09-22).
 const selects = [...hubFn.matchAll(/\.select\("([^"]+)"\)/g)].map((m) => m[1]);
 const live: Record<string, string[]> = {
-  outreach_leads: ['id','business_name','address','search_location','derived_town','website','email','phone','contact_name','amount_paid','payment_date','status','next_action','next_action_date','baseline_audit_id','remeasure_audit_id','remeasure_due_date','delivery_checklist','category','search_keyword','services_included','delivery_ref','notes','delivery_notes','project_overview','project_status','paid_for'],
-  onboarding_responses: ['id','confirmed_location','services','services_list','areas_list','areas_wanted','contact_email','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','gbp_consent','gbp_manager_email'],
-  ai_audits: ['id','baseline_completed_at','short_code','created_at'],
-  ai_audit_runs: ['id','run_number','status','created_at'],
-  ai_audit_queue: ['run_id','status'],
+  outreach_leads: ['id','business_name','address','search_location','derived_town','website','email','phone','contact_name','amount_paid','payment_date','status','next_action','next_action_date','baseline_audit_id','remeasure_audit_id','remeasure_due_date','delivery_checklist','category','search_keyword','services_included','delivery_ref','notes','delivery_notes','project_overview','project_status','paid_for','place_id','website_build'],
+  onboarding_responses: ['id','business_name','business_website','confirmed_location','business_address','services','services_list','areas_list','areas_wanted','contact_name','contact_email','confirmed_phone','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','must_not_say','website_platform','website_platform_other','willing_to_migrate','competitor_name','gbp_consent','gbp_exists','gbp_status','gbp_verified','gbp_manager_email','incomplete'],
+  ai_audits: ['id','baseline_completed_at','short_code','created_at','audit_purpose','business_name','business_type','location_text','specialism','website','has_website','baseline_target_runs','is_measurement'],
+  ai_audit_runs: ['id','audit_id','run_number','status','mention_rate','results','created_at'],
+  ai_audit_queue: ['run_id','status','id','question','result'],
   client_pages: ['id','status','primary_question','service','town','lead_id','created_at'],
+  /* Section 5 reads the STORED crawl; it never re-runs one. */
+  lead_crawl_checks: ['url','result','created_at'],
 };
 const known = new Set(Object.values(live).flat());
 const unknownCols = selects.flatMap((s) => s.split(',').map((c) => c.trim())).filter((c) => !known.has(c));
@@ -90,7 +92,24 @@ check('data: the hub reads only the lead pointer, never "the newest audit"', hub
 // 8. A page load creates nothing.
 check('safety: the hub never inserts an audit, starts a baseline or calls the audit creator', !hubFn.includes('startPaidBaseline') && !hubFn.includes('create-ai-audit') && !hubFn.includes('from("ai_audits").insert') && !hubFn.includes('from("ai_audit_runs").insert'));
 check('safety: the hub page load calls the hub with get only', hubPage.includes("call({ action: 'get', lead_id: leadId })") && !hubPage.includes("call({ action: 'run'"));
-check('safety: the hub get path performs no update or insert', !/action === "get"[\s\S]*?\.(update|insert)\(/.test(hubFn.slice(hubFn.indexOf('if (action === "get")'), hubFn.indexOf('if (action === "create_manual")'))));
+/* ⚠️ THE REGION IS BRACE-MATCHED, NOT "up to create_manual". Other actions now sit between the two
+   (save_website_build, which legitimately updates one column), and a slice that ran to the next
+   named action would fail on THEIR writes while saying the GET path had one. The property under
+   test is "the get block writes nothing" — so the block is what gets sliced. */
+function actionBody(src: string, action: string): string {
+  const start = src.indexOf(`if (action === "${action}")`);
+  if (start < 0) throw new Error(`action ${action} not found in paid-client-hub`);
+  let depth = 0;
+  for (let i = src.indexOf('{', start); i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(start, i + 1); }
+  }
+  throw new Error(`unbalanced braces in ${action}`);
+}
+check('safety: the hub get path performs no update or insert', !/\.(update|insert|upsert|delete|rpc)\(/.test(actionBody(hubFn, 'get')));
+check('safety: the welcome-pack and rebuild-prompt reads write nothing either',
+  !/\.(update|insert|upsert|delete|rpc)\(/.test(actionBody(hubFn, 'welcome_pack_html'))
+  && !/\.(update|insert|upsert|delete|rpc)\(/.test(actionBody(hubFn, 'rebuild_context')));
 
 let failures = 0;
 for (const [label, ok] of checks) { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); if (!ok) failures++; }
