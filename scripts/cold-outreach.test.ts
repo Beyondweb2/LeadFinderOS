@@ -93,6 +93,17 @@ const EXPECTED_CONTINUATIONS = [
      audit_url: the drip could select a lead queued with it. It is never queued — Inbox only, gated
      on a site fault — but if that ever changes this is the exposure to close. */
   "audit_followup_fault",
+  /* ai_site_findings_v2 — added 2026-09-22, audit_followup_fault's successor with 2-3 plain-English
+     findings in {{6}} instead of one report sentence. ⛔ THE ANSWER TO THIS TEST'S OWN QUESTION —
+     "can it now be sent to a number we have already messaged: is that right?" — IS YES, DELIBERATELY:
+     it is written for a lead who has already answered, so left cold the phone-history seatbelt would
+     refuse it for its entire audience, exactly as it would have for audit_followup_fault. Its
+     classification also does the rivalHookDecision HOLD job (a rival-naming continuation short of
+     three names holds rather than falling back to the cold video_template).
+     ⚠️ Same accepted cost and the same audit_url exposure as audit_followup_fault directly above:
+     the drip could in principle select a lead queued with it. It is never queued — Inbox only, gated
+     on findings AND on Meta approval — but if that ever changes this is the exposure to close. */
+  "ai_site_findings_v2",
   /* explain_offer — added 2026-09-15 with audit_followup's reasoning: Inbox-only, sent into a live
      conversation, so cold would refuse it for its whole audience. Same accepted cost. */
   "explain_offer",

@@ -12,6 +12,7 @@ import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { resolveSiteFindings } from "../../../src/lib/siteFindings.ts";
 import { isHookState } from "../../../src/lib/hookAudit.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ export type AuditReplyVars =
      found nothing to name (clean site, or unreachable) — Meta rejects an empty parameter, so a null
      here is what makes that template unsendable and unoffered for that lead. Every other template
      ignores it. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null }
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null }
   | { ok: false; reason: string };
 
 /**
@@ -310,5 +311,20 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     cc ? { result: cc.result ?? null, createdAtMs: new Date(cc.created_at).getTime() } : null,
     auditVisibilityGap,
   );
-  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault };
+  /* ── {{6}} FOR ai_site_findings_v2 ─────────────────────────────────────────────────────────────
+     Built from the SAME stored crawl sources as siteFault directly above — no second fetch, no
+     second query, nothing this function did not already have in hand. It differs only in what it
+     says and in being stricter about when it will say anything: no website or a clean crawl both
+     return null, because that template's own copy claims to have looked at their site and blames
+     it. Null keeps the template unsendable (Meta rejects an empty {{6}}), which is the same
+     contract siteFault has.
+     ⚠️ SEEDED ON THE LEAD ID so the transitions between findings are stable for a given lead — a
+     message re-rendered or re-sent reads identically rather than reshuffling its wording. */
+  const siteFindings = resolveSiteFindings(
+    hasWebsite,
+    runSources,
+    cc ? { result: cc.result ?? null, createdAtMs: new Date(cc.created_at).getTime() } : null,
+    { seed: leadId },
+  );
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings };
 }

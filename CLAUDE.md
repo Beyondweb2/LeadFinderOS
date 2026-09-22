@@ -469,6 +469,17 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `CONTINUATION_TEMPLATES` or it is refused for its whole audience. The queue is template-blind on
   "already sent" — it structurally cannot send a second message to a lead; second messages go from
   the Inbox. `contact_check` fails CLOSED.
+- **A template parameter may not contain a newline, a tab or 4+ consecutive spaces (#132018) and may
+  not exceed 1024 characters (#131009)** — either kills the WHOLE send. `forMeta()` collapses
+  whitespace as a last resort; a multi-sentence variable is still ONE LINE, and a long one is
+  shortened by dropping content, never truncated mid-sentence (`MAX_FINDINGS_CHARS`).
+- **A template pending Meta approval gets a `*_APPROVED` constant, and the gate goes FIRST** —
+  `INITIAL_OPENER_V2_APPROVED`, `AI_SITE_FINDINGS_V2_APPROVED` (`siteFindings.ts`, currently false).
+  Register it in all eleven places; the constant, not absence, is what stops the send. Never infer
+  approval, and never "try it and see" — that spends a real message on a real prospect.
+- **`ai_site_findings_v2`'s {{6}} excludes `missingH1`/`noJsonLd` deliberately** — a weak finding on
+  WhatsApp reads as a scan, so a lead with only weak faults gets NO message rather than a padded one.
+  It also refuses a no-website and a clean-crawl lead, which `audit_followup_fault` accepts.
 - **The send window binds the QUEUE only** (07:00–21:30 London); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
 - **`mode: "dry_run"`** on `send-whatsapp-message` builds the real payload and stops before the Graph

@@ -29,14 +29,20 @@ const TRADE = "plumber";
 const COMP = "Rival Plumbing, Other Co";
 const FIRST = "Sam";
 const SITE_FAULT = "Your service pages do not clearly tell AI which areas you cover.";
+/* ai_site_findings_v2's {{6}}. A SEPARATE fixture from SITE_FAULT on purpose: the two templates
+   take their crawl-derived sentence in the same positional slot, so passing one value for both
+   would let a body read the wrong variable and still look identical on each side. */
+const SITE_FINDINGS = "Your site is blocking OAI-SearchBot. There is another thing too. 4 of your pages have less than 120 words on them.";
 
 console.log("── EVERY SEND-SIDE TEMPLATE RENDERS IDENTICALLY ──");
 for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
-  const sent = renderTemplateBody(name, B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
+  const sent = renderTemplateBody(name, B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT, SITE_FINDINGS);
   const mine = READABLE_TEMPLATE_BODIES[name];
   ok(!!mine, `${name}: has a readable body`);
   if (!mine) continue;
-  const shown = mine(B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
+  /* BOTH crawl sentences are handed in, each in its own slot, so a body reading the wrong one shows
+     up as drift instead of quietly rendering the other template's text. */
+  const shown = mine(B, U, TRADE, COMP, FIRST, undefined, SITE_FAULT, SITE_FINDINGS);
   ok(shown === sent, `${name}: readable body === sent body`);
   if (shown !== sent) {
     console.log(`   sent : ${JSON.stringify(sent).slice(0, 120)}`);
@@ -105,9 +111,9 @@ console.log("\n── ⛔ THE GREETING NAME IS APPLIED IDENTICALLY ON BOTH SIDES
   const RECENT = new Date().toISOString();
   let drift: string[] = [];
   for (const name of Object.keys(WA_TEMPLATE_BODIES)) {
-    const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST, undefined, SITE_FAULT);
+    const sent = renderTemplateBody(name, LISTING, U, TRADE, COMP, FIRST, undefined, SITE_FAULT, SITE_FINDINGS);
     const shown = readableTemplateBody(`[${name}]`, name, {
-      businessName: LISTING, url: U, trade: TRADE, competitors: COMP, firstName: FIRST, siteFault: SITE_FAULT, sentAt: RECENT,
+      businessName: LISTING, url: U, trade: TRADE, competitors: COMP, firstName: FIRST, siteFault: SITE_FAULT, siteFindings: SITE_FINDINGS, sentAt: RECENT,
     });
     if (shown !== sent) drift.push(name);
   }

@@ -530,6 +530,11 @@ Deno.serve(async (req) => {
            lead with no fault. The picker keeps this template off a clean-site lead in the first
            place. */
         if (tvars.includes("site_fault")) auditExtra.siteFault = a.siteFault ?? "";
+        /* ai_site_findings_v2's {{6}}. Same contract as site_fault directly above: an empty value
+           makes templateBodyParams throw unsafe_template_var, which the catch below turns into a
+           visible hold rather than a failed Meta send. The picker keeps the template off a lead with
+           no findings in the first place; this is the layer that saves us when it does not. */
+        if (tvars.includes("site_findings")) auditExtra.siteFindings = a.siteFindings ?? "";
         /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
            this is the manual path: the operator pressed send and is owed an answer. A plural trade
            or a town like "Bourne uk" would render "for a Locksmiths in Bourne uk" to a prospect, so
@@ -549,7 +554,7 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined);
+        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined);
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
            template and would otherwise fall through this opener branch with no history guard at all

@@ -285,6 +285,15 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      audit_followup / audit_followup_call). Present here for byte-identity with WA_TEMPLATES, which
      re-engage-vars asserts in both directions. {{6}} is fail-closed on the send side. */
   audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
+  /* ai_site_findings_v2 - submitted to Meta 2026-09-22. MIRRORS whatsapp-send.ts; change both
+     together. audit_followup_fault's successor with the SAME seven vars in the SAME order; the only
+     difference is that {{6}} carries two or three plain-English site findings instead of one report
+     sentence. Inbox only - a CONTINUATION, and although it DOES carry audit_url the queue still
+     never selects it (same as audit_followup_fault above). Present here for byte-identity with
+     WA_TEMPLATES, which re-engage-vars asserts in both directions.
+     ⛔ Gated OFF by AI_SITE_FINDINGS_V2_APPROVED until Meta approves it; being listed here cannot
+     send it. {{6}} is fail-closed on the send side. */
+  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings", "audit_url"] },
   /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
      Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.
@@ -1025,6 +1034,8 @@ Deno.serve(async (req) => {
             if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
             if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
             if (tmpl.vars.includes("site_fault")) auditExtra.siteFault = vars.siteFault ?? "";
+            // ai_site_findings_v2's {{6}} — same fail-closed contract as site_fault above.
+            if (tmpl.vars.includes("site_findings")) auditExtra.siteFindings = vars.siteFindings ?? "";
             /* ⛔ AN UNSAFE TRADE OR TOWN HOLDS THE LEAD, IT DOES NOT SEND IT WRONG (2026-09-12).
                video_template's body is "for a {{2}} in {{3}}", so a plural trade or a town like
                "Bourne uk" would reach a prospect as visibly broken copy. templateBodyParams throws
@@ -1045,7 +1056,7 @@ Deno.serve(async (req) => {
               }
               throw e;
             }
-            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined);
+            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined, vars.siteFindings ?? undefined);
             businessName = vars.business;
             claimUrl = vars.link;
           } else if (tmpl.vars.includes("onboarding_url")) {
@@ -1580,7 +1591,7 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string } = {};
     /* Set only when a rival-naming template was swapped for the fallback, so the tick's answer can
        say so. Silence would make a substitution indistinguishable from a normal send. */
     let rivalFallbackReason = "";
@@ -1682,6 +1693,7 @@ Deno.serve(async (req) => {
       if (tvars.includes("town")) templateExtra.town = ar.town;
       if (tvars.includes("audit_url")) templateExtra.auditUrl = ar.link;
       if (tvars.includes("site_fault")) templateExtra.siteFault = ar.siteFault ?? "";
+      if (tvars.includes("site_findings")) templateExtra.siteFindings = ar.siteFindings ?? "";
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
       // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
       // would point the prospect at the wrong page entirely.
@@ -1802,7 +1814,7 @@ Deno.serve(async (req) => {
     let failCode: number | undefined;
     let sendError: string | null = null;
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
-    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault);
+    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
 
     if (live) {

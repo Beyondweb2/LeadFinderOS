@@ -534,3 +534,56 @@ the moment Meta approves the name, no further change. Deployed 2026-09-17: the 1
 the changed shared modules (whatsapp-send, audit-reply, crawlCheck, coldOutreach, templateRouting).
 Measured at deploy: 3 leads currently carry a fresh v2 crawl fault, so the template offers itself
 rarely today and will grow as crawl checks populate.
+
+---
+
+## `ai_site_findings_v2` — the human-findings successor (2026-09-22, SUBMITTED, NOT APPROVED)
+
+audit_followup_fault's successor. **Identical shape — seven vars, same order, same gates — and the
+only difference is what {{6}} says:** two or three site findings in plain English instead of one
+sentence lifted out of the report's fault list. `{{1}}` trade with its own article, `{{2}}` town,
+`{{3}}{{4}}{{5}}` rivals, `{{6}}` the findings, `{{7}}` the short report URL, `lang: "en"`.
+
+**The switch is `AI_SITE_FINDINGS_V2_APPROVED` in `src/lib/siteFindings.ts`, currently `false`.**
+While false `getTemplateSendability` refuses the template **before any other requirement is
+consulted**, and the picker label says PENDING. Approval is that one line. Nothing about
+audit_followup_fault, initial_opener_v2 or the opener A/B changes either way.
+
+**{{6}} is built from signals the crawl check already stores — no new crawler, no new fetch, no new
+query.** `buildSiteFindings` reads `CrawlSignals` and writes each finding as
+WHAT I FOUND → WHAT IT MEANS → WHY IT AFFECTS AI.
+
+⛔ **Only four of the six signals are eligible**: `searchBlocked`, `clientRendered`, `duplicates`,
+`thinPages`. `missingH1` and `noJsonLd` are excluded — they are real, they belong in the report, and
+in a WhatsApp message they are the difference between "he looked at my site" and "this is an
+automated scan". **A lead whose only faults are weak gets no message rather than a weak one.**
+
+⛔ **Stricter than `siteFaultLine` on two leads, and the registered copy is why.** It says "Had a
+proper look at your site as well" and blames the site, so **no website → refused** and **a clean
+crawl → refused**. Both still get audit_followup_fault, which has a line for each.
+
+⛔ **{{6}} is ONE LINE, and that is Meta's rule, not a style choice.** A parameter containing a
+newline, a tab or 4+ consecutive spaces is rejected with **#132018** and the whole send dies (four
+audit_reply sends died that way on 2026-08-12). It is also capped at `MAX_FINDINGS_CHARS = 900`
+against Meta's 1024-character parameter limit (**#131009**) — over the cap the **weakest finding is
+dropped and it is rebuilt**, never truncated mid-sentence.
+
+⚠️ **The two crawl sentences get their own positional argument each, and sharing one was a real bug**
+caught by template-bodies-parity on the first run: `siteFindings ?? siteFault` fed the findings to
+audit_followup_fault's body, because "whichever value is defined" is not the question — "which
+variable does THIS template declare" is.
+
+⚠️ **Transitions vary by a lead-id seed** so two prospects in one town do not read a mail merge, and
+the same lead always reads the same message. `openerVariant.ts` keeps its own hash deliberately: that
+one is part of the A/B's stability contract and must not be reshuffled by a wording change here.
+
+**What the repo cannot say, and did not invent.** The brief's examples included sitemap-points-to-
+wrong-domain, conflicting canonicals, accidental noindex, orphaned pages and disconnected
+third-party evidence. **`CrawlSignals` carries none of those** — `crawl-check` fetches the homepage,
+robots.txt and a bounded page sample, and stores six signals. Those findings would need new crawler
+work, which this task explicitly excluded.
+
+Registered in all eleven places; `scripts/site-findings.test.ts` (122 assertions) pins the switch,
+the 7-param order across both registries, the selection rules and a scanner-phrase blocklist.
+**Not deployed. Not approved. Meta registration and the flag flip are both Paul's to do.**
+

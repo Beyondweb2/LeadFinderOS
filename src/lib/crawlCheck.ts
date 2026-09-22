@@ -318,11 +318,24 @@ export function crawlResultFaults(
   result: { version?: number; signals?: CrawlSignals } | null | undefined,
   createdAtMs: number,
 ): CrawlFault[] {
-  if (!result?.signals) return [];
+  const signals = usableCrawlSignals(result, createdAtMs);
+  return signals ? buildFaultLines(signals) : [];
+}
+
+/** The fresh + current-version gate on a STORED crawl row, on its own: the signals if the row may be
+ *  believed, null if it may not. Extracted 2026-09-22 so src/lib/siteFindings.ts (which needs the
+ *  raw signals, not the built fault lines) applies the IDENTICAL gate rather than a second copy of
+ *  the expression — a stale or pre-v2 row can carry a finding that is no longer true, and two gates
+ *  that drift mean one surface says the site is broken while the other says it is fine.
+ *  Behaviour is unchanged: crawlResultFaults above is now written in terms of this. */
+export function usableCrawlSignals(
+  result: { version?: number; signals?: CrawlSignals } | null | undefined,
+  createdAtMs: number,
+): CrawlSignals | null {
+  if (!result?.signals) return null;
   const fresh = (Date.now() - createdAtMs) < CRAWL_FRESH_MS;
   const currentVer = (result.version ?? 1) >= CRAWL_CHECK_VERSION;
-  if (!fresh || !currentVer) return [];
-  return buildFaultLines(result.signals);
+  return fresh && currentVer ? result.signals : null;
 }
 
 /** The ONE sentence naming the site's main fault — the first (highest-priority) fault line's detail,
