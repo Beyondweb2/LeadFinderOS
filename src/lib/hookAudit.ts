@@ -81,6 +81,37 @@ export function isHookState(v: unknown): v is HookState {
     Array.isArray((v as { planned?: unknown }).planned);
 }
 
+/**
+ * ⛔ WHETHER THIS RUN HAS EARNED THE DEEP SALES CRAWL (2026-09-22).
+ *
+ * The CHEAP crawl — fault signals and site info — runs for every audit that finalises and is not
+ * governed by this at all; it is free and it is what Paul reads before a conversation. This decides
+ * only the EXPENSIVE half: the extra sitemap reads and the Phase 1 evidence findings, which exist to
+ * build a sales argument and are therefore worth paying for exactly where there is a sale to make.
+ *
+ * For a HOOK audit that is one outcome and one only:
+ *   · visibility_gap_found   → yes. This is the lead we are about to message.
+ *   · max_questions_reached  → no. Gemini named them in every question; _shared/hook-not-interested
+ *                              auto-marks the lead not interested. Nobody will send this message.
+ *   · provider_failure       → no. There is no hook, so there is nothing to attach findings to.
+ *   · still running (null)   → no, yet. The run finalises again when the next question settles, and
+ *                              the caller's dedupe re-crawls deeply then because the shallow row it
+ *                              wrote carries no evidence.
+ *
+ * 🔴 AND IT FAILS OPEN, WHICH IS THE ONLY SAFE DIRECTION. Everything that is NOT a recognisable hook
+ * state — a paid baseline, a remeasure, a free check, a manual audit, a malformed `results`, a shape
+ * this code has not seen — returns TRUE and keeps the behaviour it has today. Written as "is a hook
+ * AND is not a gap" rather than "is a gap" on purpose: a future shape change then switches this gate
+ * OFF rather than silently switching the evidence off for every non-hook audit in the book. Absence
+ * must never fall through as a real answer, and the absent case here is the ordinary one
+ * (CLAUDE.md §4).
+ */
+export function shouldDeepCrawl(runResults: unknown): boolean {
+  const hook = (runResults as { hook?: unknown } | null | undefined)?.hook;
+  if (!isHookState(hook)) return true;
+  return hook.stop_reason === 'visibility_gap_found';
+}
+
 /* ── The plan ───────────────────────────────────────────────────────────────────────────────── */
 
 /** How broadly commercial a question reads. Higher runs first. Deterministic and cheap: the

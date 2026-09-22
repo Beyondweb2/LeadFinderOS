@@ -37,6 +37,7 @@ import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
 import { nameMatches } from './nameMatch.ts';
+import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
 
 // Engines shown in results (queue targets chatgpt+gemini; the actor also returns
 // AI Overview + Google organic, shown for context). mention_rate is over chatgpt+gemini.
@@ -210,21 +211,11 @@ function nicheKeywordsFrom(specialisms: string, businessType: string): string[] 
   return [...out];
 }
 
-// Map/image/markup junk that sometimes leaks into an engine's answer_text.
-const JUNK_MARKERS = ['mapbox', 'openstreetmap', 'images.openai', 'oaidalleapi', 'staticmap', 'tile.', 'data:image', 'base64', 'googleusercontent', '�'];
-
-/** True when answer_text isn't clean human prose (map/image junk, mostly URLs/markup,
- *  or too few real words) — such answers must never be shown as the gut-punch quote. */
-function isJunkAnswer(text: string): boolean {
-  const t = text.toLowerCase();
-  if (JUNK_MARKERS.some((m) => t.includes(m))) return true;
-  const stripped = text.replace(/https?:\/\/\S+/gi, ' ').replace(/\S+\.(png|jpe?g|svg|webp|gif|bmp)\S*/gi, ' ');
-  const words = stripped.trim().split(/\s+/).filter((w) => /[a-z]{2,}/i.test(w));
-  if (words.length < 10) return true;                    // too little real prose
-  const letters = (text.match(/[a-z]/gi) || []).length;
-  if (letters / text.length < 0.55) return true;         // mostly markup/symbols/urls
-  return false;
-}
+/* isJunkAnswer + cleanAnswerText MOVED to src/lib/answerText.ts on 2026-09-22, unchanged in
+   behaviour. The hook report's evidence card now quotes an engine's own answer too, and it needs the
+   identical judgement — a map-formatted answer must not be quoted THERE either. A second copy would
+   have been one rule in two places on a surface a prospect reads (CLAUDE.md §4); it could not live
+   in aiAuditReportHtml.ts, which this file already imports, so it is its own leaf. */
 
 /** "There don't appear to be any kava bars…" style answers — the most damning. */
 function looksAbsent(text: string): boolean {
@@ -372,23 +363,6 @@ function trimToSentence(text: string, max: number): string {
   const cut = t.slice(0, max);
   const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
   return stop > max * 0.5 ? cut.slice(0, stop + 1).trim() : cut.trim() + '…';
-}
-
-/** Strip UI chrome + markdown out of an engine answer so it reads as clean prose. */
-function cleanAnswerText(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, ' ')                 // code fences
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')            // images
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')          // links → their text
-    .replace(/^\s{0,3}#{1,6}\s*/gm, '')               // markdown headings (###)
-    .replace(/^\s{0,3}[-*•]\s+/gm, '')                // list bullets (* / -)
-    .replace(/^\s{0,3}\d+[.)]\s+/gm, '')              // numbered lists
-    .replace(/[*_`>#]+/g, '')                         // stray md symbols (** __ ` > #)
-    .replace(/\bgive feedback\b/gi, ' ')              // AI-UI cruft
-    .replace(/^\s*feedback\b[:\-\s]*/gi, ' ')
-    .replace(/\bshow (?:more|less)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 // A sentence is "damning evidence" if it names the competitor, states the business/

@@ -20,7 +20,20 @@ import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboard
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
-import { buildFaultLines, CRAWL_CHECK_VERSION, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
+import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
+
+/** The stored crawl shape this function reads, from either the run's results or the lead-level row.
+ *  `evidence` / `evidenceVersion` are optional because every row written before 2026-09-22 has
+ *  neither, and those rows must keep rendering exactly the report they rendered yesterday. */
+type StoredCrawl = {
+  status?: string;
+  version?: number;
+  checked_at?: string;
+  signals?: CrawlSignals;
+  evidence?: SiteEvidence | null;
+  evidenceVersion?: number;
+};
 
 /* ⛔ THE "VIEW ONLINE" FOOTER LINK WAS DEAD IN EVERY REPORT EVER SENT.
    It was built from a hardcoded SITE_ORIGIN of https://yoursites.uk plus /a/<slug> — a route that
@@ -329,17 +342,32 @@ Deno.serve(async (req) => {
     // Prefer the crawl attached to this exact run. This covers standalone audits and keeps a
     // lead's newer crawl from leaking into an older/different audit. Unavailable crawls are
     // intentionally represented by silence; no findings are invented.
-    const runCrawl = (run.results as { crawl_check?: { status?: string; version?: number; signals?: CrawlSignals } } | null)?.crawl_check;
+    const runCrawl = (run.results as { crawl_check?: StoredCrawl } | null)?.crawl_check;
     if (runCrawl?.status === "complete" && (runCrawl.version ?? 0) >= CRAWL_CHECK_VERSION && runCrawl.signals) {
       const faults = buildFaultLines(runCrawl.signals);
       if (faults.length) data.crawlFaults = faults;
     }
+    /* ── "I HAD A LOOK AT YOUR WEBSITE TOO" (deep crawl, Phase 1 — 2026-09-22) ────────────────────
+       The evidence findings for the report block, read under the SAME freshness window the faults
+       use and under their OWN version. A crawl with no evidence key (every row written before this,
+       and every deliberately shallow crawl) yields [], the field is left unset, and the report
+       renders exactly what it rendered yesterday.
+       ⛔ TIER A AND B BOTH SHOW HERE, and that is the difference between this and the message. The
+       message takes Tier A only, because it has one shot at somebody who did not ask. The report is
+       being read by somebody who opened it, so a supporting finding earns its place — but a Tier C
+       one (a noindex on a privacy page) never does, because it is not a problem. */
+    const evidenceOf = (stored: StoredCrawl | null | undefined, atMs: number) =>
+      usableSiteEvidence(stored, atMs, CRAWL_FRESH_MS).filter((f) => f.tier === "A" || f.tier === "B");
+    const runEvidence = runCrawl?.status === "complete"
+      ? evidenceOf(runCrawl, runCrawl.checked_at ? new Date(runCrawl.checked_at).getTime() : Date.now())
+      : [];
+    if (runEvidence.length) data.siteEvidence = runEvidence;
     if (leadId) {
       const { data: cc } = await service
         .from("lead_crawl_checks").select("result, created_at")
         .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
-      const stored = (cc as { result?: { version?: number; signals?: CrawlSignals } } | null)?.result;
+      const stored = (cc as { result?: StoredCrawl } | null)?.result;
       /* ⛔ ONLY v2+ RESULTS RENDER. Pre-v2 rows were fetched as GPTBot (a training crawler) and can
          carry FALSE findings (a legitimate GPTBot block read as "client-rendered"). We ignore them
          and re-populate below rather than show a diagnosis we no longer trust (Paul, 2026-09-16). */
@@ -348,6 +376,11 @@ Deno.serve(async (req) => {
       if (fresh && currentVer && sig) {
         const faults = buildFaultLines(sig);
         if (faults.length && !data.crawlFaults) data.crawlFaults = faults;
+      }
+      // Same lead-level fallback for the evidence: the run's own crawl first, this only if it had none.
+      if (!data.siteEvidence?.length && cc) {
+        const leadEvidence = evidenceOf(stored, new Date((cc as { created_at: string }).created_at).getTime());
+        if (leadEvidence.length) data.siteEvidence = leadEvidence;
       }
       /* Background-populate when there's no fresh CURRENT-version check and they have a real site, so
          the section is there on the next open. Fire-and-forget via waitUntil — never blocks this

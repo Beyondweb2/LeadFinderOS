@@ -18,6 +18,8 @@ import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
    dependency-free constant files, so nothing heavy joins those bundles. */
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import type { CrawlFault } from './crawlCheck.ts';
+import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
+import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -204,6 +206,10 @@ export interface AiAuditReportData {
    *  own number. Built from the lead's STORED crawl-check by render-audit-report (buildFaultLines).
    *  Absent/empty, or a site that couldn't be fetched → the section does not render (Paul, 2026-09-16). */
   crawlFaults?: CrawlFault[];
+  /** Deep-crawl Phase 1 findings for the "I had a look at your website too" block, already filtered
+   *  by render-audit-report to the ones worth showing. Absent on every report whose crawl predates
+   *  Phase 1 or ran shallow — and absent renders NOTHING, exactly as an absent crawlFaults does. */
+  siteEvidence?: SiteEvidenceFinding[];
   /** The audit id, so the "Request a call" form can POST it (recipient + phone are derived
    *  server-side from it — the prospect sends nothing but this id). Absent → no call button. */
   auditId?: string;
@@ -739,26 +745,119 @@ const isOai = (label: string) => /chatgpt|openai|gpt/i.test(label);
 const engineMark = (label: string) => isOai(label) ? `<span class="cc-mark cc-mark--oai">${OAI_SVG}</span>` : `<span class="cc-mark cc-mark--gem">${geminiSvg("gemMark")}</span>`;
 const engineAvatar = (label: string) => isOai(label) ? `<div class="cc-avatar cc-avatar--oai">${OAI_SVG}</div>` : `<div class="cc-avatar cc-avatar--gem">${geminiSvg("gemAvatar")}</div>`;
 
-/** THE MODEL/EVIDENCE BOX — the whole hook gap narrative, in one place (2026-09-21: replaced the
- *  separate pink `.hook-card` block, which said the same "we asked / they answered with other
- *  suggestions / wasn't named" thing a second time right above this). Reuses `chatCard`'s markup/CSS
- *  (.chatcard, .cc-*) — official engine mark, the real question, the engine's own avatar — fed from
- *  the hook's own gap (the engine Gemini decided the hook on), never the generic cross-audit
- *  `gutPunch` picker, so it can never show a different engine's answer than the heading above it.
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   "I HAD A LOOK AT YOUR WEBSITE TOO" — the deep-crawl findings, for somebody sitting down to read.
+
+   🔴 THE REPORT IS WHERE THE NUMBERS AND THE URLS LIVE, AND THAT IS THE WHOLE SPLIT. The WhatsApp
+   version of these findings (src/lib/siteFindings.ts) carries no figure and no address, because a
+   precise number in a cold message invites an argument about the number. Here the opposite is true:
+   a prospect who has opened a report wants to see the actual line out of their sitemap, because that
+   is the thing they can go and check. So every finding prints its own proof, verbatim.
+
+   ⛔ FOUR AT MOST, AND THE WEAKEST GO. A list is a scan; two to four specific things is somebody
+   who looked.
+   ⛔ AND THE WORDING STAYS HEDGED HERE TOO. We can see what is on a site. We cannot see why an
+   engine named somebody else, so "can give them conflicting information" and "may mean" are what
+   the evidence supports — the same rule scripts/site-findings.test.ts enforces on the message.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Findings shown in the report block. Four is already a page. */
+const MAX_REPORT_EVIDENCE = 4;
+
+/** Customer-facing words for each finding kind, and the one place they are written.
+ *  ⚠️ NOT IN src/lib/siteEvidence.ts, deliberately. That module is the evidence layer and its
+ *  `summary` is for an operator; a customer sentence written there would be a customer sentence
+ *  neither this file's copy scan (scripts/client-copy-claims.test.ts) nor the message's copy scan
+ *  reads. Prose that a prospect sees lives where a test is already looking at it. */
+const EVIDENCE_REPORT_COPY: Record<EvidenceKind, { title: string; why: string; label: string }> = {
+  sitemap_wrong_domain: {
+    title: "Your sitemap points at a different website",
+    why: "A sitemap is the file that lists your pages so search and AI tools can follow them. Yours lists pages on another web address, which can give them conflicting information about which website is really yours.",
+    label: "Found in your sitemap",
+  },
+  canonical_off_domain: {
+    title: "A page names a different website as the main version",
+    why: "Inside each page there is a setting that says which address should be treated as the original. On this page it names a different website, which can create conflicting information about which site is meant to be treated as yours.",
+    label: "Set on this page",
+  },
+  schema_wrong_domain: {
+    title: "Your business details point at a different website",
+    why: "Your pages carry a block of business information written for software to read. It gives a different web address to the one the site is on, which can make the business harder to tie back to one clear website.",
+    label: "Written into the page",
+  },
+  noindex_important_page: {
+    title: "A main page is marked not to be listed",
+    why: "The page looks completely normal to a visitor, but it carries a line asking search tools to leave it out of their results. That may mean it is not there to be picked up when somebody searches for what you do.",
+    label: "Found on this page",
+  },
+};
+
+/** One finding: what it is, what it means, and the bytes underneath it. */
+function renderEvidenceItem(f: SiteEvidenceFinding): string {
+  const copy = EVIDENCE_REPORT_COPY[f.kind];
+  if (!copy) return "";
+  /* The counted line is printed ONLY when we actually hold a denominator, and it states BOTH halves.
+     "34 of 40" is checkable; "34 URLs" invites the reader to assume it was all of them. */
+  const counted = f.evidence.counted && f.evidence.counted.of > 0
+    ? `<span class="ev-k">${f.evidence.counted.matched} of ${f.evidence.counted.of} checked${f.evidence.subject ? ` &middot; your site is on ${esc(f.evidence.subject)}` : ""}</span>`
+    : f.evidence.subject ? `<span class="ev-k">Your site is on ${esc(f.evidence.subject)}</span>` : "";
+  const observed = f.evidence.observed.map((o) => esc(o)).join("<br>");
+  const where = f.pageUrl ? `<span class="ev-k">${esc(copy.label)}: ${esc(f.pageUrl)}</span>` : "";
+  return `
+        <div class="ev-item">
+          <p class="ev-t">${esc(copy.title)}</p>
+          <p class="ev-p">${esc(copy.why)}</p>
+          <p class="ev-proof">${where}${counted}${observed}</p>
+        </div>`;
+}
+
+/** How much of the engine's stored reply the evidence card quotes. The gap stores 600 characters;
+ *  this is what fits the card without the quote becoming the page. Enough to be unmistakably a real
+ *  answer rather than a pull-quote we chose the shape of. */
+const HOOK_QUOTE_CHARS = 420;
+
+/** Trim to a sentence boundary near `max`, so a quote never stops mid-word.
+ *  ⚠️ auditReport.ts has its own copy for the gut-punch card and the two are NOT shared: this module
+ *  is imported BY that one, so importing back would close a cycle. Trimming a string at a full stop
+ *  is a primitive, not a rule (CLAUDE.md §4 is about rules living in one place). */
+function trimQuote(text: string, max: number): string {
+  const t = (text || "").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return stop > max * 0.5 ? cut.slice(0, stop + 1).trim() : cut.trim() + "…";
+}
+
+/** THE EVIDENCE CARD — the whole hook gap narrative, in one place (2026-09-21: replaced the separate
+ *  pink `.hook-card` block, which said the same "we asked / they answered with other suggestions /
+ *  wasn't named" thing a second time right above this). Fed from the hook's own gap (the engine
+ *  Gemini decided the hook on), never the generic cross-audit `gutPunch` picker, so it can never
+ *  show a different engine's answer than the heading above it.
  *
- *  ⛔ NO RAW ANSWER TEXT (2026-09-21, Paul). The box used to quote up to 600 characters of the
- *  model's actual reply — too much for a sales-focused snapshot, and reading it added nothing the
- *  competitor list and the red result line don't already say. It shows only: the engine, the exact
- *  question, the STRUCTURED competitor list this run already extracted (namedInstead — cleaned and
- *  capped by auditReport.ts's caller; never re-parsed from the raw answer here), and the truthful
- *  named/not-named result. `answerExcerpt` still exists on the stored gap for anything that wants
- *  the full text later; this box simply no longer reads it.
- *  ⛔ NEVER FABRICATED: an empty competitor list OMITS the "AI named" block entirely (2026-09-21,
- *  Paul — the earlier "Other businesses were suggested." fallback read as an invented claim when in
- *  fact NO name had been extracted). The red "wasn't named" line already states the one fact that
- *  IS true in that case, so nothing else is said. Deduplicated case-insensitively (a single answer
- *  can repeat a name) and capped to 5 defensively, on top of the 5-cap already applied upstream. */
-function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string): string {
+ *  🔴 IT IS FINDABLE'S CARD AND IT QUOTES THE ENGINE — IT NO LONGER IMITATES ONE (2026-09-22, Paul).
+ *  The previous version wore the official OpenAI / Gemini marks and a chat-bubble layout, and the
+ *  thing INSIDE that chrome was our own summary: an engine's branding around Findable's words. A
+ *  prospect reads a replica as a mock-up, and a mock-up is the one thing this page cannot afford to
+ *  look like — the entire value of the report is that the measurement is real. So: the engine is
+ *  NAMED IN TEXT, there is no engine logo and no chat bubble, and the quote inside the card is the
+ *  engine's own words, clearly labelled and clearly separated from anything we wrote. A neutral card
+ *  containing a real quote is more credible than a replica container holding our paraphrase.
+ *
+ *  🔴 AND THE GENUINE ANSWER IS BACK. `answerExcerpt` has been stored on every hook gap since the
+ *  hook shipped (hookAudit.ts truncates the engine's reply at 600 chars, as measured); the box was
+ *  built not to read it, with a comment saying so. Reading it is the cheapest credibility this
+ *  report can buy — nothing new is captured, nothing is re-parsed, and the quote is verbatim.
+ *
+ *  ⛔ NOTHING HERE IS EVER FABRICATED, AND THE TWO ABSENT CASES ARE BOTH HANDLED EXPLICITLY:
+ *    · NO EXCERPT (a gap stored before the field, or an engine that returned nothing quotable) → the
+ *      quote block is OMITTED and the card falls back to exactly what it showed yesterday: the
+ *      question, the names, the result. Never a placeholder, never "the engine said something else".
+ *    · NO NAMES → the "named instead" block is omitted entirely (2026-09-21, Paul — the earlier
+ *      "Other businesses were suggested." fallback read as an invented claim when in fact NO name had
+ *      been extracted). The red line already states the one fact that IS true.
+ *  Names are deduplicated case-insensitively (a single answer can repeat one) and capped to 5
+ *  defensively, on top of the 5-cap already applied upstream. */
+function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string, dateLabel?: string): string {
   if (!g) return "";
   const seen = new Set<string>();
   const competitors = g.namedInstead.filter((n) => {
@@ -767,21 +866,38 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
     seen.add(key);
     return true;
   }).slice(0, 5);
+  /* The engine's own words — CLEANED AND JUDGED FIRST, never raw.
+     🔴 A MAP-FORMATTED ANSWER IS NOT A QUOTE, AND THIS IS THE SECOND SURFACE TO LEARN IT. Gemini
+     frequently answers a local question with a map card, and its stored text is then
+     "https://maps.gstatic.com/…/star.png 5.0 stars Closes 10:00 PM Educational institution". Printed
+     under "Gemini replied" that reads as a bad scrape, on the one page whose entire value is that
+     the measurement is real. isJunkAnswer already refused exactly this for the gut-punch card;
+     sharing it (src/lib/answerText.ts) is why this card does not have to learn it again.
+     ⛔ A JUNK ANSWER IS TREATED AS NO ANSWER — the quote block is omitted and the card falls back to
+     the question, the names and the result, all of which are still true without it. Never cleaned
+     harder until something emerges: what survives is a list of opening hours.
+     Trimmed to a sentence boundary so a real quote never stops mid-word. */
+  const rawExcerpt = (g.answerExcerpt ?? "").replace(/\s+/g, " ").trim();
+  const excerpt = isJunkAnswer(rawExcerpt) ? "" : trimQuote(cleanAnswerText(rawExcerpt), HOOK_QUOTE_CHARS);
+  const quoteBlock = excerpt
+    ? `
+          <p class="cc-label">${esc(g.engineLabel)} replied</p>
+          <blockquote class="ev-quote">${esc(excerpt)}</blockquote>`
+    : "";
   const namedRow = competitors.length
     ? `
-          <div class="cc-arow">
-            ${engineAvatar(g.engineLabel)}
-            <div class="cc-a"><p class="cc-label">AI named</p><ol class="cc-list">${competitors.map((n) => `<li>${esc(n)}</li>`).join("")}</ol></div>
-          </div>`
+          <p class="cc-label">Businesses it named</p>
+          <ol class="cc-list ev-list">${competitors.map((n) => `<li>${esc(n)}</li>`).join("")}</ol>`
     : "";
+  const dateRow = dateLabel ? `<span class="cc-date">${esc(dateLabel)}</span>` : "";
   return `
-      <section class="chatcard">
+      <section class="chatcard evcard">
         <div class="cc-head">
-          <span class="cc-brand">${engineMark(g.engineLabel)}${esc(g.engineLabel)}</span>
+          <span class="cc-engine">Asked ${esc(g.engineLabel)}</span>${dateRow}
         </div>
         <div class="cc-body">
           <p class="cc-label">Question</p>
-          <div class="cc-q-plain">&ldquo;${esc(g.question)}&rdquo;</div>${namedRow}
+          <div class="cc-q-plain">&ldquo;${esc(g.question)}&rdquo;</div>${quoteBlock}${namedRow}
         </div>
         <div class="cc-callout"><span class="cc-bang">!</span>${esc(businessName)} wasn&rsquo;t named.</div>
       </section>`;
@@ -794,7 +910,7 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
  *  `chatCard`, the AI model/evidence box) for every hook report the day the hook became adaptive
  *  (commit 11129185), and nothing here ever grew an equivalent — renderHookEvidenceBox above is
  *  that restoration, fed from the hook's own gap data. */
-export function renderHookSection(h: HookReportSummary, businessName: string): string {
+export function renderHookSection(h: HookReportSummary, businessName: string, dateLabel?: string): string {
   const c = hookReportCopy(h, businessName);
   if (!h.gap) {
     return `
@@ -818,7 +934,7 @@ export function renderHookSection(h: HookReportSummary, businessName: string): s
       <div class="hook-eyebrow">${esc(c.eyebrow)}</div>
       <div class="hook-vk">The verdict</div>
       <h1 class="hook-head">${esc(c.headline)}</h1>
-      ${renderHookEvidenceBox(g, businessName)}
+      ${renderHookEvidenceBox(g, businessName, dateLabel)}
       <p class="hook-caveat">${esc(c.caveat)}</p>
     </section>`;
 }
@@ -987,7 +1103,33 @@ export function renderReportHtml(d: AiAuditReportData): string {
      never-completed crawl renders NOTHING, same rule as every other report type: Paul's original
      "a site that couldn't be fetched yields no faults" silence, restored (a brief reassurance line
      was tried here and reverted the same day — it read as a claim worth making on its own). */
-  const hookCrawlSection = (d.crawlFaults && d.crawlFaults.length) ? `
+  /* ── "I HAD A LOOK AT YOUR WEBSITE TOO" (2026-09-22) ──────────────────────────────────────────
+     The deep-crawl findings, after the AI evidence card, with their proof. When there is evidence
+     this block leads and the existing dot list follows INSIDE THE SAME SECTION — two separate
+     website sections one after the other would read as the report saying the same thing twice.
+     ⛔ NO EVIDENCE → THIS RENDERS NOTHING AND hookCrawlSection BELOW IS EXACTLY WHAT IT WAS. Every
+     report whose crawl predates Phase 1, ran shallow, or found nothing is byte-identical to
+     yesterday's — which is the contract for shipping this without a backfill. */
+  const evidenceItems = (d.siteEvidence ?? []).slice(0, MAX_REPORT_EVIDENCE);
+  const evidenceSection = evidenceItems.length ? `
+    <!-- DEEP-CRAWL EVIDENCE: what was found on the prospect's own site, each with the bytes it was
+         read from. The proof is the point — it is what the prospect can go and check. -->
+    <section class="seo">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">I had a look at your website too</div>
+      <div class="seo-body">${evidenceItems.map(renderEvidenceItem).join("")}${
+        (d.crawlFaults && d.crawlFaults.length) ? `
+        <ul class="seo-findings" style="margin-top:14px">${d.crawlFaults.map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${f.minor ? "var(--amber)" : "var(--red)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("")}
+        </ul>` : ""}
+      </div>
+    </section>` : "";
+
+  const hookCrawlSection = evidenceSection ? evidenceSection
+    : (d.crawlFaults && d.crawlFaults.length) ? `
     <!-- WEBSITE ISSUES, hook layout — the same card treatment page 1/3 of the old baseline PDF
          uses ("Website issues we can fix": bordered card, dot + bold lead-in + detail), not the
          ordinary report's unboxed .fault list. Reused classes (.seo/.find*), no new CSS. -->
@@ -1851,6 +1993,31 @@ ${REPORT_CHROME_CSS_PRINT}
   @media(max-width:560px){.qlist{padding-left:18px;padding-right:18px}.qrow-e{width:52px;flex-basis:52px}}
 
   /* Chat card — official mark in the header + as the avatar, a numbered list of the real firms. */
+  /* THE EVIDENCE CARD (2026-09-22). Findable's own card: no engine logo, no chat bubble, no replica
+     chrome. The engine is named in text and its words sit in a quote block that is visibly a QUOTE —
+     ruled left edge, italic, its own background — so nothing inside this card can be mistaken for
+     something we wrote, and nothing about the card can be mistaken for a screenshot. */
+  .evcard{background:var(--paper)}
+  .ev-quote{margin:0 18px 4px; padding:12px 14px; border-left:3px solid var(--blue);
+    background:var(--page); border-radius:0 10px 10px 0; font-size:14px; line-height:1.6;
+    color:var(--ink-2); font-style:italic}
+  .ev-list{margin:8px 18px 0; padding-left:38px}
+  .cc-body .cc-label + .ev-quote{margin-top:0}
+  /* The deep-crawl findings block — one item per finding: what it is, what it means, and the actual
+     bytes underneath. .ev-proof is monospaced because it is a URL a prospect is meant to copy and
+     check, not prose.
+     ⚠️ NO USER-FACING COPY IN THIS COMMENT, DELIBERATELY. The <style> block ships in EVERY report,
+     so a heading quoted here appears in the HTML of reports that do not render the section at all —
+     which is precisely how scripts/site-evidence-report.test.ts first "proved" the section rendered
+     on a clean site. A negative can be your own check's fault (CLAUDE.md §4); so can a positive. */
+  .ev-item{padding:14px 0; border-top:1px solid var(--line)}
+  .ev-item:first-child{border-top:none; padding-top:2px}
+  .ev-t{font-size:15px; font-weight:700; color:var(--ink); margin:0 0 5px}
+  .ev-p{margin:0 0 9px; font-size:13.5px; line-height:1.55; color:var(--muted); max-width:70ch}
+  .ev-proof{margin:0; padding:9px 12px; background:var(--page); border:1px solid var(--line);
+    border-radius:8px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px; line-height:1.7; color:var(--ink-2); word-break:break-all}
+  .ev-proof .ev-k{display:block; font-family:inherit; color:var(--faint)}
   .cc-body{padding:2px 0 16px}
   .cc-brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--ink)}
   .cc-mark{width:18px;height:18px;border-radius:50%;flex:0 0 18px}
@@ -1896,6 +2063,9 @@ ${REPORT_CHROME_CSS_PRINT}
   .cc-q{background:#cdd4e2}
   .fault{border-top-color:#d3d9e4}
   .sec-title{margin-bottom:6px}
+  .ev-quote{background:#fff;border-color:#d3d9e4}
+  .ev-item{border-top-color:#d3d9e4}
+  .ev-proof{background:#eef1f6;border-color:#d3d9e4}
 </style>
 </head>
 <body>
@@ -1912,7 +2082,7 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
-` : d.hook ? `${renderHookSection(d.hook, d.businessName)}
+` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}
 ` : d.paidSummary ? `${paidSummarySection}
 ${questionsList}

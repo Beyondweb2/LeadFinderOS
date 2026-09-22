@@ -68,7 +68,10 @@ console.log('── 12: the old-page-style verdict hierarchy renders in order (e
   const vkAt = html.indexOf('hook-vk');
   const headAt = html.indexOf('hook-head');
   ok(eyebrowAt >= 0 && vkAt > eyebrowAt && headAt > vkAt, '12: eyebrow, then "the verdict" label, then the headline, in that order');
-  ok(html.indexOf('class="chatcard"') > headAt, '12: the evidence card follows the verdict, not before it');
+  /* ⚠️ The card's class became "chatcard evcard" on 2026-09-22 when the replica engine chrome was
+     replaced by Findable's own evidence card. The ORDER is what this test is about and is unchanged;
+     matched on the evidence class so it cannot pass on some other card appearing first. */
+  ok(html.indexOf('evcard') > headAt, '12: the evidence card follows the verdict, not before it');
 }
 
 console.log('── A Q1 gap (nothing named yet) earns the stronger, still-truthful headline ──');

@@ -39,9 +39,17 @@
       cannot survive the wire and are not attempted.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
+  CRAWL_FRESH_MS,
   usableCrawlSignals,
   type CrawlSignals,
 } from './crawlCheck.ts';
+import {
+  selectableEvidence,
+  usableSiteEvidence,
+  type EvidenceKind,
+  type SiteEvidence,
+  type SiteEvidenceFinding,
+} from './siteEvidence.ts';
 
 /** The Meta-registered template name. Matches WhatsApp Manager exactly — Meta resolves by name and
  *  a near-miss is template-not-found, not a warning. */
@@ -117,7 +125,16 @@ export const COMFORTABLE_THREE_CHARS = 720;
  *    returns null, the picker refuses the template, and the operator sends audit_followup_call
  *    instead. Failing closed here costs one unsent message; failing open costs the first impression.
  */
-export type FindingKind = 'crawler_blocked' | 'unreadable_homepage' | 'duplicate_pages' | 'thin_pages';
+export type SignalFindingKind = 'crawler_blocked' | 'unreadable_homepage' | 'duplicate_pages' | 'thin_pages';
+
+/**
+ * ⛔ THE DEEP-CRAWL EVIDENCE KINDS JOIN THE SAME UNION RATHER THAN GETTING THEIR OWN (2026-09-22).
+ * They are findings in exactly the same sense — one sentence in the same message, chosen by the same
+ * rule, recorded under the same name in `findings_shown`. Two parallel unions would mean two
+ * selectors, two caps and two places to forget a kind; the union is what lets the length rule, the
+ * drop-the-weakest rule and the recorded analytics stay single-sourced.
+ */
+export type FindingKind = SignalFindingKind | EvidenceKind;
 
 /**
  * One finding, split where the sentence bends.
@@ -139,6 +156,40 @@ export interface SiteFinding {
   /** The rest: what it means, then why it may make AI visibility harder. Whole sentences. */
   rest: string;
 }
+
+/**
+ * 🔴 THE WORDS FOR THE DEEP-CRAWL EVIDENCE, AND EVERY RULE THE SIGNAL COPY BELOW OBEYS APPLIES HERE
+ *    UNCHANGED. Same shape (what I saw → what it means → why it may matter), same hedging, same
+ *    refusal to carry a figure, same fragment-that-follows-an-opener form.
+ *
+ * ⛔ AND NOT ONE OF OUR WORDS FOR ANY OF IT. "sitemap" survives because it is the name of a file a
+ *    prospect can open, and it is explained in the same breath. Everything else is said in plain
+ *    English: no canonical, no schema, no markup, no noindex, no directive, no index. A tradesperson
+ *    who has to accept a technical term on trust is a tradesperson being sold to.
+ *
+ * ⚠️ THE FIGURES ARE DELIBERATELY ABSENT HERE TOO, AND THEY EXIST. The evidence block holds the
+ *    counts and the offending URLs, and the REPORT prints them — because somebody reading a report
+ *    has sat down to it. "34 of 40 URLs in your sitemap" in a cold WhatsApp invites an argument
+ *    about the 34.
+ */
+const EVIDENCE_COPY: Record<EvidenceKind, { clause: string; rest: string }> = {
+  sitemap_wrong_domain: {
+    clause: "your sitemap is pointing at a different web address to the one the site is actually on",
+    rest: "A sitemap is the file that lists your pages for search and AI tools to follow. When it sends them somewhere else, it can give them conflicting information about which website is really yours.",
+  },
+  canonical_off_domain: {
+    clause: "one of your main pages is telling search tools that a different website is the main version of it",
+    rest: "That is set inside the page rather than anywhere a visitor would see it. It can create conflicting information about which site is meant to be treated as yours.",
+  },
+  schema_wrong_domain: {
+    clause: "the business details written into the site's code point at a different web address to the one you're using",
+    rest: "That part of a page is there to tell software who the business is and where to find it. When it gives another address, it can make the business harder to tie back to one clear website.",
+  },
+  noindex_important_page: {
+    clause: "one of your main pages is marked not to be included in search results",
+    rest: "The page looks completely normal to a visitor, but there's a line inside it asking search tools to leave it out. That may mean it isn't there to be picked up when somebody searches for what you do.",
+  },
+};
 
 /**
  * Turn the crawl signals into candidate findings, strongest first.
@@ -167,9 +218,23 @@ export interface SiteFinding {
  *    for somebody sitting down to read it. Here we describe the problem. (THIN_WORDS is no longer
  *    interpolated at all, which also settles CLAUDE.md §4's "never write a cap in prose".)
  */
-export function candidateFindings(s: CrawlSignals): SiteFinding[] {
+export function candidateFindings(s: CrawlSignals, evidence: SiteEvidenceFinding[] = []): SiteFinding[] {
   if (s.fetchFailed) return [];   // could not read the site at all — we have nothing to say about it
   const out: SiteFinding[] = [];
+
+  /* ── THE DEEP-CRAWL EVIDENCE, FIRST (2026-09-22) ──────────────────────────────────────────────
+     These lead, and the reason is not that they are more technical — it is that a prospect can CHECK
+     them. Open the sitemap, look at the address in it; open the page, see it is marked not to be
+     listed. The four signal findings below are all true and none of them can be verified without
+     taking our word for what a crawler saw. A cold message that can be confirmed in a minute on the
+     prospect's own phone is a different kind of message.
+     ⛔ ONLY TIER A, ONLY OBSERVED, AND ONLY ONE PER THEME — selectableEvidence has already applied
+     all three, so this loop does no filtering of its own. Two of the three domain findings in one
+     message is the same complaint twice, which is the padding tell this template exists to avoid. */
+  for (const e of evidence) {
+    const copy = EVIDENCE_COPY[e.kind];
+    if (copy) out.push({ kind: e.kind, clause: copy.clause, rest: copy.rest });
+  }
 
   /* ⛔ ONLY THE SEARCH CRAWLERS, AND ONLY THE ONES THE STORED SIGNAL ACTUALLY NAMES. searchBlocked
      is derived from real fetches by the crawlers that fetch a page for an AI search tool. Training
@@ -290,6 +355,19 @@ export interface SiteFindingsOptions {
   seed?: string | null;
   /** Lower only for a test. */
   max?: number;
+  /** The deep-crawl evidence findings already filtered to Tier A / observed / one-per-theme by
+   *  selectableEvidence. Absent or empty → the message is built from the crawl signals alone,
+   *  exactly as it was before Phase 1 shipped. */
+  evidence?: SiteEvidenceFinding[];
+}
+
+/** The finished {{6}} AND the ordered kinds that went into it.
+ *  ⛔ THE KINDS ARE THE ANALYTICAL VALUE, NOT THE SENTENCE. A rendered sentence cannot be grouped,
+ *  counted or compared across leads, so "which findings actually sell" would be unanswerable from
+ *  the text alone. These are what `whatsapp_messages.findings_shown` stores. */
+export interface SiteFindingsResult {
+  text: string;
+  kinds: FindingKind[];
 }
 
 /**
@@ -305,9 +383,24 @@ export function buildSiteFindings(
   signals: CrawlSignals | null | undefined,
   opts: SiteFindingsOptions = {},
 ): string | null {
+  return buildSiteFindingsDetailed(signals, opts)?.text ?? null;
+}
+
+/**
+ * The same value, with the ordered kinds that produced it.
+ *
+ * ⛔ THE TEXT AND THE KINDS COME OUT OF ONE ASSEMBLY, NOT TWO. A second function that "worked out"
+ * which findings a message had used would be a second copy of the length rule and the drop-the-
+ * weakest rule, and the day they drifted `findings_shown` would record findings the prospect never
+ * read — which is worse than recording nothing, because it would be believed.
+ */
+export function buildSiteFindingsDetailed(
+  signals: CrawlSignals | null | undefined,
+  opts: SiteFindingsOptions = {},
+): SiteFindingsResult | null {
   if (!signals) return null;
   const max = Math.max(1, Math.min(opts.max ?? MAX_SITE_FINDINGS, MAX_SITE_FINDINGS));
-  const all = candidateFindings(signals);
+  const all = candidateFindings(signals, opts.evidence ?? []);
   if (all.length === 0) return null;
   const seed = fnv1a32(String(opts.seed ?? ''));
 
@@ -333,9 +426,10 @@ export function buildSiteFindings(
      is included only when the whole thing still reads short. Everything from two down is held to the
      hard Meta cap alone, because at that point there is nothing left to drop. */
   for (let n = Math.min(max, all.length); n >= 1; n--) {
-    const value = assemble(all.slice(0, n));
+    const chosen = all.slice(0, n);
+    const value = assemble(chosen);
     const limit = n >= 3 ? COMFORTABLE_THREE_CHARS : MAX_FINDINGS_CHARS;
-    if (value.length <= limit || n === 1) return value;
+    if (value.length <= limit || n === 1) return { text: value, kinds: chosen.map((f) => f.kind) };
   }
   return null;
 }
@@ -346,7 +440,17 @@ export function buildSiteFindings(
  *  crawlCheck.SiteFaultSource uses, restated here so this module does not depend on that one's
  *  fault-line machinery. */
 export interface FindingsSource {
-  result: { version?: number; status?: string; signals?: CrawlSignals } | null | undefined;
+  result: {
+    version?: number;
+    status?: string;
+    signals?: CrawlSignals;
+    /** Phase 1 deep-crawl evidence. ABSENT ON EVERY ROW WRITTEN BEFORE 2026-09-22 and on every
+     *  deliberately shallow crawl, which is why it is optional and why usableSiteEvidence answers []
+     *  rather than throwing: an old row must keep producing exactly the message it produced
+     *  yesterday, from its signals alone. */
+    evidence?: SiteEvidence | null;
+    evidenceVersion?: number;
+  } | null | undefined;
   createdAtMs: number;
   /** An explicit crawl failure is never usable. */
   complete?: boolean;
@@ -378,13 +482,33 @@ export function resolveSiteFindings(
   leadCrawl?: FindingsSource | null,
   opts: SiteFindingsOptions = {},
 ): string | null {
+  return resolveSiteFindingsDetailed(hasWebsite, auditRunCrawls, leadCrawl, opts)?.text ?? null;
+}
+
+/**
+ * The same resolution, carrying the ordered kinds for `findings_shown`.
+ *
+ * ⛔ THE EVIDENCE IS READ UNDER THE SAME FRESHNESS WINDOW AS THE SIGNALS AND UNDER ITS OWN VERSION.
+ * A stale crawl describes a site as it was; a pre-Phase-1 row has no evidence key at all. Both come
+ * back as "no evidence", the message is built from the signals exactly as before, and nothing about
+ * an old row's behaviour changes — which is the whole contract for shipping this without a backfill.
+ */
+export function resolveSiteFindingsDetailed(
+  hasWebsite: boolean,
+  auditRunCrawls: FindingsSource[] = [],
+  leadCrawl?: FindingsSource | null,
+  opts: SiteFindingsOptions = {},
+): SiteFindingsResult | null {
   if (!hasWebsite) return null;
   for (const source of [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])]) {
     if (source.complete === false) continue;
     if (source.result?.status === 'unavailable') continue;
     const signals = usableCrawlSignals(source.result, source.createdAtMs);
     if (!signals) continue;
-    const findings = buildSiteFindings(signals, opts);
+    const evidence = selectableEvidence(
+      usableSiteEvidence(source.result, source.createdAtMs, CRAWL_FRESH_MS),
+    );
+    const findings = buildSiteFindingsDetailed(signals, { ...opts, evidence });
     if (findings) return findings;
   }
   return null;

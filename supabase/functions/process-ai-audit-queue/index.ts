@@ -19,7 +19,8 @@ import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/a
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
-import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState } from "../../../src/lib/hookAudit.ts";
+import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
+import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -1136,11 +1137,35 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
        when a CURRENT-version crawl younger than the freshness window already exists — the same
        30d/v2 gate the report and the Crawl-site button apply, so an already-crawled lead is left
        alone and a stale/pre-v2 one is refreshed. Internal auth (CRON_SECRET + x-internal-job), the
-       same door extract-competitors uses. Never throws; a crawl problem can't touch the audit. */
+       same door extract-competitors uses. Never throws; a crawl problem can't touch the audit.
+
+       ── THE DEEP-CRAWL GATE (2026-09-22) ─────────────────────────────────────────────────────────
+       The CHEAP half (fault signals + site info) still runs for EVERY audit that finalises, exactly
+       as it has since 2026-09-17 — it is free and it is what Paul reads before a conversation.
+       The DEEP half (the sales evidence: the extra sitemap reads and the four Phase 1 findings) is
+       worth paying for only where there is a sales conversation to have. For a HOOK audit that is
+       precisely one outcome:
+
+         · visibility_gap_found   → DEEP. This is the lead we are about to message.
+         · max_questions_reached  → shallow. Gemini named them every time; hook-not-interested.ts
+                                    auto-marks the lead not interested a few lines above this, so
+                                    building an argument for them is work for a message never sent.
+         · provider_failure       → shallow. No hook, nothing to attach findings to.
+         · still running / absent → handled by the line below, not by this list.
+
+       🔴 AND IT FAILS OPEN, WHICH IS THE ONLY SAFE DIRECTION HERE. `deep` is false ONLY when the run
+       carries a recognisable hook state that stopped for a reason other than a gap. A paid baseline,
+       a remeasure, a free check, a manual audit and anything whose `results.hook` is missing,
+       malformed or a shape this code has not seen all take the default and crawl deeply — the
+       behaviour they have today. Written as "is a hook AND is not a gap" rather than "is a gap"
+       exactly so that a future shape change turns the gate OFF rather than silently switching the
+       evidence off for every non-hook audit in the book (CLAUDE.md §4: never let an absent value
+       fall through as a real one, and enumerate the absent case rather than trusting an else). */
     crawlInvokes.push((async () => {
       try {
         const auditId = runRow?.audit_id as string | undefined;
         if (!auditId) return;
+        const deepCrawl = shouldDeepCrawl(results);
         const markUnavailable = async (error: string) => {
           const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
           const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
@@ -1186,7 +1211,13 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           : { data: null };
         const fresh = !!cc && (Date.now() - new Date((cc as { created_at: string }).created_at).getTime()) < 30 * 86_400_000;
         const currentVer = ((cc as { result?: { version?: number } } | null)?.result?.version ?? 0) >= CRAWL_CHECK_VERSION;
-        if (fresh && currentVer) {
+        /* ⛔ A FRESH ROW IS ONLY REUSABLE FOR THE CRAWL WE ARE ASKING FOR. A row written by a shallow
+           crawl (or before Phase 1 existed) carries no evidence, so reusing it for a lead that has
+           just earned a deep crawl would mean the dedupe silently decided this lead gets no sales
+           findings — and it would look identical to a lead whose site is clean. Same shape as the
+           version gate beside it: current ENOUGH for what is being asked, not merely current. */
+        const hasEvidence = ((cc as { result?: { evidenceVersion?: number } } | null)?.result?.evidenceVersion ?? 0) >= SITE_EVIDENCE_VERSION;
+        if (fresh && currentVer && (!deepCrawl || hasEvidence)) {
           if (runId && cc?.result) {
             const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
             const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
@@ -1203,7 +1234,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
             "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
             "x-internal-job": "1",
           },
-          body: JSON.stringify({ lead_id: cLeadId, audit_id: auditId, run_id: runId, url: site }),
+          body: JSON.stringify({ lead_id: cLeadId, audit_id: auditId, run_id: runId, url: site, deep: deepCrawl }),
         });
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
