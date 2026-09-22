@@ -26,7 +26,9 @@ const cell = (o: Partial<EngineResult>): EngineResult => ({ named: false, positi
 const q1 = 'Who offers 24 hour locksmith services in Canterbury?';
 const q1Runs: Array<Record<string, EngineResult>> = [
   { chatgpt: cell({ self_named: true, named: true, answer_text: 'MCLocksmiths centre and Keytek both cover Canterbury.' }), gemini: cell({ self_named: false }) },
-  { chatgpt: cell({ self_named: false, named: true, citations: [clientCite], answer_text: 'Keytek covers Canterbury. Sources: MC Locksmiths' }), gemini: cell({ self_named: false }) },
+  /* 2026-09-22: the answer TEXT is the ruler when trade/town are known (named-text-primary.test.ts),
+     so this citation-only cell must not name the business in its prose. */
+  { chatgpt: cell({ self_named: false, named: true, citations: [clientCite], answer_text: 'Keytek covers Canterbury. [1]' }), gemini: cell({ self_named: false }) },
   { chatgpt: cell({ named: true, answer_text: '**MCLocksmiths centre** 5.0 · Keytek' }), gemini: cell({ named: false }) },
 ];
 /* Q2 — citation-only in every run: the model read each answer and said the client is not one of

@@ -192,8 +192,9 @@ function sideCounts(
   businessName: string,
   ownWebsite: string,
   namedMode: NamedMode,
+  context: { trade?: string | null; town?: string | null } = {},
 ): { byQuestion: Map<string, SideCounts>; overall: OverallSide; label: Map<string, string> } {
-  const view = buildBaselineView(rows, { businessName, namedMode });
+  const view = buildBaselineView(rows, { businessName, namedMode, trade: context.trade ?? null, town: context.town ?? null });
   const cited = citedByQuestion(rows, businessName, ownWebsite);
   const byQuestion = new Map<string, SideCounts>();
   const label = new Map<string, string>();
@@ -293,10 +294,13 @@ export function sortMeasurementQuestions(
 export function compareMeasurements(
   beforeRows: QueueRowLite[],
   afterRows: QueueRowLite[],
-  opts: { businessName?: string | null; ownWebsite?: string | null } = {},
+  opts: { businessName?: string | null; ownWebsite?: string | null; trade?: string | null; town?: string | null } = {},
 ): MeasurementComparison {
   const businessName = (opts.businessName ?? '').trim();
   const ownWebsite = (opts.ownWebsite ?? '').trim();
+  /* With trade or town the ANSWER TEXT is the ruler on BOTH sides (namedSignal.ts) — the one
+     ruler that cannot drift between day 0 and day 28. Without them, the mode below decides. */
+  const context = { trade: opts.trade ?? null, town: opts.town ?? null };
   /* ⛔ ONE RULER FOR BOTH SIDES, DECIDED ONCE, HERE. The naming verdict has two sources now —
      the model's `self_named` where extract-competitors has read the answer, the old
      nameMatches string test everywhere else. Letting each side pick its own best signal would
@@ -306,8 +310,8 @@ export function compareMeasurements(
      sides have been read by it, and otherwise both sides fall back together. */
   const namedMode: NamedMode = (allCellsModelRead(cellsOf(beforeRows)) && allCellsModelRead(cellsOf(afterRows)))
     ? 'auto' : 'legacy';
-  const b = sideCounts(beforeRows, businessName, ownWebsite, namedMode);
-  const a = sideCounts(afterRows, businessName, ownWebsite, namedMode);
+  const b = sideCounts(beforeRows, businessName, ownWebsite, namedMode, context);
+  const a = sideCounts(afterRows, businessName, ownWebsite, namedMode, context);
   /* BEFORE's order is the spine — it is the measurement the after side is being compared against,
      so its questions keep their positions and anything new is appended after them. */
   const bOrder = askOrder(beforeRows);

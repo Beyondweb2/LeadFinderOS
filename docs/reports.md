@@ -450,3 +450,32 @@ Gemini r2 — no mention at all), and the string fallback misses the "MC Locksmi
 stored name is "MCLocksmiths centre") on Faversham r2 and Ramsgate r2. Run 2 has no model verdict
 on 12 of 40 cells (the extractor did not read it). Correcting either ruler is a classification
 change on frozen evidence and was deliberately not made; Paul's call.
+
+### §33b. The ruler itself: the answer text is the evidence (2026-09-22, later the same day)
+
+Paul's rule, now the code: a business is NAMED only when the answer text names it; a citation alone
+is not; a verdict about the text may not contradict it. `cellNamed(cell, ctx)` (namedSignal.ts)
+reads, in order: (1) the ANSWER TEXT when the caller supplies the business + trade/town and the name
+is text-judgeable (`nameIsTextJudgeable` — something survives once trade, town and legal forms are
+removed; "Locksmiths Canterbury" does not qualify), via `nameMatches` over `answerProse` (URLs and
+cited domains stripped) with a joined-or-split spelling tolerance (`tokensContainJoined`: whole hay
+tokens concatenated must equal the concatenated needle — "MC Locksmiths" == "MCLocksmiths", "MCA
+Locksmiths" != , never inside a longer word; a lone first token counts only if ≥ 8 alphabetic
+characters and not trade/town/service); (2) the model's `self_named`; (3) the stored `named`. No
+context → the old behaviour exactly. Context is passed by the internal baseline view (Baseline.tsx →
+buildBaselineView), the report builder (buildReportData, so hero, per-question and per-engine agree)
+and the day-28 comparison (compareMeasurements ← remeasure-results, both sides). Not yet passed by
+the AiAudit pooled view, the playbook, hookAudit, market-view, page-generator, action-plan or the
+stored `ai_audits.baseline` snapshot (aggregateRuns) — those still read the verdicts.
+
+**MCLocksmiths `50880751`, corrected: ChatGPT 38/60, Gemini 1/60, 39/120 = 33%** (was 32 / 2 /
+34 = 28%). Nine cells changed, all by the text: seven to NAMED (break-in Canterbury r3 was a false
+"named" → see below; the seven: house-lockout Canterbury ChatGPT — "**MCLocksmiths centre** 5.0" places
+card; Broadstairs ChatGPT — "* **MC Locksmiths** — advertises 24/7 Broadstairs coverage"; Faversham
+ChatGPT ×2 — "* **MC Locksmiths** — covers Faversham" and "* **MC Locksmiths / Morgan C.**"; Herne
+Bay ChatGPT — "* **MC Locksmiths** — covers all of Herne Bay (CT6) 24/7"; Dover ChatGPT — "* **MC
+Locksmiths** — independent Dover-area locksmith"; Ramsgate ChatGPT — "… and MC Locksmiths** as
+serving Ramsgate"), two to NOT NAMED (break-in Canterbury ChatGPT and auto-locksmith Canterbury
+Gemini: the model said named, the answer never mentions the business). Stored evidence unchanged
+(results checksum 6ac1520c… before and after); the `ai_audits.baseline` snapshot still carries the
+verdict-based 34 and was left alone.

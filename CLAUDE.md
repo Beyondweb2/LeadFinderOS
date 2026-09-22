@@ -353,8 +353,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The niche verdict is the ONLY market verdict** (top of Coverage; `market-view` `niche`, free).
   Coverage rows are `worked` / `leads` / `untouched`. **Opening a view never spends**; only buttons
   that price themselves on their face may.
-- **`named` reads `cellNamed()` everywhere** — model verdict, string-match fallback, one ruler per
-  comparison; the hand-check refusal lifts on a majority of model-read cells. Never zero on absence.
+- **`named` reads `cellNamed(cell, ctx)` everywhere** — with the business + trade/town the ANSWER
+  TEXT is the ruler (a verdict may not contradict it; a citation alone is never a naming; joined or
+  split spelling of one name is one name, never fuzzy), then the model verdict, then the stored
+  string flag; one ruler per comparison. No context → the verdicts, exactly as before. Never zero on
+  absence (`docs/reports.md` §33b; `named-text-primary.test.ts`).
   "Everywhere" includes the report's per-engine "Named in the answer" line (`recommended`), which
   ran its own string match until 2026-09-22 and disagreed with the summary above it
   (`docs/reports.md` §33; `named-one-ruler.test.ts` fences it). `cited` is a separate measure.
