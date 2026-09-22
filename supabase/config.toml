@@ -144,3 +144,22 @@ verify_jwt = false
 # the platform default is verify_jwt = TRUE and a function absent from this file deploys with it —
 # which would refuse every event silently (CLAUDE.md §8, the 2026-08-14 three-dead-paths incident).
 verify_jwt = false
+
+# ── CLIENT PERFORMANCE (2026-09-22, Phase 1) ─────────────────────────────────────────────────
+# Both entries land in the SAME COMMIT as the functions. A function absent from this file deploys
+# with the platform default verify_jwt = TRUE, which is how three internal call paths died
+# silently in August (§8) — so neither of these is left to chance.
+
+# client-performance: SPA-only caller carrying the operator's own JWT. Same shape as
+# paid-client-hub — the gateway checks the token is a JWT, then the handler does its own getUser()
+# and scopes every read on user_id. Two layers, and the inner one is the one that refuses.
+[functions.client-performance]
+verify_jwt = true
+
+# performance-sync: called by pg_cron through public.invoke_performance_sync(), which sends
+# CRON_SECRET in x-cron-secret. ⛔ verify_jwt MUST stay false. The service-role key has not been a
+# JWT since the ~2026-08-11 rotation, so a gateway JWT check would refuse the nightly sync outright
+# and the only symptom would be a Performance page that quietly stops updating. The handler's own
+# x-cron-secret check is the gate.
+[functions.performance-sync]
+verify_jwt = false

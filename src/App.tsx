@@ -29,6 +29,7 @@ const BaselinePage = lazy(() => import("./pages/Baseline"));
 const PaidBaselineSetup = lazy(() => import("./pages/PaidBaselineSetup"));
 const PaidClients = lazy(() => import("./pages/PaidClients"));
 const ClientHub = lazy(() => import("./pages/ClientHub"));
+const ClientPerformance = lazy(() => import("./pages/ClientPerformance"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
@@ -208,6 +209,11 @@ const App = () => {
               <Route path="/baseline-setup/:leadId" element={<PaidBaselineSetup />} />
               <Route path="/paid-clients" element={<PaidClients />} />
               <Route path="/paid-clients/:leadId" element={<ClientHub />} />
+              {/* Google Search performance. Its OWN route and therefore its own lazy chunk, not a
+              ninth card inside the hub: the hub makes one paid-client-hub call for eight fulfilment
+              stages, and a 90-day analytics read bolted onto it would be paid for on every visit to
+              every stage. Operator-only like the rest of this block. */}
+              <Route path="/paid-clients/:leadId/performance" element={<ClientPerformance />} />
               {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
               unproven markings are part of the document, so it is shown WITH them or not at all. */}
               <Route path="/compare/:auditId" element={<ComparePage />} />

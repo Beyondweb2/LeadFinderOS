@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertCircle, Clipboard, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, Clipboard, ExternalLink, FileCode2, FileText, LineChart, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
@@ -434,5 +434,11 @@ export default function ClientHub() {
     <Stage title="6. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
     <Stage title="7. Remeasure"><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <Button variant="outline" disabled>Runs automatically when due</Button>}</Stage>
     <Stage title="8. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
+    {/* 9. PERFORMANCE — A LINK ONLY, DELIBERATELY. The live tables open on their own route so this
+    hub keeps making exactly one paid-client-hub call for all nine stages; a 90-day analytics read
+    embedded here would be paid for on every visit to every other stage. Google Search performance
+    is also a separate measurement from everything above it and is never mixed into the AI
+    visibility figures. */}
+    <Stage title="9. Performance"><p>Google Search impressions, clicks and positions for this client's pages, synced daily from Search Console.</p><Button asChild variant="outline"><Link to={`/paid-clients/${lead.id}/performance`}><LineChart className="mr-1 h-4 w-4"/>Open performance</Link></Button></Stage>
   </div></div>;
 }

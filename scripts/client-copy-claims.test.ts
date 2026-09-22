@@ -104,6 +104,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["client delivery card (operator)", "src/components/dashboard/ClientDeliveryCard.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
+  ["client performance screen (operator)", "src/pages/ClientPerformance.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

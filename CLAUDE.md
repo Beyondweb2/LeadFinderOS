@@ -530,6 +530,19 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   wording mentions SMS. `no_whatsapp` = mobile with no WhatsApp.
 - **`generated_sites` is written by the live mockup product** — purge only barber rows, as
   service_role (the lock trigger refuses the postgres role and the Auth admin cascade).
+**Search performance (`docs/client-performance.md`)**
+- **`src/lib/searchPerformance.ts` is the ONE normaliser and the ONE place CTR and average position
+  are computed**, imported by the SPA and by both edge functions. A second copy means the
+  page↔traffic join matches nothing and every row reads "untracked". **CTR is
+  `sum(clicks)/sum(impressions)`; position is impression-weighted; no impressions is `null`, not 0.**
+  **Position improves when the number goes DOWN** — read `improved`, never the sign of `delta`.
+- **The SQL aggregates return sums only** (`clicks`, `impressions`, `Σ(position×impressions)`) —
+  never a rate, or the rule exists twice. **Coverage is `max(date)`, never `last_synced_at`**, and
+  there is no "data starts at verification" rule: Search Console can hold data from before a
+  property was verified. **Google's rows are folded onto the unique key before the upsert** or the
+  whole day's write dies on "ON CONFLICT DO UPDATE cannot affect row a second time".
+- **AI visibility and Google performance are never combined by any arithmetic.** Separate blocks,
+  separate screens, no blended score.
 - **`enrichment_usage` / `_shared/enrichment/*` are the audit engine and its spend cap**, not
   contact discovery. Do not delete with the enrichment product.
 
@@ -558,6 +571,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
 | Mockup product (live) | fn `mockup`, `_shared/mockup-*.ts`, `src/pages/Mockups.tsx`, `src/mockup/templates/`, table `generated_sites`, bucket `mockup-assets` |
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
+| Client performance (Search Console) | `src/lib/searchPerformance.ts` (the rules), fns `performance-sync` / `client-performance`, `_shared/google-search-console.ts`, `src/pages/ClientPerformance.tsx` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
 
 - Live operator app **`https://leadfinderos-next.pages.dev`** — ⚠️ **`leadfinderos.pages.dev` is a
@@ -650,6 +664,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The full open-problems record, incl. the WhatsApp cap model and the auth matrix | `docs/open-problems.md` (§8) |
 | The long code map, the playbook documents | `docs/code-map.md` (§9) |
 | The measured findings in detail | `docs/findings.md` (§5) |
+| The Performance section: Search Console sync, URL identity, the CTR/position rules | `docs/client-performance.md` |
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
