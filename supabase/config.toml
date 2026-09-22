@@ -106,6 +106,9 @@ verify_jwt = true
 [functions.paid-baseline]
 verify_jwt = true
 
+[functions.paid-client-hub]
+verify_jwt = true
+
 # mockup: SPA-only caller with the operator JWT; the handler does its own getUser + admin
 # check. Explicit entry, never a platform default (§8).
 # ⛔ true, MATCHING page-generator, AND THE REASON IS THE POINT OF HAVING TWO LAYERS: the outer

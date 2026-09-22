@@ -39,6 +39,7 @@ const SCORED_ENGINES = ["chatgpt", "gemini"] as const;
 
 /** Paid baseline shape, from the shared question-count policy. */
 import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
+import { START_IN_PROGRESS_SKIP, canClaimStart, startClaimFilter } from "../../../src/lib/paidBaselineState.ts";
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
@@ -488,7 +489,7 @@ export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): 
       .update({ baseline_status: "complete", updated_at: new Date().toISOString() })
       .eq("lead_id", audit.lead_id)
       .eq("status", "paid")
-      .in("baseline_status", ["running", "approved"]);
+      .in("baseline_status", ["running", "starting", "approved"]);
   } catch (e) {
     console.warn(`[baseline] could not mark onboarding complete for lead ${audit.lead_id}:`, e instanceof Error ? e.message : e);
   }
@@ -784,27 +785,45 @@ export async function startPaidBaseline(
   onboardingId: string,
   source: string,
 ): Promise<{ ok: boolean; audit_id?: string; skipped?: string; error?: string }> {
+  /* Declared OUTSIDE the try so the catch can release a claim this attempt took and then lost to
+     a throw (a catch cannot see what its try declared — scripts/edge-catch-scope.test.ts). */
+  let claimHeld = false;
+  const releaseClaim = async () => {
+    if (!claimHeld) return;
+    claimHeld = false;
+    await service.from("onboarding_responses")
+      .update({ baseline_status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", onboardingId).eq("baseline_status", "starting");
+  };
   try {
     const { data: row, error: rErr } = await service
       .from("onboarding_responses")
-      .select("id, lead_id, confirmed_location, services, services_list, areas_list, baseline_status, baseline_questions, baseline_approved_at")
+      .select("id, lead_id, confirmed_location, services, services_list, areas_list, baseline_status, baseline_questions, baseline_approved_at, updated_at")
       .eq("id", onboardingId).maybeSingle();
     if (rErr) return { ok: false, error: `onboarding read failed: ${rErr.message}` };
     if (!row) return { ok: false, error: "onboarding row not found" };
     const leadId = row.lead_id as string | null;
     if (!leadId) return { ok: false, skipped: "no_lead_id" };
 
-    /* Payment prepares the client; only an operator-approved question set may
-       start paid work. The webhook and queue backstop both reach this guard. */
+    /* Payment prepares the client; only an operator-approved question set may start paid work.
+       ⚠️ AND APPROVAL IS ENOUGH — every caller that reaches this line with an `approved` row WILL
+       try to start: the operator's Run button, the 30-second queue backstop and the Stripe
+       webhook alike. The claim below is what keeps that to exactly one baseline. */
     const baselineStatus = String((row as { baseline_status?: unknown }).baseline_status ?? "");
     const approvedQuestions = Array.isArray((row as { baseline_questions?: unknown }).baseline_questions)
       ? ((row as { baseline_questions: unknown[] }).baseline_questions)
         .filter((q): q is string => typeof q === "string")
         .map((q) => q.trim()).filter(Boolean)
       : [];
-    if (baselineStatus !== "approved" || approvedQuestions.length === 0) {
+    if (approvedQuestions.length === 0 || (baselineStatus !== "approved" && baselineStatus !== "starting")) {
       return { ok: true, skipped: baselineStatus === "needs_approval" || baselineStatus === "approved"
         ? "awaiting_operator_run" : "needs_baseline_questions" };
+    }
+    /* A fresh `starting` claim belongs to another caller that is mid-spend right now. Only a stale
+       one — the starter crashed between claim and outcome — may be reclaimed, and the conditional
+       update below decides that atomically; this read-side check only saves the lookups. */
+    if (baselineStatus === "starting" && !canClaimStart(row as { baseline_status?: unknown; updated_at?: unknown }, Date.now())) {
+      return { ok: true, skipped: START_IN_PROGRESS_SKIP };
     }
 
     /* Already has one? Nothing to do — this is what makes retries safe.
@@ -847,7 +866,15 @@ export async function startPaidBaseline(
     }
     if (eErr) return { ok: false, error: `audit lookup failed: ${eErr.message}` };
     const already = findPaidBaseline(existing);
-    if (already) return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
+    if (already) {
+      /* The audit exists but the row may not say so yet: a starter that crashed after
+         create-ai-audit answered leaves `starting` (or `approved`) behind. Repair it here,
+         conditionally, so a finished baseline's `complete` is never regressed to `running`. */
+      await service.from("onboarding_responses")
+        .update({ audit_id: already.id, baseline_status: "running", updated_at: new Date().toISOString() })
+        .eq("id", onboardingId).in("baseline_status", ["approved", "starting"]);
+      return { ok: true, audit_id: already.id, skipped: "already_has_baseline" };
+    }
     const ambiguous = findAmbiguousMultiRun(existing);
     if (ambiguous) {
       /* Recorded, not merely returned: the backstop calls this every tick and its return value is
@@ -969,6 +996,21 @@ export async function startPaidBaseline(
       ? ((row as { areas_list: unknown[] }).areas_list.filter((a): a is string => typeof a === "string"))
       : [];
 
+    /* ── THE CLAIM: approved → starting, for exactly one caller ─────────────────────────────────
+       🔴 Every check above is a READ, and three callers (operator Run, the 30-second backstop, the
+       Stripe webhook) can all pass them inside the same second and each call create-ai-audit — the
+       findPaidBaseline guard only sees an audit that already exists. This conditional update is the
+       one write that only one of them can win: approved (or a stale `starting` left by a crashed
+       starter, START_CLAIM_STALE_MS) → starting. The losers return start_in_progress and the screen
+       shows "Starting baseline" until the winner writes `running`. Released back to `approved` on
+       every failure path below, so a refusal never strands the row. */
+    const { data: claimed, error: claimErr } = await service.from("onboarding_responses")
+      .update({ baseline_status: "starting", updated_at: new Date().toISOString() })
+      .eq("id", onboardingId).or(startClaimFilter(Date.now())).select("id").maybeSingle();
+    if (claimErr) return { ok: false, error: `start claim failed: ${claimErr.message}` };
+    if (!claimed) return { ok: true, skipped: START_IN_PROGRESS_SKIP };
+    claimHeld = true;
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const res = await fetch(`${supabaseUrl}/functions/v1/create-ai-audit`, {
       method: "POST",
@@ -1001,6 +1043,7 @@ export async function startPaidBaseline(
     if (!res.ok || !out?.ok || !out?.audit_id) {
       const why = typeof out?.error === "string" ? out.error : body.slice(0, 200);
       console.error(`[baseline] start failed for onboarding ${onboardingId} (${source}): ${res.status} ${why}`);
+      await releaseClaim();
       return { ok: false, error: `create-ai-audit refused: ${why}` };
     }
     console.log(`[baseline] started paid baseline ${out.audit_id} for onboarding ${onboardingId} (${source})`);
@@ -1047,6 +1090,9 @@ export async function startPaidBaseline(
       console.warn(`[baseline] contract write threw (non-blocking):`, e instanceof Error ? e.message : e);
     }
 
+    /* The claim is resolved by this write, not released: the audit exists, so the row goes forward
+       to `running`, never back to `approved`. */
+    claimHeld = false;
     await service.from("onboarding_responses")
       .update({ audit_id: out.audit_id, baseline_status: "running", updated_at: new Date().toISOString() })
       .eq("id", onboardingId);
@@ -1054,6 +1100,7 @@ export async function startPaidBaseline(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[baseline] start threw for onboarding ${onboardingId} (${source}):`, msg);
+    try { await releaseClaim(); } catch { /* a stale claim is reclaimable after START_CLAIM_STALE_MS */ }
     return { ok: false, error: `threw: ${msg}` };
   }
 }

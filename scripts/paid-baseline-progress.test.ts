@@ -23,7 +23,9 @@ const checks: Array<[string, boolean]> = [
   ['partial persisted progress is accurate', firstLoad[1].queue_complete === 8 && firstLoad[1].queue_total === 20],
   ['missing third run renders waiting', formatBaselineProgress(firstLoad, 3) === expected],
   ['closing and returning reconstructs identical state', formatBaselineProgress(afterReturn, 3) === expected],
-  ['ClientHub formats server-persisted runs rather than modal state', hub.includes('formatBaselineProgress(runs, 3)') && !hub.includes('setInterval(')],
+  /* 2026-09-22: the hub owns ONE read-only poller (HUB_POLL_MS) while the baseline is starting or
+     running; the dialog still holds no run state of its own. */
+  ['ClientHub formats server-persisted runs rather than modal state', hub.includes('formatBaselineProgress(runs, BASELINE_RUNS)') && hub.split('setInterval(').length === 2 && hub.includes('void refresh();')],
 ];
 
 let failures = 0;

@@ -78,7 +78,9 @@ check('remeasure plans and accepts only the exact frozen array', replay.ok && ve
 
 const root = resolve(import.meta.dirname, '..');
 const hub = readFileSync(resolve(root, 'src/pages/ClientHub.tsx'), 'utf8');
-check('production ClientHub uses save → approve → run sequence', hub.includes("act('save', { questions: qs })") && hub.includes("act('approve', { questions: qs })") && hub.includes("act('run')"));
+/* Since 2026-09-22 the chain is approve → run through the shared controller (paidBaselineFlow.ts):
+   approve freezes exactly what it is sent, so the extra save was a third round trip for nothing. */
+check('production ClientHub uses the approve → run controller', hub.includes('approveAndStart(invoke, cleanAuditQuestions(questions), onStep)') && hub.includes('startApproved(invoke, current, onStep)'));
 
 let failures = 0;
 for (const [label, ok] of checks) { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); if (!ok) failures++; }

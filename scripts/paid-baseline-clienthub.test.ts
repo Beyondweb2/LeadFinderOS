@@ -40,13 +40,14 @@ const checks: Array<[string, boolean]> = [
   ['load path does not invoke a provider', !edge.slice(0, edge.indexOf('if (action === "generate")')).includes('/functions/v1/create-ai-audit')],
   ['unexpected server failures return a safe actionable code', edge.includes('baseline_request_failed') && helper.includes("baseline_request_failed: 'Could not load or update baseline setup. Please retry.'")],
   ['paid baseline prefers run crawl with lead cache fallback', edge.includes('ai_audit_runs') && edge.includes('lead_crawl_checks') && edge.includes('selectClientCrawlContext')],
-  ['normal audit and paid baseline share the preview request builder', edge.includes('buildAuditPreviewRequest') && hub.includes('areas_list: data.areas_list') && readFileSync(resolve(root, 'src/pages/AiAudit.tsx'), 'utf8').includes('buildAuditPreviewRequest')],
+  ['normal audit and paid baseline share the preview request builder', edge.includes('buildAuditPreviewRequest') && hub.includes('areas_list: b.areas_list') && readFileSync(resolve(root, 'src/pages/AiAudit.tsx'), 'utf8').includes('buildAuditPreviewRequest')],
   ['multi-area generation request uses the supported service_areas field', JSON.stringify(multiAreaRequest).includes('"service_areas":["Canterbury","Whitstable","Herne Bay","Faversham","Ashford"]') && !/\bareas:\s*contextAreas/.test(edge)],
   ['multiple services are preserved and deduplicated', multiAreaRequest.specialisms === 'Emergency entry, Lock changes'],
   ['blank optional services do not block preview request construction', blankServicesRequest.specialisms === '' && blankServicesRequest.business_type === 'Locksmiths'],
   ['service-area prompt explicitly prevents town-swap duplication', serviceAreaQuestionDirective('Canterbury', multiAreaRequest.service_areas).includes('Do not repeat the same intent for every area')],
   ['blank services do not block context save', edge.includes('location_and_business_type_required') && !edge.includes('if (!location || !services || !businessType)')],
-  ['approve and run actions remain the existing sequence', hub.includes("act('save'") && hub.includes("act('approve'") && hub.includes("act('run'")],
+  /* 2026-09-22: save stays a button; approve → run is the shared controller (paidBaselineFlow.ts). */
+  ['approve and run remain one ordered chain through the shared controller', hub.includes("act('save', 'save'") && hub.includes('approveAndStart(') && hub.includes('startApproved(')],
 ];
 
 let failures = 0;

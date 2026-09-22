@@ -57,7 +57,10 @@ Deno.serve(async (req) => {
       if (auditId) {
         const [a, r] = await Promise.all([
           service.from("ai_audits").select("id,baseline_completed_at,short_code,created_at").eq("id", auditId).maybeSingle(),
-          service.from("ai_audit_runs").select("id,run_number,status,created_at,completed_at").eq("audit_id", auditId).order("run_number"),
+          /* ⚠️ ai_audit_runs has NO completed_at column (read back 2026-09-22). Selecting it made
+             PostgREST refuse the whole query, r.data came back undefined, and the hub showed
+             "Run 1: waiting · Run 2: waiting · Run 3: waiting" for every running baseline. */
+          service.from("ai_audit_runs").select("id,run_number,status,created_at").eq("audit_id", auditId).order("run_number"),
         ]);
         audit = a.data; runs = (r.data ?? []) as Array<Record<string, unknown>>;
         const ids = runs.map((run) => String(run.id)).filter(Boolean);

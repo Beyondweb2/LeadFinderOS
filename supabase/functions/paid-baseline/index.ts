@@ -3,8 +3,13 @@ import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 import { mergeClientContext, selectClientCrawlContext } from "../../../src/lib/clientContext.ts";
+import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 import {
   EDITABLE_BASELINE_STATUS_FILTER,
+  START_IN_PROGRESS_SKIP,
+  describeStartSkip,
+  isFrozenBaselineStatus,
+  isStartedBaselineStatus,
   normalizePaidBaselineStatus,
   paidBaselineRunState,
   requireUpdatedRow,
@@ -29,6 +34,40 @@ function cleanQuestions(value: unknown): string[] {
 function cleanList(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return [...new Set(raw.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
+}
+
+const MISSING_FIELD_LABEL: Record<string, string> = {
+  confirmed_location: "a confirmed primary location",
+  services: "at least one service",
+};
+
+/**
+ * The same gate startPaidBaseline applies before it will spend, asked at APPROVAL so the operator
+ * hears it while the context is still editable. Without this, approve succeeded and run was
+ * silently deferred ("awaiting_questionnaire_2 (services)") — the row sat at `approved` for ever
+ * and the screen showed the frozen questions with nothing to do (MCLocksmiths, 2026-09-22).
+ * ⚠️ Reads the ONBOARDING ROW, not the merged context: the engine reads the row.
+ */
+function contextRefusal(
+  row: { confirmed_location?: unknown; services?: unknown; services_list?: unknown },
+  details: { business_type: string; location: string },
+): { error: string; detail: string } | null {
+  const missing = missingQuestionnaireFields({
+    confirmed_location: typeof row.confirmed_location === "string" ? row.confirmed_location : null,
+    services: typeof row.services === "string" ? row.services : null,
+    services_list: row.services_list,
+  });
+  if (missing.length) {
+    const named = missing.map((f) => MISSING_FIELD_LABEL[f] ?? f).join(" and ");
+    return {
+      error: "baseline_context_incomplete",
+      detail: `The baseline records ${named} it is measured on, and the client record has none saved. `
+        + `Fill it in section A and press Save client context, then approve.`,
+    };
+  }
+  if (!details.business_type) return { error: "no_business_type", detail: "Add a business category in section A and save it before approving." };
+  if (!details.location) return { error: "no_location", detail: "Add a primary location in section A and save it before approving." };
+  return null;
 }
 
 async function operator(req: Request) {
@@ -56,7 +95,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -78,6 +117,13 @@ Deno.serve(async (req) => {
     const { data: recentRuns } = auditIds.length
       ? await service.from("ai_audit_runs").select("results, created_at").in("audit_id", auditIds).order("created_at", { ascending: false }).limit(10)
       : { data: [] };
+    /* PRIOR DISCOVERY CONTEXT — the business facts the operator typed into the newest Discovery
+       scan of this lead, reused so they are not typed twice. ⛔ ITS QUESTIONS ARE NEVER READ:
+       Discovery is separate research and the baseline set is approved on its own (section C). */
+    const { data: discoveryAudit } = await service.from("ai_audits")
+      .select("id, created_at, business_type, location_text, website, specialism")
+      .eq("lead_id", row.lead_id).eq("audit_purpose", "discovery")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
     const selectedCrawl = selectClientCrawlContext({
       runCrawls: (recentRuns ?? []).map((run: { results?: { crawl_check?: unknown }; created_at?: string }) => ({ result: run.results?.crawl_check, created_at: run.created_at })),
       leadCrawl: crawlRow as Record<string, unknown> | null,
@@ -87,6 +133,7 @@ Deno.serve(async (req) => {
     const merged = mergeClientContext({
       onboarding: { confirmed_location: row.confirmed_location, services: row.services, services_list: row.services_list, areas_list: row.areas_list, areas_wanted: row.areas_wanted },
       lead: lead as Record<string, unknown>,
+      discovery: discoveryAudit as Record<string, unknown> | null,
       crawl: crawlInfo,
     });
     const status = normalizePaidBaselineStatus(row.baseline_status);
@@ -98,16 +145,23 @@ Deno.serve(async (req) => {
       context_sources: { service_sources: merged.service_sources, area_sources: merged.area_sources },
       crawl_context_at: selectedCrawl?.created_at ?? null,
       crawl_context_source: selectedCrawl?.source ?? null,
+      discovery_context: discoveryAudit?.id ? { audit_id: String(discoveryAudit.id), created_at: (discoveryAudit.created_at as string | null) ?? null } : null,
       status, questions, approved_at: row.baseline_approved_at || null,
+      ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
     };
     if (action === "get") return json({ ok: true, baseline: details });
 
     if (["generate", "save", "approve", "run", "save_context"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
-    if (["running", "complete"].includes(status)) return json({ ok: true, baseline: details, skipped: "already_started" });
+    /* starting / running / complete: the measurement has begun (or is being claimed by another
+       starter this second). Every mutation answers with the row as it is — including `run`, so the
+       screen that lost the claim shows "Starting baseline" and polls, never a second start. */
+    if (isStartedBaselineStatus(status)) return json({ ok: true, baseline: details, skipped: "already_started" });
 
     /* Context is saved on the same lead/onboarding pair the baseline already reads. This is only
        an operator convenience for incomplete manual/onboarding records; it never creates a second
-       audit profile and is locked once the measurement has begun. */
+       audit profile and is locked once the measurement has begun. It stays OPEN while the row is
+       `approved`: the questions are frozen, the context is not, and a row approved without services
+       needs exactly this edit to become startable. */
     if (action === "save_context") {
       const location = typeof body.location === "string" ? body.location.trim() : String(details.location ?? "").trim();
       const services = typeof body.services === "string" ? body.services.trim() : String(details.services ?? "").trim();
@@ -132,6 +186,7 @@ Deno.serve(async (req) => {
 
     let next = questions;
     if (action === "generate") {
+      if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       if (next.length === 0 || body.force === true) {
         const contextLocation = typeof body.location === "string" ? body.location.trim() : details.location;
         const contextServices = typeof body.services === "string" ? body.services.trim() : details.services;
@@ -175,7 +230,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save") {
-      if (["approved", "running", "complete"].includes(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
+      if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       next = cleanQuestions(body.questions);
       if (next.length === 0 || next.length > 40) return json({ ok: false, error: "questions_must_be_between_1_and_40" }, 400);
       const { data: updated, error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
@@ -185,6 +240,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "approve") {
+      if (status === "approved") return json({ ok: true, baseline: details, skipped: "already_approved" });
       next = cleanQuestions(body.questions);
       if (next.length === 0) return json({ ok: false, error: "questions_required" }, 400);
       /* ⛔ APPROVAL IS WHERE THE METHODOLOGY IS ENFORCED, BECAUSE APPROVAL IS WHAT FREEZES.
@@ -205,6 +261,11 @@ Deno.serve(async (req) => {
             + `frozen and replayed verbatim at day 28.`,
         }, 400);
       }
+      /* The engine's own start gate, asked here while the answer can still be given. An approved
+         row that cannot start is a dead end the operator cannot see; a refused approval is a
+         sentence pointing at the field. */
+      const refusal = contextRefusal(row, details);
+      if (refusal) return json({ ok: false, ...refusal }, 422);
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "approved", baseline_approved_at: new Date().toISOString(), baseline_approved_by: user.id, updated_at: new Date().toISOString(),
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
@@ -213,12 +274,24 @@ Deno.serve(async (req) => {
       return json({ ok: true, baseline: { ...details, status: "approved", questions: next } });
     }
 
-    // Run only after the approved state is persisted. startPaidBaseline remains the shared
-    // idempotent creator used by the webhook/backstop, but its approval guard blocks those callers.
+    /* RUN. startPaidBaseline is the one starter for every caller (operator, backstop, webhook); it
+       claims approved → starting atomically, creates the audit, and writes running. A skip is a
+       refusal here — the operator has just pressed Run — so it comes back as an error sentence,
+       never as "approved but waiting". The row is never marked failed: the approved set is still
+       right, and the engine has already released its claim back to `approved`. */
+    if (status !== "approved") {
+      return json({ ok: false, error: "baseline_start_refused", detail: describeStartSkip("awaiting_operator_run") }, 409);
+    }
     const started = await startPaidBaseline(service, String(row.id), "operator");
     if (!started.ok) {
-      await service.from("onboarding_responses").update({ baseline_status: "failed", updated_at: new Date().toISOString() }).eq("id", row.id);
-      return json({ ok: false, error: started.error || started.skipped || "baseline_start_failed" }, 502);
+      const why = started.error || started.skipped || "baseline_start_failed";
+      return json({
+        ok: false, error: "baseline_start_failed",
+        detail: `The baseline did not start: ${why}. The approved questions are kept — fix the cause and press Start again.`,
+      }, 502);
+    }
+    if (started.skipped && !started.audit_id && started.skipped !== START_IN_PROGRESS_SKIP) {
+      return json({ ok: false, error: "baseline_start_refused", detail: describeStartSkip(started.skipped) }, 409);
     }
     const runState = paidBaselineRunState(started);
     return json({ ok: true, baseline: { ...details, ...runState }, skipped: started.skipped || null });
