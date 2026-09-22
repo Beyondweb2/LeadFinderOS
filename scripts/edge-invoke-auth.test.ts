@@ -11,7 +11,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EdgeAuthError, EdgeFunctionError, createEdgeInvoker, type EdgeInvokerDeps } from '../src/lib/edgeInvokeCore';
+import { EdgeAuthError, EdgeFunctionError, createEdgeInvoker, edgeErrorMessage, type EdgeInvokerDeps } from '../src/lib/edgeInvokeCore';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -110,6 +110,21 @@ async function main() {
     check('5. the page waits for auth before fetching', paidClients.includes("const { user, isLoading: authLoading } = useAuth();") && paidClients.includes('if (!authLoading && user?.id) void load();') && paidClients.includes('if (!user?.id) return;'));
     check('5. every paid-client caller goes through the invoker', paidClients.includes("invokeEdge<T>('paid-client-hub', body)") && hub.includes("invokeEdge<Record<string, any>>('paid-client-hub', body)") && helper.includes("invokeEdge<{ baseline: PaidBaseline }>('paid-baseline'") && submissions.includes("invokeEdge<{ rows?: SubmissionRow[] }>('submissions'"));
     check('5. no page calls supabase.functions.invoke for these functions directly any more', !paidClients.includes('supabase.functions.invoke') && !hub.includes('supabase.functions.invoke') && !submissions.includes('supabase.functions.invoke') && !helper.includes('supabase.functions.invoke'));
+  }
+  // 503 from the function (auth service or database not answering) is transient: no retry loop, no sign-out.
+  {
+    const h = harness({ sessions: [{ access_token: 't' }], responses: [http(503, { ok: false, error: 'auth_unavailable', detail: 'The sign-in service did not answer in time. You are still signed in — try again in a moment.' })] });
+    let err: unknown = null;
+    try { await h.invoke('paid-client-hub', { action: 'get' }); } catch (e) { err = e; }
+    check('503. an unavailable auth service is a function error with its sentence, not a sign-out', err instanceof EdgeFunctionError && err.status === 503 && err.code === 'auth_unavailable' && h.signedOut() === 0 && h.refreshCalls() === 0 && h.calls.length === 1);
+    const t = harness({ sessions: [{ access_token: 't' }], responses: [http(503, { ok: false, error: 'upstream_timeout', detail: 'The database did not answer in time. Nothing was changed — try again in a moment.' })] });
+    let tErr: unknown = null;
+    try { await t.invoke('paid-client-hub', { action: 'list' }); } catch (e) { tErr = e; }
+    check('503. a database timeout surfaces its sentence after exactly one request', tErr instanceof EdgeFunctionError && tErr.detail.startsWith('The database did not answer') && t.calls.length === 1);
+    const bare = harness({ sessions: [{ access_token: 't' }], responses: [http(500, { ok: false, error: 'server_error' })] });
+    let bareErr: unknown = null;
+    try { await bare.invoke('paid-client-hub', { action: 'get' }); } catch (e) { bareErr = e; }
+    check('500. a bare server_error is never shown raw', bareErr instanceof EdgeFunctionError && edgeErrorMessage(bareErr) === 'The server could not complete this request. Try again.' && !edgeErrorMessage(bareErr).startsWith('server_error'));
   }
   // 6 (spinner). The remaining full-width loader on Paid Clients is the primary accent.
   {
