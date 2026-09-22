@@ -26,10 +26,11 @@ try { requireUpdatedRow(null, 'baseline_state_changed'); } catch (error) { zeroR
 
 const checks: Array<[string, boolean]> = [
   ['both entry points use the shared paid-baseline helper', hub.includes('invokePaidBaseline') && setup.includes('invokePaidBaseline')],
-  ['ClientHub uses the same action/lead_id request shape', helper.includes('body: { action, lead_id: leadId, ...extra }')],
+  ['ClientHub uses the same action/lead_id request shape', helper.includes('{ action, lead_id: leadId, ...extra }')],
   ['generate does not force save_context first', !hub.includes("if (!data || !(await saveContext()))") && hub.includes("act('generate'")],
   ['optional blank services do not block generation', !hub.includes("if (!data || !(await saveContext()))")],
-  ['server error response is surfaced when available', helper.includes('context.clone().json()') && helper.includes('payload?.error')],
+  /* 2026-09-22: body parsing lives in the shared invoker (src/lib/edgeInvoke.ts); the helper maps its code. */
+  ['server error response is surfaced when available', readFileSync(resolve(root, 'src/lib/edgeInvokeCore.ts'), 'utf8').includes('clone().json()') && helper.includes('e.detail || (e.code && (FRIENDLY_ERRORS[e.code] ?? e.code))')],
   ['server validation codes become actionable operator text', helper.includes('FRIENDLY_ERRORS') && helper.includes('Add a location, service, and business category')],
   ['question-generation failures are safe and retryable', helper.includes('question_generation_failed') && helper.includes('Question generation failed. Please retry.')],
   ['lead load never queries the nonexistent areas_wanted column', !!leadSelect && !leadSelect.includes('areas_wanted')],

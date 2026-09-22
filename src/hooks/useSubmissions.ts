@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { EdgeAuthError, invokeEdge } from '@/lib/edgeInvoke';
 import { useAuth } from '@/hooks/useAuth';
 import { questionnaireComplete } from '@/lib/questionnaireComplete';
 
@@ -128,12 +128,15 @@ export function useSubmissions(limit = 25) {
       /* ⛔ THROUGH THE ENDPOINT, NOT .from('onboarding_responses'). The table has RLS enabled with
          NO policies, so a direct read returns 200 with [] — a card that silently claims nobody has
          ever filled the form in. See the endpoint's own header. */
-      const { data: res, error: e } = await supabase.functions.invoke('submissions', { body: { limit } });
-      if (e) throw new Error(e.message);
-      if (!res?.ok) throw new Error(res?.error ?? 'could not load submissions');
+      /* Through invokeEdge: a real session first, explicit Authorization, one refresh-and-retry
+         on 401, never the anon key (src/lib/edgeInvoke.ts). */
+      const res = await invokeEdge<{ rows?: SubmissionRow[] }>('submissions', { limit });
       return (res.rows ?? []) as SubmissionRow[];
     },
     enabled: !!user?.id,
+    /* ⛔ NO 401 LOOP. A session that could not be established or was refused is not a query
+       that will pass on the next tick; retrying it is the repeated-401 the console showed. */
+    retry: (count, e) => !(e instanceof EdgeAuthError) && count < 1,
   });
 
   const rows = useMemo(() => data ?? [], [data]);
@@ -157,11 +160,7 @@ export function useSubmissions(limit = 25) {
      buttons leave it false so the server skips paid rows. Returns the server's counts so the
      card can report what was kept. Refetches on success. */
   const deleteRows = async (ids: string[], allowPaid = false): Promise<{ deleted: number; skippedPaid: number }> => {
-    const { data: res, error: e } = await supabase.functions.invoke('submissions', {
-      body: { action: 'delete', ids, allow_paid: allowPaid },
-    });
-    if (e) throw new Error(e.message);
-    if (!res?.ok) throw new Error(res?.error ?? 'delete failed');
+    const res = await invokeEdge<{ deleted?: unknown; skipped_paid?: unknown }>('submissions', { action: 'delete', ids, allow_paid: allowPaid });
     await refetch();
     return { deleted: Number(res.deleted) || 0, skippedPaid: Number(res.skipped_paid) || 0 };
   };

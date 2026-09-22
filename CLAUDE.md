@@ -259,6 +259,12 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   mutation chain inside that dialog runs on detached and its errors reach nobody. Refresh in place;
   never toggle the first-load spinner for a re-read. Chains go in a pure controller behind a
   single-flight guard (`paidBaselineFlow.ts`).
+- 🔴 **`supabase.functions.invoke` sends the ANON KEY when `getSession()` has no token** — an expired
+  access token whose refresh failed retryably keeps the session, fires no SIGNED_OUT and answers
+  `session: null`; the gateway accepts the anon JWT and the handler 401s while React still shows the
+  operator signed in. Protected calls go through `invokeEdge` (`src/lib/edgeInvoke.ts`): session
+  first, explicit bearer, one refresh-and-retry, genuine 401 → local sign-out. A failed load is an
+  error state with retry, never an empty list (`docs/paid-baseline-flow.md`).
 - **A conditionally-shown question owns its answer's LIFETIME** — hiding a field is not clearing it,
   and clearing state is not the same as not SENDING it (derive the payload from the show condition).
 - **Cutting question count saves money, not time** — questions run in parallel; the wall clock is one
