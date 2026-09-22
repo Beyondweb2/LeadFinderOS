@@ -1099,7 +1099,21 @@ export function renderReportHtml(d: AiAuditReportData): string {
     <div class="pv-split"></div>`;
   })();
 
-  const qOther = (d.questionBreakdown ?? []).filter((q) => !gp || q.question !== gp.question);
+  /* 🔴 THE EXCLUSION EXISTS TO STOP A REPEAT, SO IT ONLY APPLIES WHERE THERE IS ONE.
+     On a prospect report the chat card prints one question in full and the table then leaves it out
+     so nothing reads twice — correct, and all the questions are still on the page: the table plus
+     the card. The PAID branch renders no chat card, and for its first two days it kept filtering
+     anyway, so the chosen question appeared NOWHERE. MCLocksmiths' client report showed 19 rows for
+     a 20-question frozen baseline (found 2026-09-22 on the live document).
+     ⛔ AND THE VICTIM WAS ARBITRARY, which is what made it hard to see. pickGutPunch reads the queue
+     rows in the order they arrive, and all 60 of MCL's rows carry just 3 distinct created_at values
+     (20 tied per run). Postgres returns ties in whatever order it likes, so the dropped question
+     changed between renders of the same report — three reproductions gave three different victims.
+     ⚠️ A paid report shows every question in questionBreakdown, always. The count a client can check
+     against their own frozen set is the one thing this table exists to be. */
+  const qOther = d.paidSummary
+    ? (d.questionBreakdown ?? [])
+    : (d.questionBreakdown ?? []).filter((q) => !gp || q.question !== gp.question);
   const engNamed = (q: NonNullable<typeof d.questionBreakdown>[number], label: string): boolean | null => {
     const e = q.perEngine?.find((pe) => pe.label === label);
     if (!e || !e.ran) return null;
