@@ -563,15 +563,27 @@ somebody guessing. The supported register is "can make it harder", "may mean", "
 information to work with". The test carries a blocklist of both scanner phrasing **and** absolute
 AI-decision claims, run over every candidate string rather than the two a single seed happens to pick.
 
-⛔ **No finding opens with a transition or a bare number.** Any of them can be first, so "the other
-thing that stood out" belongs to the joiner; and "68 characters" as the first thing a person reads is
-a scanner talking, so the measurement earns its place mid-sentence after the plain-English point.
+⛔ **The opener belongs to the joiner and is chosen by position.** A finding is stored as
+`clause` + `rest`, where the clause follows an opener ending in "is" — so the same finding reads
+*"One thing that stood out is the homepage is very thin…"* first and *"The other thing I noticed is
+the homepage is very thin…"* second, with nothing rewritten and nothing doubled. **No opener is
+"I had a look…"**: the template's own fixed line directly above {{6}} already says *"Had a proper
+look at your site as well"*, and a finding repeating it reads like the message lost its place.
+
+⛔ **No measurement reaches the message — not one digit.** *"91% the same"*, *"under 120 words"*,
+*"69 characters"* are all real and all scanner. A tradesperson does not know whether 120 words is a
+lot, and a precise figure invites an argument about the figure instead of a conversation about the
+site. The numbers stay where they are useful and checkable: the crawl signals, and the report's own
+fault section, which is written for somebody sitting down to read it. **No bot names either** —
+"OAI-SearchBot" means nothing to a locksmith; singular/plural still carries the real shape of what
+was found. **And no comparison with Google**: we never fetch the site as Googlebot, so *"as reliably
+as Google can"* was a comparison against a measurement we do not hold.
 
 ⚠️ **Two findings is the normal message.** A third is held to `COMFORTABLE_THREE_CHARS = 720`, well
-under the hard cap, and the weakest is **dropped** rather than the wording compressed. Each finding
-is a three-clause explanation of ~230–320 characters, so with the current wording three never clears
-that bar — every shipped message is one or two findings, and `MAX_SITE_FINDINGS` is the structural
-ceiling rather than a target. Shorten the wording and three becomes reachable with no code change.
+under the hard cap, and the weakest is **dropped** rather than the wording compressed. Taking the
+measurements out brought each finding down to ~200–255 characters, so the three shortest now do fit
+where they did not before; a site whose findings include the longest one (the homepage) still ships
+two. Both sides are driven in the test rather than described.
 
 ⛔ **Only four of the six signals are eligible**: `searchBlocked`, `clientRendered`, `duplicates`,
 `thinPages`. `missingH1` and `noJsonLd` are excluded — they are real, they belong in the report, and

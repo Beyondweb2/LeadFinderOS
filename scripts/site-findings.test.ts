@@ -64,9 +64,13 @@ const fresh = (signals: CrawlSignals) => ({ result: { version: CRAWL_CHECK_VERSI
 
 /* The transitions the joiner may use. Declared ONCE so "did a transition appear" and "how many
    findings are in here" cannot drift apart from each other or from the module. */
-const SECOND_TRANSITION_RE = /There's another thing too\.|I also noticed this\.|The other thing that stood out is this\./;
-const THIRD_TRANSITION_RE = /There's one more thing as well\.|One last thing I spotted\.|And there's this too\./;
-const countFindings = (v) => 1 + (SECOND_TRANSITION_RE.test(v) ? 1 : 0) + (THIRD_TRANSITION_RE.test(v) ? 1 : 0);
+const FIRST_OPENER_RE = /One thing that stood out is|One thing I noticed is|The main thing that stood out is/;
+const SECOND_TRANSITION_RE = /The other thing I noticed is|The other thing that stood out is|Another thing I noticed is/;
+const THIRD_TRANSITION_RE = /One last thing I spotted is|And the other thing is|The last thing I noticed is/;
+const countFindings = (v: string) => 1 + (SECOND_TRANSITION_RE.test(v) ? 1 : 0) + (THIRD_TRANSITION_RE.test(v) ? 1 : 0);
+/* A finding is stored as clause + rest so the OPENER can be chosen by position. Everything that
+   scans "a finding" scans the sentence it actually becomes. */
+const sentenceOf = (f: { clause: string; rest: string }) => f.clause + '. ' + f.rest;
 
 console.log('── 1. THE NAME AND THE SWITCH ──');
 ok(AI_SITE_FINDINGS_V2 === NAME, 'the constant is the Meta-registered name, exactly');
@@ -182,10 +186,10 @@ for (const seed of ['a', 'b', 'c', 'd', 'e']) {
 }
 /* Every candidate string, not just the two or three that get chosen for one seed. */
 for (const c of candidateFindings(ALL)) {
-  const hit = SCANNER.find((re) => re.test(c.text));
+  const hit = SCANNER.find((re) => re.test(sentenceOf(c)));
   ok(!hit, `${c.kind}: no scanner phrasing${hit ? ` — matched ${hit}` : ''}`);
-  ok(/\.\s/.test(c.text.trim()) || c.text.trim().split('. ').length > 1,
-    `${c.kind}: more than one sentence — what I found, what it means, why it matters`);
+  ok(sentenceOf(c).trim().split('. ').length > 1,
+    `${c.kind}: more than one sentence — what I saw, what it means, why it may matter`);
 }
 
 console.log('── …and NO CLAIM ABOUT HOW AI DECIDES, because we cannot see that ──');
@@ -210,11 +214,11 @@ const UNSUPPORTED = [
   [/\bblank page\b/i, 'describes what a model sees rather than what we measured'],
 ] as const;
 for (const c of candidateFindings(ALL)) {
-  const hit = UNSUPPORTED.find(([re]) => re.test(c.text));
+  const hit = UNSUPPORTED.find(([re]) => re.test(sentenceOf(c)));
   ok(!hit, `${c.kind}: no unsupported AI-decision claim${hit ? ` — ${hit[1]} (${hit[0]})` : ''}`);
 }
 for (const c of candidateFindings(only({ thinPages: 1, searchBlocked: ['OAI-SearchBot'] }))) {
-  const hit = UNSUPPORTED.find(([re]) => re.test(c.text));
+  const hit = UNSUPPORTED.find(([re]) => re.test(sentenceOf(c)));
   ok(!hit, `${c.kind} (singular): no unsupported AI-decision claim${hit ? ` — ${hit[1]}` : ''}`);
 }
 for (const seed of ['a', 'b', 'c', 'd']) {
@@ -228,17 +232,65 @@ console.log('── …and every finding HEDGES its third clause ──');
    actually supports, and also what a careful person sounds like. */
 const HEDGES = /\b(may|can|might|could)\b|less information|less clear|harder/i;
 for (const c of candidateFindings(ALL)) {
-  ok(HEDGES.test(c.text), `${c.kind}: hedged rather than absolute`);
+  ok(HEDGES.test(sentenceOf(c)), `${c.kind}: hedged rather than absolute`);
 }
 
-console.log('── …and no finding opens with a transition or a bare number ──');
+console.log('── …and the OPENER belongs to the joiner, never to a finding ──');
 for (const c of candidateFindings(ALL)) {
-  /* Any finding can be FIRST, so a transition belongs to the joiner, never to the text. */
-  ok(!/^(There's another|I also noticed|The other thing|One last|And there)/.test(c.text),
-    `${c.kind}: does not open with a transition`);
-  /* ⛔ A bare number as the first thing a person reads is a scanner talking. */
-  ok(!/^d/.test(c.text.trim()), `${c.kind}: does not open with a number`);
+  /* A finding can be first or second, so one that brought its own opener would double up when it
+     moved: "The other thing I noticed is One thing that stood out is …". */
+  ok(!FIRST_OPENER_RE.test(c.clause) && !SECOND_TRANSITION_RE.test(c.clause) && !THIRD_TRANSITION_RE.test(c.clause),
+    `${c.kind}: the clause carries no opener of its own`);
+  /* ⛔ THE TEMPLATE'S OWN FIXED LINE DIRECTLY ABOVE {{6}} IS "Had a proper look at your site as
+     well". A finding that opens by saying it again reads like the message lost its place — and the
+     first version of this generator opened exactly that way. */
+  ok(!/had a (proper )?look/i.test(c.clause), `${c.kind}: does not repeat the template's own "had a look" line`);
+  /* The clause follows an opener ending in "is", so it is a fragment, not a sentence. */
+  ok(/^[a-z]/.test(c.clause), `${c.kind}: the clause is lower case — it continues the opener`);
+  ok(!c.clause.trim().endsWith('.'), `${c.kind}: the clause carries no full stop of its own`);
 }
+for (const seed of ['a', 'b', 'c', 'd', 'e']) {
+  const v = buildSiteFindings(ALL, { seed }) ?? '';
+  ok(FIRST_OPENER_RE.test(v.slice(0, 40)), `seed "${seed}": the message opens with a natural opener`);
+  ok(!/had a (proper )?look/i.test(v), `seed "${seed}": never repeats "had a look"`);
+}
+
+console.log('── …and NO MEASUREMENT REACHES THE MESSAGE ──');
+/* 🔴 "91% the same", "under 120 words", "69 characters" are all real and all scanner. A tradesperson
+   does not know whether 120 words is a lot, and a precise figure invites an argument about the
+   figure instead of a conversation about the site. The numbers stay in the crawl signals and in the
+   report, which is written for somebody sitting down to read it. NO DIGIT belongs in {{6}}. */
+for (const c of candidateFindings(ALL)) {
+  ok(!/\d/.test(sentenceOf(c)), `${c.kind}: carries no digits at all`);
+  ok(!/%/.test(sentenceOf(c)), `${c.kind}: no percentage`);
+}
+for (const seed of ['a', 'b', 'c', 'd', 'e']) {
+  ok(!/\d/.test(buildSiteFindings(ALL, { seed }) ?? ''), `seed "${seed}": the whole message carries no digits`);
+}
+/* Driven on the exact values the old copy printed, so a regression is caught by the number itself. */
+const numeric = buildSiteFindings(only({
+  clientRendered: { flagged: true, visibleChars: 69, htmlBytes: 74210, appShell: true },
+  duplicates: { clusterSize: 6, sampleSize: 8, similarityPct: 91 },
+  thinPages: 5,
+}), { seed: 'a' }) ?? '';
+for (const n of ['69', '91', String(THIN_WORDS), '%']) {
+  ok(!numeric.includes(n), `the old measurement "${n}" is gone from the copy`);
+}
+/* ⛔ AND NO COMPARISON WITH GOOGLE. We never fetched the site as Googlebot, so "as reliably as
+   Google can" was a comparison against a measurement we do not hold. */
+for (const c of candidateFindings(ALL)) {
+  ok(!/\bgoogle/i.test(sentenceOf(c)), `${c.kind}: makes no comparison with Google`);
+}
+/* ⛔ AND NO BOT NAMES. They mean nothing to a locksmith and read as jargon dropped in to sound
+   authoritative. Singular/plural still carries the real shape of what was found. */
+for (const c of candidateFindings(ALL)) {
+  ok(!/SearchBot|PerplexityBot|ChatGPT-User|Claude-User|GPTBot/i.test(sentenceOf(c)),
+    `${c.kind}: names no individual bot`);
+}
+ok(/^one of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot'] }))[0].clause),
+  'a single blocked crawler reads "one of the crawlers"');
+ok(/^some of the crawlers/.test(candidateFindings(only({ searchBlocked: ['OAI-SearchBot', 'PerplexityBot'] }))[0].clause),
+  '…and several read "some of the crawlers"');
 
 console.log('── 5. WHICH FINDINGS, AND HOW MANY ──');
 ok(MAX_SITE_FINDINGS === 3, 'at most three findings');
@@ -248,7 +300,12 @@ ok(chosen[0].kind === 'crawler_blocked', 'a blocked crawler leads — AI cannot 
 ok(chosen[1].kind === 'unreadable_homepage', '…then a homepage AI cannot read');
 ok(chosen[2].kind === 'duplicate_pages', '…then duplicated town/service pages');
 ok(chosen[3].kind === 'thin_pages', '…then thin pages');
-ok((buildSiteFindings(ALL, { seed: 'a' }) ?? '').includes('69'), 'the chosen findings carry THIS lead\'s real numbers');
+/* 🔴 REVERSED ON PURPOSE. This used to assert the message carried this lead's measured character
+   count, on the reasoning that a real number is what proves somebody looked. It reads as a scanner
+   instead, so the evidence now shows up as a specific DESCRIPTION rather than a figure — the numbers
+   live in the crawl signals and in the report, which is written for somebody sitting down to it. */
+ok(!(buildSiteFindings(ALL, { seed: 'a' }) ?? '').includes('69'), 'the measured character count is NOT in the message');
+ok((buildSiteFindings(ALL, { seed: 'a' }) ?? '').includes('homepage is very thin'), '…the description of it is');
 
 console.log('── …TWO is the normal message; a third only when it comfortably fits ──');
 /* Two findings is what a person reads on a phone between jobs; the third turns it into a list, and a
@@ -262,23 +319,23 @@ for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
   if (n === 3) ok(v.length <= COMFORTABLE_THREE_CHARS, `seed "${seed}": a third was taken only because it fits comfortably`);
   if (n === 2) ok(v.length <= MAX_FINDINGS_CHARS, `seed "${seed}": two findings, within the cap`);
 }
-/* 🔴 AND HERE IS WHAT THAT ACTUALLY SHIPS, STATED RATHER THAN IMPLIED. Each finding is a three-clause
-   explanation of about 230-320 characters, so THREE of them plus their transitions is ~800 and never
-   clears the comfortable bar. With the current wording the message is therefore always ONE or TWO
-   findings, and MAX_SITE_FINDINGS is the structural ceiling rather than a target.
-   ⚠️ That is a property of the LENGTH RULE, not a hard "never three": if the wording is ever
-   shortened, three becomes reachable with no code change. This test says which of those is true
-   today so nobody reads the constant and assumes the other. */
+/* 🔴 AND HERE IS WHAT THAT ACTUALLY SHIPS, DRIVEN RATHER THAN DESCRIBED — both sides of the rule.
+   Dropping the measurements took each finding down to roughly 200-255 characters, so the THREE
+   SHORTEST now do clear the comfortable bar where they did not before this rewrite. */
 const shortest = buildSiteFindings(only({
   searchBlocked: ['OAI-SearchBot'],
   duplicates: { clusterSize: 3, sampleSize: 8, similarityPct: 90 },
   thinPages: 2,
 }), { seed: 'a' }) ?? '';
-ok(countFindings(shortest) === 2, 'even the three SHORTEST findings ship as two — the third does not clear the bar');
-ok(shortest.length <= MAX_FINDINGS_CHARS, '…and what does ship is inside the cap');
-/* The dropped one is the WEAKEST, so the strongest thing found always survives. */
-ok(shortest.includes('OAI-SearchBot'), '…and the finding that survives is the strongest one');
-ok(!shortest.includes(String(THIN_WORDS)), '…while the weakest is the one dropped');
+ok(countFindings(shortest) === 3, 'the three SHORTEST findings all fit, so three is genuinely reachable');
+ok(shortest.length <= COMFORTABLE_THREE_CHARS, '…because they clear the comfortable bar');
+/* …and the other side: add the longest finding (the homepage one) and the third no longer fits, so
+   the WEAKEST is dropped and the strongest always survives. */
+const mixed = buildSiteFindings(ALL, { seed: 'a' }) ?? '';
+ok(countFindings(mixed) === 2, 'a mixed site ships TWO — the third would not clear the bar');
+ok(mixed.length <= MAX_FINDINGS_CHARS, '…and what does ship is inside the cap');
+ok(/crawlers used by AI search tools/.test(mixed), '…the finding that survives is the strongest one');
+ok(!/light on detail/.test(mixed), '…while the weakest is the one dropped');
 
 console.log('── …and the weak ones are never said at all ──');
 /* 🔴 missingH1 and noJsonLd are real and belong in the report. In a WhatsApp message they are the
@@ -296,12 +353,13 @@ const oneOnly = buildSiteFindings(only({ duplicates: { clusterSize: 5, sampleSiz
 ok(!!oneOnly, 'a single strong finding still produces a message');
 ok(!SECOND_TRANSITION_RE.test(oneOnly ?? '') && !THIRD_TRANSITION_RE.test(oneOnly ?? ''),
   '…with NO transition, because there is nothing to transition to');
-ok((oneOnly ?? '').includes('5') && (oneOnly ?? '').includes('93'), '…and it carries its own numbers');
+ok(!/\d|%/.test(oneOnly ?? ''), '…and it carries no cluster size and no similarity percentage');
+ok(/basically the same apart from the town or the service/.test(oneOnly ?? ''), '…it describes the problem instead');
 
 console.log('── …never more than three, however many were found ──');
 for (const seed of ['a', 'b', 'c']) {
   const v = buildSiteFindings(ALL, { seed }) ?? '';
-  ok(!v.includes(String(THIN_WORDS)), `seed "${seed}": the fourth (weakest) finding is dropped`);
+  ok(!/light on detail/.test(v), `seed "${seed}": the fourth (weakest) finding is dropped`);
 }
 
 console.log('── …and never past the length Meta accepts ──');
@@ -314,7 +372,7 @@ for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
   ok(v.length < 1024, `seed "${seed}": inside Meta's 1024-character parameter limit`);
   /* Shortened by dropping the weakest finding, never by truncation — so it still ends in a full stop. */
   ok(v.trim().endsWith('.'), `seed "${seed}": ends on a complete sentence, not mid-explanation`);
-  ok(v.includes('OAI-SearchBot'), `seed "${seed}": the STRONGEST finding survives the trim`);
+  ok(/crawlers used by AI search tools/.test(v), `seed "${seed}": the STRONGEST finding survives the trim`);
 }
 ok(MAX_FINDINGS_CHARS < 1024, "the cap leaves headroom under Meta's limit");
 

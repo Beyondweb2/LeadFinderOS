@@ -39,7 +39,6 @@
       cannot survive the wire and are not attempted.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  THIN_WORDS,
   usableCrawlSignals,
   type CrawlSignals,
 } from './crawlCheck.ts';
@@ -93,12 +92,12 @@ export const MAX_FINDINGS_CHARS = 900;
  * limit is exactly the one that does. The weakest finding is DROPPED rather than the wording being
  * squeezed — compressed copy is how this stops sounding like Paul and starts sounding like a tool.
  *
- * ⚠️ WHAT THAT MEANS TODAY, SO THE CONSTANT ABOVE IS NOT MISREAD: each finding is a three-clause
- * explanation of roughly 230-320 characters, so three of them plus their transitions comes to about
- * 800 and never clears this bar. **With the current wording every message is one or two findings**,
- * and MAX_SITE_FINDINGS is the structural ceiling rather than a target. That is a consequence of the
- * LENGTH rule, not a hard "never three" — shorten the wording and three becomes reachable with no
- * code change. scripts/site-findings.test.ts asserts which of those is true today.
+ * ⚠️ WHAT THAT MEANS TODAY, SO THE CONSTANT ABOVE IS NOT MISREAD: each finding now runs about
+ * 200-255 characters with its opener, down from 230-320 before the measurements came out of the
+ * copy. So THREE now genuinely fit when they are the three shortest, and a site whose findings
+ * include the longest one (the homepage) still ships TWO. Both sides are driven in
+ * scripts/site-findings.test.ts rather than described, because this is exactly the kind of statement
+ * that is true when it is written and quietly false a rewrite later.
  */
 export const COMFORTABLE_THREE_CHARS = 720;
 
@@ -120,13 +119,26 @@ export const COMFORTABLE_THREE_CHARS = 720;
  */
 export type FindingKind = 'crawler_blocked' | 'unreadable_homepage' | 'duplicate_pages' | 'thin_pages';
 
+/**
+ * One finding, split where the sentence bends.
+ *
+ * 🔴 `clause` IS DELIBERATELY NOT A SENTENCE. It is written to follow an opener — "One thing that
+ *    stood out is …", "The other thing I noticed is …" — so the opener belongs to the JOINER and the
+ *    finding never carries one of its own. Any finding can be first or second, and a finding that
+ *    brought its own opener produced "There's another thing too. The other thing I noticed is …"
+ *    the moment it landed in second place.
+ * ⛔ AND IT IS WHY NO FINDING CAN OPEN "I had a look at how the site is being accessed". The
+ *    template's own fixed line directly above {{6}} already says "Had a proper look at your site as
+ *    well" — a finding repeating it reads like the message lost its place. Openers live in one
+ *    place now and that phrase is not among them.
+ */
 export interface SiteFinding {
   kind: FindingKind;
-  /** The sentence(s) for this finding. One line, no newlines, no markdown, no emoji. */
-  text: string;
+  /** Follows an opener ending in "is". Lower case, no full stop, no leading transition. */
+  clause: string;
+  /** The rest: what it means, then why it may make AI visibility harder. Whole sentences. */
+  rest: string;
 }
-
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 /**
  * Turn the crawl signals into candidate findings, strongest first.
@@ -144,10 +156,16 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
  *    are what the evidence actually supports, and they are also what a careful tradesperson sounds
  *    like. scripts/site-findings.test.ts fails the build if an absolute claim comes back.
  *
- * ⛔ NO FINDING OPENS WITH A TRANSITION. Any of them can be the first thing in the message, so "the
- *    other thing that stood out" belongs to the joiner below, never to a finding's own text.
- * ⛔ AND NONE OPENS WITH A BARE NUMBER. "68 characters" as the first thing a person reads is a
- *    scanner talking. The measurement earns its place mid-sentence, after the plain-English point.
+ * ⛔ NO FINDING CARRIES AN OPENER. See SiteFinding above: the opener is the joiner's, because any
+ *    finding can be first or second and one that brings its own doubles up when it moves.
+ *
+ * 🔴 AND NO MEASUREMENT REACHES THE MESSAGE. "91% the same", "under 120 words", "69 characters" —
+ *    every one of those is real, and every one of them is a scanner reading its own output aloud. A
+ *    tradesperson does not know whether 120 words is a lot, and a precise figure invites an argument
+ *    about the figure instead of a conversation about the site. The numbers stay where they are
+ *    useful and checkable: the crawl signals, and the report's own fault section, which is written
+ *    for somebody sitting down to read it. Here we describe the problem. (THIN_WORDS is no longer
+ *    interpolated at all, which also settles CLAUDE.md §4's "never write a cap in prose".)
  */
 export function candidateFindings(s: CrawlSignals): SiteFinding[] {
   if (s.fetchFailed) return [];   // could not read the site at all — we have nothing to say about it
@@ -157,45 +175,56 @@ export function candidateFindings(s: CrawlSignals): SiteFinding[] {
      is derived from real fetches by the crawlers that fetch a page for an AI search tool. Training
      crawlers (GPTBot, ClaudeBot, CCBot) are never in it and must never be described as controlling
      search visibility — blocking those is a common, legitimate choice that does not stop a business
-     being cited, and saying otherwise would be telling a prospect to undo a decision for no gain. */
+     being cited, and saying otherwise would be telling a prospect to undo a decision for no gain.
+     ⛔ THE BOT NAMES ARE NOT IN THE MESSAGE. "OAI-SearchBot, PerplexityBot" means nothing to a
+     locksmith and reads as jargon dropped in to sound authoritative; singular/plural still carries
+     the real shape of what we found. The names are in the report for anyone who wants them.
+     ⛔ AND NOTHING IS COMPARED TO GOOGLE. The previous wording said these crawlers may not read the
+     site "as reliably as Google can" — we never fetched the site as Googlebot, so that was a
+     comparison against a measurement we do not hold. */
   if (s.searchBlocked.length) {
-    const list = s.searchBlocked.join(', ');
     const one = s.searchBlocked.length === 1;
     out.push({
       kind: 'crawler_blocked',
-      text: `I had a look at how the site is being accessed as well. ${list} ${plural(s.searchBlocked.length, 'is', 'are')} being blocked from reading it, and ${one ? 'that is one of the crawlers' : 'those are crawlers'} the AI search tools use, so they may not be able to read your pages as reliably as Google can. That gives them less information from your own website to work with.`,
+      clause: one
+        ? 'one of the crawlers used by AI search tools is being blocked from the site'
+        : 'some of the crawlers used by AI search tools are being blocked from the site',
+      rest: "That can give those systems less information from your own website to work with when they're deciding which businesses are relevant.",
     });
   }
 
   if (s.clientRendered?.flagged) {
     out.push({
       kind: 'unreadable_homepage',
-      /* The character count is real and it is this lead's own, so it stays — but AFTER the point it
-         supports. And "some crawlers can end up seeing" is the honest version: we measured what one
-         fetch returned, we did not watch a model read it. */
-      text: `There is not much of the homepage actually there when it first loads. A lot of the content gets added afterwards by the browser, so some crawlers can end up seeing a much thinner version of the page than a normal visitor does — ours read about ${s.clientRendered.visibleChars} characters of text. That can make it harder to pick up what you do and where you work.`,
+      /* "may be seeing" rather than "sees": we measured what one fetch returned, we did not watch a
+         model read it. And no claim about what does or does not execute JavaScript — "gets added
+         afterwards" is the part we can actually see. */
+      clause: "the homepage is very thin when it's fetched directly",
+      rest: 'A lot of what a normal visitor sees gets added afterwards, so some crawlers may be seeing a much emptier version of the site. That can make it harder to clearly pick up what you do and where you work.',
     });
   }
 
   if (s.duplicates) {
-    const n = s.duplicates.clusterSize;
     out.push({
       kind: 'duplicate_pages',
       /* ⚠️ NOT "AI reads those as one page". That is a claim about de-duplication behaviour we have
          never measured. What we can say is what is on the pages and what it does not add. */
-      text: `There are ${n} pages on there that are very similar to each other, around ${s.duplicates.similarityPct}% the same, with mainly the town or the service changed. So although there are plenty of pages, they may not be giving AI much different information about why you are relevant in each area.`,
+      clause: "you've got several pages that are basically the same apart from the town or the service",
+      rest: "So although there are quite a few pages, they may not be giving AI much different information about why you're relevant in each area.",
     });
   }
 
   if (s.thinPages > 0) {
     out.push({
       kind: 'thin_pages',
-      /* ⚠️ NOT "not enough for AI to quote you from". A word count is a description of the page, not
-         a rule about what gets recommended, and no threshold we hold is a threshold anyone else
-         uses. THIN_WORDS is named rather than written out (CLAUDE.md §4: never a cap in prose). */
-      text: s.thinPages === 1
-        ? `One of the service pages is very light on actual information as well — it is under ${THIN_WORDS} words. It mentions the service, but there may not be much detail there for AI to use if somebody asks a specific question about it.`
-        : `A few of the service pages are very light on actual information as well — ${s.thinPages} of them are under ${THIN_WORDS} words. They mention the service, but there may not be much detail there for AI to use if somebody asks a specific question about it.`,
+      /* ⚠️ NOT "not enough for AI to quote you from", and no word count: a threshold we hold is not a
+         rule anybody else applies, and quoting it invites an argument about the number. */
+      clause: s.thinPages === 1
+        ? 'one of the service pages is really light on detail'
+        : 'a few of the service pages are really light on detail',
+      rest: s.thinPages === 1
+        ? 'It mentions the service, but there may not be much useful information there for AI to work with when somebody asks a more specific question.'
+        : 'They mention the service, but there may not be much useful information there for AI to work with when somebody asks a more specific question.',
     });
   }
 
@@ -204,20 +233,35 @@ export function candidateFindings(s: CrawlSignals): SiteFinding[] {
 
 /* ── Joining them up so it reads like a person ────────────────────────────────────────────────── */
 
-/* ⛔ THE SECOND AND THIRD FINDINGS GET A TRANSITION, THE FIRST NEVER DOES. Without one the value
-   reads as a list with the bullets taken off, which is the exact tell this template exists to
-   avoid. With the SAME transition every time it reads as a mail merge the second time anyone
-   compares two messages — and prospects in one town do talk to each other. */
-const SECOND_TRANSITIONS = [
-  "There's another thing too.",
-  "I also noticed this.",
-  "The other thing that stood out is this.",
+/* ⛔ EVERY FINDING GETS AN OPENER, INCLUDING THE FIRST, AND THE OPENER IS CHOSEN BY POSITION.
+   Without one the value reads as a list with the bullets taken off, which is the exact tell this
+   template exists to avoid. With the SAME opener every time it reads as a mail merge the second time
+   anyone compares two messages — and prospects in one town do talk to each other.
+
+   ⛔ THEY ALL END IN "is" SO THE CLAUSE FOLLOWS IDENTICALLY WHEREVER IT LANDS. That is the whole
+   reason a finding is stored as clause + rest rather than as a sentence: the same finding reads
+   "One thing that stood out is the homepage is very thin…" in first place and "The other thing I
+   noticed is the homepage is very thin…" in second, with nothing rewritten and nothing doubled.
+
+   ⛔ AND NONE OF THEM IS "I had a look…". The template's own fixed line immediately above {{6}}
+   already says "Had a proper look at your site as well"; an opener repeating it reads like the
+   message lost its place. */
+const FIRST_OPENERS = [
+  'One thing that stood out is',
+  'One thing I noticed is',
+  'The main thing that stood out is',
 ] as const;
 
-const THIRD_TRANSITIONS = [
-  "There's one more thing as well.",
-  "One last thing I spotted.",
-  "And there's this too.",
+const SECOND_OPENERS = [
+  'The other thing I noticed is',
+  'The other thing that stood out is',
+  'Another thing I noticed is',
+] as const;
+
+const THIRD_OPENERS = [
+  'One last thing I spotted is',
+  'And the other thing is',
+  'The last thing I noticed is',
 ] as const;
 
 /* FNV-1a, 32-bit — a few lines, no dependency, byte-stable across engines, so the same lead always
@@ -267,12 +311,17 @@ export function buildSiteFindings(
   if (all.length === 0) return null;
   const seed = fnv1a32(String(opts.seed ?? ''));
 
+  /* opener + clause + full stop + the explanation. One shape for all three positions, so a finding
+     that moves position is re-opened rather than rewritten. Different shifts of the same hash per
+     position, so the openers vary independently instead of moving in lockstep and producing only
+     three distinct messages in the whole book. */
+  const say = (f: SiteFinding, openers: readonly string[], shift: number): string =>
+    oneLine(openers[(seed >>> shift) % openers.length] + ' ' + f.clause + '. ' + f.rest);
+
   const assemble = (chosen: SiteFinding[]): string => {
-    const parts = [oneLine(chosen[0].text)];
-    if (chosen[1]) parts.push(SECOND_TRANSITIONS[seed % SECOND_TRANSITIONS.length] + ' ' + oneLine(chosen[1].text));
-    /* A different divisor for the third, so the two transitions vary independently rather than
-       moving in lockstep and producing only three distinct messages in the whole book. */
-    if (chosen[2]) parts.push(THIRD_TRANSITIONS[(seed >>> 8) % THIRD_TRANSITIONS.length] + ' ' + oneLine(chosen[2].text));
+    const parts = [say(chosen[0], FIRST_OPENERS, 0)];
+    if (chosen[1]) parts.push(say(chosen[1], SECOND_OPENERS, 8));
+    if (chosen[2]) parts.push(say(chosen[2], THIRD_OPENERS, 16));
     return oneLine(parts.join(' '));
   };
 
