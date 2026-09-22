@@ -355,6 +355,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   that price themselves on their face may.
 - **`named` reads `cellNamed()` everywhere** — model verdict, string-match fallback, one ruler per
   comparison; the hand-check refusal lifts on a majority of model-read cells. Never zero on absence.
+  "Everywhere" includes the report's per-engine "Named in the answer" line (`recommended`), which
+  ran its own string match until 2026-09-22 and disagreed with the summary above it
+  (`docs/reports.md` §33; `named-one-ruler.test.ts` fences it). `cited` is a separate measure.
 - **Competitor names come only from `extract-competitors` (LLM).** No regex extractor, ever. A dirty
   run withholds rival names from the client report (`competitorCleaning.ts`); RG's frozen baseline
   `f64920ce` stays suppressed by the junk rule — do not re-extract evidence.

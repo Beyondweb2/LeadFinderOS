@@ -952,10 +952,8 @@ export function buildReportData(
      it degrades to "we measured what AI said about you" instead of naming nonsense.
      ⚠️ The verdict is DERIVED from the names, not read from a stamp — every audit before
      2026-08-28 has no stamp, and absence must not read as clean (competitorCleaning.ts). */
-  /* Shared by every per-engine recommended/cited derivation below. matchCtx mirrors what the
-     SCANNER passed when it set `named`, so a prose match here means the same thing it meant then;
-     ownDomain is the client's own host, used only for the citation test. */
-  const matchCtx = { trade: ctx.businessType || null, town: ctx.locationText || null };
+  /* ownDomain is the client's own host, used only by the per-engine `cited` derivation below. The
+     per-engine `named`/`recommended` figures read cellNamed() and need no matcher context. */
   const ownDomain = citationDomain(unwrapCitationUrl(ctx.ownWebsite ?? ''));
   const cleanliness = assessCompetitorCleanliness(collectCompetitorNames(queueRows), run?.results,
     { answeredCells: countAnsweredCells(queueRows) });
@@ -1146,7 +1144,14 @@ export function buildReportData(
            not redefine the metric. Measured before building: for ABLM, recommended = 22 and
            citation-only = 0, so nothing moves — but that is a fact about this audit, not a
            guarantee, which is exactly why both numbers are now shown. */
-        if (nameMatches(er.answer_text ?? '', ctx.businessName, matchCtx)) recommended++;
+        /* 🔴 ONE RULER (2026-09-22). This used to be a raw nameMatches() over answer_text while
+           `named` (the summary, the hero, buildBaselineView) read cellNamed() — so the internal
+           baseline view printed "Gemini 1/3" over "Named in the answer — 0 of 3" for the same
+           three cells (MCLocksmiths, 4 of 20 questions disagreed). Both halves now read the one
+           predicate in namedSignal.ts: the model's verdict where the extractor recorded one, the
+           stored string match otherwise. `cited` stays its own, separate measure — being cited as
+           a source is never "named". */
+        if (cellNamed(er)) recommended++;
         if ((er.citations ?? []).some((c) => citationIsClient(c, ctx.businessName, ownDomain))) cited++;
         /* ⛔ COUNT WHAT AI ACTUALLY RETURNED, BEFORE FILTERING. `engRivals` is the KEPT list, and an
            empty kept list has three completely different causes: AI named nobody else, every name it
