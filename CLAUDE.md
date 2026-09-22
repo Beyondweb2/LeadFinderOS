@@ -23,8 +23,12 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (113 suites). **Honest green is 109/113** — the four known-stale suites are `coverage-lead-counts`,
-  `report-attribution`, `verdict`, `site-origin` (needs Deno). Read the FAILED names, never the count.
+  (160 suites). **Honest green is 152/160 (2026-09-22)** — the EIGHT known-stale suites are
+  `coverage-lead-counts`, `explain-offer`, `new-site-tier`, `onboarding-audit-fields`,
+  `remeasure-results`, `report-attribution`, `verdict`, `site-origin` (needs Deno). Read the FAILED
+  names, never the count. **Typecheck reads 12 against a baseline of 9**: three pre-existing
+  `lucide-react` `title`-prop errors in `OutreachTable.tsx` and `Inbox.tsx` are on `origin/main` and
+  are not in the baseline file, so the gate reports a regression that is not yours. Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
@@ -477,6 +481,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (row pill, Inbox button with auto-pitch, bulk) — share input resolution only.
 
 **Reports and documents**
+- **The Welcome Pack resolves from `outreach_leads.baseline_audit_id` ONLY**, and asserts the row's
+  `audit_purpose` rather than trusting the claim trigger. Never "the newest completed audit" — that
+  was the bug, and a Discovery scan would have become a client's baseline pack. `welcomePackData.ts`
+  is the one readiness rule; `_shared/welcome-pack-render.ts` is the one builder, serving BOTH
+  `findable.live/w/<code>` (the baseline audit's own `short_code`) and the operator's download.
+  Client safety is an explicit COLUMN ALLOWLIST, not a remembered omission (`docs/welcome-pack-and-
+  website-build.md`).
 - **Every report renders live** from `render-audit-report` at `findable.live/report/<auditId>`.
   Internal measurements (`isInternalMeasurement`) answer **403**; the per-question pages are
   operator-only; a mid-flight audit shows "still measuring" (`measuringState`), never a partial count;
@@ -496,6 +507,18 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.
 - **`useOutreach` is the one hook not on React Query** — its own piece of work; do not tack it on.
 - **The shell mounts once** (`<Route element={<AppLayout/>}>`); page-level caches must survive it.
+
+**Facts about a client**
+- **One ranked resolver, `src/lib/clientFacts.ts`:** onboarding > client record > baseline >
+  discovery > crawl. **Rank breaks the tie; it does not hide the loser** — a differing lower-ranked
+  value is still raised under CLIENT CONFIRMATION REQUIRED, naming both values and both sources.
+  **Lists are never merged** (a merge gives back a service the client deleted). Nothing is invented:
+  an unknown local repo path prints `[LOCAL REPO PATH REQUIRED]`.
+- **Section 5's Claude rebuild prompt is generated at CLICK TIME and never stored** — a stored prompt
+  is stale the moment onboarding or a baseline lands. `outreach_leads.website_build` (jsonb, saved
+  through an allowlist) holds only the seven workflow fields Paul types.
+- **Citation is not causation.** Do-not-break URLs are the client's own host cited in the baseline;
+  the wording says "cited while answering" and tells Claude to investigate first.
 
 **Data hygiene**
 - **Paginate every PostgREST read** (`fetchAllRows`, `.order('id')`).
@@ -583,6 +606,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
+- 🔴 **`leadfinderos.pages.dev` has not rebuilt for weeks** — the live bundle references no
+  `ClientHub`, `PaidClients` or `PaidBaselineSetup` chunk, so it predates the Paid Clients feature
+  entirely. `main` pushes fine and builds clean; the Cloudflare Pages auto-deploy is not running.
+  Nothing shipped to the operator app is actually live until that is fixed.
+- 🔴 **`findable.live/w/<code>` is not live yet.** `findable-site/functions/w/[code].ts` exists but
+  the repo was not deployed — `npm run deploy` ships the working tree and that tree carries two
+  unrelated uncommitted edits (`Footer.astro`, `research.astro`). Download works; the link does not.
 - Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
   lists and Paul's decisions. The `instantly-poll-run` cron is still active until Paul unschedules it.
 
