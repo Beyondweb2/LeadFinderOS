@@ -187,6 +187,32 @@ export function hostOf(raw: string): string {
   }
 }
 
+/* ⛔ TRACKING PARAMETERS ARE NOT PART OF THE PAGE. Engines hand back their own attribution on the
+   URLs they cite — MCLocksmiths' real baseline produced thirteen signals, of which
+   `https://www.mc-locksmiths.com/?utm_source=chatgpt.com` was the HOMEPAGE. Left in, the rebuild
+   agent reads that as a distinct page to preserve, and the same page cited by two engines lands as
+   two entries. Stripped, it is one URL and it is the one that exists on the site.
+   ⚠️ ONLY KNOWN TRACKING KEYS ARE REMOVED. A query string can be load-bearing (?page=2, ?service=x),
+   and dropping the whole thing would silently merge genuinely different pages. */
+const TRACKING_PARAM = /^(utm_[a-z_]+|fbclid|gclid|gbraid|wbraid|msclkid|mc_[ce]id|ref|source)$/i;
+
+/** A cited URL reduced to the page it actually is: tracking parameters dropped, `www.` and a
+ *  trailing slash normalised away, scheme preserved as given. Unparseable input comes back trimmed. */
+export function canonicalCitedUrl(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    for (const key of [...u.searchParams.keys()]) if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
+    u.hash = '';
+    u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
+    const path = u.pathname.replace(/\/+$/, '');
+    return `${u.protocol}//${u.hostname}${path}${u.search}`;
+  } catch {
+    return s;
+  }
+}
+
 /**
  * The client's own pages that engines cited in the baseline, most-cited first.
  *
@@ -204,7 +230,7 @@ export function visibilitySignals(report: AiAuditReportData, ownWebsite: string 
       ...((q.perEngine ?? []).flatMap((e) => e.citations ?? [])),
     ];
     for (const c of cites) {
-      const url = String(c?.url || '').trim();
+      const url = canonicalCitedUrl(String(c?.url || ''));
       if (!url) continue;
       const host = hostOf(url) || String(c?.domain || '').toLowerCase().replace(/^www\./, '');
       if (host !== own) continue;

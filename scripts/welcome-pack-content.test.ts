@@ -61,6 +61,28 @@ console.log('\n── VISIBILITY SIGNALS ARE THE CLIENT’S OWN HOST, NOT EVERY 
 ok(visibilitySignals(report, 'https://mc-locksmiths.com/').length === 1, 'their own cited page is found');
 ok(visibilitySignals(report, '').length === 0, 'no website on file → no do-not-break list invented');
 ok(visibilitySignals(report, 'https://someone-else.co.uk').length === 0, 'another host’s citations are not claimed');
+{
+  /* 🔴 THE REAL BASELINE PRODUCED THESE. Engines return their own attribution on the URLs they
+     cite, so the homepage arrived as "…/?utm_source=chatgpt.com" and the same page cited by two
+     engines arrived as two entries. A rebuild agent would read those as distinct pages to preserve. */
+  const tracked: AiAuditReportData = {
+    ...report,
+    questionBreakdown: [
+      { question: 'a', namedYou: true, namedCount: 1, answers: 1, rivals: [],
+        citations: [{ domain: 'mc-locksmiths.com', url: 'https://www.mc-locksmiths.com/?utm_source=chatgpt.com' }], perEngine: [] },
+      { question: 'b', namedYou: true, namedCount: 1, answers: 1, rivals: [],
+        citations: [{ domain: 'mc-locksmiths.com', url: 'https://mc-locksmiths.com/' }], perEngine: [] },
+      { question: 'c', namedYou: false, namedCount: 0, answers: 1, rivals: [],
+        citations: [{ domain: 'mc-locksmiths.com', url: 'https://mc-locksmiths.com/locations/dover?utm_source=chatgpt.com&page=2' }], perEngine: [] },
+    ],
+  };
+  const sig = visibilitySignals(tracked, 'https://mc-locksmiths.com/');
+  ok(sig.length === 2, `tracking params are stripped and the homepage collapses to one entry (got ${sig.length})`);
+  ok(sig.some((s) => s.url === 'https://mc-locksmiths.com' && s.questions.length === 2),
+    'the two homepage citations become one URL carrying both questions');
+  ok(sig.some((s) => s.url === 'https://mc-locksmiths.com/locations/dover?page=2'),
+    'a LOAD-BEARING query parameter survives while the tracking one does not');
+}
 
 const html = buildWelcomePackHtml({
   businessName: 'MCLocksmiths centre',
