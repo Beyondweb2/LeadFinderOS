@@ -146,6 +146,32 @@ for auth errors — the repeated-401 loop) and invokePaidBaseline. PaidClients w
 has loading / error-with-retry / loaded states, and its spinner is `text-primary`.
 `scripts/edge-invoke-auth.test.ts` (21 checks) drives the invoker with a fake client.
 
+## Second follow-up: "401 then 500" on the detail page, the word `server_error` on screen
+
+Reproduced with a one-off operator token (Auth admin magic link on the data account, revoked
+straight after): `paid-client-hub get` 200, `paid-client-hub list` **500 `server_error`**, and
+`paid-baseline get` **401 `unauthorized` after 19.6 s on the same valid ES256 token** that then
+answered 200 twice. The handler log held the 500's cause: supabase-js threw the **Cloudflare 522
+"Connection timed out" HTML page** it received from PostgREST — the API did not answer; the
+function's `catch` turned it into a bare `server_error`. The 401 is the same fault on the other
+call: the handler's own `getUser()` did not answer, `data.user` was null, and the function said
+"unauthorized" about a token the auth service never looked at. Under the session-safe invoker that
+reads as: send → 401 → refresh → retry → 522 → 500, which is exactly what Paul saw; one more
+transient 401 and the invoker would have signed him out.
+
+**Fix.** `_shared/operator-auth.ts`: `resolveOperator` bounds `getUser()` (`OPERATOR_AUTH_TIMEOUT_MS`)
+and answers **503 `auth_unavailable`** with a sentence for anything that is not a definite refusal
+of the token (`classifyAuthFailure`: 401/403 or an invalid/expired-JWT message → `unauthorized`;
+timeout, 5xx, HTML, fetch failure → unavailable). Both operator functions use it. Their `catch`
+classifies the API not answering (`isUpstreamOutage`: 522/5xx page, fetch failed, timed out) as
+**503 `upstream_timeout`** with a sentence; the 500 fallback carries a sentence too. The hub's
+`client_pages` select named three columns that do not exist (`existing_url`, `recommendation`,
+`priority`) and swallowed the 42703, so pages were always empty — fixed and every query error is
+now thrown. `edgeErrorMessage` maps known tokens to sentences and quotes an unknown one inside a
+sentence, so no screen prints `server_error`; ClientHub gets an error panel with Try again.
+`scripts/paid-client-hub-resilience.test.ts` (28 checks). Redeployed `paid-baseline`,
+`paid-client-hub`.
+
 ## MCLocksmiths — what to do after deploy
 
 Open the hub → Start baseline → section A → type the services (nothing verified holds them) →

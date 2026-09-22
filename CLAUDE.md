@@ -265,6 +265,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   operator signed in. Protected calls go through `invokeEdge` (`src/lib/edgeInvoke.ts`): session
   first, explicit bearer, one refresh-and-retry, genuine 401 → local sign-out. A failed load is an
   error state with retry, never an empty list (`docs/paid-baseline-flow.md`).
+- 🔴 **A 401 is only for a token the auth service looked at and refused.** `getUser()` not answering
+  (19.6 s on a valid token, measured) is **503 `auth_unavailable`**; the API not answering (a
+  Cloudflare 522 page thrown by supabase-js) is **503 `upstream_timeout`** — `_shared/operator-auth.ts`
+  (`resolveOperator`, `isUpstreamOutage`), used by every operator function. A bare token
+  (`server_error`) is never rendered: `edgeErrorMessage` maps or quotes it inside a sentence.
 - **A conditionally-shown question owns its answer's LIFETIME** — hiding a field is not clearing it,
   and clearing state is not the same as not SENDING it (derive the payload from the show condition).
 - **Cutting question count saves money, not time** — questions run in parallel; the wall clock is one

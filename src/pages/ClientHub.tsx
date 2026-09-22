@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, Clipboard, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
-import { invokeEdge } from '@/lib/edgeInvoke';
+import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -205,18 +205,24 @@ export default function ClientHub() {
   const fetchHub = useCallback(async () => (await call({ action: 'get', lead_id: leadId })).client as Hub, [leadId]);
   /* The first load shows the page spinner. Every later read is `refresh`: silent, in place, and it
      never touches `loading` — flipping it is what unmounted the dialog mid-chain. */
+  /* ⛔ NEVER THE RAW TOKEN. A failed load is a sentence (edgeErrorMessage: the server's detail, then
+     the known-token map, never a bare `server_error`) in an error panel with Try again. A genuine
+     sign-out is left to the sign-in flow, which invokeEdge has already started. */
+  const describe = (e: unknown, fallback: string) => (e instanceof EdgeAuthError && !e.transient) ? null : edgeErrorMessage(e, fallback);
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     fetchHub().then((h) => { if (!cancelled) { setHub(h); setPageError(null); } })
-      .catch((e) => { if (!cancelled) setPageError(e instanceof Error ? e.message : 'Could not load client'); })
+      .catch((e) => { if (!cancelled) setPageError(describe(e, 'Could not load this client')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [fetchHub]);
+  }, [fetchHub, reloadKey]);
   const refresh = useCallback(async () => {
     try { setHub(await fetchHub()); setPageError(null); }
-    catch (e) { setPageError(e instanceof Error ? e.message : 'Could not refresh client'); }
+    catch (e) { setPageError(describe(e, 'Could not refresh this client')); }
   }, [fetchHub]);
+  const retry = () => { setPageError(null); setReloadKey((k) => k + 1); };
   const bs = hubBaselineStatus(hub?.onboarding, hub?.audit);
   useEffect(() => {
     if (!(bs === 'starting' || bs === 'running')) return;
@@ -227,11 +233,12 @@ export default function ClientHub() {
   const progress = useMemo(() => formatBaselineProgress(runs, BASELINE_RUNS), [runs]);
 
   if (loading) return <div className="flex justify-center py-16"><Spinner className="h-8 w-8"/></div>;
-  if (!hub) return <div className="p-8 text-sm">{pageError ? <span className="text-destructive">{pageError}</span> : 'Client not found.'}</div>;
+  const errorPanel = pageError && <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{pageError}</span></div><Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button></CardContent></Card>;
+  if (!hub) return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>{errorPanel || <Card><CardContent className="p-6 text-sm text-muted-foreground">This client is not in your paid-client list.</CardContent></Card>}</div>;
   const { lead, onboarding, audit, pages } = hub; const rm = remeasureStatus(lead.remeasure_due_date, Date.now()); const reportUrl = audit ? `${REPORT_PUBLIC_ORIGIN}/report/${audit.id}` : '';
   const setupLabel = bs === 'needs_questions' ? 'Prepare Baseline' : bs === 'approved' ? 'Start baseline' : 'Continue baseline setup';
   return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
-  {pageError && <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{pageError}</div>}
+  {errorPanel}
   <Card><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div><div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
   <div className="grid gap-4 lg:grid-cols-2">

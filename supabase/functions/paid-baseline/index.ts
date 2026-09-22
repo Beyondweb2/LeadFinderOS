@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { isUpstreamOutage, resolveOperator } from "../_shared/operator-auth.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 import { mergeClientContext, selectClientCrawlContext } from "../../../src/lib/clientContext.ts";
@@ -70,22 +71,14 @@ function contextRefusal(
   return null;
 }
 
-async function operator(req: Request) {
-  const auth = req.headers.get("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ")) return null;
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const client = createClient(url, anon, { global: { headers: { Authorization: auth } } });
-  const { data } = await client.auth.getUser();
-  return data.user ?? null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   try {
-    const user = await operator(req);
-    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    /* The auth service not answering is 503 auth_unavailable, never 401 (_shared/operator-auth.ts). */
+    const who = await resolveOperator(req);
+    if (!who.ok) return json({ ok: false, error: who.error, detail: who.detail }, who.status);
+    const user = who.user;
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "get";
     const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id.trim() : "";
@@ -301,6 +294,11 @@ Deno.serve(async (req) => {
     if (["baseline_state_changed", "paid_onboarding_update_conflict", "lead_update_conflict"].includes(code)) {
       return json({ ok: false, error: code }, 409);
     }
-    return json({ ok: false, error: "baseline_request_failed" }, 500);
+    /* The API not answering (a Cloudflare 522 page, a fetch failure) is a 503 with a sentence,
+       never a 500 that reads as a bug in this function (_shared/operator-auth.ts). */
+    if (isUpstreamOutage(e)) {
+      return json({ ok: false, error: "upstream_timeout", detail: "The database did not answer in time. Nothing was changed — try again in a moment." }, 503);
+    }
+    return json({ ok: false, error: "baseline_request_failed", detail: "Could not load or update baseline setup. Please retry." }, 500);
   }
 });

@@ -118,9 +118,36 @@ export function createEdgeInvoker(deps: EdgeInvokerDeps) {
   };
 }
 
-/** The sentence to show an operator for any error this module throws. */
+/** Machine tokens the functions answer with, in operator English. A token missing here is still
+ *  never shown bare (see edgeErrorMessage). */
+export const EDGE_ERROR_SENTENCES: Record<string, string> = {
+  server_error: 'The server could not complete this request. Try again.',
+  upstream_timeout: 'The database did not answer in time. Nothing was changed — try again in a moment.',
+  auth_unavailable: 'The sign-in service did not answer in time. You are still signed in — try again in a moment.',
+  unauthorized: 'Your session was not accepted. Sign in again.',
+  'Auth required': 'Your session was not accepted. Sign in again.',
+  client_not_found: 'This client is not in your paid-client list.',
+  request_failed: 'The request failed. Try again.',
+  method_not_allowed: 'The server refused the request method.',
+  unsupported_action: 'The server did not recognise this action.',
+};
+
+/** Does this read as a raw machine token (`server_error`, `client_not_found`) rather than a sentence? */
+export function looksLikeErrorToken(value: string): boolean {
+  const v = value.trim();
+  return v.length > 0 && v.length <= 64 && !/\s/.test(v) && /^[a-z0-9_.-]+$/i.test(v);
+}
+
+/** The sentence to show an operator for any error this module throws. ⛔ NEVER A BARE TOKEN: the
+ *  server's own sentence first, then the known-token map, then a sentence that quotes the token. */
 export function edgeErrorMessage(e: unknown, fallback = 'Request failed'): string {
-  if (e instanceof EdgeFunctionError) return e.detail || e.code || fallback;
-  if (e instanceof Error) return e.message || fallback;
+  const humanise = (code: string, detail: string): string => {
+    if (detail && !looksLikeErrorToken(detail)) return detail;
+    if (code && EDGE_ERROR_SENTENCES[code]) return EDGE_ERROR_SENTENCES[code];
+    if (code && looksLikeErrorToken(code)) return `${fallback} (the server reported "${code}"). Try again.`;
+    return code || detail || fallback;
+  };
+  if (e instanceof EdgeFunctionError) return humanise(e.code, e.detail);
+  if (e instanceof Error) return humanise(e.message, '');
   return fallback;
 }
