@@ -65,6 +65,10 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
   booking_switch_barbers: { needsUrl: true,  needsAudit: false, group: 'site' },
   barber_fresha_booksy:   { needsUrl: true,  needsAudit: false, group: 'site' },
   initial_contact:        { needsUrl: false, needsAudit: false, group: 'opener' },
+  /* initial_opener_v2 - the A/B variant of the opener (src/lib/openerVariant.ts). Same shape as its
+     sibling: no link, no audit, and it is an OPENER, which is what keeps it out of every
+     continuation path. It carries no variables at all. */
+  initial_opener_v2:      { needsUrl: false, needsAudit: false, group: 'opener' },
   // audit_reply is not yet wired into the manual send path; its rule lives here so the guard is
   // ready the moment it's added to the picker + sender (no drift when that happens).
   audit_reply:            { needsUrl: false, needsAudit: true,  group: 'audit' },

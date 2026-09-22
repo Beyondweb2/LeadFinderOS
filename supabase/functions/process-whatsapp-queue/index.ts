@@ -246,6 +246,10 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
   barber_fresha_booksy: { lang: "en", vars: ["url", "name"] },
   // Opener — ONE variable: {{1}} = business name, NO url. vars MUST stay ["name"] (one param).
   initial_contact: { lang: "en", vars: ["name"] },
+  /* initial_opener_v2 - the second cold opener, for the A/B against initial_contact
+     (src/lib/openerVariant.ts). MIRRORS whatsapp-send.ts; change both together.
+     ⛔ ZERO VARIABLES - the registered body carries no {{1}}. vars MUST stay [] (no parameters). */
+  initial_opener_v2: { lang: "en", vars: [] },
   // Was MISSING while being selectable in the bulk picker, so a lead set to audit_reply silently
   // received booking_page_intro — a barber booking pitch. No lead was ever queued with it, so
   // nothing mis-sent, but the gap was live.
