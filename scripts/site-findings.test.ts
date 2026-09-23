@@ -33,7 +33,7 @@ import { REPORT_LINK_TEMPLATES } from '../src/lib/templateAttribution.ts';
 import { BRANCH_SUPPLIES, branchForVars, unsuppliedVars } from '../src/lib/templateRouting.ts';
 import { WHATSAPP_TEMPLATES } from '../src/types/outreach.ts';
 import { READABLE_TEMPLATE_BODIES } from '../src/lib/templateBodies.ts';
-import { INITIAL_OPENER_A, INITIAL_OPENER_B, openerArmFor, openerTemplateFor } from '../src/lib/openerVariant.ts';
+import { INITIAL_OPENER_A, INITIAL_OPENER_B, openerSendability } from '../src/lib/openerVariant.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -96,9 +96,9 @@ ok(getTemplateSendability('audit_followup_fault', { shareToken: null }, { report
   '…and still refused without one');
 ok(WA_TEMPLATE_REQS.audit_followup_fault.needsSiteFault === true && !WA_TEMPLATE_REQS.audit_followup_fault.needsSiteFindings,
   'audit_followup_fault keeps its OWN gate — the two flags are not merged');
-/* ⛔ initial_opener_v2 and its A/B are untouched by this change. */
-ok(openerTemplateFor(INITIAL_OPENER_A, 'lead-1') === openerArmFor('lead-1'), 'the opener split still substitutes normally');
-ok(openerTemplateFor(NAME, 'lead-1') === NAME, 'the opener split leaves this template alone, as it does every non-opener');
+/* The selected-opener rule reaches openers only (the 50/50 split was removed 2026-09-23). */
+ok(openerSendability(INITIAL_OPENER_A, INITIAL_OPENER_A).ok === true, 'the selected opener is sendable');
+ok(openerSendability(NAME, undefined).ok === true && openerSendability(NAME, INITIAL_OPENER_A).ok === true, 'the opener rule leaves this template alone, as it does every non-opener');
 ok(INITIAL_OPENER_B === 'initial_opener_v2' && !CONTINUATION_TEMPLATES.has(INITIAL_OPENER_B), 'initial_opener_v2 is still a COLD opener');
 
 console.log('── 2. SEVEN VARIABLES, ONE ORDER, BOTH REGISTRIES ──');

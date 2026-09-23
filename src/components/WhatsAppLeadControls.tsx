@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 import { classifyLineType } from '@/lib/lineType';
+import { openerSendability } from '@/lib/openerVariant';
+import { useSelectedOpener } from '@/hooks/useSelectedOpener';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -25,7 +27,11 @@ export function WhatsAppLeadControls({
      allowlist counts: a lead can be carrying a value from a removed or renamed template, and
      inheriting that silently is the same problem as substituting one. Removing from the queue is
      always allowed — being unable to cancel because of a bad template would be worse. */
-  const templateChosen = !!template && WHATSAPP_TEMPLATES.some((t) => t.value === template);
+  /* ⛔ An initial opener counts only if it is the SELECTED one (src/lib/openerVariant.ts) — the
+     same rule as the Outreach queue dialog and the Inbox; unknown selection = not queueable. */
+  const opener = useSelectedOpener();
+  const openerOk = openerSendability(template, opener.selected);
+  const templateChosen = !!template && WHATSAPP_TEMPLATES.some((t) => t.value === template) && openerOk.ok;
 
   const toggleQueue = async () => {
     // Guard as well as the disabled button: the button can be bypassed by a stale render, and this
@@ -109,9 +115,10 @@ export function WhatsAppLeadControls({
           <Select value={template} onValueChange={(v) => onUpdate(lead.id, { whatsapp_template: v })}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose a template" /></SelectTrigger>
             <SelectContent>
-              {WHATSAPP_TEMPLATES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-              ))}
+              {WHATSAPP_TEMPLATES.map((t) => {
+                const o = openerSendability(t.value, opener.selected);
+                return <SelectItem key={t.value} value={t.value} disabled={!o.ok}>{t.label}{!o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
+              })}
             </SelectContent>
           </Select>
           <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">
@@ -130,6 +137,9 @@ export function WhatsAppLeadControls({
           </Button>
           {/* Says why the button is dead. A disabled control with no explanation reads as a bug,
               and the picker's own placeholder is easy to miss. */}
+          {!queued && template && !openerOk.ok && (
+            <p className="mt-1.5 text-center text-[10px] text-orange-400">{openerOk.reason}</p>
+          )}
           {!queued && !templateChosen && (
             <p className="mt-1.5 text-center text-[10px] text-orange-400">
               Choose a template above before queueing — nothing is picked by default.

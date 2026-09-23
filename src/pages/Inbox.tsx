@@ -4,6 +4,7 @@ import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSen
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
+import { useSelectedOpener } from '@/hooks/useSelectedOpener';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -187,7 +188,7 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
      sent, so it must carry every template that could ever appear in a thread — gating it on the
      approval switch would make a real past message render as the bare word "Template" the moment
      the switch was turned back off. Picker = the future; this = the past. */
-  initial_opener_v2: 'Initial contact v2 (opener A/B variant)',
+  initial_opener_v2: 'Initial contact v2 (newer opener)',
   onboarding_followup: 'Onboarding follow-up',
   book_call: 'Arrange a call',
   re_engage_49: 'Re-engage (gone quiet)',
@@ -482,6 +483,9 @@ const Inbox = () => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
+  /* The ONE selected initial opener — the same rule the Outreach queue uses (src/lib/openerVariant.ts);
+     any other opener is disabled here and refused by send-whatsapp-message. */
+  const selectedOpener = useSelectedOpener();
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
   const sending = !!activeKey && sendingKeys.has(activeKey);
@@ -986,7 +990,7 @@ const Inbox = () => {
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
      an empty parameter, so it is only offered when this lead's crawl check found one. */
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false }, { selectedOpener: selectedOpener.selected });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */

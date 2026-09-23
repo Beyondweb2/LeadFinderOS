@@ -1,6 +1,6 @@
-/* The opener A/B lives in ONE leaf (src/lib/openerVariant.ts): both template names, the split,
-   and the single approval switch. Imported here so the picker cannot offer a template the split is
-   not yet allowed to send — one constant, two consumers, no second copy of the rule.
+/* The initial openers live in ONE leaf (src/lib/openerVariant.ts): both template names, the
+   selected-opener rule (no split since 2026-09-23) and the Meta approval switch. Imported here so the
+   label states the approval — one constant, no second copy of the rule.
    ⚠️ This file is reached by NO edge function (check-import-graph --reached-by), so the import adds
    nothing to any edge closure. */
 import { INITIAL_OPENER_B, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
@@ -494,7 +494,7 @@ export function canonicalFilterValue(value: StatusFilterValue): StatusFilterValu
 /** Approved WhatsApp outreach templates (Meta) an operator may send. Findable only.
  *  Keep in sync with the edge function's TEMPLATES allowlist in process-whatsapp-queue. */
 export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
-  { value: 'initial_contact', label: 'Initial contact (opener)' },
+  { value: 'initial_contact', label: 'Initial contact — original opener' },
   /* initial_opener_v2 — the A/B variant of the opener, submitted to Meta 2026-09-22.
      ⛔ LISTED UNCONDITIONALLY, AND THE LABEL CARRIES THE APPROVAL STATE INSTEAD. A conditional entry
      was tried first and template-picker-parity.test.ts refused it, correctly: while it was hidden,
@@ -504,14 +504,14 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      ⚠️ SO THE OPERATOR IS WARNED IN THE ONE PLACE THEY CHOOSE. While pending, the label says so —
      which is the same bet every other template here took (competitor_hook, barber_fresha_booksy),
      except that this one says it out loud rather than leaving it to a comment in the source.
-     ⛔ THE AUTOMATED SPLIT IS A SEPARATE, HARDER GATE: openerTemplateFor never returns v2 until
-     INITIAL_OPENER_V2_APPROVED is true, so no bulk-queued lead can be sent a pending template
-     however this list reads. One constant flips both. */
+     ⛔ THERE IS NO SPLIT (removed 2026-09-23). Only the SELECTED opener
+     (whatsapp_outreach_state.initial_opener_template) is sendable — every picker disables the other
+     through getTemplateSendability → openerSendability (src/lib/openerVariant.ts). */
   {
     value: INITIAL_OPENER_B,
     label: INITIAL_OPENER_V2_APPROVED
-      ? 'Initial contact v2 — opener A/B variant (no business name)'
-      : 'Initial contact v2 — opener A/B variant ⛔ PENDING META APPROVAL, a send will fail',
+      ? 'Initial contact v2 — newer opener (no business name)'
+      : 'Initial contact v2 — newer opener ⛔ PENDING META APPROVAL, a send will fail',
   },
   { value: 'audit_reply', label: 'Audit reply (report + competitors)' },
   /* 🔴 THE LABEL SAID "Audit result hook (outreach)" AND THAT IS THE NAME OF THE TEMPLATE THIS ONE

@@ -330,10 +330,8 @@ const THIRD_OPENERS = [
 ] as const;
 
 /* FNV-1a, 32-bit — a few lines, no dependency, byte-stable across engines, so the same lead always
-   reads the same message. openerVariant.ts has its own copy and they are deliberately NOT shared:
-   that one's hash is part of the A/B's stability contract (the same lead must keep its arm forever),
-   and wiring both to one function would mean a change made for the wording here silently reshuffles
-   which prospects are in which arm of a live experiment. A hash is a primitive, not a rule. */
+   reads the same message. (openerVariant.ts used to carry a copy for the opener A/B split; the
+   split was removed 2026-09-23.) A hash is a primitive, not a rule. */
 function fnv1a32(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
