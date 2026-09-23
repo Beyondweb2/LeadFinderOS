@@ -29,6 +29,11 @@ export const WIZARD_MAX_QUESTIONS = 5;
 export const WIZARD_DEFAULT_QUESTIONS = 3;
 
 /**
+ * 🔴 SUPERSEDED 2026-09-23 (Paul): the paid baseline now spans the home town AND the approved
+ * service areas — Discovery first, then a balanced 20 (src/lib/baselineMix.ts) — and the refund is
+ * judged on all 20. The text below is the 2026-09-12 policy it replaced, kept for the reasoning on
+ * sample size and variance, which still stands.
+ *
  * PAID BASELINE — day 0. HOME TOWN ONLY, 20 questions, measured over BASELINE_RUNS runs and
  * FROZEN: the refund is judged on this set and nothing else, and it is replayed verbatim at day 28
  * against outreach_leads.baseline_audit_id. Do NOT economise here: this is the money-back

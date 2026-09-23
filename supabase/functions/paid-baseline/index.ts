@@ -15,7 +15,8 @@ import {
   paidBaselineRunState,
   requireUpdatedRow,
 } from "../../../src/lib/paidBaselineState.ts";
-import { buildAuditPreviewRequest } from "../../../src/lib/auditQuestionContext.ts";
+import { buildBalancedBaseline, coverageReport, nearDuplicates, type Candidate } from "../../../src/lib/baselineMix.ts";
+import { discoveryState, generateDiscoveryPool, mixContext, startDiscoveryRun, DISCOVERY_MAX_QUESTIONS, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +89,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -140,6 +141,16 @@ Deno.serve(async (req) => {
     });
     const status = normalizePaidBaselineStatus(row.baseline_status);
     const questions = cleanQuestions(row.baseline_questions);
+    /* DISCOVERY (before the baseline): the stored pool and, when a Discovery audit has answers, each
+       question's opportunity. Read only — opening this screen asks no AI engine. */
+    const discoveryInput = {
+      businessName: String(lead.business_name ?? ""), businessCategory: merged.business_category, website: merged.website,
+      country: String(lead.country ?? ""), primaryTown: merged.primary_location, areas: merged.service_areas, services: merged.services,
+    };
+    const store = (row.baseline_discovery && typeof row.baseline_discovery === "object") ? row.baseline_discovery as DiscoveryStore : null;
+    const discovery = await discoveryState(service, store, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+    const mixCtx = mixContext(discoveryInput);
+    const coverage = coverageReport(questions, mixCtx, BASELINE_QUESTIONS);
     const details = {
       onboarding_id: row.id, lead_id: row.lead_id, business_name: merged.business_name,
       business_type: merged.business_category, location: merged.primary_location,
@@ -150,11 +161,13 @@ Deno.serve(async (req) => {
       crawl_context_source: selectedCrawl?.source ?? null,
       discovery_context: discoveryAudit?.id ? { audit_id: String(discoveryAudit.id), created_at: (discoveryAudit.created_at as string | null) ?? null } : null,
       status, questions, approved_at: row.baseline_approved_at || null,
+      discovery, coverage,
+      canonical_services: mixCtx.services.map((x) => x.label),
       ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
     };
     if (action === "get") return json({ ok: true, baseline: details });
 
-    if (["generate", "save", "approve", "run", "save_context"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
+    if (["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve", "run", "save_context"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
     /* starting / running / complete: the measurement has begun (or is being claimed by another
        starter this second). Every mutation answers with the row as it is — including `run`, so the
        screen that lost the claim shows "Starting baseline" and polls, never a second start. */
@@ -188,48 +201,64 @@ Deno.serve(async (req) => {
     }
 
     let next = questions;
-    if (action === "generate") {
+    const callEnv = { url, secret: Deno.env.get("CRON_SECRET") ?? "", serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", userId: user.id };
+
+    /* ══ DISCOVERY — generate the pool (one question-writing call per approved town; no AI engine is
+       asked). Replaces any earlier pool; never touches the baseline draft. ═════════════════════════ */
+    if (action === "discovery_generate") {
       if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
-      if (next.length === 0 || body.force === true) {
-        const contextLocation = typeof body.location === "string" ? body.location.trim() : details.location;
-        const contextServices = typeof body.services === "string" ? body.services.trim() : details.services;
-        const contextServiceList = cleanList(Array.isArray(body.services_list) ? body.services_list : details.services_list);
-        const contextAreas = cleanList(Array.isArray(body.areas_list) ? body.areas_list : details.areas_list);
-        const contextBusinessType = typeof body.business_type === "string" ? body.business_type.trim() : details.business_type;
-        const contextWebsite = typeof body.website === "string" ? body.website.trim() : details.website;
-        const preview = await fetch(`${url}/functions/v1/create-ai-audit`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
-            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
-            "x-internal-job": "1",
-          },
-          body: JSON.stringify(buildAuditPreviewRequest({
-            business_name: String(lead.business_name ?? ""),
-            business_category: String(contextBusinessType ?? ""),
-            primary_location: String(contextLocation ?? ""),
-            country: String(lead.country ?? ""),
-            website: String(contextWebsite ?? ""),
-            services: contextServiceList.length ? contextServiceList : cleanList(contextServices),
-            service_areas: contextAreas,
-            specialisms: [],
-          }, { questionCount: BASELINE_QUESTIONS, purpose: "baseline", userId: user.id, leadId: String(lead.id) })),
-        });
-        const payload = await preview.json().catch(() => ({}));
-        if (!preview.ok || !payload?.ok) {
-          console.error(`[paid-baseline] generate downstream status=${preview.status} error=${String(payload?.error ?? "unknown")}`);
-          return json({ ok: false, error: "question_generation_failed" }, 502);
-        }
-        next = cleanQuestions(payload.questions);
+      if (!discoveryInput.primaryTown || !discoveryInput.businessCategory) return json({ ok: false, error: "baseline_context_incomplete", detail: "Discovery needs a primary town and a business category — complete onboarding first." }, 422);
+      const fresh = await generateDiscoveryPool(discoveryInput, callEnv);
+      if (!fresh.pool.length) return json({ ok: false, error: "question_generation_failed", detail: "No Discovery questions came back. Try again in a moment." }, 502);
+      const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: fresh, updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid");
+      if (e) throw e;
+      const state = await discoveryState(service, fresh, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+      return json({ ok: true, baseline: { ...details, discovery: state } });
+    }
+
+    /* ══ DISCOVERY — measure the pool (priced on its button; an explicit press only). ═══════════ */
+    if (action === "discovery_run") {
+      if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
+      const pool = (store?.pool ?? []).map((p) => p.question).slice(0, DISCOVERY_MAX_QUESTIONS);
+      if (!pool.length) return json({ ok: false, error: "no_discovery_pool", detail: "Generate the Discovery questions first." }, 409);
+      if (discovery.audit && !discovery.audit.complete) return json({ ok: true, baseline: details, skipped: "discovery_running" });
+      if (body.confirm_cost !== true) return json({ ok: false, error: "confirm_cost_required", detail: "Discovery asks ChatGPT and Gemini — confirm the cost on the button." }, 400);
+      const auditId = await startDiscoveryRun({ ...discoveryInput, leadId: String(row.lead_id) }, pool, callEnv);
+      const nextStore: DiscoveryStore = { ...(store as DiscoveryStore), audit_id: auditId, run_started_at: new Date().toISOString() };
+      const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: nextStore }).eq("id", row.id).eq("status", "paid");
+      if (e) throw e;
+      const state = await discoveryState(service, nextStore, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+      return json({ ok: true, baseline: { ...details, discovery: state } });
+    }
+
+    /* ══ GENERATE = THE BALANCED BASELINE (2026-09-23) ═════════════════════════════════════════════
+       From the Discovery pool (generated first if there is none), plus the questions already in the
+       draft that Paul added himself (kept first), balanced across services, approved areas and intent
+       types, with no near-duplicates (src/lib/baselineMix.ts). ⛔ It never reads winnability. A DRAFT
+       only: nothing is frozen until Paul approves. */
+    if (action === "generate" || action === "balanced") {
+      if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
+      let poolStore = store;
+      if (!poolStore?.pool?.length) {
+        if (!discoveryInput.primaryTown || !discoveryInput.businessCategory) return json({ ok: false, error: "baseline_context_incomplete", detail: "The baseline needs a primary town and a business category — complete onboarding first." }, 422);
+        poolStore = await generateDiscoveryPool(discoveryInput, callEnv);
+        if (!poolStore.pool.length) return json({ ok: false, error: "question_generation_failed" }, 502);
+        await service.from("onboarding_responses").update({ baseline_discovery: poolStore }).eq("id", row.id).eq("status", "paid");
       }
+      const keep = body.keep_current === true ? cleanQuestions(body.questions) : [];
+      const candidates: Candidate[] = [
+        ...keep.map((q) => ({ question: q, source: "manual" as const })),
+        ...poolStore.pool.map((p) => ({ question: p.question, source: "discovery" as const })),
+      ];
+      next = buildBalancedBaseline(candidates, mixCtx, BASELINE_QUESTIONS);
       if (next.length === 0) return json({ ok: false, error: "no_questions_generated" }, 422);
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString(),
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
       requireUpdatedRow(updated, "baseline_state_changed");
-      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next } });
+      const state = poolStore === store ? discovery : await discoveryState(service, poolStore, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next, discovery: state, coverage: coverageReport(next, mixCtx, BASELINE_QUESTIONS) } });
     }
 
     if (action === "save") {
@@ -239,7 +268,7 @@ Deno.serve(async (req) => {
       const { data: updated, error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
       if (error) throw error;
       requireUpdatedRow(updated, "paid_onboarding_update_conflict");
-      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next } });
+      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next, coverage: coverageReport(next, mixCtx, BASELINE_QUESTIONS) } });
     }
 
     if (action === "approve") {
@@ -269,6 +298,15 @@ Deno.serve(async (req) => {
          sentence pointing at the field. */
       const refusal = contextRefusal(row, details);
       if (refusal) return json({ ok: false, ...refusal }, 422);
+      /* ⛔ NEAR-DUPLICATES ARE FLAGGED BEFORE THE FREEZE. The same question in two wordings makes the
+         frozen measuring stick 19 questions pretending to be 20. Paul can still proceed — knowingly. */
+      const dups = nearDuplicates(next, [mixCtx.primaryTown, ...mixCtx.areas]);
+      if (dups.length && body.accept_duplicates !== true) {
+        return json({
+          ok: false, error: "baseline_near_duplicates",
+          detail: `${dups.length} pair(s) ask the same thing in different words: ${dups.slice(0, 3).map(([a, b]) => `"${next[a]}" / "${next[b]}"`).join("; ")}. Replace them, or tick "approve anyway".`,
+        }, 409);
+      }
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "approved", baseline_approved_at: new Date().toISOString(), baseline_approved_by: user.id, updated_at: new Date().toISOString(),
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();

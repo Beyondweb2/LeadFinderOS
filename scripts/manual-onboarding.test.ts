@@ -53,14 +53,21 @@ const OP = '9d5a7629-3171-4091-b3a4-43010a1d424d';
 
 console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (findable-site) ──');
 {
-  const site = path.resolve(ROOT, '..', 'findable-site', 'src');
+  /* FINDABLE_SITE_DIR points at a specific findable-site checkout (a worktree on its latest
+     master); by default the sibling checkout. */
+  const site = path.resolve(process.env.FINDABLE_SITE_DIR || path.resolve(ROOT, '..', 'findable-site'), 'src');
   const flowPath = path.join(site, 'components', 'OnboardingFlow.tsx');
   const accessPath = path.join(site, 'lib', 'siteAccess.ts');
   if (!fs.existsSync(flowPath)) {
     ok(false, 'findable-site is not checked out beside this repo — the question wording CANNOT be verified (this is not a pass)');
   } else {
     const norm = (s: string) => s.replace(/&rsquo;|&#39;|&apos;/g, "'").replace(/\{"\s*"\}/g, ' ').replace(/\s+/g, ' ');
-    const customer = norm(fs.readFileSync(flowPath, 'utf8') + fs.readFileSync(accessPath, 'utf8'));
+    /* site.ts holds the customer copy constants (e.g. NEW_DOMAIN_GUARANTEE_NOTE); the term and
+       payment counts are rendered from findable-site's own constants before comparing. */
+    const siteTs = fs.readFileSync(path.join(site, 'lib', 'site.ts'), 'utf8');
+    const constant = (name: string) => new RegExp(`export const ${name} = (\\d+);`).exec(siteTs)?.[1] ?? '?';
+    const customer = norm((fs.readFileSync(flowPath, 'utf8') + fs.readFileSync(accessPath, 'utf8') + siteTs)
+      .replace(/\$\{MINIMUM_TERM_MONTHS\}/g, constant('MINIMUM_TERM_MONTHS')).replace(/\$\{TOTAL_PAYMENTS\}/g, constant('TOTAL_PAYMENTS')));
     const strings: string[] = [];
     const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
     walk(ONBOARDING_COPY);

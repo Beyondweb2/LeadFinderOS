@@ -41,7 +41,8 @@ const checks: Array<[string, boolean]> = [
   ['load path does not invoke a provider', !edge.slice(0, edge.indexOf('if (action === "generate")')).includes('/functions/v1/create-ai-audit')],
   ['unexpected server failures return a safe actionable code', edge.includes('baseline_request_failed') && helper.includes("baseline_request_failed: 'Could not load or update baseline setup. Please retry.'")],
   ['paid baseline prefers run crawl with lead cache fallback', edge.includes('ai_audit_runs') && edge.includes('lead_crawl_checks') && edge.includes('selectClientCrawlContext')],
-  ['normal audit and paid baseline share the preview request builder', edge.includes('buildAuditPreviewRequest') && hub.includes('areas_list: b.areas_list') && readFileSync(resolve(root, 'src/pages/AiAudit.tsx'), 'utf8').includes('buildAuditPreviewRequest')],
+  /* 2026-09-23: paid-baseline drafts via the Discovery module, which uses the same builder. */
+  ['normal audit and paid baseline share the preview request builder', readFileSync(resolve(root, 'supabase/functions/_shared/baseline-discovery.ts'), 'utf8').includes('buildAuditPreviewRequest') && edge.includes('generateDiscoveryPool') && hub.includes('areas_list: b.areas_list') && readFileSync(resolve(root, 'src/pages/AiAudit.tsx'), 'utf8').includes('buildAuditPreviewRequest')],
   ['multi-area generation request uses the supported service_areas field', JSON.stringify(multiAreaRequest).includes('"service_areas":["Canterbury","Whitstable","Herne Bay","Faversham","Ashford"]') && !/\bareas:\s*contextAreas/.test(edge)],
   ['multiple services are preserved and deduplicated', multiAreaRequest.specialisms === 'Emergency entry, Lock changes'],
   ['blank optional services do not block preview request construction', blankServicesRequest.specialisms === '' && blankServicesRequest.business_type === 'Locksmiths'],

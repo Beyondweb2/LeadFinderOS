@@ -510,8 +510,8 @@ function baselinePage(name: string, b: BaselineSummary): string {
       <div class="wp-box-navy">
         <p class="wp-boxtitle">How we measured it</p>
         <p>${b.questionCount} questions &middot; asked ${b.runs || 3} times each &middot; scored on
-        ${esc(b.engineLabels.join(' and ') || 'the AI tools named in your report')} &middot; judged in
-        your home town. The full question-by-question detail is in the report at the back of this pack.</p>
+        ${esc(b.engineLabels.join(' and ') || 'the AI tools named in your report')} &middot; judged on
+        these exact questions. The full question-by-question detail is in the report at the back of this pack.</p>
       </div>
       <h2 class="wp-h2">What happens next</h2>
       <div class="wp-rows">
@@ -526,7 +526,7 @@ function baselinePage(name: string, b: BaselineSummary): string {
         <div class="wp-row"><div class="wp-num">3</div><div class="wp-rowbody">
           <div class="wp-rowtitle">We measure again at four weeks</div>
           <p class="wp-rowline">The same frozen questions, the same AI tools, the same method, the same
-          home town. Nothing about the test changes.</p></div></div>
+          towns. Nothing about the test changes.</p></div></div>
         <div class="wp-row"><div class="wp-num">4</div><div class="wp-rowbody">
           <div class="wp-rowtitle">You get the before-and-after</div>
           <p class="wp-rowline">Side by side, with the same working shown.</p></div></div>

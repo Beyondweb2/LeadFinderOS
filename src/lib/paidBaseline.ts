@@ -15,6 +15,16 @@ export type PaidBaseline = {
     service_sources?: Record<string, string[]>;
     area_sources?: Record<string, string[]>;
   };
+  /** Discovery before the baseline: the pool, its Discovery audit's progress, per-question opportunity. */
+  discovery?: {
+    generated_at: string | null;
+    pool: Array<{ question: string; town: string | null; service: string | null; intent: string; opportunity?: { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; fragmentation: string; namedRuns: number; runs: number } | null }>;
+    towns_failed: string[];
+    audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean } | null;
+    estimate_usd: number;
+  };
+  /** The approved services with duplicates merged — the service axis of the coverage summary. */
+  canonical_services?: string[];
   /** What the latest crawl saw that no approved source lists — suggestions only, never measured. */
   detected?: { services: string[]; areas: string[] };
   crawl_context_at?: string | null;
@@ -49,6 +59,9 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   baseline_start_failed: 'The baseline did not start. The approved questions are kept; try again.',
   no_business_type: 'Add a business category before starting the baseline.',
   no_location: 'Add a primary location before starting the baseline.',
+  baseline_near_duplicates: 'Some questions ask the same thing in different words. Replace them, or tick "approve anyway".',
+  no_discovery_pool: 'Generate the Discovery questions first.',
+  confirm_cost_required: 'Discovery asks ChatGPT and Gemini — confirm the cost on the button.',
 };
 
 /** One client-side request shape and one useful error path for every paid-baseline entry point. */

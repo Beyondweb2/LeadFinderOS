@@ -22,6 +22,7 @@ import { BUILD_MODE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } 
 import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
+import { CoveragePanel, DiscoverySection, nearDuplicateCount } from '@/components/BaselineDiscovery';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
 import { onboardingStatus } from '@/lib/manualOnboarding';
 import { baselineReadiness } from '@/lib/baselineReadiness';
@@ -62,11 +63,13 @@ function ClientDetailsDialog({ lead, onboarding }: { lead: AnyRecord; onboarding
   </div>{notes.length > 0 && <div><p className="mb-1 text-xs text-muted-foreground">Saved notes / onboarding details</p><div className="space-y-2 rounded-md border p-3 text-sm">{notes.map((note, i) => <p key={i} className="whitespace-pre-wrap">{note}</p>)}</div></div>}<p className="text-xs text-muted-foreground">Read-only here. Existing lead and onboarding records remain the source of truth.</p></DialogContent></Dialog>;
 }
 
-type Busy = null | 'load' | 'save_context' | 'generate' | 'save' | 'approving' | 'starting';
+type Busy = null | 'load' | 'save_context' | 'generate' | 'discovery' | 'discovery_run' | 'save' | 'approving' | 'starting';
 const BUSY_TEXT: Record<Exclude<Busy, null>, string> = {
   load: 'Loading baseline setup…',
   save_context: 'Saving client context…',
-  generate: 'Preparing questions…',
+  generate: 'Building a balanced baseline…',
+  discovery: 'Writing Discovery questions for every approved town…',
+  discovery_run: 'Starting Discovery…',
   save: 'Saving draft…',
   approving: 'Approving questions…',
   starting: 'Starting baseline…',
@@ -97,6 +100,9 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  /** Questions Paul added from Discovery this session — kept first by the balanced generator. */
+  const [added, setAdded] = useState<string[]>([]);
+  const [acceptDuplicates, setAcceptDuplicates] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +115,9 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     return () => { cancelled = true; };
   }, [open, leadId, reloadKey]);
 
-  const invoke = useCallback((action: string, extra: Record<string, unknown> = {}) => invokePaidBaseline(action, leadId, extra), [leadId]);
+  /* The approval carries Paul's explicit "approve anyway" when near-duplicates remain (the server
+     refuses them otherwise). */
+  const invoke = useCallback((action: string, extra: Record<string, unknown> = {}) => invokePaidBaseline(action, leadId, action === 'approve' && acceptDuplicates ? { ...extra, accept_duplicates: true } : extra), [leadId, acceptDuplicates]);
   const accept = (next: Baseline) => { setData(next); setLoaded(next); setQuestions(next.questions); };
   const fail = (title: string, message: string) => { setError(message); toast({ title, description: message, variant: 'destructive' }); };
 
@@ -157,7 +165,17 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     } catch (e) { fail('Could not start baseline', e instanceof Error ? e.message : 'Try again'); }
     finally { setBusy(null); }
   });
-  const generate = (force = false) => data && act('generate', 'generate', { ...(force ? { force: true } : {}), ...contextOf(data) });
+  /* GENERATE = the balanced baseline from the Discovery pool (the server writes the pool first if
+     there is none), keeping the questions Paul added from Discovery. A draft, never a freeze. */
+  const generate = () => data && act('generate', 'generate', { ...contextOf(data), keep_current: added.length > 0, questions: added });
+  const generateDiscovery = () => data && act('discovery', 'discovery_generate');
+  const runDiscovery = () => {
+    if (!data?.discovery) return;
+    const ok = window.confirm(`Run Discovery: ${data.discovery.pool.length} questions × 3 runs on ChatGPT and Gemini, about ${data.discovery.estimate_usd.toFixed(2)}. Nothing is frozen and the paid baseline does not start. Continue?`);
+    if (ok) void act('discovery_run', 'discovery_run', { confirm_cost: true });
+  };
+  const addFromDiscovery = (q: string) => { setQuestions((cur) => [...cur.filter((x) => x.trim()), q]); setAdded((cur) => (cur.includes(q) ? cur : [...cur, q])); };
+  const duplicates = data ? nearDuplicateCount(data, cleanAuditQuestions(questions)) : 0;
 
   const frozen = !!data && isFrozenBaselineStatus(data.status);
   const started = !!data && isStartedBaselineStatus(data.status);
@@ -191,15 +209,20 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
         {data.crawl_context_at && <p className="mt-2 text-xs text-muted-foreground">Website context last refreshed {new Date(data.crawl_context_at).toLocaleString()}.</p>}
         {!started && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || !contextDirty} onClick={() => data && void act('save_context', 'save_context', contextOf(data))}><Save className="mr-1 h-4 w-4"/>Save client context</Button>}
       </section>
-      <section className="rounded-md border p-3"><h3 className="font-medium">B. Audit setup</h3><p className="mt-1 text-sm text-muted-foreground">Paid baseline · {data.location || 'location required'} · {BASELINE_QUESTIONS} questions × {BASELINE_RUNS} persisted runs. Preparation saves a draft only; it does not queue the audit.</p></section>
-      <section className="rounded-md border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-medium">C. Question setup ({count})</h3><p className="text-sm text-muted-foreground">Edit, remove, add, paste, or regenerate before approval.</p></div>{frozen ? <span className="flex items-center gap-1 text-xs text-emerald-600"><Lock className="h-3.5 w-3.5"/>Frozen</span> : <div className="flex gap-2"><Button size="sm" variant="outline" disabled={!!busy} onClick={() => void generate(true)}><RefreshCw className="mr-1 h-4 w-4"/>Regenerate</Button>{questions.length === 0 && <Button size="sm" disabled={!!busy} onClick={() => void generate()}><RefreshCw className="mr-1 h-4 w-4"/>Generate suggestions</Button>}</div>}</div>
+      <DiscoverySection data={data} questions={questions} busy={!!busy} frozen={frozen} onGenerate={() => void generateDiscovery()} onRun={runDiscovery} onAdd={addFromDiscovery}/>
+      <section className="rounded-md border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-medium">C. Question setup ({count})</h3><p className="text-sm text-muted-foreground">Edit, remove, add, paste, or regenerate before approval.</p></div>{frozen ? <span className="flex items-center gap-1 text-xs text-emerald-600"><Lock className="h-3.5 w-3.5"/>Frozen</span> : <div className="flex gap-2"><Button size="sm" variant={questions.length ? 'outline' : 'default'} disabled={!!busy} onClick={() => void generate()} title="20 questions balanced across the approved services, the home town and the approved areas, and intent types — from the Discovery pool, keeping any you added. Winnability is not used to choose.">
+            <RefreshCw className="mr-1 h-4 w-4"/>Generate balanced baseline{added.length ? ` (keeps ${added.length} added)` : ''}</Button></div>}</div>
         <div className="mt-3"><AuditQuestionEditor questions={questions} onChange={setQuestions} disabled={frozen} busy={!!busy}/></div>
+        <CoveragePanel data={data} questions={cleanAuditQuestions(questions)}/>
         {!frozen && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || count === 0} onClick={() => void act('save', 'save', { questions: cleanAuditQuestions(questions) })}><Save className="mr-1 h-4 w-4"/>Save draft</Button>}
       </section>
       <section className="rounded-md border border-primary/30 bg-primary/5 p-3"><h3 className="font-medium">D. Approval + start</h3><p className="mt-1 text-sm text-muted-foreground">Approval freezes the exact text and order. The server queues that frozen set × {BASELINE_RUNS}.</p>
         {!frozen && <>
           <p className="mt-2 text-sm">{count === BASELINE_QUESTIONS ? `Exactly ${BASELINE_QUESTIONS} questions — ready to approve.` : `Approval needs exactly ${BASELINE_QUESTIONS} questions (currently ${count}).`}</p>
-          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve &amp; start baseline</Button>
+          <p className="mt-1 text-xs text-muted-foreground">The refund is judged on all {BASELINE_QUESTIONS} approved questions — home town and approved areas — asked again, word for word, at re-measure.</p>
+          {duplicates > 0 && <label className="mt-2 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300"><input type="checkbox" className="mt-1" checked={acceptDuplicates} onChange={(e) => setAcceptDuplicates(e.target.checked)}/>
+            <span>{duplicates} near-duplicate pair{duplicates === 1 ? '' : 's'} flagged above. Approve anyway — I have checked they are genuinely different questions.</span></label>}
+          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS || (duplicates > 0 && !acceptDuplicates)} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve &amp; start baseline</Button>
         </>}
         {data.status === 'approved' && <>
           <p className="mt-2 text-sm">The question set is frozen. Complete section A if anything is missing, then start.</p>

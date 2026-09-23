@@ -81,7 +81,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - ⛔ **No surface may name one figure without the other.** ⛔ **Never claim an SEO score.** "Reply to
   your reviews" is a real promise (needs the client's GBP access).
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
-  questions and engines, **judged in the home town only**; if the number has not gone up, they
+  questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
+  areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
+  were); if the number has not gone up, they
   email within 14 days of their results and get the £99 back. `findable.live/refunds` is the
   customer-facing authority. ⛔ **No hedge beside it** ("the engines decide", "anyone who promises is
   guessing") — a promise with a disclaimer stapled on reads as walking it back.
@@ -98,7 +100,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   | | Shape | `audit_purpose` | Compared? |
   |---|---|---|---|
   | Hook / free check | 3 q × 1 run (free check 3 × 3) | `audit` / `free_check` | never |
-  | Baseline | 12 q, home town, × 3 runs, frozen | `baseline` | the before side |
+  | Discovery (paid clients, optional) | wide pool, one generator call per approved town, × 3 if run | `discovery` | never — it informs the choice |
+  | Baseline | 20 q, home town + approved areas, balanced, × 3 runs, frozen | `baseline` | the before side |
   | Full measure | 20 q × 3 across home + areas, DISJOINT | `measurement` | never |
   | Day-28 replay | the baseline's ASKED set verbatim × 3 | `remeasure` | the after side |
   Order is structural: the full measure starts only from `onBaselineFrozen`; a paying lead with no
@@ -550,6 +553,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `manual-onboarding.test.ts` — change the customer copy and that test fails until this matches.
 - **The crawl never MERGES into what the baseline measures** — onboarding → verified build facts →
   lead → Discovery; crawl services/towns are `detected_*` suggestions only.
+- **Paid baseline = Discovery → balanced 20 → approve** (`docs/discovery-balanced-baseline.md`).
+  Discovery asks the generator once PER APPROVED TOWN (no lead id, or `pickAuditTown` overrides the
+  town); the draft is `buildBalancedBaseline` (`src/lib/baselineMix.ts`), which spreads services, towns
+  and intent types and ⛔ **never reads winnability**. Near-duplicates are "same intent" by
+  `sameIntent` (meaning tokens + town), not by case/plural; approval refuses them unless
+  `accept_duplicates`. The create-ai-audit baseline preview is still home-town-pinned — do not use it
+  to draft a paid baseline.
 
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
