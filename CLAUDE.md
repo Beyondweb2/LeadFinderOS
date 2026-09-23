@@ -560,6 +560,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `sameIntent` (meaning tokens + town), not by case/plural; approval refuses them unless
   `accept_duplicates`. The create-ai-audit baseline preview is still home-town-pinned — do not use it
   to draft a paid baseline.
+- **Discovery progress is counted in MEASUREMENTS** (question × engine × run), from the stored rows,
+  by `src/lib/discoveryProgress.ts` — never in whole runs, never a client counter
+  (`docs/discovery-progress.md`). **One job per pool:** the start is a compare-and-set on
+  `baseline_discovery`; a finished pool refuses a re-run; regenerate is refused mid-run and keeps the
+  old job in `history`. A job is attached only if its questions all belong to the pool.
 
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
