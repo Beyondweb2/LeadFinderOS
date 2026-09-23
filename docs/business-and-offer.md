@@ -14,8 +14,11 @@ this section, this section wins.
   £99 plan on 2026-09-18 (commit `3a49d5e9`); the words, the term and the end of billing caught up on
   2026-09-23.
 - **Billing:** the webhook creates the Stripe subscription at sign-up with a 42-day trial
-  (`FINDABLE_MONTHLY_DELAY_DAYS`) and `cancel_at` exactly `FINDABLE_MINIMUM_TERM_MONTHS` months after
-  the first charge (`minimumTermCancelAt`, `_shared/delayed-subscription.ts`) — 12 payments, then it
+  (`FINDABLE_MONTHLY_DELAY_DAYS`) and `cancel_at` exactly `FINDABLE_RECURRING_PAYMENTS` months after
+  the first recurring charge (`minimumTermCancelAt`, `_shared/delayed-subscription.ts`). **12 payments
+  in total (`FINDABLE_TOTAL_PAYMENTS`), the sign-up £99 being the first: 11 recurring, £1,188 nominal**
+  (`FINDABLE_CONTRACT_TOTAL_GBP`). ⛔ The first cut the same day billed 12 recurring on top of the
+  sign-up — 13 in total — and was corrected before any subscription existed. It then
   stops. There is **no** £29.99 continuation and no open-ended £99.
 - **The 12 months is a real minimum.** Customer copy no longer says "you can cancel before it
   starts" (card screen), "cancel here … nothing is taken" (monthly-starts email), "Cancel any time

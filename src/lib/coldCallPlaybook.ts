@@ -42,7 +42,7 @@ import { pluraliseTrade } from './templateVars.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl } from './findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, reportPublicUrl } from './findableOffer.ts';
 import { shortReportUrl } from './reportSlug.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
@@ -573,7 +573,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       FINDABLE_GUARANTEE,
     ],
     /* Paul's build terms (findableOffer.ts, FINDABLE_MINIMUM_TERM_MONTHS) — they apply to a site we build. */
-    monthly: 'If we build the site: we build, host and manage it for the ' + FINDABLE_MINIMUM_TERM_MONTHS + " months, and once the term is complete and paid, it's theirs. Nothing is charged after the " + FINDABLE_MINIMUM_TERM_MONTHS + ' months.',
+    monthly: 'If we build the site: we build, host and manage it for the ' + FINDABLE_MINIMUM_TERM_MONTHS + " months, and once the term is complete and paid, it's theirs. Nothing is charged after the " + FINDABLE_TOTAL_PAYMENTS + 'th payment (the sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first).',
     nextSteps,
   };
 
