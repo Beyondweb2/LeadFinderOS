@@ -7,6 +7,7 @@
 import { articleTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../../../src/lib/templateVars.ts";
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
+import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -994,6 +995,20 @@ export function textPayload(body: string) {
   return { type: "text", text: { body, preview_url: false } };
 }
 
+/**
+ * True when a registered template must NOT be sent because Meta has not approved it yet.
+ *
+ * ⛔ THE ONE SERVER-SIDE ANSWER, read by claimTemplatePayload (every send) and by the queue's two
+ * auto-send settings (so the dropdown cannot store it). A second copy of this check would be one
+ * rule in two places on the path that spends a real message on a real prospect.
+ * ⚠️ The switch itself stays where it has always been — AI_SITE_FINDINGS_V2_APPROVED in
+ * src/lib/siteFindings.ts, one line, flipped by a human after looking in WhatsApp Manager. This only
+ * READS it, so flipping it there releases every door at once.
+ */
+export function templateAwaitingApproval(templateName: string): boolean {
+  return templateName === AI_SITE_FINDINGS_V2 && !AI_SITE_FINDINGS_V2_APPROVED;
+}
+
 /** A claim-template payload (deliverable any time). Variable order comes from the
  *  template's own `vars` in WA_TEMPLATES (falls back to the original name→url order
  *  for any unknown template, so nothing regresses). */
@@ -1012,6 +1027,22 @@ export function claimTemplatePayload(
      normal operation and exists to keep it that way. */
   const entry = WA_TEMPLATES[templateName];
   if (!entry) throw new Error(`unknown_template:${templateName} — not registered in WA_TEMPLATES, refusing to guess its variables`);
+  /* ⛔ THE SERVER-SIDE APPROVAL GATE, AND IT IS HERE BECAUSE THIS IS THE ONLY DOOR (2026-09-23).
+     Every template payload any edge function sends to Meta is built by this function — the Inbox
+     sender, the queue's drip, its first-reply and completion lanes, the payment and free-check
+     senders. So a template refused HERE cannot reach the wire from anywhere.
+     🔴 WHY IT HAD TO MOVE SERVER-SIDE. Until this, the approval switch was read only by
+     getTemplateSendability, which the Inbox's MANUAL picker calls. The Inbox's AUTO-SEND dropdown
+     lists every registered template and does not call it, and the queue validated that setting
+     against WA_TEMPLATES alone — so the moment ai_site_findings_v2 was registered, one click there
+     would have had the queue auto-send an unapproved template to every lead that replied, each send
+     failing at Meta in front of a real prospect. Found while verifying this deploy; nothing had been
+     configured that way.
+     ⚠️ The `unsafe_template_var:` prefix is deliberate: every sender already catches it and turns it
+     into a visible HOLD with its reason, rather than a failed send or a crash. */
+  if (templateAwaitingApproval(templateName)) {
+    throw new Error(`unsafe_template_var:template_not_approved:${templateName} is waiting on Meta approval — a send would fail`);
+  }
   const vars = entry.vars;
   /* ⛔ THE HEADER COMPONENT COMES FIRST, and Meta requires the ORDER header-then-body. A template
      registered with a VIDEO header and sent with only a body is rejected; the reverse — sending a

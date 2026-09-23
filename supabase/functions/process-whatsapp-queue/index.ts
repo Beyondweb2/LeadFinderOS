@@ -6,7 +6,7 @@ import { rivalHookDecision, templateNeedsRivals } from "../../../src/lib/rivalHo
 /* ⚠️ templateBodyParams IS DELIBERATELY NOT IMPORTED ANY MORE. This file used to assemble one
    send payload by hand from it, which is how video_template went out without its video header for
    its entire life. Payloads come from claimTemplatePayload, which reads the registry. */
-import { renderTemplateBody, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, type TemplateVar } from "../_shared/whatsapp-send.ts";
+import { renderTemplateBody, claimTemplatePayload, sendViaGraph, WA_TEMPLATES, TEMPLATES_NEEDING_REAL_NAME, firstNameFrom, templateAwaitingApproval, type TemplateVar } from "../_shared/whatsapp-send.ts";
 import { hookFollowupEligible } from "../_shared/hook-followup-eligibility.ts";
 import { contactFollowupEligible } from "../_shared/contact-followup-eligibility.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
@@ -683,6 +683,11 @@ Deno.serve(async (req) => {
       const raw = typeof body.template === "string" ? body.template.trim() : "";
       const next: string | null = raw ? raw : null;
       if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      /* ⛔ REGISTERED IS NOT SENDABLE. An auto-send template fires on its own for every qualifying
+         lead, so storing one Meta has not approved would turn one click into a stream of failed sends
+         to real prospects. claimTemplatePayload would hold each of them anyway; refusing it HERE means
+         the operator is told at the moment they choose it, not after the first prospect is skipped. */
+      if (next && templateAwaitingApproval(next)) return json({ ok: false, error: "template_not_approved", detail: `${next} is waiting on Meta approval` }, 400);
       const { error: sErr } = await service.from("whatsapp_outreach_state")
         .update({ audit_complete_template: next, updated_at: new Date().toISOString() })
         .eq("id", 1);
@@ -696,6 +701,8 @@ Deno.serve(async (req) => {
       const raw = typeof body.template === "string" ? body.template.trim() : "";
       const next: string | null = raw ? raw : null;
       if (next && !WA_TEMPLATES[next]) return json({ ok: false, error: "unknown_template" }, 400);
+      // ⛔ Same rule as the completion template above — registered is not sendable.
+      if (next && templateAwaitingApproval(next)) return json({ ok: false, error: "template_not_approved", detail: `${next} is waiting on Meta approval` }, 400);
       const { error: sErr } = await service.from("whatsapp_outreach_state")
         .update({ first_reply_template: next, updated_at: new Date().toISOString() })
         .eq("id", 1);
