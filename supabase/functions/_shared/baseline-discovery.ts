@@ -17,6 +17,7 @@ import { canonicalServices, classifyQuestion, dedupeByMeaning, type MixContext }
 import { opportunityFor, type Opportunity } from "../../../src/lib/discoveryOpportunity.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import type { QueueRow } from "../../../src/lib/auditReport.ts";
+import { discoveryProgress, poolMatchesJob, poolVersion, type DiscoveryProgress, type ProgressRow, type ProgressRun, type QuestionProgress } from "../../../src/lib/discoveryProgress.ts";
 /** = src/lib/queueAuditStatus.ts RUN_USABLE (that module is not edge-safe). balanced-baseline.test.ts
  *  fails if the two ever differ. */
 export const DISCOVERY_RUN_USABLE = new Set(["complete", "capped"]);
@@ -30,7 +31,22 @@ export const DISCOVERY_MAX_QUESTIONS = 80;
 export const DISCOVERY_USD_PER_QUESTION_RUN = 0.0104;   // = AI_SEARCH_USD_PER_QUESTION (billed rows)
 
 export interface PoolItem { question: string; town: string | null; service: string | null; intent: string }
-export interface DiscoveryStore { generated_at: string; pool: PoolItem[]; towns_failed?: string[]; audit_id?: string | null; run_started_at?: string | null }
+/** Stored on onboarding_responses.baseline_discovery. `pool_version` identifies the pool (a stable
+ *  hash of its questions); `audit_id` + `audit_pool_version` are the ONE Discovery job measuring it;
+ *  `run_claimed_at` is the start claim (paid-baseline, discovery_run); `history` keeps earlier
+ *  pools' jobs when the pool is regenerated, so no measurement is ever detached silently. */
+export interface DiscoveryStore {
+  generated_at: string; pool: PoolItem[]; towns_failed?: string[];
+  pool_version?: string;
+  audit_id?: string | null; audit_pool_version?: string | null; run_started_at?: string | null;
+  run_claimed_at?: string | null;
+  history?: Array<{ pool_version: string; generated_at: string; questions: number; audit_id: string | null }>;
+}
+/** A claim older than this with no audit written is a start that died mid-way; it may be retaken.
+ *  The fallback audit lookup in discoveryState still finds any audit that start DID create. */
+export const DISCOVERY_CLAIM_STALE_MS = 5 * 60 * 1000;
+export const storePoolVersion = (store: Pick<DiscoveryStore, "pool" | "pool_version"> | null): string | null =>
+  store?.pool?.length ? (store.pool_version ?? poolVersion(store.pool.map((p) => p.question))) : null;
 
 export interface DiscoveryInput {
   businessName: string; businessCategory: string; website: string; country: string;
@@ -94,7 +110,7 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
     const m = classifyQuestion(q, ctx);
     return { question: q, town: m.town, service: m.service, intent: m.intent };
   });
-  return { generated_at: new Date().toISOString(), pool, ...(failed.length ? { towns_failed: failed } : {}), audit_id: null };
+  return { generated_at: new Date().toISOString(), pool, pool_version: poolVersion(pool.map((p) => p.question)), ...(failed.length ? { towns_failed: failed } : {}), audit_id: null };
 }
 
 /** Measure the pool as a Discovery audit (runs = DISCOVERY_RUNS). Returns the audit id. */
@@ -117,18 +133,32 @@ export async function startDiscoveryRun(input: DiscoveryInput & { leadId: string
 
 export interface DiscoveryState {
   generated_at: string | null;
-  pool: Array<PoolItem & { opportunity?: Opportunity | null }>;
+  pool_version: string | null;
+  pool: Array<PoolItem & { opportunity?: Opportunity | null; progress?: Omit<QuestionProgress, "question"> | null }>;
   towns_failed: string[];
-  audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean } | null;
+  /** The ONE Discovery job measuring this pool, and its measurement-level progress. */
+  audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean; progress: Omit<DiscoveryProgress, "by_question"> } | null;
+  /** A Discovery audit exists for this lead but measured a DIFFERENT question set — never attached. */
+  mismatch: { audit_id: string } | null;
+  /** A start is claimed and its audit not written yet (a press in the last few seconds). */
+  starting: boolean;
   estimate_usd: number;
 }
 
 /** What the screen shows: the stored pool, and — if a Discovery audit exists for it — its progress
- *  and each question's opportunity. READ ONLY. */
+ *  and each question's opportunity. READ ONLY: it asks no engine and writes nothing, so opening,
+ *  reopening or polling the screen can never start or repeat a measurement. */
 export async function discoveryState(service: Client, store: DiscoveryStore | null, leadId: string, biz: { name: string; location: string; website: string }): Promise<DiscoveryState> {
   const pool: DiscoveryState["pool"] = (store?.pool ?? []).map((p) => ({ ...p }));
+  const version = storePoolVersion(store);
   let auditId = store?.audit_id ?? null;
-  if (!auditId && store?.generated_at) {
+  /* A job recorded against a different pool version is not this pool's (defence in depth — the pool
+     cannot be regenerated while a job runs, and a regenerate moves the old job to history). */
+  let mismatch: DiscoveryState["mismatch"] = null;
+  if (auditId && store?.audit_pool_version && version && store.audit_pool_version !== version) { mismatch = { audit_id: auditId }; auditId = null; }
+  /* The fallback for a start whose audit id was never written back: the newest Discovery audit of
+     this lead created after the pool. Attached only if its questions belong to this pool (below). */
+  if (!auditId && !mismatch && store?.generated_at) {
     const { data: a } = await service.from("ai_audits").select("id").eq("lead_id", leadId).eq("audit_purpose", "discovery")
       .gte("created_at", store.generated_at).order("created_at", { ascending: false }).limit(1).maybeSingle();
     auditId = (a?.id as string | undefined) ?? null;
@@ -136,29 +166,53 @@ export async function discoveryState(service: Client, store: DiscoveryStore | nu
   let audit: DiscoveryState["audit"] = null;
   if (auditId) {
     const [{ data: a }, { data: runs }] = await Promise.all([
-      service.from("ai_audits").select("id,created_at,baseline_target_runs,baseline_completed_at").eq("id", auditId).maybeSingle(),
-      service.from("ai_audit_runs").select("id,status").eq("audit_id", auditId),
+      service.from("ai_audits").select("id,created_at,baseline_target_runs,baseline_completed_at,baseline_error").eq("id", auditId).maybeSingle(),
+      service.from("ai_audit_runs").select("id,run_number,status,created_at,results").eq("audit_id", auditId).order("run_number"),
     ]);
-    const runIds = ((runs ?? []) as Array<{ id: string }>).map((r) => r.id);
-    const done = ((runs ?? []) as Array<{ status: string }>).filter((r) => DISCOVERY_RUN_USABLE.has(String(r.status))).length;
-    audit = { id: auditId, created_at: (a?.created_at as string | null) ?? null, runs_done: done, runs_target: Number(a?.baseline_target_runs ?? DISCOVERY_RUNS), complete: !!a?.baseline_completed_at };
+    const runList = (runs ?? []) as Array<ProgressRun & { results?: { discovery_config?: { engines?: unknown } } | null }>;
+    const runIds = runList.map((r) => r.id);
+    const rows: Array<QueueRow & ProgressRow> = [];
     if (runIds.length) {
-      const rows: QueueRow[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data } = await service.from("ai_audit_queue").select("id,question,status,result").in("run_id", runIds).order("id").range(from, from + 999);
-        const batch = (data ?? []) as QueueRow[];
+        const { data } = await service.from("ai_audit_queue").select("id,run_id,question,status,result,updated_at").in("run_id", runIds).order("id").range(from, from + 999);
+        const batch = (data ?? []) as Array<QueueRow & ProgressRow>;
         rows.push(...batch);
         if (batch.length < 1000) break;
       }
-      const answered = rows.filter((r) => r.result && typeof r.result === "object");
-      const byQ = new Set(answered.map((r) => r.question.trim()));
-      for (const p of pool) p.opportunity = byQ.has(p.question.trim())
-        ? opportunityFor(p.question, answered, { businessName: biz.name, location: biz.location, website: biz.website, isAggregatorUrl })
-        : null;
+    }
+    /* The job's own questions are run 1's rows — what was actually queued, after create-ai-audit's
+       own dedupe — never the pool on screen. */
+    const first = runList[0];
+    const jobQuestions = first ? rows.filter((r) => r.run_id === first.id).map((r) => r.question) : [];
+    if (!poolMatchesJob(pool.map((p) => p.question), jobQuestions)) {
+      mismatch = { audit_id: auditId };
+    } else {
+      const cfgEngines = first?.results?.discovery_config?.engines;
+      const engines = Array.isArray(cfgEngines) && cfgEngines.length && cfgEngines.every((e) => typeof e === "string") ? cfgEngines as string[] : ["chatgpt", "gemini"];
+      const targetRuns = Number(a?.baseline_target_runs ?? DISCOVERY_RUNS) || DISCOVERY_RUNS;
+      const { by_question, ...progress } = discoveryProgress({
+        questions: jobQuestions, engines, targetRuns, runs: runList, rows,
+        startedAt: (a?.created_at as string | null) ?? null, completedAt: (a?.baseline_completed_at as string | null) ?? null,
+        error: (a?.baseline_error as string | null) ?? null,
+      });
+      const usableRuns = runList.filter((r) => DISCOVERY_RUN_USABLE.has(String(r.status))).length;
+      audit = { id: auditId, created_at: (a?.created_at as string | null) ?? null, runs_done: usableRuns, runs_target: targetRuns, complete: !!a?.baseline_completed_at, progress };
+      const byQ = new Map(by_question.map((q) => [q.question.trim().toLowerCase(), q]));
+      const answeredRows = rows.filter((r) => r.status === "done" && r.result && typeof r.result === "object");
+      const hasAnswer = new Set(answeredRows.map((r) => r.question.trim()));
+      for (const p of pool) {
+        const qp = byQ.get(p.question.trim().toLowerCase());
+        p.progress = qp ? { state: qp.state, engines: qp.engines, done: qp.done, failed: qp.failed, total: qp.total } : null;
+        p.opportunity = hasAnswer.has(p.question.trim())
+          ? opportunityFor(p.question, answeredRows, { businessName: biz.name, location: biz.location, website: biz.website, isAggregatorUrl })
+          : null;
+      }
     }
   }
+  const claimedMs = store?.run_claimed_at ? new Date(store.run_claimed_at).getTime() : NaN;
   return {
-    generated_at: store?.generated_at ?? null, pool, towns_failed: store?.towns_failed ?? [], audit,
+    generated_at: store?.generated_at ?? null, pool_version: version, pool, towns_failed: store?.towns_failed ?? [], audit, mismatch,
+    starting: !audit && Number.isFinite(claimedMs) && Date.now() - claimedMs < DISCOVERY_CLAIM_STALE_MS,
     estimate_usd: Math.round(pool.length * DISCOVERY_RUNS * DISCOVERY_USD_PER_QUESTION_RUN * 100) / 100,
   };
 }

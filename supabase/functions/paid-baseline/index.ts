@@ -16,7 +16,7 @@ import {
   requireUpdatedRow,
 } from "../../../src/lib/paidBaselineState.ts";
 import { buildBalancedBaseline, coverageReport, nearDuplicates, type Candidate } from "../../../src/lib/baselineMix.ts";
-import { discoveryState, generateDiscoveryPool, mixContext, startDiscoveryRun, DISCOVERY_MAX_QUESTIONS, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
+import { discoveryState, generateDiscoveryPool, mixContext, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,8 +208,20 @@ Deno.serve(async (req) => {
     if (action === "discovery_generate") {
       if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       if (!discoveryInput.primaryTown || !discoveryInput.businessCategory) return json({ ok: false, error: "baseline_context_incomplete", detail: "Discovery needs a primary town and a business category — complete onboarding first." }, 422);
+      /* ⛔ NOT WHILE A JOB IS MEASURING THIS POOL. Replacing the pool mid-run would leave a job
+         spending on questions nobody can see, and mix its answers into a pool it never asked. */
+      if (discovery.starting || discovery.audit?.progress.status === "running") {
+        return json({ ok: false, error: "discovery_running", detail: "Discovery is still measuring the current questions. Wait for it to finish, then regenerate — its results are kept either way." }, 409);
+      }
       const fresh = await generateDiscoveryPool(discoveryInput, callEnv);
       if (!fresh.pool.length) return json({ ok: false, error: "question_generation_failed", detail: "No Discovery questions came back. Try again in a moment." }, 502);
+      /* The old pool's job is KEPT, attached to the old pool version — its audit and every answer stay
+         in ai_audits / ai_audit_queue untouched; the new pool starts unmeasured. */
+      const oldVersion = storePoolVersion(store);
+      const oldAudit = discovery.audit?.id ?? store?.audit_id ?? null;
+      if (store && oldVersion) {
+        fresh.history = [{ pool_version: oldVersion, generated_at: store.generated_at, questions: store.pool.length, audit_id: oldAudit }, ...(store.history ?? [])].slice(0, 10);
+      }
       const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: fresh, updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid");
       if (e) throw e;
       const state = await discoveryState(service, fresh, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
@@ -221,10 +233,51 @@ Deno.serve(async (req) => {
       if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       const pool = (store?.pool ?? []).map((p) => p.question).slice(0, DISCOVERY_MAX_QUESTIONS);
       if (!pool.length) return json({ ok: false, error: "no_discovery_pool", detail: "Generate the Discovery questions first." }, 409);
-      if (discovery.audit && !discovery.audit.complete) return json({ ok: true, baseline: details, skipped: "discovery_running" });
+      /* ⛔ ONE JOB PER POOL. A pool that already has a job answers with that job — running shows its
+         progress, finished says so — and never starts a second, identical, paid measurement. A new
+         Discovery means new questions: Regenerate (which keeps the old job in history). */
+      if (discovery.starting) return json({ ok: true, baseline: details, skipped: "discovery_starting" });
+      if (discovery.audit) {
+        if (discovery.audit.progress.status === "running") return json({ ok: true, baseline: details, skipped: "discovery_running" });
+        return json({ ok: false, error: "discovery_already_run", detail: "Discovery has already measured these questions — its results are shown below. To measure again, regenerate the Discovery questions first." }, 409);
+      }
       if (body.confirm_cost !== true) return json({ ok: false, error: "confirm_cost_required", detail: "Discovery asks ChatGPT and Gemini — confirm the cost on the button." }, 400);
-      const auditId = await startDiscoveryRun({ ...discoveryInput, leadId: String(row.lead_id) }, pool, callEnv);
-      const nextStore: DiscoveryStore = { ...(store as DiscoveryStore), audit_id: auditId, run_started_at: new Date().toISOString() };
+      /* ⛔ THE START CLAIM — the database decides, not a read a second ago (CLAUDE.md §4: a
+         correctness decision never reads a copy that races its own write). A compare-and-set on the
+         stored pool: same pool (generated_at), no job attached (audit_id null), and the claim we read
+         (none, or a stale one). Two presses from two tabs: exactly one update lands; the other gets
+         no row back and answers with the job that is starting. */
+      const claimAt = new Date().toISOString();
+      const prevClaim = store?.run_claimed_at ?? null;
+      const version = storePoolVersion(store);
+      /* A stored audit id reaching here measured a DIFFERENT question set (discovery.mismatch) — it is
+         kept in history, never overwritten silently. */
+      const prevAudit = store?.audit_id ?? null;
+      const claimedStore: DiscoveryStore = {
+        ...(store as DiscoveryStore), pool_version: version ?? undefined, run_claimed_at: claimAt,
+        ...(prevAudit && version ? { history: [{ pool_version: store?.audit_pool_version ?? "unknown", generated_at: String(store?.generated_at ?? ""), questions: 0, audit_id: prevAudit }, ...(store?.history ?? [])].slice(0, 10) } : {}),
+      };
+      let claimQ = service.from("onboarding_responses")
+        .update({ baseline_discovery: claimedStore })
+        .eq("id", row.id).eq("status", "paid")
+        .eq("baseline_discovery->>generated_at", String(store?.generated_at ?? ""));
+      claimQ = prevAudit ? claimQ.eq("baseline_discovery->>audit_id", prevAudit) : claimQ.is("baseline_discovery->>audit_id", null);
+      claimQ = prevClaim ? claimQ.eq("baseline_discovery->>run_claimed_at", prevClaim) : claimQ.is("baseline_discovery->>run_claimed_at", null);
+      const { data: claimed, error: claimErr } = await claimQ.select("id").maybeSingle();
+      if (claimErr) throw claimErr;
+      if (!claimed) return json({ ok: true, baseline: details, skipped: "discovery_starting" });
+      let auditId: string;
+      try {
+        auditId = await startDiscoveryRun({ ...discoveryInput, leadId: String(row.lead_id) }, pool, callEnv);
+      } catch (startErr) {
+        /* Nothing was created: release OUR claim so the press can be retried at once. */
+        await service.from("onboarding_responses").update({ baseline_discovery: { ...claimedStore, run_claimed_at: null } })
+          .eq("id", row.id).eq("baseline_discovery->>run_claimed_at", claimAt);
+        return json({ ok: false, error: "discovery_start_failed", detail: `Discovery did not start: ${errMsg(startErr)}. Nothing was measured — try again.` }, 502);
+      }
+      const nextStore: DiscoveryStore = { ...claimedStore, audit_id: auditId, audit_pool_version: version, run_started_at: new Date().toISOString() };
+      /* If this write is lost, discoveryState's fallback still finds the audit (newest Discovery audit
+         of the lead after the pool, whose questions belong to the pool), so it cannot be started twice. */
       const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: nextStore }).eq("id", row.id).eq("status", "paid");
       if (e) throw e;
       const state = await discoveryState(service, nextStore, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });

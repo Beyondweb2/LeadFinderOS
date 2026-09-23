@@ -1,5 +1,6 @@
 import { EdgeFunctionError, invokeEdge } from '@/lib/edgeInvoke';
 import type { PaidBaselineStatus } from './paidBaselineState';
+import type { DiscoveryProgress, QuestionProgress } from './discoveryProgress';
 
 export type PaidBaseline = {
   onboarding_id: string;
@@ -18,9 +19,20 @@ export type PaidBaseline = {
   /** Discovery before the baseline: the pool, its Discovery audit's progress, per-question opportunity. */
   discovery?: {
     generated_at: string | null;
-    pool: Array<{ question: string; town: string | null; service: string | null; intent: string; opportunity?: { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; fragmentation: string; namedRuns: number; runs: number } | null }>;
+    pool_version?: string | null;
+    pool: Array<{
+      question: string; town: string | null; service: string | null; intent: string;
+      opportunity?: { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; fragmentation: string; namedRuns: number; runs: number } | null;
+      /** This question's measurements in the pool's Discovery job (src/lib/discoveryProgress.ts). */
+      progress?: Omit<QuestionProgress, 'question'> | null;
+    }>;
     towns_failed: string[];
-    audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean } | null;
+    /** The ONE Discovery job for this pool — server-side, read back from the stored rows. */
+    audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean; progress?: Omit<DiscoveryProgress, 'by_question'> } | null;
+    /** A Discovery audit that measured a different question set — shown, never attached. */
+    mismatch?: { audit_id: string } | null;
+    /** A start was claimed seconds ago and its audit is being created. */
+    starting?: boolean;
     estimate_usd: number;
   };
   /** The approved services with duplicates merged — the service axis of the coverage summary. */
@@ -62,6 +74,9 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   baseline_near_duplicates: 'Some questions ask the same thing in different words. Replace them, or tick "approve anyway".',
   no_discovery_pool: 'Generate the Discovery questions first.',
   confirm_cost_required: 'Discovery asks ChatGPT and Gemini — confirm the cost on the button.',
+  discovery_running: 'Discovery is still measuring the current questions. Wait for it to finish, then regenerate.',
+  discovery_already_run: 'Discovery has already measured these questions. Regenerate the Discovery questions to measure again.',
+  discovery_start_failed: 'Discovery did not start. Nothing was measured — try again.',
 };
 
 /** One client-side request shape and one useful error path for every paid-baseline entry point. */
