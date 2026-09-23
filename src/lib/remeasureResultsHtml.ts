@@ -19,7 +19,7 @@ import {
   REPORT_CHROME_CSS_CORE, REPORT_CHROME_CSS_FOOT, REPORT_CHROME_CSS_PRINT,
 } from './aiAuditReportHtml.ts';
 import type { MeasurementComparison } from './measurementCompare.ts';
-import { numberWentUp, resultsDocumentMeaning } from './remeasureResults.ts';
+import { numberWentUp, resultsDocumentMeaning, weeksWord } from './remeasureResults.ts';
 
 export interface RemeasureResultsDoc {
   businessName: string;
@@ -28,6 +28,8 @@ export interface RemeasureResultsDoc {
   beforeDate: string | null;   // ISO
   afterDate: string | null;    // ISO
   sentAtLabel: string;         // e.g. "13 Sep 2026"
+  /** The client's re-measure clock (remeasureWeeksFor): 4, or 8 for a site we build on a brand-new domain. */
+  weeks?: number | null;
 }
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'date not recorded');
@@ -40,8 +42,10 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
     businessName: d.businessName, town: d.town,
     beforeNamed: c.before.named, beforeAnswered: c.before.answered,
     afterNamed: c.after.named, afterAnswered: c.after.answered,
-    questions: c.matchedCount, wentUp: up, withinNoise: c.withinNoise, documentUrl: '',
+    questions: c.matchedCount, wentUp: up, withinNoise: c.withinNoise, documentUrl: '', weeks: d.weeks,
   });
+  const w = weeksWord(d.weeks);
+  const W = w.charAt(0).toUpperCase() + w.slice(1);
   const matched = c.questions.filter((q) => q.before && q.after);
 
   const card = (label: string, named: number, answered: number, iso: string | null, runs: number) => `
@@ -61,7 +65,7 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
 
   const foot = renderSiteFooter({
     businessName: d.businessName,
-    metaHtml: `Findable &middot; Four-week results &middot; ${esc(d.sentAtLabel)}`,
+    metaHtml: `Findable &middot; ${W}-week results &middot; ${esc(d.sentAtLabel)}`,
     note: 'Both measurements asked the same questions on the same engines, ChatGPT and Gemini, and counted the answers that named you.',
   });
 
@@ -71,7 +75,7 @@ export function renderRemeasureResultsHtml(d: RemeasureResultsDoc): string {
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="robots" content="noindex,nofollow"/>
-<title>Four-week results &mdash; ${esc(d.businessName)}</title>
+<title>${W}-week results &mdash; ${esc(d.businessName)}</title>
 <style>
 ${REPORT_CHROME_CSS_CORE}
 ${REPORT_CHROME_CSS_FOOT}
@@ -101,11 +105,11 @@ ${REPORT_CHROME_CSS_PRINT}
 </head>
 <body>
   <div class="sheet">
-    ${renderWaveBand('Four-week results &middot; page 1 of 1')}
+    ${renderWaveBand(`${W}-week results &middot; page 1 of 1`)}
     <section class="rr-wrap">
       <div class="rr-eyebrow">Before and after</div>
       <div class="rr-title">${esc(d.businessName)}${d.town ? ` in ${esc(d.town)}` : ''}</div>
-      <p class="rr-intro">Four weeks ago we asked ChatGPT and Gemini the ${c.matchedCount} questions your customers ask and counted how many answers named you. We have just asked the same questions again, on the same engines. Here are both sets of numbers.</p>
+      <p class="rr-intro">${W} weeks ago we asked ChatGPT and Gemini the ${c.matchedCount} questions your customers ask and counted how many answers named you. We have just asked the same questions again, on the same engines. Here are both sets of numbers.</p>
       <div class="rr-cards">
         ${card('Before', c.before.named, c.before.answered, d.beforeDate, c.before.runs)}
         ${card('After', c.after.named, c.after.answered, d.afterDate, c.after.runs)}

@@ -13,9 +13,11 @@ import {
   CARD_SAVED_NOTICE, FINDABLE_CONTRACT_TOTAL_GBP, FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_OFFER_SUMMARY,
   FINDABLE_RECURRING_PAYMENTS, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, findableSiteKind, firstRecurringPaymentIso,
   monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind,
+  FINDABLE_GUARANTEE, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, remeasureWeeksFor,
 } from '../src/lib/findableOffer.ts';
 import * as results from '../src/lib/remeasureResults.ts';
-import { claimWindowCloseIso, resultsBillingStartIso, resultsDocumentMeaning, resultsEmailParagraphs } from '../src/lib/remeasureResults.ts';
+import { claimWindowCloseIso, currentTermsVerdict, resultsBillingStartIso, resultsDocumentMeaning, resultsEmailParagraphs, resultsEmailSubject } from '../src/lib/remeasureResults.ts';
+import { remeasureDueFill } from '../src/lib/remeasureFill.ts';
 import { minimumTermCancelAt, subscriptionEndedByTerm } from '../supabase/functions/_shared/delayed-subscription.ts';
 import { buildColdCallPlaybook } from '../src/lib/coldCallPlaybook.ts';
 
@@ -95,7 +97,9 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   ok(!('monthlyStartIso' in results), 'remeasureResults.ts no longer exports monthlyStartIso (the claim-window alias)');
   const sender = code('supabase/functions/_shared/remeasure-results.ts');
   ok(!/monthlyStartIso/.test(sender), 'the sender never calls monthlyStartIso');
-  ok(/resultsBillingStartIso/.test(read('supabase/functions/_shared/remeasure-results.ts').match(/import[\s\S]*?from "..\/..\/..\/src\/lib\/remeasureResults.ts"/)?.[0] ?? ''), 'resultsBillingStartIso is IMPORTED by the sender');
+  /* (Matched on the import's own list, not a regex naming the module path — check-import-graph reads
+     such a pattern as an import and fails the gate.) */
+  ok(/currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict,\s*\}/.test(read('supabase/functions/_shared/remeasure-results.ts')), 'resultsBillingStartIso is IMPORTED by the sender');
   const built = sender.indexOf('resultsEmailParagraphs(copy)');
   const claim = sender.indexOf('.is("remeasure_results_sent_at", null)');
   ok(built > 0 && claim > 0 && built < claim, 'the email words are built before the once-only claim');
@@ -161,6 +165,47 @@ console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ─�
   ok(!subscriptionEndedByTerm({ trial_end: trialEnd, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, trial_end: trialEnd }, false), 'any date absent → not complete');
   const wh = code('supabase/functions/stripe-webhook/index.ts');
   ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind \}\)/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
+}
+
+console.log('── NEW DOMAINS: RE-MEASURED LATER, NOT EXCLUDED (Paul, 2026-09-23) ──');
+{
+  const frozen = '2026-09-24T11:00:00.000Z';
+  const existing = { plan_tier: 'keep', domain_status: 'existing' };
+  const builtExisting = { plan_tier: 'new_site', domain_status: 'existing' };
+  const builtNew = { plan_tier: 'new_site', domain_status: 'new' };
+  const handBuiltNew = { website_route: 'rebuild_existing', domain_status: 'new' };
+  const keepNew = { plan_tier: 'keep', domain_status: 'new' };
+  ok(remeasureWeeksFor(existing) === 4 && remeasureDueFill(null, frozen, remeasureWeeksFor(existing)) === '2026-10-22', 'established domain, their own site → four weeks (due 22 Oct)');
+  ok(remeasureWeeksFor(builtExisting) === 4, 'a site we build on an EXISTING domain → four weeks');
+  ok(remeasureWeeksFor(builtNew) === 8 && remeasureDueFill(null, frozen, remeasureWeeksFor(builtNew)) === '2026-11-19', 'a site we build on a brand-new domain → eight weeks (due 19 Nov)');
+  ok(remeasureWeeksFor(handBuiltNew) === 8, 'a hand-added rebuild on a new domain → eight weeks');
+  ok(remeasureWeeksFor(keepNew) === 4, 'a client-owned site is never on the new-domain clock');
+  ok(remeasureWeeksFor(null) === 4 && remeasureWeeksFor({ plan_tier: 'new_site' }) === 4, 'blank domain answer → the standard four weeks');
+  ok(!/excluded|does not apply/i.test(FINDABLE_GUARANTEE) && /four weeks \(eight if we build your site on a brand-new domain\)/.test(FINDABLE_GUARANTEE), 'the contractual guarantee names both clocks and excludes nobody');
+  ok(FINDABLE_GUARANTEE.endsWith(REMEASURE_CLAIM_SENTENCE) && /14 days of your results/.test(REMEASURE_CLAIM_SENTENCE), 'the claim window counts from the results, whichever re-measure applies');
+  /* The terms gate accepts each clock only for its own client. */
+  const facts = { contract: { version: 2 }, amountPaid: 99, baselineFrozenAt: frozen };
+  ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-11-19', remeasureWeeks: 8 }).current === true, 'new-domain build with its +56 date → current terms');
+  ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-11-19', remeasureWeeks: 4 }).current === false, '+56 on a four-week client → refused (different clock)');
+  ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-10-22', remeasureWeeks: 4 }).current === true, 'four-week client on +28 → current');
+  const w8 = resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 1, afterAnswered: 10, questions: 3, wentUp: false, withinNoise: false, documentUrl: 'u', weeks: 8 });
+  ok(w8[1].startsWith('Eight weeks ago') && resultsEmailSubject({ businessName: 'X', weeks: 8 } as never) === 'Your eight-week results — X', 'an eight-week client is told "eight weeks", subject included');
+  const w4 = resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 1, afterAnswered: 10, questions: 3, wentUp: false, withinNoise: false, documentUrl: 'u' });
+  ok(w4[1].startsWith('Four weeks ago'), 'the standard client still reads "four weeks"');
+  const sender = code('supabase/functions/_shared/remeasure-results.ts');
+  ok(/remeasureWeeks: weeks/.test(sender) && /weeks: bundle\.weeks/.test(sender), 'the sender passes the clock to the terms gate and the words');
+  ok(/remeasureWeeksFor\(obRow/.test(code('supabase/functions/_shared/audit-baseline.ts')), 'the due-date fill reads the clock from the onboarding row');
+}
+
+console.log('── A VALID CLAIM AND PAYMENT 2 (Paul, 2026-09-23) ──');
+{
+  ok(/has not been taken yet, it never is/.test(GUARANTEE_PAYMENT_TWO_SENTENCE) && /already been taken, we refund it as well/.test(GUARANTEE_PAYMENT_TWO_SENTENCE), 'the sentence covers both cases: stopped before it starts, or refunded');
+  ok(!/any time|cancel/i.test(GUARANTEE_PAYMENT_TWO_SENTENCE), 'and grants no broader cancellation right');
+  const notUp = resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 1, afterAnswered: 10, questions: 3, wentUp: false, withinNoise: false, documentUrl: 'u' }).join(' ');
+  ok(notUp.includes(GUARANTEE_PAYMENT_TWO_SENTENCE) && !/before it begins/.test(notUp), 'the not-gone-up results email carries it; no "before it begins"');
+  ok(!resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 5, afterAnswered: 10, questions: 3, wentUp: true, withinNoise: false, documentUrl: 'u' }).join(' ').includes(GUARANTEE_PAYMENT_TWO_SENTENCE), 'a client whose number went up is not offered it');
+  const wh = code('supabase/functions/stripe-webhook/index.ts');
+  ok(/REFUND RECORDED — cancel the monthly/.test(wh) && /refund it too/.test(wh), 'a refund on a live subscription alerts Paul to cancel it and refund payment 2 if taken');
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }

@@ -9,7 +9,7 @@ import {
   currentTermsVerdict, LEGACY_TERMS_LABEL, resultsBillingStartIso,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from '../src/lib/findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from '../src/lib/findableOffer.ts';
 import { renderRemeasureResultsHtml } from '../src/lib/remeasureResultsHtml.ts';
 
 let f = 0;
@@ -219,8 +219,9 @@ console.log('── The words ──');
   const verdictAt = notUp.findIndex((p) => p.includes('has not gone up'));
   const claimAt = notUp.findIndex((p) => p.includes(REMEASURE_CLAIM_SENTENCE));
   ok(verdictAt >= 0 && claimAt > verdictAt, 'the verdict comes BEFORE the claim paragraph');
-  ok(notUp[claimAt] === `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE}`, 'the claim paragraph is the lead-in plus the locked sentence, nothing else');
-  ok(resultsClaimParagraph().endsWith(REMEASURE_CLAIM_SENTENCE), 'the locked sentence is never shortened or reworded');
+  /* 2026-09-23 (Paul): the locked payment-2 sentence follows the locked claim sentence. */
+  ok(notUp[claimAt] === `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE} ${GUARANTEE_PAYMENT_TWO_SENTENCE}`, 'the claim paragraph is the lead-in, the locked claim sentence and the locked payment-2 sentence, nothing else');
+  ok(resultsClaimParagraph().includes(REMEASURE_CLAIM_SENTENCE) && resultsClaimParagraph().endsWith(GUARANTEE_PAYMENT_TWO_SENTENCE), 'both locked sentences appear whole, never shortened or reworded');
   const up = resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: false });
   ok(!up.some((p) => p.includes(REMEASURE_CLAIM_SENTENCE)) && up.some((p) => p.includes('has gone up')), 'gone up → no claim sentence, says it went up');
   ok(up.some((p) => p.includes('23 of 72')) && up.some((p) => p.includes('31 of 96')), 'both counts, each with its denominator');
@@ -241,7 +242,7 @@ console.log('── The document renders both counts and the sentence, and no co
   const c = compareMeasurements(before, after, { businessName: 'RG Locksmiths' });
   const html = renderRemeasureResultsHtml({ businessName: 'RG Locksmiths', town: 'Huntingdon', comparison: c, beforeDate: '2026-08-11T10:00:00Z', afterDate: '2026-09-08T10:00:00Z', sentAtLabel: '8 Sep 2026' });
   // esc() entity-escapes the apostrophe in "we'll", so match the sentence's unambiguous clause.
-  ok(html.includes('email us within 14 days of your four week results'), 'unchanged → the document carries the claim sentence');
+  ok(html.includes('email us within 14 days of your results'), 'unchanged → the document carries the claim sentence');
   ok(html.includes('2 <span class="rr-of">of 24</span>'), 'before count with denominator (1 named run × 2 engines = 2 of 24)');
   ok(/Four-week results/.test(html) && /<table class="rr">/.test(html), 'band and the per-question table');
   ok(!/competitor|rival/i.test(html), 'no competitor language on the client document');

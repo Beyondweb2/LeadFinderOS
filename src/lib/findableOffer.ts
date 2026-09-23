@@ -115,6 +115,23 @@ export function findableSiteKind(row: { plan_tier?: unknown; website_route?: unk
   return 'unknown';
 }
 
+/* 🔴 THE RE-MEASURE CLOCK — FOUR WEEKS, OR EIGHT FOR A SITE WE BUILD ON A BRAND-NEW DOMAIN (Paul,
+   2026-09-23). A genuinely new domain needs longer to be crawled and discovered, so it is not
+   EXCLUDED from the guarantee (findable.live used to say it was, while the checkout guarantee had no
+   exclusion) — it is re-measured later, on the SAME frozen questions and method. The claim window
+   follows whichever re-measure applies, because it counts from the results being sent.
+   ⛔ POSITIVE MATCH: a Findable-built site (findableSiteKind) AND domain_status 'new' from the
+   onboarding row. Anything else — existing domain, blank, a client-owned site — is the standard four
+   weeks, the default the guarantee states first. Stored remeasure_due_date always wins (RG, Ronnie). */
+export const REMEASURE_WEEKS_STANDARD = 4;
+export const REMEASURE_WEEKS_NEW_DOMAIN = 8;
+export function isNewDomainBuild(row: { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null | undefined): boolean {
+  return findableSiteKind(row) === 'findable_built' && String(row?.domain_status ?? '').trim() === 'new';
+}
+export function remeasureWeeksFor(row: { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null | undefined): number {
+  return isNewDomainBuild(row) ? REMEASURE_WEEKS_NEW_DOMAIN : REMEASURE_WEEKS_STANDARD;
+}
+
 /** The offer in one line, for operator surfaces that quote it (the Cold Call Playbook). Built from
  *  the constants so a price move cannot leave a stale figure in a call script. */
 export const FINDABLE_OFFER_SUMMARY =
@@ -172,10 +189,20 @@ export const STALE_OFFER_TEMPLATES: ReadonlySet<string> = new Set(['explain_offe
    the longest string PROVEN to render untruncated on the hosted page is 222 (2026-08-06, read off a
    real Checkout Session). This is 14 over that proof, so the first real Checkout Session after this
    change is what proves it — read the hosted page's text, not the HTML shell. */
+/* 🔴 2026-09-23 (Paul): "(eight if we build your site on a brand-new domain)" replaces findable.live's
+   blanket new-domain exclusion, and the claim counts from "your results" — whichever re-measure
+   applies (remeasureWeeksFor). ⚠️ LENGTH grew past 236; the first real Checkout Session after this
+   change is what proves Stripe shows it whole. */
 export const FINDABLE_GUARANTEE =
-  "We measure how often AI names you before we start, then re-measure after four weeks on the " +
-  "same questions and the same engines. If that number has not gone up, email us within 14 days " +
-  "of your four week results and we'll refund your £99.";
+  "We measure how often AI names you before we start, then re-measure after four weeks (eight if " +
+  "we build your site on a brand-new domain) on the same questions and the same engines. If that " +
+  "number has not gone up, email us within 14 days of your results and we'll refund your £99.";
+
+/* 🔴 A VALID CLAIM AND PAYMENT 2 (Paul, 2026-09-23). Billing stays six weeks from sign-up, so payment 2
+   can fall inside the claim window. A valid claim then refunds it too and ends the plan; if it has not
+   been taken, it never is. No broader cancellation right. BYTE-LOCKED to findable-site's
+   GUARANTEE_PAYMENT_TWO_LINE by scripts/check-cross-repo-sync.mjs. One literal, one line. */
+export const GUARANTEE_PAYMENT_TWO_SENTENCE = "A valid claim also ends your monthly payments: if the first one has not been taken yet, it never is, and if it has already been taken, we refund it as well.";
 
 /* ⛔ WHERE A PROSPECT'S REPORT LIVES. findable.live/report/<auditId> — a Cloudflare Pages Function in
    the findable-site repo (functions/report/[id].ts) that proxies the render-audit-report edge
@@ -392,4 +419,4 @@ export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 
 export const FINDABLE_CONTACT_WHATSAPP = "447943262742";
 
-export const REMEASURE_CLAIM_SENTENCE = "If that number has not gone up, email us within 14 days of your four week results and we'll refund your £99.";
+export const REMEASURE_CLAIM_SENTENCE = "If that number has not gone up, email us within 14 days of your results and we'll refund your £99.";

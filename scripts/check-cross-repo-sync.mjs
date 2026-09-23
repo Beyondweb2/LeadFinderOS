@@ -118,6 +118,15 @@ const PAIRS = [
     why: 'The four-week results email tells a client how to claim in these words; /refunds states the policy in these words. They cannot differ.',
   },
   {
+    /* 🔴 A VALID CLAIM AND PAYMENT 2 (Paul, 2026-09-23): the results email says it when the number has
+       not gone up; /refunds, /terms and the FAQ render findable-site's GUARANTEE_PAYMENT_TWO_LINE. */
+    what: 'the payment-2 refund sentence',
+    kind: 'string',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'GUARANTEE_PAYMENT_TWO_SENTENCE' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'GUARANTEE_PAYMENT_TWO_LINE' },
+    why: 'What a valid claim does to payment 2 is one rule; the results email and the policy pages cannot describe it differently.',
+  },
+  {
     what: 'the setup price',
     kind: 'number',
     mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_SETUP_PRICE_GBP' },

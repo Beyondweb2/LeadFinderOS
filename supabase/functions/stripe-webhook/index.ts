@@ -1460,6 +1460,29 @@ Deno.serve(async (req) => {
             resolved_by: intentId ? "payment_intent" : "customer",
           });
           console.log(`[stripe-webhook] refund recorded for lead ${lead.id} (${fullyRefunded ? "full" : "partial"})`);
+          /* 🔴 A GUARANTEE REFUND MUST END THE MONTHLY (Paul, 2026-09-23): a valid claim stops future
+             payments, and refunds payment 2 if it was already taken. The app never moves money, so it
+             does not cancel or refund for him — it TELLS him, the moment a refund lands on a client
+             whose subscription is still live. Non-fatal: the refund is already recorded. */
+          try {
+            const { data: subRow } = await service.from("outreach_leads")
+              .select("stripe_subscription_id, subscription_status").eq("id", lead.id).maybeSingle();
+            const sr = subRow as { stripe_subscription_id?: string | null; subscription_status?: string | null } | null;
+            const subId = String(sr?.stripe_subscription_id ?? "").trim();
+            const live = !!subId && String(sr?.subscription_status ?? "") !== "canceled";
+            if (live) {
+              await postResend({
+                from: "Findable alerts <alerts@findable.live>", to: [ADMIN_EMAIL],
+                subject: `REFUND RECORDED — cancel the monthly — ${(lead.business_name ?? "").trim() || lead.id}`,
+                html: [
+                  `A refund of GBP ${(refundedMinor / 100).toFixed(2)} was recorded for <b>${(lead.business_name ?? "").trim() || lead.id}</b>, and their subscription ${subId} is still ${sr?.subscription_status ?? "live"}.`,
+                  `If this is a valid guarantee claim: cancel that subscription in Stripe so no further payments are taken, and if their first monthly payment (payment 2) has already been taken, refund it too.`,
+                ].map((p) => `<p>${p}</p>`).join(""),
+              });
+            }
+          } catch (e) {
+            console.error("[stripe-webhook] refund follow-up alert failed:", e instanceof Error ? e.message : String(e));
+          }
         }
         break;
       }

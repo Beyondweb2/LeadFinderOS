@@ -81,13 +81,15 @@ ok(isRemeasureDue(RG, "garbage").due === false, "an unreadable 'today' refuses r
 ok(utcDateISO(Date.UTC(2026, 9, 6, 23, 59)) === "2026-10-06", "today is the UTC day (a BST evening does not roll to the 7th)");
 
 console.log("\n── 3. THE FILL NEVER OVERWRITES A STORED DATE ──");
-ok(remeasureDueFill("2026-10-06", "2026-08-11T09:00:00Z") === null, "RG's stored 2026-10-06 → fill returns null (no write)");
-ok(remeasureDueFill("2026-10-13", "2026-09-15T09:00:00Z") === null, "Ronnie's stored 2026-10-13 → null");
-ok(remeasureDueFill(" 2026-10-06 ", "2026-08-11T09:00:00Z") === null, "a padded stored value still counts as set");
-const filled = remeasureDueFill(null, "2026-09-12T14:00:00Z");
+ok(remeasureDueFill("2026-10-06", "2026-08-11T09:00:00Z", 4) === null, "RG's stored 2026-10-06 → fill returns null (no write)");
+ok(remeasureDueFill("2026-10-13", "2026-09-15T09:00:00Z", 4) === null, "Ronnie's stored 2026-10-13 → null");
+ok(remeasureDueFill(" 2026-10-06 ", "2026-08-11T09:00:00Z", 8) === null, "a padded stored value still counts as set, whatever the clock");
+const filled = remeasureDueFill(null, "2026-09-12T14:00:00Z", 4);
 ok(filled === "2026-10-10", `a NULL date fills to frozen + ${REMEASURE_OFFSET_DAYS} = 2026-10-10 (got ${filled})`);
-ok(remeasureDueFill(undefined, "2026-09-12T14:00:00Z") === "2026-10-10", "undefined behaves as NULL");
-ok(remeasureDueFill(null, "not a date") === null, "an unreadable freeze instant writes nothing");
+ok(remeasureDueFill(undefined, "2026-09-12T14:00:00Z", 4) === "2026-10-10", "undefined behaves as NULL");
+ok(remeasureDueFill(null, "not a date", 4) === null, "an unreadable freeze instant writes nothing");
+ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 8) === "2026-11-07", "a site we build on a brand-new domain fills to frozen + 56 (eight weeks)");
+ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 0) === null, "an unreadable clock writes nothing");
 ok(REMEASURE_OFFSET_DAYS === 28, "the offset is 28 (RG's +56 is stored by hand, never derived)");
 /* The write side: the update carries the NULL guard in the database too. */
 const frozen = baselineSrc.slice(baselineSrc.indexOf("export async function onBaselineFrozen"), baselineSrc.indexOf("export async function startFullMeasure"));

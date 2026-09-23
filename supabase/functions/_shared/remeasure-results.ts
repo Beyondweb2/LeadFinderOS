@@ -27,7 +27,7 @@ import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
   currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict,
 } from "../../../src/lib/remeasureResults.ts";
-import { REPORT_PUBLIC_ORIGIN } from "../../../src/lib/findableOffer.ts";
+import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -52,6 +52,8 @@ export interface RemeasureBundle {
   town: string | null;
   /** Whether this client is provably on the terms this document describes. */
   terms: CurrentTermsVerdict;
+  /** The re-measure clock in weeks (remeasureWeeksFor): 4, or 8 for a site we build on a brand-new domain. */
+  weeks: number;
 }
 
 /** Load everything the sender and the public renderer need. Null (with a reason) when this audit is
@@ -78,11 +80,20 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   const { data: bl } = await service.from("ai_audits")
     .select("baseline_contract, baseline_completed_at")
     .eq("id", lead.baseline_audit_id).maybeSingle();
+  /* The client's clock — four weeks, or eight for a site we build on a brand-new domain — from the
+     paid onboarding row first. It sets the expected due date in the terms gate and the words. */
+  const { data: obr } = await service.from("onboarding_responses")
+    .select("plan_tier, website_route, domain_status, status, created_at").eq("lead_id", lead.id)
+    .order("created_at", { ascending: false }).limit(10);
+  const obList = (obr ?? []) as Array<{ status?: string | null }>;
+  const obRow = obList.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? ""))) ?? obList[0] ?? null;
+  const weeks = remeasureWeeksFor(obRow as { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null);
   const terms = currentTermsVerdict({
     contract: (bl as { baseline_contract?: unknown } | null)?.baseline_contract ?? null,
     amountPaid: lead.amount_paid,
     baselineFrozenAt: (bl as { baseline_completed_at?: string | null } | null)?.baseline_completed_at ?? null,
     remeasureDueDate: lead.remeasure_due_date,
+    remeasureWeeks: weeks,
   });
 
   const runsOf = async (auditId: string) => ((await service.from("ai_audit_runs").select("id, status, created_at").eq("audit_id", auditId).order("run_number", { ascending: true })).data ?? []) as Array<{ id: string; status: string | null; created_at: string }>;
@@ -98,7 +109,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
     trade: audit.business_type ?? null, town: audit.location_text ?? lead.derived_town ?? lead.search_location ?? null,
   });
   const town = (audit.location_text ?? lead.derived_town ?? lead.search_location ?? "").trim() || null;
-  return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms }, reason: null };
+  return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms, weeks }, reason: null };
 }
 
 /** "11 October 2026" — what a person reads. UTC so a late-evening stamp cannot print yesterday. */
@@ -183,6 +194,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     afterNamed: comparison.after.named, afterAnswered: comparison.after.answered,
     questions: comparison.matchedCount, wentUp: numberWentUp(comparison), withinNoise: comparison.withinNoise,
     documentUrl: resultsPublicUrl(audit.id),
+    weeks: bundle.weeks,
     monthlyStartsOn: prettyDate(billingStartIso),
   };
   const paragraphs = resultsEmailParagraphs(copy);

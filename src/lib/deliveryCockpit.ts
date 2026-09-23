@@ -106,10 +106,16 @@ export function addDaysISO(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The default re-measure due date: baseline + REMEASURE_OFFSET_DAYS (28). Written ONCE, where
- *  remeasure_due_date IS NULL (remeasureFill.ts); a stored date is never touched. */
-export function defaultRemeasureDue(baselineDate: string): string {
-  return addDaysISO(baselineDate, REMEASURE_OFFSET_DAYS);
+/** The default re-measure due date: baseline + REMEASURE_OFFSET_DAYS (28), or the offset for the
+ *  client's clock (remeasureOffsetDays — eight weeks for a site we build on a brand-new domain).
+ *  Written ONCE, where remeasure_due_date IS NULL (remeasureFill.ts); a stored date is never touched. */
+export function defaultRemeasureDue(baselineDate: string, offsetDays: number = REMEASURE_OFFSET_DAYS): string {
+  return addDaysISO(baselineDate, offsetDays);
+}
+
+/** Days from the frozen baseline to the re-measure, for a guarantee clock in weeks. */
+export function remeasureOffsetDays(weeks: number): number {
+  return weeks * 7;
 }
 
 export type RemeasureState = 'none' | 'ok' | 'amber' | 'red';
