@@ -20,6 +20,8 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
+import { readSelectedOpener } from "../_shared/initial-opener.ts";
+import { isInitialOpener, openerSelectable } from "../../../src/lib/openerVariant.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -590,6 +592,9 @@ Deno.serve(async (req) => {
       })(),
       // The reply-trigger template (null = the shared default). Defensive like the others.
       firstReplyTemplate: await firstReplyTemplate(service),
+      /* THE SELECTED INITIAL OPENER (src/lib/openerVariant.ts). null = nothing stored (the default);
+         ABSENT from the payload when it could not be read, so every picker fails closed on openers. */
+      ...(await (async () => { const v = await readSelectedOpener(service); return v === undefined ? {} : { initialOpenerTemplate: v }; })()),
       /* The three-way reply MODE. Absent column / failed read → 'audit_only' (never 'send'), so
          the panel can render before the SQL has been run and never shows a sending state that
          is not real. */
@@ -708,6 +713,20 @@ Deno.serve(async (req) => {
         .eq("id", 1);
       if (sErr) return json({ ok: false, error: "setting_failed", detail: sErr.message }, 500);
       return json({ ok: true, ...statusPayload, firstReplyTemplate: next });
+    }
+
+    /* THE SELECTED INITIAL OPENER (admin-gated). Only an opener Meta has approved may be chosen; the
+       choice changes FUTURE queueing only — a lead already queued keeps the template stored on it.
+       Writing this sends nothing. */
+    if (mode === "set_initial_opener_template") {
+      const raw = typeof body.template === "string" ? body.template.trim() : "";
+      if (!isInitialOpener(raw) || !WA_TEMPLATES[raw]) return json({ ok: false, error: "not_an_initial_opener", detail: `${raw || "(blank)"} is not an initial outreach template` }, 400);
+      if (!openerSelectable(raw) || templateAwaitingApproval(raw)) return json({ ok: false, error: "template_not_approved", detail: `${raw} is not approved at Meta` }, 400);
+      const { data: upd, error: sErr } = await service.from("whatsapp_outreach_state")
+        .update({ initial_opener_template: raw, updated_at: new Date().toISOString() })
+        .eq("id", 1).select("initial_opener_template").maybeSingle();
+      if (sErr || !upd) return json({ ok: false, error: "setting_failed", detail: sErr?.message ?? "no settings row" }, 500);
+      return json({ ok: true, ...statusPayload, initialOpenerTemplate: raw });
     }
 
     /* ══ mode 'contact_check' — WHICH OF THESE NUMBERS HAVE WE ALREADY CONTACTED? ═══════════════

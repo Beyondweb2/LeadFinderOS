@@ -24,6 +24,7 @@ import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
+import { openerRefusal } from "../_shared/initial-opener.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -60,14 +61,16 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
-const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-/* 2026-09-23a: the first build carrying findings_shown on the message log and the server-side
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "selected_opener"] as const;
+/* 2026-09-23b: the first build refusing an initial opener other than the SELECTED one
+   (whatsapp_outreach_state.initial_opener_template; the 50/50 opener split is gone).
+   2026-09-23a: the first build carrying findings_shown on the message log and the server-side
    approval gate (templateAwaitingApproval) that refuses ai_site_findings_v2 while it is pending.
    ⚠️ The deploy of 2026-09-23 shipped both WITHOUT this bump, so for that window the preflight
    read 2026-09-22a over new bytes — exactly the lie this marker exists to prevent. Bumped in the
    follow-up so the live header proves what is running.
    (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
-const BUILD_ID = "2026-09-23a";
+const BUILD_ID = "2026-09-23b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -335,6 +338,12 @@ Deno.serve(async (req) => {
 
     if (templateName) {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
+      /* ⛔ ONLY THE SELECTED INITIAL OPENER (src/lib/openerVariant.ts). An opener other than the one
+         Paul selected is refused here as in every picker — and if the selection cannot be read, every
+         opener is refused. Nothing is substituted: the other opener is never sent in its place.
+         Non-openers are untouched. Applies to dry_run too, so a preview reports the same refusal. */
+      const notSelected = await openerRefusal(service, templateName);
+      if (notSelected) return json({ ok: false, error: "opener_not_selected", reason: notSelected, template: templateName }, 200);
       /* ⛔ THE PHONE-HISTORY SEATBELT, SAME RULE AS THE DRIP. The comment in the opener branch
          below used to say "openers are guarded in the queue, not here" - and that was the hole.
          Measured 2026-09-02: a manual audit_result_hook went to SJA Locksmiths a day after their

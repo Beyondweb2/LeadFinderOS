@@ -117,7 +117,8 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
-import { openerTemplateFor } from '@/lib/openerVariant';
+import { INITIAL_OPENERS, INITIAL_OPENER_LABELS, isInitialOpener, openerSelectable, openerSendability } from '@/lib/openerVariant';
+import { useSelectedOpener } from '@/hooks/useSelectedOpener';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
@@ -288,6 +289,9 @@ export function OutreachTable({
   onAssignCampaign,
 }: OutreachTableProps) {
   const { toast } = useToast();
+  /* The ONE selected initial opener (src/lib/openerVariant.ts). Undefined until read → no opener
+     can be queued (fail closed). */
+  const opener = useSelectedOpener();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
@@ -1218,6 +1222,11 @@ export function OutreachTable({
        opener path: that path's already_sent guard refuses any lead with prior WhatsApp — which every
        Contacted business has — and forces status→initial_contact on send. Route it separately. */
     if (template === 'contact_followup') { await handleQueueContactFollowup(); return; }
+    /* ⛔ ONLY THE SELECTED OPENER IS QUEUED, EXACTLY AS CHOSEN. No split, no substitute: an opener
+       that is not the selected one — or any opener while the selection is unknown — is refused here,
+       and nothing is queued in its place. */
+    const openerCheck = openerSendability(template, opener.selected);
+    if (!openerCheck.ok) { toast({ title: 'Initial template not queued', description: openerCheck.reason, variant: 'destructive' }); return; }
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
@@ -1303,18 +1312,12 @@ export function OutreachTable({
       }
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
       // Capture the pre-queue status so cancelling restores it (not a wipe to not_contacted).
-      /* ⚖️ THE INITIAL-OPENER A/B, AND THE ONLY PLACE IT IS APPLIED. openerTemplateFor returns the
-         operator's choice untouched for every template except the incumbent opener, and splits that
-         one ~50/50 by a hash of the LEAD ID — so cancelling and re-queueing, a retry, or re-running
-         this dialog all land the lead back on the arm it already had. Nothing is drawn at random and
-         nothing new is stored: the arm IS `whatsapp_template`, which this write already persists.
-         ⛔ While INITIAL_OPENER_V2_APPROVED is false this returns the incumbent for everybody, so a
-         template Meta has not approved can never be queued.
-         ⚠️ Deliberately NOT applied in WhatsAppLeadControls — that one is documented as "the
-         operator's OWN choice, never a substitute", and a per-lead picker is not new outreach. */
+      /* ⛔ THE TEMPLATE IS STORED EXACTLY AS CHOSEN (2026-09-23 — the 50/50 opener split that used to
+         substitute here is gone). This write IS the assignment: the queue sends whatsapp_template as
+         stored, so a retry, a delay or a later change of the selected opener cannot switch it. */
       const patch: Partial<OutreachLead> = {
         status: 'queued', queued_at: now, whatsapp_attempts: 0,
-        whatsapp_template: openerTemplateFor(template, id),
+        whatsapp_template: template,
         previous_status: lead?.status ?? null,
         line_type: lineType, // cache the offline result
         contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
@@ -3062,20 +3065,47 @@ export function OutreachTable({
               Choose the approved template to send. It’s applied to all selected leads.
             </DialogDescription>
           </DialogHeader>
+          {/* THE ONE CONTROL FOR THE INITIAL OPENER. Writes whatsapp_outreach_state.initial_opener_template
+              (sends nothing); only the selected opener can then be queued, in any picker. */}
+          <div className="space-y-1.5 rounded-md border p-2">
+            <label className="text-xs font-medium text-muted-foreground">Initial outreach template</label>
+            <Select value={opener.template ?? ''} disabled={opener.selected === undefined || opener.saving}
+              onValueChange={async (v) => {
+                try {
+                  await opener.setSelected(v);
+                  if (isInitialOpener(queueTemplate)) setQueueTemplate(v);
+                  toast({ title: 'Initial outreach template set', description: `New initial outreach uses ${INITIAL_OPENER_LABELS[v as keyof typeof INITIAL_OPENER_LABELS] ?? v}. Leads already queued keep their template. Nothing was sent.` });
+                } catch (e) { toast({ title: "Couldn't change the initial template", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' }); }
+              }}>
+              <SelectTrigger><SelectValue placeholder={opener.loading ? 'Loading…' : 'Unavailable'} /></SelectTrigger>
+              <SelectContent>
+                {INITIAL_OPENERS.map((o) => (
+                  <SelectItem key={o} value={o} disabled={!openerSelectable(o)}>{INITIAL_OPENER_LABELS[o]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {opener.problem && <p className="text-[11px] text-destructive">{opener.problem} No initial template can be queued until this is fixed.</p>}
+            {!opener.problem && opener.template && <p className="text-[11px] text-muted-foreground">Selected: {INITIAL_OPENER_LABELS[opener.template]}. Every new initial message uses this one — no split.</p>}
+          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
-                {WHATSAPP_TEMPLATES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
+                {WHATSAPP_TEMPLATES.map((t) => {
+                  const o = openerSendability(t.value, opener.selected);
+                  return (
+                    <SelectItem key={t.value} value={t.value} disabled={!o.ok}>
+                      <span className="flex flex-col"><span>{t.label}</span>{!o.ok && <span className="text-[10px] text-amber-600">{o.reason}</span>}</span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!queueTemplate} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+            <Button size="sm" disabled={!queueTemplate || !openerSendability(queueTemplate, opener.selected).ok} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               Queue {selectedIds.size}
             </Button>
