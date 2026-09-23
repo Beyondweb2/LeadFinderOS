@@ -133,21 +133,21 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
 
         <Panel headline={C.you.headline} sub={C.you.sub}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label>{C.contactName.label}</Label><Input value={a.contact_name} placeholder={C.contactName.label} onChange={(e) => set('contact_name', e.target.value)} /></div>
-            <div><Label>{C.contactEmail.label}</Label><Input type="email" value={a.contact_email} onChange={(e) => set('contact_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.contactEmail.helper}</p>{problemFor('contact_email') && <p className="text-xs text-destructive">{problemFor('contact_email')}</p>}</div>
-            <div><Label>{C.phone.label}</Label><Input type="tel" value={a.confirmed_phone} placeholder={C.phone.placeholder} onChange={(e) => set('confirmed_phone', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.phone.helper}</p>{problemFor('confirmed_phone') && <p className="text-xs text-destructive">{problemFor('confirmed_phone')}</p>}</div>
-            <div><Label>{C.website.label} <span className="font-normal text-muted-foreground">{C.website.optional}</span></Label><Input value={a.business_website} placeholder={C.website.placeholder} onChange={(e) => set('business_website', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.website.helper}</p>{problemFor('business_website') && <p className="text-xs text-destructive">{problemFor('business_website')}</p>}</div>
+            <div><Label>{C.contactName.label}</Label><Input aria-label={C.contactName.label} value={a.contact_name} placeholder={C.contactName.label} onChange={(e) => set('contact_name', e.target.value)} /></div>
+            <div><Label>{C.contactEmail.label}</Label><Input aria-label={C.contactEmail.label} type="email" value={a.contact_email} onChange={(e) => set('contact_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.contactEmail.helper}</p>{problemFor('contact_email') && <p className="text-xs text-destructive">{problemFor('contact_email')}</p>}</div>
+            <div><Label>{C.phone.label}</Label><Input aria-label={C.phone.label} type="tel" value={a.confirmed_phone} placeholder={C.phone.placeholder} onChange={(e) => set('confirmed_phone', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.phone.helper}</p>{problemFor('confirmed_phone') && <p className="text-xs text-destructive">{problemFor('confirmed_phone')}</p>}</div>
+            <div><Label>{C.website.label} <span className="font-normal text-muted-foreground">{C.website.optional}</span></Label><Input aria-label={C.website.label} value={a.business_website} placeholder={C.website.placeholder} onChange={(e) => set('business_website', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.website.helper}</p>{problemFor('business_website') && <p className="text-xs text-destructive">{problemFor('business_website')}</p>}</div>
           </div>
         </Panel>
 
         <Panel headline={C.business.headline} sub={C.business.sub}>
-          <div><Label>{C.businessName.label}</Label><Input value={a.business_name} placeholder={C.businessName.placeholder} onChange={(e) => set('business_name', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.businessName.helper}</p></div>
+          <div><Label>{C.businessName.label}</Label><Input aria-label={C.businessName.label} value={a.business_name} placeholder={C.businessName.placeholder} onChange={(e) => set('business_name', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.businessName.helper}</p></div>
         </Panel>
 
         <Panel headline={C.tradeTown.headline} sub={C.tradeTown.sub}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label>{C.trade.label}</Label><Input value={a.trade} placeholder={C.trade.placeholder} onChange={(e) => set('trade', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.trade.helper}</p></div>
-            <div><Label>{C.town.label}</Label><Input value={a.confirmed_location} placeholder={C.town.placeholder} onChange={(e) => set('confirmed_location', e.target.value)} /></div>
+            <div><Label>{C.trade.label}</Label><Input aria-label={C.trade.label} value={a.trade} placeholder={C.trade.placeholder} onChange={(e) => set('trade', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.trade.helper}</p></div>
+            <div><Label>{C.town.label}</Label><Input aria-label={C.town.label} value={a.confirmed_location} placeholder={C.town.placeholder} onChange={(e) => set('confirmed_location', e.target.value)} /></div>
           </div>
         </Panel>
 
@@ -156,15 +156,15 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
             {a.domain_status === 'new' && <p className="mt-2 text-xs text-muted-foreground">{C.domain.newNote}</p>}</div>
           <div><p className="mb-1 font-medium">{C.agency.question}</p><Radio name="agency" value={a.agency_manages} options={AGENCY_OPTIONS} onChange={(v) => setA((p) => p ? { ...p, agency_manages: v, can_get_access: null, self_site: null } : p)} /></div>
           {a.agency_manages === 'yes' && <div><p className="mb-1 font-medium">{C.access.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.access.helper}</p><Radio name="access" value={a.can_get_access} options={ACCESS_OPTIONS} onChange={(v) => set('can_get_access', v)} />
-            {a.can_get_access === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
+            {a.can_get_access === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input aria-label={C.managerEmail.label} value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}
           </div>}
           {a.agency_manages === 'no' && <div><p className="mb-1 font-medium">{C.selfSite.question}</p><Radio name="self" value={a.self_site} options={SELF_SITE_OPTIONS} onChange={(v) => set('self_site', v)} /></div>}
           {siteAccess && <p className="text-xs text-muted-foreground">{accessConsequenceText(siteAccess)}</p>}
         </Panel>
 
         <Panel headline={C.permission.headline} sub={C.permission.sub}>
-          <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.gbp_consent === 'yes_all'} onChange={(e) => set('gbp_consent', e.target.checked ? 'yes_all' : null)} /><span>{permissionAckText(siteAccess)}</span></label>
-          <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" className="mt-0.5" checked={a.gbp_consent === 'discuss'} onChange={(e) => set('gbp_consent', e.target.checked ? 'discuss' : null)} /><span>{C.permission.discuss}</span></label>
+          <label className="flex items-start gap-2"><input type="checkbox" aria-label={permissionAckText(siteAccess)} className="mt-1" checked={a.gbp_consent === 'yes_all'} onChange={(e) => set('gbp_consent', e.target.checked ? 'yes_all' : null)} /><span>{permissionAckText(siteAccess)}</span></label>
+          <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" aria-label={C.permission.discuss} className="mt-0.5" checked={a.gbp_consent === 'discuss'} onChange={(e) => set('gbp_consent', e.target.checked ? 'discuss' : null)} /><span>{C.permission.discuss}</span></label>
           <p className="text-xs text-muted-foreground">Tick only what the client has actually agreed to.</p>
         </Panel>
 
@@ -179,7 +179,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
               : <p className="text-xs text-muted-foreground">{serviceExamplesFor(tradeWord(a.trade)) || C.services.noChips}</p>}
             <Pills items={a.services} onRemove={(i) => set('services', a.services.filter((_, j) => j !== i))} />
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); addService(serviceInput); setServiceInput(''); }}>
-              <Input value={serviceInput} placeholder={C.services.add} onChange={(e) => setServiceInput(e.target.value)} />
+              <Input aria-label={C.services.add} value={serviceInput} placeholder={C.services.add} onChange={(e) => setServiceInput(e.target.value)} />
               <Button type="submit" variant="outline" size="sm"><Plus className="mr-1 h-4 w-4" />Add</Button>
             </form>
             {detected.services.filter((d) => !a.services.some((x) => x.toLowerCase() === d.toLowerCase())).length > 0 && <div className="rounded-md border border-dashed p-2">
@@ -193,7 +193,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
             <p className="text-xs text-muted-foreground">{a.confirmed_location ? `We've got your main town as ${a.confirmed_location}. ` : ''}{C.areas.helper}</p>
             <Pills items={a.areas} onRemove={(i) => set('areas', a.areas.filter((_, j) => j !== i))} />
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); addArea(areaInput); setAreaInput(''); }}>
-              <Input value={areaInput} placeholder={C.areas.placeholder} onChange={(e) => setAreaInput(e.target.value)} />
+              <Input aria-label={C.areas.label} value={areaInput} placeholder={C.areas.placeholder} onChange={(e) => setAreaInput(e.target.value)} />
               <Button type="submit" variant="outline" size="sm"><Plus className="mr-1 h-4 w-4" />Add</Button>
             </form>
             {detected.towns.filter((d) => !a.areas.some((x) => x.toLowerCase() === d.toLowerCase()) && d.toLowerCase() !== a.confirmed_location.toLowerCase()).length > 0 && <div className="rounded-md border border-dashed p-2">
