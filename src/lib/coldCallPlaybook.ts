@@ -27,11 +27,9 @@
    🔴 CORRELATION IS NOT CAUSATION. A website finding "could be contributing"; it never "is why you
       don't show up". The finding copy is siteFindings.ts's, which is already hedged and tested for it.
 
-   ⚠️ THE MONTHLY IS NOT QUOTED. On 2026-09-23 the sources disagree: findableOffer.ts says
-      FINDABLE_MONTHLY_GBP is £99 (changed 2026-09-18, "Simplify Findable onboarding billing"), while
-      CLAUDE.md and findable-site's copy still describe £29.99 / a two-tier offer. Rather than guess
-      which one Paul is selling today, the playbook quotes only the setup price and the guarantee —
-      which every source agrees on — and tells him to check the monthly before quoting it.
+   🔴 THE OFFER IS READ FROM findableOffer.ts, NEVER TYPED HERE: FINDABLE_OFFER_SUMMARY (£99 to start,
+      then £99 a month, 12-month minimum — Paul, 2026-09-23) and FINDABLE_GUARANTEE. Until that date
+      the sources disagreed and the playbook said "check current offer"; they are one source now.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
 import { resolveFindingsSource, MAX_SITE_FINDINGS, type FindingKind, type FindingsSource, type SiteFinding } from './siteFindings.ts';
@@ -44,7 +42,7 @@ import { pluraliseTrade } from './templateVars.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl } from './findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl } from './findableOffer.ts';
 import { shortReportUrl } from './reportSlug.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
@@ -60,8 +58,6 @@ export const EVIDENCE_COMPETITORS = 5;
 export const EXCERPT_CHARS = 320;
 /** A previous message, trimmed for the follow-up box. The playbook is not a transcript. */
 export const MESSAGE_SNIPPET_CHARS = 220;
-/** The literal instruction the brief asks for when the offer cannot be determined reliably. */
-export const CHECK_OFFER = 'Check current offer before quoting';
 
 const DAY_MS = 86_400_000;
 
@@ -573,10 +569,11 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   else nextSteps.push('They have no website on file — talk about getting one built.');
   const offer = {
     lines: [
-      '£' + FINDABLE_SETUP_PRICE_GBP + ' to start.',
+      FINDABLE_OFFER_SUMMARY,
       FINDABLE_GUARANTEE,
     ],
-    monthly: CHECK_OFFER + ': the monthly amount after the first payment.',
+    /* Paul's build terms (findableOffer.ts, FINDABLE_MINIMUM_TERM_MONTHS) — they apply to a site we build. */
+    monthly: 'If we build the site: we build, host and manage it for the ' + FINDABLE_MINIMUM_TERM_MONTHS + " months, and once the term is complete and paid, it's theirs. Nothing is charged after the " + FINDABLE_MINIMUM_TERM_MONTHS + ' months.',
     nextSteps,
   };
 
@@ -607,7 +604,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
     {
       objection: 'How much is it?',
-      answer: '£' + FINDABLE_SETUP_PRICE_GBP + ' to start — that covers measuring where you are now, doing the work, and re-measuring at four weeks. (' + CHECK_OFFER + ' for the monthly.)',
+      answer: FINDABLE_OFFER_SUMMARY + ' The £' + FINDABLE_SETUP_PRICE_GBP + ' covers measuring where you are now, doing the work, and re-measuring at four weeks.',
     },
     {
       objection: 'Can you guarantee I\'ll show up?',

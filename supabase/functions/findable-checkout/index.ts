@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -16,7 +16,7 @@ import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../sr
 // refund if the measured number has not gone up. mode=payment — UNLESS the customer asked us to
 // build their site, which adds the £9.99/month hosting line and makes it mode=subscription. Either
 // way this is deliberately NOT the barber subscription function (that one needs an operator JWT,
-// bills £29.99/month and redirects to /barber).
+// bills the dead barber product monthly and redirects to /barber).
 //
 // ⚠️ THIS HEADER WAS THREE THINGS WRONG AT ONCE UNTIL 2026-09-12, which is worth recording because
 // none of them broke anything and all of them would have misled someone reading in a hurry: it said
@@ -289,8 +289,10 @@ Deno.serve(async (req) => {
     /* ⛔ THE TIER, READ FROM THE ROW (2026-09-17). It decides ONLY the copy on this page — the money
        taken today is £99 in payment mode either way; the recurring shape is built later by
        _shared/delayed-subscription.ts, which reads plan_tier itself. Browser never decides money, so
-       this is read off the onboarding row, never from `body`. `=== "new_site"` strictly; absent/null/
-       "keep" all mean the standard £29.99 monthly copy. */
+       this is read off the onboarding row, never from `body`.
+       ⚠️ SINCE 2026-09-18 THERE IS ONE PLAN (£99 today, then £99/month for the 12-month minimum), so
+       the tier no longer changes this page at all; it is still stored for the separate optimise-only
+       structure Paul has yet to define (findableOffer.ts, FINDABLE_MINIMUM_TERM_MONTHS). */
     /* ⛔ IT MUST BE A PRICE ID, NOT A PRODUCT ID, AND THAT IS NOT A THEORETICAL MISTAKE — IT IS THE
        ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). A *_PRICE_ID secret was set to
        `prod_VBse8QguSes2Zr` and Stripe answered
@@ -323,7 +325,8 @@ Deno.serve(async (req) => {
        durable state and the webhook stores it - without it we could never cancel or answer "is this
        customer still paying". */
     /* 🔴 ALWAYS `payment` SINCE 2026-09-13 — THE SUBSCRIPTION IS NOT CREATED HERE ANY MORE.
-       Under the delayed-monthly model the first £29.99 starts 14 days after the four-week results
+       (HISTORY — superseded 2026-09-18: the webhook now creates the subscription at signup with a
+       FINDABLE_MONTHLY_DELAY_DAYS trial.) Under the old delayed-monthly model the first charge started 14 days after the four-week results
        were SENT, and that date is unknowable at checkout: the replay lands on day 28 normally,
        later whenever it holds, and day 56 for RG by contract. A Checkout Session fixes its trial
        length at creation, so no number put here could express the offer.
@@ -391,7 +394,7 @@ Deno.serve(async (req) => {
          ⚠️ Both figures are interpolated from the constants, never typed: this string is read by
          a customer and a price move must not be able to leave a stale number on a receipt. */
       form.set("line_items[0][price_data][product_data][name]",
-        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six`);
+        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum`);
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }

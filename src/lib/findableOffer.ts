@@ -35,18 +35,14 @@
  *  change the other. */
 export const FINDABLE_SETUP_PRICE_GBP = 99;
 
-/** 🔴 THE MONTHLY. The offer is £99 to start AND £29.99 a month — one shape, not a one-off with
- *  something bolted on afterwards (Paul, 2026-09-14). Every surface that names the price names
- *  both figures now; a line that quotes only the setup fee understates what the customer pays.
+/** 🔴 THE MONTHLY: £99 A MONTH, FOR A 12-MONTH MINIMUM TERM (Paul, 2026-09-23).
+ *  The offer is £99 to start, then £99 a month. There is ONE plan and ONE monthly figure — the
+ *  £29.99 "keep your site" tier and the £99-then-£29.99 "new site" schedule are both gone (billing was
+ *  simplified to a single £99 plan on 2026-09-18, commit 3a49d5e9; the words caught up 2026-09-23).
  *
- *  It starts on the day the claim window closes: the four-week results plus 14 days, which is
- *  monthlyStartIso === claimWindowCloseIso in remeasureResults.ts — ONE function, so the charge
- *  cannot drift from the entitlement.
- *  ⛔ WHICH IS WHY BINDING COPY SAYS "14 days after you get your results" AND NEVER "week six".
- *  Week six is results + 14 days ONLY when the results land on day 28. They land later whenever
- *  the replay holds, and day 56 for RG by contract, whose second payment is therefore week ten.
- *  "From week 6" is allowed in the marketing TIMELINE, where day 28 is the stated case directly
- *  above it; terms, refunds, the pay screen, Stripe and the emails count from the results.
+ *  It starts FINDABLE_MONTHLY_DELAY_DAYS after the £99 signup payment (Stripe holds it as a trial —
+ *  _shared/delayed-subscription.ts), and bills FINDABLE_MINIMUM_TERM_MONTHS payments, then stops.
+ *  ⛔ THERE IS NO AUTOMATIC CHARGE AFTER THE 12 MONTHS — no £29.99 continuation, no open-ended £99.
  *
  *  ⚠️ DECLARED HERE, ABOVE CARD_SAVED_NOTICE, AND THAT IS STRUCTURAL. That constant interpolates
  *  this one, and a const referenced before its declaration throws ReferenceError at module load —
@@ -56,23 +52,36 @@ export const FINDABLE_MONTHLY_GBP = 99;
 /** The first recurring payment is exactly six weeks after the successful £99 signup payment. */
 export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
 
-/** 🔴 THE NEW-SITE TIER MONTHLY (Paul, 2026-09-17). A second pricing tier for clients who need a new
- *  website built: £99 to start, then £99/month for 12 months (everything in, hosting too, the site
- *  is theirs), then it DROPS to FINDABLE_MONTHLY_GBP a month. "Keep your site" (£99 + £29.99/month)
- *  is unchanged and stays the default.
- *  ⛔ THE GUARANTEE IS IDENTICAL ON BOTH TIERS and applies to the £99 ONLY — REMEASURE_CLAIM_SENTENCE
- *  and FINDABLE_GUARANTEE do not change, and the customer keeps the site either way.
- *  ⚠️ £99/month is a REAL Stripe recurring Price (FINDABLE_NEW_SITE_PRICE_ID). Its amount is checked
- *  against THIS constant before any subscription schedule is created — _shared/delayed-subscription.ts,
- *  exactly as the £29.99 price is — so a card is never charged a figure we do not publish. */
-export const FINDABLE_NEW_SITE_MONTHLY_GBP = 99;
+/** 🔴 THE MINIMUM TERM: 12 monthly payments of FINDABLE_MONTHLY_GBP (Paul, 2026-09-23).
+ *  It is a real commitment — the old note here said the 12 months did not bind the client, which is no longer
+ *  the offer. The Stripe subscription is created with this many billing periods and then ends
+ *  (_shared/delayed-subscription.ts), so nothing is charged after it.
+ *
+ *  ⛔ WHAT PAUL HAS DECIDED (2026-09-23), recorded, not yet all written into customer copy:
+ *    · For a website Findable BUILDS: we build, host and manage it during the 12 months and own the
+ *      build during that period; once the term is complete and everything due is paid, ownership
+ *      transfers to the client; after that there is no compulsory monthly fee. If payment is
+ *      overdue during the term, the Findable-hosted site may be suspended after reasonable written
+ *      notice until the arrears are paid.
+ *    · The four-week visibility guarantee still applies on top (FINDABLE_GUARANTEE): a valid claim
+ *      is an exit under the guarantee's own terms.
+ *    · Those ownership / suspension terms apply ONLY to a site Findable builds. Optimising a site
+ *      the client already owns is to have a separate pricing / service structure, NOT YET DEFINED —
+ *      until it is, checkout sells every client this one plan.
+ *  ⛔ DO NOT INVENT penalties, early-exit charges or cancellation rights beyond the above. */
+export const FINDABLE_MINIMUM_TERM_MONTHS = 12;
 
-/** How many months the new-site tier bills at £99 before it drops to FINDABLE_MONTHLY_GBP. It is the
- *  `iterations` of phase 1 of the Stripe subscription schedule; phase 2 (the £29.99 price) has no end.
- *  ⛔ NOT A BINDING TERM. Stripe does not enforce it and there is no early-termination charge (Paul,
- *  2026-09-17): a client can cancel any time, keeps the site, and simply stops being billed. The 12
- *  months only decides WHEN the price drops, and the terms state it plainly. */
-export const FINDABLE_NEW_SITE_TERM_MONTHS = 12;
+/** The offer in one line, for operator surfaces that quote it (the Cold Call Playbook). Built from
+ *  the constants so a price move cannot leave a stale figure in a call script. */
+export const FINDABLE_OFFER_SUMMARY =
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`;
+
+/** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
+ *  £29.99 a month … Stop any time"). Code cannot change what Meta sends, so they are BLOCKED on every
+ *  path (picker + server claim + queue settings) until Paul submits corrected versions at Meta and a
+ *  new name is registered here. Their mirrors in templateBodies.ts / whatsapp-send.ts keep the
+ *  registered words, because those render what four prospects actually read. */
+export const STALE_OFFER_TEMPLATES: ReadonlySet<string> = new Set(['explain_offer', 'explain_offer_v2']);
 
 /* The guarantee, WORK-based: we promise the audit, the work and the re-measurement, never the
    outcome. Anywhere this sentence is shown to a client must render it from this constant, not a
@@ -264,6 +273,9 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean }): { subj
    late on its own — so the four-week results email carries the date and the amount fourteen days
    ahead, and this is the reminder, not the announcement.
    ⚠️ Rendered by the webhook. Plain, no selling, and the date and amount are in the first line. */
+/* ⛔ NO "cancel before that date and nothing is taken" (Paul, 2026-09-23): the monthly is a
+   FINDABLE_MINIMUM_TERM_MONTHS minimum term now, so offering a free exit here would contradict what
+   was sold. `cancelUrl` stays in the signature for the caller and is deliberately not printed. */
 export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null }): { subject: string; paragraphs: string[] } {
   return {
     subject: `Your Findable monthly starts on ${i.startsOn}`,
@@ -271,9 +283,8 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
       `Hi,`,
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
-      i.cancelUrl
-        ? `If you would rather stop, you can cancel here before that date and nothing is taken: ${i.cancelUrl}`
-        : `If you would rather stop, reply to this email before that date and nothing is taken.`,
+      `It runs for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term: ${FINDABLE_MINIMUM_TERM_MONTHS} monthly payments, then it stops.`,
+      `Any questions, just reply to this email.`,
       `Paul, findable`,
     ],
   };
@@ -294,18 +305,12 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
 /* 🔴 IT NAMES BOTH FIGURES NOW (2026-09-14). It said "You pay £99 today" and then described the
    monthly without ever pricing it, on the one screen where somebody enters a card — so the only
    number in front of them at the moment they pay was the smaller half of what they owe. */
+/* 🔴 12-MONTH MINIMUM (Paul, 2026-09-23). "You can cancel before it starts" came out: the monthly is a
+   FINDABLE_MINIMUM_TERM_MONTHS minimum term, and the only exit is the guarantee, which the Stripe line
+   item's description carries verbatim (FINDABLE_GUARANTEE). ⚠️ findable.live's pre-pay screen shows
+   its own copy of this sentence and must be changed to match (separate repo, deployed by hand). */
 export const CARD_SAVED_NOTICE =
-  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today. You can cancel before it starts.`;
-
-/* ⛔ THE NEW-SITE TIER'S VERSION OF THE SAME NOTICE (2026-09-17). A SEPARATE named string, not a
-   function of CARD_SAVED_NOTICE, because check-cross-repo-sync.mjs parses a string CONSTANT and byte-
-   locks it to findable-site's copy — a function it could not read, and the pre-pay screen must say
-   exactly what the Stripe submit message says. The checkout picks this one when plan_tier is
-   new_site, CARD_SAVED_NOTICE otherwise. Both figures are interpolated from the constants so a price
-   move cannot leave a stale number on the card screen.
-   ⚠️ It names the drop, because a customer entering a card for £99/month is owed the end of it. */
-export const CARD_SAVED_NOTICE_NEW_SITE =
-  `You pay £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_NEW_SITE_MONTHLY_GBP} a month for ${FINDABLE_NEW_SITE_TERM_MONTHS} months and £${FINDABLE_MONTHLY_GBP} a month after that. We keep your card on file so the monthly can start later — nothing else is taken until after you have seen your four-week results, and you can cancel before it does.`;
+  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term. Nothing is charged after the ${FINDABLE_MINIMUM_TERM_MONTHS} months.`;
 
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 

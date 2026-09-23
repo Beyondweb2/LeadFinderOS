@@ -4,6 +4,41 @@
 
 > Moved from CLAUDE.md §1 on 2026-09-16. Verbatim. Cross-references (§N) use the ORIGINAL CLAUDE.md numbering — `docs/INDEX.md` maps them.
 
+## 0. THE CURRENT OFFER (2026-09-23) — supersedes every price and term below
+
+Everything after this section is the dated record and is kept as written. Where it disagrees with
+this section, this section wins.
+
+- **£99 to start, then £99 a month from six weeks after sign-up, for a 12-month minimum term.** One
+  plan (`FINDABLE_OFFER_SUMMARY` in `src/lib/findableOffer.ts`). Billing was simplified to this single
+  £99 plan on 2026-09-18 (commit `3a49d5e9`); the words, the term and the end of billing caught up on
+  2026-09-23.
+- **Billing:** the webhook creates the Stripe subscription at sign-up with a 42-day trial
+  (`FINDABLE_MONTHLY_DELAY_DAYS`) and `cancel_at` exactly `FINDABLE_MINIMUM_TERM_MONTHS` months after
+  the first charge (`minimumTermCancelAt`, `_shared/delayed-subscription.ts`) — 12 payments, then it
+  stops. There is **no** £29.99 continuation and no open-ended £99.
+- **The 12 months is a real minimum.** Customer copy no longer says "you can cancel before it
+  starts" (card screen), "cancel here … nothing is taken" (monthly-starts email), "Cancel any time
+  before then" (four-week results email) or "you can stop it any time" (welcome pack).
+- **Paul's terms (2026-09-23), for a site Findable BUILDS:** we build, host and manage it during the
+  12 months and own the build in that period; once the term is complete and everything due is paid,
+  ownership transfers to the client; after transfer there is no compulsory monthly fee (they arrange
+  their own hosting, or take an optional Findable plan if one is offered); if payment is overdue in
+  the term, the Findable-hosted site may be suspended after reasonable written notice until the
+  arrears are paid. **These apply only to a site we build.** Optimising a site the client already
+  owns is to have a separate pricing / service structure — **not yet defined**; until it is,
+  checkout sells every client the one plan.
+- **The guarantee is unchanged** (`FINDABLE_GUARANTEE`, byte-locked): a valid claim within the window
+  is an exit under the guarantee's own terms.
+- **explain_offer / explain_offer_v2** are registered at Meta saying "After that £29.99 a month …
+  Stop any time". They are in `STALE_OFFER_TEMPLATES` — blocked in the picker, the server claim and
+  the queue settings — until corrected versions are approved at Meta.
+- **Still to reconcile (outside LeadFinderOS or awaiting Paul):** findable-site's own copies (pricing
+  panel, FAQ, /terms, /refunds, the pre-pay notice); the optimise-only structure; the four-week
+  results email still says the monthly starts "that same day" as the claim window closes, while
+  billing now starts six weeks after sign-up; the cancelled-subscription email says "your pages stay
+  exactly where they are", which does not yet reflect the ownership/suspension terms.
+
 ## 1. What the business is
 
 - Paul sells **AI visibility** to local UK businesses. **£99, one-off, ONE FLAT PRICE FOR EVERYONE**
@@ -512,9 +547,9 @@ the submit, and read server-side — the browser never decides money.
   is `now` so the subscription id exists immediately and the webhook keys on it as for the keep tier.
 
 ⛔ **The guarantee is identical on both tiers and applies to the £99 ONLY** — `REMEASURE_CLAIM_SENTENCE`
-and `FINDABLE_GUARANTEE` untouched, byte-lock intact; the customer keeps the site either way. **Not a
-binding term**: cancel any time, keep the site, no early-exit charge (Stripe does not enforce it); the
-12 months only decides when the price drops, stated plainly on /terms and /refunds.
+and `FINDABLE_GUARANTEE` untouched, byte-lock intact; the customer keeps the site either way. (SUPERSEDED 2026-09-23 — see §0: at the time the 12 months
+was described as non-binding, cancel any time, no early-exit charge; the 12 months only decided when
+the price dropped. It is now a 12-month minimum with no charge after it.)
 
 ⛔ **The £9.99 hosting add-on is retired for new sign-ups** — hosting is inside the £99/mo on
 new-site, keep has none. Only a LEGACY row (`plan_tier` null AND the old `website_addon` tick) still

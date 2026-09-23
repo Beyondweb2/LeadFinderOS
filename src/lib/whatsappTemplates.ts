@@ -10,6 +10,7 @@
    anything edge-reachable ever pulls this module in — the extensionless form is the one the Supabase
    bundler refuses outright while tsc and vite both resolve it happily (CLAUDE.md §3). */
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from './siteFindings.ts';
+import { STALE_OFFER_TEMPLATES } from './findableOffer.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -215,6 +216,11 @@ export function getTemplateSendability(
      label is only the half the operator reads. One line in src/lib/siteFindings.ts flips both. */
   if (template === AI_SITE_FINDINGS_V2 && !AI_SITE_FINDINGS_V2_APPROVED) {
     return { ok: false, reason: 'Waiting on Meta approval — a send would fail. Use audit_followup_fault.' };
+  }
+  /* The registered body quotes the retired £29.99 monthly and "Stop any time" (2026-09-23) — blocked
+     until a corrected version is approved at Meta. Same set the server refuses on. */
+  if (STALE_OFFER_TEMPLATES.has(template)) {
+    return { ok: false, reason: 'Quotes the old £29.99/month offer — blocked until the corrected version is approved at Meta.' };
   }
   const req = WA_TEMPLATE_REQS[template];
   if (!req) return { ok: true };

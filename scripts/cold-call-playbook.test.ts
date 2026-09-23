@@ -15,7 +15,6 @@
 import { readFileSync } from 'node:fs';
 import {
   buildColdCallPlaybook,
-  CHECK_OFFER,
   type PlaybookInput,
   type PlaybookMessage,
   type PlaybookReport,
@@ -23,7 +22,7 @@ import {
 import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
-import { FINDABLE_SETUP_PRICE_GBP } from '../src/lib/findableOffer.ts';
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY } from '../src/lib/findableOffer.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => {
@@ -229,8 +228,8 @@ console.log('── 10. OFFER AND CLAIMS ──');
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
-  ok(p.offer.lines[0] === '£' + FINDABLE_SETUP_PRICE_GBP + ' to start.', 'the setup price comes from findableOffer.ts');
-  ok(p.offer.monthly.startsWith(CHECK_OFFER), 'the monthly is not guessed: "' + CHECK_OFFER + '"');
+  ok(p.offer.lines[0] === FINDABLE_OFFER_SUMMARY, 'the offer comes from findableOffer.ts: ' + FINDABLE_OFFER_SUMMARY);
+  ok(p.offer.monthly.includes(FINDABLE_MINIMUM_TERM_MONTHS + ' months') && !/check current offer/i.test(text), 'the 12-month term is stated; no "check current offer"');
   ok(!/£29\.99|£9\.99|£49\.99/.test(text), 'no stale or invented price anywhere');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');

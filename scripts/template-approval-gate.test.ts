@@ -22,6 +22,7 @@ import {
   templateAwaitingApproval,
 } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from '../src/lib/siteFindings.ts';
+import { STALE_OFFER_TEMPLATES } from '../src/lib/findableOffer.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -53,7 +54,14 @@ ok(threw.startsWith('unsafe_template_var:template_not_approved:'),
 
 console.log('── 3. NOTHING ELSE IS TOUCHED ──');
 /* 🔴 THE REGRESSION THAT WOULD MATTER MOST. Every live template must build exactly as it did. */
-const others = Object.keys(WA_TEMPLATES).filter((t) => t !== AI_SITE_FINDINGS_V2);
+/* The ONLY other deliberate holds: templates whose Meta body quotes a retired offer (2026-09-23). */
+for (const t of STALE_OFFER_TEMPLATES) {
+  ok(t in WA_TEMPLATES && templateAwaitingApproval(t), `${t}: held — its registered body quotes the retired £29.99 offer`);
+  let msg = '';
+  try { claimTemplatePayload(t, WA_TEMPLATES[t].lang, 'MC Locksmiths', 'https://findable.live/onboarding/x', FULL); } catch (e) { msg = (e as Error).message; }
+  ok(msg.startsWith('unsafe_template_var:template_not_approved:'), `${t}: refused at the one door with the readable-hold prefix`);
+}
+const others = Object.keys(WA_TEMPLATES).filter((t) => t !== AI_SITE_FINDINGS_V2 && !STALE_OFFER_TEMPLATES.has(t));
 ok(others.length >= 10, `${others.length} other registered templates checked`);
 ok(others.every((t) => templateAwaitingApproval(t) === false), 'NO other registered template is held by the approval gate');
 for (const t of ['initial_opener_v2', 'audit_followup_fault', 'audit_followup', 'audit_reply']) {
