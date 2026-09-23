@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_TOTAL_PAYMENTS, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
          ⚠️ Both figures are interpolated from the constants, never typed: this string is read by
          a customer and a price move must not be able to leave a stale number on a receipt. */
       form.set("line_items[0][price_data][product_data][name]",
-        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum`);
+        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${FINDABLE_TOTAL_PAYMENTS} payments in total (${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum)`);
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }

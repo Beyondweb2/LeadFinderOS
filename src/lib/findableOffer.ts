@@ -41,8 +41,9 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
  *  simplified to a single £99 plan on 2026-09-18, commit 3a49d5e9; the words caught up 2026-09-23).
  *
  *  It starts FINDABLE_MONTHLY_DELAY_DAYS after the £99 signup payment (Stripe holds it as a trial —
- *  _shared/delayed-subscription.ts), and bills FINDABLE_MINIMUM_TERM_MONTHS payments, then stops.
- *  ⛔ THERE IS NO AUTOMATIC CHARGE AFTER THE 12 MONTHS — no £29.99 continuation, no open-ended £99.
+ *  _shared/delayed-subscription.ts). The £99 at sign-up IS payment 1 of FINDABLE_TOTAL_PAYMENTS; Stripe
+ *  then bills FINDABLE_RECURRING_PAYMENTS more and stops.
+ *  ⛔ THERE IS NO PAYMENT AFTER THE 12TH — no £29.99 continuation, no open-ended £99.
  *
  *  ⚠️ DECLARED HERE, ABOVE CARD_SAVED_NOTICE, AND THAT IS STRUCTURAL. That constant interpolates
  *  this one, and a const referenced before its declaration throws ReferenceError at module load —
@@ -52,10 +53,9 @@ export const FINDABLE_MONTHLY_GBP = 99;
 /** The first recurring payment is exactly six weeks after the successful £99 signup payment. */
 export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
 
-/** 🔴 THE MINIMUM TERM: 12 monthly payments of FINDABLE_MONTHLY_GBP (Paul, 2026-09-23).
+/** 🔴 THE MINIMUM TERM: a 12-month minimum commitment (Paul, 2026-09-23).
  *  It is a real commitment — the old note here said the 12 months did not bind the client, which is no longer
- *  the offer. The Stripe subscription is created with this many billing periods and then ends
- *  (_shared/delayed-subscription.ts), so nothing is charged after it.
+ *  the offer. The PAYMENT count is FINDABLE_TOTAL_PAYMENTS below, and the sign-up £99 is one of them.
  *
  *  ⛔ WHAT PAUL HAS DECIDED (2026-09-23), recorded, not yet all written into customer copy:
  *    · For a website Findable BUILDS: we build, host and manage it during the 12 months and own the
@@ -71,10 +71,22 @@ export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
  *  ⛔ DO NOT INVENT penalties, early-exit charges or cancellation rights beyond the above. */
 export const FINDABLE_MINIMUM_TERM_MONTHS = 12;
 
+/** 🔴 TWELVE PAYMENTS IN TOTAL, AND THE SIGN-UP £99 IS THE FIRST OF THEM (Paul, 2026-09-23).
+ *  Payment 1 is FINDABLE_SETUP_PRICE_GBP at checkout; payments 2-12 are FINDABLE_RECURRING_PAYMENTS
+ *  monthly charges of FINDABLE_MONTHLY_GBP; nothing after the 12th.
+ *  ⛔ The first version of the term (earlier the same day) billed 12 RECURRING payments on top of the
+ *  sign-up — 13 in total. The recurring count is DERIVED here so it can never be typed as 11 in one
+ *  place and 12 in another. */
+export const FINDABLE_TOTAL_PAYMENTS = 12;
+/** Monthly charges Stripe makes after the sign-up payment. Derived — never write the number. */
+export const FINDABLE_RECURRING_PAYMENTS = FINDABLE_TOTAL_PAYMENTS - 1;
+/** The nominal value of the whole commitment: the sign-up payment plus every recurring one. */
+export const FINDABLE_CONTRACT_TOTAL_GBP = FINDABLE_SETUP_PRICE_GBP + FINDABLE_RECURRING_PAYMENTS * FINDABLE_MONTHLY_GBP;
+
 /** The offer in one line, for operator surfaces that quote it (the Cold Call Playbook). Built from
  *  the constants so a price move cannot leave a stale figure in a call script. */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${FINDABLE_TOTAL_PAYMENTS} payments in total, a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`;
 
 /** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
  *  £29.99 a month … Stop any time"). Code cannot change what Meta sends, so they are BLOCKED on every
@@ -283,7 +295,7 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
       `Hi,`,
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
-      `It runs for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term: ${FINDABLE_MINIMUM_TERM_MONTHS} monthly payments, then it stops.`,
+      `It runs for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term: ${FINDABLE_TOTAL_PAYMENTS} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`,
       `Any questions, just reply to this email.`,
       `Paul, findable`,
     ],
@@ -310,7 +322,7 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    item's description carries verbatim (FINDABLE_GUARANTEE). ⚠️ findable.live's pre-pay screen shows
    its own copy of this sentence and must be changed to match (separate repo, deployed by hand). */
 export const CARD_SAVED_NOTICE =
-  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term. Nothing is charged after the ${FINDABLE_MINIMUM_TERM_MONTHS} months.`;
+  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term — ${FINDABLE_TOTAL_PAYMENTS} payments in total, including today's. Nothing is charged after the ${FINDABLE_TOTAL_PAYMENTS}th.`;
 
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 

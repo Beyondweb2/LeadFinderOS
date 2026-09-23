@@ -229,7 +229,7 @@ console.log('── 10. OFFER AND CLAIMS ──');
   const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
   const text = allText(p);
   ok(p.offer.lines[0] === FINDABLE_OFFER_SUMMARY, 'the offer comes from findableOffer.ts: ' + FINDABLE_OFFER_SUMMARY);
-  ok(p.offer.monthly.includes(FINDABLE_MINIMUM_TERM_MONTHS + ' months') && !/check current offer/i.test(text), 'the 12-month term is stated; no "check current offer"');
+  ok(p.offer.monthly.includes(FINDABLE_MINIMUM_TERM_MONTHS + ' months') && /12th payment/.test(p.offer.monthly) && !/check current offer/i.test(text), 'the 12-month term is stated; no "check current offer"');
   ok(!/£29\.99|£9\.99|£49\.99/.test(text), 'no stale or invented price anywhere');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');

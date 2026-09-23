@@ -60,8 +60,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Offer (Paul, 2026-09-23): £99 to start, then £99/month from six weeks after sign-up, for a
   12-month minimum term — ONE plan** (`FINDABLE_OFFER_SUMMARY`). The monthly is a Stripe
   subscription created by the webhook at sign-up with a `FINDABLE_MONTHLY_DELAY_DAYS` trial
-  (`_shared/delayed-subscription.ts`) and `cancel_at` after `FINDABLE_MINIMUM_TERM_MONTHS` payments:
-  ⛔ **nothing is charged after the 12 months** — no reduced continuation price, no open-ended £99. The
+  (`_shared/delayed-subscription.ts`) and `cancel_at` after `FINDABLE_RECURRING_PAYMENTS` charges.
+  ⛔ **12 payments IN TOTAL (`FINDABLE_TOTAL_PAYMENTS`), and the sign-up £99 is payment 1** — 11
+  recurring, £1,188 nominal (`FINDABLE_CONTRACT_TOTAL_GBP`); never "£99 plus 12 more". Nothing after the 12th — no reduced continuation price, no open-ended £99. The
   old two-tier offer (keep-your-site monthly / new-site schedule) is RETIRED; `plan_tier` is still
   stored. ⛔ **The 12 months is a real minimum** — never write "cancel any time" / "stop any time" /
   "cancel before it starts" beside it. For a site Findable BUILDS: we build, host and manage it in
