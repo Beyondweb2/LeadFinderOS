@@ -19,7 +19,12 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 - **Product:** Findable — AI visibility for local UK businesses (§1). **Two paying customers, RG
   Locksmiths and Ronnie's Shoe Repairs; SC Plumbing & Gas refunded.** Re-count before quoting.
-- **Repo:** `main` auto-deploys the SPA to Cloudflare Pages on push. **Edge functions deploy by
+- **Repo:** `main` auto-deploys the SPA to **`https://leadfinderos-next.pages.dev`** (Cloudflare
+  Pages) on push — observed working 2026-09-23 (`3972fd42` live within the hour). ⛔ **Never verify
+  against `leadfinderos.pages.dev`** — a legacy project, not connected, frozen on an old bundle
+  (§7). NEITHER project is in the Cloudflare account wrangler uses on this machine (it has only
+  `findable-site`, `findable-directory`), so prove a deploy by the live BUNDLE, never a dashboard
+  (§4 deploy check; `node scripts/verify-live.mjs`). **Edge functions deploy by
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
@@ -577,9 +582,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
 
-- Live operator app **`https://leadfinderos-next.pages.dev`** — ⚠️ **`leadfinderos.pages.dev` is a
-  STALE Cloudflare project that still answers 200 with an old bundle.** A deploy check against it
-  reports "not live" forever (recorded 2026-09-20). Supabase ref `ruusxpkkmwtljxxulhbq`; public site
+- Live operator app **`https://leadfinderos-next.pages.dev`** — this is PRODUCTION. ⛔
+  **`leadfinderos.pages.dev` is LEGACY: a stale Cloudflare project, not connected to `main`, that
+  still answers 200 with an old bundle (same title, same sign-in page).** Never use it for any
+  verification. A deploy check against it reports "not live" forever and has now misled TWO
+  sessions into diagnosing a broken deploy that did not exist (2026-09-20, 2026-09-23). If a
+  change looks "not live", first check which host you fetched. Supabase ref `ruusxpkkmwtljxxulhbq`; public site
   `https://findable.live` (separate repo `../findable-site`, Astro, deploys by `npm run deploy`).
 - **Report URL has THREE resolving forms, all forever:** the SHORT `findable.live/r/<code>` (the one
   every template/email/Inbox now sends; `ai_audits.short_code`, unique, trigger-assigned + backfilled,
@@ -623,10 +631,14 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
-- 🔴 **`leadfinderos.pages.dev` has not rebuilt for weeks** — the live bundle references no
-  `ClientHub`, `PaidClients` or `PaidBaselineSetup` chunk, so it predates the Paid Clients feature
-  entirely. `main` pushes fine and builds clean; the Cloudflare Pages auto-deploy is not running.
-  Nothing shipped to the operator app is actually live until that is fixed.
+- ~~"the Cloudflare Pages auto-deploy is not running"~~ — **WRONG, corrected 2026-09-23.** That
+  entry was written from a check against the LEGACY `leadfinderos.pages.dev` (§7). Production is
+  `leadfinderos-next.pages.dev`, and it was serving current `main` (`3972fd42`): 77 of 79 chunks
+  byte-identical to a local build once filename hashes are neutralised; the other two differ only
+  by the baked-in Supabase URL/key (a local build has no `.env`) and by Windows CRLF line endings in
+  the raw-imported `src/mockup/templates/*.html`. There is no deploy fault.
+- `src/components/SEOHead.tsx` `BASE_URL` still names the legacy `leadfinderos.pages.dev`, so the
+  operator app's canonical/OG URLs point at the stale site. App code — change it in its own task.
 - 🔴 **`findable.live/w/<code>` is not live yet.** `findable-site/functions/w/[code].ts` exists but
   the repo was not deployed — `npm run deploy` ships the working tree and that tree carries two
   unrelated uncommitted edits (`Footer.astro`, `research.astro`). Download works; the link does not.
