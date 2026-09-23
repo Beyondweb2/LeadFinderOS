@@ -1,9 +1,9 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { createDelayedSubscription } from "../_shared/delayed-subscription.ts";
+import { createDelayedSubscription, subscriptionEndedByTerm } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
-import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -627,6 +627,21 @@ Deno.serve(async (req) => {
       }
     }
     return metaLeadId && SUB_UUID_RE.test(metaLeadId) ? metaLeadId : null;
+  };
+
+  /** Whose website it is (findableSiteKind), from the paid onboarding row first — the same row the
+   *  ending emails are addressed from. Any failure reads as `unknown`, which makes NO ownership claim. */
+  const siteKindForLead = async (leadId: string): Promise<FindableSiteKind> => {
+    try {
+      const { data } = await service.from("onboarding_responses")
+        .select("plan_tier, website_route, status, created_at").eq("lead_id", leadId)
+        .order("created_at", { ascending: false }).limit(10);
+      const rows = (data ?? []) as Array<{ plan_tier?: unknown; website_route?: unknown; status?: string | null }>;
+      const paidRow = rows.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? "")));
+      return findableSiteKind(paidRow ?? rows[0] ?? null);
+    } catch {
+      return "unknown";
+    }
   };
 
   /** Record the hosting subscription's state on the lead. Never fatal: a status we failed to write
@@ -1342,12 +1357,27 @@ Deno.serve(async (req) => {
                from evidence rather than re-argued. */
             const reason = String(((sub as { cancellation_details?: { reason?: unknown } }).cancellation_details?.reason) ?? "");
             const becauseOfPayment = reason === "payment_failure" || wasPastDue;
-            await emailClientForLead(leadId, "monthly_ended", subscriptionEndedEmail({ becauseOfPayment }), {
-              subscription: sub.id,
-              cancellation_reason: reason || "(none given)",
-              was_past_due: wasPastDue,
-              branched_as: becauseOfPayment ? "payment_failure" : "cancelled_on_purpose",
-            });
+            /* 🔴 THE THIRD ENDING: THE TERM WAS COMPLETED (2026-09-23). cancel_at is set at creation to
+               the boundary after the last recurring payment, and reaching it fires THIS event with
+               reason cancellation_requested — which used to send "Your monthly has been cancelled …
+               If you ever want it back" to a client who had paid all twelve.
+               ⛔ A POSITIVE TEST (subscriptionEndedByTerm): our own cancel_at, reached, not in arrears.
+               Anything absent or different falls to the existing two endings. */
+            const termComplete = subscriptionEndedByTerm(sub as { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown }, becauseOfPayment);
+            /* Whose website it is decides the ownership words (findableSiteKind: positive, else unknown). */
+            const siteKind = await siteKindForLead(leadId);
+            await emailClientForLead(
+              leadId,
+              termComplete ? "term_complete" : "monthly_ended",
+              termComplete ? termCompleteEmail({ siteKind }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
+              {
+                subscription: sub.id,
+                cancellation_reason: reason || "(none given)",
+                was_past_due: wasPastDue,
+                site_kind: siteKind,
+                branched_as: termComplete ? "term_complete" : becauseOfPayment ? "payment_failure" : "cancelled_on_purpose",
+              },
+            );
           }
           break;
         }

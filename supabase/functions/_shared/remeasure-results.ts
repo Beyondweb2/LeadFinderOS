@@ -25,7 +25,7 @@ import { compareMeasurements, type MeasurementComparison } from "../../../src/li
 import type { QueueRowLite } from "../../../src/lib/baselineView.ts";
 import {
   remeasureResultsDecision, numberWentUp, resultsEmailSubject, resultsEmailParagraphs, REMEASURE_CLAIM_WINDOW_DAYS,
-  currentTermsVerdict, type CurrentTermsVerdict,
+  currentTermsVerdict, resultsBillingStartIso, type CurrentTermsVerdict,
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
@@ -45,7 +45,7 @@ export const resultsPublicUrl = (remeasureAuditId: string) => `${REPORT_PUBLIC_O
 
 export interface RemeasureBundle {
   audit: { id: string; lead_id: string | null; business_name: string | null; business_type: string | null; website: string | null; location_text: string | null; audit_purpose: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null; created_at: string };
-  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null };
+  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null; subscription_status: string | null; subscription_renews_at: string | null };
   baselineRuns: Array<{ id: string; status: string | null; created_at: string }>;
   replayRuns: Array<{ id: string; status: string | null; created_at: string }>;
   comparison: MeasurementComparison;
@@ -65,7 +65,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   if (String(audit.audit_purpose ?? "").toLowerCase() !== "remeasure") return { bundle: null, reason: `audit_purpose is '${audit.audit_purpose ?? "null"}', not remeasure` };
   if (!audit.lead_id) return { bundle: null, reason: "replay has no lead" };
   const { data: l } = await service.from("outreach_leads")
-    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id")
+    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_renews_at")
     .eq("id", audit.lead_id).maybeSingle();
   const lead = l as RemeasureBundle["lead"] | null;
   if (!lead) return { bundle: null, reason: "lead not found" };
@@ -101,32 +101,11 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   return { bundle: { audit, lead, baselineRuns, replayRuns, comparison, town, terms }, reason: null };
 }
 
-/** Did this client tick "build my site"? The onboarding row is the record of what they bought, and
- *  the tick decides whether hosting joins the monthly. Absent or unreadable reads as NOT ticked:
- *  billing someone for hosting they did not ask for is the failure that cannot be undone. */
 /** "11 October 2026" — what a person reads. UTC so a late-evening stamp cannot print yesterday. */
 function prettyDate(iso: string | null): string | null {
   if (!iso) return null;
   const t = new Date(iso);
   return Number.isNaN(t.getTime()) ? null : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-}
-
-/** The tier and legacy hosting the client bought, from their onboarding row. `plan_tier` decides the
- *  billing shape (keep vs new_site); a null tier is a LEGACY row, billed the old way with hosting if
- *  the old website tick was set. Fails safe to the keep-flow default (no tier, no hosting) — the
- *  direction that undercharges rather than over. */
-async function planFor(service: Client, leadId: string): Promise<{ tier: "keep" | "new_site" | null; wantsHostingLegacy: boolean }> {
-  try {
-    const { data } = await service.from("onboarding_responses")
-      .select("plan_tier, website_addon, status, created_at").eq("lead_id", leadId)
-      .order("created_at", { ascending: false }).limit(10);
-    const rows = (data ?? []) as Array<{ plan_tier?: unknown; website_addon?: unknown; status?: string | null }>;
-    const paid = rows.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? "")));
-    const row = paid ?? rows[0];
-    const rawTier = String(row?.plan_tier ?? "");
-    const tier = rawTier === "new_site" ? "new_site" : rawTier === "keep" ? "keep" : null;
-    return { tier, wantsHostingLegacy: row?.website_addon === true };
-  } catch { return { tier: null, wantsHostingLegacy: false }; }
 }
 
 async function emailOperator(subject: string, lines: string[]): Promise<void> {
@@ -187,9 +166,30 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     return { kind: "held", reason: "no contact email" };
   }
 
+  /* ⛔ THE WORDS ARE BUILT BEFORE THE CLAIM (2026-09-23). They were built after it, and the billing
+     line called an undefined `monthlyStartIso`: a ReferenceError there would have left the stamp set
+     with no email behind it — a 14-day window started that the client could not see. Anything that
+     can throw now throws while nothing has been claimed.
+     The billing date is Stripe's own, from the subscription created at sign-up (resultsBillingStartIso);
+     no subscription, or one already billing, names no date. */
+  const nowIso = new Date().toISOString();
+  const billingStartIso = resultsBillingStartIso({
+    subscriptionId: lead.stripe_subscription_id, subscriptionStatus: lead.subscription_status,
+    subscriptionRenewsAt: lead.subscription_renews_at, nowIso,
+  });
+  const copy = {
+    businessName, town,
+    beforeNamed: comparison.before.named, beforeAnswered: comparison.before.answered,
+    afterNamed: comparison.after.named, afterAnswered: comparison.after.answered,
+    questions: comparison.matchedCount, wentUp: numberWentUp(comparison), withinNoise: comparison.withinNoise,
+    documentUrl: resultsPublicUrl(audit.id),
+    monthlyStartsOn: prettyDate(billingStartIso),
+  };
+  const paragraphs = resultsEmailParagraphs(copy);
+  const subject = resultsEmailSubject(copy);
+
   /* CLAIM FIRST. The conditional update is the once-only guarantee. A missing column (the SQL not
      yet run) surfaces here as a hold, never as a send with no stamp. */
-  const nowIso = new Date().toISOString();
   const { data: claimed, error: claimErr } = await service.from("outreach_leads")
     .update({ remeasure_results_sent_at: nowIso })
     .eq("id", lead.id).is("remeasure_results_sent_at", null).select("id");
@@ -200,18 +200,6 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
   }
   if (!Array.isArray(claimed) || claimed.length === 0) return { kind: "skipped", reason: "another tick claimed the send" };
 
-  const copy = {
-    businessName, town,
-    beforeNamed: comparison.before.named, beforeAnswered: comparison.before.answered,
-    afterNamed: comparison.after.named, afterAnswered: comparison.after.answered,
-    questions: comparison.matchedCount, wentUp: numberWentUp(comparison), withinNoise: comparison.withinNoise,
-    documentUrl: resultsPublicUrl(audit.id),
-    /* The date the monthly starts, named in the email BEFORE the subscription is created below.
-       Derived from the same stamp and the same function, so the email cannot promise one date and
-       Stripe bill on another. A client with no retained card gets no line (see the builder). */
-    monthlyStartsOn: lead.stripe_customer_id && !lead.stripe_subscription_id ? prettyDate(monthlyStartIso(nowIso)) : null,
-  };
-  const paragraphs = resultsEmailParagraphs(copy);
   const key = Deno.env.get("RESEND_API_KEY");
   let providerMessageId: string | null = null;
   let error: string | null = key ? null : "RESEND_API_KEY not set";
@@ -221,7 +209,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
         method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: FROM_CLIENT, to: [to], reply_to: ADMIN_EMAIL,
-          subject: resultsEmailSubject(copy),
+          subject,
           text: paragraphs.join("\n\n"),
           html: paragraphs.map((p) => `<p>${p.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/(https?:\/\/\S+)/g, '<a href="$1">$1</a>')}</p>`).join(""),
         }),
@@ -234,7 +222,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
 
   /* The outcome lives on the replay audit's first run results (jsonb, no migration), like the
      free-check stamp: what was sent, to whom, when, the provider id, and the window close. */
-  const stamp = { at: nowIso, to, provider_message_id: providerMessageId, error, window_days: REMEASURE_CLAIM_WINDOW_DAYS, went_up: copy.wentUp, within_noise: copy.withinNoise, before: comparison.before, after: comparison.after };
+  const stamp = { at: nowIso, billing_starts: billingStartIso, to, provider_message_id: providerMessageId, error, window_days: REMEASURE_CLAIM_WINDOW_DAYS, went_up: copy.wentUp, within_noise: copy.withinNoise, before: comparison.before, after: comparison.after };
   const firstRun = replayRuns[0];
   if (firstRun) {
     const { data: rr } = await service.from("ai_audit_runs").select("results").eq("id", firstRun.id).maybeSingle();
@@ -248,24 +236,22 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     await emailOperator(`FOUR-WEEK RESULTS HELD — ${businessName}`, [`Resend refused the results email to ${to}: ${error}. The stamp was cleared; nothing has gone to the client.`]);
     return { kind: "held", reason: `email failed: ${error}` };
   }
-  /* ══ AND ONLY NOW DOES A SUBSCRIPTION EXIST ═══════════════════════════════════════════════════
-     ⛔ THIS LINE IS THE ANSWER TO "what if results never send". Everything above can hold, clear the
-     stamp and return — a replay that gave up, a thin question, a client on legacy terms, no address,
-     a Resend refusal. Every one of those paths returns BEFORE this point, so no subscription is
-     created and the client is never billed. There is no state from which billing can start without
-     a results email having provably gone out, because the call site is downstream of the send.
-     ⛔ NON-FATAL, ALWAYS. The client is reading their results; a Stripe problem must not un-send
-     them. A failure flags Paul and leaves the client unbilled. */
-  const sub = { kind: "skipped", reason: "subscription is created at signup" };
-  if (sub.kind === "failed") {
-    await reportOnceAnHour(service, "delayed_subscription_failed", lead.id, sub.reason, { remeasure_audit_id: audit.id, sent_at: nowIso });
-    await emailOperator(`MONTHLY NOT STARTED — ${businessName}`, [
+  /* ══ THE SUBSCRIPTION IS NOT CREATED HERE ANY MORE ═══════════════════════════════════════════
+     Since 2026-09-18 the stripe-webhook creates it at sign-up (_shared/delayed-subscription.ts). This
+     sender only READS it. A current-terms client with NO subscription (signed up before that change,
+     or the sign-up creation failed) will never be billed automatically, so Paul is told — and the
+     email above named no billing date for them. Non-fatal: the client already has their results. */
+  const subscription = (lead.stripe_subscription_id ?? "").trim()
+    ? { kind: "exists", id: lead.stripe_subscription_id, status: lead.subscription_status, billing_starts: billingStartIso }
+    : { kind: "missing" };
+  if (subscription.kind === "missing") {
+    await reportOnceAnHour(service, "delayed_subscription_missing", lead.id, "no Stripe subscription on record at results time", { remeasure_audit_id: audit.id, sent_at: nowIso, has_customer: !!lead.stripe_customer_id });
+    await emailOperator(`MONTHLY NOT SET UP — ${businessName}`, [
       `The four-week results for <b>${businessName}</b> WERE sent, and the client has them.`,
-      `Their monthly subscription could NOT be created: ${sub.reason}.`,
-      `Nothing is wrong from the client's side — they simply will not be billed until you set it up by hand.`,
+      `There is no Stripe subscription on record for them, so no monthly payment will be taken unless you set it up by hand. The email named no billing date.`,
     ]);
   }
 
-  await service.from("client_error_reports").insert({ error_id: "remeasure_results_sent", context: { lead_id: lead.id, remeasure_audit_id: audit.id, to, provider_message_id: providerMessageId, at: nowIso, went_up: copy.wentUp, subscription: sub } });
+  await service.from("client_error_reports").insert({ error_id: "remeasure_results_sent", context: { lead_id: lead.id, remeasure_audit_id: audit.id, to, provider_message_id: providerMessageId, at: nowIso, went_up: copy.wentUp, subscription } });
   return { kind: "sent", to, providerMessageId };
 }

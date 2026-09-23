@@ -330,11 +330,11 @@ Deno.serve(async (req) => {
        were SENT, and that date is unknowable at checkout: the replay lands on day 28 normally,
        later whenever it holds, and day 56 for RG by contract. A Checkout Session fixes its trial
        length at creation, so no number put here could express the offer.
-       ⛔ NOTHING RECURRING IS CREATED UNTIL THE OBLIGATION EXISTS. The subscription is created by
-       API when the results actually go out (_shared/remeasure-results.ts). A client who claims
-       their refund, or whose results never send, has no subscription to cancel because none was
-       ever made. That is structural: it does not depend on an update landing correctly.
-       ⛔ WHAT THIS SESSION DOES INSTEAD: takes the £99 and RETAINS THE CARD. Both settings below
+       ⛔ SUPERSEDED TOO: the subscription is NOT created when the results go out any more. Since
+       2026-09-18 stripe-webhook creates it on the successful £99 (_shared/delayed-subscription.ts),
+       trial_end = firstRecurringPaymentIso(sign-up), cancel_at after FINDABLE_RECURRING_PAYMENTS.
+       The results sender only reads it. A valid guarantee claim therefore has a subscription to cancel.
+       ⛔ WHAT THIS SESSION DOES: takes the £99 and RETAINS THE CARD. Both settings below
        are payment-mode only and both are required — without the customer there is nobody to bill
        later, and without setup_future_usage the card is not kept, so the monthly could never start
        and the failure would surface four weeks later as silence. */
@@ -348,8 +348,8 @@ Deno.serve(async (req) => {
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */
-    /* The subscription's own metadata is set where the subscription is now created, in
-       _shared/remeasure-results.ts. Nothing recurring exists here to attach it to. */
+    /* The subscription's own metadata is set where the subscription is created, in
+       _shared/delayed-subscription.ts (from stripe-webhook). Nothing recurring exists here. */
     form.set("success_url", `${back}${back.includes("?") ? "&" : "?"}paid=1`);
     // The cancel URL carries the onboarding row, the success URL deliberately does not.
     //

@@ -6,7 +6,7 @@ import { compareMeasurements, MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP } from
 import type { QueueRowLite } from '../src/lib/baselineView.ts';
 import {
   remeasureResultsDecision, numberWentUp, claimWindowCloseIso, resultsEmailParagraphs, resultsDocumentMeaning, resultsClaimParagraph,
-  currentTermsVerdict, LEGACY_TERMS_LABEL, monthlyStartIso,
+  currentTermsVerdict, LEGACY_TERMS_LABEL, resultsBillingStartIso,
   resultsEmailSubject, REMEASURE_RESULTS_COPY_APPROVED, REMEASURE_CLAIM_WINDOW_DAYS,
 } from '../src/lib/remeasureResults.ts';
 import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, REMEASURE_CLAIM_SENTENCE, CARD_SAVED_NOTICE, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail } from '../src/lib/findableOffer.ts';
@@ -143,19 +143,20 @@ console.log("-- The terms gate: only the current offer passes --");
   ok(remeasureResultsDecision({ replayRuns: [{ status: 'complete' }], replayTarget: 1, comparison: c, copyApproved: false, terms: currentTermsVerdict(AD) }).send === false, 'the copy gate still refuses even a current-terms client');
 }
 
-console.log("-- The delayed monthly: one clock, not two --");
+console.log("-- The monthly: Stripe's date from sign-up, not the claim window (2026-09-23) --");
 {
-  /* ⛔ THE PROPERTY THAT MAKES THE MODEL SAFE: the first charge lands exactly when the right to
-     claim ends, because both come from the SAME function. Asserting the reference identity, not
-     just equal outputs — two functions that agree today drift the first time either is edited. */
-  ok(monthlyStartIso === claimWindowCloseIso, 'the billing anchor IS the claim-window function, not a copy of it');
+  /* 🔴 THE OLD PROPERTY IS GONE ON PURPOSE. This block asserted monthlyStartIso === claimWindowCloseIso
+     (billing = results + 14 days). Since 2026-09-18 the subscription is made at sign-up with a
+     six-week trial, so billing and the window are two clocks; the email names the subscription's
+     own date. The end-to-end lifecycle is in customer-lifecycle.test.ts. */
   const sent = '2026-10-11T09:00:00.000Z';
-  ok(monthlyStartIso(sent) === '2026-10-25T09:00:00.000Z', 'results sent 11 Oct -> monthly starts 25 Oct');
-  ok(monthlyStartIso(null) === null && monthlyStartIso('junk') === null, 'no stamp / unreadable stamp -> no billing date');
+  ok(resultsBillingStartIso({ subscriptionId: 'sub_x', subscriptionStatus: 'trialing', subscriptionRenewsAt: '2026-10-25T09:00:00.000Z', nowIso: sent }) === '2026-10-25T09:00:00.000Z', 'a trialing subscription renewing 25 Oct -> the email names 25 Oct');
+  ok(resultsBillingStartIso({ subscriptionId: null, subscriptionStatus: null, subscriptionRenewsAt: null, nowIso: sent }) === null, 'no subscription -> no billing date');
 
   const base = { businessName: 'RG Locksmiths', town: 'Huntingdon', beforeNamed: 23, beforeAnswered: 72, afterNamed: 31, afterAnswered: 96, questions: 12, documentUrl: 'https://findable.live/results/x', wentUp: true, withinNoise: false };
   const withMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: '25 October 2026' });
   ok(withMonthly.some((p) => p.includes('25 October 2026') && p.includes(String(FINDABLE_MONTHLY_GBP))), 'the results email names the date AND the amount');
+  ok(!withMonthly.some((p) => /same day/i.test(p)), 'and never says the monthly starts "that same day" as the claim window');
   /* 2026-09-23: the monthly is a 12-month minimum term (Paul) — the email names the term, never a free exit. */
   ok(withMonthly.some((p) => /12-month minimum term/.test(p)) && !withMonthly.some((p) => /cancel any time/i.test(p)), '...and names the 12-month minimum term, with no "cancel any time"');
   const noMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: null });
@@ -191,14 +192,14 @@ console.log("-- Billing notices: the right message, and never the wrong one --")
   /* ⛔ THE TWO ENDINGS ARE NOT INTERCHANGEABLE. Telling someone who chose to leave that their card
      failed, or someone whose card died that they asked to cancel, is the failure this branch
      exists to prevent. */
-  const byCard = subscriptionEndedEmail({ becauseOfPayment: true });
-  const byChoice = subscriptionEndedEmail({ becauseOfPayment: false });
+  const byCard = subscriptionEndedEmail({ becauseOfPayment: true, siteKind: 'client_owned' });
+  const byChoice = subscriptionEndedEmail({ becauseOfPayment: false, siteKind: 'client_owned' });
   ok(byCard.paragraphs.some((p) => /card/i.test(p)), 'the card-failed ending says the card failed');
   ok(!byChoice.paragraphs.some((p) => /card/i.test(p)), 'the deliberate-cancel ending never mentions a card');
   ok(!byCard.paragraphs.some((p) => /you (asked|chose)/i.test(p)), 'the card-failed ending never claims they asked to cancel');
   ok(byCard.subject !== byChoice.subject, 'the two endings are distinguishable before they are opened');
   for (const m of [byCard, byChoice]) {
-    ok(m.paragraphs.some((p) => /stay exactly where they are/i.test(p)), 'both endings say the pages stay up');
+    ok(m.paragraphs.some((p) => /stay exactly where they are/i.test(p)), 'both endings say the pages stay up (client-owned site; a site we built is in customer-lifecycle.test.ts)');
     ok(m.paragraphs.some((p) => /reply to this email/i.test(p)), 'both endings offer a way back');
   }
   for (const text of [...withLink.paragraphs, ...failed.paragraphs, ...byCard.paragraphs, ...byChoice.paragraphs]) {

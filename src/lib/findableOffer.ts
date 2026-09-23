@@ -83,6 +83,38 @@ export const FINDABLE_RECURRING_PAYMENTS = FINDABLE_TOTAL_PAYMENTS - 1;
 /** The nominal value of the whole commitment: the sign-up payment plus every recurring one. */
 export const FINDABLE_CONTRACT_TOTAL_GBP = FINDABLE_SETUP_PRICE_GBP + FINDABLE_RECURRING_PAYMENTS * FINDABLE_MONTHLY_GBP;
 
+/** 🔴 THE ONE CALCULATION OF WHEN THE FIRST RECURRING PAYMENT IS: FINDABLE_MONTHLY_DELAY_DAYS after
+ *  the successful sign-up payment. _shared/delayed-subscription.ts sets Stripe's trial_end from
+ *  this, so the date a customer is told and the date Stripe charges cannot be two sums.
+ *  ⛔ IT IS NOT THE CLAIM WINDOW. Until 2026-09-23 the results sender derived billing from the
+ *  results stamp + 14 days (`monthlyStartIso = claimWindowCloseIso`), a model retired on 2026-09-18
+ *  when the subscription moved to sign-up — and the sender still called that name without
+ *  importing it. Billing counts from sign-up; the claim window counts from the results. */
+export function firstRecurringPaymentIso(signupIso: string | null | undefined): string | null {
+  if (!signupIso) return null;
+  const t = new Date(signupIso).getTime();
+  if (!Number.isFinite(t)) return null;
+  return new Date(t + FINDABLE_MONTHLY_DELAY_DAYS * 86_400_000).toISOString();
+}
+
+/** Which kind of website this client has with us — it decides whether ownership words may be used.
+ *  ⛔ POSITIVE MATCHES ONLY, and a conflict or a blank is `unknown`, which gets NEITHER set of words:
+ *  telling a client whose site we built that "your pages stay exactly where they are" contradicts
+ *  /refunds and /terms, and telling an optimise-only client a build "transfers to you" claims an
+ *  ownership we never had. The build terms (FINDABLE_MINIMUM_TERM_MONTHS note) apply only to
+ *  `findable_built`. Reads the onboarding row: `plan_tier` from the questionnaire, `website_route`
+ *  from a hand-added client (PaidClients). */
+export type FindableSiteKind = 'findable_built' | 'client_owned' | 'unknown';
+export function findableSiteKind(row: { plan_tier?: unknown; website_route?: unknown } | null | undefined): FindableSiteKind {
+  const tier = String(row?.plan_tier ?? '').trim();
+  const route = String(row?.website_route ?? '').trim();
+  const built = tier === 'new_site' || route === 'new_site' || route === 'rebuild_existing';
+  const owned = tier === 'keep' || route === 'optimise_existing';
+  if (built && !owned) return 'findable_built';
+  if (owned && !built) return 'client_owned';
+  return 'unknown';
+}
+
 /** The offer in one line, for operator surfaces that quote it (the Cold Call Playbook). Built from
  *  the constants so a price move cannot leave a stale figure in a call script. */
 export const FINDABLE_OFFER_SUMMARY =
@@ -255,14 +287,25 @@ export function paymentFailedEmail(i: { payUrl: string | null }): { subject: str
    fires both when the retries give up and when the client cancels on purpose. Telling someone who
    chose to leave that "your payments stopped working" is insulting; telling someone whose card died
    that "you asked to cancel" is a lie. Stripe says which in cancellation_details.reason. */
-export function subscriptionEndedEmail(i: { becauseOfPayment: boolean }): { subject: string; paragraphs: string[] } {
+/* ⛔ THE PAGES SENTENCE DEPENDS ON WHOSE SITE IT IS (2026-09-23). "Your pages stay exactly where they
+   are" is true of pages we wrote on a site the client owns; for a site we BUILT and host, /refunds
+   and /terms say the build stays with us on an early exit and the hosted site may come down — so
+   that client is pointed at the terms instead, and a client whose kind is unknown gets neither. */
+function pagesOnEnding(kind: FindableSiteKind): string {
+  if (kind === 'client_owned') return `Your pages stay exactly where they are and nothing has been taken down. What stops is the weekly work and the measuring.`;
+  if (kind === 'findable_built') return `Nothing has been taken down. What stops is the weekly work and the measuring. What happens to the website we built and host for you is set out in our terms: ${REPORT_PUBLIC_ORIGIN}/terms/`;
+  return `Nothing has been taken down. What stops is the weekly work and the measuring.`;
+}
+
+export function subscriptionEndedEmail(i: { becauseOfPayment: boolean; siteKind: FindableSiteKind }): { subject: string; paragraphs: string[] } {
+  const pages = pagesOnEnding(i.siteKind);
   return i.becauseOfPayment
     ? {
       subject: "Your Findable monthly has stopped",
       paragraphs: [
         `Hi,`,
         `We tried your card a few times over the last week and it didn't go through, so your monthly has stopped and you won't be charged again.`,
-        `Your pages stay exactly where they are and nothing has been taken down. What stops is the weekly work and the measuring.`,
+        pages,
         `If that wasn't what you wanted, reply to this email and we'll start it again — no need to explain anything.`,
         `Paul, findable`,
       ],
@@ -272,18 +315,39 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean }): { subj
       paragraphs: [
         `Hi,`,
         `Your monthly is cancelled and you won't be charged again.`,
-        `Your pages stay exactly where they are and nothing has been taken down. What stops is the weekly work and the measuring.`,
+        pages,
         `If you ever want it back, reply to this email and we'll pick it up where we left off.`,
         `Paul, findable`,
       ],
     };
 }
 
+/* ⛔ THE TERM ENDED BECAUSE IT WAS COMPLETE — A THIRD ENDING, NOT A CANCELLATION (2026-09-23).
+   Stripe fires customer.subscription.deleted when `cancel_at` is reached after the last recurring
+   payment, with reason `cancellation_requested` — so before this, a client who had paid all
+   FINDABLE_TOTAL_PAYMENTS was told "Your monthly is cancelled … If you ever want it back".
+   ⛔ The transfer sentence is for `findable_built` ONLY (findableSiteKind); anyone else is told the
+   payments are complete and nothing more, because we never owned their site. */
+export function termCompleteEmail(i: { siteKind: FindableSiteKind }): { subject: string; paragraphs: string[] } {
+  return {
+    subject: "Your Findable payments are complete",
+    paragraphs: [
+      `Hi,`,
+      `All ${FINDABLE_TOTAL_PAYMENTS} of your payments are complete, so your ${FINDABLE_MINIMUM_TERM_MONTHS}-month term has finished and nothing more will be charged.`,
+      ...(i.siteKind === 'findable_built'
+        ? [`As set out in our terms, the website build we made for you now transfers to you. Reply to this email and we'll arrange the handover.`]
+        : []),
+      `Thank you for being a Findable client. Any questions, just reply to this email.`,
+      `Paul, findable`,
+    ],
+  };
+}
+
 /* ⛔ THE THREE-DAY NOTICE, AND WHY IT IS THE SECOND ONE AND NOT THE ONLY ONE (2026-09-13).
    Stripe's `customer.subscription.trial_will_end` fires exactly three days before and the interval
    cannot be changed. Three days' warning of a first charge forty-two days after paying is too
-   late on its own — so the four-week results email carries the date and the amount fourteen days
-   ahead, and this is the reminder, not the announcement.
+   late on its own — so the four-week results email carries the date and the amount (about two
+   weeks ahead on the standard timeline), and this is the reminder, not the announcement.
    ⚠️ Rendered by the webhook. Plain, no selling, and the date and amount are in the first line. */
 /* ⛔ NO "cancel before that date and nothing is taken" (Paul, 2026-09-23): the monthly is a
    FINDABLE_MINIMUM_TERM_MONTHS minimum term now, so offering a free exit here would contradict what

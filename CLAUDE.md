@@ -107,6 +107,12 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The four-week results sender** (`_shared/remeasure-results.ts`) is claim-first on
   `remeasure_results_sent_at` and **holds behind `REMEASURE_RESULTS_COPY_APPROVED = false`** until Paul
   approves the copy. **RG is due 2026-10-06** — approve before then or his results hold.
+  ⛔ **Billing and the claim window are TWO clocks**: billing = `firstRecurringPaymentIso(sign-up)`
+  (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
+  (`resultsBillingStartIso`) or none — never "that same day". The end of the 12 payments is
+  `subscriptionEndedByTerm` → `termCompleteEmail`; ownership words only for `findableSiteKind ===
+  'findable_built'`. Open decisions (overlap, new-domain exclusion, MCLocksmiths' missing subscription):
+  `docs/business-and-offer.md`, "Customer lifecycle cleanup".
 - **Named = the model's verdict** (`self_named` from `extract-competitors`), string-match fallback,
   one ruler on both sides of a comparison (`src/lib/namedSignal.ts`). A name that is only trade +
   town is **not judgeable** (`nameIsJudgeable`, `_shared/derivable.ts`) — the report replaces its hero

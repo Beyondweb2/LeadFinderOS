@@ -1,4 +1,4 @@
-import { FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_RECURRING_PAYMENTS } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_MONTHLY_GBP, FINDABLE_RECURRING_PAYMENTS, firstRecurringPaymentIso } from "../../../src/lib/findableOffer.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -50,6 +50,23 @@ export function minimumTermCancelAt(trialEndSec: number): number {
   return Math.floor(end.getTime() / 1000);
 }
 
+/**
+ * Did this subscription end because the fixed term was COMPLETED (Stripe reached our cancel_at),
+ * rather than being cancelled early or dying on a card? Stripe reports both with reason
+ * `cancellation_requested`, so this is decided from the subscription's own dates.
+ * ⛔ POSITIVE, EVERY PART REQUIRED: cancel_at is exactly minimumTermCancelAt(its own trial_end) — our
+ * fixed-term subscription, not a date set by hand — it ended at or after that moment, and it was not
+ * in arrears ("once the term is complete and all amounts due are paid"). Absent fields → false.
+ */
+export function subscriptionEndedByTerm(
+  s: { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown },
+  inArrears: boolean,
+): boolean {
+  if (inArrears) return false;
+  if (typeof s.cancel_at !== "number" || typeof s.trial_end !== "number" || typeof s.ended_at !== "number") return false;
+  return s.cancel_at === minimumTermCancelAt(s.trial_end) && s.ended_at >= s.cancel_at - 60;
+}
+
 /** Creates the one standard £99/month subscription immediately after the £99 signup payment.
  * Stripe owns the six-week delay as a trial, so a delayed worker cannot move the first charge. */
 export async function createDelayedSubscription(
@@ -64,9 +81,9 @@ export async function createDelayedSubscription(
   const customerId = (lead.stripe_customer_id ?? "").trim();
   if (!customerId) return { kind: "failed", reason: "no stripe_customer_id on the lead" };
 
-  const started = new Date(signupAtIso);
-  if (Number.isNaN(started.getTime())) return { kind: "failed", reason: `invalid signup timestamp ${JSON.stringify(signupAtIso)}` };
-  const startsAt = new Date(started.getTime() + FINDABLE_MONTHLY_DELAY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  /* The one calculation (findableOffer.ts) — the same function the customer-facing dates use. */
+  const startsAt = firstRecurringPaymentIso(signupAtIso);
+  if (!startsAt) return { kind: "failed", reason: `invalid signup timestamp ${JSON.stringify(signupAtIso)}` };
   const trialEnd = Math.floor(new Date(startsAt).getTime() / 1000);
 
   const pm = await stripe(secret, `payment_methods?customer=${encodeURIComponent(customerId)}&type=card&limit=1`);

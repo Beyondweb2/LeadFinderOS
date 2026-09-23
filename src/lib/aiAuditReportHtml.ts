@@ -16,7 +16,7 @@ import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import type { CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
@@ -478,8 +478,11 @@ function siteCheckPendingSection(): string {
    THAT DESCRIBED THE PRICE. The report names no figure anywhere else by design, so this line was
    carrying the whole offer on its own — and it said the £99 was the end of it, on a product that
    is £99 to start and then a monthly (£99 a month for the 12-month minimum since 2026-09-23), with
-   the build and hosting for exactly the customer who sees this panel (no website, so we build one). "Building it is included in your £99" says the
-   true thing the panel exists to say and claims nothing about what else is owed. */
+   the build and hosting for exactly the customer who sees this panel (no website, so we build one).
+   🔴 "Building it is included in your £99" CAME OUT 2026-09-23: a site we build is built, hosted and
+   managed inside the 12-payment term and only transfers once it is paid, so pinning the build to the
+   £99 alone understated what the customer commits to. The panel now says there is no separate build
+   fee and names the whole offer from FINDABLE_OFFER_SUMMARY, so the figures cannot drift. */
 function noWebsiteSection(): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
@@ -489,8 +492,8 @@ function noWebsiteSection(): string {
       <p style="margin:0;max-width:70ch;font-size:14px;line-height:1.55;color:var(--muted)">
         AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
         We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
-        your area, your credentials, all written the way AI quotes them. Building it is included in
-        your &pound;99.
+        your area, your credentials, all written the way AI quotes them. Building and hosting it are
+        part of the service, with no separate build fee: ${esc(FINDABLE_OFFER_SUMMARY)}
       </p>
     </section>`;
 }
