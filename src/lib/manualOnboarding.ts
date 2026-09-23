@@ -25,6 +25,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './questionnaireComplete.ts';
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_TOTAL_PAYMENTS } from './findableOffer.ts';
 
 /* ── the questions, verbatim ──────────────────────────────────────────────────────────────────── */
 
@@ -40,7 +41,7 @@ export const ONBOARDING_COPY = {
   trade: { label: 'What you do', helper: 'One word is plenty.', placeholder: 'e.g. locksmith' },
   town: { label: 'Your town', placeholder: 'e.g. Huntingdon' },
   websiteStep: { headline: 'Your website', sub: 'Where the work gets published, and who can let us in.' },
-  domain: { question: 'Are we using an existing domain?', newNote: 'New domain: because it needs time to be discovered and establish visibility, the 4-week results guarantee does not apply. We will still measure your baseline and track progress from the start.' },
+  domain: { question: 'Are we using an existing domain?', newNote: 'If we build your site on a brand-new domain, we re-measure after eight weeks instead of four, because a new domain needs longer to be discovered. Same questions, same engines, and the guarantee applies to those results.' },
   agency: { question: 'Does an agency or web company look after your website?' },
   access: { question: 'Will you be able to get us access to edit it?', helper: 'Your pages have to go on your own site, so we need a login from whoever holds it.' },
   managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can arrange access without going through you.' },
@@ -48,7 +49,7 @@ export const ONBOARDING_COPY = {
   permission: { headline: 'Permission to do the work', sub: "One thing to agree, then we're moving.", discuss: "I'd rather talk it through first" },
   q2: { headline: 'What you do, and where', sub: "Each service becomes its own page on your site, written the way people search — one per town you want work from. That's the last thing we need." },
   services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
-  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund where you trade: your home town, on the same questions before and after. The other towns you list here are measured too, to decide where your pages go — that measurement is for building, not for the guarantee.' },
+  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after — asked about your home town and the towns you list here. They also decide where your pages go.' },
 } as const;
 
 export const DOMAIN_OPTIONS = [
@@ -88,8 +89,8 @@ export function websiteManagerFromBranch(agency: AgencyManages | null): 'web_com
 /** findable-site siteAccess.ts accessConsequenceText — positive match on the one answer that keeps the site. */
 export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
   return answer !== 'yes_access'
-    ? 'No problem — we can rebuild your website where appropriate. It is part of the same Findable service, with no separate website package.'
-    : "We'll optimise your existing website as part of the same Findable service.";
+    ? `No problem, we can build you a new website as part of the same Findable service. We build, host and manage it during the ${FINDABLE_MINIMUM_TERM_MONTHS}-month term, and the website build transfers to you once all ${FINDABLE_TOTAL_PAYMENTS} payments are complete.`
+    : "We'll optimise your existing website as part of the same Findable service, at no extra cost. Your website stays yours.";
 }
 /** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {

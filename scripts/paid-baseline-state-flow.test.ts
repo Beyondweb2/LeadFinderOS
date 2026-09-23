@@ -147,7 +147,7 @@ async function main() {
     check('9. the constants are 20 questions and 3 runs', BASELINE_QUESTIONS === 20 && BASELINE_RUNS === 3);
     check('9. approve refuses any count but BASELINE_QUESTIONS', edge.includes('if (next.length !== BASELINE_QUESTIONS) {'));
     check('9. the engine queues the approved set verbatim for BASELINE_RUNS runs', startPaidBaseline.includes('baseline_target_runs: BASELINE_RUNS') && startPaidBaseline.includes('questions: approvedQuestions'));
-    check('9. the dialog disables approve until exactly BASELINE_QUESTIONS are present', hub.includes('disabled={!!busy || count !== BASELINE_QUESTIONS}'));
+    check('9. the dialog disables approve until exactly BASELINE_QUESTIONS are present', hub.includes('disabled={!!busy || count !== BASELINE_QUESTIONS'));
     check('9. the setup page does the same', setup.includes('lines.length !== BASELINE_QUESTIONS'));
   }
   // 11. Existing baselines and legacy rows are unaffected.

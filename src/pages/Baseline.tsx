@@ -13,7 +13,8 @@ import { AiAuditReport } from '@/components/AiAuditReport';
 import { downloadReportHtml } from '@/lib/aiAuditReportDownload';
 import { paidReportKind } from '@/lib/reportKind';
 import { isAggregatorUrl } from '@/lib/aggregators';
-import { buildReportData, classifyWinnability, seoStyleForAudit, type EngineMap, type QueueRow, type RunRow } from '@/lib/auditReport';
+import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from '@/lib/auditReport';
+import { opportunityFor } from '@/lib/discoveryOpportunity';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells } from '@/lib/competitorCleaning';
 import { type AiAuditReportData } from '@/lib/aiAuditReportHtml';
 import {
@@ -70,32 +71,8 @@ interface AuditRow {
   website: string | null;
 }
 
-type Opportunity = { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; clientNamed: boolean; fragmentation: string };
-
-/* Reuses the shared deterministic classifier over the baseline's already-collected runs. This
-   deliberately performs no provider call and does not create a second measurement. */
-function opportunityFor(question: string, rows: QueueRow[], businessName: string, location: string, website: string): Opportunity {
-  const merged: EngineMap = {};
-  for (const row of rows.filter((r) => r.question.trim() === question.trim())) {
-    const result = (row.result ?? {}) as EngineMap;
-    for (const [engine, raw] of Object.entries(result)) {
-      if (!raw || typeof raw !== 'object') continue;
-      const cur = merged[engine] ?? { named: false, position: null, competitors: [], citations: [], answer_text: '' };
-      cur.named = cur.named || !!raw.named;
-      cur.self_named = cur.self_named || raw.self_named;
-      cur.position = cur.position == null ? raw.position : raw.position == null ? cur.position : Math.min(cur.position, raw.position);
-      cur.competitors = [...new Set([...cur.competitors, ...(raw.competitors ?? [])])];
-      cur.citations = [...cur.citations, ...(raw.citations ?? [])].filter((c, i, a) => a.findIndex((x) => x.url === c.url) === i);
-      cur.answer_text = cur.answer_text || raw.answer_text;
-      merged[engine] = cur;
-    }
-  }
-  const result = classifyWinnability(merged, { businessName, locationText: location, ownWebsite: website, isAggregatorUrl });
-  const classification = result.clientNamed ? 'named' : result.verdict === 'open' ? 'winnable' : result.verdict === 'contested' ? 'possible' : 'low';
-  const fragmentation = result.U >= 6 ? 'highly fragmented' : result.C === 0 && result.U >= 2 ? 'fragmented across engines' : result.U <= 3 && result.C >= 2 ? 'dominant competitors' : 'mixed competition';
-  return { classification, reason: result.reason, clientNamed: result.clientNamed, fragmentation };
-}
-
+/* The classifier lives in src/lib/discoveryOpportunity.ts — the paid-client Discovery step uses the
+   same one. It performs no provider call and does not create a second measurement. */
 export default function Baseline() {
   /* The state THIS page was reached with, forwarded to anywhere that links onward, so a
      multi-hop trail (AI Audit → Baseline → Compare → Baseline) still knows its origin. */
@@ -298,7 +275,7 @@ export default function Baseline() {
   const clientBaseline = isClientBaseline(audit);
   const roleLabel = auditRoleLabel(audit);
   const opportunities = audit.baseline_completed_at && !internalOnly
-    ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, audit.business_name ?? '', audit.location_text ?? '', audit.website ?? '') }))
+    ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, { businessName: audit.business_name ?? '', location: audit.location_text ?? '', website: audit.website ?? '', isAggregatorUrl }) }))
     : [];
   const opportunityCounts = opportunities.reduce((m, q) => { m[q.classification] = (m[q.classification] ?? 0) + 1; return m; }, {} as Record<string, number>);
   /* A full measure / day-28 replay: operator document, no client report offered, labelled as
