@@ -222,6 +222,31 @@ Happy to explain more here or jump on a quick call if you'd rather
 Paul✌️`;
 };
 
+/* ai_site_findings_v2 — submitted to Meta 2026-09-22. audit_followup_fault's successor: {{1}} trade
+   WITH ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} the site findings, {{7}} the
+   short report link. Transcribed from the body Paul submitted — including the lowercase "i" in two
+   places and the hyphen (not a dash) in "ahead of you - your site", which are Paul's wording and
+   Meta's registered text. Do not tidy either.
+   ⚠️ DISPLAY ONLY, exactly like its sibling: the Inbox has no audit to read rivals from and no
+   findings threaded here, so {{3}}-{{5}} degrade to "other firms" and {{6}} to a generic line. The
+   words the prospect actually received are on Meta's side. */
+const aiSiteFindingsV2Body = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
+  const t = articleTrade(trade);
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+
+Had a proper look at your site as well.
+
+${siteFindings ?? ''}
+
+That's probably part of why the other businesses are getting picked ahead of you - your site is giving AI less clear information to work with than theirs.
+
+I've put the actual results here: ${u}
+
+Happy to explain what I'd change here if you want.
+
+Paul✌️`;
+};
+
 const auditReplyBody = (b: string, u: string, trade?: string, competitors?: string) =>
   `Hi, thanks for getting back.
 We asked AI tools like ChatGPT to recommend a ${trade || 'provider'} in your area, it's naming ${competitors || 'other firms'} - not ${b || 'you'}.
@@ -373,7 +398,7 @@ const barberFreshaBooksyBody = (b: string, u: string) =>
 /** One template's display renderer. Named so the superseded-bodies map can reuse it rather than
  *  restate the signature — two copies of it would drift the day a seventh argument appears. */
 export type TemplateBodyFn =
-  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string) => string;
+  (businessName: string, claimUrl: string, trade?: string, competitors?: string, contactFirstName?: string, town?: string, siteFault?: string, siteFindings?: string) => string;
 
 /** DISPLAY-ONLY body renderers keyed by template name. Same signature as whatsapp-send.ts's
  *  WA_TEMPLATE_BODIES so the parity test can compare them one-to-one. */
@@ -402,6 +427,7 @@ export const READABLE_TEMPLATE_BODIES: Record<string, TemplateBodyFn> = {
   audit_followup: auditFollowupBody,
   audit_followup_call: auditFollowupCallBody,
   audit_followup_fault: auditFollowupFaultBody,
+  ai_site_findings_v2: aiSiteFindingsV2Body,
   explain_offer: explainOfferBody,
   explain_offer_v2: explainOfferV2Body,
 };
@@ -416,6 +442,11 @@ export interface ReadableBodyOpts {
   town?: string | null;
   /** audit_followup_fault's crawl-derived {{6}}. */
   siteFault?: string | null;
+  /** ai_site_findings_v2's crawl-derived {{6}} — the 2-3 plain-English findings. Its OWN positional
+   *  argument, never shared with siteFault: "whichever value is defined" is not the same question as
+   *  "which variable does this template declare", and collapsing them fed the findings to
+   *  audit_followup_fault's body (caught by template-bodies-parity). */
+  siteFindings?: string | null;
   /* ⛔ WHEN THE MESSAGE WAS SENT — required for the greeting name to be honest.
      The greeting is shortened at send time (src/lib/displayName.ts), but this function re-renders a
      placeholder-bodied row from the lead's name as it is TODAY. Applying the rule blindly would
@@ -506,5 +537,6 @@ export function readableTemplateBody(
     opts.firstName ?? undefined,
     opts.town ?? undefined,
     opts.siteFault ?? undefined,
+    opts.siteFindings ?? undefined,
   ).trim();
 }

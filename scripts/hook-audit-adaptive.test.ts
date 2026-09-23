@@ -344,7 +344,7 @@ ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookA
 // Report: the hook summary is attached by the builder and rendered by its own section.
 ok(report.includes('hook: buildHookReportSummary({') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
 ok(report.includes('namedInstead: (competitors) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
-ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
+ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');
 const hookSection = html.slice(html.indexOf('export function renderHookSection('), html.indexOf('export function renderReportHtml('));
 ok(!/\d+%|out of \$\{|showed up in AI search/.test(hookSection), 'the hook section never prints a percentage or an "N out of M answers" score');
@@ -398,13 +398,25 @@ ok(!geminiHtml.includes('We asked') && !geminiHtml.includes('answered with other
 ok(!geminiHtml.includes('We found a visibility gap.'), 'N1: the old generic/technical heading wording is gone');
 ok(geminiHtml.includes('class="hook-vk"') || geminiHtml.includes('hook-vk'), 'N1: the section still carries a "the verdict" label above the headline');
 
-// N2/N3: the model box renders the engine name and the exact question.
-ok(geminiHtml.includes('class="chatcard"'), 'the model/evidence box renders');
-ok(geminiHtml.includes('cc-mark--gem') && !geminiHtml.includes('cc-mark--oai'), 'N2: it carries the Gemini mark for a Gemini gap, not ChatGPT’s');
-ok(geminiHtml.includes('>Gemini<'), 'N2: the engine label reads Gemini');
+/* N2/N3: the evidence card renders the engine name and the exact question.
+   🔴 REWRITTEN 2026-09-22 (Paul). These used to assert the card carried the OFFICIAL ENGINE MARK —
+   cc-mark--gem for a Gemini gap, cc-mark--oai for ChatGPT — and that assertion was pinning the
+   problem. The card wore an engine's branding and chat-bubble layout around FINDABLE'S OWN summary,
+   which reads as a recreation; a prospect who thinks the evidence is mocked up stops believing the
+   measurement, and the measurement is the whole product. So the card is now Findable's, the engine
+   is NAMED IN TEXT, and what sits inside it is the engine's own quoted words (N5, rewritten below).
+   The engine must still be identified exactly and must still differ per gap — that half was always
+   right and is kept. */
+ok(geminiHtml.includes('evcard'), 'the Findable evidence card renders');
+ok(geminiHtml.includes('Asked Gemini'), 'N2: it names Gemini, in text, for a Gemini gap');
 const chatgptHtml = buildAndRender('chatgpt');
-ok(chatgptHtml.includes('cc-mark--oai') && !chatgptHtml.includes('cc-mark--gem'), 'N2: a ChatGPT gap carries the ChatGPT mark instead');
-ok(chatgptHtml.includes('>ChatGPT<'), 'N2: the engine label reads ChatGPT');
+ok(chatgptHtml.includes('Asked ChatGPT') && !chatgptHtml.includes('Asked Gemini'), 'N2: a ChatGPT gap names ChatGPT instead');
+/* ⛔ AND NEITHER CARD IMPERSONATES AN ENGINE. No logo, no avatar, no chat chrome — the engine is
+   quoted and credited, never imitated. */
+for (const [label, doc] of [['Gemini', geminiHtml], ['ChatGPT', chatgptHtml]] as const) {
+  ok(!/cc-mark|cc-avatar|cc-brand/.test(doc), `N2: the ${label} card carries no engine logo, avatar or chat-brand header`);
+  ok(!/viewBox="0 0 24 24"/.test(doc), `N2: the ${label} card carries no engine SVG at all`);
+}
 ok(geminiHtml.includes('Can you recommend a good electrician in Doncaster, UK?'), 'N3: the exact question asked is shown verbatim');
 
 // N4: structured competitors render as a short, deduplicated list — from namedInstead (the
@@ -415,8 +427,17 @@ ok((dupedHtml.match(/<li>/g) ?? []).length === 2, 'N4: a case/whitespace duplica
 const manyHtml = buildAndRender('gemini', ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
 ok((manyHtml.match(/<li>/g) ?? []).length <= 5, 'N4: the visible list is capped to a reasonable amount (<=5)');
 
-// N5: the long raw answer text is NOT dumped into the report anywhere.
-ok(!geminiHtml.includes(esc(gapAnswer)), 'N5: the raw stored answer text is never rendered into the report');
+/* N5: the engine's OWN WORDS are quoted, clearly labelled and clearly separated from ours.
+   🔴 REVERSED 2026-09-22 (Paul), and the reversal is the point of the whole change. This asserted
+   the stored answer was NEVER rendered — a rule from 2026-09-21, when the card wore an engine's
+   branding: quoting inside a replica made the replica worse. Now the card is Findable's own and the
+   quote is what makes it credible. `answer_excerpt` has been stored on every hook gap since the hook
+   shipped and simply was not read; reading it is the cheapest credibility this report can buy.
+   ⚠️ A JUNK (map-formatted) answer is still never quoted — src/lib/answerText.ts decides, shared
+   with the gut-punch card, and scripts/site-findings-evidence.test.ts drives that case. */
+ok(geminiHtml.includes(esc(gapAnswer)), 'N5: the engine’s genuine stored answer IS quoted in the report');
+ok(geminiHtml.includes('Gemini replied'), 'N5: …attributed to the engine that said it');
+ok(geminiHtml.includes('ev-quote'), 'N5: …and marked as a quote, so it cannot be read as Findable’s own words');
 
 // N6: "[Business] wasn't named." renders in red (the .cc-callout/.cc-bang treatment) for a real gap.
 ok(geminiHtml.includes('class="cc-callout"') && geminiHtml.includes('Doncaster Sparks Ltd wasn&rsquo;t named.'), 'N6: the red not-named result line renders with the real business name');

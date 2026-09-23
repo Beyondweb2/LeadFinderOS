@@ -3,8 +3,15 @@
 
    The point: name a prospect's ACTUAL crawlability fault in the outreach message, for the price of a
    fetch — never the Apify SEO scanner (5.6p, off for outreach). The edge function `crawl-check` does
-   the fetching (homepage as GPTBot, robots.txt, sitemap, a bounded sample of templated pages); THIS
-   file turns those raw strings into signals and a paste-ready verdict.
+   the fetching (the homepage as each AI SEARCH crawler, robots.txt for sitemap discovery, the
+   sitemap(s), and a bounded sample of pages); THIS file turns those raw strings into signals and a
+   paste-ready verdict.
+
+   ⚠️ THIS HEADER SAID "homepage as GPTBot" UNTIL 2026-09-22 AND IT WAS NEVER TRUE OF THE REWRITTEN
+   FUNCTION. GPTBot is a TRAINING crawler; testing it was the bug the search/training split below
+   exists to fix, and the edge deliberately does not send it. It also said robots.txt was fetched
+   during the months it was not. Both corrected — a stale comment is a load-bearing bug (CLAUDE.md
+   §4) and these two had already been read back as a description of what runs.
 
    ⛔ PURE. No fetch, no DOM, no platform globals — it runs in the edge function (Deno) AND in the
    test (Node/tsx), and is imported by the edge with a relative `.ts` path (CLAUDE.md §3). Every
@@ -21,8 +28,13 @@ export const DUP_MIN_CLUSTER = 3;
 export const DUP_SIMILARITY = 0.90;      // 0..1; reported as a percentage
 /** A service/content page thinner than this (words of visible text) is "thin". */
 export const THIN_WORDS = 120;
-/** Homepage plus at most this many same-domain internal pages are fetched per crawl. */
-export const MAX_CRAWL_PAGES = 8;
+/** Homepage plus at most this many same-domain internal pages are fetched per crawl.
+ *  ⚠️ 8 → 12 on 2026-09-22 for the deep sales crawl: the domain findings need a services index, a
+ *  couple of service pages, a locations page and contact/about to have anything to read, and at 8
+ *  the location cluster was crowding the rest out. Twelve is still a STRUCTURE crawl, not a forensic
+ *  one — a 300-page site costs the same twelve as a twelve-page site. The edge function holds the
+ *  outer ceilings (total fetches, wall clock, bytes per body); this is only the page count. */
+export const MAX_CRAWL_PAGES = 12;
 
 /** Bump only when a stored fault's meaning changes. v2 is the search-crawler rewrite; the bounded
  * page evidence added later is additive, so valid existing v2 findings remain usable. */
@@ -318,11 +330,24 @@ export function crawlResultFaults(
   result: { version?: number; signals?: CrawlSignals } | null | undefined,
   createdAtMs: number,
 ): CrawlFault[] {
-  if (!result?.signals) return [];
+  const signals = usableCrawlSignals(result, createdAtMs);
+  return signals ? buildFaultLines(signals) : [];
+}
+
+/** The fresh + current-version gate on a STORED crawl row, on its own: the signals if the row may be
+ *  believed, null if it may not. Extracted 2026-09-22 so src/lib/siteFindings.ts (which needs the
+ *  raw signals, not the built fault lines) applies the IDENTICAL gate rather than a second copy of
+ *  the expression — a stale or pre-v2 row can carry a finding that is no longer true, and two gates
+ *  that drift mean one surface says the site is broken while the other says it is fine.
+ *  Behaviour is unchanged: crawlResultFaults above is now written in terms of this. */
+export function usableCrawlSignals(
+  result: { version?: number; signals?: CrawlSignals } | null | undefined,
+  createdAtMs: number,
+): CrawlSignals | null {
+  if (!result?.signals) return null;
   const fresh = (Date.now() - createdAtMs) < CRAWL_FRESH_MS;
   const currentVer = (result.version ?? 1) >= CRAWL_CHECK_VERSION;
-  if (!fresh || !currentVer) return [];
-  return buildFaultLines(result.signals);
+  return fresh && currentVer ? result.signals : null;
 }
 
 /** The ONE sentence naming the site's main fault — the first (highest-priority) fault line's detail,

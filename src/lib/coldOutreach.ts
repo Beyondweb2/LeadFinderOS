@@ -79,6 +79,20 @@ export const CONTINUATION_TEMPLATES: ReadonlySet<string> = new Set([
      lead queued with it — but it is never queued (Inbox only, the picker gates it on a site fault),
      and if it ever were, the phone-history seatbelt is bypassed for continuations. Inbox is the door. */
   "audit_followup_fault",
+  /* ai_site_findings_v2 — audit_followup_fault's successor, 2026-09-22. Same classification for the
+     same reason, and the reason is the one this file keeps having to restate: "cold" here does NOT
+     mean "has not seen a report", it means MAY NOT REACH AN EXISTING CONVERSATION. This message is
+     written for a lead who has already answered, so left unlisted it would be COLD by default and
+     the phone-history seatbelt would refuse it for every single lead it exists for — selectable,
+     apparently sending, silently dropped as phone_already_contacted. The audit_reply_warm trap.
+     ⛔ AND THE CLASSIFICATION IS LOAD-BEARING A SECOND TIME, exactly as its sibling's is:
+     rivalHookDecision reads this set, so a rival-naming CONTINUATION that cannot fill three names
+     HOLDS rather than falling back to the cold video_template. Listing it here is what stops a cold
+     opener being substituted into a live thread.
+     ⚠️ Same accepted exposure as audit_followup_fault: it carries audit_url, so the drip could in
+     principle select a lead queued with it, and continuations bypass the phone-history seatbelt. It
+     is never queued — Inbox only, and the picker gates it on findings. Inbox is the door. */
+  "ai_site_findings_v2",
   /* explain_offer — the full pitch, Inbox only, 2026-09-15. Same reasoning as audit_followup above:
      it is sent into a conversation that already exists, so COLD would refuse it for every lead it
      is written for. ⚠️ It carries the same accepted exposure — exempt from the phone-history

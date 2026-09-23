@@ -285,6 +285,15 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      audit_followup / audit_followup_call). Present here for byte-identity with WA_TEMPLATES, which
      re-engage-vars asserts in both directions. {{6}} is fail-closed on the send side. */
   audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
+  /* ai_site_findings_v2 - submitted to Meta 2026-09-22. MIRRORS whatsapp-send.ts; change both
+     together. audit_followup_fault's successor with the SAME seven vars in the SAME order; the only
+     difference is that {{6}} carries two or three plain-English site findings instead of one report
+     sentence. Inbox only - a CONTINUATION, and although it DOES carry audit_url the queue still
+     never selects it (same as audit_followup_fault above). Present here for byte-identity with
+     WA_TEMPLATES, which re-engage-vars asserts in both directions.
+     ⛔ Gated OFF by AI_SITE_FINDINGS_V2_APPROVED until Meta approves it; being listed here cannot
+     send it. {{6}} is fail-closed on the send side. */
+  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings", "audit_url"] },
   /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
      Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.
@@ -992,6 +1001,10 @@ Deno.serve(async (req) => {
           // For audit_reply-class the link IS the report link — the same "outbound URL" column.
           let businessName = ((lead.business_name as string) ?? "").trim();
           let claimUrl = "";
+          /* Hoisted for the message-log insert below, for the same reason businessName and claimUrl
+             are: it is decided inside the audit branch and written after it. The ordered deep-crawl
+             finding kinds this message's {{6}} carried, for whatsapp_messages.findings_shown. */
+          let replyFindingsShown: string[] | null = null;
           /* ⛔ THE SAME ONE RULE AS send-whatsapp-message — src/lib/templateRouting.ts. The two
              copies of this expression were byte-identical AND both wrong: a template declaring
              `trade_plural` / `rival_*` / `audit_url` (audit_followup, competitor_hook) answered NO
@@ -1025,6 +1038,11 @@ Deno.serve(async (req) => {
             if (tmpl.vars.includes("town")) auditExtra.town = vars.town;
             if (tmpl.vars.includes("audit_url")) auditExtra.auditUrl = vars.link;
             if (tmpl.vars.includes("site_fault")) auditExtra.siteFault = vars.siteFault ?? "";
+            // ai_site_findings_v2's {{6}} — same fail-closed contract as site_fault above.
+            if (tmpl.vars.includes("site_findings")) auditExtra.siteFindings = vars.siteFindings ?? "";
+            /* findings_shown: only for the template that actually carries them, so the column can be
+               trusted as "what THIS message said" rather than "what we could have said". */
+            replyFindingsShown = tmpl.vars.includes("site_findings") ? (vars.siteFindingsKinds ?? null) : null;
             /* ⛔ AN UNSAFE TRADE OR TOWN HOLDS THE LEAD, IT DOES NOT SEND IT WRONG (2026-09-12).
                video_template's body is "for a {{2}} in {{3}}", so a plural trade or a town like
                "Bourne uk" would reach a prospect as visibly broken copy. templateBodyParams throws
@@ -1045,7 +1063,7 @@ Deno.serve(async (req) => {
               }
               throw e;
             }
-            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined);
+            renderedBody = renderTemplateBody(templateName, vars.business, vars.link, vars.trade, vars.competitors, undefined, vars.town, vars.siteFault ?? undefined, vars.siteFindings ?? undefined);
             businessName = vars.business;
             claimUrl = vars.link;
           } else if (tmpl.vars.includes("onboarding_url")) {
@@ -1105,6 +1123,7 @@ Deno.serve(async (req) => {
             phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
             wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
             template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload }),
+            ...(replyFindingsShown?.length ? { findings_shown: replyFindingsShown } : {}),
           });
           /* And the send-audit row. This branch wrote only the message log, so auto-replies were
              invisible to whatsapp_sends — including to the DAILY CAP counted a few hundred lines
@@ -1580,7 +1599,10 @@ Deno.serve(async (req) => {
        EVERY builder of its payload and count them before believing you have them all.
        ⚠️ The guard did its job: it refused rather than sending a message with a missing link, and
        failed_temporary means the lead retries rather than being burned. */
-    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string } = {};
+    const templateExtra: { trade?: string; competitors?: string; rivals?: string[]; onboardingUrl?: string; town?: string; auditUrl?: string; siteFault?: string; siteFindings?: string } = {};
+    /* The ordered deep-crawl finding kinds this campaign send's {{6}} carried, for
+       whatsapp_messages.findings_shown. Null for every template that does not carry site findings. */
+    let campaignFindingsShown: string[] | null = null;
     /* Set only when a rival-naming template was swapped for the fallback, so the tick's answer can
        say so. Silence would make a substitution indistinguishable from a normal send. */
     let rivalFallbackReason = "";
@@ -1682,6 +1704,8 @@ Deno.serve(async (req) => {
       if (tvars.includes("town")) templateExtra.town = ar.town;
       if (tvars.includes("audit_url")) templateExtra.auditUrl = ar.link;
       if (tvars.includes("site_fault")) templateExtra.siteFault = ar.siteFault ?? "";
+      if (tvars.includes("site_findings")) templateExtra.siteFindings = ar.siteFindings ?? "";
+      if (tvars.includes("site_findings")) campaignFindingsShown = ar.siteFindingsKinds ?? null;
       // Its "url" var is the AUDIT REPORT link, so it replaces the claim link for this send.
       // Sending the site claim link under audit_reply's copy ("we ran a full report … <link>")
       // would point the prospect at the wrong page entirely.
@@ -1802,7 +1826,7 @@ Deno.serve(async (req) => {
     let failCode: number | undefined;
     let sendError: string | null = null;
     const campaignPayload = claimTemplatePayload(templateName, lang, lead.business_name as string, resolvedUrl, templateExtra);
-    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault);
+    const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
 
     if (live) {
@@ -1896,6 +1920,7 @@ Deno.serve(async (req) => {
           status: deliveryStatus,                            // 'sent' | 'simulated'
           test_mode: testMode,
           template_snapshot: campaignSnapshot,
+          ...(campaignFindingsShown?.length ? { findings_shown: campaignFindingsShown } : {}),
         });
         if (msgErr) console.error(`[whatsapp] outbound message-log insert failed (non-blocking, ${lead.id}):`, (msgErr as { message?: string }).message);
       } catch (e) {

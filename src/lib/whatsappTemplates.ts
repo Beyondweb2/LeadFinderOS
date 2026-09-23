@@ -6,6 +6,10 @@
 // link; audit_reply needs the lead's completed audit (competitors) + published report slug. Kept a
 // deliberate mirror because the SPA can't import Deno edge code (same pattern as src/lib/aggregators.ts).
 // KEEP IN SYNC with WA_TEMPLATES when a template's variable shape changes.
+/* The explicit `.ts` costs the SPA nothing (Vite resolves it) and is what keeps this import safe if
+   anything edge-reachable ever pulls this module in — the extensionless form is the one the Supabase
+   bundler refuses outright while tsc and vite both resolve it happily (CLAUDE.md §3). */
+import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from './siteFindings.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -54,6 +58,10 @@ export interface TemplateReq {
    *  empty parameter, so this template is only OFFERED when there is a fault to name
    *  (audit_followup_fault). Absent/false = no such requirement. */
   needsSiteFault?: boolean;
+  /** Needs the lead's crawl check to have found a STRONG fault on a site that actually exists — its
+   *  {{6}} names two or three of them (ai_site_findings_v2). Narrower than needsSiteFault on
+   *  purpose: see the note on that template below. Absent/false = no such requirement. */
+  needsSiteFindings?: boolean;
   /** Coarse flow grouping — for optional visual labelling only, NOT for auto-hiding. */
   group: TemplateGroup;
 }
@@ -109,6 +117,18 @@ export const WA_TEMPLATE_REQS: Record<string, TemplateReq> = {
      ⚠️ Like its siblings the picker does NOT check for three rivals — that is resolved server-side,
      where a lead short of three is HELD (a continuation, no cold fallback). */
   audit_followup_fault:   { needsUrl: false, needsAudit: true,  needsSiteFault: true, group: 'audit' },
+  /* ai_site_findings_v2 — submitted to Meta 2026-09-22. audit_followup_fault's requirements exactly,
+     with the fault gate swapped for the findings gate: needsAudit (rivals + the report link {{7}}),
+     and needsSiteFindings because {{6}} names two or three real findings and Meta rejects an empty
+     parameter.
+     ⛔ needsSiteFindings IS NOT needsSiteFault AND THE TWO MUST NOT BE MERGED. The findings gate is
+     strictly narrower: it refuses a lead with no website (the copy says "had a proper look at your
+     site") and a lead whose site crawled clean (the copy has already asserted the site is the
+     problem), both of which audit_followup_fault accepts and has a line for. Sharing one flag would
+     make this template offerable to leads its own words contradict.
+     ⛔ AND IT IS GATED ON APPROVAL. Until AI_SITE_FINDINGS_V2_APPROVED flips, getTemplateSendability
+     refuses it outright, before any of these requirements are even consulted. */
+  ai_site_findings_v2:    { needsUrl: false, needsAudit: true,  needsSiteFindings: true, group: 'audit' },
   /* explain_offer - the full pitch. ⛔ needsAudit is FALSE and that is the point: its {{3}} is the
      SIGN-UP link, built from the lead id alone, so nothing here waits on a completed audit. It is
      the only outreach template that can go to a lead we have never audited.
@@ -159,6 +179,10 @@ export interface SendabilityAudit {
   /** The lead's crawl check found a fault to name ({{6}} of audit_followup_fault). Presence gates
    *  that one template; every other template ignores it. Resolved per-lead by the caller. */
   hasSiteFault?: boolean;
+  /** The lead has a website AND its crawl found something strong enough to write two or three plain
+   *  findings from ({{6}} of ai_site_findings_v2). Presence gates that one template; every other
+   *  template ignores it. Resolved per-lead by the caller from resolveSiteFindings. */
+  hasSiteFindings?: boolean;
 }
 
 export interface Sendability {
@@ -184,6 +208,14 @@ export function getTemplateSendability(
   lead: SendabilityLead | null | undefined,
   audit?: SendabilityAudit | null,
 ): Sendability {
+  /* ⛔ THE APPROVAL GATE COMES FIRST, BEFORE EVERY OTHER REQUIREMENT. A template Meta has not
+     approved cannot be sent to anyone for any reason, so asking "does this lead have an audit"
+     first would let a lead who satisfies everything else look sendable one refactor away from
+     being one. While the constant is false this is the structural half of the switch; the picker
+     label is only the half the operator reads. One line in src/lib/siteFindings.ts flips both. */
+  if (template === AI_SITE_FINDINGS_V2 && !AI_SITE_FINDINGS_V2_APPROVED) {
+    return { ok: false, reason: 'Waiting on Meta approval — a send would fail. Use audit_followup_fault.' };
+  }
   const req = WA_TEMPLATE_REQS[template];
   if (!req) return { ok: true };
   const link = siteLinkGuard(req.needsUrl, lead?.shareToken);
@@ -198,6 +230,13 @@ export function getTemplateSendability(
      un-crawled) lead is steered to the call version instead — the send would fail closed anyway. */
   if (req.needsSiteFault && !audit?.hasSiteFault) {
     return { ok: false, reason: 'No site fault to name yet — use the call version (audit_followup_call).' };
+  }
+  /* ai_site_findings_v2's {{6}} names two or three findings, and it is refused outright for a lead
+     with no website or a site that crawled clean — its own copy says "had a proper look at your
+     site" and blames the site, so neither lead can be sent it honestly. resolveSiteFindings is the
+     single source of both the gate and the value, so "offered" and "sendable" cannot come apart. */
+  if (req.needsSiteFindings && !audit?.hasSiteFindings) {
+    return { ok: false, reason: 'Nothing strong enough found on the site yet — use audit_followup_call.' };
   }
   return { ok: true };
 }

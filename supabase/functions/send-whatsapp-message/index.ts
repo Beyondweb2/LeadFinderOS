@@ -318,6 +318,11 @@ Deno.serve(async (req) => {
     // template copy (real wording + business name + claim URL) so the Inbox shows
     // what the barber actually receives — not the internal template name.
     let storedBody: string | null = null;
+    /* The ordered deep-crawl finding kinds this message's {{6}} actually carried, for
+       whatsapp_messages.findings_shown. Null for every template that does not carry site findings,
+       which is all of them but one. Hoisted for the same reason storedBody is: the insert happens
+       after the branches. */
+    let findingsShown: string[] | null = null;
     // What the SEND-AUDIT row records: the business name and the link actually placed in the
     // template. Hoisted out of the branches below because whatsapp_sends is written after them.
     // For audit_reply the "claim url" IS the report link — the same column, the send's outbound URL.
@@ -530,6 +535,16 @@ Deno.serve(async (req) => {
            lead with no fault. The picker keeps this template off a clean-site lead in the first
            place. */
         if (tvars.includes("site_fault")) auditExtra.siteFault = a.siteFault ?? "";
+        /* ai_site_findings_v2's {{6}}. Same contract as site_fault directly above: an empty value
+           makes templateBodyParams throw unsafe_template_var, which the catch below turns into a
+           visible hold rather than a failed Meta send. The picker keeps the template off a lead with
+           no findings in the first place; this is the layer that saves us when it does not. */
+        if (tvars.includes("site_findings")) auditExtra.siteFindings = a.siteFindings ?? "";
+        /* ⛔ RECORDED ONLY WHEN THE TEMPLATE ACTUALLY CARRIES THE FINDINGS. The resolver computes
+           them for any lead with a usable crawl, so writing them on every send would attach a claim
+           about what this message said to messages that never said it — and the whole point of the
+           column is to be able to trust it later. Same condition as the variable itself. */
+        if (tvars.includes("site_findings")) findingsShown = a.siteFindingsKinds ?? null;
         /* ⛔ THE SAME TRADE/TOWN HOLD AS THE QUEUE (2026-09-12), and it matters MORE here because
            this is the manual path: the operator pressed send and is owed an answer. A plural trade
            or a town like "Bourne uk" would render "for a Locksmiths in Bourne uk" to a prospect, so
@@ -549,7 +564,7 @@ Deno.serve(async (req) => {
         }
         auditBusinessName = a.business;
         auditClaimUrl = a.link;
-        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined);
+        storedBody = renderTemplateBody(templateName, a.business, a.link, a.trade, a.competitors, undefined, a.town, a.siteFault ?? undefined, a.siteFindings ?? undefined);
       } else {
         /* ⛔ contact_followup — a MANUAL follow-up, so ONE PER LEAD, NO OVERRIDE. It is a ["name"]
            template and would otherwise fall through this opener branch with no history guard at all
@@ -644,6 +659,7 @@ Deno.serve(async (req) => {
       test_mode: env.testMode,
       error: sendError,
       ...(messageType === "template" && usedTemplate ? { template_snapshot: createTemplateSnapshot({ templateName: usedTemplate, language: WA_TEMPLATES[usedTemplate].lang, body: storedBody, payload }) } : {}),
+      ...(findingsShown?.length ? { findings_shown: findingsShown } : {}),
     }).select("*").maybeSingle();
     if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
 

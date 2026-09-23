@@ -4,6 +4,10 @@
    ⚠️ This file is reached by NO edge function (check-import-graph --reached-by), so the import adds
    nothing to any edge closure. */
 import { INITIAL_OPENER_B, INITIAL_OPENER_V2_APPROVED } from '@/lib/openerVariant';
+/* Same arrangement for ai_site_findings_v2: the name and the approval switch live in one leaf
+   (src/lib/siteFindings.ts, beside the generator for the {{6}} that makes it different), so the
+   picker cannot offer a template the sender is not allowed to send. */
+import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from '@/lib/siteFindings';
 
 export type LeadStatus =
   | 'not_contacted'
@@ -563,6 +567,25 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      the picker gates this on hasSiteFault and a clean-site lead gets audit_followup_call instead —
      it never falls back either way. needsAudit (rivals + report link come from the audit). */
   { value: 'audit_followup_fault', label: 'Audit follow-up + fault — names a site fault + report link (outreach)' },
+  /* ai_site_findings_v2 — SUBMITTED TO META 2026-09-22. audit_followup_fault's successor: the same
+     seven variables in the same order, and the only difference is that {{6}} carries two or three
+     plain-English findings about their site instead of one sentence lifted from the report.
+     ⛔ LISTED UNCONDITIONALLY, WITH THE APPROVAL STATE IN THE LABEL — the same shape
+     INITIAL_OPENER_B settled on, and for the reason template-picker-parity.test.ts enforces: while a
+     template is hidden nothing in the SPA names it, so a row already sent with it prints on the
+     dashboard as its raw key. Every sendable template is labelled in exactly one list and "hidden"
+     is not a list.
+     ⛔ THE LABEL IS THE HALF THE OPERATOR READS; getTemplateSendability is the half that decides. It
+     refuses this template outright while AI_SITE_FINDINGS_V2_APPROVED is false, before any other
+     requirement is consulted, so the entry cannot be clicked into a send however this reads.
+     ⚠️ THE LABEL SEPARATES IT FROM audit_followup_fault by what {{6}} SAYS, because that is the only
+     thing that differs and an operator choosing between them has nothing else to go on. */
+  {
+    value: AI_SITE_FINDINGS_V2,
+    label: AI_SITE_FINDINGS_V2_APPROVED
+      ? 'Audit follow-up + site findings — 2-3 plain-English findings + report link (outreach)'
+      : 'Audit follow-up + site findings — 2-3 findings + report link ⛔ PENDING META APPROVAL, a send will fail',
+  },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee and the sign-up link, over the same video header.
      ⚠️ THE LABEL SEPARATES IT FROM THE OTHER TWO VIDEO TEMPLATES by what it ASKS FOR. video_template

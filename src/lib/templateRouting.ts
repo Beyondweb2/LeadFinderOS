@@ -74,6 +74,12 @@ export const BRANCH_SUPPLIES: Record<TemplateBranch, ReadonlySet<string>> = {
        rather than audit-derived, so it is NOT in AUDIT_DERIVED_VARS — the template already routes to
        the audit branch on its other vars — but the branch DOES supply it, so it is listed here. */
     "site_fault",
+    /* site_findings (ai_site_findings_v2's {{6}}) — the same story as site_fault directly above and
+       resolved in the same place, from the same stored crawl check: crawl-derived, so NOT in
+       AUDIT_DERIVED_VARS (the template already routes to the audit branch on its rivals and its
+       audit_url), but supplied by this branch. It differs from site_fault only in what it says —
+       two or three findings in plain English instead of one report sentence. */
+    "site_findings",
   ]),
   plain: new Set(["name", "url", "town"]),
 };

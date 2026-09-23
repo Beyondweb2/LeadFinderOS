@@ -176,6 +176,10 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   /* audit_followup_fault — IS in REPORT_TEMPLATES (it carries the report link in {{7}}), unlike the
      call version above. Names a specific site fault plus the report. */
   audit_followup_fault: 'Audit follow-up + fault (names a site fault + report)',
+  /* ai_site_findings_v2 — the same message with 2-3 plain-English findings in {{6}}. UNCONDITIONAL,
+     like every entry here: this map names a message that has ALREADY been sent, so approval state is
+     irrelevant to it and gating it would print a raw slug in a thread. */
+  ai_site_findings_v2: 'Audit follow-up + site findings (2-3 findings + report)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   /* ⚠️ UNCONDITIONAL, unlike its entry in the picker. This map names a message that has ALREADY been
@@ -358,7 +362,7 @@ function InboundMedia({ message }: { message: WaMessage }) {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
@@ -981,7 +985,7 @@ const Inbox = () => {
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
      an empty parameter, so it is only offered when this lead's crawl check found one. */
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false });
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */

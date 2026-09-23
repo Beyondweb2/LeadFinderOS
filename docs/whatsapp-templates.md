@@ -534,3 +534,88 @@ the moment Meta approves the name, no further change. Deployed 2026-09-17: the 1
 the changed shared modules (whatsapp-send, audit-reply, crawlCheck, coldOutreach, templateRouting).
 Measured at deploy: 3 leads currently carry a fresh v2 crawl fault, so the template offers itself
 rarely today and will grow as crawl checks populate.
+
+---
+
+## `ai_site_findings_v2` — the human-findings successor (2026-09-22, SUBMITTED, NOT APPROVED)
+
+audit_followup_fault's successor. **Identical shape — seven vars, same order, same gates — and the
+only difference is what {{6}} says:** two or three site findings in plain English instead of one
+sentence lifted out of the report's fault list. `{{1}}` trade with its own article, `{{2}}` town,
+`{{3}}{{4}}{{5}}` rivals, `{{6}}` the findings, `{{7}}` the short report URL, `lang: "en"`.
+
+**The switch is `AI_SITE_FINDINGS_V2_APPROVED` in `src/lib/siteFindings.ts`, currently `false`.**
+While false `getTemplateSendability` refuses the template **before any other requirement is
+consulted**, and the picker label says PENDING. Approval is that one line. Nothing about
+audit_followup_fault, initial_opener_v2 or the opener A/B changes either way.
+
+**{{6}} is built from signals the crawl check already stores — no new crawler, no new fetch, no new
+query.** `buildSiteFindings` reads `CrawlSignals` and writes each finding as
+**WHAT I SAW → WHAT THAT MEANS IN NORMAL ENGLISH → WHY IT MAY MAKE AI VISIBILITY HARDER.**
+
+⛔ **Every third clause is hedged, and that is accuracy rather than timidity.** We can see what is on
+a site. We cannot see why Gemini or ChatGPT named somebody else. The first version of this generator
+asserted an internal decision process — *"it has read everyone else's site and not yours"*, *"AI
+reads those as one page"*, *"AI does not run JavaScript"*, *"nothing specific to repeat back"* — none
+of which we or anyone outside those companies has observed. A prospect who knows more than we do
+spots it in one line, and the message stops being a person who looked at their site and becomes
+somebody guessing. The supported register is "can make it harder", "may mean", "gives AI less
+information to work with". The test carries a blocklist of both scanner phrasing **and** absolute
+AI-decision claims, run over every candidate string rather than the two a single seed happens to pick.
+
+⛔ **The opener belongs to the joiner and is chosen by position.** A finding is stored as
+`clause` + `rest`, where the clause follows an opener ending in "is" — so the same finding reads
+*"One thing that stood out is the homepage is very thin…"* first and *"The other thing I noticed is
+the homepage is very thin…"* second, with nothing rewritten and nothing doubled. **No opener is
+"I had a look…"**: the template's own fixed line directly above {{6}} already says *"Had a proper
+look at your site as well"*, and a finding repeating it reads like the message lost its place.
+
+⛔ **No measurement reaches the message — not one digit.** *"91% the same"*, *"under 120 words"*,
+*"69 characters"* are all real and all scanner. A tradesperson does not know whether 120 words is a
+lot, and a precise figure invites an argument about the figure instead of a conversation about the
+site. The numbers stay where they are useful and checkable: the crawl signals, and the report's own
+fault section, which is written for somebody sitting down to read it. **No bot names either** —
+"OAI-SearchBot" means nothing to a locksmith; singular/plural still carries the real shape of what
+was found. **And no comparison with Google**: we never fetch the site as Googlebot, so *"as reliably
+as Google can"* was a comparison against a measurement we do not hold.
+
+⚠️ **Two findings is the normal message.** A third is held to `COMFORTABLE_THREE_CHARS = 720`, well
+under the hard cap, and the weakest is **dropped** rather than the wording compressed. Taking the
+measurements out brought each finding down to ~200–255 characters, so the three shortest now do fit
+where they did not before; a site whose findings include the longest one (the homepage) still ships
+two. Both sides are driven in the test rather than described.
+
+⛔ **Only four of the six signals are eligible**: `searchBlocked`, `clientRendered`, `duplicates`,
+`thinPages`. `missingH1` and `noJsonLd` are excluded — they are real, they belong in the report, and
+in a WhatsApp message they are the difference between "he looked at my site" and "this is an
+automated scan". **A lead whose only faults are weak gets no message rather than a weak one.**
+
+⛔ **Stricter than `siteFaultLine` on two leads, and the registered copy is why.** It says "Had a
+proper look at your site as well" and blames the site, so **no website → refused** and **a clean
+crawl → refused**. Both still get audit_followup_fault, which has a line for each.
+
+⛔ **{{6}} is ONE LINE, and that is Meta's rule, not a style choice.** A parameter containing a
+newline, a tab or 4+ consecutive spaces is rejected with **#132018** and the whole send dies (four
+audit_reply sends died that way on 2026-08-12). It is also capped at `MAX_FINDINGS_CHARS = 900`
+against Meta's 1024-character parameter limit (**#131009**) — over the cap the **weakest finding is
+dropped and it is rebuilt**, never truncated mid-sentence.
+
+⚠️ **The two crawl sentences get their own positional argument each, and sharing one was a real bug**
+caught by template-bodies-parity on the first run: `siteFindings ?? siteFault` fed the findings to
+audit_followup_fault's body, because "whichever value is defined" is not the question — "which
+variable does THIS template declare" is.
+
+⚠️ **Transitions vary by a lead-id seed** so two prospects in one town do not read a mail merge, and
+the same lead always reads the same message. `openerVariant.ts` keeps its own hash deliberately: that
+one is part of the A/B's stability contract and must not be reshuffled by a wording change here.
+
+**What the repo cannot say, and did not invent.** The brief's examples included sitemap-points-to-
+wrong-domain, conflicting canonicals, accidental noindex, orphaned pages and disconnected
+third-party evidence. **`CrawlSignals` carries none of those** — `crawl-check` fetches the homepage,
+robots.txt and a bounded page sample, and stores six signals. Those findings would need new crawler
+work, which this task explicitly excluded.
+
+Registered in all eleven places; `scripts/site-findings.test.ts` (122 assertions) pins the switch,
+the 7-param order across both registries, the selection rules and a scanner-phrase blocklist.
+**Not deployed. Not approved. Meta registration and the flag flip are both Paul's to do.**
+

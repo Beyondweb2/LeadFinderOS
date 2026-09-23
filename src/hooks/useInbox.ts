@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
 import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
+import { hasSiteFindings } from '@/lib/siteFindings';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 
@@ -497,6 +498,27 @@ export function useInbox() {
     return s;
   }, [leads, audits, crawlByLeadId]);
 
+  /* Lead ids ai_site_findings_v2's {{6}} has findings for — its own picker gate, and DELIBERATELY A
+     SECOND SET rather than a reuse of the one above. hasSiteFindings is strictly narrower: it
+     refuses a lead with no website and a lead whose site crawled clean, both of which
+     audit_followup_fault accepts and has a line for. Sharing one set would offer this template to
+     leads its own copy contradicts ("Had a proper look at your site as well" to somebody with no
+     site). hasSiteFindings is the SAME function the sender calls, so offer and send agree. */
+  const hasSiteFindingsLeadIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const l of leads) {
+      const hasWebsite = !!(l.website ?? '').trim();
+      const c = crawlByLeadId.get(l.id);
+      const audit = newestUsableAudit(audits, l.id);
+      const runSources = (audit?.ai_audit_runs ?? [])
+        .filter((r) => RUN_USABLE.has(String(r.status)))
+        .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
+        .map((r) => ({ result: r.crawl_check, createdAtMs: r.crawl_check?.checked_at ? new Date(r.crawl_check.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
+      if (hasSiteFindings(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null)) s.add(l.id);
+    }
+    return s;
+  }, [leads, audits, crawlByLeadId]);
+
   // Lead ids with an audit run currently IN FLIGHT (pending/running) — drives the Inbox audit
   // button's spinner. Same audits fetch as above; refreshed by refetch() after firing one.
   const auditRunningLeadIds = useMemo(() => {
@@ -718,5 +740,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev);
   }, [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus, patchLeadPotentialWork };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus, patchLeadPotentialWork };
 }
