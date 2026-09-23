@@ -43,6 +43,9 @@ const FILLER = new Set([
   // The default customer is a household: 'for my home' does not make a new question. residential /
   // commercial / landlord DO, and are kept.
   'house', 'home', 'homes', 'domestic', 'property', 'properties', 'additional', 'extra', 'new', 'callout', 'callouts',
+  // Sales adjectives: "efficient fault finding electricians" is still fault finding (BS4, 2026-09-23).
+  'efficient', 'fast', 'quick', 'quickly', 'friendly', 'honest', 'cheapest', 'lowest', 'highly', 'fully', 'decent',
+  'dependable', 'competent', 'skilled', 'approved', 'certified', 'accredited', 'registered', 'licensed', 'insured',
 ]);
 /* Different words for the same thing (applied after lower-casing, before stemming). */
 const PHRASES: Array<[RegExp, string]> = [

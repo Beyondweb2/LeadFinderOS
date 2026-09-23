@@ -70,6 +70,7 @@ console.log('\n── 3/4. REWORDINGS COLLAPSE ──');
 {
   ok(sameIntent('rewiring service in Bristol', 'rewiring services Bristol', TOWNS) && sameIntent('rewiring service in Bristol', 'rewiring electricians in Bristol', TOWNS), '3. rewiring service in / services / electricians Bristol are one intent');
   ok(sameIntent('EV charger installation Bristol', 'EV charger installers Bristol', TOWNS) && sameIntent('EV charger installation Bristol', 'electricians for EV chargers Bristol', TOWNS), '4. EV charger installation / installers / electricians for EV chargers are one intent');
+  ok(sameIntent('fault finding services in bristol uk', 'efficient fault finding electricians in bristol uk', TOWNS), 'a sales adjective does not make a new question (BS4 production pool)');
   ok(!sameIntent('rewiring in Bath', 'rewiring in Bristol', TOWNS), 'the same service in a different town is a different question');
   ok(!sameIntent('eicr in Bristol', 'landlord eicr in Bristol', TOWNS), 'a landlord EICR is not a plain EICR');
   const draftDups = nearDuplicates(DRAFT, TOWNS).length;
