@@ -4,7 +4,7 @@ import { isUpstreamOutage, resolveOperator } from "../_shared/operator-auth.ts";
 import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
-import { WEBSITE_BUILD_STATUSES } from "../../../src/lib/websiteBuildPrompt.ts";
+import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -33,22 +33,9 @@ const HUB_AUDIT_COLUMNS =
   "id,baseline_completed_at,short_code,created_at,audit_purpose,business_name,business_type,location_text,specialism,website,has_website,baseline_target_runs,is_measurement";
 
 /* ⛔ THE SAVED SHAPE IS AN ALLOWLIST, NOT WHATEVER THE BROWSER SENDS. website_build is a jsonb
-   column; without this, a client could post any object into it. Seven known string keys, an
-   enumerated status, and lengths capped so a paste cannot bloat the row. */
-const WEBSITE_BUILD_KEYS = ["repo_url", "local_repo_path", "preview_url", "production_url", "canonical_domain", "notes"] as const;
-function normaliseWebsiteBuild(raw: unknown): Record<string, string> {
-  const o = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
-  const out: Record<string, string> = {};
-  for (const k of WEBSITE_BUILD_KEYS) {
-    const v = text(o[k]).slice(0, k === "notes" ? 8000 : 500);
-    if (v) out[k] = v;
-  }
-  const status = text(o.status);
-  /* ⛔ An unrecognised status is dropped, never stored. The reader would fall it back to
-     'not_started' anyway; storing a token nothing reads is how a column starts lying. */
-  if ((WEBSITE_BUILD_STATUSES as readonly string[]).includes(status)) out.status = status;
-  return out;
-}
+   column; normaliseWebsiteBuild (src/lib/websiteBuildState.ts — the same module the browser reads
+   with) keeps only known keys, enumerated tokens and capped lengths/counts, so a client could not
+   post an arbitrary object into it and a paste cannot bloat the row. */
 
 /** The completed baseline's report payload, built with the SAME shared logic the client report and
  *  the welcome pack use — so the rebuild prompt's figures cannot disagree with the report Paul sends.
@@ -194,7 +181,7 @@ Deno.serve(async (req) => {
     }
 
     /* ══ SECTION 5 — EVERYTHING THE REBUILD PROMPT IS GENERATED FROM ══════════════════════════════
-       Data only. The prompt TEXT is assembled in the browser (src/lib/websiteBuildPrompt.ts) at the
+       Data only. The prompt TEXT is assembled in the browser (src/lib/buildPack.ts) at the
        moment the button is pressed, so it always reflects the newest onboarding and baseline data
        and no stale copy is ever stored.
        ⛔ READ ONLY, and every source is fetched by an explicit column list. */

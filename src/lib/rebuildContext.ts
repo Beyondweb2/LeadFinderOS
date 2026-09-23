@@ -21,7 +21,8 @@
 
 import { buildBaselineSummary, visibilitySignals, dayLabel } from './baselineSummary.ts';
 import { clientConfirmationsNeeded, resolveClientFacts, toList } from './clientFacts.ts';
-import { parseWebsiteBuild, type RebuildPromptInput } from './websiteBuildPrompt.ts';
+import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
+import { parseWebsiteBuild } from './websiteBuildState.ts';
 import { buildFaultLines } from './crawlCheck.ts';
 import type { AiAuditReportData } from './aiAuditReportHtml.ts';
 import type { CrawlStoredResult } from './crawlResult.ts';

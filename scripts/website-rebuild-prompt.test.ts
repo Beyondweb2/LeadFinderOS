@@ -1,11 +1,17 @@
 /* ============================================================
-   THE GENERATED CLAUDE REBUILD PROMPT — every fact is autofilled from Findable's own records,
-   nothing is invented, and a disagreement between sources is asked about rather than settled.
+   THE GENERATED WEBSITE BUILD PACK (rebuild route) — every fact is autofilled from Findable's own
+   records, nothing is invented, a disagreement between sources is asked about rather than settled,
+   and only VERIFIED facts are publishable.
+
+   Ported 2026-09-23 from the single "Claude rebuild prompt" to the Build Pack that replaced it:
+   the same fixtures and the same guarantees, read from the pack's items.
 
    Run: npx tsx scripts/website-rebuild-prompt.test.ts
    ============================================================ */
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
-import { buildRebuildPrompt, LOCAL_REPO_PATH_REQUIRED, parseWebsiteBuild } from '../src/lib/websiteBuildPrompt.ts';
+import { parseWebsiteBuild } from '../src/lib/websiteBuildState.ts';
+import { buildPack, MARK } from '../src/lib/buildPack.ts';
+import { candidateFacts, mergeFacts } from '../src/lib/buildFacts.ts';
 import { resolveClientFacts, clientConfirmationsNeeded } from '../src/lib/clientFacts.ts';
 import type { AiAuditReportData } from '../src/lib/aiAuditReportHtml.ts';
 
@@ -90,7 +96,22 @@ const payload = (over: Partial<RebuildContextPayload> = {}): RebuildContextPaylo
   ...over,
 });
 
-const prompt = (over: Partial<RebuildContextPayload> = {}) => buildRebuildPrompt(toRebuildPromptInput(payload(over)));
+/* The rebuild route's whole Build Pack, as one text — the capture prompt, the master prompt, every
+   command. Same client data as before; the prompts that used to be one "rebuild prompt" are now
+   split across the pack, so the assertions read the pack. */
+const packFor = (over: Partial<RebuildContextPayload> = {}, build: Record<string, unknown> = {}) => {
+  const p = payload(over);
+  const evidence = toRebuildPromptInput(p);
+  const state = parseWebsiteBuild({ build_mode: 'rebuild', rebuild_style: 'replica', copy_ownership: 'unknown', ...((p.lead as { website_build?: object } | null)?.website_build ?? {}), ...build });
+  const rows = mergeFacts(candidateFacts(p as never, state.canonical_domain), state.facts, null);
+  return buildPack({
+    state, template: null, facts: rows, evidence,
+    businessName: evidence.facts.businessName.value ?? '', existingSiteUrl: evidence.facts.website.value ?? '',
+    mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-23T00:00:00Z',
+  });
+};
+const prompt = (over: Partial<RebuildContextPayload> = {}, build: Record<string, unknown> = {}) => packFor(over, build).map((x) => x.text).join('\n\n');
+const item = (id: string, over: Partial<RebuildContextPayload> = {}, build: Record<string, unknown> = {}) => packFor(over, build).find((x) => x.id === id)!.text;
 
 console.log('\n── 9-13. THE CLIENT CONTEXT AUTOFILLS ──');
 {
@@ -101,12 +122,12 @@ console.log('\n── 9-13. THE CLIENT CONTEXT AUTOFILLS ──');
   ok(p.includes('Whittlesey'), '12. onboarding service areas autofill');
   ok(p.includes('named in 14 of 120 answers'), '13. the baseline overall result autofills');
   ok(p.includes('ChatGPT: named in 11 of 60'), '13. the per-engine result autofills');
-  ok(/source: client onboarding/.test(p), 'every fact names the source it came from');
+  ok(/VERIFIED FACTS MAY BE USED/.test(p) && /UNVERIFIED FACTS MUST NOT BE PUBLISHED/.test(p), 'the verified / unverified rule is stated');
 }
 
 console.log('\n── 14-15. THE FROZEN BASELINE AND ITS FINDINGS ──');
 {
-  const p = prompt();
+  const p = item('master');
   ok(p.includes('1. emergency locksmith Peterborough'), '14. the exact frozen questions are included, in order');
   ok(p.includes('3. car key replacement Peterborough'), '14. all of them, not a sample');
   ok(/1 question\(s\) where the business was never named/.test(p), '15. the absent finding is included');
@@ -117,7 +138,7 @@ console.log('\n── 14-15. THE FROZEN BASELINE AND ITS FINDINGS ──');
 
 console.log('\n── 23. IT SAYS NOT TO RERUN OR CHANGE THE BASELINE ──');
 {
-  const p = prompt();
+  const p = item('master');
   ok(/DO NOT change, re-run, regenerate/.test(p), '23. it forbids changing or re-running the baseline');
   ok(/DO NOT rewrite the frozen questions/.test(p), '23. it forbids rewriting the frozen questions');
   ok(/BASELINE PROTECTION/.test(p), '23. under a heading that cannot be missed');
@@ -125,31 +146,27 @@ console.log('\n── 23. IT SAYS NOT TO RERUN OR CHANGE THE BASELINE ──');
 
 console.log('\n── 20. DO-NOT-BREAK URLS, WITHOUT CLAIMING CAUSATION ──');
 {
-  const p = prompt();
+  const p = item('master');
   ok(p.includes('https://mc-locksmiths.com/emergency'), '20. a cited own-site URL is listed');
   ok(/it is NOT proof that the page caused/.test(p), '20. it explicitly refuses the causation claim');
   ok(/investigate before you touch any URL/.test(p), 'Claude is told to investigate first');
 }
 {
-  /* No own-site citations → the section still exists and still protects the obvious URLs. */
   const bare: AiAuditReportData = { ...report, questionBreakdown: report.questionBreakdown!.map((q) => ({ ...q, citations: [], perEngine: q.perEngine!.map((e) => ({ ...e, citations: [] })) })) };
-  const p = prompt({ report: bare });
+  const p = item('master', { report: bare });
   ok(/No citations of the client/.test(p), 'no evidence → it says so rather than inventing a list');
   ok(/treat as do-not-break: the homepage/.test(p), 'and still protects the homepage and service pages');
 }
 
 console.log('\n── 17. CONFLICTS ARE FLAGGED, NEVER SILENTLY CHOSEN ──');
 {
-  const p = prompt({
-    lead: { ...payload().lead!, derived_town: 'Whittlesey' },
-  });
+  const p = item('master', { lead: { ...payload().lead!, derived_town: 'Whittlesey' } });
   ok(/CLIENT CONFIRMATION REQUIRED/.test(p), '17. the section is present');
-  ok(/Primary location.*Peterborough.*Whittlesey|Primary location[\s\S]{0,200}Whittlesey/.test(p),
-    '17. the disagreeing values are both named');
-  ok(/A winner has NOT\nbeen chosen|A winner has NOT/.test(p), '17. and it says a winner was not chosen');
-  /* The higher-ranked source still leads the context line — rank breaks the tie for the CONTEXT,
-     but the conflict is still raised. Both, not either. */
-  ok(/Primary location:\s+Peterborough/.test(p), 'onboarding still wins the context line');
+  ok(/Primary location[\s\S]{0,200}Whittlesey/.test(p), '17. the disagreeing values are both named');
+  ok(/A winner has NOT/.test(p), '17. and it says a winner was not chosen');
+  const verified = p.slice(p.indexOf('## D.'), p.indexOf('## E.'));
+  ok(!/Home town:/.test(verified), 'a conflicted fact is NOT in the verified list');
+  ok(/Home town: "Peterborough"/.test(p.slice(p.indexOf('## E.'))), 'it is listed as detected, not approved');
 }
 {
   const facts = resolveClientFacts({
@@ -163,12 +180,10 @@ console.log('\n── 17. CONFLICTS ARE FLAGGED, NEVER SILENTLY CHOSEN ──');
 
 console.log('\n── 18-19. MISSING FACTS ARE LABELLED, NEVER FILLED IN ──');
 {
-  const p = prompt({ onboarding: null });
-  ok(/NOT RECORDED/.test(p), '18. an absent fact is labelled NOT RECORDED');
-  ok(/Service areas:\s+NOT RECORDED/.test(p), '18. including the service areas onboarding would have carried');
-  /* ⚠️ "placeholder" DOES appear in this prompt — inside the rule that forbids one. The check is
-     that no fabricated VALUE is presented as a fact, not that the word is absent. */
-  ok(!/lorem|example\.com|TBC\b|\bTODO\b|<[a-z_]+>/i.test(p.replace(/<LOCAL_REPO_PATH>/g, '')),
+  const p = item('master', { onboarding: null });
+  ok(/Missing \(no verified value exists/.test(p), '18. absent facts are listed as missing');
+  ok(/\n- Service areas\n/.test(p), '18. including the service areas onboarding would have carried');
+  ok(!/lorem|example\.com|TBC\b|\bTODO\b|<[a-z_]+>/i.test(prompt({ onboarding: null })),
     '19. no invented placeholder value is presented as a fact');
   const conf = toRebuildPromptInput(payload({ onboarding: null })).confirmations;
   ok(conf.some((c) => c.label === 'Service areas' && c.kind === 'missing'),
@@ -177,47 +192,44 @@ console.log('\n── 18-19. MISSING FACTS ARE LABELLED, NEVER FILLED IN ──'
 
 console.log('\n── 21-22. PREVIEW INSTRUCTIONS ──');
 {
-  const p = prompt();
-  ok(p.includes('npm run dev -- --host 0.0.0.0'), '21. terminal 1 is included');
-  ok(p.includes('cloudflared tunnel --url http://localhost:4321'), '21. terminal 2 is included');
-  ok(p.includes('http://localhost:4321'), '21. the local URL is included');
-  ok(/trycloudflare\.com/.test(p) && /ASK PAUL/.test(p), '21. Claude is told to ask Paul for the tunnel URL');
-  ok(/Quick Tunnel is for development and QA ONLY/.test(p), '21. the Quick Tunnel caveat is included');
-  ok(/do not guess one/i.test(p), '21. and it is told not to guess the tunnel URL');
-  ok(p.includes('1440\u00d7900') && p.includes('375\u00d7812'), '21. both comparison viewports are named');
+  const local = item('local');
+  ok(local.includes('npm run dev'), '21. the dev command is included');
+  ok(local.includes('cloudflared tunnel --url http://localhost:4321'), '21. the optional tunnel is included');
+  ok(local.includes('http://localhost:4321'), '21. the local URL is included');
+  ok(/development only/i.test(local), '21. the tunnel is marked development-only');
+  const p = item('master');
+  ok(p.includes('1440x900') && p.includes('375x812'), '21. both comparison viewports are named');
   ok(/HTML\/CSS similarity is NOT proof of parity/.test(p), '21. rendered comparison is required');
-  ok(p.includes(LOCAL_REPO_PATH_REQUIRED), '22. an unknown local repo path prints the required marker');
-  ok(!/C:\\\\Users/.test(p), '22. and no path is invented');
+  ok(p.includes(MARK.path), '22. an unknown local folder prints the required marker');
+  ok(!/C:\\Users/.test(prompt()), '22. and no path is invented');
 }
 {
-  const p = prompt({ lead: { ...payload().lead!, website_build: { local_repo_path: 'C:/Users/paulj/MCLocksmiths' } } });
-  ok(p.includes('cd C:/Users/paulj/MCLocksmiths'), '22. a KNOWN local repo path is autofilled into the cd');
-  ok(!p.includes(LOCAL_REPO_PATH_REQUIRED), '22. and the marker is then absent');
+  const p = item('local', {}, { local_repo_path: 'C:/Users/paulj/MCLocksmiths' });
+  ok(p.includes('Set-Location "C:\\Users\\paulj\\MCLocksmiths"'), '22. a KNOWN local folder is autofilled into the command');
+  ok(!p.includes(MARK.path), '22. and the marker is then absent');
 }
 
 console.log('\n── 16. VERIFIED PRIOR CONTEXT IS REUSED, BUT NEVER AS THE BASELINE ──');
 {
-  const p = prompt({
+  const p = item('master', {
     onboarding: null, baseline_audit: null, baseline_audit_id: null, baseline_completed_at: null, report: null,
     lead: { id: 'lead-1', business_name: 'MCLocksmiths centre', website_build: {} },
     discovery_audit: { business_type: 'locksmiths', location_text: 'Peterborough', website: 'https://mc-locksmiths.com/' },
   });
   ok(p.includes('Peterborough'), '16. Discovery context fills a gap nothing better covers');
-  ok(/source: Discovery scan/.test(p), '16. and it is labelled as Discovery');
-  ok(/no completed paid baseline recorded yet/.test(p),
-    'Discovery never substitutes for the baseline — the prompt says there is none');
+  ok(/from Discovery scan/.test(p), '16. and it is labelled as Discovery');
+  ok(/no completed paid baseline recorded yet/.test(p), 'Discovery never substitutes for the baseline — the prompt says there is none');
   ok(!/named in \d+ of \d+ answers/.test(p), 'and no measurement figure is printed from Discovery');
 }
 {
-  /* With a real baseline present, Discovery loses every tie it contests. */
-  const p = prompt({ discovery_audit: { location_text: 'Huntingdon', business_type: 'key cutting' } });
-  ok(/Primary location:\s+Peterborough/.test(p), 'Discovery does not override onboarding');
+  const p = item('master', { discovery_audit: { location_text: 'Huntingdon', business_type: 'key cutting' } });
+  ok(/Home town: "Peterborough"/.test(p) && !/Home town: "Huntingdon"/.test(p), 'Discovery does not override onboarding — the onboarding town leads, held for approval because they disagree');
   ok(/Discovery scan says "Huntingdon"/.test(p), 'but the disagreement is still raised');
 }
 
 console.log('\n── STORED CRAWL IS READ, NEVER RE-RUN ──');
 {
-  const p = prompt({
+  const p = item('master', {
     crawl: {
       url: 'https://mc-locksmiths.com/', created_at: '2026-09-20T10:00:00Z',
       result: { signals: { homeUrl: 'https://mc-locksmiths.com/', fetchFailed: false, searchBlocked: ['OAI-SearchBot'], readableAs: null, clientRendered: null, missingH1: false, noJsonLd: true, duplicates: null, thinPages: 0 } as never },
@@ -228,27 +240,26 @@ console.log('\n── STORED CRAWL IS READ, NEVER RE-RUN ──');
   ok(/do not re-run it/.test(p), 'and says not to re-run it');
 }
 
-console.log('\n── THE REUSABLE WORKFLOW IS PRESENT IN FULL ──');
+console.log('\n── THE REUSABLE RULES ARE PRESENT IN FULL ──');
 {
   const p = prompt();
   for (const phrase of [
-    'FORENSIC CRAWL / INVENTORY', 'CLASSIFY every current URL', 'CAPTURE GENUINE ASSETS LOCALLY',
-    'ESTABLISH THE SHARED DESIGN SYSTEM FIRST', 'REBUILD BY PAGE FAMILY',
-    'ONE PRIMARY PAGE PER IMPORTANT INTENT', 'NO CLONED TOWN PAGES',
-    'FUNCTIONAL PARITY', 'DO NOT SUBMIT FAKE LEADS', 'NEVER INVENT',
-    'No hotlinking', 'OAI-SearchBot', 'GPTBot', 'NEVER reset, rebase, squash, amend, or force push',
-    'FREEZE APPROVED PAGE FAMILIES', 'BE CREDIT-EFFICIENT', 'Paul is non-technical',
-  ]) ok(p.includes(phrase), `the prompt contains "${phrase}"`);
-  ok(/THEN STOP\. Paul reviews/.test(p), 'FIRST RUN STOPS AFTER INVENTORY');
-  ok(/DO NOT REBUILD ANYTHING YET/.test(p), 'and says so before the list, not after it');
+    'EVERY public URL', 'Download genuine assets LOCALLY', 'NEVER submit a form',
+    'ONE primary page per intent', 'Do NOT propose cloned town pages', 'One hop each',
+    'OAI-SearchBot', 'GPTBot', 'NEVER force push, reset, rebase, squash, amend or run git clean',
+    'No hotlinking', 'CUSTOMER QUESTION → DIRECT ANSWER → SUPPORTING DETAIL → EVIDENCE',
+    'BUSINESS → SERVICE → LOCATION → EVIDENCE', 'Work autonomously',
+  ]) ok(p.includes(phrase), `the pack contains "${phrase}"`);
+  ok(/THEN STOP\. Paul approves/.test(item('capture')), 'THE CAPTURE STOPS BEFORE THE BUILD');
   ok(p.includes('Do not say 24/7'), 'the client\u2019s must-not-say constraint is carried as a hard rule');
 }
 
 console.log('\n── WEBSITE BUILD STATE PARSING ──');
 {
-  ok(parseWebsiteBuild(null).status === 'not_started', 'an absent record is "not started"');
-  ok(parseWebsiteBuild({ status: 'nonsense' }).status === 'not_started', 'an unknown status falls to "not started", never through');
-  ok(parseWebsiteBuild({ status: 'qa', repo_url: ' x ' }).repo_url === 'x', 'values are trimmed');
+  ok(parseWebsiteBuild(null).build_mode === '', 'an absent record has no build mode');
+  ok(parseWebsiteBuild({ build_mode: 'nonsense' }).build_mode === '', 'an unknown mode falls to none, never through');
+  ok(parseWebsiteBuild({ repo_url: ' x ' }).repo_url === 'x', 'values are trimmed');
+  ok(parseWebsiteBuild({ status: 'qa', repo_url: 'y' }).repo_url === 'y', 'the 2026-09-22 shape (with a status token) still reads');
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
