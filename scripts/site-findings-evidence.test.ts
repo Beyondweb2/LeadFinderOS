@@ -37,6 +37,7 @@ import {
 } from '../src/lib/siteEvidence.ts';
 import { shouldDeepCrawl } from '../src/lib/hookAudit.ts';
 import { renderHookSection } from '../src/lib/aiAuditReportHtml.ts';
+import { isJunkAnswer, isMapCardAnswer } from '../src/lib/answerText.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -300,6 +301,25 @@ ok(!mapJunk.includes('ev-quote'), 'a map-formatted answer produces NO quote bloc
 ok(!mapJunk.includes('maps.gstatic.com') && !mapJunk.includes('5.0 stars') && !mapJunk.includes('Closes 10:00 PM'),
   '…and not one fragment of it reaches the page');
 ok(/wasn.{0,8}t named/i.test(mapJunk), '…while everything that IS true still renders');
+
+console.log('── …and the NON-hook report is untouched by any of it ──');
+/* 🔴 CORRECTED 2026-09-23, FOUND ON THE LIVE REPORT. The first version of answerText.ts added
+   'gstatic' to the SHARED junk list while calling the move "verbatim". That list also decides the
+   non-hook report's gut-punch card, and 668 of 1,421 non-hook audits carry such an answer somewhere
+   — so one word could change hundreds of existing reports, against the promise that non-hook
+   reports are unchanged. The shared rule is restored and the hook card asks a second question.
+   This is the real shape production stored for a Newcastle hook audit (mkeftj), trimmed. */
+const REAL_MAP_CARD = 'Here are several reliable, highly rated electrical contractors serving residential clients in and around Newcastle upon Tyne, known for handling domestic tasks ranging from minor repairs and socket installations to full-scale house rewires and safety certifications. ![](https://maps.gstatic.com/tactile/pane/default_geocode-1x.png) Ridley Bros. Of Gosforth 4.5 stars rating 4.5 ![](https://www.gstatic.com/gemini/maps/star.png) Electrician Closed · Opens 8:00 AM Wed';
+ok(isJunkAnswer(REAL_MAP_CARD) === false,
+  'the SHARED rule still reads a map card exactly as it did before — so the non-hook card is unchanged');
+ok(isMapCardAnswer(REAL_MAP_CARD) === true, '…while the hook card’s own second question catches it');
+const hookOnReal = renderHookSection(gap({ answerExcerpt: REAL_MAP_CARD }), 'Richard Slater Electrics');
+ok(!hookOnReal.includes('ev-quote'), 'the hook card refuses to quote the real map card');
+ok(!/gstatic|stars rating|Opens 8:00/.test(hookOnReal), '…and not one fragment of it reaches the page');
+ok(!/'gstatic'/.test(read('src/lib/answerText.ts').split('export function isJunkAnswer')[0].split('const JUNK_MARKERS')[1] ?? ''),
+  'gstatic is NOT in the shared JUNK_MARKERS list');
+ok(isMapCardAnswer('A plain answer naming three local firms and nothing else at all here.') === false,
+  'a plain prose answer is not a map card');
 
 console.log('── …the quote is escaped, because it is somebody else’s text ──');
 const nasty = renderHookSection(gap({

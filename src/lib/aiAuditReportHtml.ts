@@ -19,7 +19,7 @@ import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import type { CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
-import { cleanAnswerText, isJunkAnswer } from './answerText.ts';
+import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
 
 export interface ReportEngineRow {
   label: string;   // "ChatGPT", "Gemini", "AI Overview", "Google"
@@ -878,7 +878,13 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
      harder until something emerges: what survives is a list of opening hours.
      Trimmed to a sentence boundary so a real quote never stops mid-word. */
   const rawExcerpt = (g.answerExcerpt ?? "").replace(/\s+/g, " ").trim();
-  const excerpt = isJunkAnswer(rawExcerpt) ? "" : trimQuote(cleanAnswerText(rawExcerpt), HOOK_QUOTE_CHARS);
+  /* ⚠️ TWO QUESTIONS, NOT ONE. isJunkAnswer is the shared rule the non-hook gut-punch card also uses
+     and is kept exactly as it was; a Gemini MAP CARD passes it (the prose ratio stays high), so this
+     card also asks isMapCardAnswer. Widening the shared rule instead would silently change the
+     non-hook report — measured at 668 of 1,421 non-hook audits carrying such an answer somewhere. */
+  const excerpt = (isJunkAnswer(rawExcerpt) || isMapCardAnswer(rawExcerpt))
+    ? ""
+    : trimQuote(cleanAnswerText(rawExcerpt), HOOK_QUOTE_CHARS);
   const quoteBlock = excerpt
     ? `
           <p class="cc-label">${esc(g.engineLabel)} replied</p>
