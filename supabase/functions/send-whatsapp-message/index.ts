@@ -61,9 +61,13 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
 const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf"] as const;
-/* Bumped for the initial-opener A/B: this build is the first that carries initial_opener_v2 in
-   WA_TEMPLATES (vars []). The preflight marker is the only way to prove those bytes are live. */
-const BUILD_ID = "2026-09-22a";
+/* 2026-09-23a: the first build carrying findings_shown on the message log and the server-side
+   approval gate (templateAwaitingApproval) that refuses ai_site_findings_v2 while it is pending.
+   ⚠️ The deploy of 2026-09-23 shipped both WITHOUT this bump, so for that window the preflight
+   read 2026-09-22a over new bytes — exactly the lie this marker exists to prevent. Bumped in the
+   follow-up so the live header proves what is running.
+   (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
+const BUILD_ID = "2026-09-23a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

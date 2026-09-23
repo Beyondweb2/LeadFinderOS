@@ -20,35 +20,50 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Map/image/markup junk that leaks into an engine's answer_text when the answer was a map card
- *  rather than prose. Moved verbatim from auditReport.ts — every entry was put here by a real
- *  answer that arrived looking like this. */
-const JUNK_MARKERS = ['mapbox', 'openstreetmap', 'images.openai', 'oaidalleapi', 'staticmap', 'tile.', 'data:image', 'base64', 'googleusercontent', 'gstatic', '�'];
+ *  rather than prose. MOVED VERBATIM from auditReport.ts, and kept that way on purpose: this list
+ *  also decides the NON-hook report's gut-punch card, and changing it changes those reports.
+ *  ⚠️ CORRECTED 2026-09-23. The first version of this file added 'gstatic' here while its comment
+ *  said "verbatim". gstatic appears in at least one stored answer on 668 of 1,421 non-hook audits,
+ *  so that one word could alter what hundreds of existing reports show — the opposite of the
+ *  promise that non-hook reports are unchanged. The stricter map check the hook card needs now
+ *  lives in isMapCardAnswer below, where it touches nothing else. */
+const JUNK_MARKERS = ['mapbox', 'openstreetmap', 'images.openai', 'oaidalleapi', 'staticmap', 'tile.', 'data:image', 'base64', 'googleusercontent', '�'];
 
-/**
- * True when an answer is not clean human prose — map/image junk, mostly URLs or markup, or too
- * little real language to be worth quoting.
- *
- * ⛔ A TRUE HERE MEANS "DO NOT QUOTE THIS", AND EVERY CALLER MUST TREAT IT THAT WAY RATHER THAN
- * CLEANING HARDER. A map-formatted answer has no sentence in it to rescue; what survives aggressive
- * cleaning is a list of opening hours and star ratings, which reads to a prospect as though we
- * scraped something badly. The honest fallback is to show no quote at all — the question, the names
- * and the result are all still true without one.
- */
+/** True when answer_text isn't clean human prose (map/image junk, mostly URLs/markup,
+ *  or too few real words) — such answers must never be shown as the gut-punch quote.
+ *  ⛔ BODY IS BYTE-FOR-BYTE THE ORIGINAL from auditReport.ts. Do not "tidy" it: the non-hook
+ *  report's behaviour is exactly this function, and it was promised unchanged. */
 export function isJunkAnswer(text: string): boolean {
-  const t = (text || '').toLowerCase();
-  if (!t) return true;
+  const t = text.toLowerCase();
   if (JUNK_MARKERS.some((m) => t.includes(m))) return true;
-  const stripped = (text || '').replace(/https?:\/\/\S+/gi, ' ').replace(/\S+\.(png|jpe?g|svg|webp|gif|bmp)\S*/gi, ' ');
+  const stripped = text.replace(/https?:\/\/\S+/gi, ' ').replace(/\S+\.(png|jpe?g|svg|webp|gif|bmp)\S*/gi, ' ');
   const words = stripped.trim().split(/\s+/).filter((w) => /[a-z]{2,}/i.test(w));
   if (words.length < 10) return true;                    // too little real prose
-  const letters = ((text || '').match(/[a-z]/gi) || []).length;
-  if (letters / (text || ' ').length < 0.55) return true; // mostly markup/symbols/urls
+  const letters = (text.match(/[a-z]/gi) || []).length;
+  if (letters / text.length < 0.55) return true;         // mostly markup/symbols/urls
   return false;
+}
+
+/**
+ * True when an answer is a Gemini MAP CARD — Google's own map and star-rating image assets, which
+ * are served from gstatic.com, embedded in the stored text.
+ *
+ * 🔴 USED BY THE HOOK EVIDENCE CARD ONLY, AND THAT IS DELIBERATE. The hook card quotes the engine
+ * under "Gemini replied"; a map card quoted there prints "4.5 stars rating · Closed · Opens 8:00 AM
+ * Wed · Click to open side panel" as though it were Gemini's considered opinion. isJunkAnswer does
+ * not catch that shape (the prose ratio stays high), and widening isJunkAnswer to catch it would
+ * change the non-hook report too. So the hook card asks BOTH questions and the non-hook card keeps
+ * asking the one it always asked.
+ * ⚠️ Whether the non-hook card should also stop quoting map cards is a product decision for Paul,
+ * not something to fold in quietly.
+ */
+export function isMapCardAnswer(text: string): boolean {
+  return /gstatic\.com/i.test(text || '');
 }
 
 /** Strip UI chrome + markdown out of an engine answer so it reads as clean prose. */
 export function cleanAnswerText(text: string): string {
-  return (text || '')
+  return text
     .replace(/```[\s\S]*?```/g, ' ')                 // code fences
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')            // images
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')          // links → their text
