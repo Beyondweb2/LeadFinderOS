@@ -22,7 +22,8 @@ import { BUILD_MODE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } 
 import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
-import { CoveragePanel, DiscoverySection, nearDuplicateCount } from '@/components/BaselineDiscovery';
+import { CoveragePanel, DISCOVERY_PLAN_RUNS, DiscoverySection, nearDuplicateCount, useDiscoveryPoll } from '@/components/BaselineDiscovery';
+import { discoveryPlan } from '@/lib/discoveryProgress';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
 import { onboardingStatus } from '@/lib/manualOnboarding';
 import { baselineReadiness } from '@/lib/baselineReadiness';
@@ -32,7 +33,8 @@ type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
 type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary };
 
-/* THE ONE POLLER. The hub re-reads itself on this interval only while the baseline is `starting`
+/* THE ONE HUB POLLER. (The Prepare Baseline dialog has its own read-only Discovery poller while a
+   Discovery job runs — useDiscoveryPoll in BaselineDiscovery.tsx.) The hub re-reads itself on this interval only while the baseline is `starting`
    or `running`, and stops on its own at every other status. Nothing else on this page polls, and
    the poll is a READ of paid-client-hub — it can never start, approve or create anything. */
 export const HUB_POLL_MS = 15_000;
@@ -171,11 +173,17 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const generateDiscovery = () => data && act('discovery', 'discovery_generate');
   const runDiscovery = () => {
     if (!data?.discovery) return;
-    const ok = window.confirm(`Run Discovery: ${data.discovery.pool.length} questions × 3 runs on ChatGPT and Gemini, about ${data.discovery.estimate_usd.toFixed(2)}. Nothing is frozen and the paid baseline does not start. Continue?`);
+    const plan = discoveryPlan(data.discovery.pool.length, DISCOVERY_PLAN_RUNS);
+    const ok = window.confirm(`Run Discovery: ${plan.questions} questions × ${plan.engines} engines (ChatGPT and Gemini) × ${plan.runs} runs = ${plan.measurements} measurements, about ${data.discovery.estimate_usd.toFixed(2)}. It runs on the server — you can close this and come back. Nothing is frozen and the paid baseline does not start. Continue?`);
     if (ok) void act('discovery_run', 'discovery_run', { confirm_cost: true });
   };
   const addFromDiscovery = (q: string) => { setQuestions((cur) => [...cur.filter((x) => x.trim()), q]); setAdded((cur) => (cur.includes(q) ? cur : [...cur, q])); };
   const duplicates = data ? nearDuplicateCount(data, cleanAuditQuestions(questions)) : 0;
+  /* Discovery runs on the server; while it runs, re-read its stored progress (discovery block only). */
+  useDiscoveryPoll(leadId, open, data, !!busy, (discovery) => {
+    setData((cur) => (cur ? { ...cur, discovery } : cur));
+    setLoaded((cur) => (cur ? { ...cur, discovery } : cur));
+  });
 
   const frozen = !!data && isFrozenBaselineStatus(data.status);
   const started = !!data && isStartedBaselineStatus(data.status);
