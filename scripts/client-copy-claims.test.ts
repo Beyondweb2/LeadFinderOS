@@ -23,7 +23,7 @@
    historical mirror and called it the live template. Paul caught it.)
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
-import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from "../src/lib/findableOffer.ts";
+import { FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE, STALE_OFFER_TEMPLATES } from "../src/lib/findableOffer.ts";
 import { READABLE_TEMPLATE_BODIES } from "../src/lib/templateBodies.ts";
 import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
 
@@ -58,6 +58,7 @@ const RENDERERS: Array<[string, string]> = [
   ["free-check result email (prospect)", "supabase/functions/_shared/free-check-result.ts"],
   ["onboarding follow-up (prospect)", "supabase/functions/_shared/onboarding-followup.ts"],
   ["Stripe checkout line (payer)", "supabase/functions/findable-checkout/index.ts"],
+  ["billing emails + card notice (client)", "src/lib/findableOffer.ts"],
 ];
 
 /* Each pattern is a claim that has been false since a dated change. Keep the date in the label. */
@@ -73,10 +74,19 @@ const STALE: Array<[RegExp, string]> = [
   [/Bing Places/i, "Bing Places — tested negative, zero citations in 10,615 (CLAUDE.md §5); never a lever"],
 ];
 
+/* The FINDABLE OFFER's retired words (2026-09-23). Applied to every renderer, and to every sendable
+   template EXCEPT the two blocked in STALE_OFFER_TEMPLATES (their Meta-registered bodies are kept on
+   purpose until re-registered) and the dead barber product's own templates (its price, not ours). */
+const OFFER_STALE: Array<[RegExp, string]> = [
+  [/29\.99/, "£29.99 — one £99 plan since 2026-09-18, the words since 2026-09-23"],
+  [/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i, "a free exit — a 12-month minimum term since 2026-09-23 (the guarantee is the only early exit)"],
+  [/that same day/i, "billing 'that same day' as the claim window — billing runs from sign-up since 2026-09-18"],
+];
+
 console.log("── NO CLIENT-FACING RENDERER CARRIES A STALE CLAIM ──");
 for (const [label, path] of RENDERERS) {
   const text = renderedText(read(path));
-  for (const [re, why] of STALE) {
+  for (const [re, why] of [...STALE, ...OFFER_STALE]) {
     const m = text.match(re);
     ok(!m, `${label}: no "${m?.[0] ?? re.source}" — ${why}`.slice(0, 160));
   }
@@ -155,7 +165,8 @@ for (const name of sendable) {
   const render = bodies[name];
   if (!render) { console.log(`  (no mirrored body for ${name} — nothing to scan)`); continue; }
   const text = render("Example Business", "https://example.invalid/x");
-  for (const [re, why] of STALE) {
+  const offerRules = STALE_OFFER_TEMPLATES.has(name) || /barber/.test(name) ? [] : OFFER_STALE;
+  for (const [re, why] of [...STALE, ...offerRules]) {
     const m = text.match(re);
     ok(!m, `sendable template ${name}: no "${m?.[0] ?? re.source}" — ${why}`.slice(0, 160));
   }

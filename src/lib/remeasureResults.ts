@@ -23,7 +23,7 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import { defaultRemeasureDue } from './deliveryCockpit.ts';
 import { parseAmountPaid } from './leadPayment.ts';
 
@@ -162,16 +162,31 @@ export function claimWindowCloseIso(sentAtIso: string | null | undefined): strin
   return new Date(t + REMEASURE_CLAIM_WINDOW_DAYS * 86_400_000).toISOString();
 }
 
-/* ══ WHEN THE MONTHLY STARTS ═════════════════════════════════════════════════════════════════════
-   ⛔ THE BILLING ANCHOR AND THE CLAIM WINDOW ARE THE SAME INSTANT, COMPUTED BY THE SAME FUNCTION.
-   That is the whole safety property of the delayed-monthly model: a client cannot be charged while
-   still entitled to claim, because the first charge lands exactly when the entitlement ends. Two
-   functions that agreed today would drift the first time either was edited; one function cannot.
-
-   ⛔ IT IS DERIVED FROM THE RESULTS STAMP, NEVER FROM THE CHECKOUT DATE. The replay lands on day 28
-   normally, later whenever it holds, and day 56 for RG by contract — anchoring to checkout would
-   charge those clients inside their own window. */
-export const monthlyStartIso = claimWindowCloseIso;
+/* ══ WHEN THE MONTHLY STARTS — READ FROM THE SUBSCRIPTION, NEVER FROM THE RESULTS ══════════════════
+   🔴 REWRITTEN 2026-09-23. This used to be `monthlyStartIso = claimWindowCloseIso`: the first charge
+   was results + 14 days, and the results sender created the subscription. Since 2026-09-18 the
+   subscription is created at SIGN-UP with trial_end = firstRecurringPaymentIso(sign-up) (six weeks),
+   so the alias described billing Stripe no longer does — and the sender called it without importing
+   it, a ReferenceError after the send had been claimed.
+   ⛔ THE BILLING DATE AND THE CLAIM WINDOW ARE NOW TWO CLOCKS. Billing counts from sign-up; the
+   window counts from the results. They are close on the standard timeline and not equal, so no
+   customer text may say they are "the same day".
+   ⛔ THE DATE IS THE ONE STRIPE WILL CHARGE ON: the stored subscription's renewal date while it is
+   still trialing and in the future. Anything else — no subscription, already billing, unreadable —
+   is null, and the email then names no date rather than a guessed one. */
+export function resultsBillingStartIso(s: {
+  subscriptionId: string | null | undefined;
+  subscriptionStatus: string | null | undefined;
+  subscriptionRenewsAt: string | null | undefined;
+  nowIso: string;
+}): string | null {
+  if (!(s.subscriptionId ?? '').trim()) return null;
+  if (s.subscriptionStatus !== 'trialing') return null;
+  const at = new Date(s.subscriptionRenewsAt ?? '').getTime();
+  const now = new Date(s.nowIso).getTime();
+  if (!Number.isFinite(at) || !Number.isFinite(now) || at <= now) return null;
+  return new Date(at).toISOString();
+}
 
 /* ══ THE WORDS ═══════════════════════════════════════════════════════════════════════════════════
    Drafted for Paul's approval (2026-09-13). The refund sentence is REMEASURE_CLAIM_SENTENCE —
@@ -186,8 +201,9 @@ export interface ResultsCopyInput {
   wentUp: boolean;
   withinNoise: boolean;
   documentUrl: string;
-  /** When the monthly starts — the day the claim window closes. Absent for a client who has no
-   *  monthly (anyone who paid before 2026-09-13), and then the email says nothing about billing. */
+  /** The first recurring payment's date, as a person reads it — from resultsBillingStartIso, so
+   *  only when a trialing subscription will charge on it. Absent otherwise (no subscription, already
+   *  billing), and then the email says nothing about billing. */
   monthlyStartsOn?: string | null;
 }
 
@@ -234,15 +250,15 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
       resultsClaimParagraph(),
     );
   }
-  /* ⛔ THIS EMAIL IS THE 14-DAY NOTICE, AND IT IS THE ONLY ONE THAT ARRIVES THAT FAR AHEAD.
-     Stripe's own trial-ending event fires three days out and nothing can move it, so the honest
-     place to name the date and the amount is here, at the moment the clock actually starts.
-     ⛔ IT NAMES THE SAME DAY THE CLAIM WINDOW CLOSES, because they ARE the same day by
-     construction (monthlyStartIso is claimWindowCloseIso). Saying so plainly is what stops it
-     reading as a second, hidden deadline. */
+  /* ⛔ THIS EMAIL IS THE EARLY BILLING NOTICE. Stripe's own trial-ending event fires three days out
+     and nothing can move it, so the date and the amount are named here too.
+     🔴 NOT "THAT SAME DAY" (2026-09-23). It used to say the monthly started the day the claim window
+     closed; billing now runs from sign-up (six weeks), so that was false. The date is Stripe's own
+     (resultsBillingStartIso) and the sentence counts the payments the way the offer does:
+     the sign-up £99 is payment 1, this is payment 2, and nothing follows the last. */
   if (i.monthlyStartsOn) {
     out.push(
-      `That same day — ${i.monthlyStartsOn} — your monthly starts, at £${FINDABLE_MONTHLY_GBP} a month. It covers the work we keep doing every week to add another way for people to find you, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`,
+      `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you, for the rest of your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term. It is payment 2 of ${FINDABLE_TOTAL_PAYMENTS}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${FINDABLE_TOTAL_PAYMENTS}th.`,
     );
   }
   out.push(`Paul, findable`);

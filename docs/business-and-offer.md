@@ -585,3 +585,52 @@ surfaces cannot show one truthfully:
 The subscription structure and the guarantee (£99 only, both paths) are unchanged from the tier build.
 Verified live 2026-09-17: the card on findable.live shows £99-only; the flow's step-4 "Your website"
 renders the two-path panel.
+
+## Customer lifecycle cleanup — the results sender, the end of the term, ownership scope (2026-09-23)
+
+**The crash.** `_shared/remeasure-results.ts` called `monthlyStartIso(nowIso)` without importing it
+(`check-edge-undefined` had been flagging it on `main`). It sat AFTER the once-only claim of
+`remeasure_results_sent_at`, so the day the copy is approved, a current-terms client with a saved
+card and no subscription (MCLocksmiths, due 2026-10-20) would have had the stamp set, no email sent
+and a 14-day window started that they could not see. The name itself was stale: it was
+`claimWindowCloseIso` (results + 14 days), the billing model retired on 2026-09-18 when the
+subscription moved to sign-up. The email then told the client the monthly started "that same day"
+as the window closed — false under six-weeks-from-sign-up billing.
+
+**The fix.**
+- `firstRecurringPaymentIso(signup)` in `findableOffer.ts` is the one date sum; `delayed-subscription.ts`
+  sets Stripe's `trial_end` from it.
+- The results email names the date Stripe will charge: `resultsBillingStartIso` reads the lead's own
+  subscription (`trialing`, renewal in the future), else names no date. The alias is deleted. The
+  words are built BEFORE the claim. A current-terms client with no subscription → Paul gets "MONTHLY
+  NOT SET UP" (`delayed_subscription_missing`); the email names no billing date.
+- **End of term**: Stripe fires `customer.subscription.deleted` (reason `cancellation_requested`) when
+  our `cancel_at` is reached, which sent "Your monthly has been cancelled … If you ever want it back"
+  to a client who had paid all 12. `subscriptionEndedByTerm` (positive: cancel_at is exactly
+  `minimumTermCancelAt(trial_end)`, reached, not in arrears) now routes it to `termCompleteEmail`.
+- **Ownership scope**: `findableSiteKind` (plan_tier / website_route, positive matches, conflict or
+  blank = `unknown`). Only `findable_built` gets the transfer sentence; "your pages stay exactly
+  where they are" is only for `client_owned` (it contradicted /refunds for a site we host); a built
+  site's ending points at /terms.
+- The report's no-website panel said "Building it is included in your £99" — now "no separate build
+  fee" + `FINDABLE_OFFER_SUMMARY`.
+- Tests: `scripts/customer-lifecycle.test.ts` (new); `client-copy-claims.test.ts` scans
+  `findableOffer.ts` and bans £29.99 / "any time" / "that same day" in every renderer.
+
+**Found and NOT decided (Paul):**
+1. **Billing and the claim window overlap.** On the standard timeline the first recurring £99 (sign-up
+   + 42 days) lands about a day BEFORE the claim window closes (results ≈ day 28–29, + 14). /refunds
+   says the refund "does not cover monthly payments already taken" AND "claiming also stops the
+   monthly before it begins" — both cannot be true for a claim made on the last day. Options: refund
+   payment 2 as well on a valid claim; or move the first charge to after the window (changes "six
+   weeks"); or shorten the window.
+2. **New-domain exclusion.** findable.live (Pricing footnote, /pricing, the flow's domain question)
+   says brand-new domains are excluded from the four-week guarantee; `FINDABLE_GUARANTEE` (the Stripe
+   line item, the welcome pack, the results sender) has no exclusion and nothing in LeadFinderOS reads
+   `domain_status`. A new-domain client would be refused by the site's words and entitled by the
+   contract's. Not changed.
+3. **MCLocksmiths** (paid £99 2026-09-17, `plan_tier` new_site) has a saved card and NO subscription —
+   they signed up the day before sign-up subscriptions. Nothing will bill them unless set up by hand;
+   what they were sold on 17 Sep (then: £99/month for 12 months, then £29.99) differs from today's.
+4. **Mid-term endings**: the card-failure and deliberate-cancel emails say "you won't be charged again"
+   and offer to restart; under a 12-month minimum with arrears still due that is a commercial choice.
