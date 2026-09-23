@@ -57,29 +57,28 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
-- **Offer: £99 to start, then a monthly — and TWO tiers since 2026-09-17** (`plan_tier` on
-  `onboarding_responses`, decided by the questionnaire's site-access answer, read server-side; the
-  browser never decides money). **KEEP YOUR SITE:** £99 + **£29.99/month** (`FINDABLE_MONTHLY_GBP`),
-  the default. **NEW SITE:** £99 + **£99/month for 12 months, then £29.99** (`FINDABLE_NEW_SITE_
-  MONTHLY_GBP`, `FINDABLE_NEW_SITE_TERM_MONTHS`), build + hosting included, the site is theirs. The
-  monthly is a real, delayed Stripe subscription (`_shared/delayed-subscription.ts`) starting the day
-  the claim window closes (four-week results + 14 days) — for new-site it is a **subscription
-  SCHEDULE** (phase 0 trial → phase 1 £99×12 → phase 2 £29.99 open-ended), so Stripe drops the price
-  itself, **no month-13 code**. ⛔ **The guarantee is identical on both tiers and applies to the £99
-  ONLY** (`REMEASURE_CLAIM_SENTENCE`, byte-locked); they keep the site either way. ⛔ **The £9.99
-  hosting add-on is RETIRED for new sign-ups** — hosting is inside the £99/mo on new-site; only a
-  LEGACY row (`plan_tier` null + old `website_addon`) still bills it.
+- **Offer (Paul, 2026-09-23): £99 to start, then £99/month from six weeks after sign-up, for a
+  12-month minimum term — ONE plan** (`FINDABLE_OFFER_SUMMARY`). The monthly is a Stripe
+  subscription created by the webhook at sign-up with a `FINDABLE_MONTHLY_DELAY_DAYS` trial
+  (`_shared/delayed-subscription.ts`) and `cancel_at` after `FINDABLE_MINIMUM_TERM_MONTHS` payments:
+  ⛔ **nothing is charged after the 12 months** — no reduced continuation price, no open-ended £99. The
+  old two-tier offer (keep-your-site monthly / new-site schedule) is RETIRED; `plan_tier` is still
+  stored. ⛔ **The 12 months is a real minimum** — never write "cancel any time" / "stop any time" /
+  "cancel before it starts" beside it. For a site Findable BUILDS: we build, host and manage it in
+  the term and own the build; ownership transfers once the term is complete and paid; an overdue
+  term may see the hosted site suspended after reasonable written notice. **Those terms apply only
+  to a site we build**; optimise-only is to get its own structure (NOT YET DEFINED by Paul). Do not
+  invent penalties or exit rights. The guarantee applies on top: a valid claim is an exit under its
+  own terms. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon`.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
-  `FINDABLE_MONTHLY_GBP`, `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`,
-  `CARD_SAVED_NOTICE`. findable-site carries its own copies; `scripts/check-cross-repo-sync.mjs`
-  (exists in BOTH repos) fails the build on drift. Change one repo, change the other.
-- ⛔ **No surface may name one figure without the other — EXCEPT the generic pricing card** (Paul,
-  2026-09-17): the monthly is path-dependent (£29.99 keep / £99 rebuild+host), so the home-page card
-  and `OFFER_COPY` name only **£99 to start** and say a monthly follows whose amount is chosen in the
-  flow. PATH-SPECIFIC surfaces (the flow's site-access panel, the pay screen, /terms, /refunds, the
-  FAQ) name both figures for that path. Do not "fix" the card back to a single monthly. ⛔ **Binding
-  copy counts from the results, never "week six".** ⛔ **Never claim an SEO score.** "Reply to your
-  reviews" is a real promise (needs the client's GBP access).
+  `FINDABLE_MONTHLY_GBP`, `FINDABLE_MINIMUM_TERM_MONTHS`, `FINDABLE_OFFER_SUMMARY`,
+  `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site
+  carries its own copies; `scripts/check-cross-repo-sync.mjs` (exists in BOTH repos) fails the build
+  on drift for the pairs it lists. Change one repo, change the other. `scripts/findable-offer-terms.test.ts`
+  pins the offer. ⛔ **A Meta-registered body quoting a retired offer goes in `STALE_OFFER_TEMPLATES`**
+  (blocked on every path) until it is re-registered — explain_offer / explain_offer_v2 today.
+- ⛔ **No surface may name one figure without the other.** ⛔ **Never claim an SEO score.** "Reply to
+  your reviews" is a real promise (needs the client's GBP access).
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged in the home town only**; if the number has not gone up, they
   email within 14 days of their results and get the £99 back. `findable.live/refunds` is the

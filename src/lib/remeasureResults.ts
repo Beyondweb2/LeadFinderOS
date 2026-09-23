@@ -23,7 +23,7 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
 import { defaultRemeasureDue } from './deliveryCockpit.ts';
 import { parseAmountPaid } from './leadPayment.ts';
 
@@ -242,7 +242,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
      reading as a second, hidden deadline. */
   if (i.monthlyStartsOn) {
     out.push(
-      `That same day — ${i.monthlyStartsOn} — your monthly starts, at £${FINDABLE_MONTHLY_GBP} a month. It covers the work we keep doing every week to add another way for people to find you. Cancel any time before then and it never begins.`,
+      `That same day — ${i.monthlyStartsOn} — your monthly starts, at £${FINDABLE_MONTHLY_GBP} a month. It covers the work we keep doing every week to add another way for people to find you, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`,
     );
   }
   out.push(`Paul, findable`);

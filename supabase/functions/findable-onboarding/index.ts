@@ -87,9 +87,11 @@ const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", 
    flow sent the value, and it was still silently dropped here, because this function builds its
    insert from an explicit key list and an unlisted key simply vanishes. */
 const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
-/* The pricing tier the customer chose (2026-09-17): keep their own site (£99 + £29.99/month) or a
-   new site (£99 + £99/month for 12 months, then £29.99). findable-checkout and the subscription
-   builder read this off the row; anything not in this set stores null (a legacy/keep default). */
+/* The site-access answer the customer gave (2026-09-17): keep their own site, or have a new one
+   built. ⚠️ Since 2026-09-18 both are billed the ONE plan — £99 today, then £99/month for the
+   12-month minimum (findableOffer.ts). The value is stored because the ownership/hosting terms apply
+   only to a site Findable builds, and optimise-only is to get its own structure (not yet defined).
+   Anything not in this set stores null. */
 const PLAN_TIER = new Set(["keep", "new_site"]);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 

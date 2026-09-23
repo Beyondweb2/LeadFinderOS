@@ -14,7 +14,7 @@ dialog). One shared panel: `src/components/ColdCallPlaybook.tsx`.
 | Excerpt | quoted only if it passes `isJunkAnswer` AND `isMapCardAnswer` — the report's hook-card rule |
 | Website findings | `resolveFindingsSource` (`siteFindings.ts`) — the SAME loop the `ai_site_findings_v2` {{6}} uses; `resolveSiteFindingsDetailed` is now written in terms of it (behaviour unchanged). Up to `MAX_SITE_FINDINGS`, strongest first, words from `candidateFindings`, proof from the stored signals/evidence |
 | Follow-up | `whatsapp_messages` by lead id or WhatsApp phone; any real send (`isRealSend`) or inbound → FOLLOW-UP; report sent = a `REPORT_LINK_TEMPLATES` send |
-| Offer | `FINDABLE_SETUP_PRICE_GBP` + `FINDABLE_GUARANTEE`; the monthly says "Check current offer before quoting" |
+| Offer | `FINDABLE_OFFER_SUMMARY` (£99 to start, then £99/month, 12-month minimum) + `FINDABLE_GUARANTEE` + Paul's build terms line (since 2026-09-23) |
 
 The loader (`src/hooks/useColdCallPlaybook.ts`) is SELECTs only through the operator session, and
 loads only while the panel is open. `scripts/cold-call-playbook.test.ts` fails the build if the
@@ -30,10 +30,8 @@ hook, panel or builder gains an invoke, rpc, write or raw fetch.
 
 ## Open at ship time
 
-- ⚠️ **The monthly price disagrees across sources**: `findableOffer.ts` `FINDABLE_MONTHLY_GBP` is £99
-  (commit `3a49d5e9`, 2026-09-18, "Simplify Findable onboarding billing", and the checkout matches),
-  while CLAUDE.md §1 and findable-site's copy still describe £29.99 / two tiers. Paul to confirm; the
-  playbook will quote the monthly once one source is authoritative.
+- ✅ **Resolved 2026-09-23**: Paul confirmed £99/month with a 12-month minimum. The playbook now
+  quotes `FINDABLE_OFFER_SUMMARY`; see `docs/business-and-offer.md` §0.
 - Deep-crawl evidence (`evidence` on crawl rows) exists on ~1 of 241 stored crawls, so most leads
   show signal findings (thin pages etc.) or none.
 - Stage 2 (not built): call outcome tracking, follow-up scheduling.

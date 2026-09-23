@@ -8,6 +8,7 @@ import { articleTrade, normaliseTrade, normaliseTown, pluraliseTrade } from "../
 import { RIVAL_VARS, RIVALS_REQUIRED } from "../../../src/lib/rivalHook.ts";
 import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/displayName.ts";
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
+import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 
 export const GRAPH_VERSION = "v21.0";
 
@@ -1005,7 +1006,11 @@ export function textPayload(body: string) {
  * src/lib/siteFindings.ts, one line, flipped by a human after looking in WhatsApp Manager. This only
  * READS it, so flipping it there releases every door at once.
  */
+/* ⛔ AND A TEMPLATE WHOSE REGISTERED BODY QUOTES A RETIRED OFFER (2026-09-23): explain_offer and
+   explain_offer_v2 say "£29.99 a month … Stop any time" at Meta. They wait on corrected versions
+   being approved exactly as an unapproved template does — same refusal, every path. */
 export function templateAwaitingApproval(templateName: string): boolean {
+  if (STALE_OFFER_TEMPLATES.has(templateName)) return true;
   return templateName === AI_SITE_FINDINGS_V2 && !AI_SITE_FINDINGS_V2_APPROVED;
 }
 

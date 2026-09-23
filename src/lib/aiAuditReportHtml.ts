@@ -477,8 +477,8 @@ function siteCheckPendingSection(): string {
 /* 🔴 "nothing extra to pay" CAME OUT 2026-09-14, AND IT WAS THE ONLY SENTENCE IN THIS DOCUMENT
    THAT DESCRIBED THE PRICE. The report names no figure anywhere else by design, so this line was
    carrying the whole offer on its own — and it said the £99 was the end of it, on a product that
-   is £99 to start and £29.99 a month, with hosting on top for exactly the customer who sees this
-   panel (no website, so we build and host one). "Building it is included in your £99" says the
+   is £99 to start and then a monthly (£99 a month for the 12-month minimum since 2026-09-23), with
+   the build and hosting for exactly the customer who sees this panel (no website, so we build one). "Building it is included in your £99" says the
    true thing the panel exists to say and claims nothing about what else is owed. */
 function noWebsiteSection(): string {
   return `

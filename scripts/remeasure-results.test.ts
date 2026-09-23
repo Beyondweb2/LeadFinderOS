@@ -156,7 +156,8 @@ console.log("-- The delayed monthly: one clock, not two --");
   const base = { businessName: 'RG Locksmiths', town: 'Huntingdon', beforeNamed: 23, beforeAnswered: 72, afterNamed: 31, afterAnswered: 96, questions: 12, documentUrl: 'https://findable.live/results/x', wentUp: true, withinNoise: false };
   const withMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: '25 October 2026' });
   ok(withMonthly.some((p) => p.includes('25 October 2026') && p.includes(String(FINDABLE_MONTHLY_GBP))), 'the results email names the date AND the amount');
-  ok(withMonthly.some((p) => /cancel/i.test(p)), '...and says how to stop it');
+  /* 2026-09-23: the monthly is a 12-month minimum term (Paul) — the email names the term, never a free exit. */
+  ok(withMonthly.some((p) => /12-month minimum term/.test(p)) && !withMonthly.some((p) => /cancel any time/i.test(p)), '...and names the 12-month minimum term, with no "cancel any time"');
   const noMonthly = resultsEmailParagraphs({ ...base, monthlyStartsOn: null });
   ok(!noMonthly.some((p) => /monthly/i.test(p)), 'a client with no monthly is told nothing about billing');
   ok(noMonthly.length === withMonthly.length - 1, 'exactly one paragraph is added, never a reshuffle');
@@ -169,15 +170,16 @@ console.log("-- The delayed monthly: one clock, not two --");
   for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE]) {
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
-  ok(/99/.test(CARD_SAVED_NOTICE) && /nothing else is taken/i.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today and what is not');
+  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /Nothing is charged after/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and that nothing is charged after it');
 }
 
 console.log("-- Billing notices: the right message, and never the wrong one --");
 {
   const withLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: 'https://billing.stripe.com/p/session_123' });
-  ok(withLink.paragraphs.some((p) => p.includes('https://billing.stripe.com/p/session_123')), 'the reminder carries the portal cancel link when there is one');
+  /* 2026-09-23: no free-cancel offer in the reminder any more — the 12-month minimum was sold. */
+  ok(!withLink.paragraphs.some((p) => /cancel|nothing is taken/i.test(p)) && withLink.paragraphs.some((p) => /12-month minimum term/.test(p)), 'the reminder names the minimum term and offers no free exit');
   const noLink = monthlyStartingSoonEmail({ businessName: 'X', startsOn: '25 October 2026', cancelUrl: null });
-  ok(noLink.paragraphs.some((p) => /reply to this email/i.test(p)), 'and falls back to replying when the portal is unreachable');
+  ok(noLink.paragraphs.some((p) => /reply to this email/i.test(p)), 'and questions go to a reply');
   ok(!noLink.paragraphs.some((p) => /http/i.test(p)), 'never a half-built or empty link');
 
   const failed = paymentFailedEmail({ payUrl: 'https://invoice.stripe.com/i/abc' });

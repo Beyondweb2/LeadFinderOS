@@ -26,7 +26,9 @@
 import { READABLE_TEMPLATE_BODIES } from "../src/lib/templateBodies.ts";
 import { WA_TEMPLATE_REQS } from "../src/lib/whatsappTemplates.ts";
 import { CONTINUATION_TEMPLATES, isColdOutreachTemplate } from "../src/lib/coldOutreach.ts";
-import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP } from "../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, STALE_OFFER_TEMPLATES } from "../src/lib/findableOffer.ts";
+import { getTemplateSendability } from "../src/lib/whatsappTemplates.ts";
+import { templateAwaitingApproval } from "../supabase/functions/_shared/whatsapp-send.ts";
 import { WHATSAPP_TEMPLATES } from "../src/types/outreach.ts";
 /* The real registry, imported (its Deno reads are lazy enough for tsx — template-routing.test.ts
    already relies on this). It is what says a template's SHAPE: vars, order, header. */
@@ -49,10 +51,15 @@ for (const name of PITCHES) {
     const text = render(name, "plumbers", "Wisbech");
     ok(text.includes(`£${FINDABLE_SETUP_PRICE_GBP} to start`),
        `the setup price in the body is £${FINDABLE_SETUP_PRICE_GBP} — if this fails, the CONSTANT moved and Meta still has the old wording`);
-    ok(text.includes(`After that £${FINDABLE_MONTHLY_GBP} a month`),
-       `the monthly in the body is £${FINDABLE_MONTHLY_GBP} — same: re-register at Meta, then change this string`);
+    /* 2026-09-23: the monthly moved to £99 (12-month minimum) and Meta still has "£29.99 … Stop any
+       time". The rule is now: the body matches the constant, OR the template is BLOCKED on every path
+       until a corrected version is registered. A stale body that is still sendable fails the build. */
+    const current = text.includes(`After that £${FINDABLE_MONTHLY_GBP} a month`);
+    const blocked = STALE_OFFER_TEMPLATES.has(name) && templateAwaitingApproval(name) && !getTemplateSendability(name, null, null).ok;
+    ok(current || blocked,
+       `the monthly in the body is £${FINDABLE_MONTHLY_GBP}, or the template is blocked (picker + server) until re-registered at Meta`);
     /* §1: no surface may name one figure without the other. */
-    ok(text.includes(`£${FINDABLE_SETUP_PRICE_GBP}`) && text.includes(`£${FINDABLE_MONTHLY_GBP}`),
+    ok(text.includes(`£${FINDABLE_SETUP_PRICE_GBP}`) && /After that £[0-9.]+ a month/.test(text),
        "both halves of the offer appear — never one figure alone (CLAUDE.md §1)");
   }
 

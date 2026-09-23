@@ -2,7 +2,7 @@
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP,
   FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
@@ -257,7 +257,7 @@ function planPage1(name: string): string {
         ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Fourteen days after we send your four week results, £${FINDABLE_MONTHLY_GBP} a month begins — that is the work that keeps you there: more pages every month, your reviews replied to, and an eye on the technical side of your site. We will email you before it starts, and you can stop it any time.`)}
+        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term — that is the work that keeps you there: more pages every month, your reviews replied to, and an eye on the technical side of your site. We will email you before it starts.`)}
       </div>`;
 }
 

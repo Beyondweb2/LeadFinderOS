@@ -1,4 +1,4 @@
-import { FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP } from "../../../src/lib/findableOffer.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -29,6 +29,24 @@ async function stripe(secret: string, path: string, body?: string): Promise<{ ok
   let json: Record<string, unknown> = {};
   try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* Stripe error text is returned below. */ }
   return { ok: res.ok, json, text };
+}
+
+/**
+ * When the subscription ends: exactly FINDABLE_MINIMUM_TERM_MONTHS calendar months after the first
+ * monthly charge (the trial end), in UTC — the same anchor Stripe bills from, so the periods charged
+ * are trial_end + 0 … + (N-1) months: N payments, then it stops (Paul, 2026-09-23: "no automatic
+ * charge after month 12"). ⛔ Absent this, the subscription was open-ended and would have kept
+ * charging £99 from month 13.
+ */
+export function minimumTermCancelAt(trialEndSec: number): number {
+  const d = new Date(trialEndSec * 1000);
+  /* Clamp the day to the target month's last day (29 Feb → 28 Feb), as Stripe's own anchor does —
+     rolling into March would open a 13th period and charge it. */
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth() + FINDABLE_MINIMUM_TERM_MONTHS;
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const end = new Date(Date.UTC(y, m, Math.min(d.getUTCDate(), lastDay), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()));
+  return Math.floor(end.getTime() / 1000);
 }
 
 /** Creates the one standard £99/month subscription immediately after the £99 signup payment.
@@ -70,6 +88,9 @@ export async function createDelayedSubscription(
     customer: customerId,
     default_payment_method: paymentMethodId,
     trial_end: String(trialEnd),
+    /* The 12-payment minimum term, then nothing: cancel_at on the period boundary, no proration. */
+    cancel_at: String(minimumTermCancelAt(trialEnd)),
+    proration_behavior: "none",
     "trial_settings[end_behavior][missing_payment_method]": "cancel",
     "items[0][price]": priceId,
     "items[0][quantity]": "1",
