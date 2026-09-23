@@ -1626,9 +1626,6 @@ const Inbox = () => {
                     )}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
-                    {/* Read-only call guide for THIS conversation's lead — the SAME panel Outreach
-                        opens. Labelled rather than an icon so it is findable mid-call. */}
-                    {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} compact />}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -1674,6 +1671,9 @@ const Inbox = () => {
                       iconOnly
                     />
                   )}
+                  {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME
+                      panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
+                  {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}
                   {mapsUrl && (
                     <a href={mapsUrl} target="_blank" rel="noreferrer" title="Open in Google Maps" aria-label="Open in Google Maps" className={HEADER_ICON_BTN}>

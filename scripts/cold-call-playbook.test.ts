@@ -129,6 +129,13 @@ console.log('── 3. STRONG WEBSITE EVIDENCE ──');
   const p = buildColdCallPlaybook(base());
   ok(p.findings.length === 1 && p.findings[0].kind === 'thin_pages', 'one strong issue → exactly one finding shown');
   ok(p.findings[0].proof.some((l) => /82 words/.test(l)), 'the thin page proof carries its stored word count');
+  ok(p.findings[0].explanation === 'Your homepage is really light on detail.' && !/service page/.test(allText(p)),
+    'a thin HOMEPAGE is called the homepage, never "one of the service pages"');
+}
+{
+  const svc: CrawlSignals = { ...CLEAN, thinPages: 1, thinPageUrls: ['https://acmelocks.co.uk/lock-changes/'] };
+  const p = buildColdCallPlaybook(base({ leadCrawl: crawl(svc) }));
+  ok(/^One of the service pages is really light on detail/.test(p.findings[0]?.explanation ?? ''), 'a thin SERVICE page keeps the shared wording');
 }
 
 console.log('── 4. NO STRONG WEBSITE EVIDENCE ──');
@@ -249,7 +256,10 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
   ok(/enabled:\s*enabled && !!leadId/.test(hook), 'and loads only while the panel is open');
   const inbox = read('src/pages/Inbox.tsx');
   const outreach = read('src/components/OutreachTable.tsx') + read('src/components/LeadDetailDialog.tsx');
-  ok(/<ColdCallPlaybookButton leadId=\{active\.leadId\}/.test(inbox), 'Inbox opens it for the selected conversation\'s own lead');
+  ok(/<ColdCallPlaybookButton leadId=\{active\.leadId\} className=\{HEADER_ICON_BTN\} iconOnly \/>/.test(inbox),
+    'Inbox: an icon in the header icon row, for the selected conversation\'s own lead');
+  ok(/Send WhatsApp message[\s\S]{0,900}setPlaybookLeadId\(lead\.id\)/.test(read('src/components/OutreachTable.tsx')),
+    'Outreach: an icon beside the contact buttons');
   ok(/ColdCallPlaybookSheet/.test(outreach) && /ColdCallPlaybookButton/.test(outreach), 'Outreach opens the same shared panel');
 }
 
