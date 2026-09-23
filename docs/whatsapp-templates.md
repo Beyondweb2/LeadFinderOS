@@ -619,3 +619,20 @@ Registered in all eleven places; `scripts/site-findings.test.ts` (122 assertions
 the 7-param order across both registries, the selection rules and a scanner-phrase blocklist.
 **Not deployed. Not approved. Meta registration and the flag flip are both Paul's to do.**
 
+
+## The initial opener — one selected template, no 50/50 split (2026-09-23)
+
+- **Before:** from 2026-09-22 the Outreach queue dialog replaced `initial_contact` with
+  `openerTemplateFor(template, leadId)`, a lead-id hash that sent about half of every batch
+  `initial_opener_v2`. The queue itself always sent what was stored on the lead, so the split lived
+  in one browser write. 116 v2 openers went out under it (to 2026-09-23 14:04 UTC); they are untouched.
+- **Now:** `whatsapp_outreach_state.initial_opener_template` (default and current: `initial_contact`)
+  is the ONE selection, set from the "Initial outreach template" control in the Outreach queue dialog
+  (`process-whatsapp-queue` mode `set_initial_opener_template`, approved openers only, sends nothing).
+  `openerSendability` (`src/lib/openerVariant.ts`) makes a non-selected opener unsendable in every
+  picker (via `getTemplateSendability`) and `send-whatsapp-message` refuses it (`opener_not_selected`,
+  build 2026-09-23b). An unreadable or unavailable selection makes NO opener sendable — never the
+  other one.
+- **Frozen at queue time:** the queue sends `outreach_leads.whatsapp_template` as stored and never
+  re-reads the selection, so retries, delays and later changes cannot switch a queued lead.
+- Tests: `scripts/initial-opener-select.test.ts` (replaces `opener-variant.test.ts`).
