@@ -299,6 +299,8 @@ console.log('\n── SAFETY — the page reads one action and writes one ──
   ok(actions.length > 0 && actions.every((a) => a === 'rebuild_context' || a === 'save_website_build'), `only rebuild_context and save_website_build are called (${[...new Set(actions)].join(', ')})`);
   ok(!/create-ai-audit|crawl-check|run-seo-scan|send-whatsapp|whatsapp|notify-|functions\.invoke|sendEmail|resend/i.test(page.replace(/\/\*[\s\S]*?\*\//g, '')), 'no audit, crawl, WhatsApp or email is reachable from the page');
   ok(/invokeEdge<Record<string, any>>\('paid-client-hub'/.test(page), 'and it talks only to paid-client-hub');
+  ok(/return \(\) => \{[^}]*if \(pending\.current\) void flush\(\)/.test(page), 'a pending edit is sent when the page is left, not dropped with the debounce timer');
+  ok(!/setInterval/.test(page), 'the page never polls');
   const hub = readFileSync(new URL('../supabase/functions/paid-client-hub/index.ts', import.meta.url), 'utf8');
   ok(/import \{ normaliseWebsiteBuild \} from "\.\.\/\.\.\/\.\.\/src\/lib\/websiteBuildState\.ts"/.test(hub), 'the server saves through the SAME shape module the browser reads with');
 }

@@ -102,6 +102,9 @@ export default function WebsiteBuild() {
   const loadedRef = useRef(false);
   const timer = useRef<number | null>(null);
   const latest = useRef<WebsiteBuildState | null>(null);
+  /* An edit not yet sent. The debounce timer dies with the page, so leaving by an in-app link within
+     SAVE_DEBOUNCE_MS used to drop the last edit (found on the production run, 2026-09-23). */
+  const pending = useRef(false);
 
   const step = (STAGES as readonly string[]).includes(params.get('step') ?? '') ? params.get('step') as Stage : 'intake';
   const goStep = (s: Stage) => { const next = new URLSearchParams(params); next.set('step', s); setParams(next, { replace: true }); window.scrollTo({ top: 0 }); };
@@ -126,12 +129,15 @@ export default function WebsiteBuild() {
   const flush = useCallback(async () => {
     const s = latest.current;
     if (!s) return;
+    pending.current = false;
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
     setSave('saving');
     try {
       await call({ action: 'save_website_build', lead_id: leadId, website_build: s });
       if (latest.current === s) setSave('saved');
       setSaveError('');
     } catch (e) {
+      pending.current = true;
       setSave('error');
       setSaveError(edgeErrorMessage(e, 'Save failed'));
     }
@@ -145,9 +151,17 @@ export default function WebsiteBuild() {
       return next;
     });
     if (!loadedRef.current) return;
+    pending.current = true;
     setSave('dirty');
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { void flush(); }, SAVE_DEBOUNCE_MS);
+  }, [flush]);
+
+  /* Send a pending edit NOW when the page is left (in-app navigation unmounts it) or hidden. */
+  useEffect(() => {
+    const hide = () => { if (document.visibilityState === 'hidden' && pending.current) void flush(); };
+    document.addEventListener('visibilitychange', hide);
+    return () => { document.removeEventListener('visibilitychange', hide); if (pending.current) void flush(); };
   }, [flush]);
 
   useEffect(() => {
@@ -359,7 +373,7 @@ function Checklist({ state, group, set, title }: { state: WebsiteBuildState; gro
   const done = items.filter((q) => state.qa[q.key]).length;
   return <Section title={title} right={<span className="text-xs text-muted-foreground">{done} of {items.length}</span>}>
     <div className="grid gap-1.5 sm:grid-cols-2">{items.map((q) => <label key={q.key} className="flex cursor-pointer items-start gap-2 text-sm">
-      <input type="checkbox" className="mt-1" checked={state.qa[q.key] === true} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} /><span>{q.label}</span></label>)}</div>
+      <input type="checkbox" aria-label={q.label} className="mt-1" checked={state.qa[q.key] === true} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} /><span>{q.label}</span></label>)}</div>
     <p className="text-xs text-muted-foreground">Tick only what the QA prompts reported as PASS, or what you checked yourself.</p>
   </Section>;
 }
@@ -417,7 +431,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
           {r.source && <span className="text-[11px] text-muted-foreground">from {r.source}</span>}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <Input className="h-8 min-w-[240px] flex-1 text-xs" value={draft} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))} />
+          <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[240px] flex-1 text-xs" value={draft} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))} />
           <Button size="sm" variant={r.status === 'verified' && !changed ? 'secondary' : 'default'} disabled={!draft.trim() || (r.status === 'verified' && !changed)} onClick={() => commit(r, 'verified')}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button>
           <Button size="sm" variant="outline" disabled={r.status === 'rejected' && !changed} onClick={() => commit(r, 'rejected')}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
           <Button size="sm" variant="outline" disabled={r.status === 'not_applicable'} onClick={() => commit(r, 'not_applicable')}>N/A</Button>
@@ -472,13 +486,13 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
       {state.pages.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs">
         <thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-1">Action</th><th className="py-1 pr-1">Family</th><th className="py-1 pr-1">New path</th><th className="py-1 pr-1">Title</th><th className="py-1 pr-1">Old URL</th><th className="py-1 pr-1">Goes to (consolidate / redirect)</th><th className="py-1 pr-1">Notes</th><th /></tr></thead>
         <tbody>{state.pages.map((p) => <tr key={p.id} className={`border-b align-top ${p.action === 'undecided' ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
-          <td className="py-1 pr-1"><select className={sel} value={p.action} onChange={(e) => setPages((ps) => ps.map((x) => x.id === p.id ? applyAction(x, e.target.value as ArchPage['action']) : x))}>{PAGE_ACTIONS.map((a) => <option key={a} value={a}>{PAGE_ACTION_LABELS[a]}</option>)}</select></td>
-          <td className="py-1 pr-1"><select className={sel} value={p.family} onChange={(e) => patch(p.id, { family: e.target.value as ArchPage['family'] })}>{PAGE_FAMILIES.map((f) => <option key={f} value={f}>{PAGE_FAMILY_LABELS[f]}</option>)}</select></td>
-          <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.path} placeholder="/services/…/" disabled={p.action === 'remove'} onChange={(e) => patch(p.id, { path: e.target.value })} /></td>
-          <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} /></td>
-          <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.old_url} placeholder="—" onChange={(e) => patch(p.id, { old_url: e.target.value })} /></td>
-          <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.target} placeholder={p.action === 'redirect' || p.action === 'consolidate' ? '/new-page/' : '—'} disabled={!(p.action === 'redirect' || p.action === 'consolidate')} onChange={(e) => patch(p.id, { target: e.target.value })} /></td>
-          <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.notes} onChange={(e) => patch(p.id, { notes: e.target.value })} /></td>
+          <td className="py-1 pr-1"><select aria-label={`Action for ${p.old_url || p.path || p.title || 'page'}`} className={sel} value={p.action} onChange={(e) => setPages((ps) => ps.map((x) => x.id === p.id ? applyAction(x, e.target.value as ArchPage['action']) : x))}>{PAGE_ACTIONS.map((a) => <option key={a} value={a}>{PAGE_ACTION_LABELS[a]}</option>)}</select></td>
+          <td className="py-1 pr-1"><select aria-label={`Page family for ${p.old_url || p.path || p.title || 'page'}`} className={sel} value={p.family} onChange={(e) => patch(p.id, { family: e.target.value as ArchPage['family'] })}>{PAGE_FAMILIES.map((f) => <option key={f} value={f}>{PAGE_FAMILY_LABELS[f]}</option>)}</select></td>
+          <td className="py-1 pr-1"><Input aria-label={`New path for ${p.old_url || p.title || 'page'}`} className="h-8 text-xs" value={p.path} placeholder="/services/…/" disabled={p.action === 'remove'} onChange={(e) => patch(p.id, { path: e.target.value })} /></td>
+          <td className="py-1 pr-1"><Input aria-label={`Title for ${p.old_url || p.path || 'page'}`} className="h-8 text-xs" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} /></td>
+          <td className="py-1 pr-1"><Input aria-label={`Old URL ${p.old_url}`} className="h-8 text-xs" value={p.old_url} placeholder="—" onChange={(e) => patch(p.id, { old_url: e.target.value })} /></td>
+          <td className="py-1 pr-1"><Input aria-label={`Goes to, for ${p.old_url || p.path || p.title || 'page'}`} className="h-8 text-xs" value={p.target} placeholder={p.action === 'redirect' || p.action === 'consolidate' ? '/new-page/' : '—'} disabled={!(p.action === 'redirect' || p.action === 'consolidate')} onChange={(e) => patch(p.id, { target: e.target.value })} /></td>
+          <td className="py-1 pr-1"><Input aria-label={`Notes for ${p.old_url || p.path || p.title || 'page'}`} className="h-8 text-xs" value={p.notes} onChange={(e) => patch(p.id, { notes: e.target.value })} /></td>
           <td className="py-1"><Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setPages((ps) => ps.filter((x) => x.id !== p.id))} title="Delete row"><Trash2 className="h-3.5 w-3.5" /></Button></td>
         </tr>)}</tbody></table></div>}
     </Section>
