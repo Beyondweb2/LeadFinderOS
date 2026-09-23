@@ -76,6 +76,7 @@ import {
   MapPin,
   Tag,
   Users,
+  ScrollText,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -137,6 +138,7 @@ import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
+import { ColdCallPlaybookSheet, COLD_CALL_PLAYBOOK_LABEL } from '@/components/ColdCallPlaybook';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
 import { crawlButtonLabel } from '@/lib/crawlBatch';
@@ -294,6 +296,7 @@ export function OutreachTable({
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
   const { crawlByLeadId, refetch: refetchCrawls } = useLeadCrawls();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
+  const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
@@ -2674,6 +2677,18 @@ export function OutreachTable({
                                     <Phone className="h-4 w-4 text-green-500" />
                                     WhatsApp thread
                                   </DropdownMenuItem>
+                                  {/* Read-only call guide from this lead's stored evidence. Opens the
+                                      ONE shared panel Inbox also uses; the panel is rendered once at
+                                      the foot of the table so closing this menu cannot unmount it. */}
+                                  {!isDemoLead(lead.id) && (
+                                    <DropdownMenuItem
+                                      className="flex items-center gap-2 cursor-pointer"
+                                      onClick={() => setPlaybookLeadId(lead.id)}
+                                    >
+                                      <ScrollText className="h-4 w-4 text-sky-500" />
+                                      {COLD_CALL_PLAYBOOK_LABEL}
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                               <button
@@ -3101,6 +3116,12 @@ export function OutreachTable({
         fetchActivities={fetchActivities}
         userId={user?.id}
         campaignDefaultSaleType={detailLead && campaignDefaultSaleTypeByLead ? campaignDefaultSaleTypeByLead[detailLead.id] ?? null : null}
+      />
+
+      <ColdCallPlaybookSheet
+        leadId={playbookLeadId}
+        open={!!playbookLeadId}
+        onOpenChange={(open) => { if (!open) setPlaybookLeadId(null); }}
       />
 
       {/* Admin AI Opener Modal */}

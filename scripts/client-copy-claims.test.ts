@@ -104,6 +104,9 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["client delivery card (operator)", "src/components/dashboard/ClientDeliveryCard.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
+  /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */
+  ["cold call playbook logic (operator)", "src/lib/coldCallPlaybook.ts"],
+  ["cold call playbook panel (operator)", "src/components/ColdCallPlaybook.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

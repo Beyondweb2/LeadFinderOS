@@ -6,6 +6,7 @@ import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection'
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
+import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -587,6 +588,9 @@ function LeadDetailBody({
               with the selling sections hidden. Refuses with a toast when the lead has no completed
               audit, because the report IS the pack's last section. */}
           {!isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
+
+          {/* Read-only call guide from this lead's stored evidence — the SAME panel Inbox opens. */}
+          {!isDemoLead(lead.id) && <ColdCallPlaybookButton leadId={lead.id} />}
 
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
