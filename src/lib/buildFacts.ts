@@ -122,7 +122,9 @@ export function candidateFacts(ctx: FactsContext, savedCanonicalDomain = ''): Ca
     si?.socialLinks?.length ? { key: 'social_profiles', label: 'Social profiles', value: si.socialLinks.map((s) => s.url).join(', '), source: CRAWL_SOURCE, status: 'detected', note: '' } : null,
     si?.directories?.length ? { key: 'directory_profiles', label: 'Third-party / directory profiles', value: si.directories.join(', '), source: CRAWL_SOURCE, status: 'detected', note: 'Brand names seen on the site. Get the real profile URLs before approving.' } : null,
     si?.companyNumber ? { key: 'company_number', label: 'Company number', value: si.companyNumber, source: CRAWL_SOURCE, status: 'detected', note: '' } : null,
-    fromScalar('gbp', facts.gbp, 'Google Business Profile'),
+    /* ⛔ NOT the onboarding GBP answers: "yes_all" is a consent / access status, not something a
+       website states. It was listed as a publishable fact on the first production run (SC Plumbing,
+       2026-09-23). A Google profile belongs on the site only as a verified review-profile URL. */
   ];
   return list.filter((c): c is Candidate => !!c);
 }
@@ -157,7 +159,9 @@ export function mergeFacts(candidates: Candidate[], stored: BuildFact[], templat
   for (const spec of specs) {
     push({ key: spec.key, label: spec.label, value: '', status: 'missing', source: '', note: spec.hint ?? '', decided: false, required: spec.required });
   }
-  return rows;
+  /* What needs Paul first: the ones awaiting a decision, then what is settled. Stable within a group. */
+  const ORDER: Record<FactStatus, number> = { detected: 0, verified: 1, missing: 2, rejected: 3, not_applicable: 3 };
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => ORDER[a.r.status] - ORDER[b.r.status] || a.i - b.i).map((x) => x.r);
 }
 
 /** Only these reach the website. */
