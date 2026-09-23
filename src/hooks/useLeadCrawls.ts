@@ -24,6 +24,21 @@ async function fetchLeadCrawls(): Promise<Row[]> {
   return res.rows;
 }
 
+/** ONE lead's crawl row — the lead popup's button state. Same table, same row every screen reads;
+ *  the ['lead-crawls', …] key prefix means any crawl run anywhere invalidates it. */
+export function useLeadCrawl(leadId: string | null | undefined) {
+  const query = useQuery({
+    queryKey: ['lead-crawls', 'one', leadId ?? null],
+    enabled: !!leadId,
+    queryFn: async (): Promise<CrawlRow | null> => {
+      const { data, error } = await sb.from('lead_crawl_checks').select('result, created_at').eq('lead_id', leadId).maybeSingle();
+      if (error) throw error;
+      return data ? { result: data.result, created_at: data.created_at } : null;
+    },
+  });
+  return { crawl: query.data ?? null, refetch: query.refetch, isLoading: query.isLoading };
+}
+
 export function useLeadCrawls() {
   const { user } = useAuth();
   const query = useQuery({

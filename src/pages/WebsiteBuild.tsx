@@ -20,6 +20,8 @@ import { WEBSITE_TEMPLATES, templateById } from '@/lib/websiteTemplates';
 import { candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
 import { buildPack, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
+import { CrawlEvidenceDetails, LeadCrawlPanel } from '@/components/LeadCrawlPanel';
+import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    WEBSITE BUILD COMMAND CENTRE — /paid-clients/:leadId/website-build
@@ -270,6 +272,16 @@ export default function WebsiteBuild() {
         </div>}
       </Section>
 
+      <Section title="Website evidence (latest crawl)">
+        {/* The lead's ONE crawl row. A crawl started on Outreach, the Inbox or Paid Clients is this
+            same row; Re-crawl here writes it too. Everything read is DETECTED — it reaches the build
+            only as a fact Paul approves below. */}
+        <LeadCrawlPanel leadId={leadId} website={existingSiteUrl || String((payload.lead as { website?: string } | null)?.website ?? '')}
+          summary={summariseLeadCrawl(payload.crawl)} from="website_build"
+          onDone={async () => { if (pending.current) await flush(); setReloadKey((k) => k + 1); }} />
+        <CrawlEvidenceDetails full={payload.crawl?.mode === 'full' ? payload.crawl.full_evidence : null} />
+      </Section>
+
       <FactsSection rows={rows} template={template} onDecide={decideRow} onReset={resetFact} onPut={putFact}
         onPaste={(text) => { const add = parseFactLines(text, template, 'pasted from capture'); update((s) => ({ ...s, facts: [...s.facts.filter((f) => !add.some((a) => a.key === f.key)), ...add] })); toast({ title: `${add.length} fact(s) added`, description: 'They are marked "Needs approval".' }); }} />
 
@@ -307,7 +319,7 @@ export default function WebsiteBuild() {
 
     {/* ══ ARCHITECTURE ═════════════════════════════════════════════════════════════════════ */}
     {step === 'architecture' && <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
-      checkedPages={payload.crawl?.result?.signals?.checkedPages ?? []} cited={evidence.signals} update={update} goStep={goStep} toast={toast} />}
+      checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} />}
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>

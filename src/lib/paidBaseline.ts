@@ -15,6 +15,8 @@ export type PaidBaseline = {
     service_sources?: Record<string, string[]>;
     area_sources?: Record<string, string[]>;
   };
+  /** What the latest crawl saw that no approved source lists — suggestions only, never measured. */
+  detected?: { services: string[]; areas: string[] };
   crawl_context_at?: string | null;
   crawl_context_source?: 'run' | 'lead' | null;
   /** The Discovery scan whose stored business facts were reused as context, when one exists. */
@@ -28,7 +30,7 @@ export type PaidBaseline = {
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   onboarding_id_or_lead_id_required: 'Baseline needs a linked client lead.',
-  paid_onboarding_not_found: 'Baseline onboarding record could not be found.',
+  paid_onboarding_not_found: 'This client has no onboarding answers yet. Use Complete onboarding manually on the client page first.',
   lead_not_found: 'The linked client lead could not be found.',
   location_services_and_business_type_required: 'Add a location, service, and business category before saving client context.',
   location_and_business_type_required: 'Add a primary location and business category before saving client context.',

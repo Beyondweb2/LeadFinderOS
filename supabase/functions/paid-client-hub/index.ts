@@ -6,6 +6,8 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
 import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../src/lib/paidClient.ts";
+import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike } from "../../../src/lib/leadCrawlSummary.ts";
+import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -26,7 +28,7 @@ const HUB_LEAD_COLUMNS =
 /* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
    CLIENT stated; nothing is derived and nothing is operator workflow. */
 const HUB_ONBOARDING_COLUMNS =
-  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete";
+  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at";
 
 /* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
    than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */
@@ -74,6 +76,20 @@ async function buildBaselineReport(service: any, audit: Record<string, unknown>,
      an operator reads — the prompt is pasted into another agent's context and travels. */
   if (report) report.internal = false;
   return report;
+}
+
+/** The one onboarding row a paid client's answers live on: the newest PAID row, else the newest row
+ *  of any status for the lead (a customer who started onboarding and was then marked paid by hand). */
+// deno-lint-ignore no-explicit-any
+async function onboardingRowFor(service: any, leadId: string): Promise<Record<string, any> | null> {
+  const { data: paid, error } = await service.from("onboarding_responses").select(HUB_ONBOARDING_COLUMNS)
+    .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  if (paid) return paid;
+  const { data: latest, error: latestErr } = await service.from("onboarding_responses").select(HUB_ONBOARDING_COLUMNS)
+    .eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (latestErr) throw latestErr;
+  return latest ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -124,6 +140,15 @@ Deno.serve(async (req) => {
         .select(HUB_ONBOARDING_COLUMNS)
         .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
       if (onboardingErr) throw onboardingErr;
+      /* No PAID row: did the customer start one that never reached paid (a client marked paid by
+         hand)? Named, not used — the baseline reads paid rows only, so the hub says so and offers the
+         manual form, which adopts that row rather than creating a second one. */
+      let onboardingUnpaid: { id: string; status: string | null } | null = null;
+      if (!onboarding) {
+        const { data: other } = await service.from("onboarding_responses").select("id,status")
+          .eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        onboardingUnpaid = (other as { id: string; status: string | null } | null) ?? null;
+      }
       const auditId = (lead as Record<string, unknown>).baseline_audit_id as string | null;
       let audit: unknown = null, runs: Array<Record<string, unknown>> = [], pages: unknown[] = [];
       if (auditId) {
@@ -145,7 +170,13 @@ Deno.serve(async (req) => {
       const p = await service.from("client_pages").select(CLIENT_PAGES_COLUMNS).eq("lead_id", leadId).order("created_at", { ascending: false });
       if (p.error) throw p.error;
       pages = p.data ?? [];
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, audit, runs, pages } });
+      /* THE LEAD'S ONE CRAWL ROW, READ — never run. Whatever screen started it (Outreach, Inbox, the
+         lead popup, this hub, Website Build), this is the same row; only its summary travels, never
+         the page-by-page evidence (the hub polls this action while a baseline runs). */
+      const { data: crawlRow } = await service.from("lead_crawl_checks")
+        .select(LEAD_CRAWL_SUMMARY_COLUMNS).eq("lead_id", leadId).maybeSingle();
+      const crawl = summariseLeadCrawl(crawlRow as LeadCrawlRowLike | null);
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl } });
     }
 
     /* ══ SECTION 5 — WEBSITE BUILD WORKFLOW STATE ════════════════════════════════════════════════
@@ -225,7 +256,7 @@ Deno.serve(async (req) => {
 
       /* STORED CRAWL — read, never re-run. */
       const { data: crawl } = await service.from("lead_crawl_checks")
-        .select("url,result,created_at").eq("lead_id", leadId)
+        .select(LEAD_CRAWL_SUMMARY_COLUMNS).eq("lead_id", leadId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
       const pagesRes = await service.from("client_pages").select(CLIENT_PAGES_COLUMNS).eq("lead_id", leadId).order("created_at", { ascending: false });
@@ -245,6 +276,76 @@ Deno.serve(async (req) => {
           pages: pagesRes.data ?? [],
         },
       });
+    }
+
+    /* ══ MANUAL ONBOARDING — the form's data ══════════════════════════════════════════════════════
+       READ ONLY. The onboarding row the form edits (the paid row; else the newest row the customer
+       started for this lead), the lead fields it prefills from, and what the latest crawl DETECTED
+       — offered as suggestions the operator must tap, never filled in. */
+    if (action === "onboarding_form") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select("id,business_name,contact_name,email,phone,website,category,search_keyword,derived_town,search_location,amount_paid,status")
+        .eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead || !isPaidClient(lead as never)) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const row = await onboardingRowFor(service, leadId);
+      const { data: crawlRow } = await service.from("lead_crawl_checks").select("result").eq("lead_id", leadId).maybeSingle();
+      const si = (crawlRow as { result?: { siteInfo?: { services?: unknown; towns?: unknown } } } | null)?.result?.siteInfo ?? null;
+      return json({ ok: true, form: {
+        lead, onboarding: row,
+        detected: { services: Array.isArray(si?.services) ? si!.services : [], towns: Array.isArray(si?.towns) ? si!.towns : [] },
+      } });
+    }
+
+    /* ══ MANUAL ONBOARDING — save ════════════════════════════════════════════════════════════════
+       ⛔ THE SAME ROW, THE SAME COLUMNS the customer's onboarding writes (src/lib/manualOnboarding.ts
+       buildOnboardingPatch), plus provenance (operator_edited_at/by). One row per paid client:
+         · a paid row exists → it is updated;
+         · the customer started one that never reached "paid" (a client marked paid by hand) → that
+           row is updated and marked paid, so their own answers are kept rather than duplicated;
+         · none → one is created with client_source 'manual', exactly as create_manual does.
+       ⛔ NEVER plan_tier OR website_addon (money), NEVER a baseline, an audit, a message or an email.
+       A new row gets baseline_status 'needs_questions' — the state payment gives it — which the
+       paid backstop does NOT start (only an operator-approved question set starts). */
+    if (action === "save_onboarding") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select("id,business_name,contact_name,email,phone,website,category,notes,amount_paid,status")
+        .eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead || !isPaidClient(lead as never)) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const answers = cleanAnswers(body.answers);
+      const problems = answerProblems(answers);
+      if (problems.length) return json({ ok: false, error: "invalid_answers", detail: problems.map((p) => p.message).join(" "), problems }, 400);
+      const now = new Date().toISOString();
+      const patch = buildOnboardingPatch(answers, user.id, now);
+      const existing = await onboardingRowFor(service, leadId);
+      let saved: unknown = null;
+      if (existing) {
+        const promote = existing.status !== "paid"
+          ? { status: "paid", ...(existing.baseline_status ? {} : { baseline_status: "needs_questions" }) }
+          : {};
+        const { data, error } = await service.from("onboarding_responses")
+          .update({ ...patch, ...promote }).eq("id", existing.id).eq("lead_id", leadId)
+          .select(HUB_ONBOARDING_COLUMNS).maybeSingle();
+        if (error) throw error;
+        if (!data) return json({ ok: false, error: "onboarding_changed", detail: "The onboarding record changed while you were editing. Reload and try again." }, 409);
+        saved = data;
+      } else {
+        const { data, error } = await service.from("onboarding_responses")
+          .insert({ ...patch, lead_id: leadId, status: "paid", baseline_status: "needs_questions", client_source: "manual" })
+          .select(HUB_ONBOARDING_COLUMNS).single();
+        if (error) throw error;
+        saved = data;
+      }
+      const { patch: leadPatch, notes } = leadPatchFromAnswers(answers, lead as Record<string, unknown>, now);
+      if (notes.length) leadPatch.notes = [text((lead as { notes?: unknown }).notes), ...notes].filter(Boolean).join("\n");
+      if (Object.keys(leadPatch).length) {
+        const { error } = await service.from("outreach_leads").update(leadPatch).eq("id", leadId).eq("user_id", user.id);
+        if (error) throw error;
+      }
+      return json({ ok: true, onboarding: saved });
     }
 
     if (action === "create_manual") {

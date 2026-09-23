@@ -1669,6 +1669,7 @@ const Inbox = () => {
                       onDone={refetch}
                       className="self-center"
                       iconOnly
+                      from="inbox"
                     />
                   )}
                   {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME

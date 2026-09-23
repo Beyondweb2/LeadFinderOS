@@ -3,7 +3,7 @@ import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { isUpstreamOutage, resolveOperator } from "../_shared/operator-auth.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
-import { mergeClientContext, selectClientCrawlContext } from "../../../src/lib/clientContext.ts";
+import { mergeClientContext, selectClientCrawlContext, verifiedBuildFacts } from "../../../src/lib/clientContext.ts";
 import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
 import {
   EDITABLE_BASELINE_STATUS_FILTER,
@@ -95,16 +95,22 @@ Deno.serve(async (req) => {
     const { data: rows, error: readErr } = await q;
     if (readErr) throw readErr;
     const row = (rows ?? [])[0] as Record<string, unknown> | undefined;
-    if (!row?.id || !row.lead_id) return json({ ok: false, error: "paid_onboarding_not_found" }, 404);
+    if (!row?.id || !row.lead_id) {
+      return json({
+        ok: false, error: "paid_onboarding_not_found",
+        detail: "This client has no onboarding answers yet, so there is nothing to build the baseline from. "
+          + "Use Complete onboarding manually on the client page, then prepare the baseline.",
+      }, 404);
+    }
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, website_build")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
 
     const { data: crawlRow } = await service.from("lead_crawl_checks")
-      .select("result, created_at").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      .select("result, created_at, mode").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const { data: recentAudits } = await service.from("ai_audits").select("id").eq("lead_id", row.lead_id).order("created_at", { ascending: false }).limit(5);
     const auditIds = (recentAudits ?? []).map((audit: { id?: string }) => audit.id).filter((id): id is string => !!id);
     const { data: recentRuns } = auditIds.length
@@ -123,8 +129,11 @@ Deno.serve(async (req) => {
       website: String(lead.website || ""),
     });
     const crawlInfo = selectedCrawl?.info ?? null;
+    /* PRIORITY: onboarding (client or operator-entered) → verified build facts → lead → Discovery;
+       the crawl only DETECTS (src/lib/clientContext.ts). */
     const merged = mergeClientContext({
       onboarding: { confirmed_location: row.confirmed_location, services: row.services, services_list: row.services_list, areas_list: row.areas_list, areas_wanted: row.areas_wanted },
+      buildFacts: verifiedBuildFacts((lead as { website_build?: unknown }).website_build),
       lead: lead as Record<string, unknown>,
       discovery: discoveryAudit as Record<string, unknown> | null,
       crawl: crawlInfo,
@@ -136,6 +145,7 @@ Deno.serve(async (req) => {
       business_type: merged.business_category, location: merged.primary_location,
       services: merged.services.join(", "), services_list: merged.services, areas_list: merged.service_areas, website: merged.website,
       context_sources: { service_sources: merged.service_sources, area_sources: merged.area_sources },
+      detected: { services: merged.detected_services, areas: merged.detected_areas },
       crawl_context_at: selectedCrawl?.created_at ?? null,
       crawl_context_source: selectedCrawl?.source ?? null,
       discovery_context: discoveryAudit?.id ? { audit_id: String(discoveryAudit.id), created_at: (discoveryAudit.created_at as string | null) ?? null } : null,

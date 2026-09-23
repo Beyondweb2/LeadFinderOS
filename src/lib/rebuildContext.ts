@@ -26,6 +26,7 @@ import { parseWebsiteBuild } from './websiteBuildState.ts';
 import { buildFaultLines } from './crawlCheck.ts';
 import type { AiAuditReportData } from './aiAuditReportHtml.ts';
 import type { CrawlStoredResult } from './crawlResult.ts';
+import type { FullCrawlEvidence } from './fullCrawl.ts';
 
 /** Exactly what the edge action returns. Every field may be absent. */
 export interface RebuildContextPayload {
@@ -36,7 +37,8 @@ export interface RebuildContextPayload {
   baseline_completed_at: string | null;
   report: AiAuditReportData | null;
   discovery_audit: Record<string, unknown> | null;
-  crawl: { url?: string | null; result?: CrawlStoredResult | null; created_at?: string | null } | null;
+  /** The lead's ONE lead_crawl_checks row — whichever screen's Crawl site button wrote it. */
+  crawl: { url?: string | null; result?: CrawlStoredResult | null; created_at?: string | null; mode?: string | null; requested_from?: string | null; full_evidence?: Partial<FullCrawlEvidence> | null } | null;
   pages: Array<{ service?: string | null; town?: string | null; status?: string | null }>;
 }
 

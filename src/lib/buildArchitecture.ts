@@ -67,7 +67,12 @@ export function seedFromTemplate(template: WebsiteTemplate, rows: FactRow[]): Ar
   return out;
 }
 
-const KIND_FAMILY: Record<string, PageFamily> = { service: 'service', location: 'location', about: 'about', contact: 'contact' };
+/* The crawl's page kinds (crawlPageKind) and the full crawl's families (fullPageFamily) → the build's
+   page families. Anything unmapped (reviews, blog) is `other` — Paul decides each one. */
+const KIND_FAMILY: Record<string, PageFamily> = {
+  service: 'service', location: 'location', about: 'about', contact: 'contact',
+  faq: 'faq', pricing: 'pricing', gallery: 'gallery', legal: 'legal',
+};
 
 /** The old site's URLs Findable already stored (the crawl's checked pages), as undecided rows. */
 export function seedFromCrawl(checkedPages: Array<{ url: string; kind?: string }> | null | undefined, existing: ArchPage[]): ArchPage[] {

@@ -19,13 +19,14 @@ import type { BuildFact, FactStatus, StoredFactStatus } from './websiteBuildStat
 import type { WebsiteTemplate } from './websiteTemplates.ts';
 import { CORE_BUILD_FACTS } from './websiteTemplates.ts';
 import type { SiteInfo } from './siteInfo.ts';
+import type { FullCrawlEvidence } from './fullCrawl.ts';
 
 export interface FactsContext {
   lead: Record<string, unknown> | null;
   onboarding: Record<string, unknown> | null;
   baseline_audit: Record<string, unknown> | null;
   discovery_audit: Record<string, unknown> | null;
-  crawl: { url?: string | null; created_at?: string | null; result?: { siteInfo?: SiteInfo | null } | null } | null;
+  crawl: { url?: string | null; created_at?: string | null; mode?: string | null; result?: { siteInfo?: SiteInfo | null } | null; full_evidence?: Partial<FullCrawlEvidence> | null } | null;
 }
 
 export interface FactRow {
@@ -86,6 +87,10 @@ export function candidateFacts(ctx: FactsContext, savedCanonicalDomain = ''): Ca
     savedCanonicalDomain: savedCanonicalDomain || null,
   });
   const si = ctx.crawl?.result?.siteInfo ?? null;
+  /* The FULL manual crawl's evidence, when the latest crawl is one. Every value it adds is DETECTED
+     and names where it was read; none can be verified without Paul approving it. */
+  const full = ctx.crawl?.mode === 'full' ? (ctx.crawl.full_evidence ?? null) : null;
+  const seenList = (xs: Array<{ value: string }> | undefined, n = 6) => (xs ?? []).slice(0, n).map((x) => x.value).join(' | ');
   const lead = ctx.lead ?? {};
   const ob = ctx.onboarding ?? {};
 
@@ -122,11 +127,24 @@ export function candidateFacts(ctx: FactsContext, savedCanonicalDomain = ''): Ca
     si?.socialLinks?.length ? { key: 'social_profiles', label: 'Social profiles', value: si.socialLinks.map((s) => s.url).join(', '), source: CRAWL_SOURCE, status: 'detected', note: '' } : null,
     si?.directories?.length ? { key: 'directory_profiles', label: 'Third-party / directory profiles', value: si.directories.join(', '), source: CRAWL_SOURCE, status: 'detected', note: 'Brand names seen on the site. Get the real profile URLs before approving.' } : null,
     si?.companyNumber ? { key: 'company_number', label: 'Company number', value: si.companyNumber, source: CRAWL_SOURCE, status: 'detected', note: '' } : null,
+    full?.business?.credentials?.length ? { key: 'credentials_on_site', label: 'Credentials / memberships the current site mentions', value: seenList(full.business.credentials, 10), source: CRAWL_SOURCE, status: 'detected', note: 'A mention on the site is not proof. Confirm each one (and get the member number) before approving.' } : null,
+    full?.business?.guarantees?.length ? { key: 'guarantees_on_site', label: 'Guarantees / warranties the current site states', value: seenList(full.business.guarantees), source: CRAWL_SOURCE, status: 'detected', note: 'Only publish a guarantee the client confirms they still offer.' } : null,
+    full?.business?.experience?.length ? { key: 'experience_on_site', label: 'Experience / established claims on the current site', value: seenList(full.business.experience), source: CRAWL_SOURCE, status: 'detected', note: 'Figures go stale — confirm the current number of years.' } : null,
+    full?.business?.people?.length ? { key: 'people_on_site', label: 'People named on the current site', value: seenList(full.business.people), source: CRAWL_SOURCE, status: 'detected', note: 'Confirm they are happy to be named.' } : null,
+    full?.business?.profiles?.length ? { key: 'profiles_on_site', label: 'Third-party profile links on the current site', value: full.business.profiles.slice(0, 12).map((p) => p.value).join(', '), source: CRAWL_SOURCE, status: 'detected', note: 'Check each link still resolves to this business.' } : null,
+    full?.business?.logo ? { key: 'logo_on_site', label: 'Logo on the current site', value: full.business.logo, source: CRAWL_SOURCE, status: 'detected', note: 'Reuse only if the client owns it.' } : null,
     /* ⛔ NOT the onboarding GBP answers: "yes_all" is a consent / access status, not something a
        website states. It was listed as a publishable fact on the first production run (SC Plumbing,
        2026-09-23). A Google profile belongs on the site only as a verified review-profile URL. */
   ];
-  return list.filter((c): c is Candidate => !!c);
+  /* ⛔ WHO TYPED THE ONBOARDING ANSWERS IS SAID OUT LOUD. Answers the operator entered on the
+     client's behalf are used exactly like the client's own, but the source never claims the client
+     wrote them. */
+  const operatorEntered = String((ob as { client_source?: unknown }).client_source ?? '') === 'manual'
+    || !!String((ob as { operator_edited_at?: unknown }).operator_edited_at ?? '').trim();
+  const onboardingLabel = FACT_SOURCE_LABELS.onboarding;
+  return list.filter((c): c is Candidate => !!c)
+    .map((c) => (operatorEntered && c.source === onboardingLabel ? { ...c, source: onboardingLabel + ' (entered by operator)' } : c));
 }
 
 /**
