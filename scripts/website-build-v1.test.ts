@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { normaliseWebsiteBuild, parseWebsiteBuild, websiteBuildStages, type WebsiteBuildState } from '../src/lib/websiteBuildState.ts';
 import { MCL_TEMPLATE, WEBSITE_TEMPLATES, templateById } from '../src/lib/websiteTemplates.ts';
 import { candidateFacts, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactsContext } from '../src/lib/buildFacts.ts';
-import { checkArchitecture, parsePageLines, parseRedirectText, redirectsFromPages, seedFromCrawl, seedFromTemplate } from '../src/lib/buildArchitecture.ts';
+import { applyAction, checkArchitecture, parsePageLines, parseRedirectText, redirectsFromPages, seedFromCited, seedFromCrawl, seedFromTemplate } from '../src/lib/buildArchitecture.ts';
 import { buildPack, FORBIDDEN_COMMAND_PATTERNS, MARK, suggestCloudflareProject, suggestRepoName } from '../src/lib/buildPack.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 import { PAGE_ACTIONS, PAGE_FAMILIES } from '../src/lib/websiteBuildState.ts';
@@ -264,6 +264,32 @@ console.log('\n── THE SAVE RULE ──');
   ok((n.facts as Array<{ status: string }>)[0].status === 'detected', 'an unknown fact status falls to NEEDS APPROVAL, never verified');
   ok((n.notes as string).length === 8000, 'lengths are capped');
   ok(parseWebsiteBuild({ pages: Array.from({ length: 500 }, (_, k) => ({ title: 'p' + k })) }).pages.length === 200, 'page count is capped');
+}
+
+console.log('\n── PASS 2 — FOUND ON THE FIRST PRODUCTION RUN (SC Plumbing, 2026-09-23) ──');
+{
+  const c = ctx({ onboarding: { ...ctx().onboarding!, gbp_exists: 'yes_all' } });
+  const rows = facts(parseWebsiteBuild(READY), c);
+  ok(!rows.some((r) => r.key === 'gbp' || /yes_all/.test(r.value)), 'the onboarding GBP consent answer is never offered as a website fact');
+  const order = rows.map((r) => r.status);
+  const firstVerified = order.indexOf('verified'), lastDetected = order.lastIndexOf('detected');
+  ok(lastDetected < firstVerified, 'facts awaiting a decision are listed first');
+
+  const cited = seedFromCited([{ url: 'https://scplumbing.co.uk/emergency-plumber', questions: ['best emergency plumber in Tamworth UK'] }, { url: 'https://scplumbing.co.uk', questions: [] }], []);
+  ok(cited.length === 2 && cited.every((p) => p.action === 'undecided'), 'URLs AI engines cited are seeded, undecided');
+  ok(/AI engines cited this URL for "best emergency plumber in Tamworth UK"/.test(cited[0].notes), 'and each says which question it was cited for');
+  ok(seedFromCited([{ url: 'https://scplumbing.co.uk/emergency-plumber' }], cited).length === 0, 'a URL already in the plan is not added twice');
+
+  const kept = applyAction(cited[0], 'keep');
+  ok(kept.path === '/emergency-plumber' && kept.action === 'keep', 'choosing Keep fills the new path from the old URL');
+  ok(!/keep it, or redirect/.test(kept.notes) && /AI engines cited/.test(kept.notes), 'the "decide" hint is spent, the evidence stays');
+  const crawlRow = seedFromCrawl([{ url: 'https://x.co.uk/a', kind: 'other' }], [])[0];
+  ok(applyAction(crawlRow, 'remove').notes === '', 'a crawl seeding hint is cleared once decided');
+  ok(applyAction({ ...crawlRow, path: '/custom/' }, 'keep').path === '/custom/', 'Keep never overwrites a path Paul typed');
+
+  const removed = checkArchitecture([applyAction(crawlRow, 'remove')], []);
+  ok(removed.some((i) => i.level === 'warning' && /no redirect, so they will show "not found"/.test(i.message)), 'removing an old page with no redirect is flagged');
+  ok(!checkArchitecture([applyAction(crawlRow, 'remove')], parseRedirectText('/a -> /b/ | moved')).some((i) => /not found/.test(i.message)), 'and the flag clears once a redirect exists');
 }
 
 console.log('\n── SAFETY — the page reads one action and writes one ──');

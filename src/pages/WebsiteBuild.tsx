@@ -18,7 +18,7 @@ import {
 } from '@/lib/websiteBuildState';
 import { WEBSITE_TEMPLATES, templateById } from '@/lib/websiteTemplates';
 import { candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
-import { checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
+import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
 import { buildPack, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -63,7 +63,7 @@ function Section({ title, children, right }: { title: string; children: ReactNod
 function Choice<T extends string>({ value, options, labels, onChange, name }: { value: T | ''; options: readonly T[]; labels: Record<T, string>; onChange: (v: T) => void; name: string }) {
   return <div className="grid gap-2 sm:grid-cols-2">{options.map((o) =>
     <label key={o} className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${value === o ? 'border-primary bg-primary/5' : ''}`}>
-      <input type="radio" name={name} className="mt-1" checked={value === o} onChange={() => onChange(o)} />
+      <input type="radio" name={name} value={o} aria-label={labels[o]} className="mt-1" checked={value === o} onChange={() => onChange(o)} />
       <span>{labels[o]}</span>
     </label>)}</div>;
 }
@@ -213,7 +213,7 @@ export default function WebsiteBuild() {
         {stages.map((s) => <button key={s.stage} type="button" onClick={() => goStep(s.stage)}
           className={`rounded-md border p-2 text-left text-xs transition ${step === s.stage ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'} ${!s.applicable ? 'opacity-60' : ''}`}>
           <div className="flex items-center gap-1.5 font-medium"><StatusDot done={s.done} applicable={s.applicable} />{STAGE_LABELS[s.stage]}</div>
-          <div className="mt-1 line-clamp-2 break-all text-muted-foreground">{s.stage === 'intake' ? `${summary.verified} verified · ${summary.awaiting} to confirm` : s.stage === 'capture' && captureOn && state.capture.url_count != null ? `${state.capture.url_count} URLs · ${state.capture.asset_count ?? 0} assets` : s.detail}</div>
+          <div className="mt-1 line-clamp-2 break-all text-muted-foreground">{s.stage === 'intake' ? `${summary.verified} verified · ${summary.awaiting} to confirm` : s.stage === 'capture' && !state.build_mode ? 'Choose the build route first' : s.stage === 'capture' && captureOn && state.capture.url_count != null ? `${state.capture.url_count} URLs · ${state.capture.asset_count ?? 0} assets` : s.detail}</div>
         </button>)}
       </div>
     </CardContent></Card>
@@ -227,7 +227,7 @@ export default function WebsiteBuild() {
         {state.build_mode === 'template' && <div className="space-y-2">
           <Label>Template</Label>
           {WEBSITE_TEMPLATES.map((t) => <label key={t.id} className={`block cursor-pointer rounded-md border p-3 ${state.template_id === t.id ? 'border-primary bg-primary/5' : ''}`}>
-            <div className="flex items-start gap-2"><input type="radio" name="tpl" className="mt-1" checked={state.template_id === t.id} onChange={() => set('template_id', t.id)} />
+            <div className="flex items-start gap-2"><input type="radio" name="tpl" value={t.id} aria-label={t.name} className="mt-1" checked={state.template_id === t.id} onChange={() => set('template_id', t.id)} />
               <div className="min-w-0"><p className="font-medium">{t.name}</p><p className="text-xs text-muted-foreground">{t.description}</p>
                 <details className="mt-2 text-xs"><summary className="cursor-pointer text-primary">Template profile</summary>
                   <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
@@ -293,12 +293,13 @@ export default function WebsiteBuild() {
 
     {/* ══ ARCHITECTURE ═════════════════════════════════════════════════════════════════════ */}
     {step === 'architecture' && <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
-      checkedPages={payload.crawl?.result?.signals?.checkedPages ?? []} update={update} goStep={goStep} toast={toast} />}
+      checkedPages={payload.crawl?.result?.signals?.checkedPages ?? []} cited={evidence.signals} update={update} goStep={goStep} toast={toast} />}
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
       <ProjectDetails state={state} set={set} businessName={businessName} template={template} existingSiteUrl={existingSiteUrl} />
       <Section title="Build Pack" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — nothing is stored, so it is always current.</span>}>
+        <div className="rounded bg-muted p-3 text-xs"><p className="font-medium">Work down the list, in order.</p><ul className="mt-1 list-disc space-y-0.5 pl-4"><li><b>PowerShell</b> items: open PowerShell, paste one block at a time, read what it prints.</li><li><b>Claude Code prompt</b> items: open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} — desktop app → Code → choose that folder — then paste the prompt.</li><li>Paste back what each step tells you to (repository URL, preview URL, capture counts) — this page saves as you type.</li></ul></div>
         {pack.filter((p) => p.applicable).map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}
         {pack.filter((p) => !p.applicable).map((p) => <p key={p.id} className="text-xs text-muted-foreground">{p.title} — not needed for this build.</p>)}
       </Section>
@@ -406,7 +407,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
   return <Section title="Client Build Facts" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'detected', 'missing', 'verified'] as const).map((f) =>
     <button key={f} type="button" onClick={() => setFilter(f)} className={`rounded-full border px-2 py-0.5 ${filter === f ? 'border-primary bg-primary/10' : ''}`}>{f === 'all' ? `All ${rows.length}` : f === 'detected' ? `Need approval ${s.awaiting}` : f === 'missing' ? `Missing ${s.missing}` : `Verified ${s.verified}`}</button>)}</div>}>
     <p className="rounded bg-muted p-2 text-xs"><b>Verified facts may be used. Unverified facts must not be published.</b> Preloaded from onboarding, the client record, the baseline and the stored crawl — nothing was fetched. Edit a value, then Approve it.</p>
-    {s.requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required by the template and not verified yet: {s.requiredMissing.join(', ')}</p>}
+    {s.requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required for {template ? 'the template' : 'any build'} and not verified yet (marked *): {s.requiredMissing.join(', ')}</p>}
     <div className="space-y-2">{shown.map((r) => {
       const draft = valueOf(r); const changed = draft !== r.value;
       return <div key={r.key} className="rounded-md border p-2">
@@ -441,9 +442,9 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
   </Section>;
 }
 
-function ArchitectureSection({ state, template, rows, issues, checkedPages, update, goStep, toast }: {
+function ArchitectureSection({ state, template, rows, issues, checkedPages, cited, update, goStep, toast }: {
   state: WebsiteBuildState; template: ReturnType<typeof templateById>; rows: FactRow[];
-  issues: ReturnType<typeof checkArchitecture>; checkedPages: Array<{ url: string; kind?: string }>;
+  issues: ReturnType<typeof checkArchitecture>; checkedPages: Array<{ url: string; kind?: string }>; cited: Array<{ url: string; questions: string[] }>;
   update: (fn: (s: WebsiteBuildState) => WebsiteBuildState) => void; goStep: (s: Stage) => void;
   toast: ReturnType<typeof useToast>['toast'];
 }) {
@@ -458,9 +459,10 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, upda
 
   return <>
     <Section title="Page architecture" right={<span className="text-xs text-muted-foreground">{state.pages.length} page(s){counts.length ? ' · ' + counts.map(([a, n]) => `${n} ${PAGE_ACTION_LABELS[a].toLowerCase().replace('…', '')}`).join(' · ') : ''}</span>}>
-      <p className="text-xs text-muted-foreground">One primary page per important intent. For every old page or intent choose keep, create, consolidate, redirect or remove. Location pages only where there is genuinely local content — never cloned town pages.</p>
+      <p className="text-xs text-muted-foreground">One primary page per important intent. For every old page or intent choose keep, create, consolidate, redirect or remove. Location pages only where there is genuinely local content — never cloned town pages.{cited.length > 0 ? ' Start with the URLs AI engines cited — they are the old pages most worth keeping or redirecting carefully.' : ''}</p>
       <div className="flex flex-wrap gap-2">
         {template && <Button size="sm" variant="outline" onClick={() => addPages(seedFromTemplate(template, rows).filter((n) => !state.pages.some((p) => p.path && p.path === n.path)), 'From the template, for verified services only.')}>Add template pages (verified services only)</Button>}
+        {cited.length > 0 && <Button size="sm" variant="outline" onClick={() => addPages(seedFromCited(cited, state.pages), 'Old URLs AI engines cited in the baseline — decide each one.')}>Add URLs AI engines cited ({cited.length})</Button>}
         {checkedPages.length > 0 && <Button size="sm" variant="outline" onClick={() => addPages(seedFromCrawl(checkedPages, state.pages), 'Old URLs from the stored crawl — decide each one.')}>Add old URLs from stored crawl ({checkedPages.length})</Button>}
         <Button size="sm" variant="outline" onClick={() => setPasteOpen((o) => !o)}>Paste page list from capture</Button>
         <Button size="sm" variant="outline" onClick={() => setPages((ps) => [...ps, { id: newPageId(), family: 'other', title: '', path: '', action: 'undecided', old_url: '', target: '', notes: '' }])}><Plus className="mr-1 h-3.5 w-3.5" />Add page</Button>
@@ -470,7 +472,7 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, upda
       {state.pages.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs">
         <thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-1">Action</th><th className="py-1 pr-1">Family</th><th className="py-1 pr-1">New path</th><th className="py-1 pr-1">Title</th><th className="py-1 pr-1">Old URL</th><th className="py-1 pr-1">Goes to (consolidate / redirect)</th><th className="py-1 pr-1">Notes</th><th /></tr></thead>
         <tbody>{state.pages.map((p) => <tr key={p.id} className={`border-b align-top ${p.action === 'undecided' ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
-          <td className="py-1 pr-1"><select className={sel} value={p.action} onChange={(e) => patch(p.id, { action: e.target.value as ArchPage['action'] })}>{PAGE_ACTIONS.map((a) => <option key={a} value={a}>{PAGE_ACTION_LABELS[a]}</option>)}</select></td>
+          <td className="py-1 pr-1"><select className={sel} value={p.action} onChange={(e) => setPages((ps) => ps.map((x) => x.id === p.id ? applyAction(x, e.target.value as ArchPage['action']) : x))}>{PAGE_ACTIONS.map((a) => <option key={a} value={a}>{PAGE_ACTION_LABELS[a]}</option>)}</select></td>
           <td className="py-1 pr-1"><select className={sel} value={p.family} onChange={(e) => patch(p.id, { family: e.target.value as ArchPage['family'] })}>{PAGE_FAMILIES.map((f) => <option key={f} value={f}>{PAGE_FAMILY_LABELS[f]}</option>)}</select></td>
           <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.path} placeholder="/services/…/" disabled={p.action === 'remove'} onChange={(e) => patch(p.id, { path: e.target.value })} /></td>
           <td className="py-1 pr-1"><Input className="h-8 text-xs" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} /></td>

@@ -174,6 +174,8 @@ export function checkArchitecture(pages: ArchPage[], redirects: Redirect[]): Arc
   if (toHome >= 3 && toHome / Math.max(1, redirects.length) > 0.3) {
     issues.push({ level: 'warning', message: `${toHome} of ${redirects.length} redirects go to the homepage. Send each old page to its closest real match instead.` });
   }
+  const lost = pages.filter((p) => p.action === 'remove' && p.old_url && !froms.has(pathKey(p.old_url))).map((p) => toPath(p.old_url));
+  if (lost.length) issues.push({ level: 'warning', message: `${lost.length} removed old page(s) have no redirect, so they will show "not found": ${some(lost)}. Redirect any that had visitors or links to the closest new page.` });
   const locations = pages.filter((p) => p.family === 'location' && (p.action === 'create' || p.action === 'keep')).length;
   if (locations > 12) issues.push({ level: 'warning', message: `${locations} location pages. Only keep towns with genuinely different local content — no doorway pages.` });
   return issues;
@@ -199,4 +201,36 @@ export function parsePageLines(text: string, actions: readonly string[], familie
     }));
   }
   return out;
+}
+
+/**
+ * The client's own URLs that AI engines CITED while answering the frozen baseline questions
+ * (the do-not-break list), as undecided rows. These are the old addresses that most need a
+ * deliberate keep-or-redirect decision; the stored crawl samples only a handful of pages and
+ * missed three of SC Plumbing's four on the first production run (2026-09-23).
+ */
+export function seedFromCited(signals: Array<{ url: string; questions?: string[] }> | null | undefined, existing: ArchPage[]): ArchPage[] {
+  const have = new Set(existing.map((p) => pathKey(p.old_url || p.path)));
+  const out: ArchPage[] = [];
+  for (const s of signals ?? []) {
+    const key = pathKey(s.url);
+    if (!key || have.has(key)) continue;
+    have.add(key);
+    const q = (s.questions ?? []).slice(0, 2).map((x) => '"' + x + '"').join('; ');
+    out.push(blankPage({ family: key === '/' ? 'homepage' : 'other', title: key === '/' ? 'Home' : '', old_url: s.url, action: 'undecided',
+      notes: 'AI engines cited this URL' + (q ? ' for ' + q : '') + ' — keep it, or redirect it to its closest new page.' }));
+  }
+  return out;
+}
+
+/** When Paul picks an action, fill what it obviously implies — never what it does not. */
+export function applyAction(p: ArchPage, action: ArchPage['action']): ArchPage {
+  const next: ArchPage = { ...p, action };
+  /* Keeping an old page means the same address on the new site. */
+  if (action === 'keep' && !p.path && p.old_url) next.path = toPath(p.old_url).split('?')[0];
+  /* The seeding hint is spent once a decision is made. */
+  if (p.action === 'undecided' && action !== 'undecided' && /^(Seeded from the stored crawl|AI engines cited)/.test(p.notes)) {
+    next.notes = /^AI engines cited/.test(p.notes) ? p.notes.replace(/ — keep it, or redirect.*$/, '') : '';
+  }
+  return next;
 }
