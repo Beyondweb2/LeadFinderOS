@@ -228,8 +228,27 @@ export function ColdCallPlaybookSheet({ leadId, open, onOpenChange }: { leadId: 
 }
 
 /** The labelled button + its panel. The ONE entry point Inbox and Outreach both render. */
-export function ColdCallPlaybookButton({ leadId, className, compact }: { leadId: string; className?: string; compact?: boolean }) {
+export function ColdCallPlaybookButton({ leadId, className, compact, iconOnly }: { leadId: string; className?: string; compact?: boolean; iconOnly?: boolean }) {
   const [open, setOpen] = useState(false);
+  /* Icon-only sits in the Inbox header row and the Outreach row's contact icons (Paul, 2026-09-23):
+     the caller passes that row's own button class so it matches its siblings; the label is carried
+     by title/aria-label exactly as every sibling's is. */
+  if (iconOnly) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          title={COLD_CALL_PLAYBOOK_LABEL}
+          aria-label={COLD_CALL_PLAYBOOK_LABEL}
+          className={className}
+        >
+          <ScrollText className="h-4 w-4" />
+        </button>
+        {open && <ColdCallPlaybookSheet leadId={leadId} open={open} onOpenChange={setOpen} />}
+      </>
+    );
+  }
   return (
     <>
       <button

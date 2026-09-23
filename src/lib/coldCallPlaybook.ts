@@ -352,6 +352,14 @@ function proofFor(f: SiteFinding, signals: CrawlSignals, evidence: SiteEvidenceF
   }
 }
 
+/** host + path, no scheme, no www, no trailing slash — enough to tell "the homepage" apart. */
+const pageKey = (u: string): string => clean(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+
+function isOnlyHomepage(urls: string[], homeUrl: string): boolean {
+  const home = pageKey(homeUrl);
+  return urls.length > 0 && !!home && urls.every((u) => pageKey(u) === home || !pageKey(u).includes('/'));
+}
+
 interface FindingsOutcome {
   findings: PlaybookFinding[];
   note: string | null;
@@ -373,13 +381,28 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
   }
   const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
   if (found) {
-    const findings = found.candidates.slice(0, MAX_SITE_FINDINGS).map((f) => ({
-      kind: f.kind,
-      title: FINDING_TITLES[f.kind],
-      explanation: sentence(f.clause),
-      whyItMayMatter: clean(f.rest),
-      proof: proofFor(f, found.signals, found.evidence),
-    }));
+    const findings = found.candidates.slice(0, MAX_SITE_FINDINGS).map((f) => {
+      /* ⛔ THE THIN PAGE IS SOMETIMES THE HOMEPAGE. siteFindings.ts says "one of the service pages";
+         read aloud on a call next to proof that is the homepage URL, that is a false statement to
+         the owner (The Royal Locksmiths, 2026-09-23: the only thin page was the homepage). Said as
+         the homepage when every thin URL is the homepage; the WhatsApp copy is left as it is. */
+      if (f.kind === 'thin_pages' && isOnlyHomepage(found.signals.thinPageUrls ?? [], found.signals.homeUrl)) {
+        return {
+          kind: f.kind,
+          title: 'Homepage light on detail',
+          explanation: 'Your homepage is really light on detail.',
+          whyItMayMatter: 'It says what you do, but there may not be much useful information there for AI to work with when somebody asks a more specific question.',
+          proof: proofFor(f, found.signals, found.evidence),
+        };
+      }
+      return {
+        kind: f.kind,
+        title: FINDING_TITLES[f.kind],
+        explanation: sentence(f.clause),
+        whyItMayMatter: clean(f.rest),
+        proof: proofFor(f, found.signals, found.evidence),
+      };
+    });
     return { findings, note: null, crawlAtMs: found.source.createdAtMs, crawlStale: false };
   }
   if (newestMs === null) {

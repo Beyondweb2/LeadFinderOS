@@ -2677,18 +2677,6 @@ export function OutreachTable({
                                     <Phone className="h-4 w-4 text-green-500" />
                                     WhatsApp thread
                                   </DropdownMenuItem>
-                                  {/* Read-only call guide from this lead's stored evidence. Opens the
-                                      ONE shared panel Inbox also uses; the panel is rendered once at
-                                      the foot of the table so closing this menu cannot unmount it. */}
-                                  {!isDemoLead(lead.id) && (
-                                    <DropdownMenuItem
-                                      className="flex items-center gap-2 cursor-pointer"
-                                      onClick={() => setPlaybookLeadId(lead.id)}
-                                    >
-                                      <ScrollText className="h-4 w-4 text-sky-500" />
-                                      {COLD_CALL_PLAYBOOK_LABEL}
-                                    </DropdownMenuItem>
-                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                               <button
@@ -2698,6 +2686,19 @@ export function OutreachTable({
                               >
                                 <MessageSquare className="h-4 w-4" />
                               </button>
+                              {/* Cold Call Playbook — beside the contact icons (Paul, 2026-09-23). Opens
+                                  the ONE shared panel, rendered once at the foot of the table. */}
+                              {!isDemoLead(lead.id) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setPlaybookLeadId(lead.id); }}
+                                  className="p-1.5 rounded-md hover:bg-sky-500/10 text-sky-500 hover:text-sky-400 transition-colors"
+                                  title={COLD_CALL_PLAYBOOK_LABEL}
+                                  aria-label={COLD_CALL_PLAYBOOK_LABEL}
+                                >
+                                  <ScrollText className="h-4 w-4" />
+                                </button>
+                              )}
                             </>
                           ) : phoneFetchStatus[lead.id] === 'pending' ? (
                             <span className="text-muted-foreground text-xs flex items-center gap-1">
