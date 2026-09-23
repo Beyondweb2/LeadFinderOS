@@ -116,7 +116,10 @@ function summariseRow(row: LeadCrawlRowLike | null | undefined): LeadCrawlSummar
       credentials: full?.business?.credentials?.length ?? 0, technical: full?.technical?.length ?? 0, profiles: full?.business?.profiles?.length ?? 0,
     },
     running: null, jobId: row.job_id ?? full?.job_id ?? null,
-    label: `${kind} · ${CRAWL_STATUS_LABELS[status].toLowerCase()} · ${pagesText} · ${when(crawledAt)}`,
+    /* ⛔ NO TIME IN THE LABEL. paid-client-hub builds it on the server (UTC) while the card renders
+       crawledAt in the viewer's own time zone beside it — two clocks on one card (seen on BS4,
+       2026-09-23: "10:32" under "17:32"). The card owns the time. */
+    label: `${kind} · ${CRAWL_STATUS_LABELS[status].toLowerCase()} · ${pagesText}`,
   };
 }
 

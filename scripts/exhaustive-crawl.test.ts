@@ -265,6 +265,7 @@ console.log('\n── THE RESULT — the lead\'s ONE canonical row, honest total
   ok(lead.full_evidence.sitemaps.offSiteCount === CHILDREN, 'off-site sitemap URLs are counted');
   const s = summariseLeadCrawl(lead);
   ok(s.mode === 'full' && s.status === 'complete_with_failures' && /^Full crawl · complete with failures · /.test(s.label), `Paid Clients label: ${s.label.slice(0, 90)}…`);
+  ok(!/\d{1,2}:\d{2}/.test(s.label), 'the label carries no clock time (built on a UTC server; the card shows the viewer\'s local time)');
 }
 
 console.log('\n── 11. RE-CRAWL REDISCOVERS THE SITE ──');
