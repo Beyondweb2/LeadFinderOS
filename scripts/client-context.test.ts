@@ -37,13 +37,16 @@ const oldV2 = selectClientCrawlContext({ website: 'https://example.test', now, l
 
 const checks: Array<[string, boolean]> = [
   ['onboarding location wins', context.primary_location === 'Canterbury'],
-  ['all services are preserved and deduplicated', context.services.join('|') === 'Locksmithing|Emergency entry|Key cutting|UPVC door repair'],
-  ['all service areas are preserved and deduplicated', context.service_areas.join('|') === 'Canterbury|Whitstable|Herne Bay|Faversham'],
+  /* 2026-09-23: the crawl no longer MERGES into what the baseline measures — it is returned as
+     detected suggestions (src/lib/clientContext.ts). These three assertions changed on purpose. */
+  ['approved services are preserved and deduplicated; the crawl is not merged', context.services.join('|') === 'Locksmithing|Emergency entry|Key cutting'],
+  ['approved service areas are preserved and deduplicated; the crawl is not merged', context.service_areas.join('|') === 'Canterbury|Whitstable'],
+  ['crawl-only services and towns come back as detected suggestions', context.detected_services.join('|') === 'UPVC door repair' && context.detected_areas.join('|') === 'Herne Bay|Faversham'],
   ['category uses lead data', context.business_category === 'Locksmiths'],
   ['business name and country use lead data', context.business_name === 'MCLocksmiths centre' && context.country === 'UK'],
   ['onboarding area has onboarding source', context.area_sources.Canterbury?.includes('onboarding') === true],
-  ['crawl area has website source', context.area_sources['Herne Bay']?.includes('website') === true],
-  ['crawl service has website source', context.service_sources['UPVC door repair']?.includes('website') === true],
+  ['a crawl-only area carries no approved source', context.area_sources['Herne Bay'] === undefined],
+  ['a crawl-only service carries no approved source', context.service_sources['UPVC door repair'] === undefined],
   ['usable run-level crawl wins over lead cache', runPreferred?.source === 'run' && runPreferred.info?.towns?.[0] === 'Run town'],
   ['failed run crawl falls back to fresh compatible lead cache', leadFallback?.source === 'lead' && leadFallback.info?.towns?.[0] === 'Lead town'],
   ['stale crawl is optional and ignored', stale === null],

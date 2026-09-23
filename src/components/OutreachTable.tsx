@@ -2630,7 +2630,7 @@ export function OutreachTable({
                             <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
                           )}
                           {!isDemoLead(lead.id) && (
-                            <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} onDone={() => void refetchCrawls()} iconOnly />
+                            <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} onDone={() => void refetchCrawls()} iconOnly from="outreach" />
                           )}
                           {lead.phone ? (
                             <>

@@ -22,13 +22,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   detectClientRendered, hasH1, hasJsonLd, wordCount, looksChallenged,
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, selectCrawlUrls, crawlPageKind,
-  DUP_MIN_CLUSTER, DUP_SIMILARITY, THIN_WORDS, MAX_CRAWL_PAGES, CRAWL_CHECK_VERSION, type CrawlSignals,
+  DUP_MIN_CLUSTER, DUP_SIMILARITY, THIN_WORDS, CRAWL_CHECK_VERSION, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
 import { extractSiteInfo, SITE_INFO_VERSION, type SiteInfo } from "../../../src/lib/siteInfo.ts";
 import {
   buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS,
   type EvidencePage, type SiteEvidence,
 } from "../../../src/lib/siteEvidence.ts";
+import {
+  resolveCrawlMode, profileFor, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
+  orderSitemapChildren, selectFullCrawlUrls, leanHtml, buildFullCrawlEvidence, mayReplaceLeadCrawl,
+  type FullCrawlEvidence, type FullCrawlInputPage,
+} from "../../../src/lib/fullCrawl.ts";
+import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,23 +55,14 @@ const SEARCH_CRAWLERS: ReadonlyArray<{ label: string; ua: string }> = [
   { label: "Claude-User", ua: "Mozilla/5.0 (compatible; Claude-User/1.0; +https://www.anthropic.com/claude-user)" },
   { label: "PerplexityBot", ua: "Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)" },
 ];
-const FETCH_TIMEOUT_MS = 6_000;
-/* ⛔ THE CRAWL IS BOUNDED THREE WAYS AND ALL THREE ARE LOAD-BEARING, because this runs across the
-   whole outreach book and inside the audit-finalise path's wall clock.
-     · PAGES — how many of their pages we read. Raised 8 → 12 with this phase so the evidence has a
-       services page, a couple of service pages, a locations page and contact/about to read, which is
-       what the domain findings need. Not higher: for a 300-page site we want the STRUCTURE, not a
-       forensic crawl.
-     · FETCHES — the hard ceiling on requests, whatever the page budget spends. 4 crawler probes +
-       robots + up to MAX_SITEMAP_FETCHES sitemaps + 12 pages.
-     · MILLISECONDS — the wall clock. A site that answers slowly must never eat the edge runtime, so
-       every fetch past the deadline is skipped rather than queued. */
-const CRAWL_FETCH_BUDGET = 22;
-const CRAWL_DEADLINE_MS = 35_000;
-/** Simultaneous page fetches. Twelve pages in two waves, which stays polite to a small host. */
-const FETCH_CONCURRENCY = 6;
-/** Sitemap documents read per crawl: the robots-declared one(s), /sitemap.xml, and index children. */
-const MAX_SITEMAP_FETCHES = 4;
+/* ⛔ THE CRAWL IS BOUNDED THREE WAYS AND ALL THREE ARE LOAD-BEARING — pages, fetches, milliseconds.
+   The numbers live in src/lib/fullCrawl.ts as TWO PROFILES (2026-09-23):
+     · STANDARD_CRAWL — the budget this function has always had (12 pages, 22 fetches, 35 s, 4
+       sitemaps). Every AUTOMATED caller gets it: the audit-finalise crawl across the whole book and
+       the report's background populate. Unchanged by the full-crawl work.
+     · FULL_CRAWL — a user-initiated "Crawl site" / "Re-crawl site" button, any screen. Operator-only
+       and opt-in (`mode: "full"`); an internal caller cannot ask for it.
+   Every fetch past the deadline is skipped rather than queued, in both profiles. */
 /** ⛔ BYTES READ PER RESPONSE. crawl-check had NO cap at all — a site serving a 40MB HTML file (or a
  *  misconfigured one streaming forever) could take the whole edge runtime down with it. The body is
  *  read incrementally and the stream cancelled at the cap; a truncated page still answers every
@@ -112,9 +109,9 @@ async function readCapped(res: Response): Promise<string> {
 /** One GET with a given crawler UA and a hard timeout. Never throws. `blocked` = the site refused
  *  this crawler: a 4xx/5xx, a `cf-mitigated: challenge` header, or a Cloudflare/challenge body even
  *  on a 200. `responded` = we got ANY HTTP status (distinguishes a block from the site being down). */
-async function get(url: string, ua: string): Promise<Fetched> {
+async function get(url: string, ua: string, timeoutMs: number): Promise<Fetched> {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": ua, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
@@ -171,18 +168,9 @@ function sitemapsFromRobots(body: string): string[] {
   return [...new Set(out)];
 }
 
-/** Same-origin absolute URLs from a page's <a href> tags — the sitemap fallback. */
-function internalLinks(html: string, origin: string): string[] {
-  const out = new Set<string>();
-  const re = /<a\b[^>]*href=["']([^"'#]+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    try {
-      const u = new URL(m[1], origin);
-      if (u.origin === origin && /^https?:$/.test(u.protocol)) out.add(u.origin + u.pathname);
-    } catch { /* skip */ }
-  }
-  return [...out];
+/** The origin of the served address, falling back to the requested one when it will not parse. */
+function servedOriginOf(servedUrl: string, fallback: string): string {
+  try { return new URL(servedUrl).origin; } catch { return fallback; }
 }
 
 function median(nums: number[]): number {
@@ -234,6 +222,12 @@ Deno.serve(async (req) => {
        must never fall through as a real one, and on a spending path absent means "do not" — but this
        is not a spending path, it is a fetch path, and the absent case here is the ordinary one). */
     const deep: boolean = body?.deep !== false;
+    /* ⛔ THE PROFILE. FULL only when an OPERATOR asks for exactly `mode: "full"` (every manual Crawl
+       site / Re-crawl site button does); every internal caller, and every absent or unknown value,
+       is STANDARD — the budget this function always had. See src/lib/fullCrawl.ts. */
+    const mode = resolveCrawlMode(body?.mode, !internal);
+    const profile = profileFor(mode);
+    const requestedFrom = mode === "full" ? cleanRequestSource(body?.requested_from) : null;
 
     // lead_id → the lead's website + town (search_location, then address).
     if (leadId && !rawUrl) {
@@ -266,11 +260,20 @@ Deno.serve(async (req) => {
        the branches below are reordered later. A refused fetch returns the same never-throws shape a
        failed one does, so nothing downstream needs a second code path for "we ran out". */
     let fetchesUsed = 0;
-    const outOfBudget = () => fetchesUsed >= CRAWL_FETCH_BUDGET || (Date.now() - started) >= CRAWL_DEADLINE_MS;
-    const budgeted = async (url: string, ua: string): Promise<Fetched> => {
+    let hitFetchBudget = false, hitDeadline = false;
+    const outOfBudget = () => {
+      if (fetchesUsed >= profile.fetchBudget) { hitFetchBudget = true; return true; }
+      if ((Date.now() - started) >= profile.deadlineMs) { hitDeadline = true; return true; }
+      return false;
+    };
+    const budgeted = async (url: string, ua: string, samplePage = false): Promise<Fetched> => {
       if (outOfBudget()) return { url, finalUrl: url, ok: false, status: 0, xRobotsTag: null, html: "", blocked: false, responded: false };
       fetchesUsed++;
-      return await get(url, ua);
+      const r = await get(url, ua, profile.fetchTimeoutMs);
+      /* FULL mode keeps only the lean SAMPLE page (scripts/styles/SVG stripped, JSON-LD kept): 60 raw
+         Wix pages would be ~40 MB held at once. The homepage probes stay raw in both modes, because
+         the client-rendered check reads the scripts. STANDARD keeps every byte exactly as before. */
+      return mode === "full" && samplePage && r.html ? { ...r, html: leanHtml(r.html) } : r;
     };
 
     // Probe the homepage AS EACH SEARCH CRAWLER (parallel): which are blocked, and which lets us read
@@ -308,6 +311,13 @@ Deno.serve(async (req) => {
        the evidence analyser. Kept for the homepage too, because a noindexed homepage is the single
        most important instance of that finding. */
     const evidencePages: EvidencePage[] = [];
+    /* FULL-mode carriers, filled inside the block below. servedUrl starts as the requested address
+       and becomes the homepage's final URL once it has been read. */
+    let servedUrl = homeUrl;
+    let robotsBody: string | null = null;
+    let discoveredAll: string[] = [];
+    let pagesQueuedCount = 0;
+    const fullPages: FullCrawlInputPage[] = [];
     if (home && home.html) {
       cr = detectClientRendered(home.html);
       const homeWords = wordCount(home.html);
@@ -317,23 +327,32 @@ Deno.serve(async (req) => {
         xRobotsTag: home.xRobotsTag, html: home.html, isHome: true,
       });
 
+      /* ⛔ THE SERVED ADDRESS, NOT THE ONE WE WERE HANDED (2026-09-23). Every same-site decision
+         below is made against where the homepage ENDED UP after redirects, with a leading `www.`
+         ignored. The old code compared against the requested origin, so a site redirecting apex →
+         www (BS4 Electrical: every Wix site) had every sitemap URL and every link discarded as
+         "another site" and the crawl read the homepage alone — in BOTH profiles. */
+      servedUrl = home.finalUrl || homeUrl;
+      const servedOrigin = (() => { try { return new URL(servedUrl).origin; } catch { return origin; } })();
+
       /* SITEMAP DISCOVERY — robots.txt first, then the conventional path, then index children.
-         ⚠️ robots.txt is fetched for its `Sitemap:` lines and NOTHING ELSE. A site whose sitemap
-         lives at /sitemap_index.xml or /wp-sitemap.xml (both common) was previously invisible: the
-         old code tried exactly one fixed path and gave up, which read as "no sitemap" on sites that
-         plainly had one. Bounded by MAX_SITEMAP_FETCHES so an index of forty children cannot turn
-         into forty requests. */
-      const robots = await budgeted(`${origin}/robots.txt`, readableUa);
+         ⚠️ robots.txt is fetched for its `Sitemap:` lines (and, in FULL mode, recorded as evidence of
+         what it says) — NEVER as evidence of a crawler block. Bounded by the profile's
+         sitemapFetches so an index of forty children cannot turn into forty requests; a site's own
+         PAGES sitemap is read before its generated collections (orderSitemapChildren). */
+      const robots = await budgeted(`${servedOrigin}/robots.txt`, readableUa);
       discoveryFetches++;
-      const declared = robots.ok && robots.html ? sitemapsFromRobots(robots.html) : [];
-      const queue: string[] = [...declared.slice(0, MAX_SITEMAP_FETCHES), `${origin}/sitemap.xml`];
+      robotsBody = robots.ok && robots.html && !/<html/i.test(robots.html.slice(0, 400)) ? robots.html : null;
+      const declared = robotsBody ? sitemapsFromRobots(robotsBody) : [];
+      const queue: string[] = [...declared.slice(0, profile.sitemapFetches), `${servedOrigin}/sitemap.xml`];
       const tried = new Set<string>();
       let pool: string[] = [];
       let sitemapFetches = 0;
-      while (queue.length && sitemapFetches < MAX_SITEMAP_FETCHES && !outOfBudget()) {
+      while (queue.length && sitemapFetches < profile.sitemapFetches && !outOfBudget()) {
         const next = queue.shift()!;
-        if (tried.has(next)) continue;
-        tried.add(next);
+        const nextKey = toServedUrl(next, servedUrl) ?? next;
+        if (tried.has(nextKey)) continue;
+        tried.add(nextKey);
         const doc = await budgeted(next, readableUa);
         discoveryFetches++;
         sitemapFetches++;
@@ -341,10 +360,8 @@ Deno.serve(async (req) => {
         sitemapDocsRead.push(doc.finalUrl || next);
         const parsed = extractSitemapLocs(doc.html);
         if (parsed.isIndex) {
-          /* An INDEX's locs are sitemap files, not pages — they are never page evidence. Queue a
-             bounded number of children rather than only the first (a Yoast index with six children
-             was being read one-sixth deep). */
-          for (const child of parsed.locs.slice(0, MAX_SITEMAP_FETCHES)) queue.push(child);
+          /* An INDEX's locs are sitemap files, not pages — they are never page evidence. */
+          for (const child of orderSitemapChildren(parsed.locs).slice(0, profile.sitemapFetches)) queue.push(child);
           continue;
         }
         for (const loc of parsed.locs) {
@@ -353,25 +370,53 @@ Deno.serve(async (req) => {
         }
         pool = pool.concat(parsed.locs);
       }
-      if (!pool.length) pool = internalLinks(home.html, origin);
-      pool = pool.filter((u) => { try { return new URL(u).origin === origin; } catch { return false; } });
+      const homeLinks = internalPageLinks(home.html, servedUrl, servedUrl);
+      /* The pool: sitemap pages and the homepage's own links, rewritten onto the served origin,
+         same site only, pages only. Standard mode used the links only when there was no sitemap;
+         that is kept for standard so its sampling does not change beyond the served-origin fix. */
+      const sitemapPages = pool.map((u) => toServedUrl(u, servedUrl)).filter((u): u is string => !!u && isPageUrl(u));
+      pool = [...new Set(mode === "full" || !sitemapPages.length ? [...sitemapPages, ...homeLinks] : sitemapPages)];
       const biggest = clusterUrls(pool, town)[0];
       if (biggest) clusterUrlsForInfo = biggest.urls;
-      // One bounded page set, not just the largest location-page cluster. This gives the crawl
-      // evidence from service, location, about and contact pages while retaining the hard cap.
-      const sampleUrls = selectCrawlUrls(
-        [...(biggest?.urls ?? []), ...pool],
-        homeUrl,
-        MAX_CRAWL_PAGES,
-      );
-      sampleCount = sampleUrls.length;
-      const sampleFetched = await mapPool(sampleUrls, FETCH_CONCURRENCY, (u) => budgeted(u, readableUa));
+
+      let sampleFetched: Fetched[] = [];
+      if (mode === "full") {
+        /* FULL: breadth-first waves. The first wave is the navigation plus one page per template
+           family; each later wave adds pages linked from what was just read, until the page limit,
+           the request budget or the deadline — whichever comes first — and the stats say which. */
+        const discovered = new Set<string>(pool);
+        const fetchedKeys = new Set<string>();
+        for (let wave = 0; wave < 4 && sampleFetched.length < profile.maxPages && !outOfBudget(); wave++) {
+          const next = selectFullCrawlUrls({
+            homeLinks, discovered: [...discovered], homeUrl: servedUrl, town,
+            limit: profile.maxPages - sampleFetched.length, exclude: fetchedKeys,
+          });
+          if (!next.length) break;
+          const got = await mapPool(next, profile.concurrency, (u) => budgeted(u, readableUa, true));
+          for (const r of got) {
+            fetchedKeys.add(r.url);
+            if (r.responded) sampleFetched.push(r);
+            if (r.ok && r.html) for (const l of internalPageLinks(r.html, r.finalUrl || r.url, servedUrl)) discovered.add(l);
+          }
+        }
+        discoveredAll = [...discovered];
+        pagesQueuedCount = discoveredAll.length;
+      } else {
+        // STANDARD: one bounded page set, exactly as before (service, location, about and contact
+        // pages first, then the rest, capped at the profile's page limit).
+        const sampleUrls = selectCrawlUrls([...(biggest?.urls ?? []), ...pool], servedUrl, profile.maxPages);
+        sampleFetched = await mapPool(sampleUrls, profile.concurrency, (u) => budgeted(u, readableUa));
+        discoveredAll = pool;
+        pagesQueuedCount = sampleUrls.length;
+      }
+      sampleCount = sampleFetched.length;
       for (const r of sampleFetched) {
         const words = r.ok && r.html ? wordCount(r.html) : 0;
         checkedPages.push({ url: r.url, kind: crawlPageKind(r.url), words, hasH1: r.ok && r.html ? hasH1(r.html) : false, readable: r.ok && !!r.html });
         if (r.ok && r.html && words < THIN_WORDS) thinPageUrls.push(r.url);
       }
       for (const r of sampleFetched) if (r.ok && r.html) samplePagesForInfo.push({ url: r.url, html: r.html });
+      for (const r of sampleFetched) fullPages.push({ url: r.url, finalUrl: r.finalUrl, status: r.responded ? r.status : 0, xRobotsTag: r.xRobotsTag, html: r.ok ? r.html : "" });
       /* ⛔ ONLY PAGES THAT ACTUALLY ANSWERED become evidence. A page we never reached has no markup,
          no header and no status worth reading, and feeding it in would let "we didn't fetch it" turn
          into a finding about it — the absent-value trap, on the surface where a false finding gets
@@ -454,13 +499,41 @@ Deno.serve(async (req) => {
     let siteInfo: SiteInfo | null = null;
     try {
       siteInfo = home?.html
-        ? extractSiteInfo(home.html, { origin, samplePages: samplePagesForInfo, clusterUrls: clusterUrlsForInfo })
+        ? extractSiteInfo(home.html, { origin: servedOriginOf(servedUrl, origin), samplePages: samplePagesForInfo, clusterUrls: clusterUrlsForInfo })
         : extractSiteInfo("", { origin });
     } catch (e) {
       console.error(`[crawl-check] site-info extraction failed for ${homeUrl}:`, (e as Error).message);
     }
 
     const checkedAt = new Date().toISOString();
+
+    /* ── THE FULL MANUAL CRAWL'S EVIDENCE (2026-09-23) ─────────────────────────────────────────────
+       Built from the same pages every other half read; stored in its OWN column (full_evidence) so
+       the Outreach table and the Inbox, which read `result` for every lead, never download it.
+       Best-effort: an analyser that trips leaves the rest of the crawl intact and says so. */
+    let full: FullCrawlEvidence | null = null;
+    const fullWarnings: string[] = [];
+    if (mode === "full") {
+      try {
+        const homePage: FullCrawlInputPage[] = home?.html
+          ? [{ url: home.url, finalUrl: home.finalUrl, status: home.status, xRobotsTag: home.xRobotsTag, html: leanHtml(home.html), isHome: true }]
+          : [];
+        full = buildFullCrawlEvidence({
+          requestedUrl: homeUrl, servedUrl, pages: [...homePage, ...fullPages], robotsTxt: robotsBody,
+          sitemapDocs: sitemapDocsRead, sitemapLocs: rawSitemapLocs, discoveredUrls: discoveredAll, profile,
+          stats: {
+            urlsDiscovered: discoveredAll.length, pagesQueued: pagesQueuedCount,
+            pagesFetched: fullPages.length + homePage.length,
+            pagesOk: fullPages.filter((p) => p.status > 0 && p.status < 400 && p.html).length + homePage.length,
+            fetchesUsed, hitPageLimit: fullPages.length >= profile.maxPages && discoveredAll.length > fullPages.length + 1,
+            hitFetchBudget, hitDeadline, ms: Date.now() - started,
+          },
+        });
+      } catch (e) {
+        fullWarnings.push(`Full-crawl evidence could not be built: ${(e as Error).message}`);
+        console.error(`[crawl-check] full evidence failed for ${homeUrl}:`, (e as Error).message);
+      }
+    }
     /* ⚠️ `evidence` / `evidenceVersion` are OMITTED ENTIRELY when nothing was built, rather than
        written as null. A row with no key is the same shape every pre-Phase-1 row already has, so
        usableSiteEvidence's "no evidence → []" path is the SAME path for an old row and for a
@@ -475,17 +548,39 @@ Deno.serve(async (req) => {
        "What's stopping AI reading your site" section from these signals (buildFaultLines). One row
        per lead (upsert on lead_id); a URL-only check (no lead) stores nothing. Best-effort — a
        storage failure never fails the check the operator asked for. */
+    /* ⛔ ONE CANONICAL ROW PER LEAD, WHICHEVER SCREEN STARTED THE CRAWL. Every entry point — Outreach,
+       Inbox, lead detail, Paid Clients, Website Build — lands here with the lead id, so a crawl run
+       anywhere is the crawl every screen reads. `requested_from` records the screen; it decides
+       nothing.
+       ⛔ AN AUTOMATED STANDARD CRAWL NEVER REPLACES A FRESH FULL ONE (mayReplaceLeadCrawl): an audit
+       finalising the day after a manual Re-crawl must not swap 60 pages of evidence for 12. It still
+       attaches its own result to its run below. */
+    let stored: boolean | null = null;
+    let preserved = false;
     if (leadId) {
       try {
-        await service.from("lead_crawl_checks").upsert({
-          lead_id: leadId, url: homeUrl, user_id: userId,
-          /* siteInfo is a SEPARATE key from signals — faults and reading-material never mix. Its own
-             version marks a pre-site-info row so the popup can offer "run again" rather than reading
-             a clean site as one with nothing to find. */
-          result: storedResult,
-          created_at: checkedAt,
-        }, { onConflict: "lead_id" });
+        const { data: existing } = await service.from("lead_crawl_checks")
+          .select("mode, created_at").eq("lead_id", leadId).maybeSingle();
+        if (!mayReplaceLeadCrawl(existing as { mode?: string | null; created_at?: string | null } | null, mode, Date.now(), CRAWL_FRESH_MS)) {
+          preserved = true;
+          stored = false;
+        } else {
+          const { error: upErr } = await service.from("lead_crawl_checks").upsert({
+            lead_id: leadId, url: homeUrl, user_id: userId,
+            /* siteInfo is a SEPARATE key from signals — faults and reading-material never mix. */
+            result: storedResult,
+            created_at: checkedAt,
+            mode,
+            /* Explicit null on a standard crawl, so a stale full crawl's evidence is never left beside
+               a newer, shallower result it no longer describes. */
+            full_evidence: full,
+            requested_from: requestedFrom,
+          }, { onConflict: "lead_id" });
+          if (upErr) throw new Error(upErr.message);
+          stored = true;
+        }
       } catch (e) {
+        stored = false;
         console.error(`[crawl-check] persist failed for lead ${leadId}:`, (e as Error).message);
       }
     }
@@ -504,7 +599,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, url: homeUrl, town: town || null, verdict, signals, siteInfo, evidence, deep, checked_at: checkedAt, fetches, ms: Date.now() - started });
+    return json({
+      ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, deep,
+      mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved,
+      /* The full evidence's headline only — the row holds the rest, and every screen reads the row. */
+      full: full ? { completeness: full.completeness, stats: full.stats, limits: full.limits, warnings: full.warnings } : null,
+      warnings: fullWarnings,
+    });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message ?? "crawl-check failed" }, 500);
   }

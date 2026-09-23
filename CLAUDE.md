@@ -532,6 +532,22 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
   competitor names never on a client page; neighbourhoods are an operator field, never mined.
 
+**Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
+- **Every manual Crawl site / Re-crawl site button is the FULL profile** (`mode: "full"`, operator-only,
+  `resolveCrawlMode`); automated crawls stay STANDARD (`STANDARD_CRAWL` = the old budget). A new
+  button sends `mode: "full"` + `requested_from`, or it is not a manual crawl.
+- **`lead_crawl_checks` is ONE row per lead, read by every screen** — never a screen-specific copy.
+  Full evidence lives in `full_evidence` (never in `result`, which Outreach/Inbox read for the whole
+  book). An automated crawl never replaces a fresh full one (`mayReplaceLeadCrawl`).
+- **Same-site means the SERVED address, `www.` ignored** (`sameSiteUrl`). Comparing against the
+  requested origin read one page of every apex→www site.
+- **Manual onboarding writes the customer's columns** (`buildOnboardingPatch`) + provenance
+  (`operator_edited_at/by`, `client_source='manual'` on a row it creates); never `plan_tier`,
+  `website_addon` or `baseline_*`. Its question text is pinned to findable-site by
+  `manual-onboarding.test.ts` — change the customer copy and that test fails until this matches.
+- **The crawl never MERGES into what the baseline measures** — onboarding → verified build facts →
+  lead → Discovery; crawl services/towns are `detected_*` suggestions only.
+
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.

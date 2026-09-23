@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
+import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
@@ -195,6 +196,13 @@ const PROJECT_STATUS_OPTIONS = [
 
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
+/** The popup's Crawl site button, seeded with THIS lead's stored crawl (the one row every screen
+ *  reads) so an existing crawl opens instead of silently re-running. */
+function LeadDetailCrawlButton({ lead }: { lead: { id: string; website?: string | null } }) {
+  const { crawl, refetch } = useLeadCrawl(lead.id);
+  return <CrawlCheckButton lead={lead} crawl={crawl} onDone={() => void refetch()} from="lead_detail" />;
+}
+
 function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentType<{ className?: string }>; color: string; children: React.ReactNode }) {
   return (
     <div className="mb-2 flex items-center gap-1.5">
@@ -597,7 +605,7 @@ function LeadDetailBody({
           {!isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
           {/* Free crawlability check — run on the prospect BEFORE messaging so the outreach can name
               their actual problem. Fetches only (£0), never the Apify SEO scanner. */}
-          {!isDemoLead(lead.id) && <CrawlCheckButton lead={lead} />}
+          {!isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
           {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 

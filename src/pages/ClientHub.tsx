@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertCircle, Clipboard, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
@@ -21,10 +21,15 @@ import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
 import { BUILD_MODE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } from '@/lib/websiteBuildState';
 import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
+import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
+import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
+import { onboardingStatus } from '@/lib/manualOnboarding';
+import { baselineReadiness } from '@/lib/baselineReadiness';
+import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
-type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[] };
+type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary };
 
 /* THE ONE POLLER. The hub re-reads itself on this interval only while the baseline is `starting`
    or `running`, and stops on its own at every other status. Nothing else on this page polls, and
@@ -176,6 +181,11 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
           <div><Label>Primary location</Label><Input value={data.location} disabled={started || !!busy} onChange={(e) => setData({ ...data, location: e.target.value })}/></div>
           <div className="sm:col-span-2"><Label>Services (comma separated)</Label><Input value={data.services} disabled={started || !!busy} onChange={(e) => setData({ ...data, services: e.target.value })}/><p className="mt-1 text-xs text-muted-foreground">{sources(data.context_sources?.service_sources, 'No service facts found yet — type them to record what the baseline measures')}</p></div>
           <div className="sm:col-span-2"><Label>Service areas (comma separated)</Label><Input value={data.areas_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, areas_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/><p className="mt-1 text-xs text-muted-foreground">{sources(data.context_sources?.area_sources, 'No service-area facts found yet')}</p></div>
+          {!started && ((data.detected?.services.length ?? 0) > 0 || (data.detected?.areas.length ?? 0) > 0) && <div className="sm:col-span-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+            <p><b>Detected on the website — not included.</b> The baseline measures only approved services and towns. Add one here only if the client genuinely offers or serves it.</p>
+            {(data.detected?.services.length ?? 0) > 0 && <p className="mt-1">Services: {data.detected!.services.join(', ')}</p>}
+            {(data.detected?.areas.length ?? 0) > 0 && <p className="mt-1">Towns: {data.detected!.areas.join(', ')}</p>}
+          </div>}
           <div className="sm:col-span-2"><Label>Services list (comma separated)</Label><Input value={data.services_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, services_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
         </div>
         {data.crawl_context_at && <p className="mt-2 text-xs text-muted-foreground">Website context last refreshed {new Date(data.crawl_context_at).toLocaleString()}.</p>}
@@ -257,6 +267,44 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
+   ONBOARDING — the client's answers, and the manual route when they have not filled it in.
+   ⛔ NEVER BLOCKS THE HUB. Missing answers are named, and the fix is one button away.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+function OnboardingStage({ onboarding, unpaid, onOpen }: { onboarding: AnyRecord | null; unpaid: { id: string; status: string | null } | null | undefined; onOpen: () => void }) {
+  const st = onboardingStatus(onboarding);
+  const tone = st.state === 'complete' || st.state === 'completed_manually' ? 'text-emerald-600' : 'text-amber-700 dark:text-amber-300';
+  const services = values(onboarding?.services_list) !== '—' ? values(onboarding?.services_list) : (onboarding?.services || '—');
+  const areas = values(onboarding?.areas_list) !== '—' ? values(onboarding?.areas_list) : (onboarding?.areas_wanted || '—');
+  return <Stage title="Onboarding">
+    <p className={`flex items-center gap-1.5 font-medium ${tone}`}>{st.state === 'complete' || st.state === 'completed_manually' ? <CheckCircle2 className="h-4 w-4"/> : <AlertTriangle className="h-4 w-4"/>}{st.label}</p>
+    {unpaid && !onboarding && <p className="text-xs text-muted-foreground">The client started onboarding (status “{unpaid.status}”) but it was never marked paid. The manual form adopts that record — nothing is duplicated.</p>}
+    {onboarding && <div className="grid gap-2 text-xs sm:grid-cols-2">
+      <div><span className="text-muted-foreground">Primary town: </span>{onboarding.confirmed_location || '—'}</div>
+      <div><span className="text-muted-foreground">Domain: </span>{onboarding.domain_status || '—'} · <span className="text-muted-foreground">route: </span>{onboarding.website_route?.replaceAll('_', ' ') || (onboarding.plan_tier ? `plan ${onboarding.plan_tier}` : '—')}</div>
+      <div className="sm:col-span-2"><span className="text-muted-foreground">Services: </span>{services}</div>
+      <div className="sm:col-span-2"><span className="text-muted-foreground">Service areas: </span>{areas}</div>
+      {onboarding.operator_edited_at && <div className="sm:col-span-2 text-muted-foreground">Answers entered/edited by operator {new Date(onboarding.operator_edited_at).toLocaleString('en-GB')}.</div>}
+    </div>}
+    <Button size="sm" variant={st.state === 'complete' || st.state === 'completed_manually' ? 'outline' : 'default'} onClick={onOpen}>
+      <ClipboardEdit className="mr-1 h-4 w-4"/>{onboarding ? 'Edit onboarding answers' : 'Complete onboarding manually'}
+    </Button>
+  </Stage>;
+}
+
+/* BASELINE READINESS — the server's own gate, shown before it refuses (src/lib/baselineReadiness.ts). */
+function ReadinessList({ lead, onboarding, onFix }: { lead: AnyRecord; onboarding: AnyRecord | null; onFix: () => void }) {
+  const r = baselineReadiness(lead, onboarding);
+  return <div className="rounded-md border p-2 text-xs">
+    <p className="mb-1 font-medium">{r.ready ? 'Ready to prepare the baseline' : 'Needs attention before the baseline'}</p>
+    <ul className="space-y-0.5">{r.items.map((i) => <li key={i.key} className="flex items-start gap-1.5">
+      {i.ok ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"/> : <AlertTriangle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${i.required ? 'text-destructive' : 'text-amber-600'}`}/>}
+      <span><b>{i.label}</b>{i.ok ? '' : i.required ? ' (required)' : ''} — <span className="text-muted-foreground">{i.detail}</span></span>
+    </li>)}</ul>
+    {r.attention.length > 0 && <Button size="sm" variant="outline" className="mt-2" onClick={onFix}><ClipboardEdit className="mr-1 h-4 w-4"/>Fix in onboarding</Button>}
+  </div>;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
    STAGE 5 — WEBSITE BUILD (summary). The work happens on its own page, /paid-clients/:id/website-build
    (src/pages/WebsiteBuild.tsx): build mode, client build facts, capture, architecture, the Build Pack
    of commands and prompts, preview, QA and live. This card only says where the build stands.
@@ -311,6 +359,7 @@ export default function ClientHub() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const fetchHub = useCallback(async () => (await call({ action: 'get', lead_id: leadId })).client as Hub, [leadId]);
   /* The first load shows the page spinner. Every later read is `refresh`: silent, in place, and it
      never touches `loading` — flipping it is what unmounted the dialog mid-chain. */
@@ -350,10 +399,17 @@ export default function ClientHub() {
   {errorPanel}
   <Card><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div><div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
+  <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
   <div className="grid gap-4 lg:grid-cols-2">
+    <OnboardingStage onboarding={onboarding} unpaid={hub.onboarding_unpaid} onOpen={() => setOnboardingOpen(true)}/>
+    <Stage title="Website evidence">
+      {/* The lead's ONE crawl row — the same one the Outreach and Inbox Crawl site buttons write. */}
+      <LeadCrawlPanel leadId={lead.id} website={onboarding?.business_website || lead.website} summary={hub.crawl} from="paid_client" onDone={refresh}/>
+    </Stage>
     <Stage title="1. Baseline">
       <p className="flex items-center gap-2 font-medium">{paidBaselineStatusLabel(bs)}{(bs === 'starting' || bs === 'running') && <Spinner className="h-4 w-4"/>}</p>
-      {(bs === 'needs_questions' || bs === 'needs_approval' || bs === 'approved' || bs === 'failed') && <Button onClick={() => setBaselineOpen(true)}><RefreshCw className="mr-1 h-4 w-4"/>{setupLabel}</Button>}
+      {(bs === 'needs_questions' || bs === 'needs_approval' || bs === 'failed') && <ReadinessList lead={lead} onboarding={onboarding} onFix={() => setOnboardingOpen(true)}/>}
+      {(bs === 'needs_questions' || bs === 'needs_approval' || bs === 'approved' || bs === 'failed') && <Button disabled={!onboarding} title={onboarding ? undefined : 'Complete onboarding first — the baseline is built from it.'} onClick={() => setBaselineOpen(true)}><RefreshCw className="mr-1 h-4 w-4"/>{setupLabel}</Button>}
       {bs === 'starting' && <p className="text-muted-foreground">The server is creating the persisted queue for the approved set × {BASELINE_RUNS} runs. This page refreshes itself.</p>}
       {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} questions × {BASELINE_RUNS} runs</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
     </Stage>

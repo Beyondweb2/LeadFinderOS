@@ -11,6 +11,7 @@ import { buildFaultLines, type CrawlSignals, type CrawlFault } from '@/lib/crawl
 import type { SiteInfo } from '@/lib/siteInfo';
 import { siteInfoHasAnything } from '@/lib/siteInfo';
 import type { CrawlRow } from '@/lib/crawlResult';
+import type { CrawlRequestSource } from '@/lib/fullCrawl';
 
 /** The minimal lead shape the crawl button/dialog need — an id to crawl by and a website to gate on.
  *  Both the Outreach row (OutreachLead) and the Inbox thread (its lead-lite) satisfy it. */
@@ -29,6 +30,11 @@ type CrawlLead = { id: string; website?: string | null };
         whether audit_followup_fault is available. The button's dot reflects ONLY this.
      2. SITE INFO — everything else in the same HTML (who built it, directories, contact, …), reading
         material for before a conversation. Its presence NEVER changes the button or the template.
+
+   ⛔ EVERY PRESS IS THE FULL MANUAL CRAWL (2026-09-23). The button sends `mode: "full"` and the
+   screen it sits on (`requested_from`); crawl-check stores the result on the lead's ONE
+   lead_crawl_checks row, which Paid Clients and Website Build read too. The automated audit crawl
+   never sends `mode` and stays on the small standard profile.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 interface Verdict { ok: boolean; headline: string; problems: string[] }
@@ -36,6 +42,8 @@ interface Result {
   ok: boolean; url?: string; verdict?: Verdict;
   signals?: CrawlSignals; siteInfo?: SiteInfo | null;
   fetches?: number; ms?: number; error?: string; checked_at?: string;
+  mode?: 'full' | 'standard'; stored?: boolean | null;
+  full?: { completeness?: string; stats?: { pagesFetched?: number; urlsDiscovered?: number }; warnings?: string[] } | null;
 }
 
 /** Seed the popup's display state from a stored crawl row (so "already run" shows instantly). */
@@ -142,8 +150,8 @@ function SiteInfoView({ info }: { info: SiteInfo | null | undefined }) {
 /* ── the dialog ─────────────────────────────────────────────────────────────────────────────────── */
 
 function CrawlCheckDialog(
-  { open, onOpenChange, lead, initialCrawl, urlMode, onDone, onRunningChange, onErrorChange }:
-  { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; onDone?: () => void; onRunningChange?: (running: boolean) => void; onErrorChange?: (failed: boolean) => void },
+  { open, onOpenChange, lead, initialCrawl, urlMode, from, onDone, onRunningChange, onErrorChange }:
+  { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; from: CrawlRequestSource; onDone?: () => void; onRunningChange?: (running: boolean) => void; onErrorChange?: (failed: boolean) => void },
 ) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -154,12 +162,15 @@ function CrawlCheckDialog(
   const run = async (body: { lead_id?: string; url?: string; town?: string }) => {
     setRunning(true); onRunningChange?.(true); setResult(null); onErrorChange?.(false);
     try {
-      const { data, error } = await supabase.functions.invoke('crawl-check', { body });
+      const { data, error } = await supabase.functions.invoke('crawl-check', { body: { ...body, mode: 'full', requested_from: from } });
       if (error) throw new Error(error.message);
       const next = data as Result;
       if (!next?.ok) throw new Error(next?.error || 'check failed');
+      if (body.lead_id && next.stored === false) throw new Error('The crawl ran but could not be saved to this lead. Run it again.');
       setResult(next);
       if (body.lead_id) {
+        // The ONE crawl row changed: every screen's copy (Outreach, Paid Clients, lead popup) re-reads.
+        void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
         // Inbox intentionally has a five-minute cache; invalidate it so returning to a
         // conversation immediately re-reads this manual crawl for audit_followup_fault.
         void queryClient.invalidateQueries({ queryKey: ['inbox'] });
@@ -216,7 +227,7 @@ function CrawlCheckDialog(
 
         {running && (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Fetching the site as a crawler…
+            <Loader2 className="h-4 w-4 animate-spin" /> Crawling the whole site as a search crawler — this can take up to two minutes…
           </div>
         )}
 
@@ -227,7 +238,7 @@ function CrawlCheckDialog(
             {result.signals && (
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{fetchFailed ? 'Could not read website' : 'Crawl complete'}</span>
-                {result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
+                {result.full?.stats ? ` · full crawl · ${result.full.stats.pagesFetched} pages read of ${result.full.stats.urlsDiscovered} found${result.full.completeness === 'partial' ? ' (partial)' : ''}` : result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
                 {result.checked_at && ` · ${new Date(result.checked_at).toLocaleString()}`}
               </div>
             )}
@@ -307,8 +318,8 @@ function CrawlCheckDialog(
  *  map), or null/undefined when it hasn't been run. The dot reflects ONLY an AI-visibility fault.
  *  `onDone` refetches the caller's crawl data after a run so the button restyles. */
 export function CrawlCheckButton(
-  { lead, crawl, onDone, className, iconOnly = false }:
-  { lead: CrawlLead; crawl?: CrawlRow | null; onDone?: () => void; className?: string; iconOnly?: boolean },
+  { lead, crawl, onDone, className, iconOnly = false, from }:
+  { lead: CrawlLead; crawl?: CrawlRow | null; onDone?: () => void; className?: string; iconOnly?: boolean; from: CrawlRequestSource },
 ) {
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
@@ -352,7 +363,7 @@ export function CrawlCheckButton(
           className={`${iconBase} ${failed || crawlFailed ? 'text-destructive hover:text-destructive' : faulted ? 'text-red-500 hover:text-red-500' : ran ? 'text-emerald-600 hover:text-emerald-600 dark:text-emerald-400' : ''} ${className ?? ''}`}>
           {running ? <ScanSearch className="h-4 w-4 animate-spin" /> : failed || crawlFailed ? <AlertTriangle className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
         </button>
-        <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
+        <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} from={from} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
       </>
     );
   }
@@ -371,7 +382,7 @@ export function CrawlCheckButton(
           ? <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
           : <CircleCheck className="ml-0.5 h-3 w-3" />)}
       </button>
-      <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
+      <CrawlCheckDialog open={open} onOpenChange={setOpen} lead={lead} initialCrawl={crawl} from={from} onDone={onDone} onRunningChange={setRunning} onErrorChange={setFailed} />
     </>
   );
 }
@@ -385,7 +396,7 @@ export function CrawlCheckUrlButton() {
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <ScanSearch className="mr-1.5 h-3.5 w-3.5" /> Crawl check
       </Button>
-      <CrawlCheckDialog open={open} onOpenChange={setOpen} urlMode />
+      <CrawlCheckDialog open={open} onOpenChange={setOpen} urlMode from="outreach" />
     </>
   );
 }
