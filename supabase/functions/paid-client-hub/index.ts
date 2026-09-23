@@ -5,6 +5,7 @@ import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
+import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../src/lib/paidClient.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -90,9 +91,12 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const { data: leads, error } = await service.from("outreach_leads")
         .select("id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist")
-        .eq("user_id", user.id).gt("amount_paid", 0).order("payment_date", { ascending: false });
+        .eq("user_id", user.id).or(PAID_CLIENT_OR_FILTER).order("payment_date", { ascending: false });
       if (error) throw error;
-      return json({ ok: true, clients: leads ?? [] });
+      /* Membership is isPaidClient (src/lib/paidClient.ts): a recorded amount OR a status Paul set by
+         hand. payment_source says which, so a hand-marked client is never shown as Stripe-paid. */
+      const clients = (leads ?? []).filter(isPaidClient).map((l) => ({ ...l, payment_source: paidClientSource(l) }));
+      return json({ ok: true, clients });
     }
 
     if (action === "matches") {
