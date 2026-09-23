@@ -567,7 +567,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     {
       objection: 'My website is fine',
       answer: findingShort
-        ? 'It may well look fine to customers. This is about how clearly it reads to AI and search tools — for example, ' + findingShort + '. That\'s easy to check and easy to fix.'
+        ? 'It may well look fine to customers. This is about how clearly it reads to AI and search tools — for example, ' + findingShort + ". I can show you exactly where, and you can check it yourself."
         : 'It may well be. What I\'m talking about is what AI answered when I asked — that\'s separate from how the site looks.',
     },
     {
