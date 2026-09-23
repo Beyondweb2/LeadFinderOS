@@ -14,18 +14,21 @@
 
    IMPORTED BY AN EDGE FUNCTION: relative imports with an explicit .ts extension only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { defaultRemeasureDue } from './deliveryCockpit.ts';
+import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
 /**
  * The date to write into `remeasure_due_date`, or null when there is one already (never overwrite).
  *
  * @param existing   the lead's current remeasure_due_date, exactly as read
  * @param frozenAt   the baseline's completion instant (baseline_completed_at), ISO
+ * @param weeks      the client's re-measure clock (remeasureWeeksFor: 4, or 8 for a site we build on
+ *                   a brand-new domain) — REQUIRED, so no caller can silently fall back to four
  */
-export function remeasureDueFill(existing: string | null | undefined, frozenAt: string): string | null {
+export function remeasureDueFill(existing: string | null | undefined, frozenAt: string, weeks: number): string | null {
   if ((existing ?? '').trim()) return null;
   if (!frozenAt || Number.isNaN(new Date(frozenAt).getTime())) return null;
-  return defaultRemeasureDue(frozenAt);
+  if (!Number.isInteger(weeks) || weeks <= 0) return null;
+  return defaultRemeasureDue(frozenAt, remeasureOffsetDays(weeks));
 }
 
 /** Which of the four delivery milestones (everything except the re-measure tick itself) are

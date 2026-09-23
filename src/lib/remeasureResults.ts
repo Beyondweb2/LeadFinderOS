@@ -23,8 +23,15 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
-import { defaultRemeasureDue } from './deliveryCockpit.ts';
+import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
+
+/** "four" / "eight" — the client's re-measure clock in words (remeasureWeeksFor). */
+export function weeksWord(weeks: number | null | undefined): string {
+  const w = weeks ?? REMEASURE_WEEKS_STANDARD;
+  return w === 4 ? 'four' : w === 8 ? 'eight' : String(w);
+}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 import { parseAmountPaid } from './leadPayment.ts';
 
 /** ⛔ FALSE UNTIL PAUL APPROVES THE COPY. See the header. */
@@ -69,6 +76,10 @@ export interface CurrentTermsFacts {
   baselineFrozenAt: string | null | undefined;
   /** `outreach_leads.remeasure_due_date`, exactly as read. */
   remeasureDueDate: string | null | undefined;
+  /** The client's re-measure clock in weeks (remeasureWeeksFor: 4, or 8 for a site we build on a
+   *  brand-new domain). Absent = the standard four, which can only REFUSE a new-domain client (their
+   *  stored date is +56), never pass a wrong one. */
+  remeasureWeeks?: number | null;
 }
 
 export type CurrentTermsVerdict = { current: true } | { current: false; reason: string };
@@ -100,7 +111,7 @@ export function currentTermsVerdict(f: CurrentTermsFacts): CurrentTermsVerdict {
   }
   const stored = (f.remeasureDueDate ?? '').trim().slice(0, 10);
   if (!stored) return { current: false, reason: 'no remeasure_due_date is stored, so the cycle cannot be checked' };
-  const expected = defaultRemeasureDue(frozen);
+  const expected = defaultRemeasureDue(frozen, remeasureOffsetDays(f.remeasureWeeks ?? REMEASURE_WEEKS_STANDARD));
   if (stored !== expected) {
     return { current: false, reason: `their re-measure is due ${stored}, not the current cycle's ${expected} — they are on a different clock` };
   }
@@ -201,6 +212,8 @@ export interface ResultsCopyInput {
   wentUp: boolean;
   withinNoise: boolean;
   documentUrl: string;
+  /** The client's re-measure clock in weeks (remeasureWeeksFor). Absent = four. */
+  weeks?: number | null;
   /** The first recurring payment's date, as a person reads it — from resultsBillingStartIso, so
    *  only when a trialing subscription will charge on it. Absent otherwise (no subscription, already
    *  billing), and then the email says nothing about billing. */
@@ -217,14 +230,17 @@ export interface ResultsCopyInput {
    attached: the wording §20 already records as rejected on the pricing heading.
    So the lead-in carries the reframe and the locked sentence follows it verbatim. The condition is
    stated twice in a row by construction; that is the price of the lock, and it is the safe direction. */
+/* 🔴 PAYMENT 2 (Paul, 2026-09-23): the claim paragraph also says what a valid claim does to the
+   monthly — refunded if already taken, never taken otherwise (GUARANTEE_PAYMENT_TWO_SENTENCE, locked
+   to findable-site). */
 export function resultsClaimParagraph(): string {
-  return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE}`;
+  return `That means the guarantee applies. ${REMEASURE_CLAIM_SENTENCE} ${GUARANTEE_PAYMENT_TWO_SENTENCE}`;
 }
 
 const pct = (n: number, d: number) => (d > 0 ? Math.round((100 * n) / d) : 0);
 
 export function resultsEmailSubject(i: ResultsCopyInput): string {
-  return `Your four-week results — ${i.businessName}`;
+  return `Your ${weeksWord(i.weeks)}-week results — ${i.businessName}`;
 }
 
 /** Plain-text paragraphs; the HTML email wraps each in a <p>. */
@@ -232,7 +248,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
   const where = i.town ? ` in ${i.town}` : '';
   const out = [
     `Hi,`,
-    `Four weeks ago we measured how often ChatGPT and Gemini named ${i.businessName} when people asked the questions your customers ask${where}. We have just asked the same ${i.questions} questions again, on the same engines.`,
+    `${cap(weeksWord(i.weeks))} weeks ago we measured how often ChatGPT and Gemini named ${i.businessName} when people asked the questions your customers ask${where}. We have just asked the same ${i.questions} questions again, on the same engines.`,
     `Before: named in ${i.beforeNamed} of ${i.beforeAnswered} answers (${pct(i.beforeNamed, i.beforeAnswered)}%).`,
     `After: named in ${i.afterNamed} of ${i.afterAnswered} answers (${pct(i.afterNamed, i.afterAnswered)}%).`,
     `The full before-and-after, question by question, is here: ${i.documentUrl}`,
@@ -269,7 +285,7 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
 export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
   if (i.wentUp) {
     return [
-      `${i.businessName} is named more often than it was four weeks ago, on the same questions and the same engines.`,
+      `${i.businessName} is named more often than it was ${weeksWord(i.weeks)} weeks ago, on the same questions and the same engines.`,
       `The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`,
     ];
   }

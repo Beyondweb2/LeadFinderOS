@@ -634,3 +634,22 @@ as the window closed — false under six-weeks-from-sign-up billing.
    what they were sold on 17 Sep (then: £99/month for 12 months, then £29.99) differs from today's.
 4. **Mid-term endings**: the card-failure and deliberate-cancel emails say "you won't be charged again"
    and offer to restart; under a 12-month minimum with arrears still due that is a commercial choice.
+
+### Closed 2026-09-23 — Paul's decisions on items 1 and 2 above
+- **Payment 2 inside the claim window:** billing stays six weeks from sign-up. A VALID claim refunds
+  the £99 AND payment 2 if it was already taken, and ends the plan; if it was not taken, it never is.
+  Wording: `GUARANTEE_PAYMENT_TWO_SENTENCE` (byte-locked to findable-site `GUARANTEE_PAYMENT_TWO_LINE`),
+  in the not-gone-up results email/document and on /refunds, /terms and the FAQ. The app still never
+  moves money: a refund recorded on a lead with a live subscription emails Paul to cancel it in
+  Stripe and refund payment 2 if taken (stripe-webhook `charge.refunded`).
+- **Brand-new domains are re-measured later, not excluded:** a Findable-built site on a genuinely new
+  domain (`isNewDomainBuild`: `findableSiteKind === 'findable_built'` AND `domain_status === 'new'`) is
+  re-measured at `REMEASURE_WEEKS_NEW_DOMAIN` (8) weeks, everyone else at 4, same frozen questions and
+  method. `remeasureDueFill` takes the clock (required); the terms gate and the results words read it.
+  The claim window already counts from the results, so it follows whichever re-measure applies.
+  `FINDABLE_GUARANTEE` / `REMEASURE_CLAIM_SENTENCE` (both repos) now say "four weeks (eight if we build
+  your site on a brand-new domain)" and "within 14 days of your results"; findable.live's exclusion
+  lines became `NEW_DOMAIN_GUARANTEE_NOTE`. ⚠️ The guarantee is now 278 characters in the Stripe line
+  item — the first real Checkout Session proves it renders whole.
+- ⚠️ The dashboard's Paying-clients card computes the terms verdict without the clock, so a new-domain
+  build would show "legacy terms" there until its results; the sender itself passes the clock.

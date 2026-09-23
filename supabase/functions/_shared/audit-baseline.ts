@@ -46,6 +46,7 @@ import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
+import { remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { planReplay } from "../../../src/lib/baselineReplay.ts";
 import { REFUNDED_STATUS } from "../../../src/lib/leadPayment.ts";
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
@@ -470,7 +471,15 @@ export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): 
   try {
     const { data: lr } = await service
       .from("outreach_leads").select("remeasure_due_date").eq("id", audit.lead_id).maybeSingle();
-    const fill = remeasureDueFill((lr as { remeasure_due_date?: string | null } | null)?.remeasure_due_date, new Date().toISOString());
+    /* The clock: four weeks, or eight for a site we build on a brand-new domain (remeasureWeeksFor,
+       read from the paid onboarding row first). An unreadable row is the standard four weeks. */
+    const { data: obRows } = await service.from("onboarding_responses")
+      .select("plan_tier, website_route, domain_status, status, created_at").eq("lead_id", audit.lead_id)
+      .order("created_at", { ascending: false }).limit(10);
+    const ob = ((obRows ?? []) as Array<{ status?: string | null }>);
+    const obRow = ob.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? ""))) ?? ob[0] ?? null;
+    const weeks = remeasureWeeksFor(obRow as { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null);
+    const fill = remeasureDueFill((lr as { remeasure_due_date?: string | null } | null)?.remeasure_due_date, new Date().toISOString(), weeks);
     if (fill) {
       const { data: written } = await service
         .from("outreach_leads").update({ remeasure_due_date: fill })

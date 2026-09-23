@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       beforeDate: baselineRuns[0]?.created_at ?? null,
       afterDate: replayRuns[replayRuns.length - 1]?.created_at ?? null,
       sentAtLabel: new Date(lead.remeasure_results_sent_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }),
+      weeks: bundle.weeks,
     });
     return htmlResponse(html, 200);
   } catch (e) {

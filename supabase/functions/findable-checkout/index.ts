@@ -410,9 +410,9 @@ Deno.serve(async (req) => {
        field of ours, so moving it would DROP the guarantee text from the Stripe page silently -
        the FINDABLE_SETUP_PRICE_ID trap CLAUDE.md §11 records. Hosting uses a Price ID precisely
        because it carries no guarantee to lose.
-       ⚠️ IF THE REFUND IS CLAIMED: refund the setup fee and cancel the hosting subscription.
-       Monthly payments already taken are not refunded, and findable.live/refunds says so in those
-       words. Written here because this is the file that decides what the customer agreed to. */
+       ⚠️ IF THE REFUND IS CLAIMED (Paul, 2026-09-23): refund the setup fee, cancel the subscription,
+       and refund payment 2 as well if it was already taken inside the claim window
+       (GUARANTEE_PAYMENT_TWO_SENTENCE; findable.live/refunds says so). Written here because this is the file that decides what the customer agreed to. */
     /* 🔴 THE HOSTING LINE HAS MOVED OFF THIS SESSION (2026-09-13). It was billed from day one,
        which put a charge inside the refund window; it now starts on the SAME anchor as the monthly,
        on one invoice, so a client deciding whether to claim has paid exactly £99 and nothing else.

@@ -111,8 +111,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
   (`resultsBillingStartIso`) or none — never "that same day". The end of the 12 payments is
   `subscriptionEndedByTerm` → `termCompleteEmail`; ownership words only for `findableSiteKind ===
-  'findable_built'`. Open decisions (overlap, new-domain exclusion, MCLocksmiths' missing subscription):
-  `docs/business-and-offer.md`, "Customer lifecycle cleanup".
+  'findable_built'`. ⛔ **Re-measure clock: 4 weeks, or 8 for a site we BUILD on a brand-new domain**
+  (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
+  (`GUARANTEE_PAYMENT_TWO_SENTENCE`, locked to findable-site). Record + MCLocksmiths' missing
+  subscription: `docs/business-and-offer.md`, "Customer lifecycle cleanup".
 - **Named = the model's verdict** (`self_named` from `extract-competitors`), string-match fallback,
   one ruler on both sides of a comparison (`src/lib/namedSignal.ts`). A name that is only trade +
   town is **not judgeable** (`nameIsJudgeable`, `_shared/derivable.ts`) — the report replaces its hero
