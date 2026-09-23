@@ -12,6 +12,7 @@ import type { SiteInfo } from '@/lib/siteInfo';
 import { siteInfoHasAnything } from '@/lib/siteInfo';
 import type { CrawlRow } from '@/lib/crawlResult';
 import type { CrawlRequestSource } from '@/lib/fullCrawl';
+import { crawlJobStatus, useCrawlJobWatch } from '@/components/LeadCrawlPanel';
 
 /** The minimal lead shape the crawl button/dialog need — an id to crawl by and a website to gate on.
  *  Both the Outreach row (OutreachLead) and the Inbox thread (its lead-lite) satisfy it. */
@@ -31,6 +32,9 @@ type CrawlLead = { id: string; website?: string | null };
      2. SITE INFO — everything else in the same HTML (who built it, directories, contact, …), reading
         material for before a conversation. Its presence NEVER changes the button or the template.
 
+   ⛔ EVERY PRESS STARTS THE EXHAUSTIVE CRAWL JOB (2026-09-23): crawl-check answers at once with a
+   job id, the server crawls until the frontier is empty, and this popup only WATCHES the job —
+   closing it, or leaving the page, does not stop the crawl.
    ⛔ EVERY PRESS IS THE FULL MANUAL CRAWL (2026-09-23). The button sends `mode: "full"` and the
    screen it sits on (`requested_from`); crawl-check stores the result on the lead's ONE
    lead_crawl_checks row, which Paid Clients and Website Build read too. The automated audit crawl
@@ -43,7 +47,7 @@ interface Result {
   signals?: CrawlSignals; siteInfo?: SiteInfo | null;
   fetches?: number; ms?: number; error?: string; checked_at?: string;
   mode?: 'full' | 'standard'; stored?: boolean | null;
-  full?: { completeness?: string; stats?: { pagesFetched?: number; urlsDiscovered?: number }; warnings?: string[] } | null;
+  full?: { completeness?: string; stats?: { pagesFetched?: number; urlsDiscovered?: number; pagesOk?: number; failed?: number; skipped?: number }; warnings?: string[] } | null;
 }
 
 /** Seed the popup's display state from a stored crawl row (so "already run" shows instantly). */
@@ -158,6 +162,24 @@ function CrawlCheckDialog(
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [url, setUrl] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job = useCrawlJobWatch(open ? jobId : null, async () => {
+    if (!jobId) return;
+    try {
+      const res = await crawlJobStatus({ job_id: jobId, include_result: true });
+      const r = res.result as Record<string, any> | null;
+      if (!r?.signals) throw new Error(res.job?.status === 'failed' ? 'The crawl failed.' : 'The crawl finished without a readable result.');
+      setResult({ ok: true, url: r.url, verdict: r.verdict, signals: r.signals, siteInfo: r.siteInfo ?? null, checked_at: r.checked_at, full: res.full ?? null, mode: 'full' });
+      void queryClient.invalidateQueries({ queryKey: ['lead-crawls'] });
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      onDone?.();
+    } catch (e) {
+      setResult({ ok: false, error: e instanceof Error ? e.message : 'crawl failed' });
+      onErrorChange?.(true);
+    } finally {
+      setJobId(null); setRunning(false); onRunningChange?.(false);
+    }
+  });
 
   const run = async (body: { lead_id?: string; url?: string; town?: string }) => {
     setRunning(true); onRunningChange?.(true); setResult(null); onErrorChange?.(false);
@@ -166,6 +188,11 @@ function CrawlCheckDialog(
       if (error) throw new Error(error.message);
       const next = data as Result;
       if (!next?.ok) throw new Error(next?.error || 'check failed');
+      if ((next as { job_id?: string }).job_id) {
+        // The exhaustive job is running on the server; the watcher above finishes the popup.
+        setJobId(String((next as { job_id?: string }).job_id));
+        return;
+      }
       if (body.lead_id && next.stored === false) throw new Error('The crawl ran but could not be saved to this lead. Run it again.');
       setResult(next);
       if (body.lead_id) {
@@ -179,16 +206,17 @@ function CrawlCheckDialog(
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : 'check failed' });
       onErrorChange?.(true);
-    } finally {
       setRunning(false);
       onRunningChange?.(false);
     }
   };
+  /* A job-less answer (the inline check) is finished the moment it returns. */
+  useEffect(() => { if (result && !jobId) { setRunning(false); onRunningChange?.(false); } /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [result, jobId]);
 
   /* On open: show the STORED result if there is one (already run → open the popup), otherwise run it
      (not run yet → run the crawl). Reset when closed. */
   useEffect(() => {
-    if (!open) { setResult(null); setUrl(''); setRunning(false); return; }
+    if (!open) { setResult(null); setUrl(''); setRunning(false); setJobId(null); return; }
     if (urlMode) return;
     const stored = resultFromRow(initialCrawl);
     if (stored) setResult(stored);
@@ -227,7 +255,7 @@ function CrawlCheckDialog(
 
         {running && (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Crawling the whole site as a search crawler — this can take up to two minutes…
+            <Loader2 className="h-4 w-4 animate-spin" /> {job?.label || 'Starting the full crawl…'} — it runs on the server until every page is done; you can close this.
           </div>
         )}
 
@@ -238,7 +266,7 @@ function CrawlCheckDialog(
             {result.signals && (
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{fetchFailed ? 'Could not read website' : 'Crawl complete'}</span>
-                {result.full?.stats ? ` · full crawl · ${result.full.stats.pagesFetched} pages read of ${result.full.stats.urlsDiscovered} found${result.full.completeness === 'partial' ? ' (partial)' : ''}` : result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
+                {result.full?.stats ? ` · full crawl · ${(result.full.stats.urlsDiscovered ?? 0).toLocaleString('en-GB')} discovered · ${(result.full.stats.pagesOk ?? 0).toLocaleString('en-GB')} fetched · ${result.full.stats.failed ?? 0} failed · ${result.full.stats.skipped ?? 0} skipped${result.full.completeness === 'complete_with_failures' ? ' (complete with failures)' : ''}` : result.signals.pagesChecked != null && ` · ${result.signals.pagesChecked} pages checked`}
                 {result.checked_at && ` · ${new Date(result.checked_at).toLocaleString()}`}
               </div>
             )}

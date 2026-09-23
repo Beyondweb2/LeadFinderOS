@@ -61,10 +61,14 @@ const live: Record<string, string[]> = {
   ai_audit_queue: ['run_id','status','id','question','result'],
   client_pages: ['id','status','primary_question','service','town','lead_id','created_at'],
   /* Section 5 reads the STORED crawl; it never re-runs one. */
-  lead_crawl_checks: ['url','result','created_at'],
+  lead_crawl_checks: ['url','result','created_at','mode','full_evidence','requested_from','job_id'],
+  /* The exhaustive crawl's tables (migration 20260923020000_crawl_jobs.sql, read back 2026-09-23). */
+  crawl_jobs: ['id','lead_id','status','started_at','completed_at'],
+  crawl_urls: ['id','url','status','skip_reason','http_status','final_url','source','depth','evidence'],
 };
 const known = new Set(Object.values(live).flat());
-const unknownCols = selects.flatMap((s) => s.split(',').map((c) => c.trim())).filter((c) => !known.has(c));
+/* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */
+const unknownCols = selects.flatMap((s) => s.split(',').map((c) => c.trim().replace(/^[a-z_]+:/, '').split(/->/)[0])).filter((c) => !known.has(c));
 check('schema: every selected column exists in the live schema', unknownCols.length === 0 && hubFn.includes('const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";') && !/from\("ai_audit_runs"\)\.select\("[^"]*completed_at/.test(hubFn));
 check('schema: the client_pages error is read, not swallowed', hubFn.includes('if (p.error) throw p.error;'));
 

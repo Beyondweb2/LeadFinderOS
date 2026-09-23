@@ -20,7 +20,8 @@ import { WEBSITE_TEMPLATES, templateById } from '@/lib/websiteTemplates';
 import { candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
 import { buildPack, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
-import { CrawlEvidenceDetails, LeadCrawlPanel } from '@/components/LeadCrawlPanel';
+import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
+import { MAX_PAGES } from '@/lib/websiteBuildState';
 import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -277,7 +278,7 @@ export default function WebsiteBuild() {
             same row; Re-crawl here writes it too. Everything read is DETECTED — it reaches the build
             only as a fact Paul approves below. */}
         <LeadCrawlPanel leadId={leadId} website={existingSiteUrl || String((payload.lead as { website?: string } | null)?.website ?? '')}
-          summary={summariseLeadCrawl(payload.crawl)} from="website_build"
+          summary={summariseLeadCrawl(payload.crawl, payload.crawl_job)} from="website_build"
           onDone={async () => { if (pending.current) await flush(); setReloadKey((k) => k + 1); }} />
         <CrawlEvidenceDetails full={payload.crawl?.mode === 'full' ? payload.crawl.full_evidence : null} />
       </Section>
@@ -319,7 +320,7 @@ export default function WebsiteBuild() {
 
     {/* ══ ARCHITECTURE ═════════════════════════════════════════════════════════════════════ */}
     {step === 'architecture' && <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
-      checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} />}
+      checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} leadId={leadId} />}
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
@@ -468,11 +469,11 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
   </Section>;
 }
 
-function ArchitectureSection({ state, template, rows, issues, checkedPages, cited, update, goStep, toast }: {
+function ArchitectureSection({ state, template, rows, issues, checkedPages, cited, update, goStep, toast, leadId }: {
   state: WebsiteBuildState; template: ReturnType<typeof templateById>; rows: FactRow[];
   issues: ReturnType<typeof checkArchitecture>; checkedPages: Array<{ url: string; kind?: string }>; cited: Array<{ url: string; questions: string[] }>;
   update: (fn: (s: WebsiteBuildState) => WebsiteBuildState) => void; goStep: (s: Stage) => void;
-  toast: ReturnType<typeof useToast>['toast'];
+  toast: ReturnType<typeof useToast>['toast']; leadId: string;
 }) {
   const [redirectText, setRedirectText] = useState(() => redirectsToText(state.redirects));
   const [pageText, setPageText] = useState(''); const [pasteOpen, setPasteOpen] = useState(false);
@@ -493,6 +494,16 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
         <Button size="sm" variant="outline" onClick={() => setPasteOpen((o) => !o)}>Paste page list from capture</Button>
         <Button size="sm" variant="outline" onClick={() => setPages((ps) => [...ps, { id: newPageId(), family: 'other', title: '', path: '', action: 'undecided', old_url: '', target: '', notes: '' }])}><Plus className="mr-1 h-3.5 w-3.5" />Add page</Button>
       </div>
+      {/* THE COMPLETE OLD-SITE INVENTORY from the exhaustive crawl — every URL, paged and searchable,
+          exportable as CSV. Adding to the architecture is Paul's choice, filtered; the architecture
+          itself holds at most MAX_PAGES planned pages, and the toast says exactly what did not fit. */}
+      <CrawlInventory leadId={leadId} addRoom={Math.max(0, MAX_PAGES - state.pages.length)} onAdd={(inv: InventoryRow[]) => {
+        const seeded = seedFromCrawl(inv.map((r) => ({ url: r.final_url || r.url, kind: r.family ?? undefined })), state.pages);
+        const room = Math.max(0, MAX_PAGES - state.pages.length);
+        addPages(seeded.slice(0, room), seeded.length > room
+          ? `${seeded.length - room} more did not fit the ${MAX_PAGES}-page architecture — narrow the filter (e.g. one family) and add those you will keep, or handle them in the redirect map.`
+          : 'Old URLs from the full crawl — decide each one.');
+      }} />
       {pasteOpen && <div className="space-y-2"><Textarea rows={6} className="font-mono text-xs" value={pageText} placeholder={'action | family | /new-path/ | Title | old url | redirect target | note\nkeep | service | /services/boiler-repair/ | Boiler repair | https://old.co.uk/boiler-repair | | '} onChange={(e) => setPageText(e.target.value)} />
         <Button size="sm" disabled={!pageText.trim()} onClick={() => { addPages(parsePageLines(pageText, PAGE_ACTIONS, PAGE_FAMILIES), 'Pasted from the capture.'); setPageText(''); setPasteOpen(false); }}>Add pages</Button></div>}
       {state.pages.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs">

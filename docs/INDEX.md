@@ -81,3 +81,4 @@
 - `docs/website-build-v1.md` — Website Build V1: the command centre (build mode, MCL template profile, client build facts, architecture + redirects, the nine-item Build Pack), verified on production (2026-09-23)
 - `docs/cold-call-playbook.md` — The read-only Cold Call Playbook (Inbox + Outreach): what it reads, the rules it keeps, the monthly-price discrepancy found (2026-09-23)
 - `docs/paid-client-evidence.md` — One full manual crawl on every screen (one lead_crawl_checks row, full_evidence column, www fix), manual onboarding with the customer questions, baseline input priority (crawl detects, never merges), BS4 root cause (2026-09-23)
+- `docs/exhaustive-crawl.md` — Every manual crawl is an exhaustive resumable background job (crawl_jobs/crawl_urls, crawl-worker, cron backstop), the old limits audit, URL/trap rules, the paged inventory (2026-09-23)

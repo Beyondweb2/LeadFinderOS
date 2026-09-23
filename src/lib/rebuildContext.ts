@@ -38,7 +38,9 @@ export interface RebuildContextPayload {
   report: AiAuditReportData | null;
   discovery_audit: Record<string, unknown> | null;
   /** The lead's ONE lead_crawl_checks row — whichever screen's Crawl site button wrote it. */
-  crawl: { url?: string | null; result?: CrawlStoredResult | null; created_at?: string | null; mode?: string | null; requested_from?: string | null; full_evidence?: Partial<FullCrawlEvidence> | null } | null;
+  crawl: { url?: string | null; result?: CrawlStoredResult | null; created_at?: string | null; mode?: string | null; requested_from?: string | null; job_id?: string | null; full_evidence?: Partial<FullCrawlEvidence> | null } | null;
+  /** The lead's newest crawl job and its live counts (a running one shows progress). */
+  crawl_job?: import('./leadCrawlSummary.ts').CrawlJobLike | null;
   pages: Array<{ service?: string | null; town?: string | null; status?: string | null }>;
 }
 

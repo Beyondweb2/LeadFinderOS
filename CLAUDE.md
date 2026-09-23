@@ -533,12 +533,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   competitor names never on a client page; neighbourhoods are an operator field, never mined.
 
 **Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
-- **Every manual Crawl site / Re-crawl site button is the FULL profile** (`mode: "full"`, operator-only,
-  `resolveCrawlMode`); automated crawls stay STANDARD (`STANDARD_CRAWL` = the old budget). A new
-  button sends `mode: "full"` + `requested_from`, or it is not a manual crawl.
+- **Every manual Crawl site / Re-crawl site / Crawl check is EXHAUSTIVE** (`mode: "full"`, operator-only,
+  `resolveCrawlMode`): a background job (`crawl_jobs`/`crawl_urls`, drained by `crawl-worker`, cron
+  `crawl-worker-run` backstop) that runs until the frontier is empty — no page, request or sitemap cap
+  (`docs/exhaustive-crawl.md`). Never make it finish inside one request again. Automated crawls stay
+  STANDARD inline (`STANDARD_CRAWL`). The screens only WATCH a job; they never crawl.
 - **`lead_crawl_checks` is ONE row per lead, read by every screen** — never a screen-specific copy.
-  Full evidence lives in `full_evidence` (never in `result`, which Outreach/Inbox read for the whole
-  book). An automated crawl never replaces a fresh full one (`mayReplaceLeadCrawl`).
+  The crawl-wide summary lives in `full_evidence`, every URL in `crawl_urls` (never in `result`, which
+  Outreach/Inbox read for the whole book). An automated crawl never replaces a fresh full one
+  (`mayReplaceLeadCrawl`). Read big inventories PAGED (`crawl_inventory`), never in one response.
 - **Same-site means the SERVED address, `www.` ignored** (`sameSiteUrl`). Comparing against the
   requested origin read one page of every apex→www site.
 - **Manual onboarding writes the customer's columns** (`buildOnboardingPatch`) + provenance
@@ -624,7 +627,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the two AI-Audit ones are the only audit-keyed ones — keep at least one.
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
   `whatsapp-queue-run`, `whatsapp-auto-replies-run`, `notify-onboarding-submit-run` (1 min each),
-  `daily-cron-run` (02:00), and `instantly-poll-run` (dead product — Paul unschedules it). The
+  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), and `instantly-poll-run` (dead product — Paul unschedules it). The
   `bulk_jobs.job_type` CHECK constraint is DB-only too. A rebuild from migrations loses them.
 
 ---
