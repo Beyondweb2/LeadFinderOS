@@ -1,84 +1,23 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   SECTION 5 — WEBSITE BUILD. The workflow state, and the Claude Code rebuild prompt generated from
-   everything Findable already knows about this client.
+   WEBSITE BUILD — the EVIDENCE sections every generated build prompt shares: the frozen baseline and
+   the rule not to touch it, the client's own URLs engines cited (do-not-break), Findable's stored
+   crawl findings, and the facts whose sources disagree. The Build Pack (buildPack.ts) assembles its
+   prompts from these plus the approved facts, template and architecture.
 
-   ⛔ THE PROMPT IS GENERATED AT CLICK TIME AND NEVER STORED. Onboarding answers arrive late, a
-   baseline finishes overnight, Paul edits the repo path — a prompt saved to the database is a prompt
-   that is wrong by the time it is used, and nothing on screen would say so. The only things
-   persisted are the seven workflow fields the operator types (outreach_leads.website_build).
-
-   ⛔ NOTHING IS INVENTED. Every value comes from a resolved fact (clientFacts.ts) or a saved field.
-   An unknown local repo path prints [LOCAL REPO PATH REQUIRED] — a literal instruction to supply it,
-   never a plausible-looking guess that Claude would then act on.
-   ⛔ A DISAGREEMENT BETWEEN SOURCES IS A QUESTION, NOT A CHOICE. Conflicts arrive already detected
-   and land under CLIENT CONFIRMATION REQUIRED with both values and both sources named.
+   ⛔ NOTHING IS INVENTED. Every value comes from a resolved fact (clientFacts.ts) or stored evidence.
+   ⛔ A DISAGREEMENT BETWEEN SOURCES IS A QUESTION, NOT A CHOICE.
    ⛔ CITATION IS NOT CAUSATION. The do-not-break section says these URLs were CITED while an engine
-   answered, and tells Claude to investigate before redirecting or removing one. It never says a page
-   caused anything.
+   answered, and tells Claude to investigate before redirecting or removing one.
 
    ⚠️ BUILT FROM ARRAYS OF PLAIN STRINGS, joined — not one enormous template literal. A backtick
-   inside a template literal has broken this repo's build three times (CLAUDE.md §3), and this text
-   contains shell commands that want backticks around them in prose. Arrays remove the hazard.
+   inside a template literal has broken this repo's build three times (CLAUDE.md §3).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import type { ClientFacts, ConfirmationItem, ResolvedFact, ResolvedListFact } from './clientFacts.ts';
-import { FACT_SOURCE_LABELS } from './clientFacts.ts';
+import type { ClientFacts, ConfirmationItem } from './clientFacts.ts';
 import type { BaselineSummary, VisibilitySignal } from './baselineSummary.ts';
+import type { WebsiteBuildState } from './websiteBuildState.ts';
 
-/* ── workflow state ──────────────────────────────────────────────────────────────────────────── */
-
-/** The build statuses, in order. Stored as these tokens; displayed through the labels below. */
-export const WEBSITE_BUILD_STATUSES = ['not_started', 'inventory', 'building', 'qa', 'ready_to_deploy', 'live'] as const;
-export type WebsiteBuildStatus = (typeof WEBSITE_BUILD_STATUSES)[number];
-
-export const WEBSITE_BUILD_STATUS_LABELS: Record<WebsiteBuildStatus, string> = {
-  not_started: 'Not started',
-  inventory: 'Inventory',
-  building: 'Building',
-  qa: 'QA',
-  ready_to_deploy: 'Ready to deploy',
-  live: 'Live',
-};
-
-export interface WebsiteBuildState {
-  repo_url: string;
-  local_repo_path: string;
-  preview_url: string;
-  production_url: string;
-  canonical_domain: string;
-  status: WebsiteBuildStatus;
-  notes: string;
-}
-
-export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
-  repo_url: '', local_repo_path: '', preview_url: '', production_url: '',
-  canonical_domain: '', status: 'not_started', notes: '',
-};
-
-/**
- * Read `outreach_leads.website_build` into a complete state.
- *
- * ⛔ AN UNRECOGNISED STATUS FALLS TO 'not_started', NOT TO "whatever was stored". A status is read by
- * the UI to say how far along a build is; an unknown token rendering as itself would put an
- * unexplained word on screen. Absent means not started — which on a build pipeline is the direction
- * that never overstates progress.
- */
-export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
-  const o = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
-  const str = (k: string) => String(o[k] ?? '').trim();
-  const status = String(o.status ?? '').trim() as WebsiteBuildStatus;
-  return {
-    repo_url: str('repo_url'),
-    local_repo_path: str('local_repo_path'),
-    preview_url: str('preview_url'),
-    production_url: str('production_url'),
-    canonical_domain: str('canonical_domain'),
-    status: (WEBSITE_BUILD_STATUSES as readonly string[]).includes(status) ? status : 'not_started',
-    notes: str('notes'),
-  };
-}
-
-/* ── the prompt ──────────────────────────────────────────────────────────────────────────────── */
+/* ── the evidence input ──────────────────────────────────────────────────────────────────────── */
 
 export interface RebuildPromptInput {
   facts: ClientFacts;
@@ -99,78 +38,7 @@ export interface RebuildPromptInput {
   plannedPages: Array<{ service?: string | null; town?: string | null; status?: string | null }>;
 }
 
-/** "value  (source: client onboarding)" — or the explicit not-recorded marker. */
-function withSource(f: ResolvedFact, missing = 'NOT RECORDED — ask the client'): string {
-  if (!f.value) return missing;
-  return `${f.value}${f.source ? `   (source: ${FACT_SOURCE_LABELS[f.source]})` : ''}`;
-}
-
-function listWithSource(f: ResolvedListFact, missing = 'NOT RECORDED — ask the client'): string {
-  if (!f.values.length) return missing;
-  return `${f.values.join(', ')}   (source: ${f.source ? FACT_SOURCE_LABELS[f.source] : 'unknown'})`;
-}
-
-/** The literal marker Part 10 requires when the local repo path is unknown. Never a guess. */
-export const LOCAL_REPO_PATH_REQUIRED = '[LOCAL REPO PATH REQUIRED]';
-
-function projectContext(i: RebuildPromptInput): string[] {
-  const f = i.facts;
-  const out = [
-    '## PROJECT CONTEXT',
-    '',
-    'Every line below came from Findable’s own records. Nothing here is guessed. Where a value',
-    'says NOT RECORDED, it genuinely is not recorded — do not fill it in from the live site without',
-    'saying so, and never invent one.',
-    '',
-    `- Business name:        ${withSource(f.businessName)}`,
-    `- Live website:         ${withSource(f.website)}`,
-    `- Canonical domain:     ${withSource(f.canonicalDomain)}`,
-    `- Primary location:     ${withSource(f.primaryLocation)}`,
-    `- Business category:    ${withSource(f.category)}`,
-    `- Services:             ${listWithSource(f.services)}`,
-    `- Service areas:        ${listWithSource(f.areas)}`,
-    `- Contact name:         ${withSource(f.contactName, 'NOT RECORDED')}`,
-    `- Contact email:        ${withSource(f.email, 'NOT RECORDED')}`,
-    `- Contact phone:        ${withSource(f.phone, 'NOT RECORDED')}`,
-    '',
-    '### What the client told us at onboarding',
-    `- What makes them different: ${withSource(f.standout, 'NOT RECORDED')}`,
-    `- Accreditations:            ${withSource(f.accreditations, 'NOT RECORDED')}`,
-    `- MUST NOT SAY:              ${withSource(f.mustNotSay, 'nothing recorded')}`,
-    `- Website platform:          ${withSource(f.websitePlatform, 'NOT RECORDED')}`,
-    `- Willing to migrate host:   ${withSource(f.willingToMigrate, 'NOT RECORDED')}`,
-    `- Website route:             ${withSource(f.websiteRoute, 'NOT RECORDED')}`,
-    `- Domain status:             ${withSource(f.domainStatus, 'NOT RECORDED')}`,
-    `- Website access:            ${withSource(f.accessStatus, 'NOT RECORDED')}`,
-    `- Google Business Profile:   ${withSource(f.gbp, 'NOT RECORDED')}`,
-    `- Competitor they named:     ${withSource(f.competitorNamedByClient, 'NOT RECORDED')}`,
-  ];
-  if (f.onboardingIncomplete) {
-    out.push('', '⚠ The onboarding questionnaire is marked INCOMPLETE. Use what is above; treat every',
-      'NOT RECORDED as a real gap to raise, not as licence to assume.');
-  }
-  if (f.mustNotSay.value) {
-    out.push('', `⛔ HARD CONSTRAINT — the client has said we must NOT say: ${f.mustNotSay.value}`,
-      'This applies to every page, every heading and every meta description you write.');
-  }
-  out.push('', '### Repository and environment',
-    `- Repository:        ${i.build.repo_url || 'NOT RECORDED'}`,
-    `- Local repo path:   ${i.build.local_repo_path || LOCAL_REPO_PATH_REQUIRED}`,
-    `- Preview URL:       ${i.build.preview_url || 'not created yet'}`,
-    `- Production URL:    ${i.build.production_url || 'not decided yet'}`,
-    `- Build status:      ${WEBSITE_BUILD_STATUS_LABELS[i.build.status]}`,
-  );
-  if (i.build.notes) out.push('', `### Operator notes`, i.build.notes);
-  if (i.plannedPages.length) {
-    out.push('', '### Pages already planned in Findable',
-      ...i.plannedPages.map((p) => `- ${[p.service, p.town].filter(Boolean).join(' · ') || 'page'} — ${p.status || 'planned'}`),
-      'These are the page plan Findable has queued. Reconcile your proposed architecture with them;',
-      'do not silently drop or duplicate one.');
-  }
-  return out;
-}
-
-function baselineProtection(i: RebuildPromptInput): string[] {
+export function baselineProtection(i: RebuildPromptInput): string[] {
   if (!i.baseline) {
     return [
       '## BASELINE PROTECTION',
@@ -249,7 +117,7 @@ function baselineProtection(i: RebuildPromptInput): string[] {
   return out;
 }
 
-function doNotBreak(i: RebuildPromptInput): string[] {
+export function doNotBreak(i: RebuildPromptInput): string[] {
   const out = [
     '## DO-NOT-BREAK / EXISTING VISIBILITY SIGNALS',
     '',
@@ -282,7 +150,7 @@ function doNotBreak(i: RebuildPromptInput): string[] {
   return out;
 }
 
-function crawlSection(i: RebuildPromptInput): string[] {
+export function crawlSection(i: RebuildPromptInput): string[] {
   if (!i.crawlFindings.length) return [];
   return [
     '## STORED TECHNICAL FINDINGS (from Findable’s own crawl — do not re-run it)',
@@ -297,7 +165,7 @@ function crawlSection(i: RebuildPromptInput): string[] {
   ];
 }
 
-function confirmations(i: RebuildPromptInput): string[] {
+export function confirmationsSection(i: RebuildPromptInput): string[] {
   if (!i.confirmations.length) {
     return ['## CLIENT CONFIRMATION REQUIRED', '', 'Nothing is in conflict and no required fact is missing at the time this prompt was generated.'];
   }
@@ -313,114 +181,7 @@ function confirmations(i: RebuildPromptInput): string[] {
   ];
 }
 
-/* The reusable half — identical for every client, so it is one constant rather than string-built. */
-const WORKFLOW: string[] = [
-  '## THE REBUILD WORKFLOW',
-  '',
-  'Work in these phases, in this order. Do not run ahead.',
-  '',
-  ' 1. FORENSIC CRAWL / INVENTORY of the entire live site. Every URL, not a sample.',
-  ' 2. CLASSIFY every current URL: homepage, service, location, service+location, blog/article,',
-  '    legal, utility, orphan, duplicate, thin, redirect, dead.',
-  ' 3. CAPTURE GENUINE ASSETS LOCALLY — logo, favicon, real photographs of their work, trade badges,',
-  '    manufacturer logos, review-platform marks. No hotlinking, ever.',
-  ' 4. ESTABLISH THE SHARED DESIGN SYSTEM FIRST — tokens, type scale, spacing, components. Before any',
-  '    page family is built, not alongside.',
-  ' 5. REBUILD BY PAGE FAMILY, one family at a time, each reviewed before the next starts.',
-  ' 6. PRESERVE GENUINE CONTENT AND BUSINESS FACTS. The live site and the verified Findable data are',
-  '    the evidence base. Rewriting for clarity is fine; changing a fact is not.',
-  ' 7. REMOVE OR MERGE ONLY GENUINELY THIN OR DUPLICATE ARCHITECTURE, and say what you are doing and',
-  '    why before you do it.',
-  ' 8. ONE PRIMARY PAGE PER IMPORTANT INTENT. If two pages compete for the same intent, one owns it.',
-  ' 9. NO CLONED TOWN PAGES and no service × location matrix. A location page exists only where there',
-  '    is genuinely different, true content to put on it.',
-  '10. IMPROVE ENTITY CLARITY — the same business name, address, phone and description everywhere, and',
-  '    an unambiguous statement of who this business is, what it does and where.',
-  '11. TECHNICAL SEO, CRAWLABILITY AND SCHEMA — see the AI VISIBILITY STANDARDS section below.',
-  '12. PREVIEW SETUP — see PREVIEW below.',
-  '13. LIVE-VS-REBUILD VISUAL COMPARISON at matching viewport sizes (see PREVIEW).',
-  '14. FUNCTIONAL PARITY — see FUNCTIONAL PARITY below.',
-  '15. ANALYTICS AND SOCIAL METADATA — carried across deliberately, verified, nothing dropped silently.',
-  '16. FINAL TECHNICAL QA.',
-  '17. SAFE GIT WORKFLOW throughout (see WORKING STYLE).',
-  '18. PRODUCTION DEPLOYMENT ONLY AFTER PAUL APPROVES, and only once the production hosting path is',
-  '    actually known.',
-  '19. POST-DEPLOYMENT VERIFICATION — redirects, forms, analytics, crawlability, all re-checked live.',
-];
-
-const PREVIEW: string[] = [
-  '## PREVIEW',
-  '',
-  'Terminal 1:',
-  '',
-  '    cd <LOCAL_REPO_PATH>',
-  '    npm run dev -- --host 0.0.0.0',
-  '',
-  'Then the site is at:',
-  '',
-  '    http://localhost:4321',
-  '',
-  'Terminal 2:',
-  '',
-  '    cloudflared tunnel --url http://localhost:4321',
-  '',
-  'Cloudflare prints a URL of the form https://xxxxx.trycloudflare.com — ASK PAUL for it. It is',
-  'generated fresh each time and you cannot know it in advance; do not guess one.',
-  '',
-  '⛔ The Quick Tunnel is for development and QA ONLY.',
-  '⛔ Do NOT create a Cloudflare Pages project just to get a preview.',
-  '',
-  'VISUAL COMPARISON IS REQUIRED, and it is a RENDERED comparison:',
-  '- desktop 1440×900',
-  '- mobile  375×812',
-  'Compare the original and the rebuild at matching viewport sizes and look at both.',
-  '⛔ HTML/CSS similarity is NOT proof of parity. Two pages can share a stylesheet and look nothing',
-  'alike. If you cannot render and look, say so rather than claiming parity.',
-];
-
-const FUNCTIONAL_PARITY: string[] = [
-  '## FUNCTIONAL PARITY',
-  '',
-  'Investigate every one of these on the live site and account for it in the rebuild:',
-  '- forms of every kind, and where they submit',
-  '- callback / call-back request forms',
-  '- multi-step lead wizards',
-  '- partial lead capture (anything that records a half-finished enquiry)',
-  '- analytics of any kind',
-  '- Google Ads conversion events',
-  '- GA4 events',
-  '- tel: links',
-  '- WhatsApp links',
-  '- mailto: links',
-  '- galleries and lightboxes',
-  '- embedded maps',
-  '- booking or scheduling widgets',
-  '- any existing backend endpoint the front end calls',
-  '',
-  '⛔ DO NOT SUBMIT FAKE LEADS into the client’s live website while investigating. A test enquiry is',
-  'a real enquiry to the business owner and to whatever CRM or inbox it reaches. Read the markup, the',
-  'network calls and the code — do not press send.',
-  '',
-  'If a piece of functionality needs a backend, DOCUMENT IT and wait: it cannot be finished until the',
-  'production hosting path is known.',
-];
-
-const ASSET_AND_CONTENT_RULES: string[] = [
-  '## ASSET AND CONTENT RULES',
-  '',
-  '⛔ NEVER INVENT ANY OF THE FOLLOWING. Not as filler, not as a placeholder, not "to be replaced',
-  'later", not in a draft you intend to fix:',
-  '  reviews · jobs or case studies · prices · services · service areas · awards · accreditations ·',
-  '  licences · staff or team members · years trading · response times · guarantees · locations',
-  '',
-  'The evidence base is: the live site, and the verified Findable data in this prompt. If a fact is',
-  'in neither, it does not go on the website — it goes on the list of things to ask Paul.',
-  '',
-  'Capture genuine assets locally: logo, favicon, the client’s own photographs, trade badges,',
-  'manufacturer logos, review-platform assets. No hotlinking to the old site or anywhere else.',
-];
-
-const AI_VISIBILITY: string[] = [
+export const AI_VISIBILITY: string[] = [
   '## AI VISIBILITY STANDARDS (Findable’s, and they are not what people assume)',
   '',
   'The objective is NOT to trick an AI. It is to make the business easy to:',
@@ -449,102 +210,3 @@ const AI_VISIBILITY: string[] = [
   '⛔ No AI gimmicks: no hidden text, no keyword stuffing, no question-parroting pages, no "AI-',
   'optimised" markup that says something the page does not.',
 ];
-
-const WORKING_STYLE: string[] = [
-  '## HOW TO WORK WITH PAUL',
-  '',
-  'Paul is non-technical. Explain everything in plain English. No jargon, and lead with the answer.',
-  '',
-  'At each meaningful phase, tell him:',
-  '  1. what you found',
-  '  2. what you changed',
-  '  3. why',
-  '  4. anything he needs to decide',
-  '  5. what happens next',
-  '',
-  'BE CREDIT-EFFICIENT. Do NOT:',
-  '- repeatedly re-scan things you have already scanned',
-  '- perform broad unrelated refactors',
-  '- revisit sections that have already been approved',
-  '- produce huge speculative reports',
-  '- make changes nobody asked for',
-  '',
-  'GIT SAFETY:',
-  '- use logical commits, one coherent change each',
-  '- NEVER reset, rebase, squash, amend, or force push unless Paul explicitly tells you to',
-  '',
-  'FREEZE APPROVED PAGE FAMILIES. Once Paul has approved a family, it does not change again without',
-  'him asking for it.',
-];
-
-const FIRST_RUN_STOP: string[] = [
-  '## YOUR FIRST TASK — AND THE ONLY ONE FOR NOW',
-  '',
-  '⛔ DO NOT REBUILD ANYTHING YET. Do not create pages, do not set up a design system, do not write',
-  'a single component.',
-  '',
-  'Your first and only task is a FORENSIC INVENTORY of the existing live site. When it is done,',
-  'report back with:',
-  '',
-  ' 1. the complete live URL inventory',
-  ' 2. the page families you found',
-  ' 3. the verified business facts the site actually states',
-  ' 4. the genuine assets available (logo, favicon, photographs, badges)',
-  ' 5. the current URL architecture',
-  ' 6. duplication and thin-page issues',
-  ' 7. functionality and forms',
-  ' 8. analytics',
-  ' 9. schema / structured data',
-  '10. the potential do-not-break URLs',
-  '11. your proposed rebuild phases',
-  '12. the client confirmations required',
-  '',
-  'THEN STOP. Paul reviews all of that before the build begins.',
-];
-
-/**
- * The complete, reusable Claude Code rebuild prompt for ONE client, with that client's verified
- * context already filled in.
- */
-export function buildRebuildPrompt(i: RebuildPromptInput): string {
-  const name = i.facts.businessName.value || 'this client';
-  const repo = i.build.local_repo_path || LOCAL_REPO_PATH_REQUIRED;
-  const header = [
-    `# WEBSITE REBUILD — ${name}`,
-    '',
-    'You are rebuilding this business’s website for Findable. Read this whole brief before you start.',
-    'It contains the client’s verified details, their completed AI-visibility baseline, the rules that',
-    'apply to every Findable rebuild, and a hard stop after the first phase.',
-    '',
-    `Generated from Findable’s live records at ${new Date().toISOString()}.`,
-    '',
-  ];
-  const sections = [
-    header,
-    projectContext(i),
-    [''],
-    baselineProtection(i),
-    [''],
-    doNotBreak(i),
-    [''],
-    crawlSection(i),
-    i.crawlFindings.length ? [''] : [],
-    confirmations(i),
-    [''],
-    WORKFLOW,
-    [''],
-    PREVIEW.map((line) => line.replace('<LOCAL_REPO_PATH>', repo)),
-    [''],
-    FUNCTIONAL_PARITY,
-    [''],
-    ASSET_AND_CONTENT_RULES,
-    [''],
-    AI_VISIBILITY,
-    [''],
-    WORKING_STYLE,
-    [''],
-    FIRST_RUN_STOP,
-    [''],
-  ];
-  return sections.flat().join('\n');
-}

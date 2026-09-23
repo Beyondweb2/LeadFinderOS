@@ -29,6 +29,7 @@ const BaselinePage = lazy(() => import("./pages/Baseline"));
 const PaidBaselineSetup = lazy(() => import("./pages/PaidBaselineSetup"));
 const PaidClients = lazy(() => import("./pages/PaidClients"));
 const ClientHub = lazy(() => import("./pages/ClientHub"));
+const WebsiteBuild = lazy(() => import("./pages/WebsiteBuild"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
@@ -208,6 +209,7 @@ const App = () => {
               <Route path="/baseline-setup/:leadId" element={<PaidBaselineSetup />} />
               <Route path="/paid-clients" element={<PaidClients />} />
               <Route path="/paid-clients/:leadId" element={<ClientHub />} />
+              <Route path="/paid-clients/:leadId/website-build" element={<WebsiteBuild />} />
               {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
               unproven markings are part of the document, so it is shown WITH them or not at all. */}
               <Route path="/compare/:auditId" element={<ComparePage />} />

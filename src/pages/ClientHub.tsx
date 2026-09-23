@@ -18,13 +18,9 @@ import { hubBaselineStatus, isFrozenBaselineStatus, isStartedBaselineStatus, pai
 import { approveAndStart, createSingleFlight, startApproved, type ApproveAndStartResult } from '@/lib/paidBaselineFlow';
 import { welcomePackReadiness, welcomePackUrl } from '@/lib/welcomePackData';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
-import { toRebuildPromptInput, type RebuildContextPayload } from '@/lib/rebuildContext';
-import {
-  buildRebuildPrompt, parseWebsiteBuild, WEBSITE_BUILD_STATUSES, WEBSITE_BUILD_STATUS_LABELS,
-  type WebsiteBuildState, type WebsiteBuildStatus,
-} from '@/lib/websiteBuildPrompt';
+import { BUILD_MODE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } from '@/lib/websiteBuildState';
+import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
-import { Textarea } from '@/components/ui/textarea';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
@@ -261,77 +257,43 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   STAGE 5 — WEBSITE BUILD.
+   STAGE 5 — WEBSITE BUILD (summary). The work happens on its own page, /paid-clients/:id/website-build
+   (src/pages/WebsiteBuild.tsx): build mode, client build facts, capture, architecture, the Build Pack
+   of commands and prompts, preview, QA and live. This card only says where the build stands.
 
-   The old stage's two useful things are KEPT, not moved: the planned-pages list and the page
-   generator link are still here, now inside the section the website work actually belongs to.
-
-   ⛔ THE PROMPT IS GENERATED AT CLICK TIME FROM A FRESH READ. Nothing is cached in this component
-   and nothing is stored in the database, so onboarding answers or a baseline that landed since the
-   page loaded are in the very next copy. That is why the button fetches rather than using `hub`.
-   ⛔ THE ONLY WRITE IS SAVE. Copying the prompt calls a read-only action; it cannot change a fact.
+   The planned-pages list and the page generator link stay here — they belong to the website work.
+   ⛔ READ ONLY. Nothing on this card writes; the summary is parsed from the row the hub already read.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-function WebsiteBuildStage({ lead, onboarding, audit, pages, onSaved }: {
-  lead: AnyRecord; onboarding: AnyRecord | null; audit: AnyRecord | null;
-  pages: AnyRecord[]; onSaved: () => Promise<void>;
+function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
+  lead: AnyRecord; onboarding: AnyRecord | null; audit: AnyRecord | null; pages: AnyRecord[];
 }) {
-  const { toast } = useToast();
-  const [form, setForm] = useState<WebsiteBuildState>(() => parseWebsiteBuild(lead.website_build));
-  const [busy, setBusy] = useState<null | 'save' | 'copy'>(null);
-  const set = (k: keyof WebsiteBuildState, v: string) => setForm((p) => ({ ...p, [k]: v } as WebsiteBuildState));
-
-  /* The read-only context strip. Same resolver the prompt uses, so what Paul reads here is what
-     Claude is handed — one ruler, not a second display rule. */
+  const build = useMemo(() => parseWebsiteBuild(lead.website_build), [lead.website_build]);
   const facts = useMemo(() => resolveClientFacts({
     lead: lead as never, onboarding: onboarding as never, baselineAudit: audit as never,
-    savedCanonicalDomain: form.canonical_domain || null,
-  }), [lead, onboarding, audit, form.canonical_domain]);
+    savedCanonicalDomain: build.canonical_domain || null,
+  }), [lead, onboarding, audit, build.canonical_domain]);
   const confirmations = useMemo(() => clientConfirmationsNeeded(facts), [facts]);
-
-  const save = async () => {
-    setBusy('save');
-    try {
-      await call({ action: 'save_website_build', lead_id: lead.id, website_build: form });
-      await onSaved();
-      toast({ title: 'Website build saved' });
-    } catch (e) {
-      toast({ title: 'Could not save', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
-    } finally { setBusy(null); }
-  };
-
-  const copyPrompt = async () => {
-    setBusy('copy');
-    try {
-      const res = await call({ action: 'rebuild_context', lead_id: lead.id });
-      const payload = res.context as RebuildContextPayload;
-      const prompt = buildRebuildPrompt(toRebuildPromptInput(payload));
-      await navigator.clipboard.writeText(prompt);
-      toast({ title: 'Claude rebuild prompt copied', description: `${prompt.length.toLocaleString()} characters, generated from the current records.` });
-    } catch (e) {
-      toast({ title: 'Could not build the prompt', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
-    } finally { setBusy(null); }
-  };
-
+  const template = build.build_mode === 'template' ? templateById(build.template_id) : null;
+  const qaTotal = QA_ITEMS.length;
+  const qaDone = QA_ITEMS.filter((q) => build.qa[q.key]).length;
   const ro = (label: string, value: string) => <div><div className="text-xs text-muted-foreground">{label}</div><div className="break-words">{value || '—'}</div></div>;
-  const field = (label: string, k: keyof WebsiteBuildState, placeholder: string) =>
-    <div><Label className="text-xs">{label}</Label><Input className="h-8 text-xs" value={String(form[k] ?? '')} placeholder={placeholder} onChange={(e) => set(k, e.target.value)}/></div>;
+  const route = build.build_mode
+    ? BUILD_MODE_LABELS[build.build_mode] + (template ? ' · ' + template.name : '') + (build.build_mode === 'rebuild' && build.rebuild_style ? ' · ' + REBUILD_STYLE_LABELS[build.rebuild_style] : '')
+    : 'Not chosen yet';
 
   return <Stage title="5. Website Build">
     <div className="grid gap-3 sm:grid-cols-2">
-      {ro('Business', facts.businessName.value || '')}
+      {ro('Build route', route)}
       {ro('Live website', facts.website.value || '')}
+      {ro('Facts you approved', String(build.facts.filter((f) => f.status === 'verified').length))}
+      {ro('Architecture', build.pages.length + ' page(s) · ' + build.redirects.length + ' redirect(s)')}
+      {ro('Preview', build.preview_url)}
+      {ro('Production', build.production_url)}
+      {ro('QA', qaDone + ' of ' + qaTotal + ' checks')}
       {ro('Baseline', audit?.baseline_completed_at ? `Completed ${new Date(audit.baseline_completed_at).toLocaleDateString('en-GB', { timeZone: 'UTC' })}` : 'Not completed yet')}
-      {ro('Verified services', facts.services.values.join(', '))}
-      {ro('Verified service areas', facts.areas.values.join(', '))}
-      {ro('Business category', facts.category.value || '')}
     </div>
-
-    <div className="rounded-md border p-2">
-      <p className="text-xs font-medium text-muted-foreground">Client confirmations needed</p>
-      {confirmations.length === 0
-        ? <p className="text-xs text-muted-foreground">Nothing in conflict, nothing required missing.</p>
-        : <ul className="mt-1 space-y-1 text-xs">{confirmations.map((c, i) => <li key={i}><b>{c.label}</b> — {c.detail}</li>)}</ul>}
-    </div>
+    {confirmations.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">{confirmations.length} client confirmation(s) needed — resolved in Client Build Facts.</p>}
+    <Button asChild size="sm"><Link to={`/paid-clients/${lead.id}/website-build`}><FileCode2 className="mr-1 h-4 w-4"/>Open Website Build</Link></Button>
 
     <div className="rounded-md border p-2">
       <p className="text-xs font-medium text-muted-foreground">Planned pages</p>
@@ -340,38 +302,6 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages, onSaved }: {
         : <p className="text-xs text-muted-foreground">No planned pages yet.</p>}
       <Button asChild variant="outline" size="sm" className="mt-2"><Link to="/page-generator"><FileCode2 className="mr-1 h-4 w-4"/>Open page generator</Link></Button>
     </div>
-
-    <div className="grid gap-3 sm:grid-cols-2">
-      {field('Canonical domain', 'canonical_domain', 'mc-locksmiths.com')}
-      {field('Repository URL', 'repo_url', 'https://github.com/…')}
-      {field('Local repo path', 'local_repo_path', 'C:\\Users\\paulj\\…')}
-      {field('Preview URL', 'preview_url', 'https://xxxxx.trycloudflare.com')}
-      {field('Production URL', 'production_url', 'https://…')}
-      <div><Label className="text-xs">Build status</Label>
-        <select
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-          value={form.status}
-          onChange={(e) => set('status', e.target.value as WebsiteBuildStatus)}
-        >
-          {WEBSITE_BUILD_STATUSES.map((s) => <option key={s} value={s}>{WEBSITE_BUILD_STATUS_LABELS[s]}</option>)}
-        </select>
-      </div>
-    </div>
-    <div><Label className="text-xs">Notes</Label><Textarea className="text-xs" rows={3} value={form.notes} onChange={(e) => set('notes', e.target.value)}/></div>
-
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void save()}>
-        {busy === 'save' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Save className="mr-1 h-4 w-4"/>}Save website build
-      </Button>
-      <Button size="sm" disabled={busy !== null} onClick={() => void copyPrompt()}>
-        {busy === 'copy' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Clipboard className="mr-1 h-4 w-4"/>}Copy Claude rebuild prompt
-      </Button>
-    </div>
-    <p className="text-xs text-muted-foreground">
-      The prompt is built when you press the button, from the records as they stand — nothing is
-      stored, so newly completed onboarding or baseline data is always included. Save first if you
-      have just edited the fields above.
-    </p>
   </Stage>;
 }
 
@@ -430,7 +360,7 @@ export default function ClientHub() {
     <WelcomePackStage lead={lead} audit={audit}/>
     <Stage title="3. Action Plan">{audit?.baseline_completed_at ? <><p>Derived from the completed baseline; no second audit is run.</p><Button asChild variant="outline"><Link to={`/playbook/${audit.id}`}>Open action plan</Link></Button></> : <p>Available when the baseline completes.</p>}</Stage>
     <Stage title="4. Directories"><p>Directory opportunities are intentionally unverified until checked.</p><Button variant="outline" disabled>Directory catalogue integration</Button></Stage>
-    <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages} onSaved={refresh}/>
+    <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
     <Stage title="6. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
     <Stage title="7. Remeasure"><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <Button variant="outline" disabled>Runs automatically when due</Button>}</Stage>
     <Stage title="8. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>

@@ -102,19 +102,17 @@ ok(/to="\/page-generator"/.test(clientHub), 'the page generator link is still in
   const stage = clientHub.slice(start, end);
   ok(start > -1 && stage.includes('Planned pages'), 'planned pages render inside WebsiteBuildStage');
   ok(stage.includes('/page-generator'), 'the page generator link renders inside WebsiteBuildStage');
-  ok(stage.includes('Copy Claude rebuild prompt'), 'alongside the rebuild-prompt button');
+  ok(stage.includes('/website-build'), 'alongside the link to the Website Build command centre');
 }
 ok(/<Stage title="5\. Website Build">/.test(clientHub), 'Section 5 is titled Website Build');
 
-console.log('\n── THE PROMPT IS NEVER STORED ──');
-ok(!/buildRebuildPrompt/.test(hub), 'the server never builds the prompt');
-ok(!/rebuild_prompt|prompt_text/.test(hub), 'and there is no column for a stored prompt');
-ok(/buildRebuildPrompt\(toRebuildPromptInput\(payload\)\)/.test(clientHub),
-  'it is assembled in the browser at click time from a fresh read');
-{
-  const copyFn = clientHub.slice(clientHub.indexOf('const copyPrompt'), clientHub.indexOf('const ro ='));
-  ok(/action: 'rebuild_context'/.test(copyFn), 'the button fetches current data rather than using the loaded hub state');
-}
+console.log('\n── THE PROMPTS ARE NEVER STORED ──');
+const websiteBuild = read('src/pages/WebsiteBuild.tsx');
+ok(!/from "[^"]*buildPack|buildPack\(|buildRebuildPrompt/.test(hub), 'the server never imports or calls a prompt builder');
+ok(!/rebuild_prompt|prompt_text|master_prompt/.test(hub), 'and there is no column for a stored prompt');
+ok(/buildPack\(\{/.test(websiteBuild), 'the Build Pack is assembled in the browser from the loaded records');
+ok(/action: 'rebuild_context'/.test(websiteBuild), 'from a fresh rebuild_context read when the page opens');
+ok(!/setInterval/.test(websiteBuild), 'and the page never polls');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
 process.exit(failures ? 1 : 0);
