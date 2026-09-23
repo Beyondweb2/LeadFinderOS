@@ -52,6 +52,21 @@
 
 ## BS4 verification (production, 2026-09-23)
 
-Job `ef764f55` was already running when this shipped; no new job was started. See the session report
-for the numbers read from leadfinderos-next.pages.dev before and after closing, navigating away and
-reloading.
+Job `ef764f55` was already running when this shipped; no new job was started, and it stayed the only
+Discovery audit for the lead.
+
+- Mid-run, production read 284/294 (96%), 44/49 questions, ChatGPT 142/147, Gemini 142/147, both
+  Discovery buttons disabled, groups labelled Provisional, rows "Running · ChatGPT 2/3 · Gemini 2/3"
+  and "named in 0 of 2 answered runs so far (partial)".
+- Closed the dialog → another page → full reload → reopened: 286/294, restored from the stored rows.
+- All 147 rows landed by 13:28 UTC; the runs were then held ~23 min by competitor cleaning hitting
+  the gpt-4o 30k TPM limit (429) until `RETRY_CLEAN_CAP` (4) released them with `gave_up_at` (rival
+  names withheld on those runs — existing, bounded behaviour). The job correctly read "running".
+- Finalised 13:51:37 UTC: 294/294 measurements, 49/49 questions, ChatGPT 147/147, Gemini 147/147,
+  0 failed. The open dialog switched itself to "Discovery complete" and stopped polling; the
+  Provisional labels went. Final groups: Winnable 41 · Possible 1 · Already named 5 · Weak 2
+  (provisional had been 39 · 1 · 5 · 4).
+- Baseline untouched: status needs_approval, no approval, no baseline audit, no remeasure date.
+
+⚠️ The long tail of a 49 × 3 Discovery is the cleaning hold under the OpenAI rate limit (~23 min),
+not the engines (~49 min of answering).
