@@ -499,6 +499,35 @@ export function resolveSiteFindingsDetailed(
   leadCrawl?: FindingsSource | null,
   opts: SiteFindingsOptions = {},
 ): SiteFindingsResult | null {
+  const found = resolveFindingsSource(hasWebsite, auditRunCrawls, leadCrawl);
+  return found ? buildSiteFindingsDetailed(found.signals, { ...opts, evidence: found.evidence }) : null;
+}
+
+/** The stored crawl the findings were read from, with its raw signals and evidence beside the
+ *  candidate findings — for a surface that must show the PROOF as well as the words (the Cold Call
+ *  Playbook, 2026-09-23). */
+export interface ResolvedFindingsSource {
+  source: FindingsSource;
+  signals: CrawlSignals;
+  evidence: SiteEvidenceFinding[];
+  /** Strongest first, never empty. */
+  candidates: SiteFinding[];
+}
+
+/**
+ * THE ONE LOOP that decides which stored crawl a lead's findings come from: audit-run crawls first
+ * (newest first, as the caller orders them), then the lead-level row; incomplete, unavailable,
+ * stale and pre-v2 rows skipped; the first source with at least one strong finding wins.
+ *
+ * ⛔ resolveSiteFindingsDetailed is written in terms of this, so the WhatsApp {{6}} and the Cold Call
+ * Playbook cannot pick different crawls or different findings for the same lead. Behaviour is
+ * unchanged: buildSiteFindingsDetailed is null exactly when candidateFindings is empty.
+ */
+export function resolveFindingsSource(
+  hasWebsite: boolean,
+  auditRunCrawls: FindingsSource[] = [],
+  leadCrawl?: FindingsSource | null,
+): ResolvedFindingsSource | null {
   if (!hasWebsite) return null;
   for (const source of [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])]) {
     if (source.complete === false) continue;
@@ -508,8 +537,8 @@ export function resolveSiteFindingsDetailed(
     const evidence = selectableEvidence(
       usableSiteEvidence(source.result, source.createdAtMs, CRAWL_FRESH_MS),
     );
-    const findings = buildSiteFindingsDetailed(signals, { ...opts, evidence });
-    if (findings) return findings;
+    const candidates = candidateFindings(signals, evidence);
+    if (candidates.length) return { source, signals, evidence, candidates };
   }
   return null;
 }

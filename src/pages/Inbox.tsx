@@ -37,6 +37,7 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
+import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
@@ -1625,6 +1626,9 @@ const Inbox = () => {
                     )}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
+                    {/* Read-only call guide for THIS conversation's lead — the SAME panel Outreach
+                        opens. Labelled rather than an icon so it is findable mid-call. */}
+                    {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} compact />}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

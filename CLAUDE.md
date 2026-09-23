@@ -578,6 +578,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
+| Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
 | Mockup product (live) | fn `mockup`, `_shared/mockup-*.ts`, `src/pages/Mockups.tsx`, `src/mockup/templates/`, table `generated_sites`, bucket `mockup-assets` |
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
