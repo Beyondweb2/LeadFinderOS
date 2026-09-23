@@ -190,5 +190,9 @@ list in CLAUDE.md §0 is out of date — it names four; there are eight.
   `PaidClients` or `PaidBaselineSetup` chunk at all, so it predates the Paid Clients feature
   entirely — it was already weeks stale before this change. `main` is pushed and builds clean
   locally; the Cloudflare Pages auto-deploy is not running.
+  ⚠️ **CORRECTED 2026-09-23: this finding was wrong.** `leadfinderos.pages.dev` is a LEGACY project
+  that is not connected to `main`; production is `leadfinderos-next.pages.dev`, which was serving
+  current `main` (`3972fd42`) when checked. The auto-deploy works — the check hit the wrong host.
+  See CLAUDE.md §0 and §7.
 - `audit_purpose = 'discovery'` is a live value that is not in `auditKind.ts`'s constant list.
 - The Welcome Pack still cannot be SENT from the hub — it is download and link only.
