@@ -480,6 +480,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   and the named-template tests. The parity tests (`template-registry`, `template-bodies`,
   `template-picker`, `template-routing`) fence them. **Names match Meta exactly**, `payment_recieved`
   included; each mirror follows ITS OWN registration.
+- **One initial opener at a time — no split.** `whatsapp_outreach_state.initial_opener_template`
+  (currently `initial_contact`) is the only choice; `openerSendability` refuses any other opener in every
+  picker and in `send-whatsapp-message`, and fails closed when unreadable. Never re-introduce a
+  hash/random split (`docs/whatsapp-templates.md`, 2026-09-23).
 - **Cold vs continuation** (`coldOutreach.ts`): a cold template is refused for any phone with ANY
   non-failed message history, whatever lead row it arrives on; a follow-up must be named in
   `CONTINUATION_TEMPLATES` or it is refused for its whole audience. The queue is template-blind on
