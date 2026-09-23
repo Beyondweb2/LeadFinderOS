@@ -79,6 +79,17 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
   const interleaved: string[] = [];
   for (let i = 0; i < Math.max(...perTown.map((l) => l.length), 0); i++) for (const l of perTown) if (l[i]) interleaved.push(l[i]);
   const allTowns = [input.primaryTown, ...ctx.areas];
+  /* THE CORE QUERY PER TOWN. The generator writes mostly service questions; for the other areas it
+     often writes no plain "[trade] in [town]" at all, which is the broadest genuine thing a customer
+     asks. Added only where that town has no broad question, from the APPROVED category — nothing
+     invented (BS4, 2026-09-23: 2 broad questions in a pool of 41). */
+  const trade = input.businessCategory.trim().toLowerCase();
+  if (trade) {
+    for (const t of allTowns) {
+      const hasBroad = interleaved.some((q) => { const m = classifyQuestion(q, ctx); return m.town === t && m.intent === "broad"; });
+      if (!hasBroad) interleaved.push(`${trade} in ${t} UK`);
+    }
+  }
   const pool = dedupeByMeaning(interleaved, allTowns).slice(0, DISCOVERY_MAX_QUESTIONS).map((q) => {
     const m = classifyQuestion(q, ctx);
     return { question: q, town: m.town, service: m.service, intent: m.intent };

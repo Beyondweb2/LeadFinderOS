@@ -49,6 +49,8 @@ console.log('\n── 1. EVERY APPROVED AREA FEEDS DISCOVERY ──');
   ok(ctx.areas.length === 6 && ctx.areas.join('|') === AREAS.join('|'), '1. all six of BS4\'s approved areas are in the Discovery context');
   const c = perTownCounts(6);
   ok(c.area > 0 && c.primary + c.area * 6 <= 80 && c.primary < c.area * 6, `1. the home town gets more weight (${c.primary}) but not the pool (areas ${c.area} × 6)`);
+  ok(/if \(!hasBroad\) interleaved\.push\(`\$\{trade\} in \$\{t\} UK`\);/.test(src), '1. every approved town gets its plain core query ("[approved trade] in [town] UK") when the generator wrote none');
+  ok(classifyQuestion('electricians in Bath UK', ctx).intent === 'broad' && classifyQuestion('electricians in Bath UK', ctx).town === 'Bath', '1. …and it counts as a broad question for that town');
   const covered = new Set(pool.map((p) => classifyQuestion(p.question, ctx).town));
   ok(TOWNS.every((t) => covered.has(t)), '1. the pool covers every approved town');
 }
