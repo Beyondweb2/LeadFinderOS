@@ -6,7 +6,8 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
 import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../src/lib/paidClient.ts";
-import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike } from "../../../src/lib/leadCrawlSummary.ts";
+import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
+import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
@@ -81,6 +82,28 @@ async function buildBaselineReport(service: any, audit: Record<string, unknown>,
 /** The one onboarding row a paid client's answers live on: the newest PAID row, else the newest row
  *  of any status for the lead (a customer who started onboarding and was then marked paid by hand). */
 // deno-lint-ignore no-explicit-any
+/** The lead's newest crawl job with its live counts — read only. */
+// deno-lint-ignore no-explicit-any
+async function latestCrawlJob(service: any, leadId: string): Promise<CrawlJobLike | null> {
+  const { data: job } = await service.from("crawl_jobs").select("id,status,started_at,completed_at")
+    .eq("lead_id", leadId).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  if (!job) return null;
+  const { data: raw } = await service.rpc("crawl_job_counts", { p_job: job.id });
+  const counts = cleanCounts(raw);
+  return { ...job, counts, label: progressLabel(job.status as JobStatus, counts) };
+}
+
+/** The job whose rows are the lead's CURRENT inventory: the one its canonical crawl row names, else
+ *  its newest finished job. */
+// deno-lint-ignore no-explicit-any
+async function inventoryJobId(service: any, leadId: string): Promise<string | null> {
+  const { data: row } = await service.from("lead_crawl_checks").select("job_id").eq("lead_id", leadId).maybeSingle();
+  if (row?.job_id) return row.job_id as string;
+  const { data: job } = await service.from("crawl_jobs").select("id").eq("lead_id", leadId)
+    .in("status", ["complete", "complete_with_failures"]).order("completed_at", { ascending: false }).limit(1).maybeSingle();
+  return (job?.id as string | undefined) ?? null;
+}
+
 async function onboardingRowFor(service: any, leadId: string): Promise<Record<string, any> | null> {
   const { data: paid, error } = await service.from("onboarding_responses").select(HUB_ONBOARDING_COLUMNS)
     .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -175,8 +198,9 @@ Deno.serve(async (req) => {
          the page-by-page evidence (the hub polls this action while a baseline runs). */
       const { data: crawlRow } = await service.from("lead_crawl_checks")
         .select(LEAD_CRAWL_SUMMARY_COLUMNS).eq("lead_id", leadId).maybeSingle();
-      const crawl = summariseLeadCrawl(crawlRow as LeadCrawlRowLike | null);
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl } });
+      const crawlJob = await latestCrawlJob(service, leadId);
+      const crawl = summariseLeadCrawl(crawlRow as LeadCrawlRowLike | null, crawlJob);
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob } });
     }
 
     /* ══ SECTION 5 — WEBSITE BUILD WORKFLOW STATE ════════════════════════════════════════════════
@@ -261,6 +285,7 @@ Deno.serve(async (req) => {
 
       const pagesRes = await service.from("client_pages").select(CLIENT_PAGES_COLUMNS).eq("lead_id", leadId).order("created_at", { ascending: false });
       if (pagesRes.error) throw pagesRes.error;
+      const crawlJob = await latestCrawlJob(service, leadId);
 
       return json({
         ok: true,
@@ -273,6 +298,7 @@ Deno.serve(async (req) => {
           report,
           discovery_audit: discovery ?? null,
           crawl: crawl ?? null,
+          crawl_job: crawlJob,
           pages: pagesRes.data ?? [],
         },
       });
@@ -346,6 +372,31 @@ Deno.serve(async (req) => {
         if (error) throw error;
       }
       return json({ ok: true, onboarding: saved });
+    }
+
+    /* ══ THE COMPLETE CRAWL INVENTORY — every URL the lead's current crawl found, page by page ════
+       READ ONLY. Paged (offset/limit ≤ 1000) with optional filters, so a 5,000-URL site is browsed,
+       searched and exported without any row being left out and without one giant response. */
+    if (action === "crawl_inventory") {
+      const leadId = text(body.lead_id);
+      const { data: owned } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!owned) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const jobId = await inventoryJobId(service, leadId);
+      if (!jobId) return json({ ok: true, inventory: { job_id: null, total: 0, rows: [] } });
+      const limit = Math.max(1, Math.min(1000, Number(body.limit) || 100));
+      const offset = Math.max(0, Number(body.offset) || 0);
+      let q = service.from("crawl_urls")
+        .select("id,url,status,skip_reason,http_status,final_url,source,depth,family:evidence->d->>family,title:evidence->d->>title,words:evidence->d->>words,noindex:evidence->d->>noindex", { count: "exact" })
+        .eq("job_id", jobId).eq("kind", "page");
+      const status = text(body.status);
+      if (["done", "failed", "skipped", "queued", "processing"].includes(status)) q = q.eq("status", status);
+      const family = text(body.family);
+      if (/^[a-z_]{2,20}$/.test(family)) q = q.eq("evidence->d->>family", family);
+      const search = text(body.q).replace(/[%,()]/g, " ").trim().slice(0, 80);
+      if (search) q = q.ilike("url", `%${search}%`);
+      const { data, error, count } = await q.order("id").range(offset, offset + limit - 1);
+      if (error) throw error;
+      return json({ ok: true, inventory: { job_id: jobId, total: count ?? 0, offset, limit, rows: data ?? [] } });
     }
 
     if (action === "create_manual") {
