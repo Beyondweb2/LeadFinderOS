@@ -40,8 +40,10 @@ import {
 import {
   buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, parseModelReply, ruleSalesFacts, mergeSalesFacts,
   latestInbound, REPLY_SYSTEM_PROMPT, REPLY_TOOL, REPLY_MODEL,
+  pooledFindings, findingMentioned, sayableDetails, findingSourceLabel, PRIMARY_MISSING_PROBLEM, PRIMARY_REWRITE_INSTRUCTION,
   type SalesFacts, type ThreadMessage,
 } from "../../../src/lib/warmReply.ts";
+import { findingScore, type ResearchFinding } from "../../../src/lib/warmLeadResearch.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -411,10 +413,10 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   const ctx = buildReplyContext({
     businessName: lead.business_name, contactFirstName: (lead.contact_name ?? "").trim().split(/\s+/)[0] || null,
     trade: leadTrade(lead), town: leadTown(lead), website: lead.website, latest, thread, research, audit,
-    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, variant, avoidText: variant > 0 ? text(body.avoid) || null : null,
+    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, hookAt: conv.stage.hookAt, variant, avoidText: variant > 0 ? text(body.avoid) || null : null,
   });
 
-  const findingIds = research?.strongestFindings.map((f) => f.id) ?? [];
+  const findingIds = pooledFindings(research).map((f) => f.id);
   const genStarted = Date.now();
   let prompt = buildReplyPrompt(ctx);
   let parsed = null as ReturnType<typeof parseModelReply>;
@@ -432,7 +434,11 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     check = checkReply(parsed.reply, ctx);
     if (!check.problems.length) break;
     // One retry, told exactly what was wrong. A second failure is shown to Paul with the problems.
-    prompt = `${buildReplyPrompt(ctx)}\n\nYOUR PREVIOUS DRAFT HAD THESE PROBLEMS — fix every one:\n- ${check.problems.join("\n- ")}\n\nPrevious draft:\n"""${parsed.reply}"""`;
+    /* The strongest evidence ignored gets its own, explicit instruction (Paul's wording, 2026-09-25). */
+    const ignoredPrimary = check.problems.includes(PRIMARY_MISSING_PROBLEM) && ctx.selection.primary
+      ? `${PRIMARY_REWRITE_INSTRUCTION}\nPRIMARY FINDING: ${ctx.selection.primary.title} — ${sayableDetails(ctx.selection.primary).join(" / ")}\n\n`
+      : "";
+    prompt = `${buildReplyPrompt(ctx)}\n\n${ignoredPrimary}YOUR PREVIOUS DRAFT HAD THESE PROBLEMS — fix every one:\n- ${check.problems.join("\n- ")}\n\nPrevious draft:\n"""${parsed.reply}"""`;
   }
 
   let reply = parsed?.reply ?? null;
@@ -449,7 +455,11 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   }
 
   const merged = mergeSalesFacts(ruled.facts, parsed?.salesFacts ?? [], inbound);
-  const findingsUsed = (research?.strongestFindings ?? []).filter((f) => parsed?.findingsUsed.includes(f.id)).map((f) => ({ id: f.id, title: f.title, source: f.source }));
+  /* What the draft ACTUALLY says, checked against the text — never the model's own claim. */
+  const used = (f: ResearchFinding) => findingMentioned(reply!, f, ctx.town);
+  const card = (f: ResearchFinding) => ({ id: f.id, title: f.title, evidence: sayableDetails(f), source: findingSourceLabel(f), score: findingScore(f), used: used(f) });
+  const sel = ctx.selection;
+  const findingsUsed = pooledFindings(research).filter(used).map((f) => ({ id: f.id, title: f.title, source: f.source }));
   const generationMs = Date.now() - genStarted;
   const why = {
     questionType: parsed?.questionType ?? ctx.question.primary,
@@ -457,6 +467,11 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     detectedByRules: ctx.question.all,
     latestInbound: { id: latest.id, at: latest.at, text: latest.text.slice(0, 300) },
     findingsUsed,
+    primaryFinding: sel.primary ? { ...card(sel.primary), required: ctx.primaryRequired } : null,
+    secondaryFindings: sel.secondary.map(card),
+    strongNotUsed: sel.strongNotUsed.map(card),
+    alreadyMentioned: sel.alreadyMentioned.map((f) => f.title),
+    researchSources: research ? [...new Set(research.sources.map((x) => x.kind === "page" ? "Live website" : x.kind === "full_crawl" ? "Existing full crawl" : x.kind === "crawl_check" ? "Existing crawl check" : "AI audit"))] : [],
     research: research ? { generatedAt: research.generatedAt, status: research.status, sourceCrawlAt: research.sourceCrawlAt, technicallyClean: research.technicallyClean, warnings: research.warnings } : null,
     audit: audit ? { auditId: audit.auditId, createdAt: audit.createdAt, named: audit.namedDatapoints, total: audit.totalDatapoints, namedEverywhere: audit.namedEverywhere } : null,
     askedOwnership: parsed?.askedOwnership ?? ctx.askOwnership,

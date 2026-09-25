@@ -23,7 +23,10 @@ import {
   FINDABLE_OFFER_SUMMARY, FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP,
   FINDABLE_CONTRACT_TOTAL_GBP, REPORT_PUBLIC_ORIGIN,
 } from './findableOffer.ts';
-import { normaliseForMatch, MIN_QUOTE_CHARS, type AuditContext, type ResearchFinding, type WarmLeadResearch } from './warmLeadResearch.ts';
+import {
+  normaliseForMatch, MIN_QUOTE_CHARS, MIN_SALES_STRENGTH, rankFindings, findingScore,
+  type AuditContext, type ResearchFinding, type WarmLeadResearch,
+} from './warmLeadResearch.ts';
 
 export const REPLY_MODEL = 'gpt-4o-mini';
 /** Messages of history the model sees (oldest dropped first). */
@@ -172,6 +175,143 @@ export function mergeSalesFacts(existing: SalesFacts | null | undefined, proposa
   return { facts, changed, rejected };
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 THE PRIMARY FINDING (Paul, 2026-09-25). The live drafts proved that a list of findings "you may
+   use" is a list the model may ignore: it wrote "the opening hours aren't consistent" with
+   "9AM–9PM / 9AM–9AM / Open 24 hours" in front of it. So, before the model writes:
+     · every finding the research holds is pooled, de-duplicated and RANKED (findingScore —
+       severity, sales relevance, specificity, confidence), whatever it came from: the live site,
+       the full crawl, the crawl check or a model reading;
+     · the best one is the PRIMARY finding — the model is told it MUST refer to it, with its concrete
+       details — and up to two SECONDARY findings are offered as support;
+     · `checkReply` then checks the draft actually says it (findingMentioned), and a draft that
+       doesn't is sent back once and, failing again, shown to Paul as CHECK THIS DRAFT.
+   ⛔ NOT a website finding, so never primary: the audit's AI-visibility result (it is the context
+      the reply explains, carried in the AI VISIBILITY block) and the "built/hosted by" credit (a
+      reason to ask about ownership, not a flaw in their site).
+   ⛔ A finding Paul already put to them since the hook is not asked for again — the next best leads.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** A finding must score at least this to LEAD a reply. Below it (a vague title, one old copyright
+ *  year) there is nothing specific enough to insist on, and the reply is not forced to use one. */
+export const PRIMARY_MIN_SCORE = 17;
+/** …and at least this to be offered as support. */
+export const SECONDARY_MIN_SCORE = 14;
+export const MAX_SECONDARY_FINDINGS = 2;
+/** The questions where the strongest website finding must feature. A refusal, a request for a call
+ *  or a plain "yes I own it" is answered on its own terms. */
+export const PRIMARY_QUESTION_TYPES: ReadonlySet<WarmQuestionType> = new Set(['price', 'how_it_works', 'tell_me_more', 'show_changes', 'existing_provider', 'other']);
+/** The words the operator sees when the primary finding is missing — the brief's own wording. */
+export const PRIMARY_MISSING_PROBLEM = 'Strong website finding was not used.';
+export const PRIMARY_REWRITE_INSTRUCTION = 'The previous response ignored the strongest evidence. Rewrite it while keeping it conversational and explicitly include the primary website finding, with its concrete details.';
+
+const NOT_PRIMARY: ReadonlySet<string> = new Set(['ai_visibility', 'provider_attribution']);
+
+export interface ReplySelection {
+  primary: ResearchFinding | null;
+  secondary: ResearchFinding[];
+  /** Other findings strong enough to have led — shown to Paul as "Strong findings not used". */
+  strongNotUsed: ResearchFinding[];
+  /** Findings Paul has already put to them since the hook (skipped for the lead). */
+  alreadyMentioned: ResearchFinding[];
+}
+
+/** Every finding the saved research holds, once each. */
+export function pooledFindings(r: WarmLeadResearch | null | undefined): ResearchFinding[] {
+  if (!r) return [];
+  const seen = new Set<string>();
+  return [...r.strongestFindings, ...r.technicalFindings, ...r.contentFindings, ...r.localVisibilityFindings]
+    .filter((f) => { if (!f || seen.has(f.id)) return false; seen.add(f.id); return true; });
+}
+
+/** The details to keep: keyDetails, else evidence cut to something sayable. */
+export function sayableDetails(f: ResearchFinding): string[] {
+  const src = f.keyDetails?.length ? f.keyDetails : f.evidence;
+  return src.filter((e) => !/^crawl check /.test(e)).map((e) => (e.length > 90 ? `${e.slice(0, 87).replace(/\s+\S*$/, '')}…` : e)).slice(0, 4);
+}
+
+const STOP = new Set(['about', 'their', 'there', 'which', 'would', 'could', 'pages', 'website', 'services', 'service', 'business', 'other', 'these', 'those', 'where', 'while', 'being']);
+const flat = (s: string) => normaliseForMatch(s).replace(/\s+/g, '');
+
+/**
+ * Does this text clearly communicate the SUBSTANCE of the finding? Not word for word — but the
+ * concrete part must be there: an actual time for the hours, "nationwide" plus the town for the
+ * positioning, the page/noindex/other-site idea for the technical ones. "A few inconsistencies"
+ * satisfies none of them, which is the point.
+ */
+export function findingMentioned(text: string, f: ResearchFinding, town?: string | null): boolean {
+  const t = normaliseForMatch(text);
+  const tf = flat(text);
+  const details = f.keyDetails?.length ? f.keyDetails : f.evidence;
+  switch (f.kind) {
+    case 'hours_conflict': {
+      const times = details.flatMap((d) => d.match(/\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)|24\s*(?:\/\s*7|hours)/gi) ?? []).map(flat);
+      return /\b(hours|open|opening)\b/.test(t) && times.some((x) => tf.includes(x));
+    }
+    case 'positioning_conflict': {
+      const wide = /\b(nationwide|national|across (the )?(uk|england|britain|country)|whole (country|of england)|all over|anywhere in the uk|uk wide)\b/.test(t);
+      const localTown = town ? t.includes(normaliseForMatch(town)) : false;
+      return wide && (localTown || /\b(local|based)\b/.test(t));
+    }
+    case 'missing_core_service_pages':
+      return /\bpages?\b/.test(t) && /\b(plumb\w*|boiler\w*|emergenc\w*|heating|electric\w*|rewir\w*|locks?\w*|roof\w*|core services?|main services?|services? pages?)\b/.test(t);
+    case 'contact_conflict':
+      return /\b(numbers?)\b/.test(t) && /\b(different|several|multiple|three|four|3|4|two|2|don t match|do not match)\b/.test(t);
+    case 'thin_or_duplicate':
+      return /\b(very little|thin|few lines|not much|barely|same|identical|duplicate\w*|copies)\b/.test(t);
+    case 'title_h1':
+      return /\b(title|heading)\b/.test(t);
+    case 'crawl_indexing': {
+      const id = f.id;
+      if (/noindex/.test(id)) return /\b(noindex|not to be (listed|shown|included)|left out|leave (it|them) out|hidden|excluded|out of (the )?(search )?results|not (listed|showing) in)\b/.test(t);
+      if (/canonical/.test(id)) return /\b((another|different|other) (web ?site|site|domain|address)|main version|canonical)\b/.test(t);
+      if (/sitemap/.test(id)) return /\bsitemap\b/.test(t);
+      if (/robots|blocked|crawler/.test(id) || /block/i.test(f.title)) return /\b(block\w*|robots|shut out|locked out|keep\w* out|can t (get in|reach|read))\b/.test(t);
+      if (/client_rendered|unreadable/.test(id) || /javascript/i.test(f.title)) return /\b(javascript|nearly empty|blank|no text|almost nothing)\b/.test(t);
+      if (/broken/.test(id)) return /\b(broken|error|dead end|404|doesn t load|don t load)\b/.test(t);
+      break;
+    }
+    default:
+      break;
+  }
+  // Anything else (model findings, off-trade content, evidence): two of its significant words.
+  const words = [...new Set(details.concat(f.title).flatMap((d) => normaliseForMatch(d).split(' ')).filter((w) => w.length >= 5 && !STOP.has(w)))];
+  const hits = words.filter((w) => t.includes(w)).length;
+  return words.length > 0 && hits >= Math.min(2, words.length);
+}
+
+/**
+ * The deterministic choice made BEFORE the model writes. `thread` is used only to skip a finding
+ * Paul has already put to them since the hook, so the next reply moves on rather than repeating.
+ */
+export function selectReplyFindings(r: WarmLeadResearch | null | undefined, thread: ThreadMessage[], town?: string | null, hookAt?: string | null): ReplySelection {
+  const empty: ReplySelection = { primary: null, secondary: [], strongNotUsed: [], alreadyMentioned: [] };
+  if (!r || r.status === 'failed' || r.status === 'no_website') return empty;
+  const said = thread.filter((m) => m.direction === 'outbound' && (!hookAt || m.at > hookAt)).map((m) => m.text).join('\n');
+  const eligible = rankFindings(pooledFindings(r).filter((f) => f.verified && f.strength >= MIN_SALES_STRENGTH && !NOT_PRIMARY.has(f.kind)));
+  const alreadyMentioned = said ? eligible.filter((f) => findingMentioned(said, f, town)) : [];
+  const fresh = eligible.filter((f) => !alreadyMentioned.includes(f));
+  const primary = fresh.find((f) => findingScore(f) >= PRIMARY_MIN_SCORE) ?? null;
+  const secondary: ResearchFinding[] = [];
+  const kinds = new Set(primary ? [primary.kind] : []);
+  for (const f of fresh) {
+    if (secondary.length >= MAX_SECONDARY_FINDINGS || f === primary) continue;
+    if (findingScore(f) < SECONDARY_MIN_SCORE || (kinds.has(f.kind) && f.kind !== 'crawl_indexing')) continue;
+    if (!primary) break; // nothing strong enough to lead → nothing to support
+    secondary.push(f); kinds.add(f.kind);
+  }
+  const strongNotUsed = fresh.filter((f) => f !== primary && !secondary.includes(f) && findingScore(f) >= PRIMARY_MIN_SCORE);
+  return { primary, secondary, strongNotUsed, alreadyMentioned };
+}
+
+/** Where a finding came from, in Paul's words. */
+export function findingSourceLabel(f: ResearchFinding): string {
+  if (f.source === 'rule') return 'Live website';
+  if (f.source === 'model') return 'Live website (read by AI, quote-checked)';
+  if (f.source === 'audit') return 'AI audit';
+  return f.id.startsWith('full:') ? 'Existing full crawl' : 'Existing crawl check';
+}
+
 /* ─────────────────────────────── what the reply should do ─────────────────────────────── */
 
 /** Ask "do you own/control the site?" only when the research gives a reason AND they have not
@@ -202,14 +342,23 @@ export interface ReplyContext {
   variant: number;
   /** Paul has already sent something AFTER their latest message (derived, never passed in). */
   alreadyAnswered: boolean;
+  /** When the hook went out (warmStage) — findings Paul raised after it are not asked for again. */
+  hookAt?: string | null;
+  /** The primary / secondary findings, chosen before the model writes (derived, never passed in). */
+  selection: ReplySelection;
+  /** Must this reply use the primary finding? (a primary exists AND the question calls for it) */
+  primaryRequired: boolean;
   avoidText: string | null;
 }
 
-export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered'>): ReplyContext {
+export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered' | 'selection' | 'primaryRequired'>): ReplyContext {
   const question = classifyInbound(i.latest.text);
+  const selection = selectReplyFindings(i.research, i.thread, i.town, i.hookAt ?? null);
   return {
     ...i,
     question,
+    selection,
+    primaryRequired: !!selection.primary && PRIMARY_QUESTION_TYPES.has(question.primary),
     alreadyAnswered: i.thread.some((m) => m.direction === 'outbound' && m.at > i.latest.at),
     askOwnership: shouldAskOwnership(i.research, i.salesFacts),
     allowReportUrl: !!i.reportUrl && reportUrlAllowed(i.latest.text, question.all),
@@ -288,10 +437,6 @@ export const REPLY_TOOL = {
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 const hhmm = (iso: string) => { try { return new Date(iso).toISOString().slice(0, 16).replace('T', ' '); } catch { return iso; } };
 
-function findingLines(fs: ResearchFinding[]): string {
-  return fs.map((f) => `- [${f.id}] ${f.title}: ${f.detail}`).join('\n');
-}
-
 export function buildReplyPrompt(ctx: ReplyContext): string {
   const r = ctx.research;
   const history = ctx.thread.slice(-REPLY_THREAD_MESSAGES)
@@ -307,11 +452,19 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   } else if (r.status === 'failed') {
     research = 'Their website could NOT be read. Do NOT mention any website problem. Answer their message using the facts above.';
   } else {
-    const strongest = r.strongestFindings;
+    const { primary, secondary } = ctx.selection;
+    const concrete = (f: ResearchFinding) => sayableDetails(f).map((d) => `"${d}"`).join(' / ');
     research = [
       `Researched ${hhmm(r.generatedAt)} (${r.status}). ${r.businessSummary ?? ''}`.trim(),
       r.technicallyClean ? 'The site is technically fine — no technical fault was found. Do not say or suggest it is broken.' : '',
-      strongest.length ? `FINDINGS you may use (strongest first; use at most three, only those relevant):\n${findingLines(strongest)}` : 'FINDINGS: none strong enough to mention. Do not invent any.',
+      primary
+        ? [
+          `PRIMARY FINDING — YOU MUST REFER TO THIS IN THE RESPONSE, keeping its concrete details:\n- [${primary.id}] ${primary.title}: ${primary.detail}\n  Concrete details to keep: ${concrete(primary)}`,
+          secondary.length ? `SUPPORTING FINDINGS (optional, at most two, only if they fit):\n${secondary.map((f) => `- [${f.id}] ${f.title}: ${f.detail}\n  Concrete details: ${concrete(f)}`).join('\n')}` : '',
+          'Say the finding the way Paul would, but keep the specifics (the actual times, the actual wording, the actual pages). Never water it down to "a few inconsistencies", "a few things we\'d improve" or "your site could be clearer".',
+        ].filter(Boolean).join('\n')
+        : 'No website finding is specific enough to lead with. Do NOT invent one. If it helps, explain the gap using the AI VISIBILITY result instead.',
+      ctx.selection.alreadyMentioned.length ? `Paul has ALREADY told them about: ${ctx.selection.alreadyMentioned.map((f) => f.title).join('; ')} — do not repeat it.` : '',
       r.ownershipClues.length ? `Ownership clues: ${r.ownershipClues.join(' ')}` : '',
     ].filter(Boolean).join('\n');
   }
@@ -336,6 +489,11 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
       ? `REPORT LINK: they asked for it or for what we found — you may include ${ctx.reportUrl}`
       : 'REPORT LINK: do NOT include the audit/report link in this reply.',
     ctx.question.primary === 'price' ? 'PRICE: their message asks about price — the FIRST sentence must give it, with both figures; then the four-week first-payment guarantee; and include the Full details link.' : '',
+    ctx.primaryRequired && ctx.question.primary === 'price'
+      ? 'ORDER: price → guarantee → "I had a look through your site as well. The biggest thing I noticed is …" (the PRIMARY FINDING, concretely) → optionally one supporting finding → the link / a question. Never open with the website issue.'
+      : ctx.primaryRequired
+        ? 'ORDER: answer their message in a line, then make the PRIMARY FINDING the centre of the reply ("For yours, one of the clearest issues I found is …", concretely), then what Findable would change about it, then a simple question.'
+        : '',
     ctx.alreadyAnswered ? 'ALREADY ANSWERED: Paul has already replied after their latest message (see the conversation). Do not repeat what he said; write a short, natural follow-up that adds something new.' : '',
     ctx.variant > 0 && ctx.avoidText
       ? `ALTERNATIVE: this is regenerate #${ctx.variant}. Write a genuinely different version (different opening and wording, same facts) from:\n"""${clip(ctx.avoidText, 1500)}"""`
@@ -378,7 +536,7 @@ export interface ReplyCheck {
 const GUARANTEE_OVERREACH = /\b(guarantee[ds]?|promise[ds]?|guaranteed)\b[^.?!\n]{0,50}\b(rank(?:ing|ed)?s?|top|first page|number one|#1|recommend(?:ed|ation)?s?|cit(?:ed|ation)s?|leads|customers|calls|enquiries|more work)\b/i;
 const TOP_CLAIM = /\bwe(?:'ll| will| can)\s+(?:get|put|make)\s+you\s+(?:to\s+)?(?:the\s+)?(?:top|number one|#1|first)\b/i;
 const NO_MINIMUM = /\b(cancel (?:any ?time|whenever)|stop (?:any ?time|whenever)|no contract|no minimum|no tie[- ]in)\b/i;
-const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:'|no)?t|cannot|doesn'?t|does not|won'?t|will not|never)\s+(?:see|read|find|understand|index|crawl|trust)\b|\b(?:AI|ChatGPT|Gemini)\s+(?:ignores|reads (?:it|them|those) as)\b/i;
+const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:['\u2019]|no)?t|cannot|doesn['\u2019]?t|does not|won['\u2019]?t|will not|never)\s+(?:see|read|find|understand|index|crawl|trust)\b|\b(?:AI|ChatGPT|Gemini)\s+(?:ignores|reads (?:it|them|those) as)\b/i;
 const OWNERSHIP_Q = /\b(own|control|manage[sd]?|built|host(?:s|ed)?)\b[^?\n]{0,80}\?/i;
 const LIST_LINE = /^\s*(?:[-•*]|\d+[.)])\s+/m;
 
@@ -415,6 +573,7 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   if (ctx.hookTemplate && rivals.filter((c) => normaliseForMatch(text).includes(normaliseForMatch(c))).length >= 2) {
     problems.push('It repeats the competitor hook they have already had (lists the same businesses again).');
   }
+  if (ctx.primaryRequired && ctx.selection.primary && !findingMentioned(text, ctx.selection.primary, ctx.town)) problems.push(PRIMARY_MISSING_PROBLEM);
   if (AI_ABSOLUTE.test(text)) problems.push('It claims to know how an AI model decides — hedge it ("can make it harder").');
   if ((!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
     problems.push('It describes a website problem, but the site was not researched.');

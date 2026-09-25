@@ -74,6 +74,10 @@ export interface ResearchFinding {
   detail: string;
   /** Verbatim text the finding rests on (page text, a URL list, or a measured count). */
   evidence: string[];
+  /** The SHORT concrete bits worth saying out loud — the actual times, the actual phrases, the page
+   *  names. What the reply must keep instead of "a few inconsistencies". Absent on rows saved before
+   *  2026-09-25 (readers fall back to evidence). */
+  keyDetails?: string[];
   pageUrl: string | null;
   strength: 1 | 2 | 3 | 4 | 5;
   source: FindingSource;
@@ -334,16 +338,20 @@ export function positioningFinding(pages: PageFacts[], town: string | null | und
   const t = (town ?? '').trim();
   if (!t) return null;
   const townRe = new RegExp(`\\b${escapeRe(t)}\\b`, 'i');
-  let national: { q: string; url: string } | null = null;
-  let local: { q: string; url: string } | null = null;
+  let national: { q: string; url: string; phrase: string } | null = null;
+  let local: { q: string; url: string; phrase: string } | null = null;
   for (const p of pages) {
     if (!p.ok || !p.text) continue;
     const n = p.text.match(NATIONAL_RE);
-    if (n && n.index !== undefined && !national) national = { q: sentenceAround(p.text, n.index, n[0].length), url: p.finalUrl };
+    if (n && n.index !== undefined && !national) {
+      // The phrase as written, plus the next couple of words ("nationwide across England").
+      const phrase = p.text.slice(n.index, n.index + n[0].length + 40).match(/^\S+(?:\s+\S+){0,2}/)?.[0] ?? n[0];
+      national = { q: sentenceAround(p.text, n.index, n[0].length), url: p.finalUrl, phrase: n[0].toLowerCase() === 'nationwide' ? phrase.replace(/[.,;:]+$/, '') : n[0] };
+    }
     // Prefer a sentence that CLAIMS the town as a base ("Scunthorpe-based", "based in Scunthorpe").
     const based = p.text.match(new RegExp(`\\b${escapeRe(t)}[- ]based\\b|\\bbased in ${escapeRe(t)}\\b`, 'i'));
     const any = based ?? p.text.match(townRe);
-    if (any && any.index !== undefined && (!local || based)) local = { q: sentenceAround(p.text, any.index, any[0].length), url: p.finalUrl };
+    if (any && any.index !== undefined && (!local || based)) local = { q: sentenceAround(p.text, any.index, any[0].length), url: p.finalUrl, phrase: any[0] };
   }
   if (!national || !local) return null;
   return {
@@ -353,6 +361,7 @@ export function positioningFinding(pages: PageFacts[], town: string | null | und
     title: 'Local vs nationwide positioning',
     detail: `The site describes the business as covering the whole country in one place and as ${t}-based in another. Mixed signals about where a business works can make it harder for AI tools to connect it clearly with ${t}.`,
     evidence: [national.q, local.q],
+    keyDetails: [national.phrase, local.phrase],
     pageUrl: national.url,
     strength: 4,
     source: 'rule',
@@ -389,6 +398,7 @@ export function hoursFinding(pages: PageFacts[]): ResearchFinding | null {
     title: 'Opening hours don’t agree',
     detail: `The site gives different opening hours in different places (${evidence.map((e) => `“${e}”`).join(', ')}). When basic details disagree, anything reading the site — a customer or an AI tool — has less to go on about when you are actually available.`,
     evidence,
+    keyDetails: evidence,
     pageUrl: list[0]?.url ?? open24?.url ?? null,
     strength: 3,
     source: 'rule',
@@ -419,6 +429,7 @@ export function contactFinding(pages: PageFacts[]): ResearchFinding | null {
     title: 'Several different phone numbers',
     detail: `The site lists ${found.size} different phone numbers. Inconsistent contact details are one of the things that can make a business harder to pin down as one clear entity.`,
     evidence: list.slice(0, 4).map((x) => x.q),
+    keyDetails: list.slice(0, 3).map((x) => x.q),
     pageUrl: list[0].url,
     strength: 2,
     source: 'rule',
@@ -456,6 +467,7 @@ export function coreServiceFinding(home: PageFacts | null, trade: string | null 
     title: 'No pages for the core services',
     detail: `None of the pages linked from the homepage is about ${entry.describe}. The menu is about other things. Without a page for each main service, there is less on the site that clearly says what you do and where — which can make it harder for AI tools to match you to those searches.`,
     evidence: listed,
+    keyDetails: [entry.describe, ...listed.slice(0, 3).map((x) => x.replace(/^\//, '').replace(/[-_]/g, ' '))],
     pageUrl: home.finalUrl,
     strength: 3,
     source: 'rule',
@@ -502,6 +514,7 @@ export function providerFinding(credit: ProviderCredit | null): ResearchFinding 
     title: credit.hosted ? 'Site built and hosted by another company' : 'Site built by another company',
     detail: `The site credits ${credit.name}${credit.hosted ? ' for building and hosting it' : ' for building it'}. That can mean they control changes to it, so it is worth knowing who owns and controls the site before anything is changed.`,
     evidence: [credit.quote],
+    keyDetails: [credit.name],
     pageUrl: credit.url || null,
     strength: 3,
     source: 'rule',
@@ -546,17 +559,17 @@ export function indexingFindings(pages: PageFacts[]): ResearchFinding[] {
   if (home?.ok && home.noindex) {
     out.push({ id: 'rule:noindex', kind: 'crawl_indexing', category: 'technical', title: 'Homepage tells search engines not to list it',
       detail: 'The homepage carries a "noindex" instruction, which asks search engines not to list it. That is a genuine technical fault and can stop the page being found at all.',
-      evidence: ['meta robots: noindex'], pageUrl: home.finalUrl, strength: 5, source: 'rule', verified: true });
+      evidence: ['meta robots: noindex'], keyDetails: ['Homepage marked "noindex"'], pageUrl: home.finalUrl, strength: 5, source: 'rule', verified: true });
   }
   if (home?.ok && home.canonical && !sameRegistrableDomain(home.canonical, home.finalUrl)) {
     out.push({ id: 'rule:canonical_offsite', kind: 'crawl_indexing', category: 'technical', title: 'Homepage points search engines at another site',
       detail: `The homepage says its "real" address is ${home.canonical}, a different website. Anything following that signal is sent to the other site instead of this one.`,
-      evidence: [`canonical: ${home.canonical}`], pageUrl: home.finalUrl, strength: 4, source: 'rule', verified: true });
+      evidence: [`canonical: ${home.canonical}`], keyDetails: [(() => { try { return new URL(home.canonical!).hostname; } catch { return home.canonical!; } })()], pageUrl: home.finalUrl, strength: 4, source: 'rule', verified: true });
   }
   if (home?.ok && home.clientRendered) {
     out.push({ id: 'rule:client_rendered', kind: 'crawl_indexing', category: 'technical', title: 'Homepage is nearly empty without JavaScript',
       detail: 'The homepage shows almost no text until JavaScript runs. Tools that read the page without running it see very little, which can make it harder for them to understand the business.',
-      evidence: [`${home.wordCount} words readable without JavaScript`], pageUrl: home.finalUrl, strength: 4, source: 'rule', verified: true });
+      evidence: [`${home.wordCount} words readable without JavaScript`], keyDetails: [`${home.wordCount} words readable without JavaScript`], pageUrl: home.finalUrl, strength: 4, source: 'rule', verified: true });
   }
   return out;
 }
@@ -620,6 +633,7 @@ export function crawlFindings(row: CrawlRowInput | null | undefined, nowMs: numb
       const clause = f.clause.charAt(0).toUpperCase() + f.clause.slice(1);
       out.push({ id: `crawl:${f.kind}:${i}`, kind: meta.kind, category: 'technical', title: meta.title,
         detail: `${clause}. ${f.rest}`, evidence: [`crawl check ${row.created_at}: ${f.kind}`], pageUrl: signals.homeUrl ?? null,
+        ...(f.kind === 'crawler_blocked' && signals.searchBlocked.length ? { keyDetails: signals.searchBlocked } : {}),
         strength: meta.strength, source: 'crawl', verified: true });
     });
   }
@@ -746,6 +760,13 @@ export function fullCrawlFindings(full: FullEvidenceInput | null, trade: string 
     const pf = providerFinding(providerCredit([footerPage], businessName));
     if (pf) out.push({ ...pf, id: 'full:provider_attribution', source: 'crawl' });
   }
+  // Short, sayable details: a page's path rather than its full URL; the other site for a canonical.
+  const shorten = (e: string) => {
+    const arrow = e.split(' → ');
+    if (arrow.length === 2) { try { return new URL(arrow[1]).hostname; } catch { return arrow[1]; } }
+    return /^https?:\/\//i.test(e) ? (pathOf(e).replace(/^\//, '').replace(/[-_/]+/g, ' ').trim() || 'homepage') : e;
+  };
+  for (const f of out) if (!f.keyDetails) f.keyDetails = [...new Set(f.evidence.slice(0, 3).map(shorten))];
   return out;
 }
 
@@ -839,13 +860,52 @@ export function verifyModelFindings(raw: unknown, pages: PageFacts[]): { kept: R
 
 const SOURCE_RANK: Record<FindingSource, number> = { rule: 0, crawl: 1, audit: 2, model: 3 };
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 RANKING FOR THE SALES CONVERSATION (Paul, 2026-09-25). Strength alone put the audit's vague "low
+   AI visibility" level with "your site says 9AM–9PM, 9AM–9AM and open 24 hours" — and the live draft
+   duly said "the opening hours aren't consistent". A finding now scores on five things:
+     · SEVERITY       the finding's own strength (1–5), weighted most (×3)
+     · SALES RELEVANCE how easily a tradesperson understands it and how directly Findable can fix it
+                      (KIND_RELEVANCE — conflicting hours/locations and blocked/mis-pointed pages top it;
+                      structured data and copyright years at the bottom)
+     · SPECIFICITY    concrete details it carries (times, phrases, page names, numbers)
+     · CONFIDENCE     measured by code (rule / crawl) over a model reading that was quote-checked
+   The AI-visibility audit result is CONTEXT, not a website finding: it never becomes the primary
+   finding (the reply's AI VISIBILITY block carries it).
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export const KIND_RELEVANCE: Record<FindingKind, number> = {
+  crawl_indexing: 5, hours_conflict: 5, positioning_conflict: 5,
+  missing_core_service_pages: 4, contact_conflict: 4, off_trade_content: 4,
+  thin_or_duplicate: 3, weak_evidence: 3,
+  title_h1: 2, provider_attribution: 2, other: 2,
+  outdated_content: 1, structured_data: 1, ai_visibility: 1,
+};
+const CONFIDENCE: Record<FindingSource, number> = { rule: 2, crawl: 2, model: 1, audit: 1 };
+
+/** Concrete details: explicit keyDetails, else evidence strings that carry a figure, a time or a
+ *  proper noun. A finding whose only evidence is "crawl check <date>: thin_pages" scores 0 here. */
+export function findingSpecificity(f: ResearchFinding): number {
+  const bits = (f.keyDetails?.length ? f.keyDetails : f.evidence).filter((e) => !/^crawl check /.test(e));
+  const concrete = bits.filter((e) => /\d|[A-Z][a-z]{2,}/.test(e)).length;
+  return Math.min(3, (bits.length >= 2 ? 1 : 0) + Math.min(2, concrete));
+}
+
+export function findingScore(f: ResearchFinding): number {
+  return f.strength * 3 + KIND_RELEVANCE[f.kind] * 2 + findingSpecificity(f) + CONFIDENCE[f.source];
+}
+
+/** Best first, by score; ties go to what we measured ourselves. */
+export function rankFindings(findings: ResearchFinding[]): ResearchFinding[] {
+  return [...findings].sort((a, b) => findingScore(b) - findingScore(a) || SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
+}
+
 /** Rank for the sales conversation: strength first, then what we measured ourselves over what the
  *  model read, one finding per kind, trivia (below MIN_SALES_STRENGTH) never. */
 export function rankStrongest(findings: ResearchFinding[], max = MAX_STRONGEST_FINDINGS): ResearchFinding[] {
   const seen = new Set<string>();
   return [...findings]
     .filter((f) => f.verified && f.strength >= MIN_SALES_STRENGTH)
-    .sort((a, b) => b.strength - a.strength || SOURCE_RANK[a.source] - SOURCE_RANK[b.source])
+    .sort((a, b) => findingScore(b) - findingScore(a) || SOURCE_RANK[a.source] - SOURCE_RANK[b.source])
     .filter((f) => { const k = f.kind === 'other' ? f.id : f.kind; if (seen.has(k)) return false; seen.add(k); return true; })
     .slice(0, max);
 }

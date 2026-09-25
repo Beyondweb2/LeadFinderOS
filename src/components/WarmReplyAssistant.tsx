@@ -24,7 +24,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AlertTriangle, Check, ChevronDown, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
-import { SALES_FACT_LABELS, SALES_FACT_KEYS, type SalesFacts } from '@/lib/warmReply';
+import { SALES_FACT_LABELS, SALES_FACT_KEYS, PRIMARY_MISSING_PROBLEM, type SalesFacts } from '@/lib/warmReply';
 import { WARM_STAGE_LABELS, type WarmStage } from '@/lib/warmStage';
 import { cn } from '@/lib/utils';
 
@@ -43,8 +43,15 @@ interface ResearchSummary {
 
 interface StatusResponse { ok: true; freshness: Freshness; has_website: boolean; research: ResearchSummary | null; sales_facts: SalesFacts }
 interface ResearchResponse { ok: true; plan: string; research: ResearchSummary | null; ms: number }
+interface FindingCard { id: string; title: string; evidence: string[]; source: string; score: number; used: boolean; required?: boolean }
 interface DraftWhy {
   questionType: string;
+  latestInbound?: { text: string } | null;
+  primaryFinding?: FindingCard | null;
+  secondaryFindings?: FindingCard[];
+  strongNotUsed?: FindingCard[];
+  alreadyMentioned?: string[];
+  researchSources?: string[];
   questionSummary: string | null;
   detectedByRules: string[];
   findingsUsed: Array<{ id: string; title: string; source: string }>;
@@ -197,7 +204,8 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadab
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       {why && why.problems.length > 0 && !whyOpen && (
         <p className="flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> Check this draft before sending — {why.problems[0]}
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <span><span className="font-semibold">CHECK THIS DRAFT</span> — {why.problems.includes(PRIMARY_MISSING_PROBLEM) ? PRIMARY_MISSING_PROBLEM : why.problems[0]}</span>
         </p>
       )}
       {why && whyOpen && <WhyPanel why={why} />}
@@ -210,12 +218,30 @@ function WhyPanel({ why }: { why: DraftWhy }) {
   return (
     <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/30 p-2 text-[11px] leading-snug">
       <p className="text-muted-foreground">For you only — none of this is sent. Nothing has been sent.</p>
-      <Row label="Their message">
-        {QUESTION_LABELS[why.questionType] ?? why.questionType}
-        {why.questionSummary ? ` — ${why.questionSummary}` : ''}
+      <Row label="Question detected">
+        {why.latestInbound?.text ? `“${why.latestInbound.text}” · ` : ''}{QUESTION_LABELS[why.questionType] ?? why.questionType}
       </Row>
-      <Row label="Findings used">
-        {why.findingsUsed.length ? why.findingsUsed.map((f) => f.title).join(' · ') : 'None — answered from the offer and what we already know'}
+      {why.primaryFinding ? (
+        <>
+          <Row label="Primary finding" tone={why.primaryFinding.used ? undefined : why.primaryFinding.required ? 'bad' : 'warn'}>
+            {why.primaryFinding.title} · {why.primaryFinding.used ? 'used' : why.primaryFinding.required ? 'NOT used' : 'not used (not needed for this message)'}
+          </Row>
+          {why.primaryFinding.evidence.length > 0 && <Row label="Evidence">{why.primaryFinding.evidence.join(' / ')}</Row>}
+        </>
+      ) : (
+        <Row label="Primary finding">None strong enough to lead with — nothing was invented</Row>
+      )}
+      {why.secondaryFindings && why.secondaryFindings.length > 0 && (
+        <Row label="Secondary findings">{why.secondaryFindings.map((f) => `${f.title}${f.used ? ' (used)' : ''}`).join(' · ')}</Row>
+      )}
+      {why.strongNotUsed && why.strongNotUsed.length > 0 && (
+        <Row label="Strong findings not used" tone="warn">{why.strongNotUsed.map((f) => f.title).join(' · ')}</Row>
+      )}
+      {why.alreadyMentioned && why.alreadyMentioned.length > 0 && (
+        <Row label="Already told them">{why.alreadyMentioned.join(' · ')}</Row>
+      )}
+      <Row label="Research source">
+        {[why.primaryFinding?.source, ...(why.researchSources ?? [])].filter((x, i, a) => x && a.indexOf(x) === i).join(' · ') || '—'}
       </Row>
       <Row label="Research">
         {why.research
