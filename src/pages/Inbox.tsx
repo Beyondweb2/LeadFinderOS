@@ -25,6 +25,10 @@ import { parseTemplateSnapshot, type WhatsAppTemplateSnapshot } from '@/lib/what
 import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
+import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
+import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
+import { voiceSendErrorMessage } from '@/lib/voiceNote';
+import type { VoiceClip } from '@/lib/voiceRecorderState';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -343,6 +347,12 @@ function AutoReplyToggle() {
   );
 }
 
+/** An audio row with a stored file renders as the player alone — its body is only "[audio]" (inbound)
+ *  or "Voice note (0:08)" (ours), which the list preview uses but the bubble does not need. */
+function isPlayableVoice(m: WaMessage): boolean {
+  return m.message_type === 'audio' && !!m.media_path;
+}
+
 function InboundMedia({ message }: { message: WaMessage }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -360,12 +370,12 @@ function InboundMedia({ message }: { message: WaMessage }) {
   if (!url) return <p className="mt-1 text-xs text-muted-foreground">Loading attachment…</p>;
   if (message.message_type === 'image' || message.message_type === 'sticker') return <img src={url} alt={message.media_filename ?? message.message_type} className="mt-1 max-h-72 rounded object-contain" />;
   if (message.message_type === 'video') return <video src={url} controls className="mt-1 max-h-72 rounded" />;
-  if (message.message_type === 'audio') return <audio src={url} controls className="mt-1 max-w-full" />;
+  if (message.message_type === 'audio') return <VoiceNotePlayer src={url} tone={message.direction === 'outbound' ? 'outbound' : 'inbound'} className="mt-1 w-56 max-w-full" />;
   return <a href={url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 underline"><ExternalLink className="h-3 w-3" />{message.media_filename ?? 'Open document'}</a>;
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
@@ -1296,6 +1306,21 @@ const Inbox = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, leads, isLoading]);
 
+  /* The recorder holds the row while it is recording / previewing / sending. */
+  const [voiceActive, setVoiceActive] = useState(false);
+  /* ⛔ THE TARGET IS CAPTURED WHEN SEND IS PRESSED. The recorder that calls this is keyed by
+     conversation, so it can only ever be the open thread's; the phone and lead are read once, here,
+     and a thread switch mid-upload cannot redirect it. */
+  const sendVoiceNote = async (clip: VoiceClip): Promise<{ ok: boolean; error?: string; retryable?: boolean }> => {
+    if (!active?.leadId) return { ok: false, error: voiceSendErrorMessage('lead_required'), retryable: false };
+    const target = { key: active.key, phone: active.phone, leadId: active.leadId };
+    const res = await sendVoice({ phone: target.phone, leadId: target.leadId, audio: clip.blob, mime: clip.mime, sendId: clip.sendId });
+    if (!res.ok) return { ok: false, error: voiceSendErrorMessage(res.error, res.reason), retryable: res.retryable };
+    toast({ title: res.simulated ? 'Voice note sent (simulated — test mode)' : 'Voice note sent ✓' });
+    if (activeKey === target.key) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+    return { ok: true };
+  };
+
   /* `freeText` is the COMPOSER'S OWN current value. It must be passed in rather than read from
      the draft map: the composer persists on a debounce now, so the stored draft can be up to
      DRAFT_DEBOUNCE_MS behind what is on screen, and sending the stale copy would send the message
@@ -1860,8 +1885,9 @@ const Inbox = () => {
                       m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
                       {m.direction === 'outbound' && templateSnapshot
                         ? <WhatsAppTemplateMessage snapshot={templateSnapshot} />
+                        : isPlayableVoice(m) ? null
                         : <p className="whitespace-pre-wrap break-words">{bubbleReadable(m) || templateLabel(m.template_name)}</p>}
-                      {m.direction === 'inbound' && <InboundMedia message={m} />}
+                      {(m.direction === 'inbound' || m.message_type === 'audio') && <InboundMedia message={m} />}
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                         <span>{relTime(m.created_at)}</span>
@@ -1917,14 +1943,31 @@ const Inbox = () => {
                         the outgoing instance flushes its draft under its own key on unmount and the
                         incoming one seeds from the new thread's draft. That is what stops a
                         half-typed message following you into someone else's conversation. */}
-                    <InboxComposer
-                      key={`${active.key}:${composerSeed}`}
-                      convKey={active.key}
-                      initialText={text}
-                      sending={sending}
-                      onPersist={persistDraft}
-                      onSend={(bodyText) => doSend(false, bodyText)}
-                    />
+                    {/* ⛔ VOICE NOTES LIVE ONLY IN THIS OPEN-WINDOW BRANCH, and only on a thread linked to a
+                        lead (the server resolves the recipient from the lead). Keyed by conversation
+                        like the composer, so switching thread discards a recording in progress. The
+                        text composer is HIDDEN while the recorder has the row — still mounted, so a
+                        half-typed reply is exactly where it was when the voice note is sent or deleted. */}
+                    <div className="flex min-w-0 items-end gap-2">
+                      <div className={cn('min-w-0 flex-1', voiceActive && active.leadId && 'hidden')}>
+                        <InboxComposer
+                          key={`${active.key}:${composerSeed}`}
+                          convKey={active.key}
+                          initialText={text}
+                          sending={sending}
+                          onPersist={persistDraft}
+                          onSend={(bodyText) => doSend(false, bodyText)}
+                        />
+                      </div>
+                      {active.leadId && (
+                        <VoiceNoteRecorder
+                          key={active.key}
+                          disabled={sending}
+                          onActiveChange={setVoiceActive}
+                          onSend={sendVoiceNote}
+                        />
+                      )}
+                    </div>
                     {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply" above. */}
                     <div className="border-t border-border/60 pt-2">
                       <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
