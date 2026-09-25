@@ -623,7 +623,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
-| Website Build (command centre) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`), `websiteTemplates.ts` (MCL profile, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`; column `outreach_leads.website_build` |
+| Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`; column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
 | Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
 | Mockup product (live) | fn `mockup`, `_shared/mockup-*.ts`, `src/pages/Mockups.tsx`, `src/mockup/templates/`, table `generated_sites`, bucket `mockup-assets` |
@@ -719,7 +719,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |
 | The free-check lane, its dedupe, its emails, where it meets the baseline | `docs/free-check.md` (§6j, §15, §21) |
 | Dashboard numbers, the campaign card, the client card, stored tasks | `docs/dashboard.md` (§6h, §14, §23) |
-| Website Build: build mode, template profile, build facts, the Build Pack | `docs/website-build-v1.md` |
+| Website Build: build mode, template profile, build facts, the Build Pack | `docs/website-build-v1.md`, then `docs/website-build-v2.md` (routes, stage prompts, manifest) |
 | The page generator, the page-plan queue, Q&A modes | `docs/page-generator.md` (§6i) |
 | Coverage, the town gate, state persistence, the DELETED market view | `docs/state-coverage-market.md` (§6c–§6f; §6e is archive) |
 | findable-site's home page and copy rules | `docs/findable-site.md` (§20, §28) |

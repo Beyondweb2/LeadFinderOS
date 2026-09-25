@@ -29,10 +29,29 @@ export interface TemplateClaim {
 
 export interface TemplateFactSpec { key: string; label: string; required: boolean; hint?: string }
 
+/** What kind of identifier a seed value is — so later QA can say WHY a hit is a leak. */
+export const SEED_VALUE_KINDS = ['business_name', 'owner', 'phone', 'email', 'domain', 'town', 'address', 'credential', 'profile', 'brand', 'claim', 'trade_word', 'image'] as const;
+export type SeedValueKind = (typeof SEED_VALUE_KINDS)[number];
+/** A value that belongs to the template's SEED client. Found in a generated client site = a leak,
+ *  unless the new client has the same fact VERIFIED. Belongs to the template, never global. */
+export interface ForbiddenSeedValue { kind: SeedValueKind; value: string }
+
+/** An optional section the template can show or hide, and the fact that decides it. */
+export interface TemplateSection { id: string; label: string; needsFact?: string }
+
+/** An image slot the template expects the client to fill with their OWN asset. */
+export interface TemplateImageSlot { id: string; label: string; required: boolean; spec: string }
+
 export interface WebsiteTemplate {
   id: string;
   name: string;
+  /** Bumped by hand whenever the source repo's structure changes. */
+  version: string;
+  /** The trade the template was built for. */
+  trade: string;
   description: string;
+  /** A deployed preview of the template itself, for design comparison. Blank until one exists. */
+  previewUrl: string;
   /** The source client the structure came from — named so its facts are recognised as foreign. */
   sourceClient: string;
   sourceRepoUrl: string;
@@ -55,20 +74,61 @@ export interface WebsiteTemplate {
   visualStyle: string[];
   supportedBusinessTypes: string[];
   facts: TemplateFactSpec[];
+  /** Optional sections, each shown only when its fact is verified for the client. */
+  optionalSections: TemplateSection[];
+  imageRequirements: TemplateImageSlot[];
+  /** Client-specific claim fields: every claim the source makes and the fact that must back it. */
   claims: TemplateClaim[];
+  /** Every identifier of the seed client. Later QA fails a generated site that contains one. */
+  forbiddenSeedValues: ForbiddenSeedValue[];
   /** Files in the source that carry client content and MUST be rewritten or emptied. */
   clientContentFiles: string[];
   /** Folders of client-owned assets that must be emptied and refilled with the new client's own. */
   clientAssetDirs: string[];
-  /** Strings that prove source-client content survived. Every hit is removed or backed by a VERIFIED fact. */
+  /** Strings that prove source-client content survived. Every hit is removed or backed by a VERIFIED
+   *  fact. DERIVED from forbiddenSeedValues (one list, not two). */
   leftoverNeedles: string[];
 }
+
+/** The supported page types, read from the template's own page families. */
+export const templatePageTypes = (t: WebsiteTemplate) => [...new Set(t.defaultPageFamilies.map((f) => f.family))];
+export const templateRequiredFacts = (t: WebsiteTemplate) => t.facts.filter((f) => f.required);
+export const templateOptionalFacts = (t: WebsiteTemplate) => t.facts.filter((f) => !f.required);
+
+/**
+ * Every forbidden seed value found in a text, case-insensitive. For the future QA gate; pure.
+ * ⛔ Positive: a hit is a leak unless the caller has the same value VERIFIED for the new client.
+ */
+export function findForbiddenSeedValues(text: string, t: WebsiteTemplate, verifiedValues: string[] = []): ForbiddenSeedValue[] {
+  const hay = text.toLowerCase();
+  const allowed = verifiedValues.join(' | ').toLowerCase();
+  return t.forbiddenSeedValues.filter((v) => hay.includes(v.value.toLowerCase()) && !allowed.includes(v.value.toLowerCase()));
+}
+
+const MCL_FORBIDDEN: ForbiddenSeedValue[] = [
+  { kind: 'owner', value: 'Morgan' },
+  { kind: 'business_name', value: 'MC Locksmiths' }, { kind: 'business_name', value: 'MCLocksmiths' },
+  { kind: 'domain', value: 'mc-locksmiths' },
+  { kind: 'town', value: 'Canterbury' }, { kind: 'town', value: 'Kent' }, { kind: 'town', value: 'Whitstable' }, { kind: 'town', value: 'Herne Bay' },
+  { kind: 'phone', value: '07395' }, { kind: 'phone', value: '07848' }, { kind: 'phone', value: '447395351094' }, { kind: 'phone', value: '447848426374' },
+  { kind: 'email', value: 'morganbusiness1' },
+  { kind: 'address', value: 'Walden Court' }, { kind: 'address', value: 'CT2 7JQ' },
+  { kind: 'credential', value: 'DBS' }, { kind: 'credential', value: 'NCFE' }, { kind: 'credential', value: 'City & Guilds' },
+  { kind: 'credential', value: 'Hiscox' }, { kind: 'credential', value: 'Public Liability' }, { kind: 'credential', value: 'APECS' },
+  { kind: 'profile', value: 'Checkatrade' }, { kind: 'profile', value: 'MyBuilder' }, { kind: 'profile', value: 'MyJobQuote' }, { kind: 'profile', value: 'MPL' },
+  { kind: 'brand', value: 'Yale' }, { kind: 'brand', value: 'Chubb' }, { kind: 'brand', value: 'Mul-T-Lock' },
+  { kind: 'trade_word', value: 'locksmith' },
+  { kind: 'claim', value: '24/7' }, { kind: 'claim', value: '15-30 minutes' }, { kind: 'claim', value: '£65' }, { kind: 'claim', value: '£75' },
+];
 
 export const MCL_TEMPLATE_ID = 'mcl-local-trades';
 
 export const MCL_TEMPLATE: WebsiteTemplate = {
   id: MCL_TEMPLATE_ID,
   name: 'MCL Local Trades Template',
+  version: '1.0',
+  trade: 'Locksmith',
+  previewUrl: '',
   description: 'The finished MCLocksmiths site (Astro + Tailwind, Cloudflare Pages) as a reusable local-trades design system and page structure: hero, service and location card systems, CTA and floating call/WhatsApp actions, callback wizard, FAQ and pricing layouts, schema and redirect framework.',
   sourceClient: 'MC Locksmiths (Morgan, Canterbury)',
   sourceRepoUrl: 'https://github.com/Beyondweb2/MCLocksmiths.git',
@@ -143,6 +203,24 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { key: 'photos', label: "Client's own photos / logo", required: false },
     { key: 'standout', label: 'What makes them different', required: false },
   ],
+  optionalSections: [
+    { id: 'pricing', label: 'Pricing page / price-from on cards', needsFact: 'prices' },
+    { id: 'gallery', label: 'Gallery', needsFact: 'photos' },
+    { id: 'locations', label: 'Areas covered + location pages', needsFact: 'service_areas' },
+    { id: 'commercial', label: 'Commercial page', needsFact: 'services' },
+    { id: 'trust_strip', label: 'Trust strip / credentials', needsFact: 'accreditations' },
+    { id: 'brands', label: 'Brand panel (manufacturer logos)', needsFact: 'brands' },
+    { id: 'reviews', label: 'Review cards', needsFact: 'review_profiles' },
+    { id: 'whatsapp', label: 'WhatsApp floating action', needsFact: 'whatsapp_number' },
+    { id: 'guarantee', label: 'Guarantee block', needsFact: 'guarantee' },
+  ],
+  imageRequirements: [
+    { id: 'logo', label: 'Logo', required: true, spec: 'SVG preferred, else PNG 512px+ on transparent' },
+    { id: 'favicon', label: 'Favicon set', required: true, spec: 'from the logo: 32px, 180px apple-touch, SVG' },
+    { id: 'hero', label: 'Hero photo', required: false, spec: "the client's own, landscape 1600px+; omitted if none" },
+    { id: 'og', label: 'Share image', required: false, spec: '1200x630' },
+    { id: 'gallery', label: 'Gallery photos', required: false, spec: "the client's own job photos only" },
+  ],
   claims: [
     { id: 'owner', label: 'Owner named in copy', sourceExample: '"Speak to Morgan directly"', factKey: 'owner_name' },
     { id: 'services', label: 'Service list (22 locksmith services, car keys page)', sourceExample: 'lock changes, uPVC repairs, emergency entry, auto locksmith', factKey: 'services' },
@@ -175,12 +253,8 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     'tests/*.test.ts (assert MCL content — rewrite for the new client)',
   ],
   clientAssetDirs: ['public/images/gallery', 'public/images/badges', 'public/images/brands', 'public/images (hero-van.webp, logo.png)', 'public (favicons, apple-touch-icon, safari-pinned-tab.svg, og-image)'],
-  leftoverNeedles: [
-    'Morgan', 'MC Locksmiths', 'MCLocksmiths', 'mc-locksmiths', 'Canterbury', 'Kent', 'Whitstable', 'Herne Bay',
-    '07395', '07848', '447395351094', '447848426374', 'morganbusiness1', 'Walden Court', 'CT2 7JQ',
-    'DBS', 'NCFE', 'City & Guilds', 'Hiscox', 'Public Liability', 'APECS', 'Checkatrade', 'MyBuilder', 'MyJobQuote',
-    'MPL', 'Yale', 'Chubb', 'Mul-T-Lock', 'locksmith', '24/7', '15-30 minutes', '£65', '£75',
-  ],
+  forbiddenSeedValues: MCL_FORBIDDEN,
+  leftoverNeedles: MCL_FORBIDDEN.map((v) => v.value),
 };
 
 export const WEBSITE_TEMPLATES: readonly WebsiteTemplate[] = [MCL_TEMPLATE];
