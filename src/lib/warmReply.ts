@@ -200,14 +200,17 @@ export interface ReplyContext {
   hookTemplate: string | null;
   /** Regenerate: 0 for the first draft, then 1, 2… with the previous draft to differ from. */
   variant: number;
+  /** Paul has already sent something AFTER their latest message (derived, never passed in). */
+  alreadyAnswered: boolean;
   avoidText: string | null;
 }
 
-export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl'>): ReplyContext {
+export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered'>): ReplyContext {
   const question = classifyInbound(i.latest.text);
   return {
     ...i,
     question,
+    alreadyAnswered: i.thread.some((m) => m.direction === 'outbound' && m.at > i.latest.at),
     askOwnership: shouldAskOwnership(i.research, i.salesFacts),
     allowReportUrl: !!i.reportUrl && reportUrlAllowed(i.latest.text, question.all),
   };
@@ -332,7 +335,8 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
     ctx.allowReportUrl && ctx.reportUrl
       ? `REPORT LINK: they asked for it or for what we found — you may include ${ctx.reportUrl}`
       : 'REPORT LINK: do NOT include the audit/report link in this reply.',
-    ctx.question.primary === 'price' ? 'PRICE: their message asks about price — the FIRST sentence must give it, with both figures.' : '',
+    ctx.question.primary === 'price' ? 'PRICE: their message asks about price — the FIRST sentence must give it, with both figures; then the four-week first-payment guarantee; and include the Full details link.' : '',
+    ctx.alreadyAnswered ? 'ALREADY ANSWERED: Paul has already replied after their latest message (see the conversation). Do not repeat what he said; write a short, natural follow-up that adds something new.' : '',
     ctx.variant > 0 && ctx.avoidText
       ? `ALTERNATIVE: this is regenerate #${ctx.variant}. Write a genuinely different version (different opening and wording, same facts) from:\n"""${clip(ctx.avoidText, 1500)}"""`
       : '',
@@ -395,6 +399,11 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
     const firstPara = text.split(/\n\s*\n/)[0] ?? '';
     if (!new RegExp(`£\\s?${FINDABLE_SETUP_PRICE_GBP}\\b`).test(firstPara)) problems.push('They asked the price and the first paragraph does not give it.');
     if (!/\bmonth/i.test(text)) problems.push('It names the start price without the monthly.');
+    /* Measured on the first live draft (Adcock Heat, 2026-09-25): price and findings, but no guarantee
+       and no link. A price answer without the four-week first-payment guarantee undersells the one
+       thing that makes the setup fee low-risk, so it is a problem, not a note. */
+    if (!/\b(refund|money back|claim[^.?!\n]{0,30}back|guarantee)/i.test(text)) problems.push('They asked the price and it leaves out the four-week first-payment guarantee.');
+    if (!text.includes('findable.live')) problems.push(`They asked the price and it leaves out ${FINDABLE_DETAILS_URL}.`);
   }
   if (ctx.reportUrl && !ctx.allowReportUrl && (text.includes(ctx.reportUrl) || /findable\.live\/(?:r|report)\//i.test(text))) {
     problems.push('It includes the report link when nothing in their message called for it.');
@@ -415,7 +424,8 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   if (paras > 5) warnings.push(`It has ${paras} paragraphs.`);
   if (LIST_LINE.test(text) && !/\b(detail|list|breakdown|everything)\b/i.test(ctx.latest.text)) warnings.push('It uses a list they did not ask for.');
   if (!/\?/.test(text) && ctx.question.primary !== 'not_interested') warnings.push('It ends without a question or next step.');
-  if ((ctx.question.primary === 'price' || ctx.question.primary === 'how_it_works') && !text.includes('findable.live')) warnings.push(`No link to ${FINDABLE_DETAILS_URL}.`);
+  if (ctx.question.primary === 'how_it_works' && !text.includes('findable.live')) warnings.push(`No link to ${FINDABLE_DETAILS_URL}.`);
+  if (ctx.alreadyAnswered) warnings.push('You have already replied since their last message — this draft answers it again. Check it adds something new.');
   if (ctx.askOwnership && !OWNERSHIP_Q.test(text)) warnings.push('The research suggests asking who owns the site, and the draft does not.');
   return { problems, warnings };
 }

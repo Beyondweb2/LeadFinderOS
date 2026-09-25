@@ -104,6 +104,20 @@ const fb = fallbackReply(ctx)!;
 ok(fb.startsWith(FINDABLE_OFFER_SUMMARY) && fb.includes('https://findable.live/') && !fb.includes('JC Plumbing') && checkReply(fb, ctx).problems.length === 0,
   'the rule-built fallback: price first, findable.live, no hook resend, passes its checks');
 
+/* The FIRST LIVE DRAFT (Adcock Heat / ryliheat.co.uk, 2026-09-25), verbatim: price and three real
+   findings, but no guarantee and no findable.live. Both are now problems, so the model is sent back. */
+const LIVE_1 = "£99 to start, then £99 a month from week 6, with 12 payments in total.\n\nI had a look through your site and noticed a few things that could be improved. The site gives mixed signals about where you operate, and the opening hours listed are inconsistent. Also, there aren't dedicated pages for your core services like plumbing or boiler repair, which might make it harder for AI tools to connect you with local searches.\n\nQuick one: do you own/control the current website, or is it owned/managed by Keyhole IT?";
+const live1 = checkReply(LIVE_1, ctx);
+ok(live1.problems.some((p) => /four-week first-payment guarantee/.test(p)), 'the live draft without the guarantee is sent back');
+ok(live1.problems.some((p) => /findable\.live/.test(p)), 'the live draft without findable.live is sent back');
+ok(/then the four-week first-payment guarantee; and include the Full details link/.test(prompt), 'the prompt asks for both up front');
+// Paul had already answered "How much" by hand at 10:52 in that thread.
+const answered = [...thread, { id: 'paul', direction: 'outbound' as const, text: '£99 to start mate…', at: at(10) }];
+const ctxAnswered = buildReplyContext({ ...ctx, thread: answered });
+ok(ctxAnswered.alreadyAnswered === true && ctx.alreadyAnswered === false, 'a thread Paul has already answered since their message is recognised');
+ok(/ALREADY ANSWERED: Paul has already replied after their latest message/.test(buildReplyPrompt(ctxAnswered)), '…the model is told not to repeat him');
+ok(checkReply(GOOD, ctxAnswered).warnings.some((w) => /already replied since their last message/.test(w)), '…and Paul is warned in Why this reply?');
+
 /* ─────────── 5. the full crawl ─────────── */
 const W = 'https://gilesplumbingservices.com/';
 const fullRow = (over: Partial<CrawlRowInput> = {}, ev: Record<string, unknown> = {}): CrawlRowInput => ({
