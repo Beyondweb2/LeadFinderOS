@@ -79,6 +79,15 @@ The reply comes after opener → reply → the AI/competitor hook → their repl
 - **Why this reply?** adds AI search context, Primary issue, Proposed solution, Website ownership,
   Final question.
 - Regression: `scripts/warm-stage-purpose.test.ts` (the Addlestone electrician, blocked crawlers).
+- **Taught by the first live drafts (E.E.S Electrical, First Call Electrical, Adcock Heat):**
+  a failed read today (E.E.S: HTTP 429) must not erase what an earlier crawl check MEASURED — only
+  crawl-measured findings survive a failed read; a model reading may not author conflicts, missing
+  pages, blocking, titles or credits (`MODEL_MAY_AUTHOR` — First Call's "cover areas across
+  Hertfordshire" was called a conflict); "AI tools can't access your site" needs a finding behind it;
+  the AI search must actually be said ("i asked google ai…"), not implied. "Someone manages the
+  website for me" is now a keyword rule; "how did you get my details" is answered from the lead row
+  (a Google listing) or left to Paul. When Paul has already sent the primary finding by hand (E.E.S),
+  the drafter does not repeat it and lists it under "Already told them".
 
 ## The primary finding (Paul, 2026-09-25, after the first live drafts)
 
