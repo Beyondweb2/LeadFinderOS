@@ -197,8 +197,21 @@ export type AssetApproval = (typeof ASSET_APPROVALS)[number];
 export const INTERACTION_KINDS = ['form', 'menu', 'accordion', 'slider', 'sticky', 'booking', 'contact_flow', 'popup', 'other'] as const;
 export type InteractionKind = (typeof INTERACTION_KINDS)[number];
 
-export interface ManifestPage { url: string; type: PageFamily; title: string; h1: string; purpose: string; screenshots: string[] }
-export interface ManifestAsset { source_url: string; type: AssetType; purpose: string; location: string; approval: AssetApproval }
+/** How the operator sees the three approval tokens (the stored tokens are V2's and never change). */
+export const ASSET_APPROVAL_LABELS: Record<AssetApproval, string> = { approved: 'USE', pending: 'REVIEW', rejected: 'IGNORE' };
+export const ASSET_OWNERSHIPS = ['client_owned', 'third_party', 'unknown'] as const;
+export type AssetOwnership = (typeof ASSET_OWNERSHIPS)[number];
+
+export interface ManifestPage {
+  url: string; type: PageFamily; title: string; h1: string; purpose: string; screenshots: string[];
+  /** Phase 2 (recon): the HTTP status seen, and the page's section order. */
+  status_code: number | null; sections: string[];
+}
+export interface ManifestAsset {
+  source_url: string; type: AssetType; purpose: string; location: string; approval: AssetApproval;
+  /** Phase 2 (recon): the page it was seen on, the filename it should get locally, who owns it. */
+  page_url: string; suggested_filename: string; ownership: AssetOwnership;
+}
 export interface ManifestInteraction { kind: InteractionKind; where: string; notes: string }
 export interface SourceManifest {
   pages: ManifestPage[];
@@ -206,7 +219,34 @@ export interface SourceManifest {
   design: { fonts: string; colours: string; layout_notes: string; component_notes: string };
   interactions: ManifestInteraction[];
   seo: { metadata: string; canonical: string; schema: string; sitemap: string; robots: string; tracking: string };
+  /** Old URLs the recon says will need a redirect. Suggestions only — the redirect map is Paul's. */
+  redirect_candidates: Redirect[];
 }
+
+/* ── Phase 2: the recon import's own record. Status is DERIVED (reconStatus), never stored. ──── */
+
+export const RECON_REVIEW_KINDS = ['conflict', 'unknown', 'warning'] as const;
+export type ReconReviewKind = (typeof RECON_REVIEW_KINDS)[number];
+export interface ReconReviewItem {
+  kind: ReconReviewKind;
+  /** The fact key it is about, when it is about one (a conflict always is). */
+  key: string;
+  label: string;
+  detail: string;
+  /** Paul dismissed it (unknowns / warnings). A conflict resolves by deciding its fact. */
+  resolved: boolean;
+}
+export interface ReconState {
+  prompt_copied_at: string;
+  imported_at: string;
+  /** The site the imported recon describes, and when Claude captured it. */
+  source_url: string;
+  captured_at: string;
+  pages_total: number | null;
+  assets_total: number | null;
+  review: ReconReviewItem[];
+}
+export const MAX_RECON_REVIEW = 200;
 
 /* ── V2: visual comparison (faithful rebuild) — state only; no image comparison is run. ───────── */
 
@@ -268,6 +308,8 @@ export interface WebsiteBuildState {
   manifest: SourceManifest;
   visual: VisualComparison;
   promotion: TemplatePromotion;
+  /** Phase 2: the last recon import (Claude crawled; LeadFinderOS stored). */
+  recon: ReconState;
   facts: BuildFact[];
   pages: ArchPage[];
   redirects: Redirect[];
@@ -291,12 +333,12 @@ type StringField = keyof typeof STRING_FIELDS;
 export const MAX_FACTS = 120;
 export const MAX_PAGES = 200;
 export const MAX_REDIRECTS = 600;
-export const MAX_MANIFEST_PAGES = 300;
+export const MAX_MANIFEST_PAGES = 600;
 export const MAX_MANIFEST_ASSETS = 300;
 export const MAX_MANIFEST_INTERACTIONS = 100;
 
 const EMPTY_MANIFEST: SourceManifest = {
-  pages: [], assets: [], interactions: [],
+  pages: [], assets: [], interactions: [], redirect_candidates: [],
   design: { fonts: '', colours: '', layout_notes: '', component_notes: '' },
   seo: { metadata: '', canonical: '', schema: '', sitemap: '', robots: '', tracking: '' },
 };
@@ -313,6 +355,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   manifest: EMPTY_MANIFEST,
   visual: { source_url: '', preview_url: '', widths: [...DEFAULT_COMPARE_WIDTHS], results: [] },
   promotion: { candidate: false, proposed_name: '', proposed_trade: '', notes: '' },
+  recon: { prompt_copied_at: '', imported_at: '', source_url: '', captured_at: '', pages_total: null, assets_total: null, review: [] },
   facts: [], pages: [], redirects: [], qa: {}, checks: {},
 };
 
@@ -377,19 +420,24 @@ export function parseManifest(raw: unknown): SourceManifest {
   return {
     pages: arr(o.pages).map((x) => {
       const p = obj(x);
+      const code = Math.floor(Number(p.status_code));
       return { url: str(p.url, 500), type: tok(PAGE_FAMILIES, p.type, 'other'), title: str(p.title, 200), h1: str(p.h1, 200),
-        purpose: str(p.purpose, 300), screenshots: arr(p.screenshots).map((v) => str(v, 300)).filter(Boolean).slice(0, 8) };
+        purpose: str(p.purpose, 300), screenshots: arr(p.screenshots).map((v) => str(v, 300)).filter(Boolean).slice(0, 8),
+        status_code: p.status_code != null && code >= 100 && code <= 599 ? code : null,
+        sections: arr(p.sections).map((v) => str(v, 120)).filter(Boolean).slice(0, 20) };
     }).filter((p) => p.url).slice(0, MAX_MANIFEST_PAGES),
     assets: arr(o.assets).map((x) => {
       const a = obj(x);
       return { source_url: str(a.source_url, 500), type: tok(ASSET_TYPES, a.type, 'other'), purpose: str(a.purpose, 200),
-        location: str(a.location, 300), approval: tok(ASSET_APPROVALS, a.approval, 'pending') };
+        location: str(a.location, 300), approval: tok(ASSET_APPROVALS, a.approval, 'pending'),
+        page_url: str(a.page_url, 500), suggested_filename: str(a.suggested_filename, 120), ownership: tok(ASSET_OWNERSHIPS, a.ownership, 'unknown') };
     }).filter((a) => a.source_url || a.location).slice(0, MAX_MANIFEST_ASSETS),
+    redirect_candidates: arr(o.redirect_candidates).map(readRedirect).filter((r): r is Redirect => !!r).slice(0, MAX_REDIRECTS),
     interactions: arr(o.interactions).map((x) => {
       const it = obj(x);
       return { kind: tok(INTERACTION_KINDS, it.kind, 'other'), where: str(it.where, 300), notes: str(it.notes, 500) };
     }).filter((it) => it.where || it.notes).slice(0, MAX_MANIFEST_INTERACTIONS),
-    design: { fonts: str(d.fonts, 1000), colours: str(d.colours, 1000), layout_notes: str(d.layout_notes, 3000), component_notes: str(d.component_notes, 3000) },
+    design: { fonts: str(d.fonts, 1000), colours: str(d.colours, 1000), layout_notes: str(d.layout_notes, 4000), component_notes: str(d.component_notes, 4000) },
     seo: { metadata: str(s.metadata, 2000), canonical: str(s.canonical, 500), schema: str(s.schema, 2000), sitemap: str(s.sitemap, 500), robots: str(s.robots, 1000), tracking: str(s.tracking, 1000) },
   };
 }
@@ -451,6 +499,16 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
   };
   const pr = obj(o.promotion);
   out.promotion = { candidate: pr.candidate === true, proposed_name: str(pr.proposed_name, 120), proposed_trade: str(pr.proposed_trade, 120), notes: str(pr.notes, 2000) };
+  const rc = obj(o.recon);
+  out.recon = {
+    prompt_copied_at: str(rc.prompt_copied_at, 40), imported_at: str(rc.imported_at, 40),
+    source_url: str(rc.source_url, 500), captured_at: str(rc.captured_at, 40),
+    pages_total: count(rc.pages_total), assets_total: count(rc.assets_total),
+    review: arr(rc.review).map((x) => {
+      const r = obj(x);
+      return { kind: tok(RECON_REVIEW_KINDS, r.kind, 'warning'), key: str(r.key, 80), label: str(r.label, 160), detail: str(r.detail, 1000), resolved: r.resolved === true };
+    }).filter((r) => r.label || r.detail).slice(0, MAX_RECON_REVIEW),
+  };
   const seen = new Set<string>();
   out.facts = arr(o.facts).map(readFact)
     .filter((f): f is BuildFact => !!f && !seen.has(f.key) && !!seen.add(f.key)).slice(0, MAX_FACTS);
@@ -533,8 +591,8 @@ export function websiteBuildStages(i: StageInputs): StageStatus[] {
   return [
     { stage: 'intake', applicable: true, done: intakeDone,
       detail: !modeComplete(s) ? 'Choose the build route' : i.factsAwaiting ? `${i.factsAwaiting} fact(s) need a decision` : 'Route chosen, facts reviewed' },
-    { stage: 'capture', applicable: capApplies, done: !capApplies || s.capture.status === 'captured',
-      detail: !capApplies ? 'Not needed for this build' : CAPTURE_STATUS_LABELS[s.capture.status] },
+    { stage: 'capture', applicable: capApplies, done: !capApplies || s.capture.status === 'captured' || reconInventoryReady(s, i.hasExistingSite),
+      detail: !capApplies ? 'Not needed for this build' : s.recon.imported_at ? `Recon imported · ${s.manifest.pages.length} page(s)` : CAPTURE_STATUS_LABELS[s.capture.status] },
     { stage: 'architecture', applicable: true, done: archDone,
       detail: `${s.pages.length} page(s) · ${s.redirects.length} redirect(s)${i.architectureErrors ? ` · ${i.architectureErrors} problem(s)` : ''}` },
     { stage: 'build_pack', applicable: true, done: intakeDone && archDone && i.setupMissing.length === 0,
@@ -566,4 +624,36 @@ export function parseCompareReply(text: string, existing: CompareResult[]): Comp
     byFam.set(fam as PageFamily, { family: fam as PageFamily, status: m[2].toLowerCase() as CompareStatus, notes: m[3].trim().slice(0, 1000) });
   }
   return PAGE_FAMILIES.filter((f) => byFam.has(f)).map((f) => byFam.get(f)!);
+}
+
+/* ── Phase 2: recon status — DERIVED from what is stored, never stored itself. ─────────────── */
+
+export const RECON_STATUSES = ['not_started', 'prompt_copied', 'imported', 'needs_review', 'complete'] as const;
+export type ReconStatus = (typeof RECON_STATUSES)[number];
+export const RECON_STATUS_LABELS: Record<ReconStatus, string> = {
+  not_started: 'Not started', prompt_copied: 'Prompt copied', imported: 'Imported', needs_review: 'Needs review', complete: 'Complete',
+};
+
+/** A recon counts as a page inventory once it is imported with pages — or, with no old site to
+ *  crawl (bespoke discovery), once it is imported at all. */
+export function reconInventoryReady(s: WebsiteBuildState, hasExistingSite: boolean): boolean {
+  if (!s.recon.imported_at) return false;
+  return s.manifest.pages.length > 0 || !hasExistingSite;
+}
+
+/** Open review items: unresolved unknowns / warnings, and conflicts whose fact is still undecided. */
+export function openReconReview(s: WebsiteBuildState, isFactOpen: (key: string) => boolean): ReconReviewItem[] {
+  return s.recon.review.filter((r) => !r.resolved && (r.kind !== 'conflict' || !r.key || isFactOpen(r.key)));
+}
+
+/**
+ * Complete = imported, a page inventory exists, and what needs approval is surfaced AND decided.
+ * Unknowns that must wait for the client do not block — they are resolved (dismissed) by Paul, or
+ * they stay visible as "needs review" without stopping the next stage (Capture's DONE is
+ * reconInventoryReady, which does not require them answered).
+ */
+export function reconStatus(s: WebsiteBuildState, opts: { hasExistingSite: boolean; factsAwaiting: number; openReview: number }): ReconStatus {
+  if (!s.recon.imported_at) return s.recon.prompt_copied_at ? 'prompt_copied' : 'not_started';
+  if (!reconInventoryReady(s, opts.hasExistingSite)) return 'imported';
+  return opts.factsAwaiting > 0 || opts.openReview > 0 ? 'needs_review' : 'complete';
 }

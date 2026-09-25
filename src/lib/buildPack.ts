@@ -30,6 +30,8 @@ import type { FactRow } from './buildFacts.ts';
 import { CLAIM_VERDICT_LABELS, isPublishable, mapTemplateClaims } from './buildFacts.ts';
 import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
+import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
+import { manifestBuildLines } from './manifestSummary.ts';
 
 export const PACK_ITEM_IDS = ['setup', 'capture', 'master', 'local', 'preview', 'visual_qa', 'seo_qa', 'production', 'final_qa'] as const;
 export type PackItemId = (typeof PACK_ITEM_IDS)[number];
@@ -265,21 +267,15 @@ function setupCommands(i: BuildPackInput): PackItem {
 
 /* ── 2. CAPTURE ───────────────────────────────────────────────────────────────────────────────── */
 
-/** The capture's machine-readable output — the Source Site Manifest shape LeadFinderOS accepts
- *  (websiteBuildState.ts parseManifest). Paul pastes the file's contents into the Capture step. */
+/** The capture's machine-readable output is the RECON RESULT (reconSchema.ts) — the one shape the
+ *  Capture step's Import Recon Result accepts. If the Recon prompt already ran, the capture updates
+ *  that same file rather than writing a second format. */
 export const MANIFEST_SPEC: string[] = [
-  'capture/manifest.json — ONE JSON object, exactly these keys (Paul pastes it into LeadFinderOS):',
-  '  {',
-  '    "pages": [{ "url", "type", "title", "h1", "purpose", "screenshots": ["capture/screenshots/..."] }],',
-  '    "assets": [{ "source_url", "type", "purpose", "location", "approval": "pending" }],',
-  '    "design": { "fonts", "colours", "layout_notes", "component_notes" },',
-  '    "interactions": [{ "kind", "where", "notes" }],',
-  '    "seo": { "metadata", "canonical", "schema", "sitemap", "robots", "tracking" }',
-  '  }',
-  '  page "type": homepage, services_index, service, locations_index, location, commercial, pricing, about,',
-  '  faq, gallery, contact, legal, other. asset "type": logo, photo, icon, badge, brand_logo, favicon,',
-  '  document, video, other. "location" = the local file path. interaction "kind": form, menu, accordion,',
-  '  slider, sticky, booking, contact_flow, popup, other. Strings only; "" when unknown — never guess.',
+  'capture/recon.json — ONE JSON object in the recon result format below (if capture/recon.json already',
+  'exists from the Recon prompt, UPDATE it — add the local file path of each downloaded asset to its',
+  '"suggestedFilename"). Paul pastes it into LeadFinderOS with Import Recon Result.',
+  ...RECON_SCHEMA_LINES,
+  ...RECON_RULES_LINES,
 ];
 
 export function capturePrompt(i: BuildPackInput): PackItem {
@@ -381,7 +377,7 @@ export function capturePrompt(i: BuildPackInput): PackItem {
     '',
     '## FINISH WITH capture/SUMMARY.md, and paste three blocks from it back to Paul',
     '',
-    '1. Counts — "URLs: N · Assets: N" (Paul records these in LeadFinderOS), and the contents of capture/manifest.json.',
+    '1. Counts — "URLs: N · Assets: N", and the contents of capture/recon.json (Paul imports it).',
     '2. PROPOSED PAGE ARCHITECTURE, one line per page, exactly this format (Paul pastes it in):',
     '       action | family | /new-path/ | Title | old url | redirect target | note',
     '   action is one of keep, create, consolidate, redirect, remove.',
@@ -598,6 +594,8 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
     hasOld ? 'Current website: ' + i.existingSiteUrl : 'The client has no current website.',
     ...(hasOld ? ['Capture: ' + s.capture.status.replace('_', ' ') + (s.capture.url_count != null ? ' · ' + s.capture.url_count + ' URLs' : '') + (s.capture.asset_count != null ? ' · ' + s.capture.asset_count + ' assets' : '') + (s.capture.status === 'captured' ? ' — in capture/.' : '')] : []),
     ...(s.capture.notes ? ['Capture notes: ' + s.capture.notes] : []),
+    '',
+    ...manifestBuildLines(s, i.existingSiteUrl),
     '',
     ...(hasOld ? doNotBreak(e) : []),
     ...(e.crawlFindings.length ? ['', ...crawlSection(e)] : []),
