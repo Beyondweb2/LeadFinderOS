@@ -21,14 +21,16 @@ import type { Stage, WebsiteBuildState } from './websiteBuildState.ts';
 import { BUILD_ROUTE_LABELS, compareFamilies, PAGE_FAMILY_LABELS, REBUILD_STYLE_LABELS } from './websiteBuildState.ts';
 import type { FactRow } from './buildFacts.ts';
 import { reconPrompt } from './recon.ts';
-import { manifestArchitectureLines } from './manifestSummary.ts';
+import { manifestArchitectureLines, oneLine } from './manifestSummary.ts';
+import { computeMapping } from './templateMapping.ts';
+import type { ManifestAsset } from './websiteBuildState.ts';
 import { isPublishable } from './buildFacts.ts';
 import {
   capturePrompt, cloudflareProblem, codeConfig, finalQaPrompt, isBespokeRoute, isFaithfulRoute,
   isTemplateRoute, MARK, masterPrompt, pageLines, seoQaPrompt, winPath, type BuildPackInput,
 } from './buildPack.ts';
 
-export const STAGE_PROMPT_IDS = ['recon', 'capture', 'architecture', 'build', 'preview_deploy', 'visual_compare', 'qa', 'production_deploy'] as const;
+export const STAGE_PROMPT_IDS = ['recon', 'capture', 'architecture', 'asset_download', 'build', 'preview_deploy', 'visual_compare', 'qa', 'production_deploy'] as const;
 export type StagePromptId = (typeof STAGE_PROMPT_IDS)[number];
 
 export interface StagePrompt {
@@ -235,7 +237,51 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
 }
 
 /** All eight, in stage order. */
+/* ── ASSET DOWNLOAD — Claude Code fetches ONLY the approved assets; LeadFinderOS downloads nothing. ─
+   Faithful: every asset marked USE (the authorised site's own assets). Template: only USE assets that
+   are ASSIGNED to a template slot. Bespoke: assigned USE assets, else every USE asset. */
+export function assetsToDownload(i: BuildPackInput): { list: Array<{ asset: ManifestAsset; slot: string }>; held: number } {
+  const s = i.state;
+  const use = s.manifest.assets.filter((a) => a.approval === 'approved');
+  const held = s.manifest.assets.filter((a) => a.approval === 'pending').length;
+  const m = computeMapping(s, i.template, i.facts, i.businessName);
+  const slotOf = new Map<string, string>();
+  for (const st of m.slots) for (const a of st.publishable) if (!slotOf.has(a.source_url)) slotOf.set(a.source_url, st.slot.label);
+  const assignedOnly = isTemplateRoute(s) || (isBespokeRoute(s) && slotOf.size > 0);
+  const chosen = assignedOnly ? use.filter((a) => slotOf.has(a.source_url)) : use;
+  return { list: chosen.map((asset) => ({ asset, slot: slotOf.get(asset.source_url) ?? '' })), held };
+}
+
+function assetDownload(i: BuildPackInput): StagePrompt {
+  const s = i.state;
+  const { list, held } = assetsToDownload(i);
+  const safeName = (a: ManifestAsset, n: number) => (a.suggested_filename || (a.source_url.split('/').pop() || 'asset-' + (n + 1))).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 80);
+  const L = [
+    ...header('ASSET DOWNLOAD', i),
+    'Work in: ' + folder(s) + '. Download ONLY the ' + list.length + ' asset(s) below — ' + (isTemplateRoute(s) ? 'approved (USE) in LeadFinderOS AND assigned to a template slot.' : isFaithfulRoute(s) ? 'every asset of the authorised site that Paul marked USE.' : 'approved (USE) in LeadFinderOS.'),
+    '',
+    'Rules:',
+    '- Originals: capture/assets/original/<filename>, byte-for-byte as served. Never edit an original.',
+    '- Web copies: public/images/<filename> — WebP (or AVIF) for photos, longest edge 2400px max, sensible quality; SVG logos copied as-is; keep the originals.',
+    '- Safe local filenames only: lowercase, a-z 0-9 . - _ , no spaces. Keep the original extension on the original.',
+    '- Each source URL is downloaded ONCE; if two URLs return identical bytes, keep one file and note it.',
+    '- Never hotlink: the built site must reference the local web copy only.',
+    '- Do NOT download anything that is not on this list (REVIEW / IGNORE assets, stock images, anything else you see).',
+    '- If a download fails (404, blocked, not an image), record it and carry on — never substitute another image.',
+    '- Record every one in capture/assets/downloads.csv: source_url, original_file, web_file, bytes, status (ok / failed: reason).',
+    '',
+    'Assets:',
+    ...(list.length ? list.map(({ asset, slot }, n) => '- ' + (slot ? '[' + slot + '] ' : '') + oneLine(asset.source_url, 300) + ' → ' + safeName(asset, n) + (asset.purpose ? '  (' + oneLine(asset.purpose, 80) + ')' : ''))
+      : ['(nothing to download yet — mark assets USE' + (isTemplateRoute(s) ? ' and assign them to template slots' : '') + ' in LeadFinderOS)']),
+    ...(held ? ['', held + ' asset(s) are still REVIEW in LeadFinderOS and are NOT on this list — do not download them.'] : []),
+    '',
+    'Reply with one line per asset:  <source_url> -> <web_file>   and a FAILED list.',
+  ];
+  return { id: 'asset_download', label: 'Copy Asset Download Prompt', short: 'Assets', stage: 'build_pack', blockedBy: [...(list.length ? [] : ['Approved assets']), ...(s.local_repo_path ? [] : ['Local folder'])],
+    help: 'Claude Code downloads only the approved assets, keeps originals, makes web copies and records source → file.', text: L.join('\n') };
+}
+
 export function stagePrompts(i: BuildPackInput): StagePrompt[] {
-  return [recon(i), capture(i), architecture(i), build(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
+  return [recon(i), capture(i), architecture(i), assetDownload(i), build(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
 }
 

@@ -30,7 +30,8 @@ import type {
   AssetType, BuildFact, InteractionKind, ManifestAsset, ManifestInteraction, ManifestPage, PageFamily, Redirect,
   ReconReviewItem, SourceManifest, StoredFactStatus, WebsiteBuildState,
 } from './websiteBuildState.ts';
-import { MAX_FACTS, MAX_MANIFEST_ASSETS, MAX_MANIFEST_INTERACTIONS, MAX_MANIFEST_PAGES, MAX_RECON_REVIEW, MAX_REDIRECTS, REBUILD_STYLE_LABELS } from './websiteBuildState.ts';
+import { MAX_FACTS, MAX_MANIFEST_ASSETS, MAX_MANIFEST_INTERACTIONS, MAX_MANIFEST_PAGES, MAX_RECON_CANDIDATES, MAX_RECON_REVIEW, MAX_REDIRECTS, REBUILD_STYLE_LABELS } from './websiteBuildState.ts';
+import type { ReconCandidate } from './websiteBuildState.ts';
 import type { FactRow } from './buildFacts.ts';
 import { isPublishable } from './buildFacts.ts';
 import { CORE_BUILD_FACTS, templatePageTypes } from './websiteTemplates.ts';
@@ -157,6 +158,8 @@ export interface ReconResult {
   pages: ManifestPage[]; facts: ReconFact[]; assets: ManifestAsset[]; interactions: ManifestInteraction[];
   design: SourceManifest['design']; seo: SourceManifest['seo']; redirectCandidates: Redirect[];
   unknowns: Array<{ field: string; note: string }>; warnings: string[];
+  /** Phase 3: analytics / tag-manager / ads IDs seen on the site — they become facts NEEDING approval. */
+  trackingIds: { analytics: string[]; ads: string[] };
 }
 export interface ReconSummary {
   pages: number; facts: number; assets: number; unknowns: number; warnings: number; interactions: number; redirectCandidates: number;
@@ -370,6 +373,10 @@ export function parseReconText(input: string): ReconParse {
     sourceUrl: safeUrl(o.sourceUrl), capturedAt: clean(o.capturedAt, 40), platform: clean(o.platform, 100),
     siteStatus: siteStatus === 'live' || siteStatus === 'offline' || siteStatus === 'partial' ? siteStatus : '',
     pages, facts, assets, interactions, design, seo, redirectCandidates, unknowns, warnings,
+    trackingIds: {
+      analytics: [...new Set([...(Array.isArray(tr.analytics) ? tr.analytics : [tr.analytics]), tr.tagManager].map((v) => clean(v, 60)).filter((v) => /^(G-|UA-|GTM-|AW-)?[A-Z0-9-]{4,}$/i.test(v)))].slice(0, 10),
+      ads: [...new Set((Array.isArray(tr.adsIds) ? tr.adsIds : [tr.adsIds]).map((v) => clean(v, 60)).filter((v) => /^[A-Z0-9-]{4,}$/i.test(v)))].slice(0, 10),
+    },
   };
   const famCount = new Map<PageFamily, number>();
   for (const p of pages) famCount.set(p.type, (famCount.get(p.type) ?? 0) + 1);
@@ -394,15 +401,43 @@ const FIELD_KEYS: Record<string, string> = {
   services: 'services', service: 'services', owner_name: 'owner_name', owner: 'owner_name',
   opening_hours: 'opening_hours', hours: 'opening_hours', response_time: 'response_time',
   years_experience: 'years_experience', experience: 'years_experience',
-  accreditations: 'accreditations', credentials: 'accreditations', memberships: 'accreditations', certifications: 'accreditations',
+  accreditations: 'accreditations', credentials: 'accreditations', certifications: 'accreditations',
+  memberships: 'memberships', membership: 'memberships', qualifications: 'qualifications', qualification: 'qualifications',
+  dbs: 'dbs', dbs_checked: 'dbs', awards: 'awards', award: 'awards', review_rating: 'review_rating', rating: 'review_rating', review_count: 'review_rating',
+  payment_methods: 'payment_methods', payments: 'payment_methods', vat_status: 'vat_status', vat: 'vat_status',
+  legal_status: 'legal_status', legal_entity: 'legal_status', licences: 'licences', licenses: 'licences', licence: 'licences',
+  compliance: 'compliance', availability: 'availability', '24_7': 'availability', website: 'website', domain: 'website',
+  analytics: 'analytics_ids', analytics_ids: 'analytics_ids', ads: 'ads_ids', ads_ids: 'ads_ids',
   insurance: 'insurance', prices: 'prices', price: 'prices', guarantee: 'guarantee', guarantees: 'guarantee', warranty: 'guarantee',
   brands: 'brands', manufacturers: 'brands', review_profiles: 'review_profiles', reviews: 'reviews_on_site', testimonials: 'reviews_on_site',
   directory_profiles: 'directory_profiles', social_profiles: 'social_profiles', social: 'social_profiles',
   company_number: 'company_number', standout: 'standout', legal: 'legal_facts',
 };
 /** Keys that hold a LIST — several values are items, not a contradiction. */
-const LIST_KEYS = new Set(['service_areas', 'services', 'accreditations', 'brands', 'review_profiles', 'directory_profiles', 'social_profiles', 'prices', 'guarantee', 'insurance', 'legal_facts', 'reviews_on_site']);
-const LABELS: Record<string, string> = { ...Object.fromEntries(CORE_BUILD_FACTS.map((f) => [f.key, f.label])), company_number: 'Company number', legal_facts: 'Legal facts', reviews_on_site: 'Reviews shown on the current site' };
+const LIST_KEYS = new Set(['service_areas', 'services', 'accreditations', 'brands', 'review_profiles', 'directory_profiles', 'social_profiles', 'prices', 'guarantee', 'insurance', 'legal_facts', 'reviews_on_site',
+  'memberships', 'qualifications', 'awards', 'payment_methods', 'licences', 'compliance', 'analytics_ids', 'ads_ids']);
+
+/* ── Phase 3: RISK-BASED APPROVAL (Paul, 2026-09-25) ─────────────────────────────────────────────
+   LOW-RISK source facts — identity and links — may be auto-accepted when the site states them
+   verbatim, consistently, with nothing disagreeing (basis: the source website).
+   EVERYTHING ELSE is a commercial / proof / legal / coverage claim and ALWAYS needs Paul's approval,
+   however clearly the site states it: prices, hours, 24/7, guarantees, insurance, qualifications,
+   DBS, memberships, accreditations, awards, ratings, years trading, payment methods, VAT, legal
+   status, the public address, service areas, licences, compliance, tracking / ads IDs, anything
+   unrecognised. ⛔ Positive allowlist: a key nobody listed is high-risk, never low.
+   And any value carrying a strong claim word ("approved", "certified", "best", "24/7"…) needs
+   approval whatever its key. */
+export const LOW_RISK_FACT_KEYS: ReadonlySet<string> = new Set(['business_name', 'trade', 'phone', 'email', 'website', 'social_profiles', 'directory_profiles', 'review_profiles', 'primary_town']);
+export const STRONG_CLAIM = /\b(approved|certified|accredited|registered|licensed|vetted|checked|insured|guaranteed?|best|leading|no\.?\s?1|number one|award[- ]?winning|trusted|official|24\/7|24 hours|24hr|fully qualified)\b/i;
+export function isHighRiskFact(key: string, values: string[]): boolean {
+  return !LOW_RISK_FACT_KEYS.has(key) || values.some((v) => STRONG_CLAIM.test(v));
+}
+const LABELS: Record<string, string> = {
+  ...Object.fromEntries(CORE_BUILD_FACTS.map((f) => [f.key, f.label])), company_number: 'Company number', legal_facts: 'Legal facts', reviews_on_site: 'Reviews shown on the current site',
+  memberships: 'Memberships', qualifications: 'Qualifications', dbs: 'DBS check', awards: 'Awards', review_rating: 'Review rating / count', payment_methods: 'Payment methods',
+  vat_status: 'VAT status', legal_status: 'Legal entity / status', licences: 'Licences', compliance: 'Compliance claims', availability: 'Availability (e.g. 24/7)',
+  website: 'Current website', analytics_ids: 'Analytics IDs', ads_ids: 'Google Ads IDs',
+};
 
 const norm = (v: string) => v.toLowerCase().replace(/\s+/g, ' ').replace(/[.,;:]+$/, '').trim();
 const normPhone = (v: string) => v.replace(/[^\d+]/g, '').replace(/^\+44/, '0').replace(/^0044/, '0');
@@ -456,7 +491,11 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     stored.set(f.key, f);
   };
 
-  for (const g of groupFacts(r.facts)) {
+  const trackingFacts: ReconFact[] = [
+    ...(r.trackingIds?.analytics ?? []).map((v) => ({ field: 'analytics_ids', label: '', value: v, sourceUrl: r.sourceUrl, sourceContext: 'tracking scripts', confidence: 'high' as const, evidence: 'visible' as const, conflicts: [] })),
+    ...(r.trackingIds?.ads ?? []).map((v) => ({ field: 'ads_ids', label: '', value: v, sourceUrl: r.sourceUrl, sourceContext: 'ads tags', confidence: 'high' as const, evidence: 'visible' as const, conflicts: [] })),
+  ];
+  for (const g of groupFacts([...r.facts, ...trackingFacts])) {
     const list = LIST_KEYS.has(g.key);
     const value = list ? g.values.join(', ') : g.values[0];
     const multi = !list && g.values.length > 1;
@@ -481,8 +520,12 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     }
     const cleanGroup = g.allClean && !g.flagged && !multi;
     const disagrees = !!existingValue && !agrees;
-    const status: StoredFactStatus = cleanGroup && !disagrees ? 'verified' : 'detected';
+    const isService = g.key === 'services';
+    const highRisk = isHighRiskFact(g.key, g.values);
+    const status: StoredFactStatus = cleanGroup && !disagrees && !highRisk && !isService ? 'verified' : 'detected';
     const why = [
+      isService ? 'Source-derived service candidates — the site names them; confirm what is still offered (Template Mapping).' : '',
+      !isService && highRisk ? 'Commercial / proof claim — always needs your approval, even when the site states it.' : '',
       multi ? 'Pages disagree: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       g.flagged && !multi ? 'Claude flagged a conflict: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       !g.allClean ? 'Not stated verbatim (inferred or not high confidence).' : '',
@@ -499,6 +542,7 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
       source: disagrees ? (row?.source || RECON_SOURCE) : RECON_SOURCE,
       source_url: g.sourceUrl || row?.source_url || '',
       notes: [prevNotes.includes(reconNote) ? '' : prevNotes, reconNote].filter(Boolean).join('\n').slice(0, 1000),
+      basis: status === 'verified' ? 'source_site' : '',
     });
     if (!row || row.status === 'missing') report.added++;
     if (status === 'verified') report.verified++; else report.needsApproval++;
@@ -540,9 +584,36 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
       ...state.recon,
       imported_at: now, source_url: r.sourceUrl || state.recon.source_url, captured_at: r.capturedAt,
       pages_total: r.pages.length, assets_total: r.assets.length, review: nextReview,
+      services: candidatesFrom(r, 'services', 'service', state.recon.services),
+      towns: candidatesFrom(r, 'service_areas', 'location', state.recon.towns),
     },
   };
   return { state: next, report };
+}
+
+/** SOURCE-DERIVED candidates: the site's list facts for `factField` (one per item) plus its pages
+ *  of `pageType` (a service page's title / H1; a location page's town from its URL). Merged with the
+ *  previous import's, de-duplicated by name. Candidates only — never a claim. */
+function candidatesFrom(r: ReconResult, factField: 'services' | 'service_areas', pageType: 'service' | 'location', previous: ReconCandidate[]): ReconCandidate[] {
+  const out = new Map<string, ReconCandidate>(previous.map((c) => [c.name.toLowerCase(), c]));
+  const add = (name: string, source_url: string, context: string) => {
+    const n = name.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (n.length < 2 || out.has(n.toLowerCase())) return;
+    out.set(n.toLowerCase(), { name: n, source_url, context: context.slice(0, 300) });
+  };
+  for (const f of r.facts) {
+    if ((FIELD_KEYS[f.field] ?? '') !== factField && !(factField === 'service_areas' && FIELD_KEYS[f.field] === 'primary_town')) continue;
+    for (const v of splitList(f.value)) add(v, f.sourceUrl, f.sourceContext || 'stated on the site');
+  }
+  for (const p of r.pages) {
+    if (p.type !== pageType) continue;
+    if (pageType === 'service') add(p.h1 || p.title, p.url, 'service page');
+    else {
+      const slug = (p.url.replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() ?? '').replace(/[-_]+/g, ' ').trim();
+      if (slug) add(slug.replace(/\b\w/g, (c) => c.toUpperCase()), p.url, 'location page' + (p.title ? ': ' + p.title.slice(0, 80) : ''));
+    }
+  }
+  return [...out.values()].slice(0, MAX_RECON_CANDIDATES);
 }
 
 /** Manifest merge: pages by URL, assets by source URL (Paul's USE / REVIEW / IGNORE kept),

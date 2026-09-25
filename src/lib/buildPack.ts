@@ -32,6 +32,7 @@ import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
 import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
 import { manifestBuildLines } from './manifestSummary.ts';
+import { computeMapping, type Mapping } from './templateMapping.ts';
 
 export const PACK_ITEM_IDS = ['setup', 'capture', 'master', 'local', 'preview', 'visual_qa', 'seo_qa', 'production', 'final_qa'] as const;
 export type PackItemId = (typeof PACK_ITEM_IDS)[number];
@@ -551,6 +552,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
     ...(!s.pages.length ? ['Page architecture'] : []),
     ...(s.pages.some((p) => p.action === 'undecided') ? ['Undecided pages'] : []),
     ...(i.facts.some((f) => f.status === 'detected') ? ['Facts awaiting approval'] : []),
+    ...(isTemplateRoute(s) && t && !computeMapping(s, t, i.facts, i.businessName).readiness.ok ? ['Template mapping not ready to build'] : []),
   ];
   const H = (x: string) => ['', '## ' + x, ''];
   const L: string[] = [
@@ -590,6 +592,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
     ...(t && isTemplateRoute(s) ? ['', ...claimMappingLines(t, i.facts)] : []),
     '',
     ...confirmationsSection(e),
+    ...(isTemplateRoute(s) && t ? templateConfigSection(i, computeMapping(s, t, i.facts, i.businessName)) : []),
     ...H('F. EXISTING SITE INVENTORY'),
     hasOld ? 'Current website: ' + i.existingSiteUrl : 'The client has no current website.',
     ...(hasOld ? ['Capture: ' + s.capture.status.replace('_', ' ') + (s.capture.url_count != null ? ' · ' + s.capture.url_count + ' URLs' : '') + (s.capture.asset_count != null ? ' · ' + s.capture.asset_count + ' assets' : '') + (s.capture.status === 'captured' ? ' — in capture/.' : '')] : []),
@@ -686,6 +689,41 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
     expect: 'Claude reports the pages built, open questions and the preview URL. Paste the preview URL into the Preview step.',
     text: L.join('\n'),
   };
+}
+
+/* ── TEMPLATE REBUILD: the generated client config is the build's ONLY data (Phase 3) ────────── */
+
+function templateConfigSection(i: BuildPackInput, m: Mapping): string[] {
+  const t = i.template!;
+  const r = m.readiness;
+  const services = m.services.filter((x) => x.include).map((x) => x.service.name);
+  const dropped = m.services.filter((x) => !x.include).map((x) => x.service.name);
+  const served = m.towns.filter((x) => x.serves).map((x) => x.name);
+  const pages = m.towns.filter((x) => x.serves && x.page).map((x) => x.name);
+  const unknowns = i.state.recon.review.filter((x) => x.kind === 'unknown' && !x.resolved).map((x) => x.label + ': ' + x.detail);
+  return [
+    '', '## E2. GENERATED CLIENT CONFIG — the ONLY data this template is filled with',
+    '',
+    'Template: ' + t.name + ' v' + t.version + ' (' + t.id + '). Mapped in LeadFinderOS from the approved facts, the recon and Paul\'s decisions.',
+    r.ok ? 'READY TO BUILD: yes.' : 'READY TO BUILD: NO — ' + r.blockers.join('; ') + '. STOP and ask Paul.',
+    '',
+    '```json',
+    JSON.stringify(m.config, null, 2),
+    '```',
+    '',
+    'Rules for using it:',
+    '- Put these values into the template\'s config / content layer (' + t.clientContentFiles.slice(0, 4).join(', ') + ' …). Nothing else is business data.',
+    '- Use the template architecture. Selected services ONLY: ' + (services.join(', ') || '(none)') + '.',
+    ...(dropped.length ? ['- REMOVE every other template service page / card: ' + dropped.join(', ') + '.'] : []),
+    '- Location pages ONLY for: ' + (pages.join(', ') || '(none)') + '. Other served areas (' + (served.filter((x) => !pages.includes(x)).join(', ') || 'none') + ') appear in the service-area wording, never as their own pages.',
+    '- Assets: only the files under "assets" (downloaded by the Asset Download prompt). A slot with no asset is designed without one — never a stock or seed-client image.',
+    '- Do NOT invent missing claims. Optional proof that is not in the config is OMITTED — the section closes up.',
+    ...(m.omitted.length ? ['- Left out on purpose: ' + m.omitted.join('; ') + '.'] : []),
+    '- Derive the LocalBusiness schema from this config only (name, phone, email, url = the domain, areaServed = locations.served' + ((m.config.business as { mode?: string }).mode === 'mobile' ? '; NO street address — the business is mobile' : '') + ').',
+    '- Tracking: only what is under "tracking"' + (Object.keys(m.config.tracking).length ? '' : ' — there is none, so add no analytics or ads tags') + '.',
+    '- ⛔ No ' + t.sourceClient + ' value may survive: ' + t.leftoverNeedles.join(' · ') + '.',
+    ...(unknowns.length ? ['- Still unknown (waiting for the client) — leave out, do not guess: ' + unknowns.slice(0, 15).join(' | ')] : []),
+  ];
 }
 
 /* ── 4. LOCAL DEV ─────────────────────────────────────────────────────────────────────────────── */

@@ -15,7 +15,8 @@ export const RECON_FACT_FIELDS = [
   'business_name', 'trade', 'phone', 'whatsapp_number', 'email', 'address', 'primary_town', 'service_areas',
   'services', 'owner_name', 'opening_hours', 'response_time', 'years_experience', 'accreditations', 'insurance',
   'prices', 'guarantee', 'brands', 'review_profiles', 'directory_profiles', 'social_profiles', 'company_number',
-  'standout', 'reviews', 'legal', 'other',
+  'standout', 'reviews', 'legal', 'dbs', 'memberships', 'qualifications', 'awards', 'review_rating', 'payment_methods',
+  'vat_status', 'legal_status', 'licences', 'compliance', 'availability', 'website', 'other',
 ] as const;
 
 export const RECON_PAGE_TYPES = 'homepage, services_index, service, locations_index, location, commercial, pricing, about, faq, gallery, contact, legal, other';
@@ -44,7 +45,7 @@ export const RECON_SCHEMA_LINES: string[] = [
   '  "interactions": [{ "kind": "form", "pageUrl": "https://…", "description": "" }],',
   '  "seo": { "titles": "", "metaDescriptions": "", "canonical": "", "robots": "", "sitemap": "",',
   '           "schema": "", "internalLinking": "", "notes": "" },',
-  '  "tracking": { "analytics": [], "tagManager": "", "pixels": [], "embeds": [], "notes": "" },',
+  '  "tracking": { "analytics": [], "tagManager": "", "adsIds": [], "pixels": [], "embeds": [], "notes": "" },',
   '  "redirectCandidates": [{ "from": "/old-path/", "to": "", "reason": "" }],',
   '  "unknowns": [{ "field": "insurance", "note": "not stated anywhere on the site" }],',
   '  "warnings": [""]',
