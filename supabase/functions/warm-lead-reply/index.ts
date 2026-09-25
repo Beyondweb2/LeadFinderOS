@@ -41,6 +41,7 @@ import {
   buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, parseModelReply, ruleSalesFacts, mergeSalesFacts,
   latestInbound, REPLY_SYSTEM_PROMPT, REPLY_TOOL, REPLY_MODEL,
   pooledFindings, findingMentioned, sayableDetails, findingSourceLabel, PRIMARY_MISSING_PROBLEM, PRIMARY_REWRITE_INSTRUCTION,
+  ROUTE_LABELS, websiteControlKnown,
   type SalesFacts, type ThreadMessage,
 } from "../../../src/lib/warmReply.ts";
 import { findingScore, type ResearchFinding } from "../../../src/lib/warmLeadResearch.ts";
@@ -471,6 +472,17 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     secondaryFindings: sel.secondary.map(card),
     strongNotUsed: sel.strongNotUsed.map(card),
     alreadyMentioned: sel.alreadyMentioned.map((f) => f.title),
+    /* Paul's stage summary (2026-09-25): what AI was asked, the issue, the proposed route, what we
+       know about who controls the site, and how the reply ends. For Paul only. */
+    aiSearchContext: ctx.searchContext,
+    proposedSolution: ROUTE_LABELS[ctx.route],
+    websiteOwnership: websiteControlKnown(ctx.salesFacts)
+      ? (ctx.salesFacts.owns_website ? `they own it: ${ctx.salesFacts.owns_website.value} ("${ctx.salesFacts.owns_website.quote}")` : `managed by someone else ("${ctx.salesFacts.has_existing_provider?.quote ?? ""}")`)
+      : "unknown",
+    finalQuestion: ctx.askOwnership ? (ctx.route === "new_only" ? "do they have a website at the moment" : "agency / owns site") : "not asked, they already told us",
+    noFindingNote: !sel.primary && research && research.status !== "failed" && research.status !== "no_website"
+      ? "No website finding was strong enough to use; the draft leans on the AI search result. Nothing was invented."
+      : null,
     researchSources: research ? [...new Set(research.sources.map((x) => x.kind === "page" ? "Live website" : x.kind === "full_crawl" ? "Existing full crawl" : x.kind === "crawl_check" ? "Existing crawl check" : "AI audit"))] : [],
     research: research ? { generatedAt: research.generatedAt, status: research.status, sourceCrawlAt: research.sourceCrawlAt, technicallyClean: research.technicallyClean, warnings: research.warnings } : null,
     audit: audit ? { auditId: audit.auditId, createdAt: audit.createdAt, named: audit.namedDatapoints, total: audit.totalDatapoints, namedEverywhere: audit.namedEverywhere } : null,

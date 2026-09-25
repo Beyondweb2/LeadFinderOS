@@ -17,7 +17,7 @@ import {
   type AuditContext, type CrawlRowInput, type ResearchFinding, type WarmLeadResearch,
 } from '../src/lib/warmLeadResearch.ts';
 import {
-  selectReplyFindings, findingMentioned, buildReplyContext, buildReplyPrompt, checkReply, latestInbound,
+  selectReplyFindings, findingMentioned, buildReplyContext, buildReplyPrompt, checkReply, latestInbound, REPLY_SYSTEM_PROMPT,
   PRIMARY_MISSING_PROBLEM, PRIMARY_REWRITE_INSTRUCTION, MAX_SECONDARY_FINDINGS, type ThreadMessage,
 } from '../src/lib/warmReply.ts';
 import { FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_TOTAL_PAYMENTS } from '../src/lib/findableOffer.ts';
@@ -77,27 +77,28 @@ ok(pos.keyDetails?.[0] === 'nationwide across England' && pos.keyDetails?.[1] ==
 const ctx = ctxFor(ryli);
 const prompt = buildReplyPrompt(ctx);
 ok(ctx.primaryRequired === true, 'a price question with strong evidence requires the primary finding');
-ok(/PRIMARY FINDING — YOU MUST REFER TO THIS IN THE RESPONSE/.test(prompt), 'the model is told it MUST refer to the primary finding');
+ok(/PRIMARY FINDING — YOU MUST USE THIS AS THE SPECIFIC ISSUE/.test(prompt), 'the model is told it MUST use the primary finding');
 ok(prompt.includes(`[${sel.primary!.id}]`) && sayableDetailsIn(prompt, sel.primary!), 'the primary finding and its concrete details are in the prompt');
-ok(/ORDER: price → guarantee → "I had a look through your site as well\. The biggest thing I noticed is …"/.test(prompt), 'price first, guarantee, then the primary finding — never opening with the issue');
-ok(/Never water it down to "a few inconsistencies"/.test(prompt), 'the prompt forbids watering it down');
+ok(/ISSUE: the PRIMARY FINDING is the specific issue in this reply, with its real details/.test(prompt), 'the primary finding is the issue of the reply');
+ok(/water a specific finding down to "a few technical issues"/.test(REPLY_SYSTEM_PROMPT) && /Specificity beats quantity/.test(prompt), 'the prompt forbids watering it down, and asks for one clear issue');
 ok(!prompt.includes('https://findable.live/r/ABC123'), 'the report link is still withheld for a price question');
 
 function sayableDetailsIn(p: string, x: ResearchFinding) { return (x.keyDetails ?? []).every((d) => p.includes(d)); }
 
 // The regression the brief names: generic words FAIL when stronger evidence exists.
-const price = `£${FINDABLE_SETUP_PRICE_GBP} to start mate, then £${FINDABLE_MONTHLY_GBP} a month from week 6, ${FINDABLE_TOTAL_PAYMENTS} payments in total. If your measured AI visibility hasn't gone up at the four-week re-measure, you can claim the first £${FINDABLE_SETUP_PRICE_GBP} back.`;
-const tail = `Full details: https://findable.live/\n\nDo you own the site yourself, or is it managed by Keyhole who built it?`;
+// This stage carries no price (Paul, 2026-09-25): the opening is the AI search, the tail the two routes + the website question.
+const price = `depends which route suits you mate. i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you.`;
+const tail = `that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nare you currently with an agency or do you own/manage the website yourself?`;
 const GENERIC = `${price}\n\nI had a look through your site as well and there are a few inconsistencies on your site.\n\n${tail}`;
 ok(checkReply(GENERIC, ctx).problems.includes(PRIMARY_MISSING_PROBLEM), '"there are a few inconsistencies on your site" FAILS');
 const LIVE_DRAFT = `${price}\n\nI noticed that your website gives mixed signals about where you operate, and the opening hours aren't consistent either.\n\n${tail}`;
 const live = checkReply(LIVE_DRAFT, ctx);
 ok(sel.primary!.kind !== 'positioning_conflict' || live.problems.includes(PRIMARY_MISSING_PROBLEM), 'the actual live draft ("mixed signals about where you operate") FAILS — it lost the specifics');
-const GOOD = `${price}\n\nI had a look through your site as well. The biggest thing I noticed is it says you cover "nationwide across England" in one place and calls you Scunthorpe-based in another, so it's not clear where you actually work. It also gives 9AM–9PM, 9AM–9AM and "open 24 hours" in different places.\n\n${tail}`;
+const GOOD = `${price}\n\ni checked your site to see why and the biggest thing is it says you cover "nationwide across england" in one place and calls you scunthorpe-based in another, so ai gets mixed signals about where you actually work.\n\n${tail}`;
 const good = checkReply(GOOD, ctx);
 ok(good.problems.length === 0, `a concrete, price-first Ryli reply passes (${good.problems.join(' | ') || 'no problems'})`);
-ok(!new RegExp('JC Plumbing|James Broadbent').test(GOOD) && !GOOD.includes('findable.live/r/'), 'the good reply repeats no competitor and carries no report link');
-ok(checkReply(GOOD.replace('I had a look through your site as well.', 'Also AI can’t read your site.'), ctx).problems.some((p) => /how an AI model decides/.test(p)), 'an absolute AI claim is caught — curly apostrophe included ("AI can’t read")');
+ok(!new RegExp('JC Plumbing|James Broadbent').test(GOOD) && !GOOD.includes('findable.live'), 'the good reply repeats no competitor and carries no link');
+ok(checkReply(GOOD.replace('i checked your site to see why and', 'AI can’t read your site and'), ctx).problems.some((p) => /how an AI model decides/.test(p)), 'an absolute AI claim is caught — curly apostrophe included ("AI can’t read")');
 
 // The substance check itself.
 ok(findingMentioned('Your site says 9am-9pm in one place and 9am-9am in the footer, and also says open 24 hours.', hours), 'hours: the actual times count as the substance');
@@ -108,7 +109,7 @@ ok(!findingMentioned('Your location signals could be clearer.', pos, 'Scunthorpe
 // "Explain here" / "Tell me more": the primary features prominently.
 for (const q of ['Explain here', 'Tell me more', 'How does it work?', 'What would you change?']) {
   const c = ctxFor(ryli, q);
-  ok(c.primaryRequired && /make the PRIMARY FINDING the centre of the reply/.test(buildReplyPrompt(c)), `"${q}": the primary finding is the centre of the reply`);
+  ok(c.primaryRequired && /ISSUE: the PRIMARY FINDING is the specific issue/.test(buildReplyPrompt(c)), `"${q}": the primary finding is the issue the reply explains`);
 }
 ok(!ctxFor(ryli, 'Not interested thanks').primaryRequired, 'a refusal is not forced to carry a website finding');
 // Paul has already told them about the primary since the hook → the next best leads.
@@ -141,7 +142,8 @@ const b = research(CLEAN, W, { crawl: { created_at: at(60), result: { version: 9
 const sb = selectReplyFindings(b, [], 'Scunthorpe');
 ok(sb.primary?.kind === 'crawl_indexing' && sb.primary.strength === 5, `B: blocked crawlers are primary (got ${sb.primary?.id})`);
 ok(JSON.stringify(sb.primary?.keyDetails) === JSON.stringify(['OAI-SearchBot', 'PerplexityBot']), 'B: the blocked crawlers are named as the detail');
-ok(findingMentioned('Your site is blocking the crawlers ChatGPT search uses.', sb.primary!), 'B: "blocking the crawlers" is the substance');
+ok(findingMentioned('oai-searchbot and perplexitybot are blocked from fetching your pages.', sb.primary!), 'B: the named crawlers, blocked, are the substance');
+ok(!findingMentioned('Your site is blocking the crawlers ChatGPT search uses.', sb.primary!), 'B: "blocking the crawlers" without naming them is too generic (2026-09-25)');
 
 // C. Technically healthy, weak service architecture → service architecture is primary.
 const WEAK = `<html><head><title>Plumber Scunthorpe | Weak Co</title><script type="application/ld+json">{"@type":"Plumber"}</script></head><body>
@@ -155,8 +157,9 @@ ok(c.technicallyClean && sc.primary?.kind === 'missing_core_service_pages', `C: 
 const d = research(CLEAN, W, { audit: auditGap });
 const cd = ctxFor(d);
 ok(cd.selection.primary === null && cd.primaryRequired === false, 'D: a clean site has no primary finding — none is invented');
-ok(/No website finding is specific enough to lead with\. Do NOT invent one\. If it helps, explain the gap using the AI VISIBILITY result instead\./.test(buildReplyPrompt(cd)), 'D: the reply explains the gap from the AI audit instead');
-ok(!checkReply(`${price}\n\nWhen we asked AI for a plumber in Scunthorpe you weren't named in any of the 3 answers.\n\n${tail}`, cd).problems.includes(PRIMARY_MISSING_PROBLEM), 'D: no "finding not used" problem when there is no finding');
+ok(/No website finding is strong enough to use\. Do NOT invent one\. The site itself is not badly built: say so honestly, then use the strongest true point you have: AI still isn't linking them strongly enough/.test(buildReplyPrompt(cd)), 'D: say the site is not badly built, then explain the visibility gap');
+ok(checkReply(`${price}\n\nyour site itself isn't badly built, but ai still isn't linking you strongly enough with plumber searches in scunthorpe.\n\n${tail}`, cd).problems.length === 0, 'D: an honest no-finding reply passes, nothing invented');
+ok(checkReply(`${price}\n\nyour site itself isn't badly built.\n\n${tail}`, cd).warnings.some((w) => /No website finding was strong enough/.test(w)), 'D: Paul is told no website finding was used');
 
 // E. Multiple strong issues → the strongest + at most two supporting, the rest listed as not used.
 const MANY = RYLI.replace('<head>', '<head><meta name="robots" content="noindex">').replace('07908 046839', '07908 046839 01724 111222 01724 333444');
@@ -181,7 +184,7 @@ ok(FN.includes('PRIMARY_REWRITE_INSTRUCTION') && PRIMARY_REWRITE_INSTRUCTION.sta
 ok(/const used = \(f: ResearchFinding\) => findingMentioned\(reply!, f, ctx\.town\);/.test(FN), '"used" is checked against the draft text, never taken from the model\'s claim');
 ok(/primaryFinding: sel\.primary \?/.test(FN) && /strongNotUsed: sel\.strongNotUsed\.map\(card\)/.test(FN) && /researchSources:/.test(FN), 'the Why data carries primary, secondary, strong-not-used and sources');
 ok(/CHECK THIS DRAFT<\/span> — \{why\.problems\.includes\(PRIMARY_MISSING_PROBLEM\) \? PRIMARY_MISSING_PROBLEM/.test(UI) && PRIMARY_MISSING_PROBLEM === 'Strong website finding was not used.', 'the Inbox shows CHECK THIS DRAFT — Strong website finding was not used.');
-for (const label of ['Question detected', 'Primary finding', 'Evidence', 'Secondary findings', 'Strong findings not used', 'Research source']) {
+for (const label of ['Question detected', 'AI search context', 'Primary issue', 'Evidence', 'Secondary findings', 'Strong findings not used', 'Proposed solution', 'Website ownership', 'Final question', 'Research source']) {
   ok(UI.includes(`label="${label}"`), `Why this reply? shows "${label}"`);
 }
 

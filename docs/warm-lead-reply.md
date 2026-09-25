@@ -50,6 +50,36 @@ timeouts, no sitemap, no robots.txt) is left out. On a shared kind the full-craw
 same rule run over today's few pages. Still at most four findings reach a reply. Nothing here ever
 starts a crawl job.
 
+## What this stage is for (Paul, 2026-09-25, third pass — supersedes the price rules below)
+
+**PROVE THERE IS A REAL ISSUE → SAY WHAT WE CAN DO ABOUT IT → FIND OUT WHO CONTROLS THE WEBSITE.**
+The reply comes after opener → reply → the AI/competitor hook → their reply to it.
+
+- ⛔ **No price at this stage.** No figure, monthly, payments, guarantee, refund or findable.live
+  link — even to "How much?" (it says it depends which route suits them, which is why it asks about
+  the site). `warmReply.ts` no longer imports the offer constants; `findableOffer.ts` is untouched for
+  a later stage. `checkReply` refuses any price talk (`PRICE_TALK`) and the details link.
+- **Leads from the AI search** (`aiSearchContext`, e.g. "electrician in Addlestone"), without
+  re-listing the hook's competitors. A misread hook ("do you need an electrician?") is put right.
+- **The primary finding is the specific issue**, with its details (the named crawlers, the actual
+  times, the actual phrases); one finding normally, a second only if it genuinely strengthens it.
+  A blocked-crawler finding must NAME at least one crawler to count as used.
+- **Both routes** — fix the site they have, or build a new one properly set up for ai visibility and
+  seo (`routeLean`: fix-first normally; leans rebuild for a JS-only site or an agency-hosted site with
+  no core pages; build-only when no website is on record).
+- **Ends with the website question** ("are you currently with an agency or do you own/manage the
+  website yourself?") unless `websiteControlKnown` — `owns_website`, or `has_existing_provider = yes`
+  (new rule: "our agency/developer manages/looks after…"). Known → never asked again; the reply builds
+  on it and ends with a simple next step.
+- **No finding** → nothing invented; "your site itself isn't badly built, but ai still isn't linking
+  you strongly enough with … searches", and Paul is told internally.
+- **Paul on WhatsApp:** short, lowercase is fine, "mate", no headings/bullets/bold/emojis, **no dashes**
+  (`usesDash` — a hyphen inside a quoted time range like "9AM - 9PM" is allowed), none of the
+  script phrases in `SALESY`, no promises. All of these are problems → one rewrite → CHECK THIS DRAFT.
+- **Why this reply?** adds AI search context, Primary issue, Proposed solution, Website ownership,
+  Final question.
+- Regression: `scripts/warm-stage-purpose.test.ts` (the Addlestone electrician, blocked crawlers).
+
 ## The primary finding (Paul, 2026-09-25, after the first live drafts)
 
 **Why the strong finding was omitted:** the prompt offered a flat list "you may use (at most three,

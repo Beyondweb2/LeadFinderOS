@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { warmStage, isAuditHookSend, WARM_STAGE_LABELS, type StageMessage } from '../src/lib/warmStage.ts';
 import { WA_TEMPLATE_REQS } from '../src/lib/whatsappTemplates.ts';
-import { buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, latestInbound, type ThreadMessage } from '../src/lib/warmReply.ts';
+import { buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, latestInbound, PRIMARY_MISSING_PROBLEM, type ThreadMessage } from '../src/lib/warmReply.ts';
 import { assembleResearch, extractPageFacts, usableFullCrawl, fullCrawlFindings, WARM_RESEARCH_FRESH_MS, type CrawlRowInput, type AuditContext } from '../src/lib/warmLeadResearch.ts';
 import { FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_TOTAL_PAYMENTS } from '../src/lib/findableOffer.ts';
 
@@ -86,37 +86,31 @@ const ctx = buildReplyContext({ businessName: 'Ryli Heat', contactFirstName: nul
 const prompt = buildReplyPrompt(ctx);
 ok(ctx.latest.text === 'How much' && ctx.question.primary === 'price', 'the drafter answers "How much" — their reply to the hook, not "Yeah"');
 ok(/STAGE: Paul has already sent them the AI check[\s\S]*Do NOT repeat that message or list those businesses again/.test(prompt), 'the prompt says the hook has gone and must not be resent');
-ok(FINDABLE_OFFER_SUMMARY.includes(`£${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up`) && FINDABLE_OFFER_SUMMARY.includes(`${FINDABLE_TOTAL_PAYMENTS} payments in total`), 'the offer the model is given: £99/month from week six, 12 payments');
-const GOOD = `£${FINDABLE_SETUP_PRICE_GBP} to start mate, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${FINDABLE_TOTAL_PAYMENTS} payments in total.
+ok(/THEY ASKED THE PRICE: do not give one at this stage/.test(prompt) && !/£\s?\d/.test(prompt), 'this stage gives no price, even to "How much" (Paul, 2026-09-25)');
+const GOOD = `depends which route suits you mate, so i'll go through that once i know how the site's set up.
 
-If your measured AI visibility hasn't gone up at the four-week re-measure, you can claim the first £${FINDABLE_SETUP_PRICE_GBP} back.
+i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and it says "nationwide across england" in one place and scunthorpe-based in another, so ai gets mixed signals about where you actually work.
 
-Had a look through your site too. It says nationwide across England in one place and Scunthorpe-based in another, and the opening hours say three different things — both give AI less to go on about who you are and where.
+that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
 
-Full details: https://findable.live/
-
-Do you own the site yourself, or is it managed by Keyhole who built it?`;
+are you currently with an agency or do you own/manage the website yourself?`;
 const good = checkReply(GOOD, ctx);
-ok(good.problems.length === 0, `a price-first, guarantee, findings, findable.live, ownership reply passes (${good.problems.join(' | ') || 'no problems'})`);
-const RESEND = `£99 to start, then £99 a month.\n\nLike I said, AI mentioned JC Plumbing & Heating and James Broadbent Plumbing and Heating instead of you.\n\nhttps://findable.live/ — want me to explain?`;
+ok(good.problems.length === 0, `a stage reply (AI search, the finding, both routes, the website question, no price) passes (${good.problems.join(' | ') || 'no problems'})`);
+const RESEND = `i asked ai and it mentioned JC Plumbing & Heating and James Broadbent Plumbing and Heating instead of you.\n\nwe can fix it on the site you've already got or build you a new one.\n\nare you with an agency or do you manage the website yourself?`;
 ok(checkReply(RESEND, ctx).problems.some((p) => /repeats the competitor hook/.test(p)), 'a draft that re-lists the hook\'s competitors is caught');
 const fb = fallbackReply(ctx)!;
-ok(fb.startsWith(FINDABLE_OFFER_SUMMARY) && fb.includes('https://findable.live/') && !fb.includes('JC Plumbing') && checkReply(fb, ctx).problems.length === 0,
-  'the rule-built fallback: price first, findable.live, no hook resend, passes its checks');
+ok(!fb.includes('JC Plumbing') && !/£\s?\d|findable\.live/.test(fb) && checkReply(fb, ctx).problems.length === 0,
+  `the rule-built fallback: no hook resend, no price, passes its checks (${checkReply(fb, ctx).problems.join(' | ') || 'ok'})`);
 
-/* The FIRST LIVE DRAFT (Adcock Heat / ryliheat.co.uk, 2026-09-25), verbatim: price and three real
-   findings, but no guarantee and no findable.live. Both are now problems, so the model is sent back. */
-const LIVE_1 = "£99 to start, then £99 a month from week 6, with 12 payments in total.\n\nI had a look through your site and noticed a few things that could be improved. The site gives mixed signals about where you operate, and the opening hours listed are inconsistent. Also, there aren't dedicated pages for your core services like plumbing or boiler repair, which might make it harder for AI tools to connect you with local searches.\n\nQuick one: do you own/control the current website, or is it owned/managed by Keyhole IT?";
+/* The live drafts of the PRICE-stage version (Adcock Heat, 2026-09-25) are now wrong for this stage:
+   they led with the price. Each is refused for exactly that. */
+const LIVE_1 = "£99 to start, then £99 a month from week 6, with 12 payments in total.\n\nI had a look through your site and noticed a few things that could be improved. The site gives mixed signals about where you operate, and the opening hours listed are inconsistent.\n\nQuick one: do you own/control the current website, or is it owned/managed by Keyhole IT?";
 const live1 = checkReply(LIVE_1, ctx);
-ok(live1.problems.some((p) => /four-week first-payment guarantee/.test(p)), 'the live draft without the guarantee is sent back');
-ok(live1.problems.some((p) => /findable\.live/.test(p)), 'the live draft without findable.live is sent back');
-ok(/then the four-week first-payment guarantee; and include the Full details link/.test(prompt), 'the prompt asks for both up front');
-// The second live draft said the guarantee in other words — it must NOT be sent back for it.
-const LIVE_2 = "It's £99 to get started, then £99 a month from week six, for a total of 12 payments. If your AI visibility hasn't improved after four weeks, you can get your first £99 back.\n\nI took a look at your website and noticed it sends mixed signals about your coverage area.\n\nDo you control the current website, or is it managed by Keyhole IT Solutions?\nFull details are here: https://findable.live/";
-ok(!checkReply(LIVE_2, ctx).problems.some((p) => /guarantee/.test(p)), '"you can get your first £99 back" counts as the guarantee');
-ok(checkReply(LIVE_2.replace('you can get your first £99 back', 'thanks'), ctx).problems.some((p) => /guarantee/.test(p)), '…and removing it is caught again');
+ok(live1.problems.some((p) => /carries no price/.test(p)), 'the old price-first live draft is refused: price at this stage');
+ok(live1.problems.includes(PRIMARY_MISSING_PROBLEM), '…and for its generic "mixed signals about where you operate"');
+ok(live1.problems.some((p) => /AI search/.test(p)) && live1.problems.some((p) => /both routes/.test(p)), '…and for no AI search and no routes');
 // Paul had already answered "How much" by hand at 10:52 in that thread.
-const answered = [...thread, { id: 'paul', direction: 'outbound' as const, text: '£99 to start mate…', at: at(10) }];
+const answered = [...thread, { id: 'paul', direction: 'outbound' as const, text: 'depends on the route mate…', at: at(10) }];
 const ctxAnswered = buildReplyContext({ ...ctx, thread: answered });
 ok(ctxAnswered.alreadyAnswered === true && ctx.alreadyAnswered === false, 'a thread Paul has already answered since their message is recognised');
 ok(/ALREADY ANSWERED: Paul has already replied after their latest message/.test(buildReplyPrompt(ctxAnswered)), '…the model is told not to repeat him');
