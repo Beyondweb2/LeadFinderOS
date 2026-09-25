@@ -12,12 +12,12 @@ import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
 import { hasSiteFindings } from '@/lib/siteFindings';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
+import { serviceWindowState } from '@/lib/serviceWindow';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
 const sb = supabase as unknown as { from: (t: string) => any; functions: typeof supabase.functions };
 
-const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /* The report-ready audit read is an Inbox enhancement, but it is also the source for the
  * audit-template gate. Keep the richer projection (crawl + visibility summary) and fall back to
@@ -152,11 +152,10 @@ export function normalizeWaNumber(raw: string, country?: string | null): string 
   return s.replace(/\D/g, '') || null;
 }
 
+/* The rule lives in src/lib/serviceWindow.ts (shared with the warm-reply drafter). */
 export function windowFor(lastInboundAt: string | null): { open: boolean; hoursLeft: number } {
-  if (!lastInboundAt) return { open: false, hoursLeft: 0 };
-  const elapsed = Date.now() - new Date(lastInboundAt).getTime();
-  if (elapsed >= WINDOW_MS) return { open: false, hoursLeft: 0 };
-  return { open: true, hoursLeft: Math.max(1, Math.ceil((WINDOW_MS - elapsed) / (60 * 60 * 1000))) };
+  const w = serviceWindowState(lastInboundAt);
+  return { open: w.open, hoursLeft: w.hoursLeft };
 }
 
 /** Everything the Inbox reads, in one fetch — one cache entry, one invalidation target. */

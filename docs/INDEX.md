@@ -88,3 +88,4 @@
 - `docs/exhaustive-crawl.md` — Every manual crawl is an exhaustive resumable background job (crawl_jobs/crawl_urls, crawl-worker, cron backstop), the old limits audit, URL/trap rules, the paged inventory (2026-09-23)
 - `docs/discovery-balanced-baseline.md` — Paid baseline = Discovery (one generator call per approved town) → balanced 20 across services/towns/intents → approve; refund now judged on all 20 incl. areas; near-duplicate rules (2026-09-23)
 - `docs/discovery-progress.md` — Discovery as a durable server job: progress in measurements (question × engine × run), one job per pool (compare-and-set start), pool version, read-only poller (2026-09-23)
+- `docs/warm-lead-reply.md` — Inbox Research & draft reply: warm_lead_research (one row per lead), reuse/revalidate/refresh rules, rule + verified-quote findings, the reply prompt and checks, the 24h window, quote-backed sales facts (2026-09-25)

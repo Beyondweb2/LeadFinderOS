@@ -38,6 +38,7 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
+import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
@@ -723,6 +724,29 @@ const Inbox = () => {
     setText(fillTemplate(content, { businessName: activeBusinessName }));
     setComposerSeed((n) => n + 1);
   };
+  /* WARM REPLY DRAFTS go in the same way a quick reply does: write the draft, remount the composer.
+     ⛔ NEVER A SEND — Paul reviews, edits and presses the composer's own Send. The key is explicit so
+     a draft that lands after Paul has moved thread is filed under the thread it was written for.
+     draftsRef is read, not `drafts`: the composer flushes on blur, and the click that asks for a
+     draft is handled before a render could hand this closure the flushed value. */
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  /* ⚠️ The outgoing composer's unmount flush saves ITS old text under the same key AFTER the write
+     below, so the stored draft silently reverted while the box showed the new one (measured in the
+     UI harness, 2026-09-25). A passive effect keyed on the remount runs after every unmount cleanup
+     of the same commit, so writing the draft again there makes it stick. */
+  const pendingWarmDraft = useRef<{ key: string; draft: string } | null>(null);
+  const insertWarmDraft = useCallback((key: string, draft: string) => {
+    pendingWarmDraft.current = { key, draft };
+    setDrafts((prev) => setDraft(prev, key, draft));
+    setComposerSeed((n) => n + 1);
+  }, [setDrafts]);
+  useEffect(() => {
+    const p = pendingWarmDraft.current;
+    if (!p) return;
+    pendingWarmDraft.current = null;
+    setDrafts((prev) => setDraft(prev, p.key, p.draft));
+  }, [composerSeed, setDrafts]);
 
   // Thread-header quick-action data — each button/link renders only when present.
   // Public audit report for THIS lead — the lead's own COMPLETED audit, served live at /a/<auditId>
@@ -757,6 +781,18 @@ const Inbox = () => {
     const firstName = firstNameFrom(activeLead?.contact_name);
     /* ⛔ sentAt: the transcript must show the name that WENT OUT, not the rule as it stands today. */
     return readableTemplateBody(m.body, m.template_name, { businessName, url, trade, firstName, sentAt: m.created_at });
+  };
+
+  /* Our own template messages as the prospect SAW them, for the warm-reply drafter's context (the
+     server only has the stored slug for older rows). Read at click time, never on every render. */
+  const readableOutbound = (msgs: WaMessage[]): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const m of msgs.slice(-40)) {
+      if (m.direction !== 'outbound' || m.message_type !== 'template') continue;
+      const t = bubbleReadable(m);
+      if (t) out[m.id] = t.slice(0, 2000);
+    }
+    return out;
   };
 
   const [reportCopied, setReportCopied] = useState(false);
@@ -1842,6 +1878,19 @@ const Inbox = () => {
               <div className="border-t border-border p-2.5">
                 {win.open ? (
                   <div className="space-y-2">
+                    {/* Research & draft reply — only once they have replied and a lead is linked. It
+                        writes a DRAFT into the composer below; it never sends (WarmReplyAssistant). */}
+                    {active.leadId && active.lastInboundAt && (
+                      <WarmReplyAssistant
+                        key={active.key}
+                        leadId={active.leadId}
+                        phone={active.phone}
+                        windowOpen
+                        getReadable={() => readableOutbound(thread)}
+                        getComposerText={() => getDraft(draftsRef.current, active.key)}
+                        onDraft={(draft) => insertWarmDraft(active.key, draft)}
+                      />
+                    )}
                     {/* Quick-reply: insert a saved TEXT script (editable before send). */}
                     {textTemplates.length > 0 && (
                       <DropdownMenu>
@@ -1882,6 +1931,17 @@ const Inbox = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {active.leadId && active.lastInboundAt && (
+                      <WarmReplyAssistant
+                        key={active.key}
+                        leadId={active.leadId}
+                        phone={active.phone}
+                        windowOpen={false}
+                        getReadable={() => ({})}
+                        getComposerText={() => ''}
+                        onDraft={() => undefined}
+                      />
+                    )}
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
                     </p>
