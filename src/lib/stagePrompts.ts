@@ -18,10 +18,11 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { Stage, WebsiteBuildState } from './websiteBuildState.ts';
-import { BUILD_ROUTE_LABELS, compareFamilies, PAGE_FAMILY_LABELS, REBUILD_STYLE_LABELS, SITE_LIVE_LABELS } from './websiteBuildState.ts';
-import { templatePageTypes } from './websiteTemplates.ts';
+import { BUILD_ROUTE_LABELS, compareFamilies, PAGE_FAMILY_LABELS, REBUILD_STYLE_LABELS } from './websiteBuildState.ts';
 import type { FactRow } from './buildFacts.ts';
-import { factsSummary, isPublishable } from './buildFacts.ts';
+import { reconPrompt } from './recon.ts';
+import { manifestArchitectureLines } from './manifestSummary.ts';
+import { isPublishable } from './buildFacts.ts';
 import {
   capturePrompt, cloudflareProblem, codeConfig, finalQaPrompt, isBespokeRoute, isFaithfulRoute,
   isTemplateRoute, MARK, masterPrompt, pageLines, seoQaPrompt, winPath, type BuildPackInput,
@@ -49,45 +50,11 @@ const factVal = (facts: FactRow[], key: string) => { const r = facts.find((f) =>
 const folder = (s: WebsiteBuildState) => (s.local_repo_path ? winPath(s.local_repo_path) : MARK.path);
 const tplLine = (i: BuildPackInput) => (isTemplateRoute(i.state) && i.template ? ['Template: ' + i.template.name + ' v' + i.template.version + ' (' + i.template.trade + ')'] : []);
 
-/* ── RECON — a read-only first look, before any capture ───────────────────────────────────────── */
+/* ── RECON — Claude Code crawls the source site and returns ONE structured result (recon.ts). ─── */
 function recon(i: BuildPackInput): StagePrompt {
-  const s = i.state;
-  const sum = factsSummary(i.facts);
-  const site = i.existingSiteUrl;
-  const L = [
-    ...header('RECON', i), ...tplLine(i),
-    'Existing site: ' + (site || 'none recorded') + (site ? ' (still live: ' + SITE_LIVE_LABELS[s.source_still_live] + ')' : ''),
-    'Trade: ' + (factVal(i.facts, 'trade') || 'not verified') + ' · Home town: ' + (factVal(i.facts, 'primary_town') || 'not verified'),
-    'Facts: ' + sum.verified + ' verified, ' + sum.awaiting + ' need approval, ' + sum.missing + ' missing.',
-    '',
-    'READ-ONLY. Do not build, do not download the whole site, do not change anything, never submit a form.',
-    '',
-    'Find out:',
-  ];
-  if (site) L.push(
-    '- The platform the site runs on (WordPress, Wix, Squarespace, hand-coded…) and how you can tell.',
-    '- Roughly how many public URLs (sitemap.xml / robots.txt) and the page families, one example URL each.',
-    '- Tracking / analytics scripts and form handlers present.',
-  );
-  if (isFaithfulRoute(s)) L.push(
-    '- Anything that makes a FAITHFUL rebuild hard: page builders, heavy JavaScript, third-party booking or',
-    '  chat widgets, embedded maps, sliders, custom fonts that need licences.',
-    '- Whether the site is still live and complete (broken pages, missing images).',
-  );
-  if (isTemplateRoute(s)) L.push(
-    '- How well the ' + (i.template?.name ?? 'selected template') + ' fits: which of its page types (' + (i.template ? templatePageTypes(i.template).join(', ') : '—') + ')',
-    '  this business needs, which it does not, and anything the business needs that the template lacks.',
-    '- Which assets are worth reusing (logo, genuine photos).',
-  );
-  if (isBespokeRoute(s)) L.push(
-    '- What the business does and for whom, and the main things its customers would search for.',
-    '- Which existing Findable sites or templates are the closest design references, and why.',
-  );
-  L.push('', 'Reply with exactly these lines (Paul pastes them into LeadFinderOS):',
-    'Source platform: …', 'Original site still live: yes / no', 'URL count: N', 'Page families: …',
-    'Route fit: does the chosen route still look right? one sentence', 'Risks: …');
-  return { id: 'recon', label: 'Copy Recon Prompt', short: 'Recon', stage: 'intake', blockedBy: s.route ? [] : ['Build route'],
-    help: 'A read-only first look at the business and its site before capture starts.', text: L.join('\n') };
+  const p = reconPrompt(i);
+  return { id: 'recon', label: 'Copy Recon Prompt', short: 'Recon', stage: 'capture', blockedBy: p.blockedBy,
+    help: 'Claude Code crawls the site for this route and ends with one JSON result — paste it back with Import Recon Result.', text: p.text };
 }
 
 /* ── CAPTURE — the V1 capture prompt, route-aware, plus the manifest ─────────────────────────── */
@@ -125,6 +92,7 @@ function architecture(i: BuildPackInput): StagePrompt {
     '- For each page, the proof / evidence it needs (put it in the note column; say what is missing).',
     ...(s.design_references ? ['- Design references: ' + s.design_references] : []));
   else L.push('(No build route chosen — STOP and ask Paul.)');
+  L.push(...manifestArchitectureLines(s));
   if (s.pages.length) L.push('', 'The current plan (improve it; keep the decisions Paul has made):', ...pageLines(s).slice(0, 60));
   L.push('', 'Reply with two blocks Paul pastes straight into LeadFinderOS:',
     '1. One line per page:  action | family | /new-path/ | Title | old url | redirect target | note',

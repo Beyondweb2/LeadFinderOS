@@ -10,9 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { toRebuildPromptInput, type RebuildContextPayload } from '@/lib/rebuildContext';
 import {
-  ASSET_APPROVALS, BUILD_ROUTE_LABELS, BUILD_ROUTES, CAPTURE_STATUS_LABELS, CAPTURE_STATUSES, COMPARE_STATUS_LABELS, COMPARE_STATUSES,
+  BUILD_ROUTE_LABELS, BUILD_ROUTES, CAPTURE_STATUS_LABELS, CAPTURE_STATUSES, COMPARE_STATUS_LABELS, COMPARE_STATUSES,
   COPY_OWNERSHIP_LABELS, COPY_OWNERSHIPS, CUSTOM_DOMAIN_STATUS_LABELS, CUSTOM_DOMAIN_STATUSES, DEFAULT_COMPARE_WIDTHS, FACT_STATUS_LABELS,
-  mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_ACTIONS, PAGE_FAMILIES, PAGE_FAMILY_LABELS, parseCompareReply, parseManifest, parseWebsiteBuild,
+  mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_ACTIONS, PAGE_FAMILIES, PAGE_FAMILY_LABELS, parseCompareReply, parseWebsiteBuild,
+  ASSET_APPROVAL_LABELS, openReconReview, RECON_STATUS_LABELS, reconStatus, type AssetApproval, type ReconReviewItem, type ReconStatus,
   PREVIEW_STATUS_LABELS, PREVIEW_STATUSES, PRODUCTION_STATUS_LABELS, PRODUCTION_STATUSES, QA_ITEMS, REBUILD_STYLE_LABELS, REBUILD_STYLES,
   SITE_LIVE_LABELS, SITE_LIVE_STATES, STAGE_LABELS, STAGES, WWW_REDIRECT_STATUS_LABELS, WWW_REDIRECT_STATUSES,
   captureApplies, compareFamilies, websiteBuildStages,
@@ -23,6 +24,8 @@ import { annotate, candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, m
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
 import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
 import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
+import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
+import { pageFamilyGroups } from '@/lib/manifestSummary';
 import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks, templateSuitsTrade } from '@/lib/buildRoutes';
 import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
 import { MAX_PAGES } from '@/lib/websiteBuildState';
@@ -247,14 +250,18 @@ export default function WebsiteBuild() {
     setupMissing: setupProblems(state).map((p) => p.label),
   }) : [], [state, existingSiteUrl, summary.awaiting, archErrors]);
 
-  const copyText = async (title: string, text: string, missing: string[]) => {
+  const copyText = async (title: string, text: string, missing: string[]): Promise<boolean> => {
     try {
       await navigator.clipboard.writeText(text);
       toast({ title: `${title} copied`, description: missing.length ? `Still missing: ${missing.join(', ')}` : `${text.length.toLocaleString()} characters.` });
-    } catch { toast({ title: 'Could not copy', description: 'Open "Show" and copy the text by hand.', variant: 'destructive' }); }
+      return true;
+    } catch { toast({ title: 'Could not copy', description: 'Open "Show" and copy the text by hand.', variant: 'destructive' }); return false; }
   };
   const copyItem = (item: PackItem) => copyText(item.title.replace(/^\d+\.\s*/, ''), item.text, item.blockedBy);
-  const copyPrompt = (p: StagePrompt) => copyText(p.label.replace(/^Copy /, ''), p.text, p.blockedBy);
+  const copyPrompt = async (p: StagePrompt) => {
+    const done = await copyText(p.label.replace(/^Copy /, ''), p.text, p.blockedBy);
+    if (done && p.id === 'recon') update((s) => ({ ...s, recon: { ...s.recon, prompt_copied_at: new Date().toISOString() } }));
+  };
 
   if (loadError) return <div className="mx-auto max-w-6xl space-y-4 py-6"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
     <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{loadError}</span></div><Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}><RefreshCw className="mr-1 h-4 w-4" />Try again</Button></CardContent></Card></div>;
@@ -323,7 +330,6 @@ export default function WebsiteBuild() {
           <p className="text-xs text-muted-foreground">When this build is finished it can be marked as a template candidate on the Live step.</p>
         </div>}
         <RouteGuide state={state} stage="intake" update={update} />
-        {state.route && <PromptCard p={promptById('recon')} onCopy={copyPrompt} />}
       </Section>
 
       <Section title="Website evidence (latest crawl)">
@@ -352,24 +358,29 @@ export default function WebsiteBuild() {
 
     {/* ══ CAPTURE ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'capture' && <>
-      {!captureOn ? <Section title="Existing site capture"><p className="text-muted-foreground">{state.route ? 'No current website is recorded, so there is nothing to capture.' : 'Choose the build route first.'}</p></Section> : <>
-        <Section title={state.route === 'bespoke' && !existingSiteUrl ? 'Business discovery' : 'Existing site capture'}>
-          <RouteGuide state={state} stage="capture" update={update} />
-          <p className="text-xs text-muted-foreground">Run the <b>Project setup</b> commands first so the client folder exists. Then open Claude Code in that folder and paste the capture prompt. It saves what it finds in a <code>capture</code> folder and replies with counts, a manifest, a page list, redirects and facts — paste those into this screen.</p>
-          <PackCard item={packById('setup')} onCopy={copyItem} />
-          <PromptCard p={promptById('capture')} onCopy={copyPrompt} />
-        </Section>
-        <Section title="Capture results">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <div><Label className="text-xs">Status</Label><select aria-label="Capture status" className={sel} value={state.capture.status} onChange={(e) => set('capture', { ...state.capture, status: e.target.value as typeof state.capture.status })}>{CAPTURE_STATUSES.map((c) => <option key={c} value={c}>{CAPTURE_STATUS_LABELS[c]}</option>)}</select></div>
-            <div><Label className="text-xs">URLs captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.url_count ?? ''} onChange={(e) => set('capture', { ...state.capture, url_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
-            <div><Label className="text-xs">Assets captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.asset_count ?? ''} onChange={(e) => set('capture', { ...state.capture, asset_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
-            <div><Label className="text-xs">Last captured</Label><Input type="date" className="h-8 text-xs" value={state.last_captured_at} onChange={(e) => set('last_captured_at', e.target.value)} /></div>
+      {!state.route ? <Section title="Source website"><p className="text-muted-foreground">Choose the build route first.</p></Section> : <>
+        <ReconPanel state={state} update={update} rows={rows} candidates={candidates} template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl}
+          set={set} prompt={promptById('recon')} onCopy={copyPrompt} factsAwaiting={summary.awaiting} toast={toast} />
+        {state.recon.imported_at && <NeedsReviewPanel state={state} update={update} rows={rows} onDecide={decideRow} onReset={resetFact} onPut={putFact} />}
+        {state.manifest.pages.length > 0 && <PageFamiliesPanel manifest={state.manifest} />}
+        {state.manifest.assets.length > 0 && <AssetInventory state={state} update={update} />}
+        <RouteGuide state={state} stage="capture" update={update} />
+        {captureOn && <details className="rounded-lg border bg-card p-4 text-sm">
+          <summary className="cursor-pointer font-semibold">Local capture — downloads, screenshots, design &amp; SEO notes <span className="text-xs font-normal text-muted-foreground">(after the recon)</span></summary>
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-muted-foreground">Run the <b>Project setup</b> commands first so the client folder exists. The capture prompt saves the site locally in a <code>capture</code> folder and updates <code>capture/recon.json</code> — import it again above.</p>
+            <PackCard item={packById('setup')} onCopy={copyItem} />
+            <PromptCard p={promptById('capture')} onCopy={copyPrompt} />
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div><Label className="text-xs">Capture status</Label><select aria-label="Capture status" className={sel} value={state.capture.status} onChange={(e) => set('capture', { ...state.capture, status: e.target.value as typeof state.capture.status })}>{CAPTURE_STATUSES.map((c) => <option key={c} value={c}>{CAPTURE_STATUS_LABELS[c]}</option>)}</select></div>
+              <div><Label className="text-xs">URLs captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.url_count ?? ''} onChange={(e) => set('capture', { ...state.capture, url_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
+              <div><Label className="text-xs">Assets captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.asset_count ?? ''} onChange={(e) => set('capture', { ...state.capture, asset_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
+              <div><Label className="text-xs">Last captured</Label><Input type="date" className="h-8 text-xs" value={state.last_captured_at} onChange={(e) => set('last_captured_at', e.target.value)} /></div>
+            </div>
+            <div><Label className="text-xs">Capture notes</Label><Textarea rows={2} className="text-xs" value={state.capture.notes} placeholder="Anything notable Claude reported (e.g. the gallery is on Facebook, not the site)." onChange={(e) => set('capture', { ...state.capture, notes: e.target.value })} /></div>
+            <DesignSeoNotes state={state} update={update} />
           </div>
-          <div><Label className="text-xs">Capture notes</Label><Textarea rows={3} className="text-xs" value={state.capture.notes} placeholder="Anything notable Claude reported (e.g. the gallery is on Facebook, not the site)." onChange={(e) => set('capture', { ...state.capture, notes: e.target.value })} /></div>
-          <p className="text-xs text-muted-foreground">Paste the capture's <b>facts</b> in Intake → Client Build Facts, and its <b>page list</b> and <b>redirects</b> in Architecture.</p>
-        </Section>
-        <ManifestPanel state={state} update={update} toast={toast} />
+        </details>}
       </>}
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('intake')}>Back</Button><Button onClick={() => goStep('architecture')}>Next: Architecture</Button></div>
     </>}
@@ -581,41 +592,168 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
   </details>;
 }
 
-function ManifestPanel({ state, update, toast }: { state: WebsiteBuildState; update: UpdateFn; toast: ReturnType<typeof useToast>['toast'] }) {
-  const [paste, setPaste] = useState('');
+function DesignSeoNotes({ state, update }: { state: WebsiteBuildState; update: UpdateFn }) {
   const m = state.manifest;
   const setM = (fn: (x: WebsiteBuildState['manifest']) => WebsiteBuildState['manifest']) => update((s) => ({ ...s, manifest: fn(s.manifest) }));
-  const importIt = () => {
-    let raw: unknown;
-    try { raw = JSON.parse(paste); } catch { toast({ title: 'Not valid JSON', description: 'Paste the whole contents of capture/manifest.json.', variant: 'destructive' }); return; }
-    const next = parseManifest(raw);
-    update((s) => ({ ...s, manifest: next, capture: { ...s.capture,
-      /* Counts fill only a blank field — a number Paul typed is never overwritten. */
-      url_count: s.capture.url_count ?? (next.pages.length || null), asset_count: s.capture.asset_count ?? (next.assets.length || null) } }));
-    setPaste('');
-    toast({ title: 'Manifest imported', description: `${next.pages.length} page(s), ${next.assets.length} asset(s), ${next.interactions.length} interaction(s). Assets start "pending".` });
-  };
   const D = m.design, S = m.seo;
-  return <Section title="Source site manifest" right={<span className="text-xs text-muted-foreground">{m.pages.length} pages · {m.assets.length} assets · {m.interactions.length} interactions</span>}>
-    <p className="text-xs text-muted-foreground">What the capture found, in one place — pages, assets, design, interactions and SEO. Filled by pasting the capture's <code>capture/manifest.json</code>; nothing here crawls.</p>
-    <div className="space-y-2"><Textarea rows={3} className="font-mono text-xs" value={paste} placeholder='{"pages":[{"url":"https://…","type":"service","title":"…","h1":"…","purpose":"…","screenshots":[]}],"assets":[…]}' onChange={(e) => setPaste(e.target.value)} />
-      <Button size="sm" disabled={!paste.trim()} onClick={importIt}>Import manifest (replaces the current one)</Button></div>
-    {m.pages.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Pages ({m.pages.length})</summary>
-      <div className="mt-2 max-h-72 overflow-auto"><table className="w-full min-w-[640px]"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">URL</th><th className="py-1 pr-2">Type</th><th className="py-1 pr-2">Title / H1</th><th className="py-1">Purpose</th></tr></thead>
-        <tbody>{m.pages.map((p, n) => <tr key={n} className="border-b align-top"><td className="py-1 pr-2 break-all">{p.url}</td><td className="py-1 pr-2">{PAGE_FAMILY_LABELS[p.type]}</td><td className="py-1 pr-2">{p.title}{p.h1 && p.h1 !== p.title ? <span className="text-muted-foreground"> / {p.h1}</span> : null}</td><td className="py-1">{p.purpose}{p.screenshots.length ? <span className="text-muted-foreground"> · {p.screenshots.length} shot(s)</span> : null}</td></tr>)}</tbody></table></div></details>}
-    {m.assets.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Assets ({m.assets.filter((a) => a.approval === 'approved').length} approved of {m.assets.length})</summary>
-      <div className="mt-2 max-h-72 overflow-auto"><table className="w-full min-w-[640px]"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">Asset</th><th className="py-1 pr-2">Type</th><th className="py-1 pr-2">Purpose</th><th className="py-1">Use it?</th></tr></thead>
-        <tbody>{m.assets.map((a, n) => <tr key={n} className="border-b align-top"><td className="py-1 pr-2 break-all">{a.location || a.source_url}</td><td className="py-1 pr-2">{a.type}</td><td className="py-1 pr-2">{a.purpose}</td>
-          <td className="py-1"><select aria-label={`Approval for ${a.location || a.source_url}`} className={sel} value={a.approval} onChange={(e) => setM((x) => ({ ...x, assets: x.assets.map((y, k) => k === n ? { ...y, approval: e.target.value as typeof y.approval } : y) }))}>{ASSET_APPROVALS.map((v) => <option key={v} value={v}>{v === 'pending' ? 'Needs approval' : v === 'approved' ? 'Approved' : 'Rejected'}</option>)}</select></td></tr>)}</tbody></table></div></details>}
-    {m.interactions.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Interactions ({m.interactions.length})</summary>
-      <ul className="mt-2 space-y-1">{m.interactions.map((it, n) => <li key={n}><b>{it.kind.replace('_', ' ')}</b> — {it.where}{it.notes ? `: ${it.notes}` : ''}</li>)}</ul></details>}
-    <details className="text-xs"><summary className="cursor-pointer font-medium">Design and SEO notes</summary>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {([['fonts', 'Fonts'], ['colours', 'Colours'], ['layout_notes', 'Layout notes'], ['component_notes', 'Component notes']] as const).map(([k, l]) =>
-          <div key={k}><Label className="text-xs">{l}</Label><Textarea rows={2} className="text-xs" value={D[k]} onChange={(e) => setM((x) => ({ ...x, design: { ...x.design, [k]: e.target.value } }))} /></div>)}
-        {([['metadata', 'Metadata'], ['canonical', 'Canonical'], ['schema', 'Schema'], ['sitemap', 'Sitemap'], ['robots', 'Robots'], ['tracking', 'Tracking']] as const).map(([k, l]) =>
-          <div key={k}><Label className="text-xs">SEO — {l}</Label><Textarea rows={2} className="text-xs" value={S[k]} onChange={(e) => setM((x) => ({ ...x, seo: { ...x.seo, [k]: e.target.value } }))} /></div>)}
-      </div></details>
+  return <details className="text-xs"><summary className="cursor-pointer font-medium">Design, interactions and SEO ({m.interactions.length} interaction(s))</summary>
+    {m.interactions.length > 0 && <ul className="mt-2 space-y-1">{m.interactions.map((it, n) => <li key={n} className="break-words"><b>{it.kind.replace('_', ' ')}</b> — {it.where}{it.notes ? `: ${it.notes}` : ''}</li>)}</ul>}
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      {([['fonts', 'Fonts'], ['colours', 'Colours'], ['layout_notes', 'Layout notes'], ['component_notes', 'Component notes']] as const).map(([k, l]) =>
+        <div key={k}><Label className="text-xs">{l}</Label><Textarea rows={2} className="text-xs" value={D[k]} onChange={(e) => setM((x) => ({ ...x, design: { ...x.design, [k]: e.target.value } }))} /></div>)}
+      {([['metadata', 'Metadata'], ['canonical', 'Canonical'], ['schema', 'Schema'], ['sitemap', 'Sitemap'], ['robots', 'Robots'], ['tracking', 'Tracking']] as const).map(([k, l]) =>
+        <div key={k}><Label className="text-xs">SEO — {l}</Label><Textarea rows={2} className="text-xs" value={S[k]} onChange={(e) => setM((x) => ({ ...x, seo: { ...x.seo, [k]: e.target.value } }))} /></div>)}
+    </div></details>;
+}
+
+/* ══ PHASE 2 — SOURCE SITE RECON ═══════════════════════════════════════════════════════════════
+   URL → Copy Recon Prompt → Claude Code crawls → Import Recon Result (checked, summarised, then
+   merged) → Needs Review. Everything imported is untrusted text: rendered as text only, links only
+   for http(s) URLs (safeUrl), never markup. */
+
+const RECON_TONE: Record<ReconStatus, string> = {
+  not_started: 'bg-muted text-muted-foreground', prompt_copied: 'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100',
+  imported: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100', needs_review: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+  complete: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+};
+const when = (iso: string) => { const d = new Date(iso); return iso && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''; };
+const factOpen = (rows: FactRow[]) => (key: string) => { const r = rows.find((x) => x.key === key); return !r || r.status === 'detected' || r.status === 'missing'; };
+
+function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl, factSiteUrl, set, prompt, onCopy, factsAwaiting, toast }: {
+  state: WebsiteBuildState; update: UpdateFn; rows: FactRow[]; candidates: ReturnType<typeof candidateFacts>; template: ReturnType<typeof templateById>;
+  existingSiteUrl: string; factSiteUrl: string; set: SetFn; prompt: StagePrompt; onCopy: (p: StagePrompt) => void | Promise<void>;
+  factsAwaiting: number; toast: ReturnType<typeof useToast>['toast'];
+}) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [text, setText] = useState('');
+  const [parsed, setParsed] = useState<ReconParse | null>(null);
+  const openReview = openReconReview(state, factOpen(rows)).length;
+  const status = reconStatus(state, { hasExistingSite: !!existingSiteUrl, factsAwaiting, openReview });
+  const href = safeUrl(existingSiteUrl);
+  const doImport = () => {
+    if (!parsed || !('result' in parsed)) return;
+    /* Merged against the ledger exactly as it stands, then saved through the normal autosave. */
+    const out = applyRecon(state, parsed.result, mergeFacts(candidates, state.facts, template), new Date().toISOString());
+    update(() => out.state);
+    setText(''); setParsed(null); setImportOpen(false);
+    const r = out.report;
+    toast({ title: 'Recon imported', description: `${r.verified} fact(s) verified from the site · ${r.needsApproval} need approval · ${r.conflicts} conflict(s) · ${r.keptVerified} already-verified fact(s) kept${r.factsDropped ? ` · ${r.factsDropped} not stored (fact limit)` : ''}.` });
+  };
+  const sum = parsed && 'summary' in parsed ? parsed.summary : null;
+  return <Section title="Source website" right={<span className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase ${RECON_TONE[status]}`}>Recon: {RECON_STATUS_LABELS[status]}</span>}>
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="min-w-[220px] flex-1"><Field label="Existing website URL" value={state.source_site_url} placeholder={factSiteUrl || 'https://…'} onChange={(v) => set('source_site_url', v.trim())} /></div>
+      {href ? <Button asChild size="sm" variant="outline"><a href={href} target="_blank" rel="noopener noreferrer">Open source website</a></Button>
+        : <Button size="sm" variant="outline" disabled>Open source website</Button>}
+      <Button size="sm" disabled={!state.route} onClick={() => void onCopy(prompt)}><Clipboard className="mr-1 h-4 w-4" />Copy Recon Prompt</Button>
+      <Button size="sm" variant={importOpen ? 'secondary' : 'outline'} onClick={() => { setImportOpen((o) => !o); setParsed(null); }}>Import Recon Result</Button>
+    </div>
+    {!state.source_site_url && factSiteUrl && <p className="text-[11px] text-muted-foreground">Using the Current website fact: {factSiteUrl}</p>}
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+      <div><dt className="text-muted-foreground">Last recon</dt><dd>{when(state.recon.imported_at) || '—'}</dd></div>
+      <div><dt className="text-muted-foreground">Pages discovered</dt><dd>{state.recon.imported_at ? state.manifest.pages.length + (state.recon.pages_total && state.recon.pages_total > state.manifest.pages.length ? ` (of ${state.recon.pages_total})` : '') : '—'}</dd></div>
+      <div><dt className="text-muted-foreground">Assets discovered</dt><dd>{state.recon.imported_at ? state.manifest.assets.length : '—'}</dd></div>
+      <div><dt className="text-muted-foreground">Facts needing approval</dt><dd>{factsAwaiting}</dd></div>
+    </dl>
+    {prompt.blockedBy.length > 0 && <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Recon prompt is missing: {prompt.blockedBy.join(' · ')}</p>}
+    <button type="button" className="text-xs text-primary underline" onClick={() => setShowPrompt((o) => !o)}>{showPrompt ? 'Hide the recon prompt' : 'Show the recon prompt'}</button>
+    {showPrompt && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{prompt.text}</pre>}
+    {importOpen && <div className="space-y-2 rounded-md border p-3">
+      <Label className="text-xs">Paste Claude's recon result — the whole reply, or just the JSON</Label>
+      <Textarea aria-label="Recon result" rows={6} className="font-mono text-xs" value={text} placeholder={'…Claude’s summary…\n```json\n{ "reconVersion": 1, "sourceUrl": "https://…", "pages": [ … ], "facts": [ … ] }\n```'} onChange={(e) => { setText(e.target.value); setParsed(null); }} />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={!text.trim()} onClick={() => setParsed(parseReconText(text))}>Check</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setImportOpen(false); setText(''); setParsed(null); }}>Cancel</Button>
+      </div>
+      {parsed && 'error' in parsed && <div role="alert" className="flex items-start gap-2 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{parsed.error}</span></div>}
+      {sum && <div className="space-y-2 rounded bg-muted p-3 text-xs">
+        <p className="font-medium">Ready to import{parsed && 'result' in parsed && parsed.result.sourceUrl ? ` — ${parsed.result.sourceUrl}` : ''}</p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">{([['Pages', sum.pages], ['Facts', sum.facts], ['Assets', sum.assets], ['Unknowns', sum.unknowns], ['Warnings', sum.warnings], ['Interactions', sum.interactions]] as const).map(([l, n]) =>
+          <div key={l} className="rounded border bg-background p-2"><div className="text-muted-foreground">{l}</div><div className="text-base font-semibold">{n}</div></div>)}</div>
+        {sum.families.length > 0 && <p><b>Page families:</b> {sum.families.map((f) => `${PAGE_FAMILY_LABELS[f.family]} ${f.count}`).join(' · ')}</p>}
+        {sum.dropped.length > 0 && <p className="text-amber-800 dark:text-amber-200"><b>Not imported:</b> {sum.dropped.join(' · ')}</p>}
+        {sum.ignoredKeys.length > 0 && <p className="text-amber-800 dark:text-amber-200"><b>Fields LeadFinderOS does not store:</b> {sum.ignoredKeys.join(', ')}</p>}
+        {sum.notes.map((n, k) => <p key={k} className="text-muted-foreground">{n}</p>)}
+        <p className="text-muted-foreground">Import MERGES: pages and assets are added or updated by URL, facts go to the ledger (verified only when the site states them clearly and nothing disagrees), and the route, project details, page plan, redirects, QA and preview are left alone.</p>
+        <div className="flex gap-2"><Button size="sm" onClick={doImport}>Import</Button><Button size="sm" variant="ghost" onClick={() => setParsed(null)}>Cancel</Button></div>
+      </div>}
+    </div>}
+  </Section>;
+}
+
+function NeedsReviewPanel({ state, update, rows, onDecide, onReset, onPut }: {
+  state: WebsiteBuildState; update: UpdateFn; rows: FactRow[];
+  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void; onPut: (f: BuildFact) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const items = openReconReview(state, factOpen(rows));
+  const keyed = new Set(items.filter((i) => i.key).map((i) => i.key));
+  const awaiting = rows.filter((r) => r.status === 'detected' && !keyed.has(r.key));
+  const requiredMissing = factsSummary(rows).requiredMissing;
+  const dismiss = (it: ReconReviewItem) => update((s) => ({ ...s, recon: { ...s.recon, review: s.recon.review.map((x) =>
+    x.kind === it.kind && x.key === it.key && x.detail === it.detail ? { ...x, resolved: true } : x) } }));
+  const total = items.length + awaiting.length;
+  const shown = all ? items : items.slice(0, 25);
+  const KIND_LABEL: Record<ReconReviewItem['kind'], string> = { conflict: 'Conflict', unknown: 'Unknown', warning: 'Check' };
+  return <Section title="Needs review" right={<span className="text-xs text-muted-foreground">{total} open</span>}>
+    {total === 0 ? <p className="text-xs text-muted-foreground">Nothing from the recon needs a decision. Unknowns you set aside can wait for the client.</p> : <>
+      <p className="text-xs text-muted-foreground">Contradictions, uncertain facts and gaps from the recon. Approve, reject or edit here — it is the same fact ledger as Intake. A conflict clears once its fact is decided; an unknown can wait for the client.</p>
+      <div className="space-y-2">{shown.map((it, n) => {
+        const row = it.key ? rows.find((r) => r.key === it.key) : undefined;
+        const chip = <span className={`mr-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${it.kind === 'conflict' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'}`}>{KIND_LABEL[it.kind]}</span>;
+        const dismissBtn = it.kind !== 'conflict' && <Button size="sm" variant="ghost" onClick={() => dismiss(it)}>{it.kind === 'unknown' ? 'Wait for client' : 'Dismiss'}</Button>;
+        return row ? <div key={n} className="space-y-1">
+          <FactRowEditor row={row} onDecide={onDecide} onReset={onReset} onPut={onPut} detail={KIND_LABEL[it.kind] + ': ' + it.detail} />
+          {dismissBtn && <div className="flex justify-end">{dismissBtn}</div>}
+        </div> : <div key={n} className="flex flex-wrap items-start justify-between gap-2 rounded-md border p-2 text-xs">
+          <p className="min-w-0 flex-1 break-words">{chip}<b>{it.label}</b> — {it.detail}</p>{dismissBtn}
+        </div>;
+      })}</div>
+      {items.length > 25 && <button type="button" className="text-xs text-primary underline" onClick={() => setAll((a) => !a)}>{all ? 'Show fewer' : `Show all ${items.length}`}</button>}
+      {awaiting.length > 0 && <details className="text-xs" open={items.length === 0}><summary className="cursor-pointer font-medium">Other facts needing approval ({awaiting.length})</summary>
+        <div className="mt-2 space-y-2">{awaiting.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} />)}</div></details>}
+    </>}
+    {requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required and not verified yet: {requiredMissing.join(', ')} — these can wait for the client; the build leaves out whatever needs them.</p>}
+  </Section>;
+}
+
+function PageFamiliesPanel({ manifest }: { manifest: WebsiteBuildState['manifest'] }) {
+  const groups = pageFamilyGroups(manifest);
+  return <Section title="Page families" right={<span className="text-xs text-muted-foreground">{manifest.pages.length} page(s)</span>}>
+    <div className="grid gap-1 sm:grid-cols-2">{groups.map((g) => <details key={g.family} className="rounded border px-2 py-1 text-xs">
+      <summary className="cursor-pointer"><b>{g.label}</b> — {g.count}</summary>
+      <ul className="mt-1 max-h-64 space-y-0.5 overflow-auto">{manifest.pages.filter((p) => p.type === g.family).slice(0, 300).map((p) => { const href = safeUrl(p.url);
+        return <li key={p.url} className="break-all">{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{p.url}</a> : p.url}
+          {p.status_code && p.status_code !== 200 ? <span className="ml-1 text-amber-700">[{p.status_code}]</span> : null}{p.title ? <span className="text-muted-foreground"> — {p.title}</span> : null}</li>; })}</ul>
+    </details>)}</div>
+  </Section>;
+}
+
+const IMAGE_TYPES = new Set(['logo', 'photo', 'icon', 'badge', 'brand_logo', 'favicon']);
+function AssetInventory({ state, update }: { state: WebsiteBuildState; update: UpdateFn }) {
+  const [filter, setFilter] = useState<'all' | AssetApproval>('all');
+  const [thumbs, setThumbs] = useState(true);
+  const [all, setAll] = useState(false);
+  const assets = state.manifest.assets;
+  const shown = assets.map((a, i) => ({ a, i })).filter(({ a }) => filter === 'all' || a.approval === filter);
+  const visible = all ? shown : shown.slice(0, 60);
+  const setApproval = (i: number, approval: AssetApproval) => update((s) => ({ ...s, manifest: { ...s.manifest, assets: s.manifest.assets.map((x, k) => (k === i ? { ...x, approval } : x)) } }));
+  const n = (k: AssetApproval) => assets.filter((a) => a.approval === k).length;
+  return <Section title="Asset inventory" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'approved', 'pending', 'rejected'] as const).map((k) =>
+    <button key={k} type="button" onClick={() => setFilter(k)} className={`rounded-full border px-2 py-0.5 ${filter === k ? 'border-primary bg-primary/10' : ''}`}>{k === 'all' ? `All ${assets.length}` : `${ASSET_APPROVAL_LABELS[k]} ${n(k)}`}</button>)}</div>}>
+    <p className="text-xs text-muted-foreground">Recorded, not downloaded. Mark each <b>USE</b>, <b>REVIEW</b> or <b>IGNORE</b>; only USE assets reach the build prompts (downloaded locally then — never hotlinked). <button type="button" className="text-primary underline" onClick={() => setThumbs((t) => !t)}>{thumbs ? 'Hide thumbnails' : 'Show thumbnails'}</button></p>
+    <div className="space-y-1">{visible.map(({ a, i }) => { const href = safeUrl(a.source_url);
+      return <div key={a.source_url || i} className="flex flex-wrap items-center gap-2 rounded border p-1.5 text-xs">
+        {thumbs && href && IMAGE_TYPES.has(a.type) ? <img src={href} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-10 w-10 shrink-0 rounded bg-muted object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} /> : <span className="h-10 w-10 shrink-0 rounded bg-muted" />}
+        <div className="min-w-0 flex-1">
+          <p className="truncate">{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">{a.source_url}</a> : a.source_url}</p>
+          <p className="truncate text-muted-foreground">{a.type}{a.purpose ? ` · ${a.purpose}` : ''}{a.page_url ? ` · on ${a.page_url.replace(/^https?:\/\/[^/]+/, '') || '/'}` : ''}{a.suggested_filename ? ` · → ${a.suggested_filename}` : ''}{a.ownership !== 'unknown' ? ` · ${a.ownership.replace('_', ' ')}` : ''}</p>
+        </div>
+        <select aria-label={`Status for ${a.source_url}`} className="h-8 rounded-md border border-input bg-background px-2 text-xs" value={a.approval} onChange={(e) => setApproval(i, e.target.value as AssetApproval)}>
+          {(['approved', 'pending', 'rejected'] as const).map((k) => <option key={k} value={k}>{ASSET_APPROVAL_LABELS[k]}</option>)}</select>
+      </div>; })}</div>
+    {shown.length > 60 && <button type="button" className="text-xs text-primary underline" onClick={() => setAll((x) => !x)}>{all ? 'Show fewer' : `Show all ${shown.length}`}</button>}
   </Section>;
 }
 
@@ -668,50 +806,58 @@ function PromotionPanel({ state, update }: { state: WebsiteBuildState; update: U
   </Section>;
 }
 
+/** ONE fact row — Approve / Reject / N/A / Edit / Source & notes. The same control everywhere a fact
+ *  is decided (Client Build Facts and the recon's Needs Review), so there is one approval system. */
+function FactRowEditor({ row: r, onDecide, onReset, onPut, detail }: {
+  row: FactRow; onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void;
+  onPut: (f: BuildFact) => void; detail?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const value = draft ?? r.value; const changed = value !== r.value;
+  const commit = (status: StoredFactStatus) => { onDecide(r, status, value); setDraft(null); };
+  return <div className="rounded-md border p-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium">{r.label}{r.required && <span className="text-destructive"> *</span>}</span>
+      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${FACT_TONE[r.status]}`}>{FACT_STATUS_LABELS[r.status]}</span>
+      {r.source && <span className="text-[11px] text-muted-foreground">from {r.source}</span>}
+      {r.source_url && <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">· {r.source_url}</span>}
+      {r.notes && <span className="text-[11px] text-muted-foreground">· note</span>}
+    </div>
+    {detail && <p className="mt-1 break-words text-[11px] text-amber-700 dark:text-amber-300">{detail}</p>}
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[180px] flex-1 text-xs" value={value} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDraft(e.target.value)} />
+      <Button size="sm" variant={r.status === 'verified' && !changed ? 'secondary' : 'default'} disabled={!value.trim() || (r.status === 'verified' && !changed)} onClick={() => commit('verified')}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button>
+      <Button size="sm" variant="outline" disabled={r.status === 'rejected' && !changed} onClick={() => commit('rejected')}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
+      <Button size="sm" variant="outline" disabled={r.status === 'not_applicable'} onClick={() => commit('not_applicable')}>N/A</Button>
+      <Button size="sm" variant="ghost" aria-label={`Source and notes for ${r.label}`} onClick={() => setOpen((o) => !o)}>{open ? 'Hide source' : 'Source / notes'}</Button>
+      {changed && <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>Undo edit</Button>}
+      {r.decided && !changed && <Button size="sm" variant="ghost" onClick={() => onReset(r.key)} title="Forget your decision and go back to what the records say">Reset</Button>}
+    </div>
+    {open && <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <Field label="Source URL / context" value={r.source_url} placeholder="https://… or 'phone call 24 Sep'" onChange={(v) => onPut(annotate(r, { source_url: v }))} />
+      <div><Label className="text-xs">Notes (never published)</Label><Textarea aria-label="Notes (never published)" rows={2} className="text-xs" value={r.notes} placeholder="e.g. client confirmed on the call" onChange={(e) => onPut(annotate(r, { notes: e.target.value }))} /></div>
+    </div>}
+    {r.note && <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{r.note}</p>}
+  </div>;
+}
+
 function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
   rows: FactRow[]; template: ReturnType<typeof templateById>;
   onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void;
   onPut: (f: BuildFact) => void; onPaste: (text: string) => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'detected' | 'missing' | 'verified'>('all');
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [openKey, setOpenKey] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState(''); const [newValue, setNewValue] = useState('');
   const [paste, setPaste] = useState(''); const [pasteOpen, setPasteOpen] = useState(false);
   const s = factsSummary(rows);
   const shown = rows.filter((r) => filter === 'all' || r.status === filter);
-  const valueOf = (r: FactRow) => drafts[r.key] ?? r.value;
-  const commit = (r: FactRow, status: StoredFactStatus) => { onDecide(r, status, valueOf(r)); setDrafts((d) => { const n = { ...d }; delete n[r.key]; return n; }); };
   return <Section title="Client Build Facts" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'detected', 'missing', 'verified'] as const).map((f) =>
     <button key={f} type="button" onClick={() => setFilter(f)} className={`rounded-full border px-2 py-0.5 ${filter === f ? 'border-primary bg-primary/10' : ''}`}>{f === 'all' ? `All ${rows.length}` : f === 'detected' ? `Need approval ${s.awaiting}` : f === 'missing' ? `Missing ${s.missing}` : `Verified ${s.verified}`}</button>)}</div>}>
     <p className="rounded bg-muted p-2 text-xs"><b>Verified facts may be used. Unverified facts must not be published.</b> Preloaded from onboarding, the client record, the baseline and the stored crawl — nothing was fetched. Edit a value, then Approve it. Prompts never present a "Needs approval" value as confirmed.</p>
     {s.requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required for {template ? 'the template' : 'any build'} and not verified yet (marked *): {s.requiredMissing.join(', ')}</p>}
-    <div className="space-y-2">{shown.map((r) => {
-      const draft = valueOf(r); const changed = draft !== r.value;
-      return <div key={r.key} className="rounded-md border p-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium">{r.label}{r.required && <span className="text-destructive"> *</span>}</span>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${FACT_TONE[r.status]}`}>{FACT_STATUS_LABELS[r.status]}</span>
-          {r.source && <span className="text-[11px] text-muted-foreground">from {r.source}</span>}
-          {r.source_url && <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">· {r.source_url}</span>}
-          {r.notes && <span className="text-[11px] text-muted-foreground">· note</span>}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[200px] flex-1 text-xs" value={draft} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))} />
-          <Button size="sm" variant={r.status === 'verified' && !changed ? 'secondary' : 'default'} disabled={!draft.trim() || (r.status === 'verified' && !changed)} onClick={() => commit(r, 'verified')}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button>
-          <Button size="sm" variant="outline" disabled={r.status === 'rejected' && !changed} onClick={() => commit(r, 'rejected')}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
-          <Button size="sm" variant="outline" disabled={r.status === 'not_applicable'} onClick={() => commit(r, 'not_applicable')}>N/A</Button>
-          <Button size="sm" variant="ghost" aria-label={`Source and notes for ${r.label}`} onClick={() => setOpenKey((k) => (k === r.key ? null : r.key))}>{openKey === r.key ? 'Hide source' : 'Source / notes'}</Button>
-          {changed && <Button size="sm" variant="ghost" onClick={() => setDrafts((d) => { const n = { ...d }; delete n[r.key]; return n; })}>Undo edit</Button>}
-          {r.decided && !changed && <Button size="sm" variant="ghost" onClick={() => onReset(r.key)} title="Forget your decision and go back to what the records say">Reset</Button>}
-        </div>
-        {openKey === r.key && <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          <Field label="Source URL / context" value={r.source_url} placeholder="https://… or 'phone call 24 Sep'" onChange={(v) => onPut(annotate(r, { source_url: v }))} />
-          <Field label="Notes (never published)" value={r.notes} placeholder="e.g. client confirmed on the call" onChange={(v) => onPut(annotate(r, { notes: v }))} />
-        </div>}
-        {r.note && <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{r.note}</p>}
-      </div>;
-    })}{shown.length === 0 && <p className="text-xs text-muted-foreground">Nothing in this filter.</p>}</div>
+    <div className="space-y-2">{shown.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} />)}
+      {shown.length === 0 && <p className="text-xs text-muted-foreground">Nothing in this filter.</p>}</div>
     <div className="flex flex-wrap items-end gap-2 border-t pt-3">
       <div className="min-w-[160px]"><Label className="text-xs">Add a fact the client confirmed</Label><Input className="h-8 text-xs" value={newLabel} placeholder="e.g. Gas Safe number" onChange={(e) => setNewLabel(e.target.value)} /></div>
       <div className="min-w-[200px] flex-1"><Label className="text-xs">Value</Label><Input className="h-8 text-xs" value={newValue} placeholder="e.g. 123456" onChange={(e) => setNewValue(e.target.value)} /></div>
@@ -783,6 +929,13 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
     <Section title="Redirect map" right={<span className="text-xs text-muted-foreground">{state.redirects.length} redirect(s)</span>}>
       <p className="text-xs text-muted-foreground">One line per old URL that will not exist at the same path: <code>/old-path -&gt; /new-path/ | reason</code>. One hop each, no chains, not everything to the homepage.</p>
       <div className="flex flex-wrap gap-2">
+        {state.manifest.redirect_candidates.length > 0 && <Button size="sm" variant="outline" className="h-auto min-h-9 max-w-full whitespace-normal text-left" onClick={() => {
+          const have = new Set(state.redirects.map((r) => r.from.toLowerCase()));
+          const add = state.manifest.redirect_candidates.filter((r) => r.to && !have.has(r.from.toLowerCase()));
+          const noTarget = state.manifest.redirect_candidates.filter((r) => !r.to && !have.has(r.from.toLowerCase())).length;
+          if (add.length) applyRedirects([redirectText.trim(), redirectsToText(add)].filter(Boolean).join('\n'));
+          toast({ title: add.length ? `${add.length} redirect(s) added from the recon` : 'Nothing to add', description: noTarget ? `${noTarget} candidate(s) have no target yet — decide those in the page plan.` : undefined });
+        }}>Add recon redirect candidates ({state.manifest.redirect_candidates.length})</Button>}
         <Button size="sm" variant="outline" className="h-auto min-h-9 max-w-full whitespace-normal text-left" onClick={() => { const add = redirectsFromPages(state.pages, state.redirects); if (!add.length) { toast({ title: 'Nothing to add', description: 'No consolidated / redirected page with an old URL and a destination is missing from the map.' }); return; } applyRedirects([redirectText.trim(), redirectsToText(add)].filter(Boolean).join('\n')); toast({ title: `${add.length} redirect(s) added from the page plan` }); }}>Add redirects from consolidated / redirected pages</Button>
       </div>
       <Textarea rows={10} className="font-mono text-xs" value={redirectText} placeholder={'/old-page -> /services/new-page/ | merged into the service page'} onChange={(e) => applyRedirects(e.target.value)} />

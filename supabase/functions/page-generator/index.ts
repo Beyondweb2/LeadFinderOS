@@ -895,12 +895,12 @@ Deno.serve(async (req) => {
     if (action === "plan") {
       let { data: storedPages, error: storedPagesError } = await service.from("client_pages")
         .select("id, job, topic, primary_question, rationale, winnability, score, score_reasons, status, published_url, wave, position")
-        .eq("user_id", user.id).eq("baseline_audit_id", audit.id)
+        .eq("user_id", userId).eq("baseline_audit_id", audit.id)
         .not("status", "in", "(removed,merged)").order("wave", { ascending: true }).order("position", { ascending: true });
       if (storedPagesError && /published_url/i.test(storedPagesError.message ?? "")) {
         ({ data: storedPages, error: storedPagesError } = await service.from("client_pages")
           .select("id, job, topic, primary_question, rationale, winnability, score, score_reasons, status, wave, position")
-          .eq("user_id", user.id).eq("baseline_audit_id", audit.id)
+          .eq("user_id", userId).eq("baseline_audit_id", audit.id)
           .not("status", "in", "(removed,merged)").order("wave", { ascending: true }).order("position", { ascending: true }));
       }
       return json({

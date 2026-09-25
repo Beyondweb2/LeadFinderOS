@@ -168,10 +168,10 @@ console.log('\n── STAGE PROMPTS ──');
   ok(/design a NEW architecture/.test(P(B, 'architecture').text) && /findable\.live typography/.test(P(B, 'architecture').text), 'architecture — bespoke designs new, with its references');
   ok(/design\.md/.test(P(F, 'capture').text) && /interactions\.md/.test(P(F, 'capture').text), 'capture — faithful captures design and interactions');
   ok(!/design\.md/.test(P(T, 'capture').text), 'capture — template skips the design capture');
-  ok(P(F, 'capture').text.includes('capture/manifest.json') && P(T, 'capture').text.includes('"assets": [{ "source_url"'), 'capture — asks for the Source Site Manifest in the shape this screen imports');
+  ok(P(F, 'capture').text.includes('capture/recon.json') && P(T, 'capture').text.includes('"reconVersion": 1'), 'capture — writes the recon result (Phase 2: one import format), in the shape Import Recon Result reads');
   const disc = P(B, 'capture', '');
   ok(/BUSINESS DISCOVERY/.test(disc.text) && /QUESTIONS FOR THE CLIENT/.test(disc.text) && disc.blockedBy.every((b) => !/website URL/.test(b)), 'capture — bespoke with no site is discovery, not blocked on a website');
-  ok(/Platform|platform/.test(P(F, 'recon').text) && /FAITHFUL rebuild hard/.test(P(F, 'recon').text) && /closest design references/.test(P(B, 'recon').text) && /fits/.test(P(T, 'recon').text), 'recon — asks different things per route');
+  ok(/Crawl the ENTIRE site/.test(P(F, 'recon').text) && /NOT AUTOMATICALLY THE TARGET DESIGN/.test(P(T, 'recon').text) && /BESPOKE \/ NEW TRADE \(existing site\)/.test(P(B, 'recon').text), 'recon — asks different things per route (Phase 2 detail in website-build-recon.test.ts)');
 
   const vc = P({ ...F, preview_url: 'https://preview.sc.pages.dev' }, 'visual_compare');
   ok(/SOURCE: https:\/\/www\.scplumbing\.co\.uk\//.test(vc.text) && /PREVIEW: https:\/\/preview\.sc\.pages\.dev/.test(vc.text), 'visual comparison — faithful: source vs preview');
@@ -192,7 +192,7 @@ console.log('\n── STAGE PROMPTS ──');
   const lean = P(T, 'build').text, master = masterPrompt(inputs(T)).text;
   ok(lean.length < master.length && !/wrangler pages deploy/.test(lean) && /Do not deploy/.test(lean), 'the Build prompt is the lean brief: no deployment, shorter than the V1 master');
   ok(/ARCHITECTURE[\s\S]*Verified services: Boiler repair/.test(P(T, 'architecture').text), 'architecture carries only the verified services it needs');
-  ok(P(T, 'qa').text.length < master.length && P(T, 'recon').text.length < 3000, 'QA and Recon do not repeat the whole handover');
+  ok(P(T, 'qa').text.length < master.length && P(T, 'recon').text.length < master.length && !/## D\. VERIFIED BUSINESS FACTS|## K\. SEO/.test(P(T, 'recon').text), 'QA and Recon do not repeat the whole build handover');
 
   /* ⛔ NEEDS APPROVAL is never presented as confirmed. The lead-row phone is DETECTED. */
   for (const p of prompts(T)) {
