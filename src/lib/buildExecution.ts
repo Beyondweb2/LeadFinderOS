@@ -105,6 +105,14 @@ export function configVersion(m: Mapping): string {
   return 'c' + h.toString(36);
 }
 
+/** The existing site and the new one live on the same domain (www ignored) — a rebuild in place, where
+ *  "the old domain" is also the canonical one and cannot be a forbidden value (BS4 pilot, 2026-09-25). */
+export function sameDomainRebuild(existingSiteUrl: string, canonicalDomain: string): boolean {
+  const host = (u: string) => { try { return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+  const a = host(existingSiteUrl || ''), b = host(canonicalDomain || '');
+  return !!a && a === b;
+}
+
 const expectedRemote = (s: WebsiteBuildState) => 'https://github.com/' + (s.github_owner || MARK.owner) + '/' + (s.repo_name || MARK.repo) + '.git';
 
 /* ── the Build Execution prompt ───────────────────────────────────────────────────────────────── */
@@ -122,6 +130,7 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
   const remote = expectedRemote(s);
   const { list: assets, held } = assetsToDownload(i, m);
   const sourcePaths = [...new Set(s.manifest.pages.map((p) => toPath(p.url)))].slice(0, 300);
+  const inPlace = sameDomainRebuild(i.existingSiteUrl, s.canonical_domain);
   const H = (x: string) => ['', '## ' + x, ''];
   const L: string[] = [
     masterPrompt(i, { lean: true, execution: true }).text,
@@ -155,6 +164,9 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
       '- AFTER building, search the WHOLE source (src, public, functions, astro.config.*, package.json, README) AND the built output (' + cfg.outputDir + '/) — whole words, case-insensitive — for every one of:',
       '    ' + t.leftoverNeedles.join(' · '),
       '- A hit is legitimate ONLY if that exact value is in the client config above. Every other hit: remove it and re-build. If any remain, DO NOT deploy the preview: status "needs_attention", qa.seedContaminationPassed false, list them in seedHits.',
+    ] : inPlace ? [
+      '- The old site and the new one share the domain ' + s.canonical_domain + ': canonicals, links and schema MUST use https://' + s.canonical_domain + ' — that is not a hit.',
+      '- Search the source and ' + cfg.outputDir + '/ instead for what the OLD PLATFORM leaves behind: any file hotlinked from the old site or its CDN, internal links to old-only paths (anything not built and not in the redirect map), copy lifted from the old site, and any placeholder or another business\'s details. Any hit blocks the preview (qa.seedContaminationPassed false, list in seedHits).',
     ] : [
       '- Search the source and ' + cfg.outputDir + '/ for the OLD domain' + (i.existingSiteUrl ? ' (' + i.existingSiteUrl + ')' : '') + ' in canonicals / links / schema and for any placeholder or another business\'s details. Any hit blocks the preview (qa.seedContaminationPassed false, list in seedHits).',
     ]),
@@ -180,7 +192,7 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- Confirm noindex: curl -sI https://preview.' + s.cloudflare_project + '.pages.dev/ must show an X-Robots-Tag noindex header. If it does not, do not call it preview_ready.',
     '- ⛔ Never deploy the production branch, never add a custom domain, never touch DNS. Linking the project to the GitHub repository (dashboard → Settings → Builds) is an operator step — list it in warnings, do not attempt it with guessed access.',
     ...H('X9. QA — before you say preview_ready'),
-    '- TECHNICAL: the production build passes; every internal link resolves; canonicals; sitemap; robots.txt; the 404 page; schema is valid JSON-LD matching the page; no accidental noindex in the production configuration; preview noindex confirmed; no broken assets; no old domain anywhere; seed scrub clean.',
+    '- TECHNICAL: the production build passes; every internal link resolves; canonicals; sitemap; robots.txt; the 404 page; schema is valid JSON-LD matching the page; no accidental noindex in the production configuration; preview noindex confirmed; no broken assets; ' + (inPlace ? 'no hotlinked old-site file anywhere' : 'no old domain anywhere') + '; seed scrub clean.',
     '- CONTENT: correct business name; phone and email consistent everywhere; selected services only; selected locations only; approved facts only; no placeholder copy; no unsupported proof.',
     '- RESPONSIVE (Playwright screenshots under qa/): 1440, 1024, 768, 390 and iPhone SE (375×667) — no horizontal overflow; navigation, hero, cards, CTAs, footer, floating controls, images and forms (fill, never submit) all correct.',
     '- Targeted checks on the built client site only — do not run large unrelated test suites.',
