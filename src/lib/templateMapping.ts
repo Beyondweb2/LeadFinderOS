@@ -27,7 +27,7 @@ import { PAGE_FAMILY_LABELS } from './websiteBuildState.ts';
 import type { ForbiddenSeedValue, TemplateAssetSlot, TemplateField, TemplateService, WebsiteTemplate } from './websiteTemplates.ts';
 import { CORE_BUILD_MODEL, seedValueIn } from './websiteTemplates.ts';
 import type { FactRow } from './buildFacts.ts';
-import { checkArchitecture, pathKey, toPath } from './buildArchitecture.ts';
+import { checkArchitecture, pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
 
 export type MapStatus = 'ready' | 'needs_approval' | 'missing' | 'omitted';
 export const MAP_STATUS_LABELS: Record<MapStatus, string> = { ready: 'Ready', needs_approval: 'Needs approval', missing: 'Missing', omitted: 'Left out' };
@@ -368,6 +368,7 @@ export interface UrlRow { url: string; path: string; family: PageFamily; decisio
  *  map. Read-only: it never writes a redirect. */
 export function urlDecisions(s: WebsiteBuildState): { rows: UrlRow[]; counts: Record<UrlDecision, number>; issues: string[] } {
   const redirects = new Map(s.redirects.map((r) => [pathKey(r.from), r]));
+  const coveredBy = redirectMatcher(s.redirects);
   const planByOld = new Map(s.pages.filter((p) => p.old_url).map((p) => [pathKey(p.old_url), p]));
   const livePaths = new Map(s.pages.filter((p) => (p.action === 'keep' || p.action === 'create') && p.path).map((p) => [pathKey(p.path), p]));
   const sources = new Map<string, { url: string; family: PageFamily }>();
@@ -376,7 +377,7 @@ export function urlDecisions(s: WebsiteBuildState): { rows: UrlRow[]; counts: Re
   const rows: UrlRow[] = [];
   for (const [key, src] of sources) {
     const flags: string[] = [];
-    const red = redirects.get(key);
+    const red = coveredBy(key);
     const plan = planByOld.get(key);
     let decision: UrlDecision = 'unresolved', target = '';
     if (red) { decision = 'redirected'; target = red.to; }
