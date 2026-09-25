@@ -499,11 +499,9 @@ export function useInbox() {
   }, [leads, audits, crawlByLeadId]);
 
   /* Lead ids ai_site_findings_v2's {{6}} has findings for — its own picker gate, and DELIBERATELY A
-     SECOND SET rather than a reuse of the one above. hasSiteFindings is strictly narrower: it
-     refuses a lead with no website and a lead whose site crawled clean, both of which
-     audit_followup_fault accepts and has a line for. Sharing one set would offer this template to
-     leads its own copy contradicts ("Had a proper look at your site as well" to somebody with no
-     site). hasSiteFindings is the SAME function the sender calls, so offer and send agree. */
+     SECOND SET rather than a reuse of the one above: hasSiteFindings refuses a lead with no website,
+     which audit_followup_fault accepts. A clean site qualifies (the clean-site {{6}}) only with the
+     SAME measured visibility gap audit-reply.ts passes the sender, so offer and send agree. */
   const hasSiteFindingsLeadIds = useMemo(() => {
     const s = new Set<string>();
     for (const l of leads) {
@@ -514,7 +512,8 @@ export function useInbox() {
         .filter((r) => RUN_USABLE.has(String(r.status)))
         .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
         .map((r) => ({ result: r.crawl_check, createdAtMs: r.crawl_check?.checked_at ? new Date(r.crawl_check.checked_at).getTime() : r.created_at ? new Date(r.created_at).getTime() : 0, complete: r.crawl_check?.status === 'complete' }));
-      if (hasSiteFindings(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null)) s.add(l.id);
+      const visibilityGap = auditShowsVisibilityGap(audit?.ai_audit_runs ?? []);
+      if (hasSiteFindings(hasWebsite, runSources, c ? { result: c.result, createdAtMs: new Date(c.created_at).getTime() } : null, visibilityGap)) s.add(l.id);
     }
     return s;
   }, [leads, audits, crawlByLeadId]);

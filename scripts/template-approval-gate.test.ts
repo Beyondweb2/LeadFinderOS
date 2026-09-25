@@ -28,29 +28,26 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
-/* Every variable the pending template declares, filled with a value that would otherwise pass — so
-   a refusal below can only be the APPROVAL gate, never a missing-variable hold wearing its clothes. */
+/* Every variable the templates below declare, filled with a value that passes — so a refusal below
+   can only be the APPROVAL gate, never a missing-variable hold wearing its clothes. */
 const FULL = {
   trade: 'locksmith', town: 'Wisbech', rivals: ['A1 Locks', 'Fenland Security', 'Key Masters'],
   competitors: 'A1 Locks, Fenland Security and Key Masters', auditUrl: 'https://findable.live/r/abc123',
   siteFault: 'x', siteFindings: 'One thing that stood out is your sitemap is pointing at a different web address. It can give conflicting information.',
 };
 
-console.log('── 1. THE SWITCH IS STILL OFF ──');
-ok(AI_SITE_FINDINGS_V2_APPROVED === false, 'AI_SITE_FINDINGS_V2_APPROVED is false');
-ok(AI_SITE_FINDINGS_V2 in WA_TEMPLATES, 'the template IS registered — which is exactly why registration cannot be the gate');
+console.log('── 1. THE SWITCH IS ON — APPROVED AT META 2026-09-25 ──');
+ok(AI_SITE_FINDINGS_V2_APPROVED === true, 'AI_SITE_FINDINGS_V2_APPROVED is true');
+ok(AI_SITE_FINDINGS_V2 in WA_TEMPLATES, 'the template IS registered');
 
-console.log('── 2. THE ONE DOOR REFUSES IT ──');
-ok(templateAwaitingApproval(AI_SITE_FINDINGS_V2) === true, 'the pending template is awaiting approval');
-let threw = '';
+console.log('── 2. THE ONE DOOR NOW BUILDS IT ──');
+ok(templateAwaitingApproval(AI_SITE_FINDINGS_V2) === false, 'the approved template is no longer awaiting approval');
+let built: unknown = null;
 try {
-  claimTemplatePayload(AI_SITE_FINDINGS_V2, WA_TEMPLATES[AI_SITE_FINDINGS_V2].lang, 'MC Locksmiths', '', FULL);
-} catch (e) { threw = (e as Error).message; }
-ok(threw.length > 0, 'building its payload THROWS, even with every variable supplied');
-/* ⚠️ THE PREFIX IS THE CONTRACT. Every sender already catches `unsafe_template_var:` and turns it into
-   a visible hold with its reason — so this refusal reaches the operator as a sentence, not a crash. */
-ok(threw.startsWith('unsafe_template_var:template_not_approved:'),
-  `…with the prefix every sender already turns into a readable hold (got "${threw.slice(0, 60)}")`);
+  built = claimTemplatePayload(AI_SITE_FINDINGS_V2, WA_TEMPLATES[AI_SITE_FINDINGS_V2].lang, 'MC Locksmiths', '', FULL);
+} catch (e) { built = (e as Error).message; }
+ok(typeof built === 'object' && built !== null && (built as { type?: string }).type === 'template',
+  `its payload builds (got ${typeof built === 'string' ? built : 'a payload'})`);
 
 console.log('── 3. NOTHING ELSE IS TOUCHED ──');
 /* 🔴 THE REGRESSION THAT WOULD MATTER MOST. Every live template must build exactly as it did. */

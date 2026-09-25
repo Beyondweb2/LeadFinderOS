@@ -287,15 +287,12 @@ const TEMPLATES: Record<string, { lang: string; vars: TemplateVar[] }> = {
      audit_followup / audit_followup_call). Present here for byte-identity with WA_TEMPLATES, which
      re-engage-vars asserts in both directions. {{6}} is fail-closed on the send side. */
   audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
-  /* ai_site_findings_v2 - submitted to Meta 2026-09-22. MIRRORS whatsapp-send.ts; change both
-     together. audit_followup_fault's successor with the SAME seven vars in the SAME order; the only
-     difference is that {{6}} carries two or three plain-English site findings instead of one report
-     sentence. Inbox only - a CONTINUATION, and although it DOES carry audit_url the queue still
-     never selects it (same as audit_followup_fault above). Present here for byte-identity with
-     WA_TEMPLATES, which re-engage-vars asserts in both directions.
-     ⛔ Gated OFF by AI_SITE_FINDINGS_V2_APPROVED until Meta approves it; being listed here cannot
-     send it. {{6}} is fail-closed on the send side. */
-  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings", "audit_url"] },
+  /* ai_site_findings_v2 - APPROVED BY META 2026-09-25 (the edited body). MIRRORS whatsapp-send.ts;
+     change both together. SIX vars: {{1}} trade with article, {{2}} town, {{3}} {{4}} {{5}} rivals,
+     {{6}} site findings. NO audit_url and no {{7}}: the approved body carries no report link.
+     Inbox only - a CONTINUATION. Present here for byte-identity with WA_TEMPLATES, which
+     re-engage-vars asserts in both directions. {{6}} is fail-closed on the send side. */
+  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings"] },
   /* explain_offer - submitted to Meta 2026-09-15. MIRRORS whatsapp-send.ts; change both together.
      {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} the lead's onboarding link.
      Inbox only - it is a CONTINUATION and carries no audit_url, so this queue never selects it.
