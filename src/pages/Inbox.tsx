@@ -1635,7 +1635,7 @@ const Inbox = () => {
                   )}
                   {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                   <span className="truncate">{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
-                  {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" title="Interested" />}
+                  {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                 </span>
                 {c.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relTime(c.lastMessageAt)}</span>}
               </div>
@@ -1675,7 +1675,7 @@ const Inbox = () => {
                 <div className="min-w-0">
                   <p className="flex items-center gap-1 truncate text-sm font-semibold">
                     <span className="truncate">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</span>
-                    {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" title="Interested" />}
+                    {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                   </p>
                   {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
                       second copy. `active` IS the list's own conversation object (conversations.find
