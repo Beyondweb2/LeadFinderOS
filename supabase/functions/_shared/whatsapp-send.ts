@@ -188,32 +188,21 @@ export const WA_TEMPLATES: Record<string, { lang: string; vars: TemplateVar[]; h
      lead's crawl check (resolveAuditReplyVars.siteFault), so it lives beside the rivals it ships
      with. No header, no buttons. MIRRORS process-whatsapp-queue; change both together. */
   audit_followup_fault: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_fault", "audit_url"] },
-  /* ai_site_findings_v2 — SUBMITTED TO META 2026-09-22. audit_followup_fault's successor, and the
-     ONLY difference is what {{6}} says: two or three site findings in plain English instead of one
-     sentence lifted out of the report's fault list. Registered here before approval for the same
-     reason free_check_result and audit_followup were — an absent name fails `unknown_template` in
-     OUR code, so the registry must be complete before the switch can mean anything.
-     ⛔ SEVEN VARS, THE SAME SHAPE AND ORDER AS audit_followup_fault, taken from the body Paul
-     submitted: {{1}} trade WITH ITS OWN ARTICLE ("a locksmith" — the registered text reads "looking
-     for {{1}} in {{2}}" with no article, so the value supplies it), {{2}} town, {{3}} {{4}} {{5}}
-     three rivals, {{6}} the site findings, {{7}} the SHORT report URL.
-     ⛔ IT IS GATED OFF BY AI_SITE_FINDINGS_V2_APPROVED (src/lib/siteFindings.ts), not by being
-     absent from this map. Listing it here cannot send it: the picker refuses it and
-     getTemplateSendability refuses it while that constant is false.
-     ⛔ {{6}} CANNOT BE EMPTY — Meta rejects a blank parameter and the whole send dies — so it is
-     only OFFERED when the lead has a website AND the crawl found a STRONG fault, and the send FAILS
-     CLOSED if it somehow arrives without one (the site_findings case below throws
-     unsafe_template_var), exactly as site_fault does.
-     ⛔ STRICTER THAN audit_followup_fault ON TWO LEADS, AND THE REGISTERED COPY IS WHY: it says
-     "Had a proper look at your site as well", so a lead with NO WEBSITE is refused (that message
-     would be an obvious lie) and a CLEAN site is refused (the copy has already asserted the site is
-     the problem). Both of those still get audit_followup_fault, whose own {{6}} has a line for them.
-     That template is untouched by this one.
-     ⛔ audit_url makes it needsAudit AND carries the report link ({{7}}); rival_1..3 make it
-     templateNeedsRivals, so a lead short of three rivals HOLDS (it is a CONTINUATION, no cold
-     fallback) exactly like audit_followup_fault. No header, no buttons. MIRRORS
-     process-whatsapp-queue; change both together. */
-  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings", "audit_url"] },
+  /* ai_site_findings_v2 — APPROVED BY META 2026-09-25 in its EDITED form (first submitted 2026-09-22
+     with seven vars and a report link). {{6}} is the site findings in plain English (siteFindings.ts).
+     ⛔ SIX VARS, EXACTLY, IN THIS ORDER: {{1}} trade WITH ITS OWN ARTICLE ("a locksmith" — the
+     registered text reads "looking for {{1}} in {{2}}" with no article), {{2}} town, {{3}} {{4}} {{5}}
+     three rivals, {{6}} the site findings. THERE IS NO {{7}} AND NO REPORT LINK — the approved body
+     carries none; the report stays on the audit (ai_audits.short_code) to send as proof after they
+     reply. Adding audit_url back would send a seventh parameter and Meta rejects the whole send.
+     ⛔ {{6}} CANNOT BE EMPTY — Meta rejects a blank parameter — so it is only OFFERED when
+     resolveSiteFindings has a value (real findings, or the clean-site line with a measured gap), and
+     the send FAILS CLOSED without one (the site_findings case below throws unsafe_template_var).
+     ⛔ A lead with NO WEBSITE is still refused; audit_followup_fault handles that lead.
+     ⛔ rival_1..3 route it to the audit branch (templateRouting) and make it templateNeedsRivals, so a
+     lead short of three rivals HOLDS (a CONTINUATION, no cold fallback). No header, no buttons.
+     MIRRORS process-whatsapp-queue; change both together. */
+  ai_site_findings_v2: { lang: "en", vars: ["trade_article", "town", "rival_1", "rival_2", "rival_3", "site_findings"] },
   /* explain_offer — SUBMITTED TO META 2026-09-15. The full pitch: what we do, both figures, the
      guarantee, and the sign-up link, over the SAME video header video_template carries.
      THREE vars: {{1}} trade as a LOWERCASE PLURAL, {{2}} town, {{3}} onboarding link.
@@ -674,27 +663,28 @@ Happy to explain more here or jump on a quick call if you'd rather
 Paul✌️`;
 };
 
-/* ai_site_findings_v2 — SUBMITTED TO META 2026-09-22. audit_followup_fault's successor. Seven vars
-   in the SAME order: {{1}} trade WITH ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals,
-   {{6}} the site findings, {{7}} report link.
-   ⛔ "i" IS LOWERCASE in two places and "ahead of you - your site" uses a HYPHEN, not a dash. Both
-   are Paul's submitted wording and therefore Meta's registered text. Do not tidy either.
-   ⚠️ DISPLAY ONLY, exactly as its sibling above: rivals degrade to "other firms" and {{6}} to a
-   generic line when nothing is threaded here. What the prospect received is on Meta's side.
+/* ai_site_findings_v2 — APPROVED BY META 2026-09-25 (the edited body). SIX vars: {{1}} trade WITH
+   ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} the site findings. NO report link —
+   the claim/report URL argument is deliberately unused.
+   ⛔ "i" IS LOWERCASE twice — Paul's approved wording and Meta's registered text. Do not tidy it.
+   ⚠️ DISPLAY ONLY, exactly as its sibling above: rivals degrade to "other firms" when nothing is
+   threaded here. What the prospect received is on Meta's side.
    MIRRORED in src/lib/templateBodies.ts; template-bodies-parity asserts identical output. */
-const aiSiteFindingsV2Body = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
+const aiSiteFindingsV2Body = (_b: string, _u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
   const t = articleTrade(trade);
-  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || "a local business")} in ${town || "your area"} so i asked AI and it mentioned ${competitors || "other firms"}
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || "a local business")} in ${town || "your area"} so i asked AI and it mentioned
 
-Had a proper look at your site as well.
+${competitors || "other firms"}
+
+Your AI visibility is low, so you're likely missing customers using AI to find businesses like yours.
+
+I checked what AI is seeing:
 
 ${siteFindings ?? ""}
 
-That's probably part of why the other businesses are getting picked ahead of you - your site is giving AI less clear information to work with than theirs.
+That's likely why the other businesses are getting picked ahead of you.
 
-I've put the actual results here: ${u}
-
-Happy to explain what I'd change here if you want.
+Happy to explain what I'd change here or jump on a quick call.
 
 Paul✌️`;
 };
@@ -791,7 +781,7 @@ export function renderTemplateBody(templateName: string, businessName: string, c
     throw new Error("unsafe_template_var:no_site_fault:the crawl check found no fault to name — use the call version");
   }
   /* ai_site_findings_v2 refuses for the same reason its sibling does: the stored transcript must not
-     say "Had a proper look at your site as well" followed by a blank. Throwing here keeps the stored
+     say "I checked what AI is seeing:" followed by a blank. Throwing here keeps the stored
      body and the Meta parameter failing together rather than one of them silently writing a hole. */
   if (templateName === "ai_site_findings_v2" && !siteFindings?.trim()) {
     throw new Error("unsafe_template_var:no_site_findings:the crawl check found nothing strong enough to name — use audit_followup_call");

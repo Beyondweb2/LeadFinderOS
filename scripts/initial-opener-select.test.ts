@@ -94,7 +94,9 @@ console.log('\n── 8. ONE RULE: OUTREACH, THE PER-LEAD PICKER AND THE INBOX �
   const sender = read('supabase/functions/send-whatsapp-message/index.ts');
   ok(/const notSelected = await openerRefusal\(service, templateName\);\n\s+if \(notSelected\) return json\(\{ ok: false, error: "opener_not_selected"/.test(sender), '8. send-whatsapp-message refuses a non-selected opener on the server');
   ok(sender.indexOf('openerRefusal(service, templateName)') < sender.lastIndexOf('sendViaGraph(') && sender.indexOf('openerRefusal(service, templateName)') < sender.indexOf('mode: "dry_run",'), '8. …before the prospect send reaches Meta, and before the dry-run return (a preview reports it too)');
-  ok(/BUILD_ID = "2026-09-23b"/.test(sender) && /"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
+  /* A later build (2026-09-25a, ai_site_findings_v2 approved) supersedes 23b; what matters is that
+     the marker is at or after the build that shipped this refusal, and names the capability. */
+  ok((sender.match(/BUILD_ID = "(\d{4}-\d{2}-\d{2}[a-z])"/)?.[1] ?? '') >= '2026-09-23b' && /"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
   ok(getTemplateSendability(INITIAL_OPENER_A, { shareToken: null }, {}, { selectedOpener: 'initial_contact' }).ok, '8. selected original → sendable');
   ok(!getTemplateSendability(INITIAL_OPENER_B, { shareToken: null }, {}, { selectedOpener: 'initial_contact' }).ok, '8. unselected v2 → refused');
   ok(getTemplateSendability('audit_reply', { shareToken: null }, { reportSlug: 'x' }, {}).ok, '8. a non-opener ignores the rule entirely');
