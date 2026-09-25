@@ -631,6 +631,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
 | Warm reply drafter (Inbox) | `src/lib/warmLeadResearch.ts`, `src/lib/warmReply.ts`, `src/lib/serviceWindow.ts`, `src/components/WarmReplyAssistant.tsx`, fn `warm-lead-reply`, table `warm_lead_research` (`docs/warm-lead-reply.md`). ⛔ It drafts into the composer and NEVER sends; a model finding survives only if its quote is on the page |
 | Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
+| Prospect Preview (outreach homepage + evidence card, never sends; NOT a Website Build) | `src/lib/prospectPreview/`, fn `prospect-preview`, `_shared/prospect-preview-shot.ts`, `src/components/ProspectPreviewPanel.tsx`, table `prospect_previews` + private bucket `prospect-previews` (`docs/prospect-preview.md`) |
 | Mockup product (live) | fn `mockup`, `_shared/mockup-*.ts`, `src/pages/Mockups.tsx`, `src/mockup/templates/`, table `generated_sites`, bucket `mockup-assets` |
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |

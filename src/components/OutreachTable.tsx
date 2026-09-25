@@ -2494,7 +2494,7 @@ export function OutreachTable({
                             </Badge>
                           )}
                           {lead.is_potential_work && (
-                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" title="Interested" />
+                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0"><title>Interested</title></Star>
                           )}
                           {!!lead.notes && lead.notes.trim().length > 0 && (
                             <span title="Has a note" className="inline-flex flex-shrink-0">
