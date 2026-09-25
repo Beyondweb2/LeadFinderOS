@@ -36,6 +36,27 @@ export function pathKey(raw: string): string {
 }
 const isExternal = (to: string) => /^https?:\/\//i.test(to.trim());
 
+/**
+ * The redirect rule that covers an old path: an exact rule first, else the longest "/prefix/*"
+ * splat (Cloudflare Pages _redirects syntax) the path sits under. Without this a doorway site
+ * whose clones are redirected by pattern (BS4: 1,460 service/problem × town URLs, 2026-09-25)
+ * reads as hundreds of UNRESOLVED URLs that are in fact covered.
+ */
+export function redirectMatcher<R extends { from: string }>(rules: readonly R[]): (raw: string) => R | undefined {
+  const exact = new Map<string, R>();
+  const splats: Array<{ prefix: string; rule: R }> = [];
+  for (const r of rules) {
+    const from = toPath(r.from);
+    if (/\/\*$/.test(from)) splats.push({ prefix: pathKey(from.slice(0, -2)), rule: r });
+    else if (!exact.has(pathKey(from))) exact.set(pathKey(from), r);
+  }
+  splats.sort((a, b) => b.prefix.length - a.prefix.length);
+  return (raw: string) => {
+    const key = pathKey(raw);
+    return exact.get(key) ?? splats.find((s) => key.startsWith(s.prefix === '/' ? '/' : s.prefix + '/'))?.rule;
+  };
+}
+
 let counter = 0;
 export const newPageId = () => `p${Date.now().toString(36)}${(counter++).toString(36)}`;
 

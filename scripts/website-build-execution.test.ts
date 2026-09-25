@@ -19,7 +19,8 @@ import { MCL_TEMPLATE, templateById } from '../src/lib/websiteTemplates.ts';
 import { candidateFacts, mergeFacts, type FactsContext } from '../src/lib/buildFacts.ts';
 import { stagePrompts } from '../src/lib/stagePrompts.ts';
 import { applyRecon, parseReconText, type ReconResult } from '../src/lib/recon.ts';
-import { autoAssign, computeMapping } from '../src/lib/templateMapping.ts';
+import { autoAssign, computeMapping, urlDecisions } from '../src/lib/templateMapping.ts';
+import { redirectMatcher } from '../src/lib/buildArchitecture.ts';
 import { applyBuildResult, builtCoverage, configVersion, executionPrompt, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResult } from '../src/lib/buildExecution.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 
@@ -213,6 +214,28 @@ console.log('\n── P. OLD URL COVERAGE ON THE REAL BUILD ──');
   const unres = importInto({ ...s, pages: s.pages.slice(0, 1) }, OK_RESULT).state;
   ok(builtCoverage(unres).rows.find((x) => x.path === '/old-offers/')!.decision === 'unresolved', 'UNRESOLVED = not built, not redirected, not retired');
   ok(JSON.stringify(b.redirects) === JSON.stringify(s.redirects), 'coverage never changes the redirect map');
+}
+
+console.log('\n── P2. PATTERN (SPLAT) REDIRECTS COVER A DOORWAY FAMILY ──');
+{
+  const m = redirectMatcher([{ from: '/eicrs-locations/*', to: '/eicrs/' }, { from: '/sub-services/*', to: '/' }, { from: '/sub-services/rcbo-upgrades/*', to: '/consumer-unit-upgrade/' }, { from: '/eicrs-locations/bath', to: '/bath-special/' }]);
+  ok(m('/eicrs-locations/yate')?.to === '/eicrs/' && m(SITE + 'eicrs-locations/yate/')?.to === '/eicrs/', 'a URL under /prefix/* is covered, full URL or path, with or without a trailing slash');
+  ok(m('/eicrs-locations/bath')?.to === '/bath-special/', 'an exact rule wins over a splat');
+  ok(m('/sub-services/rcbo-upgrades/bristol')?.to === '/consumer-unit-upgrade/', 'the longest matching prefix wins');
+  ok(!m('/eicrs-locations') && !m('/eicrs-locations-old/yate') && !m('/eicrs'), 'the prefix itself and look-alike paths are NOT covered');
+  ok(m('/sub-services/burning-smells-%26-sparks/bath')?.to === '/', 'encoded characters match as the manifest stores them');
+
+  const pages = ['eicrs-locations/yate', 'eicrs-locations/bath', 'mystery/page'].map((x) => ({ url: SITE + x, type: 'location' as const, title: '', h1: '', purpose: '', screenshots: [], status_code: null, sections: [] }));
+  const s = { ...ready(), manifest: { ...ready().manifest, pages: [...ready().manifest.pages, ...pages] },
+    redirects: [{ from: '/eicrs-locations/*', to: '/contact/', reason: 'town clones → the one page' }] };
+  const d = urlDecisions(s);
+  const row = (p: string) => d.rows.find((x) => x.path === p)!;
+  ok(row('/eicrs-locations/yate').decision === 'redirected' && row('/eicrs-locations/yate').target === '/contact/', 'the decision view counts a splat-covered URL as REDIRECTED');
+  ok(row('/mystery/page').decision === 'unresolved', 'a URL no rule covers stays UNRESOLVED');
+  const c = builtCoverage(importInto(s, OK_RESULT).state);
+  const cr = (p: string) => c.rows.find((x) => x.path === p)!;
+  ok(cr('/eicrs-locations/bath').decision === 'redirected' && !cr('/eicrs-locations/bath').flags.includes('redirect target does not exist in the build'), 'real-build coverage counts it REDIRECTED to a built page');
+  ok(cr('/mystery/page').decision === 'unresolved', 'real-build coverage keeps an uncovered URL UNRESOLVED');
 }
 
 console.log('\n── V. RETRY (DELTA ONLY) ──');

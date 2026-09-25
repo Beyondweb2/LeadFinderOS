@@ -28,7 +28,7 @@ import { cloudflareProblem, codeConfig, isBespokeRoute, isFaithfulRoute, isTempl
 import { computeMapping, type Mapping } from './templateMapping.ts';
 import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
-import { pathKey, toPath } from './buildArchitecture.ts';
+import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
 
 /* ── assets to download (shared with the standalone Asset Download prompt) ──────────────────── */
 
@@ -344,6 +344,7 @@ export function builtCoverage(s: WebsiteBuildState): { rows: CoverageRow[]; coun
   const counts = { kept: 0, redirected: 0, retired: 0, unresolved: 0 } as Record<CoverageDecision, number>;
   if (!built.size) return { rows: [], counts, assessed: false };
   const red = new Map(s.redirects.map((r) => [pathKey(r.from), r]));
+  const coveredBy = redirectMatcher(s.redirects);
   const removed = new Set(s.pages.filter((p) => p.action === 'remove' && p.old_url).map((p) => pathKey(p.old_url)));
   const rows: CoverageRow[] = [];
   const seen = new Set<string>();
@@ -353,7 +354,7 @@ export function builtCoverage(s: WebsiteBuildState): { rows: CoverageRow[]; coun
     seen.add(key);
     const flags: string[] = [];
     let decision: CoverageDecision = 'unresolved', target = '';
-    const r = red.get(key);
+    const r = coveredBy(key);
     if (built.has(key)) { decision = 'kept'; if (r) flags.push('also redirected — the redirect would hide the built page'); }
     else if (r) {
       decision = 'redirected'; target = r.to;
