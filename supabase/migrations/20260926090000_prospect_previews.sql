@@ -31,6 +31,8 @@ create table if not exists public.prospect_previews (
   facts jsonb,
   notes jsonb,
   message text,
+  -- What to send: {send: 'card_and_homepage' | 'card_only', why, weaknesses[]}. Guidance, never a gate.
+  recommendation jsonb,
   asset_paths jsonb not null default '{}'::jsonb,
   timings jsonb,
   generated_at timestamptz,
@@ -39,6 +41,8 @@ create table if not exists public.prospect_previews (
   constraint prospect_previews_status_check check (status in
     ('not_generated', 'gathering', 'selecting_template', 'building', 'rendering', 'ready', 'failed'))
 );
+
+alter table public.prospect_previews add column if not exists recommendation jsonb;
 
 alter table public.prospect_previews enable row level security;
 revoke all on table public.prospect_previews from anon, authenticated;

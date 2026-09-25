@@ -31,9 +31,10 @@ const enginesText = (e: string[]) => (e.length <= 1 ? e[0] ?? 'AI' : `${e.slice(
 
 export function buildCardCopy(h: ProspectHeadline, sel: FindingSelection, businessName: string, hasWebsite: boolean): CardCopy {
   const issues = sel.primary ? [sel.primary.line, ...sel.secondary.map((s) => s.line)] : [];
-  const notNamed = h.prospectNamed
-    ? `${enginesText(h.engines)} didn’t name ${businessName}.`
-    : `${businessName} wasn’t named.`;
+  // ⛔ Always the ENGINE, never "AI" as a whole: the headline is one engine's answer, and another
+  // engine may well have named them (Paul, 2026-09-26: "Gemini didn't name E.E.S", not "AI doesn't").
+  const engine = enginesText(h.engines);
+  const notNamed = `${engine} didn’t name ${businessName}.`;
   let bridgeLine: string;
   let checkedLabel = 'We checked your current site';
   if (!hasWebsite) {
@@ -42,18 +43,18 @@ export function buildCardCopy(h: ProspectHeadline, sel: FindingSelection, busine
   } else if (issues.length) {
     bridgeLine = issues.length > 1 ? 'These issues may be contributing to the visibility gap.' : 'This may be contributing to the visibility gap.';
   } else if (sel.fallbackReason?.startsWith('The site was read')) {
-    bridgeLine = 'The site is technically accessible, but AI is still naming other businesses for these searches. The new concept makes your services, areas and evidence much clearer.';
+    bridgeLine = `The site is technically accessible, but ${engine} still named other businesses for this search. The new concept makes your services, areas and evidence much clearer.`;
   } else if (sel.fallbackReason?.startsWith('The current site could not be read')) {
     // We did not read it, so we compare it to nothing.
-    bridgeLine = 'AI named other businesses for this search. The new concept sets out your services, areas and evidence clearly.';
+    bridgeLine = `${engine} named other businesses for this search. The new concept sets out your services, areas and evidence clearly.`;
   } else {
-    bridgeLine = 'AI is consistently naming other businesses for these searches. The new concept makes your services, areas and evidence much clearer.';
+    bridgeLine = `${engine} named other businesses for this search. The new concept makes your services, areas and evidence much clearer.`;
   }
   return {
     askedLabel: 'We asked AI',
     question: h.question,
     engineLine: `Asked on ${enginesText(h.engines)}`,
-    recommendedLabel: 'AI recommended',
+    recommendedLabel: `${engine} recommended`,
     competitors: h.competitors.slice(0, 3),
     notNamedLine: notNamed,
     checkedLabel,

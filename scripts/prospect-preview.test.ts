@@ -7,7 +7,8 @@ import { withShotCap, pngDimensions, shotWithinCap, SHOTS } from '../src/lib/pro
 import { pickOrdinaryAudit, siteDownFinding } from '../src/lib/prospectPreview/gather.ts';
 import type { FactsInput } from '../src/lib/prospectPreview/facts.ts';
 import { buildProspectConfig, areasFromText, cleanServices, yearsTradingClaims, sentencesOf } from '../src/lib/prospectPreview/facts.ts';
-import { selectFindings, pickHeadline, previewEligibility, cardLine } from '../src/lib/prospectPreview/findings.ts';
+import { selectFindings, pickHeadline, previewEligibility, cardLine, engineGap } from '../src/lib/prospectPreview/findings.ts';
+import { outreachRecommendation } from '../src/lib/prospectPreview/recommendation.ts';
 import { copyProblems, suggestedMessage, buildCardCopy } from '../src/lib/prospectPreview/copy.ts';
 import { extractPageFacts } from '../src/lib/warmLeadResearch.ts';
 import { scanContamination } from '../src/lib/prospectPreview/contamination.ts';
@@ -44,7 +45,8 @@ const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) => {
     ok(p.selection.secondary.length === 2, 'A: two secondary findings');
     ok(!p.selection.secondary.some((s) => /meta description/i.test(s.line)), 'A: a missing meta description never makes the card');
     ok(p.card.competitors.join('|') === 'Addlestone Electricians|Pennington’s Electrical|Helsdown Electrical Contractors Ltd', 'A: card names the three audit competitors, in order');
-    ok(p.card.notNamedLine === 'E.E.S Electrical wasn’t named.', 'A: card says the prospect was not named');
+    ok(p.card.notNamedLine === 'ChatGPT didn’t name E.E.S Electrical.', 'A: card names the ENGINE that did not name the prospect');
+    ok(p.card.recommendedLabel === 'ChatGPT recommended', 'A: the recommended list is labelled with the engine, not "AI"');
     ok(/may be contributing/.test(p.card.bridgeLine), 'A: link between result and issues is hedged');
     ok(copyProblems([p.card.bridgeLine, p.card.rebuiltLine, ...p.card.issues].join(' ')).length === 0, 'A: card copy passes the claim check');
     const card = buildCardHtml(p, null);
@@ -78,7 +80,7 @@ const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) => {
 {
   const g = gen({ research: eesResearch('clean') });
   ok(g.ok && g.preview.selection.fallback && g.preview.card.issues.length === 0, 'C: clean site → no issues listed (nothing invented)');
-  ok(g.ok && /technically accessible, but AI is still naming other businesses/.test(g.preview.card.bridgeLine), 'C: truthful no-issue hook');
+  ok(g.ok && /technically accessible, but ChatGPT still named other businesses/.test(g.preview.card.bridgeLine), 'C: truthful no-issue hook');
   ok(g.ok && !/found a few issues/.test(g.preview.message), 'C: message does not claim issues were found');
   const none = gen({ research: null });
   ok(none.ok && none.preview.selection.fallback && none.preview.card.issues.length === 0, 'C: unreadable site → no claim about the site');
@@ -325,6 +327,56 @@ ok(suggestedMessage(eesHeadline(), selectFindings(eesResearch('strong')), false)
   const half = { ...eesHeadline(), namedDatapoints: 1, totalDatapoints: 2, prospectNamed: true, engines: ['Gemini'] };
   ok(previewEligibility({ headline: half, auditComplete: true, hasWebsite: true, hasPhoneOrEmail: true, hasTown: true }).eligible, 'real: named 1 of 2 still qualifies');
   ok(buildCardCopy(half, selectFindings(eesResearch('strong')), 'E.E.S Electrical Services', true).notNamedLine === 'Gemini didn’t name E.E.S Electrical Services.', 'real: …and the card names the engine that missed them');
+}
+
+/* ── partial engine gap (Paul, 2026-09-26) ── */
+{
+  const h = eesHeadline();
+  const el = (perEngine: Array<{ label: string; named: number; total: number }>) =>
+    previewEligibility({ headline: { ...h, perEngine }, auditComplete: true, hasWebsite: true, hasPhoneOrEmail: true, hasTown: true });
+  ok(el([{ label: 'ChatGPT', named: 3, total: 3 }, { label: 'Gemini', named: 0, total: 3 }]).eligible, 'gap: ChatGPT 3/3, Gemini 0/3 qualifies');
+  // Overall 4 of 6 — the old overall-share rule refused this; per engine Gemini still missed them 2 of 3.
+  ok(el([{ label: 'ChatGPT', named: 3, total: 3 }, { label: 'Gemini', named: 1, total: 3 }]).eligible, 'gap: ChatGPT 3/3, Gemini 1/3 qualifies (4 of 6 overall)');
+  ok(!el([{ label: 'ChatGPT', named: 3, total: 3 }, { label: 'Gemini', named: 2, total: 3 }]).eligible, 'gap: named on most answers on EVERY engine → no preview');
+  ok(!el([{ label: 'ChatGPT', named: 3, total: 3 }, { label: 'Gemini', named: 3, total: 3 }]).eligible, 'gap: named everywhere → no preview');
+  const partial = el([{ label: 'ChatGPT', named: 3, total: 3 }, { label: 'Gemini', named: 0, total: 3 }]);
+  ok(partial.eligible && partial.notes.some((n) => /Engine-specific gap: ChatGPT named them in 3 of 3; Gemini named them in 0 of 3/.test(n)), 'gap: the operator note states the measured split');
+  ok(engineGap({ ...h, perEngine: [{ label: 'ChatGPT', named: 0, total: 3 }, { label: 'Gemini', named: 0, total: 3 }] }).kind === 'all', 'gap: missed on every engine = all');
+  ok(engineGap({ ...h, perEngine: undefined, namedDatapoints: 5, totalDatapoints: 6 }).kind === 'none', 'gap: no per-engine rows → overall share decides');
+  ok(engineGap({ ...h, perEngine: [{ label: 'ChatGPT', named: 0, total: 0 }], namedDatapoints: 0, totalDatapoints: 6 }).kind === 'all', 'gap: an engine that never answered is ignored');
+  const gem = { ...h, engines: ['Gemini'], prospectNamed: true };
+  for (const kind of ['strong', 'clean'] as const) {
+    const c = buildCardCopy(gem, selectFindings(eesResearch(kind)), 'E.E.S Electrical Services', true);
+    const words = [c.notNamedLine, c.recommendedLabel, c.bridgeLine].join(' ');
+    ok(!/AI (?:is|doesn|didn|named|recommended|still)/.test(words) && /Gemini/.test(c.notNamedLine), `gap: ${kind} card never says "AI" missed them — it names Gemini`);
+  }
+  const unread = buildCardCopy(gem, selectFindings(null), 'X', true);
+  ok(/^Gemini named other businesses/.test(unread.bridgeLine) && !/consistently/.test(unread.bridgeLine), 'gap: fallback wording names the engine and drops "consistently"');
+}
+
+/* ── card-only recommendation (Paul, 2026-09-26) ── */
+{
+  // Strong: services with their own descriptions, logo + colours, photos, proof.
+  const strong = gen({ facts: eesFacts({ photos: true }) });
+  ok(strong.ok && strong.preview.recommendation.send === 'card_and_homepage', 'rec: real services + brand + photos → card + homepage');
+  // JOLT shape: site down, no services, no brand, no photos.
+  const joltFacts: FactsInput = { ...eesFacts({ logo: false }), siteInfo: { email: null, phone: null, address: null, openingHours: null, services: [], towns: [] },
+    pages: [{ url: 'https://www.ees-electrical.example/', ok: false, text: 'Not found', metaDescription: null, title: 'Not found' }],
+    brand: { logoUrl: null, logoWarning: null, primary: null, accent: null, colourSource: 'fixture', photos: [] } };
+  const down = selectFindings({ status: 'complete', technicallyClean: false, strongestFindings: [{ ...FINDING_CRAWLER_BLOCKED, id: 'rule:site_down_not_found', kind: 'other', strength: 5 }] });
+  const jp = planPreview(joltFacts);
+  ok(jp.ok, 'rec: the JOLT shape still plans (the homepage is still built)');
+  if (jp.ok) {
+    const html = jp.template.render(jp.config, { year: 2026 });
+    const r = outreachRecommendation({ config: jp.config, selection: down, homepageHtml: html });
+    ok(r.send === 'card_only', 'rec: site down + no business content → card only');
+    ok(r.weaknesses.length >= 2 && !/error|fail/i.test(r.why), 'rec: reasons listed, worded as guidance not an error');
+  }
+  // No services but otherwise fine → card only with the service sentence.
+  const noSvc = gen({ facts: { ...eesFacts({ photos: true }), siteInfo: { ...eesFacts().siteInfo!, services: [] }, pages: [{ url: 'https://www.ees-electrical.example/', ok: true, text: 'E.E.S Electrical is based in Addlestone. Call 01632 960123.', metaDescription: null, title: 'Home' }] } });
+  ok(noSvc.ok && noSvc.preview.recommendation.send === 'card_only' && noSvc.preview.recommendation.why === 'Homepage preview is missing reliable service content.', 'rec: no reliable services → card only, and says why');
+  // Not a gate: the homepage is still produced on a card-only recommendation.
+  ok(noSvc.ok && noSvc.preview.homepageHtml.length > 1000, 'rec: card-only never withholds the homepage');
 }
 
 /* ── facts helpers ── */

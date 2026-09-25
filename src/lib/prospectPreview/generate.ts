@@ -19,6 +19,7 @@ import { buildCardCopy, cardCopyText, copyProblems, suggestedMessage, type CardC
 import { renderEvidenceCard } from './evidenceCard.ts';
 import { selectTemplate, PROSPECT_TEMPLATES, templateKey } from './templates/index.ts';
 import { scanContamination, type ContaminationHit } from './contamination.ts';
+import { outreachRecommendation, type OutreachRecommendation } from './recommendation.ts';
 import { applyStoredImages, hotlinkedImages, imagesToCopy, type CopiedImage, type ImageToCopy } from './assets.ts';
 
 export interface GenerateInput {
@@ -43,6 +44,8 @@ export interface GeneratedPreview {
   homepageHtml: string;
   /** Operator-only warnings (flags + conflicts), in reading order. */
   notes: string[];
+  /** What to send: card + homepage, or card only. Guidance for the operator — never a gate. */
+  recommendation: OutreachRecommendation;
 }
 
 export type GenerateResult =
@@ -105,6 +108,7 @@ export function generatePreview(i: GenerateInput): GenerateResult {
       config,
       template: { id: t.id, version: t.version, key: templateKey(t), name: t.name, status: t.status, why: choice.why },
       selection, card, message, homepageHtml, notes,
+      recommendation: outreachRecommendation({ config, selection, homepageHtml }),
     },
   };
 }

@@ -1,4 +1,4 @@
-# Prospect Preview (2026-09-26, branch `feat/prospect-homepage-preview`, NOT merged / deployed)
+# Prospect Preview (2026-09-26; merged to main 2026-09-25 as `fc3366bc`)
 
 An OUTREACH tool, not a Website Build: for a prospect whose AI audit went badly, generate ONE
 replacement homepage + an evidence card + screenshots, stored privately for the operator to send by
@@ -51,6 +51,23 @@ hand. Operator click only; never automatic; never sends.
   picked as their own words; a 404 site not recognised (now a strength-5 finding, fetched twice;
   403 is never "down"); a message claiming "the site is accessible" about a site we could not read;
   named 1 of 2 (one engine missed them) now qualifies and the card names that engine.
+
+## Consolidation pass (2026-09-25, before ship)
+- **Partial engine gap is PER ENGINE** (`engineGap`, findings.ts): a preview qualifies when at least
+  one scored engine named them in at most `POOR_VISIBILITY_MAX_SHARE` of its answers. Named on one
+  engine and missed on another = `partial` = qualifies, with an operator note stating the split.
+  Named on most answers on EVERY engine = no preview. The old rule used the OVERALL share, which
+  refused ChatGPT 3/3 + Gemini 1/3 (4 of 6). Without per-engine rows the overall share still decides.
+- **The card always names the engine** — "Gemini didn’t name E.E.S Electrical Services.",
+  "Gemini recommended", and no "AI is consistently naming…" line. Never "AI" as a whole.
+- **Card-only recommendation** (`recommendation.ts`, stored in `prospect_previews.recommendation`):
+  CARD + HOMEPAGE or CARD ONLY with a one-line why and the weaknesses. Deterministic: no services →
+  card only; site down/unreadable + thin business content → card only; two or more of (thin
+  services, no logo AND no colour, no photos, no proof, fewer than `MIN_SUBSTANTIAL_SECTIONS` real
+  sections on the rendered page) → card only. No numerical score. Guidance only: the homepage and
+  screenshots stay viewable and downloadable. Real leads 2026-09-25: R.Coulson → card + homepage;
+  JOLT → card only; E.E.S → card only (no reliable service content on their site today).
+- Generator version 2 (card wording changed), so any v1 row reads stale.
 
 ## To ship
 1. Apply the migration (read back the table, RLS, bucket). 2. Deploy `prospect-preview` (needs

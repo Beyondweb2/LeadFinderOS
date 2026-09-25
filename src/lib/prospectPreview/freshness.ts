@@ -9,7 +9,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Bump when the generator's output would change for the same inputs (copy, layout, rules). */
-export const PROSPECT_PREVIEW_GENERATOR_VERSION = 1;
+export const PROSPECT_PREVIEW_GENERATOR_VERSION = 2;
 
 export interface FingerprintParts {
   leadId: string;

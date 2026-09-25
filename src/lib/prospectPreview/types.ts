@@ -143,6 +143,9 @@ export interface ProspectHeadline {
   /** Named in N of M answers across the whole audit. */
   namedDatapoints: number | null;
   totalDatapoints: number | null;
+  /** Named / asked per scored engine across the whole audit (the report's `perEngine`). Absent on
+   *  rows stored before it existed — eligibility then falls back to the overall share. */
+  perEngine?: Array<{ label: string; named: number; total: number }>;
 }
 
 export interface CardFinding {

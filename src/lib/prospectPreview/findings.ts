@@ -15,9 +15,11 @@ import type { CardFinding, FindingSelection, ProspectHeadline } from './types.ts
 import { rankStrongest, type ResearchFinding } from '../warmLeadResearch.ts';
 import type { AiAuditReportData } from '../aiAuditReportHtml.ts';
 
-/** Named in MORE than this share of answers = not performing poorly for this tool. Exactly half
- *  (named by one engine, missed by the other) still qualifies — the card then names the engine that
- *  missed them (2026-09-26, E.E.S Electrical: ChatGPT named them, Gemini did not). */
+/** PER ENGINE: an engine that named the business in MORE than this share of its answers has no
+ *  meaningful gap. A preview qualifies when at least ONE scored engine is at or below it — named by
+ *  one engine and missed by another is a genuine engine-specific gap (Paul, 2026-09-26; E.E.S
+ *  Electrical: ChatGPT named them, Gemini did not). Named consistently on EVERY engine = no preview.
+ *  The card names the engine that missed them; it never says "AI" as a whole missed them. */
 export const POOR_VISIBILITY_MAX_SHARE = 0.5;
 /** A finding leads the card only at this strength or above (warm research's 1–5 scale). */
 export const PRIMARY_MIN_STRENGTH = 3;
@@ -119,6 +121,7 @@ export function pickHeadline(data: AiAuditReportData | null, meta: { auditId: st
     town: meta.town,
     namedDatapoints: data.named,
     totalDatapoints: data.total,
+    perEngine: (data.perEngine ?? []).filter((e) => e.total > 0).map((e) => ({ label: e.label, named: e.named, total: e.total })),
   };
 }
 
@@ -136,13 +139,34 @@ export function previewEligibility(i: {
   if (!i.auditComplete) return { eligible: false, reason: 'No completed AI audit for this lead yet — run the audit first.' };
   if (!i.headline) return { eligible: false, reason: 'The audit has no usable example of AI naming other businesses instead (names withheld, not judgeable, or none named).' };
   const h = i.headline;
-  if (h.totalDatapoints && h.namedDatapoints != null && h.namedDatapoints / h.totalDatapoints > POOR_VISIBILITY_MAX_SHARE) {
-    return { eligible: false, reason: `The business was named in ${h.namedDatapoints} of ${h.totalDatapoints} answers — it is not performing poorly enough for this pitch.` };
+  const gap = engineGap(h);
+  if (gap.kind === 'none') {
+    return { eligible: false, reason: `${gap.line} — no meaningful visibility gap on any engine, so there is nothing true to pitch.` };
   }
   if (!i.hasTown) return { eligible: false, reason: 'No home town is known for this business.' };
   if (!i.hasWebsite && !i.hasPhoneOrEmail) return { eligible: false, reason: 'No website and no phone or email — not enough to build a truthful homepage.' };
   const notes: string[] = [];
   if (!i.hasWebsite) notes.push('No website: the homepage is built from the lead record only.');
+  if (gap.kind === 'partial') notes.push(`Engine-specific gap: ${gap.line}. The card names the engine that missed them, never "AI" as a whole.`);
   if (h.prospectNamed) notes.push('On the headline question another engine did name them — the card says which engine did not.');
   return { eligible: true, notes };
+}
+
+export type EngineGap = { kind: 'all' | 'partial' | 'none'; line: string };
+
+/** Where the visibility gap is, measured per engine. 'all' = every scored engine at or below the
+ *  share; 'partial' = some engines missed them, others named them; 'none' = named consistently on
+ *  every engine. Without per-engine data, the overall share decides between 'all' and 'none'. */
+export function engineGap(h: ProspectHeadline): EngineGap {
+  const rows = (h.perEngine ?? []).filter((e) => e.total > 0);
+  if (rows.length) {
+    const line = rows.map((e) => `${e.label} named them in ${e.named} of ${e.total}`).join('; ');
+    const gapped = rows.filter((e) => e.named / e.total <= POOR_VISIBILITY_MAX_SHARE);
+    return { kind: gapped.length === 0 ? 'none' : gapped.length === rows.length ? 'all' : 'partial', line };
+  }
+  if (h.totalDatapoints && h.namedDatapoints != null) {
+    const line = `Named in ${h.namedDatapoints} of ${h.totalDatapoints} answers`;
+    return { kind: h.namedDatapoints / h.totalDatapoints > POOR_VISIBILITY_MAX_SHARE ? 'none' : 'all', line };
+  }
+  return { kind: 'all', line: 'No per-engine counts' };
 }

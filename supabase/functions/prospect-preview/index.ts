@@ -190,6 +190,7 @@ async function view(service: Service, row: any, freshness: ReturnType<typeof pre
       template: row.template_id ? `${row.template_id}@${row.template_version}` : null,
       headline: row.headline, primaryFinding: row.primary_finding, secondaryFindings: row.secondary_findings ?? [],
       notes: row.notes ?? [], message: row.message, facts: row.facts, timings: row.timings,
+      recommendation: row.recommendation ?? null,
       stale: freshness?.state === "stale" ? freshness.changed.map((k) => FINGERPRINT_LABELS[k]) : [],
       assets: Object.fromEntries(Object.entries(assetPaths).map(([k, p]) => [k, signed[p]]).filter(([, u]) => !!u)),
       /** Stored image copies, by path — the panel swaps them into the homepage HTML to view it. */
@@ -364,7 +365,7 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
         conflicts: p.config.conflicts, requiresResolution: p.config.requiresResolution, rejectedAreas: p.config.rejectedAreas,
         researchSource: inputs.researchSource, contactPhone,
       },
-      notes: p.notes, message: p.message, asset_paths: assetPaths, timings, generated_at: new Date().toISOString(),
+      notes: p.notes, message: p.message, recommendation: p.recommendation, asset_paths: assetPaths, timings, generated_at: new Date().toISOString(),
     });
     const row = await loadRow(service, lead.id);
     return json(await view(service, row, previewFreshness(row, g.parts), { plan: plan.reason }));

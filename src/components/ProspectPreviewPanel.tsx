@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { resolveStoredAssets } from '@/lib/prospectPreview/assets';
+import { OUTREACH_SEND_LABELS, type OutreachRecommendation } from '@/lib/prospectPreview/recommendation';
 import { PREVIEW_ASSETS, PREVIEW_ASSET_LABELS, PREVIEW_STATUS_LABELS, type PreviewStatus, type ProspectHeadline, type CardFinding } from '@/lib/prospectPreview/types';
 
 export const PROSPECT_PREVIEW_LABEL = 'Prospect preview';
@@ -27,6 +28,7 @@ interface PreviewView {
   /** Stored copies of their images, by storage path → short-lived signed URL. */
   storedImages?: Record<string, string>;
   timings: Record<string, number> | null;
+  recommendation?: OutreachRecommendation | null;
 }
 interface StatusResponse {
   ok: boolean;
@@ -129,6 +131,18 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
 
           {p?.status === 'ready' && (
             <>
+              {p.recommendation && (
+                // Guidance, not a gate: the homepage stays viewable and downloadable either way.
+                <div className="rounded border p-2">
+                  <div className="text-xs uppercase text-muted-foreground">Recommended outreach</div>
+                  <div className="font-semibold">{OUTREACH_SEND_LABELS[p.recommendation.send]}</div>
+                  <div className="text-xs text-muted-foreground">{p.recommendation.why}</div>
+                  {p.recommendation.send === 'card_only' && <div className="pt-1 text-xs text-muted-foreground">The homepage is still below if you want to use it.</div>}
+                  {p.recommendation.weaknesses.length > 1 && (
+                    <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">{p.recommendation.weaknesses.map((w) => <li key={w}>{w}</li>)}</ul>
+                  )}
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="text-xs uppercase text-muted-foreground">Primary site issue</div>
                 <div>{p.primaryFinding ? p.primaryFinding.line : 'None strong enough — the card uses the truthful no-issue wording.'}</div>
