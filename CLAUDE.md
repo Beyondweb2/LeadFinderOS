@@ -617,6 +617,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Report gates | `competitorCleaning.ts`, `knownEntities.ts`, `sourceType.ts`, `seedGuard.ts` |
 | WhatsApp registries | `_shared/whatsapp-send.ts`, `process-whatsapp-queue` mirror, `src/types/outreach.ts`, `src/lib/whatsappTemplates.ts`, `templateBodies.ts`, `templateVars.ts`, `templateRouting.ts`, `coldOutreach.ts`, `rivalHook.ts`, `displayName.ts`, `firstReplyMode.ts` |
 | Senders | fn `send-whatsapp-message` (Inbox, `dry_run`, `test_send`), `process-whatsapp-queue` (drip, first-reply lane, `contact_check`, `suppress_lead`), `_shared/whatsapp-inbound.ts` (via `whatsapp-status`) |
+| Voice notes (Inbox, 24h only) | fn `send-whatsapp-voice`, `_shared/voice-note-send.ts`, `src/lib/oggOpus.ts` (WebM→Ogg remux), `voiceNote.ts`, `VoiceNoteRecorder`/`VoiceNotePlayer` — `docs/whatsapp-voice-notes.md` |
 | Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |

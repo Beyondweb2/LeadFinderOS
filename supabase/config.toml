@@ -155,3 +155,8 @@ verify_jwt = false
 # prospect sites, but it NEVER sends a message. Explicit entry in the same commit as the function.
 [functions.warm-lead-reply]
 verify_jwt = true
+
+# send-whatsapp-voice: the Inbox's voice-note sender. SPA-only caller with the operator's JWT; the
+# handler does its own resolveOperator + lead-ownership + 24h-window check. No internal caller.
+[functions.send-whatsapp-voice]
+verify_jwt = true

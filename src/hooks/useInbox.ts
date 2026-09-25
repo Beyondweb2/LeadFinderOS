@@ -685,6 +685,37 @@ export function useInbox() {
     return { ok: true, simulated: data.simulated };
   }, [queryClient, queryKey]);
 
+  /* ⛔ ONE RECORDED VOICE NOTE → send-whatsapp-voice. The server resolves the recipient from the
+     LEAD (the phone here is only a confirmation it must match), re-checks the 24-hour window, converts
+     the recording to Ogg/Opus and sends it with `voice: true`. `sendId` is per recording, so a retry
+     of the same recording can never go twice. ok is true only once Meta confirmed the send (or the
+     simulation, in test mode). */
+  const sendVoice = useCallback(async (args: {
+    phone: string; leadId: string; audio: Blob; mime: string; sendId: string;
+  }): Promise<{ ok: boolean; simulated?: boolean; error?: string; reason?: string; retryable?: boolean }> => {
+    const form = new FormData();
+    form.append('lead_id', args.leadId);
+    form.append('phone', args.phone);
+    form.append('send_id', args.sendId);
+    form.append('audio', args.audio, args.mime === 'audio/ogg' ? 'voice-note.ogg' : 'voice-note.webm');
+    const { data, error } = await sb.functions.invoke('send-whatsapp-voice', { body: form });
+    if (error) {
+      /* A non-2xx still carries our JSON reason; read it rather than showing "non-2xx".
+         Retrying is safe by default even after a network drop: the server's claim on `sendId`
+         refuses a second send of the same recording (duplicate_send). Only the server's own
+         "result unknown" answer sets retryable:false. */
+      let body: { error?: string; reason?: string; retryable?: boolean } | null = null;
+      try { body = await (error as { context?: Response }).context?.json(); } catch { body = null; }
+      return { ok: false, error: body?.error ?? error.message, reason: body?.reason, retryable: body?.retryable ?? true };
+    }
+    if (!data?.ok) return { ok: false, error: data?.error ?? 'send_failed', reason: data?.reason, retryable: data?.retryable };
+    if (data.message?.id) {
+      queryClient.setQueryData<InboxData>(queryKey, (current) => current
+        ? { ...current, messages: mergeInboxMessages(current.messages, [data.message as WaMessage]) } : current);
+    }
+    return { ok: true, simulated: data.simulated };
+  }, [queryClient, queryKey]);
+
   /* ⛔ PREVIEW WHAT WOULD BE SENT — the SAME endpoint, the same guards, nothing sent.
      `mode: "dry_run"` returns the built Meta payload and the transcript body immediately before the
      Graph POST, or the refusal it would have given. It exists because `audit_followup` failed twice
@@ -738,5 +769,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev);
   }, [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, preview, patchLeadStatus, patchLeadPotentialWork };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, sendVoice, preview, patchLeadStatus, patchLeadPotentialWork };
 }
