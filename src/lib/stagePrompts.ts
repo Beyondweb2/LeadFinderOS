@@ -22,15 +22,15 @@ import { BUILD_ROUTE_LABELS, compareFamilies, PAGE_FAMILY_LABELS, REBUILD_STYLE_
 import type { FactRow } from './buildFacts.ts';
 import { reconPrompt } from './recon.ts';
 import { manifestArchitectureLines, oneLine } from './manifestSummary.ts';
-import { computeMapping } from './templateMapping.ts';
 import type { ManifestAsset } from './websiteBuildState.ts';
+import { assetsToDownload, executionPrompt, safeAssetName } from './buildExecution.ts';
 import { isPublishable } from './buildFacts.ts';
 import {
   capturePrompt, cloudflareProblem, codeConfig, finalQaPrompt, isBespokeRoute, isFaithfulRoute,
   isTemplateRoute, MARK, masterPrompt, pageLines, seoQaPrompt, winPath, type BuildPackInput,
 } from './buildPack.ts';
 
-export const STAGE_PROMPT_IDS = ['recon', 'capture', 'architecture', 'asset_download', 'build', 'preview_deploy', 'visual_compare', 'qa', 'production_deploy'] as const;
+export const STAGE_PROMPT_IDS = ['recon', 'capture', 'architecture', 'asset_download', 'build', 'build_execution', 'preview_deploy', 'visual_compare', 'qa', 'production_deploy'] as const;
 export type StagePromptId = (typeof STAGE_PROMPT_IDS)[number];
 
 export interface StagePrompt {
@@ -237,25 +237,11 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
 }
 
 /** All eight, in stage order. */
-/* ── ASSET DOWNLOAD — Claude Code fetches ONLY the approved assets; LeadFinderOS downloads nothing. ─
-   Faithful: every asset marked USE (the authorised site's own assets). Template: only USE assets that
-   are ASSIGNED to a template slot. Bespoke: assigned USE assets, else every USE asset. */
-export function assetsToDownload(i: BuildPackInput): { list: Array<{ asset: ManifestAsset; slot: string }>; held: number } {
-  const s = i.state;
-  const use = s.manifest.assets.filter((a) => a.approval === 'approved');
-  const held = s.manifest.assets.filter((a) => a.approval === 'pending').length;
-  const m = computeMapping(s, i.template, i.facts, i.businessName);
-  const slotOf = new Map<string, string>();
-  for (const st of m.slots) for (const a of st.publishable) if (!slotOf.has(a.source_url)) slotOf.set(a.source_url, st.slot.label);
-  const assignedOnly = isTemplateRoute(s) || (isBespokeRoute(s) && slotOf.size > 0);
-  const chosen = assignedOnly ? use.filter((a) => slotOf.has(a.source_url)) : use;
-  return { list: chosen.map((asset) => ({ asset, slot: slotOf.get(asset.source_url) ?? '' })), held };
-}
-
+/* ── ASSET DOWNLOAD — Claude Code fetches ONLY the approved assets (assetsToDownload, buildExecution.ts). */
 function assetDownload(i: BuildPackInput): StagePrompt {
   const s = i.state;
   const { list, held } = assetsToDownload(i);
-  const safeName = (a: ManifestAsset, n: number) => (a.suggested_filename || (a.source_url.split('/').pop() || 'asset-' + (n + 1))).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 80);
+  const safeName = (a: ManifestAsset, n: number) => safeAssetName(a, n);
   const L = [
     ...header('ASSET DOWNLOAD', i),
     'Work in: ' + folder(s) + '. Download ONLY the ' + list.length + ' asset(s) below — ' + (isTemplateRoute(s) ? 'approved (USE) in LeadFinderOS AND assigned to a template slot.' : isFaithfulRoute(s) ? 'every asset of the authorised site that Paul marked USE.' : 'approved (USE) in LeadFinderOS.'),
@@ -281,7 +267,14 @@ function assetDownload(i: BuildPackInput): StagePrompt {
     help: 'Claude Code downloads only the approved assets, keeps originals, makes web copies and records source → file.', text: L.join('\n') };
 }
 
+/* ── BUILD EXECUTION (Phase 4) — build, push, deploy the preview, return a structured result. ──── */
+function buildExecution(i: BuildPackInput): StagePrompt {
+  const p = executionPrompt(i);
+  return { id: 'build_execution', label: 'Copy Build Execution Prompt', short: 'Build + preview', stage: 'build_pack', blockedBy: p.blockedBy,
+    help: 'The whole build in one run: a separate client repo, the site, assets, seed scrub, QA, a Cloudflare Pages PREVIEW and a JSON result to import.', text: p.text };
+}
+
 export function stagePrompts(i: BuildPackInput): StagePrompt[] {
-  return [recon(i), capture(i), architecture(i), assetDownload(i), build(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
+  return [recon(i), capture(i), architecture(i), assetDownload(i), build(i), buildExecution(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
 }
 

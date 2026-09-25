@@ -535,7 +535,7 @@ export const FINDABLE_STANDARD: string[] = [
 
 /** lean = the stage Build prompt: the same brief without the deployment, QA and definition-of-done
  *  sections, which are their own stage prompts now (stagePrompts.ts). */
-export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): PackItem {
+export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean; execution?: boolean } = {}): PackItem {
   const s = i.state, t = i.template;
   const lean = !!opts.lean;
   const path = s.local_repo_path ? winPath(s.local_repo_path) : MARK.path;
@@ -571,7 +571,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
     ...(lean
       ? ['Work autonomously through the build without stopping after each file. Stop only where a genuinely',
          'missing fact or decision cannot safely be inferred — then ask Paul one clear question and carry on.',
-         'Deployment and QA are separate prompts: do not deploy anything.']
+         opts.execution ? 'The EXECUTION section below says exactly how to deploy the PREVIEW and report.' : 'Deployment and QA are separate prompts: do not deploy anything.']
       : ['Work autonomously. Continue through implementation, testing, visual QA, technical QA and the preview',
          'deployment without stopping after each file. Stop only where a genuinely missing fact or decision',
          'cannot safely be inferred — then ask Paul one clear question and carry on with everything else.']),
@@ -650,7 +650,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): 
       '- "' + codeConfig(s, t).buildCommand + '" passes; every page renders locally ("' + codeConfig(s, t).devCommand + '" → ' + codeConfig(s, t).devUrl + ').',
       '- Every fact on every page is in section D. Anything not in D comes out.',
       ...(t && isTemplateRoute(s) ? ['- Search the repo for these seed-client values; each hit is removed or backed by D: ' + t.leftoverNeedles.join(' · ')] : []),
-      '- ⛔ Do not deploy. Preview deployment, visual comparison and QA are separate prompts Paul gives you next.',
+      opts.execution ? '- Then follow the EXECUTION section below (preview deploy, QA, the build result).' : '- ⛔ Do not deploy. Preview deployment, visual comparison and QA are separate prompts Paul gives you next.',
       '',
       'Report to Paul in plain English: pages built (count per family), anything removed or left out and why,',
       'and every question you still need answered.',

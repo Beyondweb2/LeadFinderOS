@@ -338,7 +338,9 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { id: 'garage-locks', name: 'Garage locks', synonyms: ['garage', 'garage door', 'shed lock'] },
   ],
   minServices: 1,
-  assetSlots: byId(CORE_ASSET_SLOTS, { logo: { requirement: 'required' } }, [
+  /* Phase 4: the logo is OPTIONAL — with no approved logo the config carries a text wordmark of the
+     verified business name (templateMapping.ts). A graphical logo is never generated. */
+  assetSlots: byId(CORE_ASSET_SLOTS, {}, [
     { id: 'van', label: 'Van', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['van', 'vehicle', 'car'] } },
     { id: 'map', label: 'Map / area', requirement: 'optional', multiple: false, suggest: { types: ['photo', 'other'], words: ['map', 'area', 'coverage'] } },
   ]),
