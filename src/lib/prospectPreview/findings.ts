@@ -15,7 +15,9 @@ import type { CardFinding, FindingSelection, ProspectHeadline } from './types.ts
 import { rankStrongest, type ResearchFinding } from '../warmLeadResearch.ts';
 import type { AiAuditReportData } from '../aiAuditReportHtml.ts';
 
-/** Share of answers at or above which the business is not "performing poorly" for this tool. */
+/** Named in MORE than this share of answers = not performing poorly for this tool. Exactly half
+ *  (named by one engine, missed by the other) still qualifies — the card then names the engine that
+ *  missed them (2026-09-26, E.E.S Electrical: ChatGPT named them, Gemini did not). */
 export const POOR_VISIBILITY_MAX_SHARE = 0.5;
 /** A finding leads the card only at this strength or above (warm research's 1–5 scale). */
 export const PRIMARY_MIN_STRENGTH = 3;
@@ -27,6 +29,8 @@ const NOT_A_CARD_ISSUE = new Set(['ai_visibility', 'provider_attribution']);
 
 /** Phone-readable card lines. Keyed by finding id prefix first, then kind; the title otherwise. */
 const LINE_BY_ID: Array<[RegExp, string]> = [
+  [/^rule:site_down_not_found/, 'Your website is showing a “Not found” error'],
+  [/^rule:site_down_error/, 'Your website is showing a server error'],
   [/^full:robots_all/, 'The whole site tells crawlers to stay out'],
   [/^crawl:crawler_blocked/, 'AI search crawlers are blocked'],
   [/^crawl:unreadable_homepage/, 'The homepage is almost empty without JavaScript'],
@@ -63,7 +67,8 @@ export interface ResearchForCard {
 }
 
 export function selectFindings(research: ResearchForCard | null): FindingSelection {
-  if (!research || research.status === 'failed') {
+  const unread = !research || research.status === 'failed';
+  if (!research) {
     return { primary: null, secondary: [], fallback: true, fallbackReason: 'The current site could not be read, so the card makes no claim about it.' };
   }
   if (research.status === 'no_website') {
@@ -72,13 +77,16 @@ export function selectFindings(research: ResearchForCard | null): FindingSelecti
   const pool = [
     ...research.strongestFindings,
     ...(research.technicalFindings ?? []), ...(research.contentFindings ?? []), ...(research.localVisibilityFindings ?? []),
-  ].filter((f) => f.verified && !NOT_A_CARD_ISSUE.has(f.kind));
+  ]
+    .filter((f) => f.verified && !NOT_A_CARD_ISSUE.has(f.kind))
+    // Site unreadable today: only what the (fresh) crawl already MEASURED may still be said.
+    .filter((f) => !unread || f.source === 'crawl');
   const ranked = rankStrongest(pool, 1 + MAX_SECONDARY_FINDINGS + 2);
   const primary = ranked.find((f) => f.strength >= PRIMARY_MIN_STRENGTH) ?? null;
   if (!primary) {
     return {
       primary: null, secondary: [], fallback: true,
-      fallbackReason: research.technicallyClean
+      fallbackReason: unread ? 'The current site could not be read, so the card makes no claim about it.' : research.technicallyClean
         ? 'The site was read and nothing technical of substance was found.'
         : 'No site finding was strong enough to lead with.',
     };
@@ -128,7 +136,7 @@ export function previewEligibility(i: {
   if (!i.auditComplete) return { eligible: false, reason: 'No completed AI audit for this lead yet — run the audit first.' };
   if (!i.headline) return { eligible: false, reason: 'The audit has no usable example of AI naming other businesses instead (names withheld, not judgeable, or none named).' };
   const h = i.headline;
-  if (h.totalDatapoints && h.namedDatapoints != null && h.namedDatapoints / h.totalDatapoints >= POOR_VISIBILITY_MAX_SHARE) {
+  if (h.totalDatapoints && h.namedDatapoints != null && h.namedDatapoints / h.totalDatapoints > POOR_VISIBILITY_MAX_SHARE) {
     return { eligible: false, reason: `The business was named in ${h.namedDatapoints} of ${h.totalDatapoints} answers — it is not performing poorly enough for this pitch.` };
   }
   if (!i.hasTown) return { eligible: false, reason: 'No home town is known for this business.' };

@@ -8,12 +8,13 @@
 // ⛔ IT IS NOT A WEBSITE BUILD. It never reads or writes outreach_leads.website_build, never deploys,
 // never attaches a domain. The HTML is stored privately and is noindex.
 // ⛔ NO OPENAI SPEND. Research reuses warm_lead_research when it is fresh for this website (read-only:
-// that table belongs to warm-lead-reply), else the rule/crawl findings are assembled here with no
-// model call. The only spend is Cloudflare Browser Rendering (the screenshots).
+// that table belongs to warm-lead-reply), else the rule/crawl findings are assembled with no model
+// call. The only spend is Cloudflare Browser Rendering (the screenshots).
+// ⛔ NEVER HOTLINKS. The few images the homepage shows are copied into the private bucket first
+// (src/lib/prospectPreview/assets.ts) and the page renders from those copies.
 //
-// Order of reuse: lead row → newest ordinary audit + its run → lead_crawl_checks (incl. a full crawl)
-// → warm_lead_research → ONE homepage fetch (brand: logo/colours/photos, which nothing stores) and,
-// only without a fresh full crawl, a few menu pages.
+// All judgement is in src/lib/prospectPreview (gather.ts → generate.ts); this file reads rows, fetches
+// pages/images, stores files and takes the screenshots.
 //
 // Actions: "status" (DB only) · "generate" { regenerate?: boolean }.
 
@@ -21,20 +22,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOperator, isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { shootHtml, shotConfigured } from "../_shared/prospect-preview-shot.ts";
-import { buildReportData, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
+import type { QueueRow, RunRow } from "../../../src/lib/auditReport.ts";
 import {
-  planResearch, extractPageFacts, pickResearchPages, assembleResearch, usableFullCrawl,
-  WARM_RESEARCH_FETCH_TIMEOUT_MS, WARM_RESEARCH_DEADLINE_MS, WARM_RESEARCH_MAX_PAGES,
-  type CrawlRowInput, type PageFacts, type StoredResearchRow, type WarmLeadResearch,
+  extractPageFacts, pickResearchPages, WARM_RESEARCH_FETCH_TIMEOUT_MS, WARM_RESEARCH_DEADLINE_MS, WARM_RESEARCH_MAX_PAGES,
+  type CrawlRowInput, type PageFacts, type StoredResearchRow,
 } from "../../../src/lib/warmLeadResearch.ts";
-import { extractSiteInfo } from "../../../src/lib/siteInfo.ts";
-import { readBrand } from "../../../src/lib/prospectPreview/brand.ts";
-import { pickHeadline, previewEligibility } from "../../../src/lib/prospectPreview/findings.ts";
-import { generatePreview, buildCardHtml } from "../../../src/lib/prospectPreview/generate.ts";
-import { selectTemplate, templateKey } from "../../../src/lib/prospectPreview/templates/index.ts";
-import { tradePackFor } from "../../../src/lib/prospectPreview/trades.ts";
+import { gatherPreview, buildInputs, needsMenuPages, homeUrlFor, pickOrdinaryAudit, type AuditBundle, type Gathered } from "../../../src/lib/prospectPreview/gather.ts";
+import { planPreview, generatePreview, buildCardHtml } from "../../../src/lib/prospectPreview/generate.ts";
+import { copyImages, resolveStoredAssets } from "../../../src/lib/prospectPreview/assets.ts";
+import { stylesheetsToRead } from "../../../src/lib/prospectPreview/brand.ts";
 import { SHOTS } from "../../../src/lib/prospectPreview/shots.ts";
-import { fingerprint, planGenerate, previewFreshness, PROSPECT_PREVIEW_GENERATOR_VERSION, FINGERPRINT_LABELS, type FingerprintParts } from "../../../src/lib/prospectPreview/freshness.ts";
+import { fingerprint, planGenerate, previewFreshness, PROSPECT_PREVIEW_GENERATOR_VERSION, FINGERPRINT_LABELS } from "../../../src/lib/prospectPreview/freshness.ts";
 import { PREVIEW_ASSETS, type PreviewStatus } from "../../../src/lib/prospectPreview/types.ts";
 
 const corsHeaders = {
@@ -51,7 +49,8 @@ const BUCKET = "prospect-previews";
 const SIGNED_URL_SECONDS = 3600;
 /** A row stuck mid-generation longer than this is treated as dead, so a new click may start. */
 const IN_PROGRESS_STALE_MS = 5 * 60_000;
-const MAX_BODY_BYTES = 1_500_000;
+const MAX_HTML_BYTES = 1_500_000;
+const MAX_CSS_BYTES = 600_000;
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const IN_PROGRESS: readonly string[] = ["gathering", "selecting_template", "building", "rendering"];
 
@@ -71,7 +70,7 @@ function isPublicHttpUrl(raw: string): boolean {
     const u = new URL(raw);
     if (!/^https?:$/.test(u.protocol)) return false;
     const h = u.hostname.toLowerCase();
-    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h.startsWith("[") || h.includes(":")) return false;
+    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".invalid") || h.startsWith("[") || h.includes(":")) return false;
     if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
       const [a, b] = h.split(".").map(Number);
       if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return false;
@@ -80,22 +79,41 @@ function isPublicHttpUrl(raw: string): boolean {
   } catch { return false; }
 }
 
-async function fetchHtml(url: string): Promise<{ html: string; finalUrl: string; status: number; ok: boolean }> {
-  if (!isPublicHttpUrl(url)) return { html: "", finalUrl: url, status: 0, ok: false };
+/** Public address only, timed out, read no further than `maxBytes`. */
+async function fetchCapped(url: string, maxBytes: number, accept: string): Promise<{ bytes: Uint8Array; contentType: string | null; finalUrl: string; status: number; ok: boolean } | null> {
+  if (!isPublicHttpUrl(url)) return null;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), WARM_RESEARCH_FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8" }, redirect: "follow", signal: controller.signal });
-    const type = res.headers.get("content-type") ?? "";
-    let html = "";
-    if (/html|xml|text/i.test(type) || !type) {
-      const buf = new Uint8Array(await res.arrayBuffer());
-      html = new TextDecoder("utf-8", { fatal: false }).decode(buf.subarray(0, MAX_BODY_BYTES));
+    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": accept }, redirect: "follow", signal: controller.signal });
+    const finalUrl = res.url && /^https?:\/\//i.test(res.url) ? res.url : url;
+    if (!isPublicHttpUrl(finalUrl)) return null;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    if (res.body) {
+      const reader = res.body.getReader();
+      try {
+        while (total < maxBytes) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) { chunks.push(value); total += value.byteLength; }
+        }
+      } finally { try { await reader.cancel(); } catch { /* closed */ } }
     }
-    return { html, finalUrl: res.url && /^https?:\/\//i.test(res.url) ? res.url : url, status: res.status, ok: res.ok && html.length > 0 };
+    const bytes = new Uint8Array(Math.min(total, maxBytes));
+    let at = 0;
+    for (const c of chunks) { const n = Math.min(c.byteLength, bytes.length - at); if (n <= 0) break; bytes.set(c.subarray(0, n), at); at += n; }
+    return { bytes, contentType: res.headers.get("content-type"), finalUrl, status: res.status, ok: res.ok };
   } catch {
-    return { html: "", finalUrl: url, status: 0, ok: false };
+    return null;
   } finally { clearTimeout(t); }
+}
+
+async function fetchPage(url: string): Promise<{ html: string; facts: PageFacts }> {
+  const r = await fetchCapped(url, MAX_HTML_BYTES, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8");
+  const isHtml = !!r && (/html|xml|text/i.test(r.contentType ?? "") || !r.contentType);
+  const html = r && isHtml ? new TextDecoder("utf-8", { fatal: false }).decode(r.bytes) : "";
+  return { html, facts: extractPageFacts(html, url, r?.finalUrl ?? url, r?.status ?? 0, !!r?.ok && html.length > 0) };
 }
 
 /* ───────────────────────── loading (DB) ───────────────────────── */
@@ -109,33 +127,21 @@ async function loadLead(service: Service, leadId: string, operatorId: string): P
   return l && l.user_id === operatorId ? l : null;
 }
 
-// deno-lint-ignore no-explicit-any
-async function loadAudit(service: Service, leadId: string): Promise<{ audit: any; run: RunRow; rows: QueueRow[] } | null> {
+async function loadAudit(service: Service, leadId: string): Promise<AuditBundle | null> {
   const { data } = await service.from("ai_audits")
     .select("id, business_name, business_type, location_text, audit_purpose, is_measurement, created_at, ai_audit_runs(id, audit_id, run_number, status, mention_rate, results, created_at)")
     .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(10);
-  // deno-lint-ignore no-explicit-any
-  for (const a of (Array.isArray(data) ? data : []) as any[]) {
-    const purpose = a.audit_purpose ?? null;
-    // The same "ordinary audit" the warm reply reads: a hook / free check / manual audit — never a
-    // paid measurement, whose report is an operator document.
-    if (a.is_measurement === true || !(purpose === null || purpose === "audit" || purpose === "free_check")) continue;
-    // deno-lint-ignore no-explicit-any
-    const runs = (Array.isArray(a.ai_audit_runs) ? [...a.ai_audit_runs] : []).sort((x: any, y: any) => (y.run_number ?? 0) - (x.run_number ?? 0));
-    // deno-lint-ignore no-explicit-any
-    const run = runs.find((r: any) => r.status === "complete" || r.status === "capped");
-    if (!run) continue;
-    const rows: QueueRow[] = [];
-    for (let from = 0; ; from += 1000) {
-      const { data: page, error } = await service.from("ai_audit_queue").select("id, question, status, result")
-        .eq("audit_id", a.id).order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, from + 999);
-      if (error) throw error;
-      rows.push(...((page ?? []) as QueueRow[]));
-      if (!page || page.length < 1000) break;
-    }
-    return { audit: a, run: run as RunRow, rows };
+  const picked = pickOrdinaryAudit(Array.isArray(data) ? data : []);
+  if (!picked) return null;
+  const rows: QueueRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await service.from("ai_audit_queue").select("id, question, status, result")
+      .eq("audit_id", picked.audit.id).order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, from + 999);
+    if (error) throw error;
+    rows.push(...((page ?? []) as QueueRow[]));
+    if (!page || page.length < 1000) break;
   }
-  return null;
+  return { audit: picked.audit, run: picked.run as RunRow, rows };
 }
 
 async function loadCrawl(service: Service, leadId: string): Promise<CrawlRowInput | null> {
@@ -148,6 +154,13 @@ async function loadResearch(service: Service, leadId: string): Promise<StoredRes
   return (data as StoredResearchRow | null) ?? null;
 }
 
+/** The number LeadFinder is actually messaging for this lead: the newest WhatsApp row's, else the lead's. */
+async function loadContactPhone(service: Service, lead: LeadRow): Promise<string | null> {
+  const { data } = await service.from("whatsapp_messages").select("phone").eq("lead_id", lead.id).order("created_at", { ascending: false }).limit(1);
+  const p = Array.isArray(data) && data[0]?.phone ? String(data[0].phone) : null;
+  return p || lead.phone || null;
+}
+
 // deno-lint-ignore no-explicit-any
 async function loadRow(service: Service, leadId: string): Promise<any | null> {
   const { data, error } = await service.from(TABLE).select("*").eq("lead_id", leadId).maybeSingle();
@@ -155,19 +168,20 @@ async function loadRow(service: Service, leadId: string): Promise<any | null> {
   return data ?? null;
 }
 
-// deno-lint-ignore no-explicit-any
-async function signAssets(service: Service, paths: Record<string, string> | null): Promise<Record<string, string>> {
+async function signPaths(service: Service, paths: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  for (const [k, p] of Object.entries(paths ?? {})) {
-    const { data } = await service.storage.from(BUCKET).createSignedUrl(p, SIGNED_URL_SECONDS);
-    if (data?.signedUrl) out[k] = data.signedUrl;
-  }
+  if (!paths.length) return out;
+  const { data } = await service.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_SECONDS);
+  for (const d of (data ?? []) as Array<{ path: string | null; signedUrl: string | null }>) if (d.path && d.signedUrl) out[d.path] = d.signedUrl;
   return out;
 }
 
 // deno-lint-ignore no-explicit-any
 async function view(service: Service, row: any, freshness: ReturnType<typeof previewFreshness> | null, extra: Record<string, unknown> = {}) {
   if (!row) return { ok: true, status: "not_generated", preview: null, ...extra };
+  const assetPaths = (row.asset_paths ?? {}) as Record<string, string>;
+  const imagePaths = ((row.facts?.images ?? []) as Array<{ stored: string | null }>).map((x) => x.stored).filter((x): x is string => !!x);
+  const signed = row.status === "ready" ? await signPaths(service, [...Object.values(assetPaths), ...imagePaths]) : {};
   return {
     ok: true,
     status: row.status,
@@ -177,7 +191,9 @@ async function view(service: Service, row: any, freshness: ReturnType<typeof pre
       headline: row.headline, primaryFinding: row.primary_finding, secondaryFindings: row.secondary_findings ?? [],
       notes: row.notes ?? [], message: row.message, facts: row.facts, timings: row.timings,
       stale: freshness?.state === "stale" ? freshness.changed.map((k) => FINGERPRINT_LABELS[k]) : [],
-      assets: row.status === "ready" ? await signAssets(service, row.asset_paths) : {},
+      assets: Object.fromEntries(Object.entries(assetPaths).map(([k, p]) => [k, signed[p]]).filter(([, u]) => !!u)),
+      /** Stored image copies, by path — the panel swaps them into the homepage HTML to view it. */
+      storedImages: Object.fromEntries(imagePaths.map((p) => [p, signed[p]]).filter(([, u]) => !!u)),
     },
     ...extra,
   };
@@ -185,52 +201,26 @@ async function view(service: Service, row: any, freshness: ReturnType<typeof pre
 
 /* ───────────────────────── gathering ───────────────────────── */
 
-interface Gathered {
-  lead: LeadRow;
-  audit: NonNullable<Awaited<ReturnType<typeof loadAudit>>>;
-  crawl: CrawlRowInput | null;
-  researchRow: StoredResearchRow | null;
-  parts: FingerprintParts;
-  headline: ReturnType<typeof pickHeadline>;
-  eligibility: ReturnType<typeof previewEligibility>;
-}
+interface Loaded { audit: AuditBundle; crawl: CrawlRowInput | null; researchRow: StoredResearchRow | null; g: Gathered }
 
-async function gather(service: Service, lead: LeadRow): Promise<Gathered | { refusal: string }> {
+async function load(service: Service, lead: LeadRow): Promise<Loaded | { refusal: string }> {
   const audit = await loadAudit(service, lead.id);
   if (!audit) return { refusal: "No completed AI audit for this lead yet — run the audit first." };
   const [crawl, researchRow] = await Promise.all([loadCrawl(service, lead.id), loadResearch(service, lead.id)]);
-  const a = audit.audit;
-  const trade = (a.business_type ?? "").trim() || lead.category || lead.search_keyword || null;
-  const town = (a.location_text ?? "").trim() || lead.derived_town || lead.search_location || null;
-  const data = buildReportData(audit.rows, audit.run, {
-    businessName: a.business_name ?? lead.business_name ?? "", businessType: a.business_type ?? "", locationText: a.location_text ?? "",
-    specialisms: "", isAggregatorUrl, ownWebsite: (lead.website ?? "").trim() || undefined,
-  });
-  const headline = pickHeadline(data, { auditId: a.id, runId: audit.run.id ?? null, trade, town });
-  const website = (lead.website ?? "").trim() && !isAggregatorUrl(lead.website!) ? lead.website!.trim() : null;
-  const eligibility = previewEligibility({
-    headline, auditComplete: true, hasWebsite: !!website, hasPhoneOrEmail: !!(lead.phone || lead.email), hasTown: !!town,
-  });
-  const choice = selectTemplate(tradePackFor(trade).key);
-  const researchFresh = planResearch({ row: researchRow, leadWebsite: website, refresh: false, nowMs: Date.now() }).action === "reuse";
-  const parts: FingerprintParts = {
-    leadId: lead.id, website, auditId: a.id, runId: audit.run.id ?? null, crawlAt: crawl?.created_at ?? null,
-    researchAt: researchFresh ? researchRow?.generated_at ?? null : null,
-    template: choice.ok ? templateKey(choice.template) : "none", generator: PROSPECT_PREVIEW_GENERATOR_VERSION,
-  };
-  return { lead: { ...lead, website }, audit, crawl, researchRow, parts, headline, eligibility };
+  const g = gatherPreview({ lead, audit, crawl, researchRow, isAggregatorUrl, nowMs: Date.now() });
+  return { audit, crawl, researchRow, g };
 }
 
 /* ───────────────────────── handlers ───────────────────────── */
 
 async function handleStatus(service: Service, lead: LeadRow) {
   const row = await loadRow(service, lead.id);
-  const g = await gather(service, lead);
-  if ("refusal" in g) return json(await view(service, row, null, { eligible: false, reason: g.refusal }));
-  return json(await view(service, row, previewFreshness(row, g.parts), {
-    eligible: g.eligibility.eligible, reason: g.eligibility.eligible ? null : g.eligibility.reason,
-    eligibilityNotes: g.eligibility.eligible ? g.eligibility.notes : [],
-    headline: g.headline, shotsConfigured: shotConfigured(),
+  const l = await load(service, lead);
+  if ("refusal" in l) return json(await view(service, row, null, { eligible: false, reason: l.refusal }));
+  const e = l.g.eligibility;
+  return json(await view(service, row, previewFreshness(row, l.g.parts), {
+    eligible: e.eligible, reason: e.eligible ? null : e.reason, eligibilityNotes: e.eligible ? e.notes : [],
+    headline: l.g.headline, shotsConfigured: shotConfigured(),
   }));
 }
 
@@ -245,8 +235,9 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
   if (existing && IN_PROGRESS.includes(existing.status) && Date.now() - new Date(existing.updated_at).getTime() < IN_PROGRESS_STALE_MS) {
     return json({ ok: false, error: "in_progress", detail: "A preview is already being generated for this lead." }, 409);
   }
-  const g = await gather(service, lead);
-  if ("refusal" in g) return json({ ok: false, error: "not_eligible", detail: g.refusal }, 409);
+  const l = await load(service, lead);
+  if ("refusal" in l) return json({ ok: false, error: "not_eligible", detail: l.refusal }, 409);
+  const g = l.g;
   if (!g.eligibility.eligible) return json({ ok: false, error: "not_eligible", detail: g.eligibility.reason }, 409);
   if (!g.headline) return json({ ok: false, error: "not_eligible", detail: "No usable audit example." }, 409);
 
@@ -256,7 +247,7 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
   }
   if (!shotConfigured()) return json({ ok: false, error: "not_configured", detail: "Screenshots need CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_BROWSER_TOKEN." }, 503);
 
-  /* Claim the row. A concurrent click loses the conditional update and is told so. */
+  /* Claim the row. A concurrent click loses the conditional write and is told so. */
   const nowIso = new Date().toISOString();
   if (!existing) {
     const { error } = await service.from(TABLE).insert({ lead_id: lead.id, user_id: lead.user_id, status: "gathering", updated_at: nowIso });
@@ -268,67 +259,60 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
   }
 
   const timings: Record<string, number> = {};
+  const fp = fingerprint(g.parts);
+  const dir = `${lead.id}/${fp}`;
+  const put = async (path: string, bytes: Uint8Array | string, type: string) => {
+    const { error } = await service.storage.from(BUCKET).upload(path, typeof bytes === "string" ? new Blob([bytes], { type }) : bytes, { contentType: type, upsert: true });
+    if (error) throw new Error(`storage upload ${path}: ${error.message}`);
+  };
   try {
-    /* ── gathering: research + their homepage ── */
+    /* ── gathering: their homepage (brand + words), menu pages only when nothing fresher is held ── */
     const t0 = Date.now();
-    const website = g.lead.website;
-    let research: WarmLeadResearch | null = null;
-    let homeHtml = "";
-    let homeUrl = "";
     const pages: PageFacts[] = [];
-    if (website) {
-      homeUrl = /^https?:\/\//i.test(website) ? website : `https://${website}`;
-      const home = await fetchHtml(homeUrl);
+    let homeHtml = "";
+    if (g.website) {
+      const homeUrl = homeUrlFor(g.website);
+      // Twice before anything is said about it: a transient failure is not "your site is down".
+      let home = await fetchPage(homeUrl);
+      if (!home.facts.ok) home = await fetchPage(homeUrl);
       homeHtml = home.html;
-      const homeFacts = extractPageFacts(home.html, homeUrl, home.finalUrl, home.status, home.ok);
-      pages.push(homeFacts);
-      if (g.parts.researchAt && g.researchRow?.research) {
-        research = g.researchRow.research;
-      } else {
-        const full = usableFullCrawl(g.crawl, homeUrl, Date.now());
-        if (homeFacts.ok && !full) {
-          const deadline = Date.now() + WARM_RESEARCH_DEADLINE_MS;
-          const targets = pickResearchPages(homeFacts, WARM_RESEARCH_MAX_PAGES - 1);
-          const rest = await Promise.all(targets.map(async (u) => {
-            if (Date.now() > deadline) return extractPageFacts("", u, u, 0, false);
-            const r = await fetchHtml(u);
-            return extractPageFacts(r.html, u, r.finalUrl, r.status, r.ok);
-          }));
-          pages.push(...rest);
-        }
-        research = assembleResearch({
-          nowIso, website: homeUrl, businessName: lead.business_name, trade: g.headline.trade, town: g.headline.town,
-          pages, crawl: g.crawl, audit: null, model: null, modelError: null, fetchMs: Date.now() - t0, analyseMs: null, researchMs: 0,
-          nowYear: new Date().getUTCFullYear(),
-        });
+      pages.push(home.facts);
+      if (home.facts.ok && needsMenuPages(g, l.crawl, homeUrl, Date.now())) {
+        const deadline = Date.now() + WARM_RESEARCH_DEADLINE_MS;
+        const targets = pickResearchPages(home.facts, WARM_RESEARCH_MAX_PAGES - 1);
+        pages.push(...await Promise.all(targets.map(async (u) => (Date.now() > deadline ? extractPageFacts("", u, u, 0, false) : (await fetchPage(u)).facts))));
       }
     }
-    const stored = g.crawl?.result?.siteInfo ?? null;
-    let origin = "";
-    try { origin = homeUrl ? new URL(pages[0]?.finalUrl || homeUrl).origin : ""; } catch { /* no origin */ }
-    const siteInfo = stored ?? (homeHtml && origin ? extractSiteInfo(homeHtml, { origin }) : null);
-    const brand = homeHtml ? readBrand(homeHtml, pages[0]?.finalUrl || homeUrl, lead.business_name) : null;
+    // Their own theme stylesheet(s) — the only place most sites declare their brand colour.
+    let css = "";
+    if (homeHtml) {
+      const sheets = stylesheetsToRead(homeHtml, pages[0]?.finalUrl || homeUrlFor(g.website!));
+      const got = await Promise.all(sheets.map((u) => fetchCapped(u, MAX_CSS_BYTES, "text/css,*/*;q=0.5")));
+      css = got.filter((r) => r?.ok).map((r) => new TextDecoder("utf-8", { fatal: false }).decode(r!.bytes)).join("\n");
+    }
+    const contactPhone = await loadContactPhone(service, lead);
+    const inputs = buildInputs({ lead, gathered: g, crawl: l.crawl, researchRow: l.researchRow, pages, homeHtml, contactPhone, nowIso, css });
     timings.gatherMs = Date.now() - t0;
 
-    /* ── selecting_template + building ── */
+    /* ── selecting_template, then copy ONLY the images that template will show ── */
     await setStatus(service, lead.id, "selecting_template");
+    const planned = planPreview(inputs.facts);
+    if (planned.ok === false) {
+      await setStatus(service, lead.id, "failed", `${planned.stage}: ${planned.reason}`);
+      return json({ ok: false, error: "generation_failed", stage: planned.stage, detail: planned.reason }, 422);
+    }
     const t1 = Date.now();
-    const conflicts = (research?.strongestFindings ?? []).concat(research?.technicalFindings ?? [], research?.contentFindings ?? [])
-      .filter((f) => /conflict/.test(f.kind)).map((f) => ({ kind: f.kind, title: f.title, detail: f.detail, evidence: f.evidence }));
-    await setStatus(service, lead.id, "building");
-    const result = generatePreview({
-      facts: {
-        lead: { ...g.lead },
-        audit: { trade: g.headline.trade, town: g.headline.town },
-        siteInfo: siteInfo as never,
-        pages: pages.map((p) => ({ url: p.finalUrl, ok: p.ok, text: p.text, metaDescription: p.metaDescription, title: p.title })),
-        brand,
-        researchConflicts: conflicts,
-      },
-      headline: g.headline,
-      research: research ? { status: research.status, technicallyClean: research.technicallyClean, strongestFindings: research.strongestFindings, technicalFindings: research.technicalFindings, contentFindings: research.contentFindings, localVisibilityFindings: research.localVisibilityFindings } : (website ? null : { status: "no_website", technicallyClean: false, strongestFindings: [] }),
+    const images = await copyImages(planned.imagesToCopy, dir, {
+      fetchBytes: async (url, max) => { const r = await fetchCapped(url, max, "image/avif,image/webp,image/*;q=0.9,*/*;q=0.5"); return r && r.ok ? { bytes: r.bytes, contentType: r.contentType } : null; },
+      store: (path, bytes, type) => put(path, bytes, type),
     });
-    timings.buildMs = Date.now() - t1;
+    timings.imagesMs = Date.now() - t1;
+
+    /* ── building ── */
+    await setStatus(service, lead.id, "building");
+    const t2 = Date.now();
+    const result = generatePreview({ facts: inputs.facts, headline: g.headline, research: inputs.research, images });
+    timings.buildMs = Date.now() - t2;
     if (!result.ok) {
       const detail = [result.reason, ...(result.problems ?? []), ...(result.contamination ?? []).map((h) => `${h.why}: ${h.value}`)].join(" · ").slice(0, 900);
       await setStatus(service, lead.id, "failed", `${result.stage}: ${detail}`);
@@ -336,35 +320,33 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
     }
     const p = result.preview;
 
-    /* ── rendering ── */
+    /* ── rendering: from our stored copies, through short-lived signed URLs ── */
     await setStatus(service, lead.id, "rendering");
-    const t2 = Date.now();
-    const fp = fingerprint(g.parts);
-    const dir = `${lead.id}/${fp}`;
+    const t3 = Date.now();
+    const signed = await signPaths(service, images.map((i) => i.stored).filter((x): x is string => !!x));
+    const live = (html: string) => resolveStoredAssets(html, (path) => signed[path] ?? null);
     const assetPaths: Record<string, string> = {};
-    const put = async (name: string, bytes: Uint8Array | string, type: string) => {
-      const path = `${dir}/${name}`;
-      const { error } = await service.storage.from(BUCKET).upload(path, typeof bytes === "string" ? new Blob([bytes], { type }) : bytes, { contentType: type, upsert: true });
-      if (error) throw new Error(`storage upload ${name}: ${error.message}`);
-      return path;
-    };
-    assetPaths.homepage_html = await put("homepage.html", p.homepageHtml, "text/html; charset=utf-8");
+    // Stored with the placeholder origin: the saved page never carries an expiring link.
+    assetPaths.homepage_html = `${dir}/homepage.html`;
+    await put(assetPaths.homepage_html, p.homepageHtml, "text/html; charset=utf-8");
     let mobileHero: Uint8Array | null = null;
     for (const s of SHOTS) {
-      let html = p.homepageHtml;
+      let html = live(p.homepageHtml);
       if (s.doc === "card") {
         const b64 = mobileHero ? btoa(Array.from(mobileHero, (c) => String.fromCharCode(c)).join("")) : null;
         const card = buildCardHtml(p, b64 ? `data:image/png;base64,${b64}` : null);
         if (!card.ok) throw new Error(`card refused: ${card.contamination.map((h) => h.value).join(", ")}`);
         html = card.html;
-        assetPaths.card_html = await put("card.html", card.html, "text/html; charset=utf-8");
+        assetPaths.card_html = `${dir}/card.html`;
+        await put(assetPaths.card_html, card.html, "text/html; charset=utf-8");
       }
       const shot = await shootHtml(html, s);
       if (!shot.ok) throw new Error(`screenshot ${s.asset}: ${shot.refusal} ${shot.detail ?? ""}`);
       if (s.asset === "mobile_hero") mobileHero = shot.bytes;
-      assetPaths[s.asset] = await put(`${s.asset}.png`, shot.bytes, "image/png");
+      assetPaths[s.asset] = `${dir}/${s.asset}.png`;
+      await put(assetPaths[s.asset], shot.bytes, "image/png");
     }
-    timings.renderMs = Date.now() - t2;
+    timings.renderMs = Date.now() - t3;
     timings.totalMs = Date.now() - started;
     const missing = PREVIEW_ASSETS.filter((a) => !assetPaths[a]);
     if (missing.length) throw new Error(`missing assets: ${missing.join(", ")}`);
@@ -372,12 +354,15 @@ async function handleGenerate(service: Service, lead: LeadRow, regenerate: boole
     await setStatus(service, lead.id, "ready", null, {
       audit_id: g.parts.auditId, template_id: p.template.id, template_version: p.template.version,
       generator_version: PROSPECT_PREVIEW_GENERATOR_VERSION, fingerprint: fp, fingerprint_parts: g.parts,
-      source_website: website, source_crawl_at: g.crawl?.created_at ?? null,
+      source_website: g.website, source_crawl_at: l.crawl?.created_at ?? null,
       headline: g.headline, primary_finding: p.selection.primary, secondary_findings: p.selection.secondary,
       facts: {
         business: p.config.business, services: p.config.services, areas: p.config.areas, proof: p.config.proof,
-        brand: { logo: p.config.brand.logoUrl, primary: p.config.brand.primary, accent: p.config.brand.accent, photos: p.config.brand.photos.length },
-        conflicts: p.config.conflicts, rejectedAreas: p.config.rejectedAreas, researchSource: g.parts.researchAt ? "warm_lead_research" : "assembled_here",
+        brand: { logo: p.config.brand.logoUrl, primary: p.config.brand.primary, accent: p.config.brand.accent },
+        // Provenance: every copied image, source URL → stored path (or why it was left out).
+        images,
+        conflicts: p.config.conflicts, requiresResolution: p.config.requiresResolution, rejectedAreas: p.config.rejectedAreas,
+        researchSource: inputs.researchSource, contactPhone,
       },
       notes: p.notes, message: p.message, asset_paths: assetPaths, timings, generated_at: new Date().toISOString(),
     });

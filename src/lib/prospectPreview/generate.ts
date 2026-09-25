@@ -19,6 +19,7 @@ import { buildCardCopy, cardCopyText, copyProblems, suggestedMessage, type CardC
 import { renderEvidenceCard } from './evidenceCard.ts';
 import { selectTemplate, PROSPECT_TEMPLATES, templateKey } from './templates/index.ts';
 import { scanContamination, type ContaminationHit } from './contamination.ts';
+import { applyStoredImages, hotlinkedImages, imagesToCopy, type CopiedImage, type ImageToCopy } from './assets.ts';
 
 export interface GenerateInput {
   facts: FactsInput;
@@ -28,6 +29,9 @@ export interface GenerateInput {
   /** Values from OTHER prospects/clients the caller knows about (tests; a batch run). */
   extraForbidden?: readonly string[];
   year?: number;
+  /** The images the caller copied into preview storage (from `planPreview`'s `imagesToCopy`).
+   *  ⛔ Anything not listed here is DROPPED from the page — the preview never hotlinks. */
+  images?: CopiedImage[];
 }
 
 export interface GeneratedPreview {
@@ -45,14 +49,25 @@ export type GenerateResult =
   | { ok: true; preview: GeneratedPreview }
   | { ok: false; stage: PreviewStatus; reason: string; contamination?: ContaminationHit[]; problems?: string[] };
 
-export function generatePreview(i: GenerateInput): GenerateResult {
-  const facts = buildProspectConfig(i.facts);
-  if (facts.ok === false) return { ok: false, stage: 'gathering', reason: facts.reason };
-  const config = facts.config;
+export type PlanResult =
+  | { ok: true; config: ProspectConfig; template: ProspectTemplate; why: string; imagesToCopy: ImageToCopy[] }
+  | { ok: false; stage: PreviewStatus; reason: string };
 
-  const choice = selectTemplate(config.tradeKey, i.registry ?? PROSPECT_TEMPLATES);
+/** Step 1: facts + template, and the exact images the caller must copy before `generatePreview`. */
+export function planPreview(facts: FactsInput, registry?: readonly ProspectTemplate[]): PlanResult {
+  const f = buildProspectConfig(facts);
+  if (f.ok === false) return { ok: false, stage: 'gathering', reason: f.reason };
+  const choice = selectTemplate(f.config.tradeKey, registry ?? PROSPECT_TEMPLATES);
   if (choice.ok === false) return { ok: false, stage: 'selecting_template', reason: choice.reason };
-  const t = choice.template;
+  return { ok: true, config: f.config, template: choice.template, why: choice.why, imagesToCopy: imagesToCopy(f.config, choice.template) };
+}
+
+export function generatePreview(i: GenerateInput): GenerateResult {
+  const plan = planPreview(i.facts, i.registry);
+  if (plan.ok === false) return plan;
+  const config = applyStoredImages(plan.config, i.images ?? []);
+  const choice = { why: plan.why };
+  const t = plan.template;
 
   const selection = selectFindings(i.research);
   const hasWebsite = !!config.business.website;
@@ -71,6 +86,8 @@ export function generatePreview(i: GenerateInput): GenerateResult {
   } catch (e) {
     return { ok: false, stage: 'building', reason: `The template failed to render: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
   }
+  const hotlinks = hotlinkedImages(homepageHtml);
+  if (hotlinks.length) return { ok: false, stage: 'building', reason: `Refused: the page would load ${hotlinks.length} image(s) from outside preview storage.`, problems: hotlinks };
   const hits = scanContamination(homepageHtml, config, i.extraForbidden ?? []);
   if (hits.length) {
     return { ok: false, stage: 'building', reason: `Refused: the page contained ${hits.length} value(s) that are not this prospect's.`, contamination: hits };

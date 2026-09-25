@@ -7,6 +7,7 @@ import { AlertTriangle, Check, Copy, Download, ExternalLink, Loader2, MonitorSma
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
+import { resolveStoredAssets } from '@/lib/prospectPreview/assets';
 import { PREVIEW_ASSETS, PREVIEW_ASSET_LABELS, PREVIEW_STATUS_LABELS, type PreviewStatus, type ProspectHeadline, type CardFinding } from '@/lib/prospectPreview/types';
 
 export const PROSPECT_PREVIEW_LABEL = 'Prospect preview';
@@ -23,6 +24,8 @@ interface PreviewView {
   message: string | null;
   stale: string[];
   assets: Record<string, string>;
+  /** Stored copies of their images, by storage path → short-lived signed URL. */
+  storedImages?: Record<string, string>;
   timings: Record<string, number> | null;
 }
 interface StatusResponse {
@@ -83,9 +86,10 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
     }
   };
 
-  const openHtml = async (url: string) => {
-    // Storage serves HTML as a download/plain text; render it from a blob in a new tab instead.
-    const html = await (await fetch(url)).text();
+  const openHtml = async (url: string, images: Record<string, string>) => {
+    // Storage serves HTML as a download/plain text; render it from a blob in a new tab instead,
+    // with the stored image copies swapped in (the saved page never holds an expiring link).
+    const html = resolveStoredAssets(await (await fetch(url)).text(), (path) => images[path] ?? null);
     const blob = new Blob([html], { type: 'text/html' });
     window.open(URL.createObjectURL(blob), '_blank', 'noopener');
   };
@@ -142,7 +146,7 @@ function ProspectPreviewSheet({ leadId, open, onOpenChange }: { leadId: string; 
                   ))}
                 </div>
                 {p.assets.homepage_html && (
-                  <Button variant="outline" size="sm" onClick={() => void openHtml(p.assets.homepage_html)}><ExternalLink className="mr-2 h-4 w-4" /> View homepage</Button>
+                  <Button variant="outline" size="sm" onClick={() => void openHtml(p.assets.homepage_html, p.storedImages ?? {})}><ExternalLink className="mr-2 h-4 w-4" /> View homepage</Button>
                 )}
               </div>
 

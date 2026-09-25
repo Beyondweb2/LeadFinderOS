@@ -28,6 +28,30 @@ hand. Operator click only; never automatic; never sends.
 - Stale = inputs moved; the stored preview is shown marked stale; only Regenerate rebuilds.
 - Research reuse is READ-ONLY on `warm_lead_research` (warm-lead-reply owns it). No OpenAI spend.
 
+## Pre-ship validation (2026-09-26)
+- **Phone rule (Paul):** agree → used. Differ → a conflict: the outreach preview's CTA uses the number
+  LeadFinder is messaging (newest `whatsapp_messages.phone`, else the lead's), labelled
+  `outreach_contact`; the website's number stays as `business.websitePhone`; operator note
+  "Phone mismatch: LeadFinder/contact number is X; current website shows Y."; `requiresResolution`
+  records it for a paid build. The card is never about the mismatch.
+- **No hotlinking:** `assets.ts` — only the template's `imageBudget` (logo + ≤8 photos) is fetched,
+  sniffed (magic bytes + header, size bounds, script-free SVG logos only), stored under
+  `<lead>/<fingerprint>/src/`, and the page references `https://prospect-preview.invalid/<path>`,
+  swapped for signed URLs at render/view time. A failed image is omitted and flagged. Provenance in
+  `facts.images`. No resizing (no image library in the edge runtime) — size bounds instead.
+- **Screenshot cap:** `withShotCap` puts the cap IN the document (sheds gallery → FAQs → about →
+  areas → trust, then clips); `shotWithinCap` reads the PNG header and refuses oversize/overweight.
+- **Shared gather:** `gather.ts` is the one path from stored rows to inputs, used by the edge fn and
+  the local real-lead run.
+- **Real leads taught** (E.E.S Electrical, R.Coulson Plumbing & Heating, JOLT Electrical): WordPress
+  core palette / theme defaults read as "brand" on three unrelated sites (now excluded; their own
+  theme stylesheet and an SVG logo's fills are read instead); stock (AdobeStock) and WP site-icon
+  clip-art taken as photos; hover/rollover twins; menu pages as services ("Finance", "Thankyou",
+  "Complaint Procedure", "Contact Lee"); a finance disclaimer, a menu run and a customer REVIEW
+  picked as their own words; a 404 site not recognised (now a strength-5 finding, fetched twice;
+  403 is never "down"); a message claiming "the site is accessible" about a site we could not read;
+  named 1 of 2 (one engine missed them) now qualifies and the card names that engine.
+
 ## To ship
 1. Apply the migration (read back the table, RLS, bucket). 2. Deploy `prospect-preview` (needs
 `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_BROWSER_TOKEN`, already used by `mockup`). 3. Merge for the SPA.

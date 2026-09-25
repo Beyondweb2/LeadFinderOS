@@ -43,6 +43,9 @@ export function buildCardCopy(h: ProspectHeadline, sel: FindingSelection, busine
     bridgeLine = issues.length > 1 ? 'These issues may be contributing to the visibility gap.' : 'This may be contributing to the visibility gap.';
   } else if (sel.fallbackReason?.startsWith('The site was read')) {
     bridgeLine = 'The site is technically accessible, but AI is still naming other businesses for these searches. The new concept makes your services, areas and evidence much clearer.';
+  } else if (sel.fallbackReason?.startsWith('The current site could not be read')) {
+    // We did not read it, so we compare it to nothing.
+    bridgeLine = 'AI named other businesses for this search. The new concept sets out your services, areas and evidence clearly.';
   } else {
     bridgeLine = 'AI is consistently naming other businesses for these searches. The new concept makes your services, areas and evidence much clearer.';
   }
@@ -65,11 +68,23 @@ export function buildCardCopy(h: ProspectHeadline, sel: FindingSelection, busine
 export function suggestedMessage(h: ProspectHeadline, sel: FindingSelection, hasWebsite: boolean): string {
   const rivals = h.competitors.slice(0, 3);
   const who = rivals.length > 1 ? 'those businesses are' : `${rivals[0]} is`;
+  const down = !!sel.primary && /^rule:site_down/.test(sel.primary.id);
+  const unread = !sel.primary && !!sel.fallbackReason?.startsWith('The current site could not be read');
+  const clean = !sel.primary && !!sel.fallbackReason?.startsWith('The site was read');
+  const issues = sel.primary ? 1 + sel.secondary.length : 0;
   const first = !hasWebsite
     ? `i had a look at why ${who} coming up instead of you, and one thing that stands out is there's no website for AI to read about you.`
-    : sel.primary
-      ? `i had a look at why ${who} coming up instead of you and found a few issues with the current site.`
-      : `i had a look at why ${who} coming up instead of you. the site itself is accessible, but it doesn't make your services and areas very clear.`;
+    : down
+      ? `i had a look at why ${who} coming up instead of you, and your website is showing an error page at the moment.`
+      : sel.primary
+        ? `i had a look at why ${who} coming up instead of you and found ${issues > 1 ? 'a few issues' : 'an issue'} with the current site.`
+        : clean
+          ? `i had a look at why ${who} coming up instead of you. the site itself is accessible, but it doesn't make your services and areas very clear.`
+          // Not read: say nothing about it.
+          : `i had a look at why ${who} coming up instead of you.`;
+  if (unread) {
+    return `${first}\n\nrather than just telling you what i'd do, i mocked up a homepage that sets out your services and areas clearly so you can see it 👇`;
+  }
   const second = hasWebsite
     ? `rather than just telling you what i'd change i mocked up what i'd actually replace it with so you can see it 👇`
     : `so rather than just telling you, i mocked up what i'd build for you so you can see it 👇`;

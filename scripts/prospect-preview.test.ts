@@ -1,25 +1,38 @@
 /* PROSPECT PREVIEW — the generator, end to end on fixtures (test data only; no DB, no network,
    no WhatsApp). Cases A–J are the brief's. */
 
-import { generatePreview, buildCardHtml } from '../src/lib/prospectPreview/generate.ts';
+import { generatePreview, buildCardHtml, planPreview } from '../src/lib/prospectPreview/generate.ts';
+import { copyImages, sniffImage, hotlinkedImages, resolveStoredAssets, STORED_ASSET_BASE, type CopiedImage } from '../src/lib/prospectPreview/assets.ts';
+import { withShotCap, pngDimensions, shotWithinCap, SHOTS } from '../src/lib/prospectPreview/shots.ts';
+import { pickOrdinaryAudit, siteDownFinding } from '../src/lib/prospectPreview/gather.ts';
+import type { FactsInput } from '../src/lib/prospectPreview/facts.ts';
 import { buildProspectConfig, areasFromText, cleanServices, yearsTradingClaims, sentencesOf } from '../src/lib/prospectPreview/facts.ts';
 import { selectFindings, pickHeadline, previewEligibility, cardLine } from '../src/lib/prospectPreview/findings.ts';
-import { copyProblems, suggestedMessage } from '../src/lib/prospectPreview/copy.ts';
+import { copyProblems, suggestedMessage, buildCardCopy } from '../src/lib/prospectPreview/copy.ts';
+import { extractPageFacts } from '../src/lib/warmLeadResearch.ts';
 import { scanContamination } from '../src/lib/prospectPreview/contamination.ts';
 import { selectTemplate, PROSPECT_TEMPLATES } from '../src/lib/prospectPreview/templates/index.ts';
 import { fingerprint, planGenerate, previewFreshness, PROSPECT_PREVIEW_GENERATOR_VERSION, type FingerprintParts } from '../src/lib/prospectPreview/freshness.ts';
-import { readBrand } from '../src/lib/prospectPreview/brand.ts';
+import { readBrand, stylesheetsToRead, svgLogoColours } from '../src/lib/prospectPreview/brand.ts';
 import { paletteFrom, contrast, parseColor } from '../src/lib/prospectPreview/color.ts';
 import { tradePackFor } from '../src/lib/prospectPreview/trades.ts';
-import { eesFacts, eesHeadline, eesResearch, keylineFacts, keylineHeadline, FINDING_CRAWLER_BLOCKED } from './prospect-preview-fixtures.ts';
+import { eesFacts, eesHeadline, eesResearch, keylineFacts, keylineHeadline, FINDING_CRAWLER_BLOCKED, FINDING_NO_SERVICE_PAGES } from './prospect-preview-fixtures.ts';
 import type { ProspectTemplate } from '../src/lib/prospectPreview/types.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 const visible = (html: string) => html.replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ');
 
-const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) =>
-  generatePreview({ facts: eesFacts(), headline: eesHeadline(), research: eesResearch('strong'), year: 2026, ...over });
+/** What the drivers do: copy exactly the images the template will show (here every copy
+ *  "succeeds", stored under a fake preview folder). */
+const copiedAll = (facts: FactsInput): CopiedImage[] => {
+  const p = planPreview(facts);
+  return p.ok ? p.imagesToCopy.map((i) => ({ role: i.role, source: i.source, stored: `L/fp/src/${i.role}-${i.index}.jpg` })) : [];
+};
+const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) => {
+  const facts = over.facts ?? eesFacts();
+  return generatePreview({ facts, headline: eesHeadline(), research: eesResearch('strong'), year: 2026, images: copiedAll(facts), ...over });
+};
 
 /* ── A. strong technical issue ── */
 {
@@ -77,7 +90,7 @@ const gen = (over: Partial<Parameters<typeof generatePreview>[0]> = {}) =>
   ok(g.ok && g.preview.homepageHtml.includes('class="wordmark"') && !g.preview.homepageHtml.includes('ees-logo.svg'), 'D: no logo → text wordmark, no image');
   ok(g.ok && g.preview.notes.some((n) => /No logo found/.test(n)), 'D: missing logo flagged to the operator');
   const withLogo = gen();
-  ok(withLogo.ok && withLogo.preview.homepageHtml.includes('ees-logo.svg'), 'D: a found logo is used as found');
+  ok(withLogo.ok && withLogo.preview.homepageHtml.includes(`${STORED_ASSET_BASE}L/fp/src/logo-0.jpg`) && !withLogo.preview.homepageHtml.includes('ees-logo.svg'), 'D: a found logo is used — from our stored copy');
 }
 
 /* ── E. missing photos ── */
@@ -186,6 +199,132 @@ ok(suggestedMessage(eesHeadline(), selectFindings(eesResearch('strong')), false)
   ok(!previewEligibility({ ...base, headline: { ...h!, namedDatapoints: 4, totalDatapoints: 6 } }).eligible, 'ineligible: named in most answers');
   ok(!previewEligibility({ ...base, auditComplete: false }).eligible, 'ineligible: no completed audit');
   ok(!previewEligibility({ ...base, hasWebsite: false, hasPhoneOrEmail: false }).eligible, 'ineligible: nothing truthful to build from');
+}
+
+/* ── phone rule (Paul, 2026-09-26) ── */
+{
+  const same = buildProspectConfig(eesFacts());
+  ok(same.ok && same.config.conflicts.every((c) => c.field !== 'phone'), 'phone: agreeing numbers → used normally, no conflict');
+  const diff = buildProspectConfig({ ...eesFacts(), fixture: false, contactPhone: '447700900111' });
+  ok(diff.ok, 'phone: mismatch still builds');
+  if (diff.ok) {
+    const c = diff.config;
+    ok(c.business.phone?.value === '07700 900111' && c.business.phone.source === 'outreach_contact', 'phone: CTA uses the number we are messaging, labelled outreach-only');
+    ok(c.business.websitePhone?.value === '01632 960123' && c.business.websitePhone.source === 'existing_site', 'phone: the website number stays recorded as its own fact');
+    ok(c.conflicts.some((x) => x.field === 'phone' && x.note.startsWith('Phone mismatch: LeadFinder/contact number is 07700 900111; current website shows 01632 960123.')), 'phone: operator note in the agreed wording');
+    ok(c.requiresResolution.some((r) => /Phone mismatch/.test(r)), 'phone: a paid build would have to resolve it');
+  }
+  const g = gen({ facts: { ...eesFacts(), contactPhone: '07700 900111' } });
+  ok(g.ok && !visible(g.preview.homepageHtml).includes('01632 960123') && g.preview.card.issues.every((l) => !/phone|number/i.test(l)), 'phone: page shows one number; the card is not about the mismatch');
+  ok(g.ok && g.preview.notes.some((n) => /Phone mismatch/.test(n)), 'phone: mismatch surfaced in the operator notes');
+}
+
+/* ── images are copied, never hotlinked ── */
+{
+  const facts = eesFacts({ photos: true });
+  const p = planPreview(facts);
+  ok(p.ok && p.imagesToCopy.length === 4 && p.imagesToCopy[0].role === 'logo', 'images: only the logo + the photos the template shows are listed');
+  const many = eesFacts({ photos: true });
+  many.brand!.photos = Array.from({ length: 30 }, (_, i) => `https://ees.example/p${i}.jpg`);
+  const pm = planPreview(many);
+  ok(pm.ok && pm.imagesToCopy.filter((x) => x.role === 'photo').length === 8, 'images: never more photos than the template budget (never the media library)');
+  const none = generatePreview({ facts, headline: eesHeadline(), research: eesResearch('strong'), year: 2026 });
+  ok(none.ok && hotlinkedImages(none.preview.homepageHtml).length === 0 && !/127\.0\.0\.1|stock-0/.test(none.preview.homepageHtml), 'images: nothing copied → nothing shown (no hotlink, no stock)');
+  ok(none.ok && none.preview.notes.some((n) => /could not be copied/.test(n)), 'images: an uncopied logo is flagged');
+  const partial = copiedAll(facts).map((c, i) => (i === 2 ? { ...c, stored: null, failed: 'could not be fetched' } : c));
+  const gp = generatePreview({ facts, headline: eesHeadline(), research: eesResearch('strong'), year: 2026, images: partial });
+  ok(gp.ok && gp.preview.config.brand.photos.length === 2 && gp.preview.notes.some((n) => /1 selected photo/.test(n)), 'images: a failed fetch omits that photo gracefully');
+  ok(gp.ok && hotlinkedImages(gp.preview.homepageHtml).length === 0, 'images: every <img> is our stored copy');
+  ok(hotlinkedImages('<img src="https://their-site.example/van.jpg">').length === 1 && hotlinkedImages('<div style="background:url(https://x.example/a.jpg)">').length === 1, 'images: hotlink detector catches img and CSS url()');
+  ok(resolveStoredAssets(`<img src="${STORED_ASSET_BASE}L/fp/src/photo-0.jpg">`, (path) => 'https://signed.example/' + path) === '<img src="https://signed.example/L/fp/src/photo-0.jpg">', 'images: placeholder origin swapped for a signed URL at render time');
+  const jpg = new Uint8Array(20000); jpg.set([0xff, 0xd8, 0xff]);
+  ok(sniffImage(jpg, 'image/jpeg', 'photo').ok, 'sniff: a JPEG passes');
+  ok(!sniffImage(jpg, 'text/html', 'photo').ok, 'sniff: an HTML response is refused even with JPEG bytes');
+  ok(!sniffImage(new TextEncoder().encode('<html>'.padEnd(20000)), 'image/png', 'photo').ok, 'sniff: non-image bytes refused whatever the header says');
+  ok(!sniffImage(new Uint8Array(7_000_000).fill(0xff), 'image/jpeg', 'photo').ok, 'sniff: oversize refused');
+  ok(sniffImage(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), 'image/svg+xml', 'logo').ok, 'sniff: a clean SVG logo passes');
+  ok(!sniffImage(new TextEncoder().encode('<svg onload="alert(1)"></svg>'), 'image/svg+xml', 'logo').ok, 'sniff: an SVG with script is refused');
+  ok(!sniffImage(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>'.padEnd(20000)), 'image/svg+xml', 'photo').ok, 'sniff: SVG is a logo format only');
+  const stored: string[] = [];
+  const copied = await copyImages([
+    { role: 'photo', source: 'https://a.example/1.jpg', index: 0 }, { role: 'photo', source: 'https://a.example/2.jpg', index: 1 }, { role: 'photo', source: 'https://a.example/3.jpg', index: 2 },
+  ], 'L/fp', {
+    fetchBytes: async (u) => (u.endsWith('1.jpg') ? { bytes: jpg, contentType: 'image/jpeg' } : u.endsWith('2.jpg') ? null : { bytes: new TextEncoder().encode('<html>'), contentType: 'text/html' }),
+    store: async (path) => { stored.push(path); },
+  });
+  ok(copied[0].stored === 'L/fp/src/photo-0.jpg' && copied[1].stored === null && copied[2].stored === null && stored.length === 1, 'copy: good image stored; failed fetch and non-image omitted');
+  ok(copied[0].source === 'https://a.example/1.jpg' && !!copied[1].failed && !!copied[2].failed, 'copy: provenance kept (source → stored, or why not)');
+}
+
+/* ── screenshot cap ── */
+{
+  const full = SHOTS.find((s) => s.asset === 'desktop_full')!;
+  const hero = SHOTS.find((s) => s.asset === 'desktop_hero')!;
+  const mobile = SHOTS.find((s) => s.asset === 'mobile_full')!;
+  ok(SHOTS.every((s) => s.maxCssHeight > 0 && (s.fullPage ? s.maxCssHeight >= s.height : s.maxCssHeight === s.height)), 'cap: every shot has a height limit');
+  const capped = withShotCap('<html><body><p>x</p></body></html>', full);
+  ok(capped.includes('var cap=6000') && capped.includes('"#faq"') && capped.indexOf('<script>') < capped.indexOf('</body>'), 'cap: full-page documents carry the cap + section shedding');
+  ok(withShotCap('<html><body></body></html>', hero) === '<html><body></body></html>', 'cap: first-screen shots are untouched');
+  const png = (w: number, h: number) => {
+    const b = new Uint8Array(33); b.set([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+    b.set([(w >>> 24) & 255, (w >>> 16) & 255, (w >>> 8) & 255, w & 255], 16); b.set([(h >>> 24) & 255, (h >>> 16) & 255, (h >>> 8) & 255, h & 255], 20); return b;
+  };
+  ok(JSON.stringify(pngDimensions(png(1440, 4107))) === '{"width":1440,"height":4107}', 'cap: PNG size read from the header');
+  ok(shotWithinCap(png(1440, 4107), full).ok && !shotWithinCap(png(1440, 6100), full).ok, 'cap: a too-tall full-page shot is refused');
+  ok(shotWithinCap(png(1440, 900), hero).ok && !shotWithinCap(png(1440, 1200), hero).ok, 'cap: first-screen shots are exactly one screen');
+  ok(shotWithinCap(png(780, 16000), mobile).ok && !shotWithinCap(png(780, 16100), mobile).ok, 'cap: mobile cap = CSS height × device scale');
+}
+
+/* ── audit choice ── */
+{
+  const pick = pickOrdinaryAudit([
+    { id: 'm', created_at: '2026-09-25', audit_purpose: 'measurement', ai_audit_runs: [{ status: 'complete', run_number: 1 }] },
+    { id: 'b', created_at: '2026-09-24', audit_purpose: 'baseline', ai_audit_runs: [{ status: 'complete', run_number: 1 }] },
+    { id: 'r', created_at: '2026-09-23', audit_purpose: 'audit', ai_audit_runs: [{ status: 'running', run_number: 1 }] },
+    { id: 'h', created_at: '2026-09-20', audit_purpose: null, ai_audit_runs: [{ status: 'capped', run_number: 1 }] },
+  ]);
+  ok(pick?.audit.id === 'h', 'audit: newest ORDINARY audit with a settled run (never a measurement or baseline)');
+}
+
+/* ── what the real-lead validation taught (2026-09-26) ── */
+{
+  // WordPress core palette + a theme default are not a brand.
+  const wp = '<style id="global-styles-inline-css">:root{--wp--preset--color--vivid-red:#cf2e2e;--wp--preset--color--vivid-green-cyan:#00d084}</style><style>a{color:#13aff0}a:hover{color:#13aff0}.x{color:#13aff0}</style>';
+  const b = readBrand(`<html><head>${wp}</head><body></body></html>`, 'https://x.example/', 'X');
+  ok(b.primary === null, 'real: WordPress default palette and the OceanWP default are not read as brand colours');
+  const own = readBrand(`<html><head>${wp}</head><body></body></html>`, 'https://x.example/', 'X', '.btn{background:#1b4f7a}.h{color:#1b4f7a}.f{border-color:#1b4f7a}');
+  ok(own.primary === '#1b4f7a', 'real: a colour their OWN theme stylesheet uses is read');
+  ok(JSON.stringify(stylesheetsToRead('<link rel="stylesheet" href="/wp-content/themes/x/style.css"><link rel="stylesheet" href="/wp-includes/css/dist/block-library/style.min.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?x">', 'https://www.x.example/')) === '["https://www.x.example/wp-content/themes/x/style.css"]', 'real: only their own theme stylesheet is fetched');
+  const svg = svgLogoColours('<svg><path fill="#1b4f7a"/><path fill="#1b4f7a"/><path fill="#e8612c"/><path fill="#7fc3ea"/></svg>');
+  ok(svg.primary === '#1b4f7a' && svg.accent === '#e8612c', 'real: an SVG logo gives the brand pair (deep colour + most distinct hue)');
+  const withSvg = generatePreview({ facts: eesFacts(), headline: eesHeadline(), research: eesResearch('strong'), year: 2026,
+    images: copiedAll(eesFacts()).map((c) => (c.role === 'logo' ? { ...c, logoColours: { primary: '#1b4f7a', accent: '#e8612c' } } : c)) });
+  ok(withSvg.ok && withSvg.preview.config.brand.primary?.value === '#1b4f7a' && withSvg.preview.config.brand.primary.quote === 'the colours in their logo', 'real: logo colours outrank CSS colours');
+  // Stock, clip-art, WP site icons and hover twins are not genuine business photos.
+  const ph = readBrand('<main><img src="/wp-content/uploads/AdobeStock_205.jpeg" width="900"><img src="/wp-content/uploads/cropped-caution-svgrepo-com.png" width="512"><img src="/u/Boiler-installation-img.png" width="600"><img src="/u/Boiler-installation-Rollover.png" width="600"><img src="/u/518391851_1296_n.jpg" width="800"></main>', 'https://x.example/', 'X');
+  ok(ph.photos.length === 2 && ph.photos.some((p) => p.endsWith('Boiler-installation-img.png')) && ph.photos.some((p) => p.endsWith('518391851_1296_n.jpg')), 'real: stock, clip-art and rollover duplicates excluded; genuine photos kept');
+  // Menu pages that are not services, and boilerplate that is not a description.
+  ok(cleanServices(['Heating', 'Plumbing', 'Bathrooms', 'Finance', 'Thankyou', 'R Coulson Plumbing', 'Complaint Procedure'], 'plumber', ['Scunthorpe'], 'R.Coulson Plumbing & Heating Ltd').join('|') === 'Heating|Plumbing|Bathrooms', 'real: Finance / Thankyou / Complaint Procedure / their own name are not services');
+  const rc = buildProspectConfig({ ...eesFacts(), lead: { ...eesFacts().lead, business_name: 'R.Coulson Plumbing & Heating Ltd' }, pages: [{ url: 'https://rc.example/', ok: true, metaDescription: null,
+    text: 'R.Coulson Plumbing & Heating Ltd works limited introduce customers to TradeHelp Ltd and do not receive a fee for the introduction. R. Coulson Plumbing & Heating Ltd have provided over 23 years of heating and plumbing services to homes and businesses across Scunthorpe.' }] });
+  ok(rc.ok && /23 years of heating and plumbing/.test(rc.config.proof.summary?.value ?? '') && !/TradeHelp/.test(rc.config.proof.summary?.value ?? ''), 'real: a finance disclaimer is never the About text');
+  // A site that is down is the finding; nothing older is said.
+  const downPage = extractPageFacts('Not found: www.jolt.example', 'http://www.jolt.example/', 'https://www.jolt.example/', 404, false);
+  const f404 = siteDownFinding('http://www.jolt.example/', downPage);
+  ok(!!f404 && f404.strength === 5 && cardLine(f404) === 'Your website is showing a “Not found” error', 'real: a 404 homepage is a strength-5 finding');
+  ok(siteDownFinding('http://x.example/', extractPageFacts('', 'http://x.example/', 'http://x.example/', 403, false)) === null, 'real: a 403 (could be bot-blocking) is NOT called down');
+  const unreadSel = selectFindings({ status: 'failed', technicallyClean: false, strongestFindings: [FINDING_CRAWLER_BLOCKED, { ...FINDING_NO_SERVICE_PAGES }] });
+  ok(unreadSel.primary?.id === FINDING_CRAWLER_BLOCKED.id && unreadSel.secondary.length === 0, 'real: site unreadable today → only the crawl’s measured findings survive');
+  const noneSel = selectFindings({ status: 'failed', technicallyClean: false, strongestFindings: [] });
+  const msg = suggestedMessage(eesHeadline(), noneSel, true);
+  ok(!/accessible|issue|doesn't make/.test(msg), 'real: nothing is claimed about a site we could not read');
+  const card = buildCardCopy(eesHeadline(), noneSel, 'X', true);
+  ok(!/clearer|technically accessible/.test(card.bridgeLine), 'real: the card compares nothing it did not read');
+  ok(/found an issue/.test(suggestedMessage(eesHeadline(), { primary: selectFindings(eesResearch('strong')).primary, secondary: [], fallback: false, fallbackReason: null }, true)), 'real: one issue is "an issue", not "a few"');
+  // Named by one engine, missed by the other: a genuine gap (E.E.S Electrical).
+  const half = { ...eesHeadline(), namedDatapoints: 1, totalDatapoints: 2, prospectNamed: true, engines: ['Gemini'] };
+  ok(previewEligibility({ headline: half, auditComplete: true, hasWebsite: true, hasPhoneOrEmail: true, hasTown: true }).eligible, 'real: named 1 of 2 still qualifies');
+  ok(buildCardCopy(half, selectFindings(eesResearch('strong')), 'E.E.S Electrical Services', true).notNamedLine === 'Gemini didn’t name E.E.S Electrical Services.', 'real: …and the card names the engine that missed them');
 }
 
 /* ── facts helpers ── */

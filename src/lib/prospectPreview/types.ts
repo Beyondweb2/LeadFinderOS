@@ -15,10 +15,11 @@
 
 /** Where a value came from. "existing_site" = the business states it on its own public website
  *  (the Findable source-site rule) — reusable, never "verified". */
-export type FactSource = 'lead_record' | 'google_places' | 'ai_audit' | 'existing_site' | 'crawl' | 'fixture';
+export type FactSource = 'lead_record' | 'outreach_contact' | 'google_places' | 'ai_audit' | 'existing_site' | 'crawl' | 'fixture';
 
 export const FACT_SOURCE_LABELS: Record<FactSource, string> = {
   lead_record: 'Lead record',
+  outreach_contact: 'LeadFinder contact number (the number we are messaging) — outreach preview only',
   google_places: 'Google Business Profile (via Places)',
   ai_audit: 'AI audit',
   existing_site: 'Existing client website',
@@ -73,6 +74,9 @@ export interface ProspectConfig {
     address: Sourced<string> | null;
     town: Sourced<string>;
     openingHours: Sourced<string[]> | null;
+    /** The number their WEBSITE shows, kept as its own fact. Never overwritten by the outreach
+     *  number; when the two differ the preview's CTA uses the outreach number and this is flagged. */
+    websitePhone: Sourced<string> | null;
   };
   brand: ProspectBrand;
   services: ProspectService[];
@@ -89,6 +93,9 @@ export interface ProspectConfig {
   /** Operator-only notes: missing logo, poor logo, no photos, areas rejected, etc. */
   flags: string[];
   rejectedAreas: string[];
+  /** What a PAID build would have to resolve with the client before production (the outreach
+   *  preview may proceed). */
+  requiresResolution: string[];
 }
 
 /* ─────────────────────────────── templates ─────────────────────────────── */
@@ -113,6 +120,8 @@ export interface ProspectTemplate {
    *  demonstration design, used only when no approved template covers the trade. */
   status: 'approved' | 'demo';
   sections: readonly HomepageSectionId[];
+  /** The most images this design shows — the ONLY images the pipeline copies from their site. */
+  imageBudget: { logo: boolean; photos: number };
   render(cfg: ProspectConfig, opts?: { year?: number }): string;
 }
 

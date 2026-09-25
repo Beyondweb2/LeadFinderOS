@@ -51,6 +51,9 @@ export interface ResearchConflictHint { kind: string; title: string; detail: str
 
 export interface FactsInput {
   lead: LeadFacts;
+  /** The number LeadFinder is actually communicating with for this lead (the WhatsApp thread's
+   *  number); defaults to the lead row's phone. */
+  contactPhone?: string | null;
   /** Trade + town as the audit asked them. */
   audit: { trade: string | null; town: string | null } | null;
   siteInfo: SiteInfoFacts | null;
@@ -67,6 +70,28 @@ export type FactsResult =
   | { ok: false; reason: string };
 
 const NAV_NOISE = /^(?:home|about(?: us)?|contact(?: us)?|blog|news|gallery|our work|projects?|reviews?|testimonials?|faqs?|areas?(?: we cover| covered)?|locations?|privacy.*|cookie.*|terms.*|sitemap|careers|jobs|shop|book(?: now| online)?|get a quote|quote|services|our services|menu|login|account|cart|basket|search|team|meet the team|why choose us)$/i;
+
+/** Menu entries that are pages, not services (found live 2026-09-26: Finance, Thankyou, Complaint Procedure). */
+const NOT_A_SERVICE = /^contact\b|\b(?:finance|financing|thank ?you|thanks|complaints?|procedure|polic(?:y|ies)|cookies?|privacy|terms|accessibility|careers?|vacanc\w*|testimonials?|reviews?|gallery|portfolio|case stud\w*|faqs?|blog|news|shop|login|sitemap|brochure|downloads?)\b/i;
+/** Sentences that are legal / finance / site boilerplate, never a description. */
+const BOILERPLATE = /\b(?:finance|credit|introduc(?:e|er|ing) customers|fca|authori[sz]ed|regulated|registered (?:in|office)|company (?:no|number)|vat|cookies?|privacy|terms|all rights reserved|copyright|subject to status|complaints?)\b|©/i;
+
+/** Prose, not a run of menu labels: mostly lower-case words, no label repeated three times. The
+ *  visible text of a page starts with its menu ("About Services Gallery Reviews About Services…"),
+ *  which a sentence splitter happily returns as one "sentence" (E.E.S Electrical, live 2026-09-26). */
+export function isProse(s: string): boolean {
+  const words = s.split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
+  if (words.length < 6) return false;
+  const lower = words.filter((w) => /^[a-z]/.test(w)).length;
+  const counts = new Map<string, number>();
+  for (const w of words) counts.set(w.toLowerCase(), (counts.get(w.toLowerCase()) ?? 0) + 1);
+  const repeatedLabel = [...counts.entries()].some(([w, n]) => n >= 3 && /^[A-Z]/.test(words.find((x) => x.toLowerCase() === w) ?? ''));
+  return lower / words.length >= 0.3 && !repeatedLabel;
+}
+
+/** A CUSTOMER speaking (a testimonial on their page) — never the business's own description. Found
+ *  live 2026-09-26: R.Coulson's "Bathrooms" card got "…we are extremely pleased with his work". */
+const REVIEW_VOICE = /\b(?:his|her|their) work\b|\b(?:highly|would|thoroughly|definitely) recommend|\bpleased with\b|\bthank(?:s| you)\b|\bcame out\b|\bturned up\b|\bfive stars?\b|\b5 stars?\b|\bgreat job\b|\bamazing job\b|\bwe (?:were|are) (?:very |extremely |so |really )?(?:happy|pleased|impressed)\b/i;
 
 const titleCase = (s: string) => s.replace(/\b([a-z])([a-z]*)/g, (_m, a: string, b: string) => a.toUpperCase() + b)
   .replace(/\b(And|Of|In|For|The|To|A|An|On|With)\b/g, (w) => w.toLowerCase()).replace(/^./, (c) => c.toUpperCase());
@@ -93,7 +118,14 @@ const postcodeOf = (a: string | null | undefined) => (/\b([A-Z]{1,2}\d[A-Z\d]?)\
 /** Sentences of visible text. A full stop inside "E.E.S" is not a boundary: a boundary is
  *  [.!?] + space + a capital. */
 export function sentencesOf(text: string): string[] {
-  return text.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z0-9“"'])/).map((x) => x.trim()).filter(Boolean);
+  const parts = text.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z0-9“"'])/).map((x) => x.trim()).filter(Boolean);
+  // "R. Coulson", "J. Smith & Sons": a lone initial before the stop is not a sentence end.
+  const out: string[] = [];
+  for (const x of parts) {
+    if (out.length && /(?:^|\s)[A-Z]\.$/.test(out[out.length - 1])) out[out.length - 1] += ' ' + x;
+    else out.push(x);
+  }
+  return out;
 }
 
 function sentenceWith(text: string, needle: RegExp, min = 30, max = 220): string | null {
@@ -104,15 +136,18 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Service names from the site's menu / page titles, cleaned. Town-suffixed doorway titles
  *  ("Electrician in Woking") are reduced to the service or dropped. */
-export function cleanServices(raw: string[], tradeLabel: string, towns: string[]): string[] {
+export function cleanServices(raw: string[], tradeLabel: string, towns: string[], businessName = ''): string[] {
   const townRe = towns.length ? new RegExp(`\\s*(?:in|near|around|across|for)?\\s*(?:${towns.map(escapeRe).join('|')})\\b.*$`, 'i') : null;
+  // A menu entry that is the business's own name ("R Coulson Plumbing") is not a service.
+  const nameWord = (businessName.replace(/[^A-Za-z ]/g, ' ').split(/\s+/).find((w) => w.length >= 4) ?? '').toLowerCase();
   const out: string[] = [];
   const seen = new Set<string>();
   for (const r of raw) {
     let s = (r ?? '').replace(/\s*[|–—-]\s*.*$/, '').replace(/\s+/g, ' ').trim();
     if (townRe) s = s.replace(townRe, '').trim();
     s = s.replace(/\s+(?:in|near)\s+[A-Z][\w' -]+$/, '').trim();
-    if (s.length < 3 || s.length > 48 || NAV_NOISE.test(s)) continue;
+    if (s.length < 3 || s.length > 48 || NAV_NOISE.test(s) || NOT_A_SERVICE.test(s)) continue;
+    if (nameWord && s.toLowerCase().includes(nameWord)) continue;
     if (s.toLowerCase() === tradeLabel.toLowerCase() || s.toLowerCase() === `${tradeLabel}s`) continue;
     const key = s.toLowerCase().replace(/s$/, '');
     if (seen.has(key)) continue;
@@ -166,15 +201,26 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
   const allText = pages.map((p) => p.text).join(' \n ');
   const site = i.siteInfo ?? {};
 
-  /* ── contact ── */
-  const leadPhone = i.lead.phone?.trim() || null;
+  /* ── contact ──
+     ⛔ THE PHONE RULE (Paul, 2026-09-26). Agree → used normally. Differ → a SOURCE CONFLICT: this
+     OUTREACH preview may put the number we are actually messaging on its CTA, but the website's
+     number stays recorded as its own fact (websitePhone), the two are never presented as
+     consistent, and the operator is told. A paid build must resolve it before production. */
+  const requiresResolution: string[] = [];
+  const contactPhone = (i.contactPhone ?? i.lead.phone)?.trim() || null;
   const sitePhone = site.phone?.trim() || null;
+  const websitePhone: Sourced<string> | null = sitePhone ? { value: displayPhone(sitePhone), source: src('existing_site'), url: home?.url ?? null } : null;
   let phone: Sourced<string> | null = null;
-  if (leadPhone) phone = { value: displayPhone(leadPhone), source: src('google_places') };
-  else if (sitePhone) phone = { value: displayPhone(sitePhone), source: src('existing_site'), url: home?.url ?? null };
-  if (leadPhone && sitePhone && normalisePhone(leadPhone) !== normalisePhone(sitePhone)) {
-    conflicts.push({ field: 'phone', note: `Two numbers: the preview uses ${displayPhone(leadPhone)} (lead record). Check which they want on the site.`,
-      values: [{ value: displayPhone(leadPhone), source: src('google_places') }, { value: displayPhone(sitePhone), source: src('existing_site'), url: home?.url ?? null }] });
+  if (contactPhone && sitePhone && normalisePhone(contactPhone) !== normalisePhone(sitePhone)) {
+    phone = { value: displayPhone(contactPhone), source: src('outreach_contact') };
+    const note = `Phone mismatch: LeadFinder/contact number is ${displayPhone(contactPhone)}; current website shows ${displayPhone(sitePhone)}.`;
+    conflicts.push({ field: 'phone', note: `${note} The preview CTA uses the contact number (outreach only).`,
+      values: [{ value: displayPhone(contactPhone), source: src('outreach_contact') }, { value: displayPhone(sitePhone), source: src('existing_site'), url: home?.url ?? null }] });
+    requiresResolution.push(`${note} Confirm with the client which number goes on the site.`);
+  } else if (contactPhone) {
+    phone = { value: displayPhone(contactPhone), source: src(sitePhone ? 'existing_site' : 'lead_record'), url: sitePhone ? home?.url ?? null : null };
+  } else if (websitePhone) {
+    phone = websitePhone;
   }
   const email: Sourced<string> | null = site.email ? { value: site.email.trim(), source: src('existing_site'), url: home?.url ?? null }
     : i.lead.email ? { value: i.lead.email.trim(), source: src('lead_record') } : null;
@@ -211,7 +257,7 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
   ];
 
   /* ── services ── */
-  const serviceNames = cleanServices(site.services ?? [], tradeLabel, [town, ...areaNames, ...clusterTowns]);
+  const serviceNames = cleanServices(site.services ?? [], tradeLabel, [town, ...areaNames, ...clusterTowns], name);
   /* A description is THEIR sentence about THAT service: it names the service, it is not a list of
      several services (that sentence describes none of them), and no two cards share one. */
   const sentences = sentencesOf(allText);
@@ -224,7 +270,7 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
     const re = keyRe(n);
     const others = serviceNames.filter((o) => o !== n).map(keyRe).filter((r): r is RegExp => !!r);
     const d = re ? sentences
-      .filter((x) => re.test(x) && x.length >= 40 && x.length <= 190 && !used.has(x) && others.filter((o) => o.test(x)).length < 2)
+      .filter((x) => re.test(x) && x.length >= 40 && x.length <= 190 && !used.has(x) && !/\?$/.test(x) && !/\|/.test(x) && !BOILERPLATE.test(x) && isProse(x) && !REVIEW_VOICE.test(x) && !/^(?:This|It|It['’]s|Its|These|That|They|Those|He|She|Here|Yes|No|Absolutely|Of course)\b/.test(x) && others.filter((o) => o.test(x)).length < 2)
       .sort((x, y) => x.length - y.length)[0] ?? null : null;
     if (d) used.add(d);
     return { name: n, description: d, source: src('existing_site'), url: home?.url ?? null };
@@ -248,10 +294,26 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
   const rating = typeof i.lead.rating === 'number' && typeof i.lead.review_count === 'number' && i.lead.review_count >= 5 && i.lead.rating >= 4
     ? { value: { rating: Math.round(i.lead.rating * 10) / 10, count: i.lead.review_count }, source: src('google_places') } : null;
 
-  const nameRe = new RegExp(escapeRe(name.split(/\s+/)[0]), 'i');
+  // The name's most distinctive word ("R.Coulson …" → "Coulson"): spacing and punctuation in the
+  // name vary across one site ("R.Coulson" / "R. Coulson").
+  // Built from the name's FIRST word with its punctuation optional: "E.E.S" matches "EES" / "E. E. S",
+  // "R.Coulson" matches "R. Coulson". Never a generic later word ("Electrical" is everyone's).
+  const firstChars = (name.split(/\s+/)[0] ?? '').replace(/[^A-Za-z0-9]/g, '');
+  const nameRe = firstChars.length >= 2 ? new RegExp('\\b' + firstChars.split('').map(escapeRe).join('[.\\s]*'), 'i') : new RegExp(escapeRe(name), 'i');
+  const tradeRe = new RegExp(escapeRe(tradeLabel.split(' ')[0].slice(0, 6)), 'i');
   const meta = home?.metaDescription?.trim() ?? '';
-  const summaryText = meta.length >= 50 && meta.length <= 240 && (nameRe.test(meta) || new RegExp(tradeLabel.split(' ')[0], 'i').test(meta))
-    ? meta : sentenceWith(allText, nameRe, 60, 240);
+  /* The summary is a sentence ABOUT the business: it names them, and it is not legal / finance /
+     cookie boilerplate (R.Coulson's footer finance disclaimer was picked live, 2026-09-26). A sentence
+     that also names the trade or says what they do ranks first. */
+  const allSentences = sentencesOf(allText);
+  const aboutSentences = allSentences.filter((x) => nameRe.test(x) && x.length >= 40 && x.length <= 240 && !BOILERPLATE.test(x) && !REVIEW_VOICE.test(x) && !/\?$/.test(x) && isProse(x));
+  let bestAbout = aboutSentences.find((x) => tradeRe.test(x) || /\b(?:we|our)\b/i.test(x)) ?? aboutSentences[0] ?? null;
+  // A short one ("I set up E.E.S … since 2008.") carries on into their next "We …" sentence, verbatim.
+  if (bestAbout && bestAbout.length < 110) {
+    const next = allSentences[allSentences.indexOf(bestAbout) + 1];
+    if (next && /^(?:We|Our)\b/.test(next) && isProse(next) && !BOILERPLATE.test(next) && bestAbout.length + next.length <= 280) bestAbout = bestAbout + ' ' + next;
+  }
+  const summaryText = meta.length >= 50 && meta.length <= 240 && !BOILERPLATE.test(meta) && (nameRe.test(meta) || tradeRe.test(meta)) ? meta : bestAbout;
   const summary = summaryText ? { value: summaryText, source: src('existing_site'), url: home?.url ?? null } : null;
 
   /* ── brand ── */
@@ -280,6 +342,7 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
         phone, email, address,
         town: { value: town, source: src(i.audit?.town ? 'ai_audit' : 'lead_record') },
         openingHours,
+        websitePhone,
       },
       brand,
       services,
@@ -288,6 +351,7 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
       conflicts,
       flags,
       rejectedAreas,
+      requiresResolution,
     },
   };
 }

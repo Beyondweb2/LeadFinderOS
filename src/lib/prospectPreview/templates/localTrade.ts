@@ -328,5 +328,7 @@ export const LOCAL_TRADE_TEMPLATE: ProspectTemplate = {
   trades: '*',
   status: 'demo',
   sections: ['header', 'hero', 'trust', 'services', 'about', 'areas', 'faq', 'contact', 'footer'],
+  // hero + about + a gallery of up to six.
+  imageBudget: { logo: true, photos: 8 },
   render: renderLocalTrade,
 };
