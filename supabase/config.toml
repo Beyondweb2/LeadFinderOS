@@ -149,3 +149,9 @@ verify_jwt = false
 # the platform default is verify_jwt = TRUE and a function absent from this file deploys with it —
 # which would refuse every event silently (CLAUDE.md §8, the 2026-08-14 three-dead-paths incident).
 verify_jwt = false
+
+# warm-lead-reply: the Inbox's "Research & draft reply". SPA-only caller with the operator's JWT;
+# the handler does its own resolveOperator + lead-ownership check. It spends OpenAI money and reads
+# prospect sites, but it NEVER sends a message. Explicit entry in the same commit as the function.
+[functions.warm-lead-reply]
+verify_jwt = true
