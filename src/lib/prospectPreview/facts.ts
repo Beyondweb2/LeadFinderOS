@@ -275,7 +275,7 @@ export function buildProspectConfig(i: FactsInput): FactsResult {
     if (d) used.add(d);
     return { name: n, description: d, source: src('existing_site'), url: home?.url ?? null };
   });
-  if (!services.length) flags.push('No services could be read from their site — the services section lists none. Add them in the lead before regenerating, or send the card only.');
+  if (!services.length) flags.push('No services could be read from their site, so the homepage has no services section and reads thin. Consider sending the evidence card on its own.');
 
   /* ── proof ── */
   const credentials: Array<Sourced<string>> = [];
