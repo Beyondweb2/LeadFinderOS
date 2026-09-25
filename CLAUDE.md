@@ -44,7 +44,8 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
   Feedback page, the multi-user surface. 22 functions are deployed with no source (2 belong to the
   findable-directory repo and stay).
-- **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
+- **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
+  `origin/main` on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
 - **Windows host.** PowerShell is primary, Git Bash is available. Working tree is CRLF, repo is LF
@@ -174,6 +175,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - [ ] Commit with `-F <file>`. **End with `Co-Authored-By: Claude <the model this session is actually
       running, as the harness names it> <noreply@anthropic.com>`** — e.g. today `Claude Fable 5.1`.
       Never copy the trailer from an older commit.
+- [ ] Never modify another session's branch or worktree. Commit only this task's files.
+- [ ] **Before merging:** `git fetch origin`; if `origin/main` moved, bring it into the branch,
+      resolve conflicts deliberately, rerun the relevant tests. Merge only a current, verified branch.
 - [ ] Merge `--no-ff`. Prove `origin` is unmoved immediately before pushing.
 - [ ] **Never stage** `HANDOFF.md`, `ONBOARDING.md`, `HANDOVER_NEXT.md`, `RECON_*.md`,
       `INVENTORY_DEEP_CLEAN.md`, `SQL_FOR_PAUL_*.sql`, `scripts/_*.ts`. Stage files explicitly; never
@@ -196,6 +200,15 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
       `client-copy-claims.test.ts`; new operator screen → its `OPERATOR_SCREENS`.
 
 **Deploy**
+- [ ] **Production deploys originate from `main` only** — never from a feature branch, never bundling
+      another unfinished branch. If another session moved `main` or changed shared infrastructure,
+      stop and reconcile before deploying.
+- [ ] **Backend before frontend:** when both changed, deploy and verify SQL/edge functions first,
+      then the SPA.
+- [ ] **Before any Cloudflare deploy, confirm and state:** the active Cloudflare account, the target
+      project, the branch, the commit.
+- [ ] **After every production deploy, verify the live operator app at
+      `https://leadfinderos-next.pages.dev/`** (§7) by the marker check (§4).
 - [ ] **SQL first, confirmed by read-back, then deploy** anything that reads/writes the new schema.
 - [ ] Edge functions do not auto-deploy. After changing a shared module (`_shared/`, `src/lib/`),
       **walk the transitive import closure and redeploy every function that reaches it — then NAME
