@@ -151,6 +151,7 @@ const COUNTRIES: { value: string; label: string }[] = [
 import type { AuditRow, RunLite, AuditLite, BusinessGroup, LeadOption } from '@/types/auditBook';
 import { auditListQueryKey } from '@/types/auditBook';
 import { AuditBookList } from '@/components/audit/AuditBookList';
+import { ProspectPreviewButton } from '@/components/ProspectPreviewPanel';
 const TERMINAL = new Set(['complete', 'capped', 'failed', 'cancelled']);
 
 /** The ceiling the landing list can EVER load — fetchAllRows' runaway guard (50 pages × 1,000).
@@ -3183,6 +3184,12 @@ const AiAudit = () => {
                     <Button size="sm" onClick={openReportForCurrentRun}>
                       <FileText className="mr-2 h-4 w-4" /> {runId && reports[runId] ? 'View report' : 'Create report'}
                     </Button>
+                  )}
+
+                  {/* Prospect Preview — an OUTREACH homepage mock-up + evidence card for this audit's lead.
+                      Generate on click only; it never sends (src/components/ProspectPreviewPanel.tsx). */}
+                  {!isDraining && liveTally.done > 0 && openAuditRow?.lead_id && (
+                    <ProspectPreviewButton leadId={openAuditRow.lead_id} />
                   )}
 
                   {/* Everything else. One menu, grouped, with prices on the faces that spend. */}

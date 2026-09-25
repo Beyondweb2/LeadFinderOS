@@ -59,6 +59,9 @@ const RENDERERS: Array<[string, string]> = [
   ["onboarding follow-up (prospect)", "supabase/functions/_shared/onboarding-followup.ts"],
   ["Stripe checkout line (payer)", "supabase/functions/findable-checkout/index.ts"],
   ["billing emails + card notice (client)", "src/lib/findableOffer.ts"],
+  ["prospect preview homepage (prospect)", "src/lib/prospectPreview/templates/localTrade.ts"],
+  ["prospect preview evidence card + message (prospect)", "src/lib/prospectPreview/copy.ts"],
+  ["prospect preview card layout (prospect)", "src/lib/prospectPreview/evidenceCard.ts"],
 ];
 
 /* Each pattern is a claim that has been false since a dated change. Keep the date in the label. */
@@ -117,6 +120,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */
   ["cold call playbook logic (operator)", "src/lib/coldCallPlaybook.ts"],
   ["cold call playbook panel (operator)", "src/components/ColdCallPlaybook.tsx"],
+  ["prospect preview panel (operator)", "src/components/ProspectPreviewPanel.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",
