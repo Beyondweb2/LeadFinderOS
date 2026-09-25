@@ -102,6 +102,11 @@ console.log('\n── F11. SERVICE-AREA CANDIDATES ──');
   ok(serviceAreaView(ign, rowsFor(ign)).candidates.find((c) => c.name === 'Yate')?.status === 'ignored', 'Ignore = does not serve (the same decision the Locations panel reads)');
   ok(Object.values(ign.mapping.locations).every((l) => l.page === undefined), 'nothing sets a dedicated page — serving an area is not a page');
   ok(!rowsFor(s).some((r) => r.key === 'service_areas' && /Yate/.test(r.value)), 'found is never verified: no recon town reaches the fact without an operator action');
+  /* BS4's live record: the recon also named the base as "Bristol (Knowle West)" */
+  const noted = { ...s, recon: { ...s.recon, towns: [...s.recon.towns, { name: 'Bristol (Knowle West)', source_url: SITE + 'about', context: 'Based in Knowle West' }, { name: 'Kingswood (South Glos)', source_url: '', context: '' }] } };
+  const nv = serviceAreaView(noted, rowsFor(noted));
+  ok(nv.candidates.find((c) => c.name === 'Bristol (Knowle West)')?.status === 'base', 'a town with a bracketed note is recognised as the base town');
+  ok(nv.candidates.find((c) => c.name === 'Kingswood (South Glos)')?.status === 'candidate' && serviceAreaView(withServes(noted, [], undefined), rowsFor(noted)).candidates.filter((c) => c.status === 'base').length === 2, 'and only the base — other noted towns stay candidates');
   const round = parseWebsiteBuild(JSON.parse(JSON.stringify(normaliseWebsiteBuild(ign))));
   ok(round.mapping.locations.yate?.serves === false && round.recon.towns.length === 20, 'Ignore and the candidates survive the save rule');
 }

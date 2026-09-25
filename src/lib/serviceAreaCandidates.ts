@@ -57,8 +57,11 @@ export function serviceAreaView(s: WebsiteBuildState, rows: FactRow[]): AreaView
     const key = townNorm(c.name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const status: AreaStatus = listKeys.has(key) ? (fact?.status === 'verified' ? 'verified' : 'listed')
-      : key === baseKey ? 'base'
+    /* "Bristol (Knowle West)" is the town Bristol with a note — compare without the bracket, on both
+       sides (found on BS4's live record: the base town was offered as a candidate). */
+    const bare = townNorm(c.name.replace(/\([^)]*\)/g, ''));
+    const status: AreaStatus = listKeys.has(key) || listKeys.has(bare) ? (fact?.status === 'verified' ? 'verified' : 'listed')
+      : key === baseKey || bare === baseKey ? 'base'
       : s.mapping.locations[key]?.serves === false ? 'ignored' : 'candidate';
     candidates.push({ key, name: c.name.trim(), source_url: c.source_url, context: c.context, status });
   }
