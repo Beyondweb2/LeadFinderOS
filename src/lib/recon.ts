@@ -23,6 +23,9 @@
      · a fact LeadFinderOS already has VERIFIED (onboarding or Paul) is NEVER overwritten; a
        disagreement becomes a review item beside it
      · a fact Paul rejected / marked N/A stays as he left it
+   ⛔ STRENGTHS (the quality standard, websiteQuality.ts): the recon's "strengths" list is merged into
+     website_build.quality.strengths; Paul's decision on each survives a re-import, and a strength the
+     new recon does not list is kept, never silently forgotten.
    ⚠️ Browser-only (the page imports it). Never a backtick inside a template literal (§3).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -37,6 +40,7 @@ import { isPublishable } from './buildFacts.ts';
 import { CORE_BUILD_FACTS, templatePageTypes } from './websiteTemplates.ts';
 import { isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, verifiedFactLines, winPath, type BuildPackInput } from './buildPack.ts';
 import { RECON_FACT_FIELDS, RECON_RULES_LINES, RECON_SCHEMA_LINES, RECON_VERSION } from './reconSchema.ts';
+import { MAX_STRENGTHS, STRENGTH_RECON_LINES, mergeStrengths, readStrength, type ExistingStrength } from './websiteQuality.ts';
 
 /* ══ 1. THE PROMPT ════════════════════════════════════════════════════════════════════════════ */
 
@@ -77,6 +81,7 @@ export function reconPrompt(i: BuildPackInput): { text: string; blockedBy: strin
       '  headings, visible copy (summarised), CTAs, forms, interactions and sticky / floating controls.',
       'DESIGN — fonts and weights; colours (hex); gradients; container widths; gutters; spacing rhythm; border',
       '  radius; shadows; cards; buttons (all states); icons; breakpoints; mobile behaviour.',
+      ...STRENGTH_RECON_LINES,
       'ASSETS — logo, favicon, hero images, gallery images, owner / team images, certification logos, manufacturer',
       '  logos, background images. For each: original URL, purpose, whether it looks client-owned or third-party,',
       '  and a suggested local filename.',
@@ -98,6 +103,7 @@ export function reconPrompt(i: BuildPackInput): { text: string; blockedBy: strin
       '  contact details, opening hours, credentials, insurance, memberships, reviews and review profiles,',
       '  project / job evidence, FAQs and the customer questions the site answers, guarantees, legal facts',
       '  (company number, registered address, regulated wording).',
+      ...STRENGTH_RECON_LINES,
       'ASSETS — the real images and logos (URL, purpose, ownership, suggested filename). Skip stock imagery or mark it third_party.',
       'TRACKING — analytics, tag manager, pixels, embeds that must be carried over.',
       'STILL CAPTURE — the full URL inventory with titles, H1s and metadata, the schema, and which old URLs will need',
@@ -112,6 +118,7 @@ export function reconPrompt(i: BuildPackInput): { text: string; blockedBy: strin
       'EVIDENCE — case studies, job photos, testimonials, accreditations: what proof exists for each service.',
       'CUSTOMERS — who the site is for and the questions it answers; the conversion flow (how an enquiry happens).',
       'ARCHITECTURE — the full URL inventory with page families, titles, H1s and purposes.',
+      ...STRENGTH_RECON_LINES,
       'ASSETS — logo, genuine photos and marks (URL, purpose, ownership, suggested filename).',
       'DESIGN — fonts, colours and any element worth reusing (reference only).',
       'Use "unknowns" for everything a new design needs that the site does not say: likely customer questions it',
@@ -158,6 +165,8 @@ export interface ReconResult {
   pages: ManifestPage[]; facts: ReconFact[]; assets: ManifestAsset[]; interactions: ManifestInteraction[];
   design: SourceManifest['design']; seo: SourceManifest['seo']; redirectCandidates: Redirect[];
   unknowns: Array<{ field: string; note: string }>; warnings: string[];
+  /** What the old site already does well (websiteQuality.ts) — separate from its problems. */
+  strengths: ExistingStrength[];
   /** Phase 3: analytics / tag-manager / ads IDs seen on the site — they become facts NEEDING approval. */
   trackingIds: { analytics: string[]; ads: string[] };
 }
@@ -172,7 +181,7 @@ export interface ReconSummary {
 }
 export type ReconParse = { ok: true; result: ReconResult; summary: ReconSummary } | { ok: false; error: string };
 
-const KNOWN_KEYS = new Set(['reconVersion', 'sourceUrl', 'capturedAt', 'platform', 'siteStatus', 'pages', 'pageFamilies', 'facts', 'assets', 'design', 'interactions', 'seo', 'tracking', 'redirectCandidates', 'unknowns', 'warnings']);
+const KNOWN_KEYS = new Set(['reconVersion', 'sourceUrl', 'capturedAt', 'platform', 'siteStatus', 'pages', 'pageFamilies', 'facts', 'assets', 'design', 'interactions', 'seo', 'tracking', 'redirectCandidates', 'unknowns', 'warnings', 'strengths']);
 
 /** Clean imported text: a string (or number) only, control characters out, trimmed, capped. */
 export function clean(v: unknown, cap: number): string {
@@ -246,7 +255,7 @@ export function parseReconText(input: string): ReconParse {
     if (!Array.isArray(o.pages) && !Array.isArray(o.facts)) return { ok: false, error: 'This does not look like a recon result: no "reconVersion", "pages" or "facts".' };
     notes.push('No "reconVersion" — read as version ' + RECON_VERSION + '.');
   }
-  for (const k of ['pages', 'facts', 'assets', 'interactions', 'redirectCandidates', 'unknowns', 'warnings', 'pageFamilies'] as const) {
+  for (const k of ['pages', 'facts', 'assets', 'interactions', 'redirectCandidates', 'unknowns', 'warnings', 'pageFamilies', 'strengths'] as const) {
     if (o[k] != null && !Array.isArray(o[k])) return { ok: false, error: '"' + k + '" must be a list ([ … ]), not ' + typeof o[k] + '.' };
   }
   for (const k of ['design', 'seo', 'tracking'] as const) {
@@ -362,6 +371,10 @@ export function parseReconText(input: string): ReconParse {
   drop(unkAll.length - unknowns.length, 'unknown(s) over the ' + MAX_UNKNOWNS + ' limit');
   const warnAll = list('warnings').map((x) => clean(x, 500)).filter(Boolean);
   const warnings = warnAll.slice(0, MAX_WARNINGS);
+  /* strengths — any decision fields the recon sends are ignored: only Paul decides. */
+  const strAll = list('strengths').map((x) => (isObj(x) ? readStrength({ category: x.category, label: clean(x.label, 200), evidence: clean(x.evidence, 600), sourceUrl: safeUrl(x.sourceUrl) }) : null)).filter((x): x is ExistingStrength => !!x);
+  const strengths = strAll.slice(0, MAX_STRENGTHS);
+  drop(strAll.length - strengths.length, 'strength(s) over the ' + MAX_STRENGTHS + ' limit');
   drop(warnAll.length - warnings.length, 'warning(s) over the ' + MAX_WARNINGS + ' limit');
 
   const ignoredKeys = Object.keys(o).filter((k) => !KNOWN_KEYS.has(k));
@@ -372,7 +385,7 @@ export function parseReconText(input: string): ReconParse {
   const result: ReconResult = {
     sourceUrl: safeUrl(o.sourceUrl), capturedAt: clean(o.capturedAt, 40), platform: clean(o.platform, 100),
     siteStatus: siteStatus === 'live' || siteStatus === 'offline' || siteStatus === 'partial' ? siteStatus : '',
-    pages, facts, assets, interactions, design, seo, redirectCandidates, unknowns, warnings,
+    pages, facts, assets, interactions, design, seo, redirectCandidates, unknowns, warnings, strengths,
     trackingIds: {
       analytics: [...new Set([...(Array.isArray(tr.analytics) ? tr.analytics : [tr.analytics]), tr.tagManager].map((v) => clean(v, 60)).filter((v) => /^(G-|UA-|GTM-|AW-)?[A-Z0-9-]{4,}$/i.test(v)))].slice(0, 10),
       ads: [...new Set((Array.isArray(tr.adsIds) ? tr.adsIds : [tr.adsIds]).map((v) => clean(v, 60)).filter((v) => /^[A-Z0-9-]{4,}$/i.test(v)))].slice(0, 10),
@@ -417,20 +430,31 @@ const FIELD_KEYS: Record<string, string> = {
 const LIST_KEYS = new Set(['service_areas', 'services', 'accreditations', 'brands', 'review_profiles', 'directory_profiles', 'social_profiles', 'prices', 'guarantee', 'insurance', 'legal_facts', 'reviews_on_site',
   'memberships', 'qualifications', 'awards', 'payment_methods', 'licences', 'compliance', 'analytics_ids', 'ads_ids']);
 
-/* ── Phase 3: RISK-BASED APPROVAL (Paul, 2026-09-25) ─────────────────────────────────────────────
-   LOW-RISK source facts — identity and links — may be auto-accepted when the site states them
-   verbatim, consistently, with nothing disagreeing (basis: the source website).
-   EVERYTHING ELSE is a commercial / proof / legal / coverage claim and ALWAYS needs Paul's approval,
-   however clearly the site states it: prices, hours, 24/7, guarantees, insurance, qualifications,
-   DBS, memberships, accreditations, awards, ratings, years trading, payment methods, VAT, legal
-   status, the public address, service areas, licences, compliance, tracking / ads IDs, anything
-   unrecognised. ⛔ Positive allowlist: a key nobody listed is high-risk, never low.
-   And any value carrying a strong claim word ("approved", "certified", "best", "24/7"…) needs
-   approval whatever its key. */
-export const LOW_RISK_FACT_KEYS: ReadonlySet<string> = new Set(['business_name', 'trade', 'phone', 'email', 'website', 'social_profiles', 'directory_profiles', 'review_profiles', 'primary_town']);
-export const STRONG_CLAIM = /\b(approved|certified|accredited|registered|licensed|vetted|checked|insured|guaranteed?|best|leading|no\.?\s?1|number one|award[- ]?winning|trusted|official|24\/7|24 hours|24hr|fully qualified)\b/i;
+/* ── THE SOURCE-SITE FACT RULE (Paul, 2026-09-25, the quality standard — supersedes the earlier
+   same-day "every commercial claim needs approval" rule) ─────────────────────────────────────────
+   A factual claim the client's OWN public site states directly and consistently — services, genuine
+   service areas, qualifications, accreditations, memberships, years trading, guarantees, contact
+   details, the public address, customer groups, payment methods, hours, business descriptions — is
+   CLIENT-SUPPLIED SOURCE INFORMATION: accepted with basis "source_site" (shown as "source: existing
+   client website"), NEVER described as independently verified. Paul decides only CONTRADICTIONS,
+   AMBIGUITY, INFERENCE or ANOTHER ENTITY's claim (all routed to "detected" in applyRecon: flagged,
+   multi-valued, not verbatim / high confidence, or disagreeing with what LeadFinderOS holds).
+   STILL ALWAYS PAUL'S (money, legal exposure, or a number that moves): prices, insurance, reviews and
+   ratings, awards, DBS, licences, compliance, VAT / legal status, company number, availability,
+   tracking / ads IDs, and anything unrecognised (⛔ positive allowlist — a key nobody listed needs
+   approval). And any value carrying a SUPERLATIVE or an AVAILABILITY claim ("best", "leading",
+   "trusted", "24/7"…) whatever its key: "24/7" is the classic cross-field contradiction with the
+   stated opening hours (BS4, 2026-09-25), which a same-field conflict check cannot see. */
+export const SOURCE_SITE_FACT_KEYS: ReadonlySet<string> = new Set([
+  'business_name', 'trade', 'phone', 'email', 'website', 'social_profiles', 'directory_profiles', 'review_profiles', 'primary_town',
+  'whatsapp_number', 'address', 'service_areas', 'qualifications', 'accreditations', 'memberships', 'years_experience',
+  'guarantee', 'payment_methods', 'opening_hours', 'standout', 'owner_name', 'response_time', 'brands',
+]);
+/** The earlier name, kept for callers — it is now the whole source-site allowlist. */
+export const LOW_RISK_FACT_KEYS: ReadonlySet<string> = SOURCE_SITE_FACT_KEYS;
+export const STRONG_CLAIM = /\b(best|leading|no\.?\s?1|number one|award[- ]?winning|trusted|official|vetted|insured|cheapest|lowest|24\/7|24 hours|24hr|24-hour|round[- ]the[- ]clock|any ?time)\b/i;
 export function isHighRiskFact(key: string, values: string[]): boolean {
-  return !LOW_RISK_FACT_KEYS.has(key) || values.some((v) => STRONG_CLAIM.test(v));
+  return !SOURCE_SITE_FACT_KEYS.has(key) || values.some((v) => STRONG_CLAIM.test(v));
 }
 const LABELS: Record<string, string> = {
   ...Object.fromEntries(CORE_BUILD_FACTS.map((f) => [f.key, f.label])), company_number: 'Company number', legal_facts: 'Legal facts', reviews_on_site: 'Reviews shown on the current site',
@@ -525,7 +549,7 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     const status: StoredFactStatus = cleanGroup && !disagrees && !highRisk && !isService ? 'verified' : 'detected';
     const why = [
       isService ? 'Source-derived service candidates — the site names them; confirm what is still offered (Template Mapping).' : '',
-      !isService && highRisk ? 'Commercial / proof claim — always needs your approval, even when the site states it.' : '',
+      !isService && highRisk ? 'Price, legal, rating, availability or superlative claim — always needs your approval, even when the site states it.' : '',
       multi ? 'Pages disagree: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       g.flagged && !multi ? 'Claude flagged a conflict: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       !g.allClean ? 'Not stated verbatim (inferred or not high confidence).' : '',
@@ -587,6 +611,7 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
       services: candidatesFrom(r, 'services', 'service', state.recon.services),
       towns: candidatesFrom(r, 'service_areas', 'location', state.recon.towns),
     },
+    quality: { ...state.quality, strengths: mergeStrengths(state.quality.strengths, r.strengths ?? []) },
   };
   return { state: next, report };
 }

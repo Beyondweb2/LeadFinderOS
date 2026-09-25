@@ -55,12 +55,15 @@ const RECON = {
 };
 const parsedRecon = parseReconText(JSON.stringify(RECON)) as { result: ReconResult };
 
+/** The quality standard, fully decided — for fixtures that test something else (websiteQuality.ts). */
+const DECIDED_QUALITY = { strengths_reviewed: true, strengths: [], intents: Object.fromEntries(['services_hub', 'service_pages', 'areas_hub', 'location_pages', 'faq_hub', 'quotes_pricing', 'about', 'our_work', 'contact', 'customer_types', 'urgent_services'].map((k) => [k, { need: 'needed', page: 'section on /', note: '' }])) };
 const BASE = {
   version: 2, route: 'template_rebuild', template_id: 'mcl-local-trades', repo_name: 'HarbourLocks', github_owner: 'Beyondweb2',
   local_repo_path: 'C:\\Users\\paulj\\HarbourLocks', cloudflare_project: 'harbour-locks', cloudflare_mode: 'direct_upload', canonical_domain: 'harbourlocks.co.uk',
   pages: [{ id: 'h', family: 'homepage', path: '/', title: 'Home', action: 'keep', old_url: SITE }],
   redirects: [{ from: '/emergency-locksmith/', to: '/services/emergency-lockouts/', reason: 'moved' }], qa: { visual_qa: true },
   mapping: { fields: { mobile_or_premises: 'mobile' } },
+  quality: DECIDED_QUALITY,
 };
 function ready(b: Record<string, unknown> = BASE): WebsiteBuildState {
   const s0 = parseWebsiteBuild(b);
@@ -80,6 +83,7 @@ const OK_RESULT = {
   build: { pages: ['/', '/services/', '/services/lock-changes/', '/services/emergency-lockouts/', '/contact/'], services: ['Lock changes & upgrades', 'Emergency lockouts'], locations: ['Whitby'], assets: [SITE + 'img/van-hero.jpg -> public/images/van-hero.webp'], unsupportedFields: [] },
   redirects: { kept: 3, redirected: 1, retired: 0, unresolved: ['/old-offers/'], issues: [] },
   qa: { buildPassed: true, seedContaminationPassed: true, linksPassed: true, responsivePassed: true, schemaPassed: true },
+  quality: { oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' } },
   seedHits: [], warnings: ['Link the Pages project to GitHub in the dashboard (operator step).'], errors: [],
 };
 const parse = (o: unknown) => parseBuildResult(typeof o === 'string' ? o : JSON.stringify(o));

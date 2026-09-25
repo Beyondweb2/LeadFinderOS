@@ -26,6 +26,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { ALL_ROUTE_CHECK_IDS } from './buildRoutes.ts';
+import { EMPTY_QUALITY, EMPTY_UPGRADE, qualityGateProblems, readQuality, readUpgradeReview, type QualityState, type UpgradeReview } from './websiteQuality.ts';
 
 export const WEBSITE_BUILD_VERSION = 2;
 
@@ -192,6 +193,10 @@ export const QA_ITEMS = [
   { key: 'no_placeholders', label: 'No placeholder content left', group: 'preview' },
   { key: 'no_unverified_claims', label: 'No unverified claim published', group: 'preview' },
   { key: 'no_template_leftovers', label: 'No template / previous-client content left', group: 'preview' },
+  /* The quality standard (websiteQuality.ts, 2026-09-25): Paul's own look, not Claude's report. */
+  { key: 'old_new_upgrade', label: 'Old vs new side by side (desktop + mobile): the new site is clearly an upgrade', group: 'preview' },
+  { key: 'strengths_kept', label: 'Every good feature of the old site is kept, modernised or improved', group: 'preview' },
+  { key: 'nothing_sparse', label: 'Nothing looks sparse or unfinished; real photos, proof and contact routes are prominent', group: 'preview' },
   { key: 'redirects_tested', label: 'Redirects tested on production (one hop each)', group: 'live' },
   { key: 'production_deployed', label: 'Production deployed', group: 'live' },
   { key: 'production_checked', label: 'Production checked end to end', group: 'live' },
@@ -294,6 +299,8 @@ export interface BuildExecution {
   pages: string[]; services: string[]; locations: string[]; assets: string[];
   redirects: { kept: number | null; redirected: number | null; retired: number | null; unresolved: string[]; issues: string[] };
   seed_hits: string[];
+  /** The old-vs-new comparison Claude reported with the result (websiteQuality.ts). */
+  upgrade: UpgradeReview;
   /** The last result before this one — a failed build never erases what was working. */
   previous: BuildSnapshot | null;
 }
@@ -301,7 +308,7 @@ export const EMPTY_BUILD_EXECUTION: BuildExecution = {
   started_at: '', completed_at: '', template_id: '', config_version: '', repository_url: '', repository_name: '', branch: '', local_path: '',
   cloudflare_project: '', preview_url: '', deployment_id: '', deployment_status: '', noindex_confirmed: null, output_dir: '', commit_hash: '',
   result_imported_at: '', result_status: '', warnings: [], errors: [], qa: {}, pages: [], services: [], locations: [], assets: [],
-  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], previous: null,
+  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], upgrade: EMPTY_UPGRADE, previous: null,
 };
 const strList = (v: unknown, n: number, cap: number) => arr(v).map((x) => str(x, cap)).filter(Boolean).slice(0, n);
 export function readBuildExecution(v: unknown): BuildExecution {
@@ -320,6 +327,7 @@ export function readBuildExecution(v: unknown): BuildExecution {
     pages: strList(o.pages, 600, 300), services: strList(o.services, 100, 160), locations: strList(o.locations, 100, 160), assets: strList(o.assets, 300, 600),
     redirects: { kept: count(r.kept), redirected: count(r.redirected), retired: count(r.retired), unresolved: strList(r.unresolved, 600, 500), issues: strList(r.issues, 200, 500) },
     seed_hits: strList(o.seed_hits, 100, 300),
+    upgrade: readUpgradeReview(o.upgrade),
     previous: Object.keys(p).length ? { commit_hash: str(p.commit_hash, 64), repository_url: str(p.repository_url, 500), preview_url: str(p.preview_url, 500), result_status: oneOf(BUILD_RESULT_STATUSES, p.result_status, ''), imported_at: str(p.imported_at, 40) } : null,
   };
 }
@@ -444,6 +452,8 @@ export interface WebsiteBuildState {
   qa: Partial<Record<QaKey, boolean>>;
   /** Route-specific stage checklist ticks, keyed route.stage.key (buildRoutes.ts). */
   checks: Record<string, true>;
+  /** The Findable quality standard: existing-site strengths + their decisions, content completeness. */
+  quality: QualityState;
 }
 
 /* The plain string fields and their caps. One list, read by both the parser and the normaliser. */
@@ -488,7 +498,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   recon: { prompt_copied_at: '', imported_at: '', source_url: '', captured_at: '', pages_total: null, assets_total: null, review: [], services: [], towns: [] },
   mapping: { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} },
   build_execution: EMPTY_BUILD_EXECUTION,
-  facts: [], pages: [], redirects: [], qa: {}, checks: {},
+  facts: [], pages: [], redirects: [], qa: {}, checks: {}, quality: EMPTY_QUALITY,
 };
 
 const obj = (v: unknown): Record<string, unknown> =>
@@ -659,6 +669,7 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
   const ch = obj(o.checks);
   out.checks = {};
   for (const k of ALL_ROUTE_CHECK_IDS) if (ch[k] === true) out.checks[k] = true;
+  out.quality = readQuality(o.quality);
   return out;
 }
 
@@ -837,12 +848,39 @@ export function previewGateProblems(b: BuildExecution): string[] {
   return out;
 }
 
-export function buildExecutionStatus(s: WebsiteBuildState, readyToBuild: boolean): BuildExecStatus {
+/** Does this build replace an existing website? Derived from the state when the caller does not know
+ *  better: a recorded source URL, an imported recon of a site, or its crawled pages. */
+export function stateHasExistingSite(s: WebsiteBuildState): boolean {
+  return !!(s.source_site_url || s.recon.source_url || s.manifest.pages.length);
+}
+
+/** The pages that exist for the completeness check: what the build reported, else the page plan. */
+export function builtOrPlannedPaths(s: WebsiteBuildState): string[] {
+  const b = s.build_execution;
+  return b.pages.length ? b.pages : s.pages.filter((p) => p.action === 'keep' || p.action === 'create').map((p) => p.path).filter(Boolean);
+}
+
+/**
+ * THE Preview Ready gate: the technical gate (previewGateProblems) PLUS the Findable quality standard
+ * (websiteQuality.ts) — strengths decided, completeness assessed, and for an existing-site rebuild an
+ * old-vs-new comparison that says the new site is clearly an upgrade. One list, used by the status,
+ * the Preview panel and the retry prompt, so they can never disagree.
+ */
+export function previewReadyProblems(s: WebsiteBuildState, hasExistingSite: boolean = stateHasExistingSite(s)): string[] {
+  const b = s.build_execution;
+  if (b.result_status !== 'preview_ready') return [];
+  return [
+    ...previewGateProblems(b),
+    ...qualityGateProblems({ quality: s.quality, upgrade: b.upgrade, hasExistingSite, paths: builtOrPlannedPaths(s) }),
+  ];
+}
+
+export function buildExecutionStatus(s: WebsiteBuildState, readyToBuild: boolean, hasExistingSite?: boolean): BuildExecStatus {
   const b = s.build_execution;
   if (b.result_imported_at) {
     if (b.result_status === 'failed') return 'failed';
     if (b.result_status === 'needs_attention') return 'needs_attention';
-    if (b.result_status === 'preview_ready') return previewGateProblems(b).length ? 'needs_attention' : 'preview_ready';
+    if (b.result_status === 'preview_ready') return previewReadyProblems(s, hasExistingSite ?? stateHasExistingSite(s)).length ? 'needs_attention' : 'preview_ready';
     return 'result_ready';
   }
   if (b.started_at) return 'building';
