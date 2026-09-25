@@ -117,6 +117,30 @@ ok(eesCtx.askOwnership === false, '…so the reply builds on it instead of askin
 ok(/THEY ASKED HOW YOU GOT THEIR DETAILS: answer it plainly and first: their number is on their public google business listing/.test(buildReplyPrompt(eesCtx)), '"How did you get my details" is answered from the lead row (a Google listing)');
 ok(/THEY ASKED HOW YOU GOT THEIR DETAILS: we do not have a recorded source/.test(buildReplyPrompt(mk(eesFacts, ees))), '…and never guessed when the lead row does not prove it');
 
+/* ─────────── the three live drafts of 2026-09-25, as regressions ─────────── */
+// (1) E.E.S: today's read got HTTP 429, but the earlier crawl check MEASURED the blocked crawlers.
+const failedToday = { ...research, status: 'failed' as const };
+const e1 = buildReplyContext({ ...mk(), research: failedToday });
+ok(e1.selection.primary?.id.startsWith('crawl:crawler_blocked') === true, 'E.E.S: a failed read today keeps the crawl-measured blocked-crawler finding');
+ok(/could not be read today, but an earlier crawl check MEASURED the finding below\. Use ONLY that finding/.test(buildReplyPrompt(e1)), '…and the model is told to use only that');
+const failedRules = { ...failedToday, strongestFindings: failedToday.strongestFindings.filter((x) => x.source !== 'crawl'), technicalFindings: failedToday.technicalFindings.filter((x) => x.source !== 'crawl') };
+ok(buildReplyContext({ ...mk(), research: failedRules }).selection.primary === null, '…but nothing read (or not read) TODAY is used after a failed read');
+const LIVE_EES = "i found your number on your public google business listing, that’s how i got in touch.\n\nwhen i asked AI for an electrician in Addlestone, it mentioned you in one of the answers, but it also highlighted some competitors. one issue is that ai tools can’t properly access your site, which can make it harder for you to show up.\n\nthat’s the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.\n\nif you’re interested in exploring this further, let me know what works for you.";
+const noFindingCtx = buildReplyContext({ ...mk(eesFacts, ees), research: failedRules });
+ok(checkReply(LIVE_EES, noFindingCtx).problems.some((p) => /cannot access the site, but no finding shows that/.test(p)), 'E.E.S live draft: "ai tools can’t properly access your site" with no finding behind it is refused');
+ok(!checkReply(LIVE_EES, buildReplyContext({ ...mk(eesFacts, ees), research: failedToday })).problems.some((p) => /no finding shows that/.test(p)), '…and allowed when the blocked-crawler finding is the primary');
+// (2) First Call: a MODEL-authored "conflict" from a normal service-area sentence.
+const modelConflict: typeof research = { ...cleanResearchFor(), localVisibilityFindings: [{ id: 'model:0', kind: 'positioning_conflict', category: 'local_visibility', title: 'Conflicting Service Areas', detail: 'Based in St Albans but covers Hertfordshire.', evidence: ['We are based in St Albans and cover areas across Hertfordshire including; Harpenden'], pageUrl: W, strength: 4, source: 'model', verified: true }] };
+ok(buildReplyContext({ ...mk(), research: modelConflict }).selection.primary === null, 'First Call: a model-authored location "conflict" is never used — conflicts are the rules\' call');
+// (3) Adcock: no "i asked ai…" at all.
+const LIVE_ADCOCK = "hey mate, it really depends on which route makes sense for you. when i checked your site, i noticed it says you're based in Scunthorpe but also claims to be nationwide across England. that mixed messaging can make it harder for AI tools to connect you clearly with local searches.\n\nwe can fix that on your existing site or build you a new one.\n\nare you currently with an agency or do you own/manage the website yourself?";
+ok(checkReply(LIVE_ADCOCK, ctx).problems.some((p) => /AI search that started/.test(p)), 'Adcock live draft: no "i asked ai…" is refused (a passing "AI tools … searches" is not the search)');
+
+function cleanResearchFor() {
+  return assembleResearch({ nowIso: new Date(NOW).toISOString(), website: W, businessName: 'Example Electrics', trade: 'Electricians', town: 'Addlestone',
+    pages: [extractPageFacts(HOME, W, W, 200, true)], crawl: null, audit: null, model: null, modelError: null, fetchMs: 1, analyseMs: null, researchMs: 1, nowYear: 2026 });
+}
+
 /* ─────────── no finding: nothing invented ─────────── */
 const cleanResearch = assembleResearch({ nowIso: new Date(NOW).toISOString(), website: W, businessName: 'Example Electrics', trade: 'Electricians', town: 'Addlestone',
   pages: [extractPageFacts(HOME, W, W, 200, true)], crawl: null, audit: null, model: null, modelError: null, fetchMs: 1, analyseMs: null, researchMs: 1, nowYear: 2026 });

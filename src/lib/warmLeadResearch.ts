@@ -847,6 +847,9 @@ export function verifyModelFindings(raw: unknown, pages: PageFacts[]): { kept: R
     const category = FINDING_CATEGORIES.includes(o.category as FindingCategory) ? (o.category as FindingCategory) : 'content';
     const quotes = strList(o.evidence_quotes, 4, 300).filter((q) => verifyQuote(q, all));
     if (!detail || quotes.length === 0 || kind === 'ai_visibility') { dropped.push(title); return; }
+    /* The rules own conflicts, missing pages, blocking/indexing, titles and credits (see warmReply.ts
+       MODEL_MAY_AUTHOR): a model's version of those is not kept (First Call Electrical, live). */
+    if (!['off_trade_content', 'weak_evidence', 'thin_or_duplicate', 'outdated_content', 'other'].includes(kind)) { dropped.push(`${title} (left to the rule checks)`); return; }
     const where = corpora.find((c) => c.n.includes(normaliseForMatch(quotes[0])))?.url ?? null;
     const s = Math.round(Number(o.strength));
     // The model may not outrank what we measured ourselves: its ceiling is 4.

@@ -206,6 +206,10 @@ export const PRIMARY_MISSING_PROBLEM = 'Strong website finding was not used.';
 export const PRIMARY_REWRITE_INSTRUCTION = 'The previous response ignored the strongest evidence. Rewrite it while keeping it conversational and explicitly include the primary website finding, with its concrete details.';
 
 const NOT_PRIMARY: ReadonlySet<string> = new Set(['ai_visibility', 'provider_attribution']);
+/** Kinds a MODEL reading may raise. Conflicts (hours, locations, phones), missing pages, blocking /
+ *  indexing, titles and credits are judged by the rules, precisely; a model's version of those is a
+ *  judgement call it got wrong live ("cover areas across Hertfordshire" read as a conflict). */
+export const MODEL_MAY_AUTHOR: ReadonlySet<string> = new Set(['off_trade_content', 'weak_evidence', 'thin_or_duplicate', 'outdated_content', 'other']);
 
 export interface ReplySelection {
   primary: ResearchFinding | null;
@@ -291,9 +295,16 @@ export function findingMentioned(text: string, f: ResearchFinding, town?: string
  */
 export function selectReplyFindings(r: WarmLeadResearch | null | undefined, thread: ThreadMessage[], town?: string | null, hookAt?: string | null): ReplySelection {
   const empty: ReplySelection = { primary: null, secondary: [], strongNotUsed: [], alreadyMentioned: [] };
-  if (!r || r.status === 'failed' || r.status === 'no_website') return empty;
+  if (!r || r.status === 'no_website') return empty;
+  /* ⛔ A FAILED READ TODAY DOES NOT ERASE WHAT AN EARLIER CRAWL MEASURED. E.E.S Electrical (live,
+     2026-09-25): today's fetch got HTTP 429, while the crawl check an hour earlier had all four AI
+     crawlers blocked — and the drafter, seeing "failed", used nothing. Only crawl-measured findings
+     survive a failed read; nothing read (or not read) today is used. */
+  const failedRead = r.status === 'failed';
   const said = thread.filter((m) => m.direction === 'outbound' && (!hookAt || m.at > hookAt)).map((m) => m.text).join('\n');
-  const eligible = rankFindings(pooledFindings(r).filter((f) => f.verified && f.strength >= MIN_SALES_STRENGTH && !NOT_PRIMARY.has(f.kind)));
+  const eligible = rankFindings(pooledFindings(r).filter((f) => f.verified && f.strength >= MIN_SALES_STRENGTH && !NOT_PRIMARY.has(f.kind)
+    && !(f.source === 'model' && !MODEL_MAY_AUTHOR.has(f.kind))
+    && (!failedRead || f.source === 'crawl')));
   const alreadyMentioned = said ? eligible.filter((f) => findingMentioned(said, f, town)) : [];
   const fresh = eligible.filter((f) => !alreadyMentioned.includes(f));
   const primary = fresh.find((f) => findingScore(f) >= PRIMARY_MIN_SCORE) ?? null;
@@ -510,13 +521,15 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
     research = 'No website research is available. Do NOT mention anything specific about their website. Lead with the AI search result instead.';
   } else if (r.status === 'no_website') {
     research = 'They have NO website on record. Do not critique a website. The route is: we can build them one that is properly set up for ai visibility and seo.';
-  } else if (r.status === 'failed') {
-    research = 'Their website could NOT be read. Do NOT mention any website problem. Lead with the AI search result instead.';
+  } else if (r.status === 'failed' && !ctx.selection.primary) {
+    research = 'Their website could NOT be read today and nothing measured earlier applies. Do NOT mention any website problem. Lead with the AI search result instead.';
   } else {
     const { primary, secondary } = ctx.selection;
     const concrete = (f: ResearchFinding) => sayableDetails(f).map((d) => `"${d}"`).join(' / ');
     research = [
-      `Researched ${hhmm(r.generatedAt)} (${r.status}). ${r.businessSummary ?? ''}`.trim(),
+      r.status === 'failed'
+        ? 'Their site could not be read today, but an earlier crawl check MEASURED the finding below. Use ONLY that finding; say nothing else about the site.'
+        : `Researched ${hhmm(r.generatedAt)} (${r.status}). ${r.businessSummary ?? ''}`.trim(),
       primary
         ? [
           `PRIMARY FINDING — YOU MUST USE THIS AS THE SPECIFIC ISSUE, keeping its concrete details:\n- [${primary.id}] ${primary.title}: ${primary.detail}\n  Concrete details to keep: ${concrete(primary)}`,
@@ -604,7 +617,9 @@ const PRICE_TALK = /£\s?\d|\b\d+\s?(?:quid|pounds?)\b|\bper month\b|\ba month\b
 const WEBSITE_Q = /\b(agency|agencies|developer|web (?:guy|designer|company|person)|own|owns|manage|manages|control|look(?:s|ing)? after|built|runs?|in charge of|have a (?:web)?site|got a (?:web)?site)\b[^?]{0,140}\?/i;
 const ROUTE_EXISTING = /\b(site|website) you(?:['’]ve| have)? (?:already )?got\b|\b(?:current|existing) (?:web)?site\b|\bsite you already have\b|\byour (?:current )?(?:web)?site as it is\b|\bon (?:the|your) (?:current )?(?:web)?site\b/i;
 const ROUTE_NEW = /\bnew (?:one|site|website)\b|\bbuild (?:you )?(?:a|one|a new)\b|\brebuild\b/i;
-const AI_SEARCH = /\b(ai|chatgpt|gemini|perplexity|claude|google)\b[^.?!\n]{0,80}\b(asked|ask|recommend\w*|search\w*|brought up|came up|mention\w*|suggest\w*|shows?|named)\b|\b(asked|checking|checked|searched|looked)\b[^.?!\n]{0,60}\b(ai|chatgpt|gemini|perplexity|google)\b/i;
+/* ⛔ The AI search must be SAID ("i asked google ai…", "ai brought up…"). A passing "harder for AI tools
+   to connect you with local searches" passed the first version (Adcock Heat, live 2026-09-25). */
+const AI_SEARCH_STRICT = /\b(?:asked|asking|checked|checking|searched|searching|looked|looking|tried|typed|put)\b[^.?!\n]{0,60}\b(?:ai|chatgpt|gemini|perplexity|claude|google)\b|\b(?:ai|chatgpt|gemini|perplexity|claude|google ai)\b[^.?!\n]{0,40}\b(?:recommend\w*|brought up|brings up|came up with|comes up with|mention\w*|suggest\w*|named|listed|picked)\b/i;
 /** An em/en dash, or a spaced hyphen used as one. A hyphen inside a quoted time range ("9AM - 9PM")
  *  is the site's own wording, not Paul's punctuation, so it is allowed. */
 export function usesDash(text: string): boolean {
@@ -644,12 +659,16 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   if (AI_ABSOLUTE.test(text) && !(ctx.selection.primary && /block|robots|javascript/i.test(`${ctx.selection.primary.id} ${ctx.selection.primary.title}`))) {
     problems.push('It claims to know how an AI model decides — hedge it ("can make it harder").');
   }
-  if ((!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
+  const accessFinding = [ctx.selection.primary, ...ctx.selection.secondary].some((x) => !!x && /block|robots|javascript|client_rendered|unreadable|noindex/i.test(`${x.id} ${x.title}`));
+  if (!accessFinding && /\b(?:can['\u2019]?t|cannot|unable to|struggl\w* to|not able to)\s+(?:properly\s+|fully\s+|really\s+)?(?:access|read|reach|get into|crawl|see)\b|\bblock(?:ed|ing|s)?\b/i.test(text)) {
+    problems.push('It says the AI tools cannot access the site, but no finding shows that.');
+  }
+  if (!ctx.selection.primary && (!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
     problems.push('It describes a website problem, but the site was not researched.');
   }
 
   if (!refusal) {
-    if (!AI_SEARCH.test(text)) problems.push('It does not mention the AI search that started this conversation.');
+    if (!AI_SEARCH_STRICT.test(text)) problems.push('It does not mention the AI search that started this conversation.');
     if (ctx.route === 'new_only') {
       if (!ROUTE_NEW.test(text)) problems.push('It does not say we can build them a site.');
     } else if (!ROUTE_EXISTING.test(text) || !ROUTE_NEW.test(text)) {

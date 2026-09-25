@@ -200,7 +200,7 @@ ok(shouldAskOwnership({ ...ryliResearch, ownershipClues: [] }, {}) === true, 'wi
 
 /* ─────────── 8. failed crawl / clean site / regenerate prompts ─────────── */
 const failedCtx = ctxFor({ research: { ...ryliResearch, status: 'failed', strongestFindings: [] } });
-ok(/Their website could NOT be read\. Do NOT mention any website problem/.test(buildReplyPrompt(failedCtx)), 'failed crawl: the model is told not to mention the site');
+ok(/Their website could NOT be read today and nothing measured earlier applies\. Do NOT mention any website problem/.test(buildReplyPrompt(failedCtx)), 'failed crawl: the model is told not to mention the site');
 ok(checkReply(`i asked ai and it showed others. Your website has a problem with its pages. are you with an agency or do you manage it yourself?`, failedCtx).problems.some((p) => /not researched/.test(p)), 'failed crawl: a site problem in the draft is caught');
 const noResearch = ctxFor({ research: null });
 ok(/No website research is available\. Do NOT mention anything specific about their website/.test(buildReplyPrompt(noResearch)), 'no evidence: nothing personalised invented');
