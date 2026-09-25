@@ -402,7 +402,8 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
     /* Measured on the first live draft (Adcock Heat, 2026-09-25): price and findings, but no guarantee
        and no link. A price answer without the four-week first-payment guarantee undersells the one
        thing that makes the setup fee low-risk, so it is a problem, not a note. */
-    if (!/\b(refund|money back|claim[^.?!\n]{0,30}back|guarantee)/i.test(text)) problems.push('They asked the price and it leaves out the four-week first-payment guarantee.');
+    // "refund", "money back", "claim/get/have … back" ("you can get your first … back", live 2026-09-25).
+    if (!/\b(refund|money back|guarantee|(?:claim|get|have|give)[^.?!\n]{0,40}\bback)\b/i.test(text)) problems.push('They asked the price and it leaves out the four-week first-payment guarantee.');
     if (!text.includes('findable.live')) problems.push(`They asked the price and it leaves out ${FINDABLE_DETAILS_URL}.`);
   }
   if (ctx.reportUrl && !ctx.allowReportUrl && (text.includes(ctx.reportUrl) || /findable\.live\/(?:r|report)\//i.test(text))) {

@@ -111,6 +111,10 @@ const live1 = checkReply(LIVE_1, ctx);
 ok(live1.problems.some((p) => /four-week first-payment guarantee/.test(p)), 'the live draft without the guarantee is sent back');
 ok(live1.problems.some((p) => /findable\.live/.test(p)), 'the live draft without findable.live is sent back');
 ok(/then the four-week first-payment guarantee; and include the Full details link/.test(prompt), 'the prompt asks for both up front');
+// The second live draft said the guarantee in other words — it must NOT be sent back for it.
+const LIVE_2 = "It's £99 to get started, then £99 a month from week six, for a total of 12 payments. If your AI visibility hasn't improved after four weeks, you can get your first £99 back.\n\nI took a look at your website and noticed it sends mixed signals about your coverage area.\n\nDo you control the current website, or is it managed by Keyhole IT Solutions?\nFull details are here: https://findable.live/";
+ok(!checkReply(LIVE_2, ctx).problems.some((p) => /guarantee/.test(p)), '"you can get your first £99 back" counts as the guarantee');
+ok(checkReply(LIVE_2.replace('you can get your first £99 back', 'thanks'), ctx).problems.some((p) => /guarantee/.test(p)), '…and removing it is caught again');
 // Paul had already answered "How much" by hand at 10:52 in that thread.
 const answered = [...thread, { id: 'paul', direction: 'outbound' as const, text: '£99 to start mate…', at: at(10) }];
 const ctxAnswered = buildReplyContext({ ...ctx, thread: answered });
