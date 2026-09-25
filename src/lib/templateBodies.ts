@@ -222,27 +222,27 @@ Happy to explain more here or jump on a quick call if you'd rather
 Paul✌️`;
 };
 
-/* ai_site_findings_v2 — submitted to Meta 2026-09-22. audit_followup_fault's successor: {{1}} trade
-   WITH ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} the site findings, {{7}} the
-   short report link. Transcribed from the body Paul submitted — including the lowercase "i" in two
-   places and the hyphen (not a dash) in "ahead of you - your site", which are Paul's wording and
-   Meta's registered text. Do not tidy either.
-   ⚠️ DISPLAY ONLY, exactly like its sibling: the Inbox has no audit to read rivals from and no
-   findings threaded here, so {{3}}-{{5}} degrade to "other firms" and {{6}} to a generic line. The
-   words the prospect actually received are on Meta's side. */
-const aiSiteFindingsV2Body = (_b: string, u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
+/* ai_site_findings_v2 — APPROVED BY META 2026-09-25 (the edited body). SIX vars: {{1}} trade WITH
+   ITS OWN ARTICLE, {{2}} town, {{3}} {{4}} {{5}} rivals, {{6}} the site findings. NO report link —
+   the claim/report URL argument is deliberately unused. The lowercase "i" twice is Paul's approved
+   wording and Meta's registered text — do not tidy it.
+   ⚠️ DISPLAY ONLY, exactly like its sibling: the Inbox has no audit to read rivals from here, so
+   {{3}}-{{5}} degrade to "other firms". The words the prospect received are on Meta's side. */
+const aiSiteFindingsV2Body = (_b: string, _u: string, trade?: string, competitors?: string, _first?: string, town?: string, _siteFault?: string, siteFindings?: string) => {
   const t = articleTrade(trade);
-  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned ${competitors || 'other firms'}
+  return `Hi mate, i was looking for ${t.ok ? t.value : (trade || 'a local business')} in ${town || 'your area'} so i asked AI and it mentioned
 
-Had a proper look at your site as well.
+${competitors || 'other firms'}
+
+Your AI visibility is low, so you're likely missing customers using AI to find businesses like yours.
+
+I checked what AI is seeing:
 
 ${siteFindings ?? ''}
 
-That's probably part of why the other businesses are getting picked ahead of you - your site is giving AI less clear information to work with than theirs.
+That's likely why the other businesses are getting picked ahead of you.
 
-I've put the actual results here: ${u}
-
-Happy to explain what I'd change here if you want.
+Happy to explain what I'd change here or jump on a quick call.
 
 Paul✌️`;
 };

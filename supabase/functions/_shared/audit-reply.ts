@@ -316,11 +316,9 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   );
   /* ── {{6}} FOR ai_site_findings_v2 ─────────────────────────────────────────────────────────────
      Built from the SAME stored crawl sources as siteFault directly above — no second fetch, no
-     second query, nothing this function did not already have in hand. It differs only in what it
-     says and in being stricter about when it will say anything: no website or a clean crawl both
-     return null, because that template's own copy claims to have looked at their site and blames
-     it. Null keeps the template unsendable (Meta rejects an empty {{6}}), which is the same
-     contract siteFault has.
+     second query, nothing this function did not already have in hand. No website returns null; a
+     clean crawl returns the clean-site line only with a measured visibility gap, else null. Null
+     keeps the template unsendable (Meta rejects an empty {{6}}), the same contract siteFault has.
      ⚠️ SEEDED ON THE LEAD ID so the transitions between findings are stable for a given lead — a
      message re-rendered or re-sent reads identically rather than reshuffling its wording. */
   /* ⛔ THE ORDERED KINDS COME BACK WITH THE SENTENCE, FROM THE SAME CALL. `siteFindingsKinds` is what
@@ -333,7 +331,9 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
     hasWebsite,
     runSources,
     cc ? { result: cc.result ?? null, createdAtMs: new Date(cc.created_at).getTime() } : null,
-    { seed: leadId },
+    /* auditVisibilityGap: the clean-site {{6}} (NO_TECHNICAL_FAULT_FINDING) claims a measured gap,
+       so it is only produced with one — the same value useInbox's picker gate passes. */
+    { seed: leadId, auditVisibilityGap },
   );
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;

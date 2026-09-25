@@ -56,9 +56,10 @@ import {
 export const AI_SITE_FINDINGS_V2 = 'ai_site_findings_v2';
 
 /**
- * ⛔ SUBMITTED TO META 2026-09-22, NOT YET APPROVED. While this is false the template cannot be
- * selected by anything: the picker labels it as pending and `getTemplateSendability` refuses it, so
- * no operator click and no queue path can put it on the wire. Approval is this ONE line.
+ * ✅ APPROVED BY META 2026-09-25 — the EDITED body (six variables, no report link; see
+ * whatsapp-send.ts). While this reads false the template cannot be selected by anything:
+ * `getTemplateSendability` and the server's `templateAwaitingApproval` both refuse it, so no
+ * operator click and no queue path can put it on the wire. Approval is this ONE line.
  *
  * ⚠️ IT IS NOT INFERRED FROM ANYTHING AND MUST NOT BECOME SO. Meta's approval state is not mirrored
  * into this database and a send is the only thing that discovers it, so the honest answer is a
@@ -70,7 +71,20 @@ export const AI_SITE_FINDINGS_V2 = 'ai_site_findings_v2';
  * its own behaviour whichever way this reads; the two templates are siblings, not versions, and
  * nothing in this file is reachable from that one.
  */
-export const AI_SITE_FINDINGS_V2_APPROVED = false;
+export const AI_SITE_FINDINGS_V2_APPROVED = true;
+
+/**
+ * {{6}} FOR A SITE THAT CRAWLED CLEAN (Paul, 2026-09-25, with the approved body).
+ *
+ * The approved copy introduces {{6}} with "I checked what AI is seeing:" — it no longer asserts the
+ * site is the problem — so a site we crawled successfully and found nothing strong on can be sent it
+ * honestly, with THIS line instead of an invented fault.
+ * ⛔ ONLY with a successful, fresh, current-version crawl AND a completed audit that measured the
+ *    business missing from at least one answer (auditShowsVisibilityGap) — that measured gap is what
+ *    "isn't being consistently surfaced" claims. No crawl, a failed crawl or no gap → null, never this.
+ */
+export const NO_TECHNICAL_FAULT_FINDING =
+  "Your site is accessible, but the business isn't being consistently surfaced in AI answers for the searches I checked.";
 
 /** At most this many findings in one message. Three is already a lot to read on a phone, and the
  *  fourth is always the weakest thing we found — which is the one that makes the whole message
@@ -461,14 +475,12 @@ export interface FindingsSource {
  * 🔴 IT IS STRICTER THAN siteFaultLine IN TWO WAYS, AND BOTH COME FROM THE REGISTERED COPY ITSELF
  *    RATHER THAN FROM TASTE:
  *
- *    · A LEAD WITH NO WEBSITE IS REFUSED. The body says "Had a proper look at your site as well" and
- *      "your site is giving AI less clear information to work with than theirs". Sent to somebody who
- *      has no website that is simply a lie, and an obvious one. audit_followup_fault handles that
+ *    · A LEAD WITH NO WEBSITE IS REFUSED. Both {{6}} forms describe their site, and the old body said
+ *      "Had a proper look at your site as well". audit_followup_fault handles that
  *      lead with NO_WEBSITE_FAULT_LINE and keeps doing so — this template is not for them.
- *    · A CLEAN SITE IS REFUSED. audit_followup_fault has CLEAN_SITE_FAULT_LINE for a site we crawled
- *      successfully and found nothing wrong with. Here the surrounding copy has already asserted
- *      that the site is the problem, so there is no sentence that can honestly go in {{6}}. The lead
- *      gets audit_followup_call instead.
+ *    · A CLEAN SITE gets NO_TECHNICAL_FAULT_FINDING (since the approved body, 2026-09-25) — but only
+ *      with a fresh successful crawl AND a measured visibility gap (`auditVisibilityGap`). Without
+ *      both it is still refused.
  *
  * ⛔ Returns null for "not this lead", never a placeholder. A placeholder would pass the picker's
  *    non-empty gate and put a generic sentence inside a message whose entire value is that it is
@@ -478,7 +490,7 @@ export function resolveSiteFindings(
   hasWebsite: boolean,
   auditRunCrawls: FindingsSource[] = [],
   leadCrawl?: FindingsSource | null,
-  opts: SiteFindingsOptions = {},
+  opts: SiteFindingsOptions & { auditVisibilityGap?: boolean } = {},
 ): string | null {
   return resolveSiteFindingsDetailed(hasWebsite, auditRunCrawls, leadCrawl, opts)?.text ?? null;
 }
@@ -495,10 +507,30 @@ export function resolveSiteFindingsDetailed(
   hasWebsite: boolean,
   auditRunCrawls: FindingsSource[] = [],
   leadCrawl?: FindingsSource | null,
-  opts: SiteFindingsOptions = {},
+  opts: SiteFindingsOptions & { auditVisibilityGap?: boolean } = {},
 ): SiteFindingsResult | null {
   const found = resolveFindingsSource(hasWebsite, auditRunCrawls, leadCrawl);
-  return found ? buildSiteFindingsDetailed(found.signals, { ...opts, evidence: found.evidence }) : null;
+  if (found) return buildSiteFindingsDetailed(found.signals, { ...opts, evidence: found.evidence });
+  /* ⛔ The clean-site line: kinds [] (it names no finding), so findings_shown stays null for it. */
+  if (opts.auditVisibilityGap === true && hasCleanCurrentCrawl(hasWebsite, auditRunCrawls, leadCrawl)) {
+    return { text: NO_TECHNICAL_FAULT_FINDING, kinds: [] };
+  }
+  return null;
+}
+
+/** A website we successfully read with a fresh, current-version crawl — the same source filters
+ *  resolveFindingsSource applies, minus "found something". */
+function hasCleanCurrentCrawl(
+  hasWebsite: boolean,
+  auditRunCrawls: FindingsSource[],
+  leadCrawl?: FindingsSource | null,
+): boolean {
+  if (!hasWebsite) return false;
+  return [...auditRunCrawls, ...(leadCrawl ? [leadCrawl] : [])].some((source) => {
+    if (source.complete === false || source.result?.status === 'unavailable') return false;
+    const signals = usableCrawlSignals(source.result, source.createdAtMs);
+    return !!signals && signals.fetchFailed !== true;
+  });
 }
 
 /** The stored crawl the findings were read from, with its raw signals and evidence beside the
@@ -547,6 +579,7 @@ export function hasSiteFindings(
   hasWebsite: boolean,
   auditRunCrawls: FindingsSource[] = [],
   leadCrawl?: FindingsSource | null,
+  auditVisibilityGap = false,
 ): boolean {
-  return resolveSiteFindings(hasWebsite, auditRunCrawls, leadCrawl) !== null;
+  return resolveSiteFindings(hasWebsite, auditRunCrawls, leadCrawl, { auditVisibilityGap }) !== null;
 }

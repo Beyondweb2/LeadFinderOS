@@ -217,14 +217,11 @@ const partial = resolveSiteFindingsDetailed(true, [oldEvidence], null, { seed: '
 ok(!!partial && !partial.kinds.some((k) => (ALL_KINDS as string[]).includes(k)),
   'evidence below the current version is dropped while the signal findings survive');
 
-console.log('── 4. THE SWITCH IS STILL OFF ──');
-/* ⛔ THE TEMPLATE IS SUBMITTED TO META AND NOT APPROVED. Everything above is built; nothing may
-   select it. A send of an unapproved template fails at Meta, in front of a real prospect, on the one
-   message whose whole value is that it reads like a person wrote it. */
-ok(AI_SITE_FINDINGS_V2_APPROVED === false, 'ai_site_findings_v2 is still NOT approved');
+console.log('── 4. THE SWITCH IS ON (approved at Meta 2026-09-25) ──');
+ok(AI_SITE_FINDINGS_V2_APPROVED === true, 'ai_site_findings_v2 is approved');
 ok(AI_SITE_FINDINGS_V2 === 'ai_site_findings_v2', 'and still named exactly as Meta has it');
-ok(/AI_SITE_FINDINGS_V2_APPROVED = false/.test(read('src/lib/siteFindings.ts')),
-  'the flag is literally false in the source, not merely falsy at runtime');
+ok(/AI_SITE_FINDINGS_V2_APPROVED = true/.test(read('src/lib/siteFindings.ts')),
+  'the flag is literally true in the source');
 
 console.log('── 5. THE DEEP-CRAWL GATE ──');
 const hook = (stop: string | null) => ({ hook: { version: 1, planned: ['q1', 'q2', 'q3'], next_index: 1, executed: 1, stop_reason: stop, gap: null, named_in: [] } });

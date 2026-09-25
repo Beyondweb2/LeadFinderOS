@@ -178,10 +178,9 @@ const TEMPLATE_DISPLAY: Record<string, string> = {
   /* audit_followup_fault — IS in REPORT_TEMPLATES (it carries the report link in {{7}}), unlike the
      call version above. Names a specific site fault plus the report. */
   audit_followup_fault: 'Audit follow-up + fault (names a site fault + report)',
-  /* ai_site_findings_v2 — the same message with 2-3 plain-English findings in {{6}}. UNCONDITIONAL,
-     like every entry here: this map names a message that has ALREADY been sent, so approval state is
-     irrelevant to it and gating it would print a raw slug in a thread. */
-  ai_site_findings_v2: 'Audit follow-up + site findings (2-3 findings + report)',
+  /* ai_site_findings_v2 — rivals + what AI is seeing on their site in {{6}}; NO report link, so it is
+     NOT in REPORT_TEMPLATES (like audit_followup_call). UNCONDITIONAL, like every entry here. */
+  ai_site_findings_v2: 'AI site findings (rivals + what AI sees, no link)',
   explain_offer: 'Explain the offer (full pitch + sign-up link)',
   explain_offer_v2: 'Explain the offer v2 (adds the 941-audit proof)',
   /* ⚠️ UNCONDITIONAL, unlike its entry in the picker. This map names a message that has ALREADY been

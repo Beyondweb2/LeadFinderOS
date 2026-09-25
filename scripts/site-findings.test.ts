@@ -1,15 +1,13 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   ai_site_findings_v2 — the registry, the switch, and the {{6}} that makes it different (2026-09-22).
+   ai_site_findings_v2 — the registry, the switch, and the {{6}} that makes it different (2026-09-22;
+   APPROVED at Meta in its edited six-variable form 2026-09-25).
 
    Three things are pinned here and each has a specific way of going wrong:
 
-     1. THE SWITCH. The template is SUBMITTED to Meta and NOT APPROVED. Everything about it is built;
-        nothing may select it. A send of an unapproved template fails at Meta, in front of a real
-        prospect, on the one message whose whole value is that it looks like a person wrote it.
-     2. THE SHAPE. Seven variables in one exact order, mirrored in two registries. A borrowed or
-        shifted var list returns 200 and reads as gibberish — the mistake audit_reply_warm's comment
-        records, and the reason every sibling's order was read off WhatsApp Manager rather than
-        inferred.
+     1. THE SWITCH. The edited template is APPROVED. It must be selectable, carry no pending warning,
+        and still only be offered to a lead whose {{6}} has a true value.
+     2. THE SHAPE. SIX variables in one exact order, mirrored in two registries, and NO {{7}} / report
+        link. A seventh parameter is a param-count mismatch at Meta (#132000) and the send dies.
      3. THE WORDS. {{6}} exists because the report's fault sentences read like a scanner. A test that
         only checked it was non-empty would pass on exactly the output this template was built to
         stop being.
@@ -23,9 +21,12 @@ import {
   MAX_SITE_FINDINGS,
   buildSiteFindings,
   candidateFindings,
+  NO_TECHNICAL_FAULT_FINDING,
   hasSiteFindings,
   resolveSiteFindings,
+  resolveSiteFindingsDetailed,
 } from '../src/lib/siteFindings.ts';
+import { WA_TEMPLATES, claimTemplatePayload, renderTemplateBody, templateAwaitingApproval } from '../supabase/functions/_shared/whatsapp-send.ts';
 import { CRAWL_CHECK_VERSION, THIN_WORDS, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { WA_TEMPLATE_REQS, getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { CONTINUATION_TEMPLATES, isColdOutreachTemplate } from '../src/lib/coldOutreach.ts';
@@ -74,20 +75,25 @@ const sentenceOf = (f: { clause: string; rest: string }) => f.clause + '. ' + f.
 
 console.log('── 1. THE NAME AND THE SWITCH ──');
 ok(AI_SITE_FINDINGS_V2 === NAME, 'the constant is the Meta-registered name, exactly');
-/* ⛔ THIS IS THE ASSERTION THE WHOLE TASK TURNS ON. Meta has not approved it. */
-ok(AI_SITE_FINDINGS_V2_APPROVED === false, 'AI_SITE_FINDINGS_V2_APPROVED is FALSE — submitted to Meta, not approved');
+/* ✅ Approved at Meta 2026-09-25 (the edited, six-variable body). */
+ok(AI_SITE_FINDINGS_V2_APPROVED === true, 'AI_SITE_FINDINGS_V2_APPROVED is TRUE — approved at Meta');
 ok((read('src/lib/siteFindings.ts').match(/export const AI_SITE_FINDINGS_V2_APPROVED/g) ?? []).length === 1,
-  'there is exactly ONE switch — approval must be a one-line change, not a hunt');
+  'there is exactly ONE switch');
+ok(templateAwaitingApproval(NAME) === false, 'the server gate no longer holds it');
 
-console.log('── …and while it is false NOTHING can select the template ──');
+console.log('── …it is selectable for a ready lead, with no pending-approval warning anywhere ──');
 const ready = { reportSlug: 'abc123', hasSiteFault: true, hasSiteFindings: true };
 const gate = getTemplateSendability(NAME, { shareToken: null }, ready);
-ok(gate.ok === false, 'a lead who satisfies EVERY other requirement is still refused');
-ok(/approval/i.test(gate.reason ?? ''), `…and the reason says why: "${gate.reason}"`);
-/* The approval gate must come FIRST, or a refactor that satisfies the other requirements quietly
-   makes it sendable. Driven by a lead that fails everything: the reason must still be approval. */
+ok(gate.ok === true, `a lead with an audit and a {{6}} can be sent it (reason: ${gate.reason ?? 'none'})`);
 const bare = getTemplateSendability(NAME, { shareToken: null }, { reportSlug: null, hasSiteFindings: false });
-ok(/approval/i.test(bare.reason ?? ''), 'approval is checked BEFORE the audit and findings requirements');
+ok(bare.ok === false && !/approval/i.test(bare.reason ?? ''), 'a lead with no audit is refused for THAT reason, never "approval"');
+const noFindings = getTemplateSendability(NAME, { shareToken: null }, { reportSlug: 'abc123', hasSiteFindings: false });
+ok(noFindings.ok === false && !/approval/i.test(noFindings.reason ?? ''), '…and a lead with no {{6}} is refused for THAT reason');
+const PENDING_RE = /pending|awaiting|waiting on meta|not approved|approval/i;
+const pickerEntry = WHATSAPP_TEMPLATES.find((t) => t.value === NAME);
+ok(!!pickerEntry && !PENDING_RE.test(pickerEntry.label), `the picker label carries no pending warning: "${pickerEntry?.label}"`);
+ok(!/2-3 findings \+ report link ⛔ PENDING META APPROVAL/.test(read('src/types/outreach.ts')), 'the old pending label text for this template is gone from the source');
+ok(!PENDING_RE.test(read('src/pages/Inbox.tsx').match(/ai_site_findings_v2: '([^']*)'/)?.[1] ?? 'missing'), 'the Inbox display name carries no pending warning');
 
 console.log('── …and the live template it succeeds is completely unchanged ──');
 ok(getTemplateSendability('audit_followup_fault', { shareToken: null }, { reportSlug: 'abc123', hasSiteFault: true }).ok === true,
@@ -101,8 +107,8 @@ ok(openerSendability(INITIAL_OPENER_A, INITIAL_OPENER_A).ok === true, 'the selec
 ok(openerSendability(NAME, undefined).ok === true && openerSendability(NAME, INITIAL_OPENER_A).ok === true, 'the opener rule leaves this template alone, as it does every non-opener');
 ok(INITIAL_OPENER_B === 'initial_opener_v2' && !CONTINUATION_TEMPLATES.has(INITIAL_OPENER_B), 'initial_opener_v2 is still a COLD opener');
 
-console.log('── 2. SEVEN VARIABLES, ONE ORDER, BOTH REGISTRIES ──');
-const EXPECTED = ['trade_article', 'town', 'rival_1', 'rival_2', 'rival_3', 'site_findings', 'audit_url'];
+console.log('── 2. SIX VARIABLES, ONE ORDER, BOTH REGISTRIES, NO {{7}} ──');
+const EXPECTED = ['trade_article', 'town', 'rival_1', 'rival_2', 'rival_3', 'site_findings'];
 const varsOf = (src: string) => {
   const m = src.match(new RegExp(NAME + ':\\s*\\{\\s*lang:\\s*"([a-z_]+)",\\s*vars:\\s*\\[([^\\]]*)\\]'));
   return m ? { lang: m[1], vars: m[2].split(',').map((v) => v.trim().replace(/^"|"$/g, '')).filter(Boolean) } : null;
@@ -111,36 +117,81 @@ const sendReg = varsOf(SEND);
 const queueReg = varsOf(QUEUE);
 ok(!!sendReg, 'registered in WA_TEMPLATES (whatsapp-send.ts)');
 ok(!!queueReg, 'registered in the process-whatsapp-queue mirror');
-ok(JSON.stringify(sendReg?.vars) === JSON.stringify(EXPECTED), `{{1}}-{{7}} are ${EXPECTED.join(', ')}`);
-ok(sendReg?.vars.length === 7, 'exactly SEVEN variables — Meta rejects a param-count mismatch (#132000)');
-ok(sendReg?.vars[5] === 'site_findings', '{{6}} is the site findings');
-/* ⛔ {{7}} IS THE REPORT LINK, AND IT IS THE EXISTING ONE. audit_url is what both senders fill from
-   resolveAuditReplyVars' `link` — the same findable.live report URL every sibling uses. No new
-   scheme, and never /a/<id>, which is a deliberate 404. */
-ok(sendReg?.vars[6] === 'audit_url', '{{7}} is audit_url — the existing public report URL, not a new scheme');
+ok(JSON.stringify(sendReg?.vars) === JSON.stringify(EXPECTED), `{{1}}-{{6}} are ${EXPECTED.join(', ')}`);
+ok(sendReg?.vars.length === 6 && WA_TEMPLATES[NAME].vars.length === 6, 'exactly SIX variables — Meta rejects a param-count mismatch (#132000)');
+ok(sendReg?.vars[0] === 'trade_article' && sendReg?.vars[1] === 'town', '{{1}} trade, {{2}} location');
+ok(sendReg?.vars[2] === 'rival_1' && sendReg?.vars[3] === 'rival_2' && sendReg?.vars[4] === 'rival_3', '{{3}} {{4}} {{5}} competitors 1-3, in order');
+ok(sendReg?.vars[5] === 'site_findings', '{{6}} is the AI visibility finding');
+ok(!sendReg?.vars.includes('audit_url') && !queueReg?.vars.includes('audit_url'), 'NO audit_url in either registry — there is no {{7}}');
 ok(JSON.stringify(sendReg?.vars) === JSON.stringify(queueReg?.vars), 'the two registries are byte-identical');
 ok(sendReg?.lang === 'en' && queueReg?.lang === 'en', "language is 'en', matching its siblings and the submitted template");
-/* The shape is deliberately its sibling's, so a mistake in one is visible against the other. */
-const faultVars = varsOf(SEND.replace(NAME, '__x__'))?.vars;
-ok(JSON.stringify(EXPECTED.map((v) => (v === 'site_findings' ? 'site_fault' : v)))
-   === JSON.stringify(['trade_article', 'town', 'rival_1', 'rival_2', 'rival_3', 'site_fault', 'audit_url']),
-  'the shape is audit_followup_fault\'s with site_fault swapped for site_findings');
-void faultVars;
+ok(JSON.stringify(WA_TEMPLATES.audit_followup_fault.vars) === JSON.stringify(['trade_article', 'town', 'rival_1', 'rival_2', 'rival_3', 'site_fault', 'audit_url']),
+  'audit_followup_fault (the approved sibling) keeps its own seven vars, untouched');
+
+console.log('── …the payload Meta receives: six body parameters, in order, and no report URL ──');
+const REPORT_URL = 'https://findable.live/r/abc123';
+const PAYLOAD_EXTRA = {
+  trade: 'locksmith', town: 'Wisbech', rivals: ['A1 Locks', 'Fenland Security', 'Key Masters'],
+  competitors: 'A1 Locks, Fenland Security and Key Masters', auditUrl: REPORT_URL,
+  siteFindings: 'One thing that stood out is your sitemap is pointing at a different web address. It can give conflicting information.',
+};
+const payload = claimTemplatePayload(NAME, WA_TEMPLATES[NAME].lang, 'MC Locksmiths', REPORT_URL, PAYLOAD_EXTRA) as
+  { template: { name: string; components: { type: string; parameters: { type: string; text: string }[] }[] } };
+const bodyComp = payload.template.components.filter((c) => c.type === 'body');
+const params = bodyComp[0]?.parameters.map((p) => p.text) ?? [];
+ok(payload.template.name === NAME, 'the payload names the approved template exactly');
+ok(bodyComp.length === 1 && params.length === 6, `exactly SIX body parameters are sent (got ${params.length})`);
+ok(payload.template.components.every((c) => c.type === 'body'), 'no header, no button component');
+ok(params[0] === 'a locksmith' && params[1] === 'Wisbech', `{{1}} "${params[0]}", {{2}} "${params[1]}"`);
+ok(params[2] === 'A1 Locks' && params[3] === 'Fenland Security' && params[4] === 'Key Masters', '{{3}}-{{5}} are the three rivals in order');
+ok(params[5] === PAYLOAD_EXTRA.siteFindings, '{{6}} is the finding, verbatim');
+ok(!params.some((p) => /findable\.live|https?:\/\//.test(p)), 'NO parameter carries the report URL (or any URL), even when one is supplied');
+
+console.log('── …and the preview/transcript matches the approved Meta body exactly ──');
+const APPROVED_BODY = (t1: string, t2: string, rivals: string, t6: string) => `Hi mate, i was looking for ${t1} in ${t2} so i asked AI and it mentioned
+
+${rivals}
+
+Your AI visibility is low, so you're likely missing customers using AI to find businesses like yours.
+
+I checked what AI is seeing:
+
+${t6}
+
+That's likely why the other businesses are getting picked ahead of you.
+
+Happy to explain what I'd change here or jump on a quick call.
+
+Paul✌️`;
+const rendered = renderTemplateBody(NAME, 'MC Locksmiths', REPORT_URL, 'locksmith', 'A1 Locks, Fenland Security and Key Masters', undefined, 'Wisbech', undefined, PAYLOAD_EXTRA.siteFindings).replace(/\r\n/g, '\n');
+ok(rendered === APPROVED_BODY('a locksmith', 'Wisbech', 'A1 Locks, Fenland Security and Key Masters', PAYLOAD_EXTRA.siteFindings),
+  'the edge transcript is the approved body, word for word');
+ok(!rendered.includes(REPORT_URL) && !/https?:\/\//.test(rendered), 'the transcript carries NO report URL');
+const spaBody = READABLE_TEMPLATE_BODIES[NAME]('MC Locksmiths', REPORT_URL, 'locksmith', 'A1 Locks, Fenland Security and Key Masters', undefined, 'Wisbech', undefined, PAYLOAD_EXTRA.siteFindings).replace(/\r\n/g, '\n');
+ok(spaBody === rendered, 'the Inbox preview body is byte-identical to the edge transcript');
+ok(((WA_TEMPLATES[NAME].vars.length) === (APPROVED_BODY('{{1}}', '{{2}}', '{{3}}, {{4}} and {{5}}', '{{6}}').match(/\{\{\d\}\}/g) ?? []).length)
+   && !/\{\{7\}\}/.test(APPROVED_BODY('{{1}}', '{{2}}', '{{3}}, {{4}} and {{5}}', '{{6}}')),
+  'the approved body has {{1}}-{{6}} and no {{7}}, matching the registry count');
+
+console.log('── …the report URL stays stored for the follow-up after they reply ──');
+const AUDIT_REPLY = read('supabase/functions/_shared/audit-reply.ts');
+ok(/return \{ ok: true, trade, competitors, rivals: [^}]*\blink\b/.test(AUDIT_REPLY), 'resolveAuditReplyVars still returns the report `link` beside the findings');
+ok(WA_TEMPLATES.audit_followup.vars.includes('audit_url') && REPORT_LINK_TEMPLATES.has('audit_followup'),
+  'the report-link follow-up (audit_followup) still carries audit_url and counts as a report sent');
+ok(!REPORT_LINK_TEMPLATES.has(NAME), 'ai_site_findings_v2 is NOT counted as a report sent — it carries no link');
 
 console.log('── …and every variable its branch must supply, it supplies ──');
-ok(branchForVars(EXPECTED) === 'audit', 'it routes to the AUDIT branch (rivals + audit_url)');
+ok(branchForVars(EXPECTED) === 'audit', 'it routes to the AUDIT branch (on its rivals)');
 ok(BRANCH_SUPPLIES.audit.has('site_findings'), 'the audit branch declares site_findings');
 ok(unsuppliedVars(EXPECTED).length === 0, 'no variable is left unanswered — the audit_followup 500');
 
 console.log('── 3. THE REGISTRIES THAT ARE NOT THE SEND PATH ──');
 ok(WHATSAPP_TEMPLATES.some((t) => t.value === NAME), 'it is in the SPA picker list (never hidden — hidden is not a list)');
-const entry = WHATSAPP_TEMPLATES.find((t) => t.value === NAME);
-ok(/PENDING META APPROVAL/.test(entry?.label ?? ''), `…and its label warns the operator: "${entry?.label}"`);
+ok(WHATSAPP_TEMPLATES.filter((t) => t.value === NAME).length === 1, '…exactly once (the old pending entry was updated, not duplicated)');
 ok(CONTINUATION_TEMPLATES.has(NAME) && !isColdOutreachTemplate(NAME),
   'it is a CONTINUATION — cold would refuse it for its entire audience (the audit_reply_warm trap)');
-ok(REPORT_LINK_TEMPLATES.has(NAME), 'it is in REPORT_LINK_TEMPLATES — {{7}} is a report link, so its opens are report opens');
 ok(!!READABLE_TEMPLATE_BODIES[NAME], 'it has a readable body, so a sent row never prints as a raw slug');
-ok(WA_TEMPLATE_REQS[NAME]?.needsAudit === true, 'needsAudit — rivals and the report link come from the completed audit');
+ok(WA_TEMPLATE_REQS[NAME]?.needsAudit === true, 'needsAudit — the rivals come from the completed audit');
 ok(WA_TEMPLATE_REQS[NAME]?.needsSiteFindings === true, 'needsSiteFindings — {{6}} cannot be empty');
 ok(new RegExp('ai_site_findings_v2:').test(read('src/pages/Inbox.tsx')), 'TEMPLATE_DISPLAY names it, so a thread never shows the slug');
 
@@ -241,9 +292,9 @@ for (const c of candidateFindings(ALL)) {
      moved: "The other thing I noticed is One thing that stood out is …". */
   ok(!FIRST_OPENER_RE.test(c.clause) && !SECOND_TRANSITION_RE.test(c.clause) && !THIRD_TRANSITION_RE.test(c.clause),
     `${c.kind}: the clause carries no opener of its own`);
-  /* ⛔ THE TEMPLATE'S OWN FIXED LINE DIRECTLY ABOVE {{6}} IS "Had a proper look at your site as
-     well". A finding that opens by saying it again reads like the message lost its place — and the
-     first version of this generator opened exactly that way. */
+  /* ⛔ The template's fixed line directly above {{6}} ("I checked what AI is seeing:", and before
+     2026-09-25 "Had a proper look at your site as well") already says we looked. A finding that
+     opens by saying it again reads like the message lost its place. */
   ok(!/had a (proper )?look/i.test(c.clause), `${c.kind}: does not repeat the template's own "had a look" line`);
   /* The clause follows an opener ending in "is", so it is a fragment, not a sentence. */
   ok(/^[a-z]/.test(c.clause), `${c.kind}: the clause is lower case — it continues the opener`);
@@ -394,12 +445,29 @@ ok(candidateFindings(only({ fetchFailed: true, searchBlocked: ['OAI-SearchBot'] 
 ok(buildSiteFindings(null) === null && buildSiteFindings(undefined) === null, 'absent signals produce null, never a generic line');
 
 console.log('── 8. WHEN IT MAY BE SENT AT ALL ──');
-ok(resolveSiteFindings(true, [fresh(ALL)]) !== null, 'a website with strong faults → findings');
-/* ⛔ STRICTER THAN siteFaultLine ON TWO LEADS, AND THE REGISTERED COPY IS WHY. */
-ok(resolveSiteFindings(false, [fresh(ALL)]) === null,
-  'NO WEBSITE → refused: the body says "Had a proper look at your site as well"');
-ok(resolveSiteFindings(true, [fresh(CLEAN)]) === null,
-  'a CLEAN site → refused: the body already blames the site, so there is nothing honest for {{6}}');
+/* A. A GENUINE TECHNICAL ISSUE → {{6}} names it (and never the clean-site line). */
+const tech = resolveSiteFindingsDetailed(true, [fresh(only({ searchBlocked: ['OAI-SearchBot'] }))], null, { seed: 'x', auditVisibilityGap: true });
+ok(!!tech && /crawlers used by AI search tools is being blocked/.test(tech.text) && tech.kinds[0] === 'crawler_blocked',
+  `A. a technical issue → {{6}} names it: "${tech?.text.slice(0, 90)}…"`);
+ok(tech?.text !== NO_TECHNICAL_FAULT_FINDING && !(tech?.text ?? '').includes(NO_TECHNICAL_FAULT_FINDING), 'A. …and a real finding is never swapped for the clean-site line');
+ok(resolveSiteFindings(true, [fresh(ALL)]) !== null, 'a website with strong faults → findings (no gap needed to name a real fault)');
+/* B. NO OBVIOUS TECHNICAL FAULT → the truthful non-technical line, ONLY with a clean crawl + measured gap. */
+const clean = resolveSiteFindingsDetailed(true, [fresh(CLEAN)], null, { seed: 'x', auditVisibilityGap: true });
+ok(clean?.text === NO_TECHNICAL_FAULT_FINDING, `B. a clean crawl + a measured gap → "${clean?.text}"`);
+ok(clean?.kinds.length === 0, 'B. …it names no finding kind, so findings_shown stays null');
+ok(!/block|sitemap|thin|duplicate|crawler|wrong domain/i.test(NO_TECHNICAL_FAULT_FINDING), 'B. …and it invents no technical issue');
+ok(!/[\n\r\t]/.test(NO_TECHNICAL_FAULT_FINDING) && NO_TECHNICAL_FAULT_FINDING.length < 1024, 'B. …one line, inside Meta\'s parameter limit');
+ok(resolveSiteFindings(true, [fresh(CLEAN)]) === null, 'B. a clean crawl WITHOUT a measured gap → refused (no true line)');
+ok(resolveSiteFindings(true, [fresh(CLEAN)], null, { auditVisibilityGap: false }) === null, 'B. …explicitly false gap → refused');
+ok(resolveSiteFindings(true, [], null, { auditVisibilityGap: true }) === null, 'B. a gap but NO crawl → refused (we cannot say the site is accessible)');
+ok(resolveSiteFindings(true, [fresh(only({ fetchFailed: true }))], null, { auditVisibilityGap: true }) === null, 'B. a gap but a FAILED fetch → refused');
+ok(resolveSiteFindings(true, [{ result: { version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: Date.now() - (31 * 86_400_000) }], null, { auditVisibilityGap: true }) === null,
+  'B. a gap but a STALE clean crawl → refused');
+ok(resolveSiteFindings(true, [{ ...fresh(CLEAN), complete: false }], null, { auditVisibilityGap: true }) === null, 'B. a gap but an incomplete crawl → refused');
+ok(hasSiteFindings(true, [fresh(CLEAN)], null, true) === true && hasSiteFindings(true, [fresh(CLEAN)], null, false) === false,
+  'B. the picker gate takes the same gap, so offer and send agree');
+ok(resolveSiteFindings(false, [fresh(ALL)], null, { auditVisibilityGap: true }) === null,
+  'NO WEBSITE → refused: both {{6}} forms describe their site (audit_followup_fault handles that lead)');
 ok(resolveSiteFindings(true, []) === null, 'no crawl at all → refused');
 ok(resolveSiteFindings(true, [{ result: { version: CRAWL_CHECK_VERSION, signals: ALL }, createdAtMs: Date.now() - (31 * 86_400_000) }]) === null,
   'a STALE crawl → refused (it describes the site as it was)');
