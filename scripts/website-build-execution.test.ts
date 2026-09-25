@@ -21,7 +21,7 @@ import { stagePrompts } from '../src/lib/stagePrompts.ts';
 import { applyRecon, parseReconText, type ReconResult } from '../src/lib/recon.ts';
 import { autoAssign, computeMapping, urlDecisions } from '../src/lib/templateMapping.ts';
 import { redirectMatcher } from '../src/lib/buildArchitecture.ts';
-import { applyBuildResult, builtCoverage, configVersion, executionPrompt, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResult } from '../src/lib/buildExecution.ts';
+import { applyBuildResult, builtCoverage, sameDomainRebuild, configVersion, executionPrompt, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResult } from '../src/lib/buildExecution.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 
 let failures = 0;
@@ -137,12 +137,18 @@ console.log('\n── N. FAITHFUL / BESPOKE ──');
 {
   const f = ready({ ...BASE, route: 'faithful_rebuild', rebuild_style: 'replica', copy_ownership: 'client_wrote' });
   const fp = executionPrompt(input(f));
-  ok(fp.blockedBy.length === 0 && /approved source architecture/.test(fp.text) && /OLD domain/.test(fp.text) && !/E2\. GENERATED CLIENT CONFIG/.test(fp.text), 'faithful: source architecture, old-domain scrub, no template config');
+  ok(fp.blockedBy.length === 0 && /approved source architecture/.test(fp.text) && /OLD PLATFORM/.test(fp.text) && !/E2\. GENERATED CLIENT CONFIG/.test(fp.text), 'faithful (same domain): source architecture, old-platform scrub, no template config');
   ok(fp.text.includes('img/other.jpg') === false && fp.text.includes('img/dan.jpg'), 'faithful: every USE asset (the REVIEW one still out)');
   const noPlan = executionPrompt(input(ready({ ...BASE, route: 'bespoke', pages: [] })));
   ok(noPlan.blockedBy.includes('Page architecture (no pages planned)'), 'bespoke without an approved architecture is blocked');
   const bp = executionPrompt(input(ready({ ...BASE, route: 'bespoke' })));
   ok(bp.blockedBy.length === 0 && /approved Architecture/.test(bp.text), 'bespoke: follows the approved Architecture, no template required');
+  /* Rebuild IN PLACE (old site www.harbourlocks.co.uk, new canonical harbourlocks.co.uk): the old domain is the
+     canonical one, so the scrub must not forbid it — it hunts the old platform's leftovers instead. */
+  ok(sameDomainRebuild(SITE, 'harbourlocks.co.uk') && !sameDomainRebuild(SITE, 'harbour-locks.com') && !sameDomainRebuild('', 'harbourlocks.co.uk'), 'same-domain detection ignores www and never matches a blank');
+  ok(!/for the OLD domain/.test(bp.text) && /share the domain harbourlocks\.co\.uk/.test(bp.text) && /hotlinked from the old site/.test(bp.text) && /no hotlinked old-site file anywhere/.test(bp.text), 'same-domain bespoke: the scrub does not forbid the production domain');
+  const moved = executionPrompt(input(ready({ ...BASE, route: 'bespoke', canonical_domain: 'harbour-locks.com' })));
+  ok(/for the OLD domain \(https:\/\/www\.harbourlocks\.co\.uk\/\)/.test(moved.text) && /no old domain anywhere/.test(moved.text), 'a move to a NEW domain still forbids the old one');
 }
 
 console.log('\n── Q/R. PARSING THE BUILD RESULT ──');
