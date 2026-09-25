@@ -238,7 +238,7 @@ ok(shouldDeepCrawl({}) === true, 'a results object with no hook → deep (paid b
 ok(shouldDeepCrawl({ summary: { mention_rate: 0.5 } }) === true, 'an ordinary audit result → deep');
 ok(shouldDeepCrawl({ hook: null }) === true, 'an explicitly null hook → deep');
 ok(shouldDeepCrawl({ hook: 'nonsense' }) === true, 'a malformed hook → deep, never silently off');
-ok(shouldDeepCrawl({ hook: { version: 2, planned: [] } }) === true,
+ok(shouldDeepCrawl({ hook: { version: 99, planned: [] } }) === true,
   '⛔ a FUTURE hook shape this code does not recognise → deep. The gate turns itself off rather than turning the evidence off for the book.');
 
 console.log('── 6. THE HOOK EVIDENCE CARD ──');

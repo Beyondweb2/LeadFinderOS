@@ -1218,6 +1218,10 @@ export function buildReportData(
       engineOrder: SCORED_ENGINES,
       engineLabel: (e) => ENGINE_LABELS[e] ?? e,
       namedInstead: (competitors) => rivalsSuppressed ? [] : competitors.filter((n) => !isProvableJunkName(n)).slice(0, 5),
+      // Version 2 only (six-result hook): the same ruler the hero and per-question counts use.
+      namedCtx,
+      town: ctx.locationText || null,
+      trade: ctx.businessType || null,
     }),
     questionBreakdown,
     questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows

@@ -1,4 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
+   ⚠️ SUPERSEDED FOR NEW AUDITS (2026-09-25). A new hook audit is 3 questions × 2 engines, all queued at
+   once, never stopping early: state version 2, scored by src/lib/hookScore.ts. Everything below
+   about planning one question at a time is the VERSION-1 record. It still runs for any v1 run
+   that was in flight at deploy, and it still renders historical v1 audits with their own
+   denominators. Do not build new behaviour on it.
+
    THE ADAPTIVE HOOK AUDIT — one module, imported by create-ai-audit (the plan), the queue processor
    (the step) and the report builder (the summary). Plain TypeScript, no Deno, no React.
 
@@ -31,8 +37,12 @@
    ⛔ Every field lives in ai_audit_runs.results.hook — existing jsonb, no migration.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { cellNamed, type NamedCell } from './namedSignal.ts';
+import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { OUTREACH_HOOK_QUESTIONS } from './auditQuestionCounts.ts';
+import { HOOK_SCORE_QUESTIONS, hasAnswer, hookBreadthScore, hookMissSentence, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
+
+/* One copy of each: the v2 score (hookScore.ts) owns them, this v1 module re-exports them. */
+export { hasAnswer, hookBreadthScore };
 
 /** Ceiling on questions a hook may ask. The same number the callers state as question_count. */
 export const HOOK_MAX_QUESTIONS = OUTREACH_HOOK_QUESTIONS;
@@ -98,6 +108,12 @@ export function isHookState(v: unknown): v is HookState {
  *                              the caller's dedupe re-crawls deeply then because the shallow row it
  *                              wrote carries no evidence.
  *
+ * For a VERSION-2 hook (3 questions × 2 engines, hookScore.ts) the same idea, read from the score:
+ *   · complete with at least one missed search → yes. There is a hook to message about.
+ *   · complete 6/6                             → no. The lead leaves active outreach.
+ *   · incomplete (a failed or pending result)  → no. No final score means no hook.
+ * `ctx` must be the report's NamedContext so "missed" means the same thing here as on screen.
+ *
  * 🔴 AND IT FAILS OPEN, WHICH IS THE ONLY SAFE DIRECTION. Everything that is NOT a recognisable hook
  * state — a paid baseline, a remeasure, a free check, a manual audit, a malformed `results`, a shape
  * this code has not seen — returns TRUE and keeps the behaviour it has today. Written as "is a hook
@@ -106,33 +122,20 @@ export function isHookState(v: unknown): v is HookState {
  * must never fall through as a real answer, and the absent case here is the ordinary one
  * (CLAUDE.md §4).
  */
-export function shouldDeepCrawl(runResults: unknown): boolean {
+export function shouldDeepCrawl(runResults: unknown, ctx: HookScoreContext = {}): boolean {
   const hook = (runResults as { hook?: unknown } | null | undefined)?.hook;
+  if (isHookStateV2(hook)) {
+    const score = scoreHookRun(hook, rowsFromRunResults(runResults), ctx);
+    return score.complete && score.misses.length > 0;
+  }
   if (!isHookState(hook)) return true;
   return hook.stop_reason === 'visibility_gap_found';
 }
 
 /* ── The plan ───────────────────────────────────────────────────────────────────────────────── */
 
-/** How broadly commercial a question reads. Higher runs first. Deterministic and cheap: the
- *  generator already writes local-intent questions; this only decides their ORDER so Q1 is the
- *  broad "recommend a good <trade> in <town>" ask and the narrowest intent runs last. */
-export function hookBreadthScore(question: string, town: string): number {
-  const q = question.toLowerCase();
-  let score = 0;
-  if (/\brecommend/.test(q)) score += 4;
-  if (/\b(best|good|top|reliable|trusted|reputable)\b/.test(q)) score += 2;
-  if (/\bwho\b/.test(q)) score += 1;
-  const t = town.split(',')[0].trim().toLowerCase();
-  if (t && q.includes(t)) score += 2;
-  if (/\b(near me|nearby|local|in my area)\b/.test(q)) score += 1;
-  // Narrow intents: a price, an emergency, a named service or a comparison run later.
-  if (/\b(cost|price|how much|cheap|quote)\b/.test(q)) score -= 2;
-  if (/\b(emergency|24|out of hours|same day|urgent)\b/.test(q)) score -= 1;
-  if (/\b(vs|versus|compare|difference)\b/.test(q)) score -= 2;
-  if (q.length > 110) score -= 1;
-  return score;
-}
+/* hookBreadthScore moved to hookScore.ts (re-exported above) so the v2 hook pick and this v1
+   plan rank wording with one function. */
 
 /** Order the generated questions broadest-first and cap at HOOK_MAX_QUESTIONS. Stable: ties keep
  *  the generator's order, so the same generated set always yields the same plan. */
@@ -164,12 +167,6 @@ export type HookEvaluation =
   | { outcome: 'gap'; gap: Omit<HookGap, 'question_index' | 'question'>; namedEngines: string[] }
   | { outcome: 'named'; namedEngines: string[] }
   | { outcome: 'no_valid_answer' };
-
-export function hasAnswer(cell: unknown): cell is HookEngineCell {
-  return !!cell && typeof cell === 'object' &&
-    typeof (cell as { answer_text?: unknown }).answer_text === 'string' &&
-    ((cell as { answer_text: string }).answer_text).trim().length > 0;
-}
 
 /* ── The Gemini 3/3 lead-qualification check (Paul, 2026-09-21) ────────────────────────────────
    evaluateHookQuestion above ALREADY makes Gemini (HOOK_DECIDING_ENGINE) the sole decider of
@@ -287,6 +284,8 @@ export function advanceHookState(
 /* ── The summary (report + future outreach generator) ───────────────────────────────────────── */
 
 export interface HookReportSummary {
+  /** 'six' = a version-2 hook (3 questions × 2 engines). Absent = version 1. The copy branches on it. */
+  shape?: 'six';
   questionsTested: number;
   maxQuestions: number;
   stopReason: HookStopReason;
@@ -339,8 +338,14 @@ export function buildHookReportSummary(input: {
   engineOrder: readonly string[];
   engineLabel: (engine: string) => string;
   namedInstead: (competitors: string[]) => string[];
+  /** The report's own NamedContext and town/trade. Version 2 only: the score must use the same
+   *  ruler as the report's counts. Version 1 is rendered exactly as it always was. */
+  namedCtx?: NamedContext;
+  town?: string | null;
+  trade?: string | null;
 }): HookReportSummary | null {
   const { state } = input;
+  if (isHookStateV2(state)) return buildHookReportSummaryV2(state, input);
   if (!isHookState(state) || !state.stop_reason || state.stop_reason === 'provider_failure') return null;
   const byQuestion = new Map(input.rows.map((r) => [r.question.trim().toLowerCase(), r]));
   const cellsFor = (question: string): Record<string, unknown> | null => {
@@ -383,6 +388,56 @@ export function buildHookReportSummary(input: {
   };
 }
 
+/**
+ * VERSION 2: the six-result hook. Null until the score is COMPLETE (every one of the six results a
+ * valid answer). A partial audit falls back to the ordinary rendering, which labels failed and
+ * in-flight runs itself. The "gap" is the hook pick (hookScore.ts pickHookResult: the strongest
+ * Google AI miss, else the strongest ChatGPT miss). Its competitors and citations are read from that
+ * exact question's cell for that exact engine and nowhere else.
+ */
+function buildHookReportSummaryV2(
+  state: HookStateV2,
+  input: Parameters<typeof buildHookReportSummary>[0],
+): HookReportSummary | null {
+  const score = scoreHookRun(state, input.rows, { named: input.namedCtx, town: input.town, trade: input.trade });
+  if (!score.complete) return null;
+  const pick = score.hook;
+  const statusOf = (qi: number, e: string) => score.results.find((r) => r.questionIndex === qi && r.engine === e)?.status;
+  const tested = state.planned.map((question, i) => ({
+    question,
+    isGap: pick?.questionIndex === i,
+    perEngine: input.engineOrder.filter((e) => score.results.some((r) => r.questionIndex === i && r.engine === e)).map((e) => {
+      const st = statusOf(i, e);
+      return { engine: e, label: input.engineLabel(e), named: st === 'named' ? true : st === 'not_named' ? false : null };
+    }),
+  }));
+  let gap: HookReportSummary['gap'] = null;
+  if (pick) {
+    const row = input.rows.find((r) => r.question.trim().toLowerCase() === pick.question.trim().toLowerCase() && r.status === 'done');
+    const cell = row?.result && typeof row.result === 'object' ? (row.result as Record<string, unknown>)[pick.engine] : null;
+    gap = {
+      questionIndex: pick.questionIndex,
+      question: pick.question,
+      engine: pick.engine,
+      engineLabel: input.engineLabel(pick.engine),
+      namedInstead: input.namedInstead(pick.competitors),
+      citations: hasAnswer(cell) ? citationList((cell as HookEngineCell).citations) : [],
+      namedOnEngineLabels: score.results
+        .filter((r) => r.questionIndex === pick.questionIndex && r.engine !== pick.engine && r.status === 'named')
+        .map((r) => input.engineLabel(r.engine)),
+      answerExcerpt: pick.answerExcerpt,
+    };
+  }
+  return {
+    shape: 'six',
+    questionsTested: state.planned.length,
+    maxQuestions: HOOK_SCORE_QUESTIONS,
+    stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',
+    gap,
+    tested,
+  };
+}
+
 /** The words. Plain, platform-specific, never a percentage. Tested directly, rendered verbatim.
  *
  * 🔴 RESTORED TOWARD THE ORIGINAL REPORT DESIGN (2026-09-21, Paul — page 1 of the baseline PDF is
@@ -401,6 +456,20 @@ export function hookReportCopy(summary: HookReportSummary, businessName: string)
   const eyebrow = 'Quick AI Visibility Check';
   const caveat = 'This is a quick snapshot, not your full AI visibility measurement.';
   const n = summary.questionsTested;
+  /* VERSION 2 (2026-09-25): engine-specific, always. The six-result hook knows exactly which engine
+     missed, and a Gemini miss beside a ChatGPT naming must never read as "AI doesn't recommend you". */
+  if (summary.shape === 'six') {
+    if (!summary.gap) {
+      const results = summary.tested.reduce((t, q) => t + q.perEngine.length, 0);
+      return {
+        eyebrow,
+        headline: 'Strong initial AI visibility',
+        lede: `${businessName} was named in all ${results} results tested (${n} ${n === 1 ? 'search' : 'searches'}, each asked on ${summary.tested[0]?.perEngine.map((e) => e.label).join(' and ') || 'each engine'}). This is still only a quick snapshot rather than a full visibility baseline.`,
+        caveat,
+      };
+    }
+    return { eyebrow, headline: hookMissSentence(summary.gap.engineLabel), lede: '', caveat };
+  }
   if (!summary.gap) {
     return {
       eyebrow,

@@ -14,13 +14,14 @@ import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
-import { autoMarkHookLeadNotInterested } from "../_shared/hook-not-interested.ts";
+import { autoMarkHookLeadNotInterested, autoMarkSixOfSixNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
+import { isHookStateV2 } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
@@ -977,7 +978,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     const { data: runNow } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
     const existingResults: Row = runNow?.results && typeof runNow.results === "object" ? (runNow.results as Row) : {};
 
-    /* ── ADAPTIVE HOOK STEP (2026-09-20, src/lib/hookAudit.ts) ──────────────────────────────────
+    /* ── ADAPTIVE HOOK STEP (2026-09-20, src/lib/hookAudit.ts) — VERSION 1 RUNS ONLY ──────────────
+       ⚠️ Since 2026-09-25 a new hook is version 2: all three questions are queued at creation and
+       the run finalises like any ordinary audit, so it never enters this block (isHookState is
+       version 1 only). This stays for a v1 run that was in flight at deploy.
        A hook run reaches this point with every queued row settled. The question that just settled
        is the LAST row (rows are ordered by created_at and the plan queues one at a time). Evaluate
        it on the scored engines: a gap or a provider failure stops the hook and the run finalises
@@ -1128,6 +1132,9 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         console.log(`[process-ai-audit-queue] hook run ${runId}: not auto-marking not interested — ${outcome.reason}`);
       }
     }
+    /* The VERSION-2 hook's 6/6 rule is NOT here. It runs after the run is released (below, beside
+       readyRuns), because "named" must be read after extract-competitors has written its verdicts.
+       That way the rule, the report and the Inbox card read one set of cells. */
 
     /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
        Every audit that finalises crawls its lead's site — complete, capped OR failed, because the
@@ -1165,7 +1172,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
       try {
         const auditId = runRow?.audit_id as string | undefined;
         if (!auditId) return;
-        const deepCrawl = shouldDeepCrawl(results);
         const markUnavailable = async (error: string) => {
           const { data: currentRun } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
           const currentResults = currentRun?.results && typeof currentRun.results === "object" ? currentRun.results : {};
@@ -1174,7 +1180,15 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           }).eq("id", runId);
         };
         const { data: aud } = await service
-          .from("ai_audits").select("lead_id, is_market, website").eq("id", auditId).maybeSingle();
+          .from("ai_audits").select("lead_id, is_market, website, business_name, business_type, location_text").eq("id", auditId).maybeSingle();
+        /* The version-2 hook gate scores the six results with the report's own ruler (business,
+           trade, town), so "missed" here means what the report and the Inbox card show. */
+        const audCtx = aud as { business_name?: string | null; business_type?: string | null; location_text?: string | null } | null;
+        const deepCrawl = shouldDeepCrawl(results, {
+          named: { businessName: audCtx?.business_name ?? "", trade: audCtx?.business_type || null, town: audCtx?.location_text || null },
+          town: audCtx?.location_text ?? null,
+          trade: audCtx?.business_type ?? null,
+        });
         const cLeadId = (aud as { lead_id?: string | null } | null)?.lead_id ?? null;
         if ((aud as { is_market?: boolean } | null)?.is_market === true) return;
         const { data: lead } = cLeadId
@@ -1378,6 +1392,23 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (readiness.ready) {
       const { error } = await service.from("ai_audit_runs").update({ status: p.finalStatus }).eq("id", p.runId).eq("status", "processing");
       if (!error) readyRuns.add(p.runId);
+      /* ── VERSION 2 HOOK: 6/6 ON CHATGPT + GOOGLE AI (2026-09-25, _shared/hook-not-interested.ts) ──
+         Here, after release, because only now has extract-competitors written the model's named
+         verdicts. The rule reads the queue rows with the report's own ruler, so it agrees with the
+         Inbox card and the report. Only a COMPLETE six-result hook where all six results named the
+         business moves the lead. Any miss (5/6 down to 0/6) keeps it as an opportunity, and an
+         incomplete audit decides nothing. It deletes nothing, sends nothing, and is idempotent (a
+         conditional write that skips an already-moved lead). The reason is recorded on
+         results.hook. Runs before the completion auto-send below. That send would refuse anyway
+         (audit-reply's hookForbidsAbsenceCopy), but the lead should already be out of outreach. */
+      if (!error && isHookStateV2(current.hook)) {
+        const outcome = await autoMarkSixOfSixNotInterested(service, p.auditId, p.runId);
+        if (outcome.applied) {
+          console.log(`[process-ai-audit-queue] hook run ${p.runId}: named in all six results — lead ${outcome.leadId} auto-marked not interested`);
+        } else if (outcome.reason !== "not_six_of_six") {
+          console.log(`[process-ai-audit-queue] hook run ${p.runId}: not auto-marking not interested — ${outcome.reason}`);
+        }
+      }
     } else {
       await service.from("ai_audit_runs").update({ status: "pending" }).eq("id", p.runId).eq("status", "processing");
       console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${readiness.crawlReady}, cleaning=${readiness.cleaning}`);

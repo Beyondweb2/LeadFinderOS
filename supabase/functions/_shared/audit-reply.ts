@@ -14,6 +14,7 @@ import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { resolveSiteFindingsDetailed } from "../../../src/lib/siteFindings.ts";
 import { isHookState } from "../../../src/lib/hookAudit.ts";
+import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 
 /* ── The all-named hook guard ──────────────────────────────────────────────────────────────────────
    ⛔ A HOOK THAT NAMED THEM EVERYWHERE FORBIDS ABSENCE COPY (Paul, 2026-09-21). Several audit-class
@@ -32,6 +33,16 @@ export const HOOK_NO_GAP_REASON = "hook_no_visibility_gap";
  *  failure or a non-hook run all return false: absence of the marker never decides. */
 export function hookForbidsAbsenceCopy(state: unknown): boolean {
   return isHookState(state) && state.stop_reason === "max_questions_reached" && !state.gap;
+}
+
+/** VERSION 2 (2026-09-25): the six-result hook forbids absence copy when it is COMPLETE and named the
+ *  business in all six results. Scored by scoreHookRun with the report's ruler, the same call the
+ *  6/6 Not Interested rule and the Inbox card make. Any miss (5/6 down) or an incomplete audit
+ *  returns false and leaves every other check below to decide, as before. */
+export function sixResultHookForbidsAbsenceCopy(state: unknown, rows: readonly HookScoreRow[], ctx: HookScoreContext): boolean {
+  if (!isHookStateV2(state)) return false;
+  const score = scoreHookRun(state, rows, ctx);
+  return score.complete && score.allNamed && score.expected === HOOK_SCORE_RESULTS;
 }
 
 // Public report origin (matches the /a/<slug|auditId> route fronted by functions/a/[slug].ts).
@@ -159,6 +170,18 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      questioned, it is complete by definition". A FAILED run never reaches here at all: the selector
      above accepts only complete|capped, so a failed audit already returns the no-completed-audit
      reason and is never described as a competitor problem. */
+  /* ⛔ THE SIX-RESULT HOOK, SAME REFUSAL (2026-09-25). A version-2 hook needs its rows to be scored, so
+     this check sits after they are read. Named in 6/6 means there is no absence to claim. */
+  if (sixResultHookForbidsAbsenceCopy(hookState, (qrows ?? []) as HookScoreRow[], {
+    named: { businessName: audit.business_name ?? "", trade: audit.business_type || null, town: audit.location_text || null },
+  })) {
+    return {
+      ok: false,
+      reason: `${HOOK_NO_GAP_REASON}: the quick check named ${String(audit.business_name ?? "").trim() || "this business"} ` +
+        `in all ${HOOK_SCORE_RESULTS} ChatGPT and Google AI results, so there is no absence to message about. ` +
+        `No audit-based template can be sent from this check; the report shows the result honestly.`,
+    };
+  }
   const answered = countAnsweredCells((qrows ?? []) as Parameters<typeof countAnsweredCells>[0]);
   if (run.status === "capped" && answered === 0) {
     return { ok: false, reason: "The audit didn't answer any questions — re-run it." };

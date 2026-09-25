@@ -307,8 +307,11 @@ ok(/const freshAudit: boolean = body\.fresh_audit === true && \(isInternal \|\| 
 // H: the report keys on the persisted hook state, not on the question count.
 ok(buildHookReportSummary({ state: undefined, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(false) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors }) === null, 'H: a one-question ordinary run with no hook state gets the normal report, never the hook UX');
 ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, stop_reason: 'max_questions_reached' }, rows: [{ question: 'q', status: 'done', result: { chatgpt: cell(true) } }], engineOrder: ENGINES, engineLabel: label, namedInstead: (competitors) => competitors }) !== null, 'H: hook state present → hook UX');
-ok(createAudit.includes('questions = planHookQuestions(questions, { town: locationText });') && createAudit.includes('hookState = initialHookState(questions);'), 'create-ai-audit plans and orders the hook questions');
-ok(createAudit.includes('(hookState ? questions.slice(0, 1) : questions).map('), 'create-ai-audit queues ONLY Q1 for a hook; every other audit still fans out in full');
+/* 2026-09-25: a NEW hook is version 2 (3 questions × 2 engines, all queued). The v1 rules above stay
+   tested because a v1 run in flight at deploy is still advanced by them. scripts/hook-score.test.ts
+   covers version 2. */
+ok(createAudit.includes('questions = planHookQuestions(questions, { town: locationText });') && createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit plans and orders the hook questions (version 2)');
+ok(createAudit.includes('const queueRows = questions.map((q) => ({') && !createAudit.includes('questions.slice(0, 1)'), 'create-ai-audit queues EVERY hook question; nothing stops early');
 ok(createAudit.includes('if (hookState) runResults.hook = hookState;'), 'the plan lives on the run (results.hook) — no migration');
 ok(/&& !freshAudit && !isHookAudit\) \{/.test(createAudit), 'H: a hook request never reuses the lead\'s existing audit — an Inbox re-run is a NEW hook that starts at Q1');
 ok((createAudit.match(/from\("ai_audit_runs"\)\s*\.insert\(/g) ?? []).length === 1 && !/from\("ai_audit_runs"\)\s*\.insert\(/.test(queue.replace(/\/\*[\s\S]*?\*\//g, '')), 'only create-ai-audit inserts a run; the processor never mints run 2');

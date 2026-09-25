@@ -292,7 +292,7 @@ export async function reconcileFirstReplyAuditIntents(service: Service): Promise
         has_website: !!website,
         question_count: OUTREACH_HOOK_QUESTIONS,
         fresh_audit: true,   // a NEW audit, never a run on an old one
-        hook_audit: true,    // the explicit hook marker: adaptive 1→3, hook report
+        hook_audit: true,    // the explicit hook marker: 3 questions × 2 engines (hookScore.ts), hook report
       };
       const response = await fetch(`${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/create-ai-audit`, {
         method: "POST",

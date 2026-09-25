@@ -1,4 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
+   ⚠️ 2026-09-25: A NEW HOOK IS SIX RESULTS (3 questions × ChatGPT + Google AI), and the rule for it is
+   autoMarkSixOfSixNotInterested at the bottom of this file: named in 6/6 → the lead leaves active
+   outreach. Any miss keeps it. The Gemini-3/3 rule below applies to version-1 runs only.
+
    AUTO "NOT INTERESTED" ON A 3/3 GEMINI HOOK (Paul, 2026-09-21).
 
    A hook/outreach audit that gets a genuine Gemini answer naming the business on all three
@@ -20,6 +24,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { geminiNamedAllThree } from "../../../src/lib/hookAudit.ts";
+import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun } from "../../../src/lib/hookScore.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -29,7 +34,7 @@ type Service = any;
  *  in-progress outreach and is safe to move to not_interested, exactly as the manual button would
  *  from any of those stages. `not_interested` itself is included so a repeat run is a harmless
  *  no-op rather than a second write. */
-const PROTECTED_LEAD_STATUSES = [
+export const PROTECTED_LEAD_STATUSES = [
   "not_interested", "payment_received", "in_delivery", "completed",
   "refunded", "closed", "opted_out", "price_given", "already_visible",
 ];
@@ -74,6 +79,76 @@ export async function autoMarkHookLeadNotInterested(
     if (!Array.isArray(updated) || updated.length !== 1) {
       return { applied: false, reason: "lead_already_progressed_or_missing" };
     }
+    return { applied: true, leadId };
+  } catch (e) {
+    return { applied: false, reason: `unexpected_error:${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+/* ── VERSION 2: NAMED IN 6/6 (Paul, 2026-09-25) ─────────────────────────────────────────────────
+   A six-result hook (3 questions × ChatGPT + Google AI, src/lib/hookScore.ts) that is COMPLETE and
+   named the business in all six results has no missed search to message about. The lead is moved
+   exactly as the manual "Not interested" button moves it, under the same conditional write as the
+   v1 rule above. Nothing is deleted and nothing is sent. The audit, its rows and the lead's history
+   all stay, and the reason (HOOK_ALL_NAMED_REASON) is recorded on the run's results.hook.
+
+   ⛔ 5/6, 4/6 … 0/6 NEVER MOVE THE LEAD. A real, measured gap exists, so it stays an opportunity.
+   ⛔ INCOMPLETE NEVER MOVES THE LEAD. A failed engine result is not a "named". scoreHookRun is
+   complete only when all six results are valid answers.
+   ⛔ SAME RULER AS THE REPORT AND THE INBOX. Scored with the audit's business name, trade and town,
+   and called only after the run is released, so extract-competitors' verdicts are already written. */
+export async function autoMarkSixOfSixNotInterested(
+  service: Service,
+  auditId: string | null | undefined,
+  runId: string,
+): Promise<HookNotInterestedOutcome> {
+  try {
+    if (!auditId) return { applied: false, reason: "no_audit_id" };
+    const [{ data: audit, error: auditError }, { data: run, error: runError }, { data: rows, error: rowsError }] = await Promise.all([
+      service.from("ai_audits").select("lead_id, business_name, business_type, location_text").eq("id", auditId).maybeSingle(),
+      service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle(),
+      service.from("ai_audit_queue").select("question, status, result, engines").eq("run_id", runId).order("created_at", { ascending: true }),
+    ]);
+    if (auditError) return { applied: false, reason: `audit_lookup_failed:${auditError.message}` };
+    if (runError) return { applied: false, reason: `run_lookup_failed:${runError.message}` };
+    if (rowsError) return { applied: false, reason: `rows_lookup_failed:${rowsError.message}` };
+    const results = run?.results && typeof run.results === "object" ? run.results as Record<string, unknown> : {};
+    const state = results.hook;
+    if (!isHookStateV2(state)) return { applied: false, reason: "not_a_six_result_hook" };
+
+    const score = scoreHookRun(state, Array.isArray(rows) ? rows : [], {
+      named: { businessName: audit?.business_name ?? "", trade: audit?.business_type || null, town: audit?.location_text || null },
+      town: audit?.location_text ?? null,
+      trade: audit?.business_type ?? null,
+    });
+    if (!(score.complete && score.allNamed && score.expected === HOOK_SCORE_RESULTS)) {
+      return { applied: false, reason: "not_six_of_six" };
+    }
+
+    const leadId = audit?.lead_id as string | null | undefined;
+    if (!leadId) return { applied: false, reason: "audit_has_no_lead" };
+    const { data: updated, error: updateError } = await service
+      .from("outreach_leads")
+      .update({ status: "not_interested", is_potential_work: false })
+      .eq("id", leadId)
+      .not("status", "in", `(${PROTECTED_LEAD_STATUSES.join(",")})`)
+      .or("is_potential_work.is.null,is_potential_work.eq.false")
+      .select("id");
+    if (updateError) return { applied: false, reason: `lead_update_failed:${updateError.message}` };
+    if (!Array.isArray(updated) || updated.length !== 1) {
+      return { applied: false, reason: "lead_already_progressed_or_missing" };
+    }
+
+    /* The internal reason, kept with the audit that decided it. A fresh read-modify-write of
+       results, the same shape every other writer of this column uses. A failure here is logged by
+       the caller's reason and never undoes the move. */
+    const { data: fresh } = await service.from("ai_audit_runs").select("results").eq("id", runId).maybeSingle();
+    const freshResults = fresh?.results && typeof fresh.results === "object" ? fresh.results as Record<string, unknown> : results;
+    const freshHook = isHookStateV2(freshResults.hook) ? freshResults.hook : state;
+    const { error: stampError } = await service.from("ai_audit_runs").update({
+      results: { ...freshResults, hook: { ...freshHook, auto_not_interested: { reason: HOOK_ALL_NAMED_REASON, lead_id: leadId, at: new Date().toISOString() } } },
+    }).eq("id", runId);
+    if (stampError) console.error(`[hook-not-interested] lead ${leadId} moved, but the reason could not be recorded on run ${runId}: ${stampError.message}`);
     return { applied: true, leadId };
   } catch (e) {
     return { applied: false, reason: `unexpected_error:${e instanceof Error ? e.message : String(e)}` };
