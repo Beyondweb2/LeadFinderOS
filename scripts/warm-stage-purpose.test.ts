@@ -108,6 +108,15 @@ const noQ = EXPECTED.replace(/\n\nare you currently[^\n]*$/, '\n\nhappy to go th
 ok(checkReply(noQ, k).problems.length === 0, `…and a reply that builds on it instead passes (${checkReply(noQ, k).problems.join(' | ') || 'ok'})`);
 ok(websiteControlKnown({ owns_website: { value: 'yes', quote: 'i own it', messageId: 'x', at: at(1), source: 'rule' } }), '"i own it" closes the question too');
 
+// The real E.E.S Electrical reply (live, 2026-09-25): the website question is already answered.
+const ees = [...thread.slice(0, 3), { id: 'i3', direction: 'inbound' as const, text: 'Someone manages the website for me massive marketing. How did you get my details', at: at(20) }];
+const eesFacts = mergeSalesFacts({}, ruleSalesFacts(ees.filter((m) => m.direction === 'inbound')), ees).facts;
+ok(eesFacts.has_existing_provider?.value === 'yes' && /Someone manages the website for me/.test(eesFacts.has_existing_provider.quote), '"Someone manages the website for me" is remembered — the agency question is not asked again');
+const eesCtx = buildReplyContext({ ...mk(eesFacts, ees), numberSource: 'their number is on their public google business listing, which is where Paul found them' });
+ok(eesCtx.askOwnership === false, '…so the reply builds on it instead of asking');
+ok(/THEY ASKED HOW YOU GOT THEIR DETAILS: answer it plainly and first: their number is on their public google business listing/.test(buildReplyPrompt(eesCtx)), '"How did you get my details" is answered from the lead row (a Google listing)');
+ok(/THEY ASKED HOW YOU GOT THEIR DETAILS: we do not have a recorded source/.test(buildReplyPrompt(mk(eesFacts, ees))), '…and never guessed when the lead row does not prove it');
+
 /* ─────────── no finding: nothing invented ─────────── */
 const cleanResearch = assembleResearch({ nowIso: new Date(NOW).toISOString(), website: W, businessName: 'Example Electrics', trade: 'Electricians', town: 'Addlestone',
   pages: [extractPageFacts(HOME, W, W, 200, true)], crawl: null, audit: null, model: null, modelError: null, fetchMs: 1, analyseMs: null, researchMs: 1, nowYear: 2026 });

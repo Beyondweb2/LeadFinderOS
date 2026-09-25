@@ -68,6 +68,8 @@ interface LeadRow {
   id: string; user_id: string; business_name: string | null; website: string | null; phone: string | null; country: string | null;
   category: string | null; search_keyword: string | null; search_location: string | null; derived_town: string | null; contact_name: string | null;
   is_archived: boolean | null;
+  place_id?: string | null;
+  google_maps_url?: string | null;
 }
 
 /* ───────────────────────── fetching (research action ONLY) ───────────────────────── */
@@ -169,7 +171,7 @@ async function callModel(model: string, system: string, user: string, tool: any,
 
 async function loadLead(service: Service, leadId: string, operatorId: string): Promise<LeadRow | null> {
   const { data, error } = await service.from("outreach_leads")
-    .select("id, user_id, business_name, website, phone, country, category, search_keyword, search_location, derived_town, contact_name, is_archived")
+    .select("id, user_id, business_name, website, phone, country, category, search_keyword, search_location, derived_town, contact_name, is_archived, place_id, google_maps_url")
     .eq("id", leadId).maybeSingle();
   if (error) throw error;
   const l = data as LeadRow | null;
@@ -414,7 +416,8 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   const ctx = buildReplyContext({
     businessName: lead.business_name, contactFirstName: (lead.contact_name ?? "").trim().split(/\s+/)[0] || null,
     trade: leadTrade(lead), town: leadTown(lead), website: lead.website, latest, thread, research, audit,
-    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, hookAt: conv.stage.hookAt, variant, avoidText: variant > 0 ? text(body.avoid) || null : null,
+    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, hookAt: conv.stage.hookAt, variant,
+    numberSource: lead.place_id || lead.google_maps_url ? "their number is on their public google business listing, which is where Paul found them" : null, avoidText: variant > 0 ? text(body.avoid) || null : null,
   });
 
   const findingIds = pooledFindings(research).map((f) => f.id);

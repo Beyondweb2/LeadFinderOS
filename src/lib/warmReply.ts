@@ -120,6 +120,7 @@ const FACT_RULES: ReadonlyArray<{ key: SalesFactKey; value: 'yes' | 'no'; re: Re
   { key: 'owns_website', value: 'no', re: /\b(?:i|we)\s+(?:don'?t|do not|dont)\s+(?:own|control)\s+(?:the|my|our|it)\b[^.?!]*/i },
   { key: 'owns_website', value: 'yes', re: /\b(?:i|we)\s+(?:do\s+)?(?:own|control)\s+(?:the|my|our)\s+(?:web\s*site|site)\b[^.?!]*|\b(?:it'?s|its|the (?:web)?site is)\s+(?:mine|ours|my own)\b[^.?!]*/i },
   { key: 'has_existing_provider', value: 'yes', re: /\b(?:my|our|an|the|a)\s+(?:agency|developer|web ?designer|web guy|it company|website company|web company)\s+(?:manages|looks after|runs|does|handles|built|hosts|sorts)\b[^.?!]*/i },
+  { key: 'has_existing_provider', value: 'yes', re: /\b(?:someone|somebody|a (?:company|guy|lad|bloke|firm|mate))\s+(?:else\s+)?(?:manages|looks after|runs|does|handles|built|hosts|sorts)\s+(?:the|my|our)\s+(?:web\s*)?site\b[^.?!]*/i },
   { key: 'has_existing_provider', value: 'yes', re: /\b(?:already|currently)\b.{0,40}\b(?:seo|someone|somebody|a company|an agency|a guy|web ?designer|marketing)\b[^.?!]*|\b(?:i|we)\s+(?:have|'ve got|got|use|pay)\s+(?:someone|somebody|a (?:company|guy|firm|bloke|lad)|an agency)\b[^.?!]*/i },
   { key: 'prefers_call', value: 'yes', re: /\b(?:call me|ring me|give me a (?:call|ring|bell)|phone me|can you (?:call|ring)|rather (?:talk|speak) on the phone)\b[^.?!]*/i },
   { key: 'not_interested', value: 'yes', re: /\b(?:not interested|no thanks|no thank you|not for us|stop messaging|unsubscribe|remove me)\b[^.?!]*/i },
@@ -402,6 +403,8 @@ export interface ReplyContext {
   route: RouteLean;
   /** "electrician in Addlestone" (derived). */
   searchContext: string | null;
+  /** Where their number came from, stated only when the lead row proves it (a Google listing). */
+  numberSource?: string | null;
   avoidText: string | null;
 }
 
@@ -546,6 +549,9 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
         ? 'LAST LINE: ask, naturally, whether they have a website at the moment or have been going without one.'
         : 'LAST LINE: end with the website question, naturally, e.g. "are you currently with an agency or do you own/manage the website yourself?"')
       : `WEBSITE QUESTION: they have ALREADY told us (they said: "${clip(known?.quote ?? '', 160)}"). Do NOT ask who owns or manages the site again. Build on what they said and end with one simple next step instead.`,
+    /\bhow (?:did|do) you (?:get|find)\b|\bwhere did you get\b/i.test(ctx.latest.text)
+      ? (ctx.numberSource ? `THEY ASKED HOW YOU GOT THEIR DETAILS: answer it plainly and first: ${ctx.numberSource}.` : 'THEY ASKED HOW YOU GOT THEIR DETAILS: we do not have a recorded source for this lead, so do not state one; leave it for Paul to answer.')
+      : '',
     ctx.question.all.includes('price') ? 'THEY ASKED THE PRICE: do not give one at this stage. Say it depends which route makes sense for them, which is why you are asking about the website.' : '',
     ctx.allowReportUrl && ctx.reportUrl
       ? `REPORT LINK: they asked for it or for what we found, so you may include ${ctx.reportUrl}`
