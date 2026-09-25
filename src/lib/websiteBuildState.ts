@@ -262,6 +262,58 @@ export interface ReconCandidate { name: string; source_url: string; context: str
 export const MAX_RECON_CANDIDATES = 150;
 export const MAX_RECON_REVIEW = 200;
 
+/* ── Phase 4: BUILD EXECUTION — what Claude Code built and deployed, as imported. ─────────────── */
+
+export const BUILD_RESULT_STATUSES = ['preview_ready', 'built', 'needs_attention', 'failed'] as const;
+export type BuildResultStatus = (typeof BUILD_RESULT_STATUSES)[number];
+export const BUILD_QA_KEYS = ['buildPassed', 'seedContaminationPassed', 'linksPassed', 'responsivePassed', 'schemaPassed'] as const;
+export type BuildQaKey = (typeof BUILD_QA_KEYS)[number];
+export const BUILD_QA_LABELS: Record<BuildQaKey, string> = {
+  buildPassed: 'Build', seedContaminationPassed: 'Seed scrub', linksPassed: 'Links', responsivePassed: 'Responsive', schemaPassed: 'Schema',
+};
+export interface BuildSnapshot { commit_hash: string; repository_url: string; preview_url: string; result_status: BuildResultStatus | ''; imported_at: string }
+export interface BuildExecution {
+  started_at: string; completed_at: string; template_id: string; config_version: string;
+  repository_url: string; repository_name: string; branch: string; local_path: string;
+  cloudflare_project: string; preview_url: string; deployment_id: string; deployment_status: string;
+  noindex_confirmed: boolean | null; output_dir: string; commit_hash: string;
+  result_imported_at: string; result_status: BuildResultStatus | '';
+  warnings: string[]; errors: string[];
+  qa: Partial<Record<BuildQaKey, boolean>>;
+  /** What was built (paths / names), as Claude reported it. */
+  pages: string[]; services: string[]; locations: string[]; assets: string[];
+  redirects: { kept: number | null; redirected: number | null; retired: number | null; unresolved: string[]; issues: string[] };
+  seed_hits: string[];
+  /** The last result before this one — a failed build never erases what was working. */
+  previous: BuildSnapshot | null;
+}
+export const EMPTY_BUILD_EXECUTION: BuildExecution = {
+  started_at: '', completed_at: '', template_id: '', config_version: '', repository_url: '', repository_name: '', branch: '', local_path: '',
+  cloudflare_project: '', preview_url: '', deployment_id: '', deployment_status: '', noindex_confirmed: null, output_dir: '', commit_hash: '',
+  result_imported_at: '', result_status: '', warnings: [], errors: [], qa: {}, pages: [], services: [], locations: [], assets: [],
+  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], previous: null,
+};
+const strList = (v: unknown, n: number, cap: number) => arr(v).map((x) => str(x, cap)).filter(Boolean).slice(0, n);
+export function readBuildExecution(v: unknown): BuildExecution {
+  const o = obj(v);
+  const q = obj(o.qa), r = obj(o.redirects), p = obj(o.previous);
+  const qa: Partial<Record<BuildQaKey, boolean>> = {};
+  for (const k of BUILD_QA_KEYS) if (typeof q[k] === 'boolean') qa[k] = q[k] as boolean;
+  const S = (k: string, cap = 500) => str(o[k], cap);
+  return {
+    started_at: S('started_at', 40), completed_at: S('completed_at', 40), template_id: S('template_id', 80), config_version: S('config_version', 40),
+    repository_url: S('repository_url'), repository_name: S('repository_name', 100), branch: S('branch', 100), local_path: S('local_path'),
+    cloudflare_project: S('cloudflare_project', 100), preview_url: S('preview_url'), deployment_id: S('deployment_id', 100), deployment_status: S('deployment_status', 60),
+    noindex_confirmed: typeof o.noindex_confirmed === 'boolean' ? o.noindex_confirmed : null, output_dir: S('output_dir', 200), commit_hash: S('commit_hash', 64),
+    result_imported_at: S('result_imported_at', 40), result_status: oneOf(BUILD_RESULT_STATUSES, o.result_status, ''),
+    warnings: strList(o.warnings, 100, 500), errors: strList(o.errors, 100, 500), qa,
+    pages: strList(o.pages, 600, 300), services: strList(o.services, 100, 160), locations: strList(o.locations, 100, 160), assets: strList(o.assets, 300, 600),
+    redirects: { kept: count(r.kept), redirected: count(r.redirected), retired: count(r.retired), unresolved: strList(r.unresolved, 600, 500), issues: strList(r.issues, 200, 500) },
+    seed_hits: strList(o.seed_hits, 100, 300),
+    previous: Object.keys(p).length ? { commit_hash: str(p.commit_hash, 64), repository_url: str(p.repository_url, 500), preview_url: str(p.preview_url, 500), result_status: oneOf(BUILD_RESULT_STATUSES, p.result_status, ''), imported_at: str(p.imported_at, 40) } : null,
+  };
+}
+
 export interface MappingState {
   /** template service id → included in the build. Absent = no decision (the mapper proposes). */
   services: Record<string, boolean>;
@@ -368,6 +420,8 @@ export interface WebsiteBuildState {
    *  holds only choices the ledger has no row for (include a service, serve / page a town, which
    *  asset fills which slot, a template choice field). */
   mapping: MappingState;
+  /** Phase 4: the last build Claude Code ran (prompt copied → result imported). */
+  build_execution: BuildExecution;
   facts: BuildFact[];
   pages: ArchPage[];
   redirects: Redirect[];
@@ -415,6 +469,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   promotion: { candidate: false, proposed_name: '', proposed_trade: '', notes: '' },
   recon: { prompt_copied_at: '', imported_at: '', source_url: '', captured_at: '', pages_total: null, assets_total: null, review: [], services: [], towns: [] },
   mapping: { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} },
+  build_execution: EMPTY_BUILD_EXECUTION,
   facts: [], pages: [], redirects: [], qa: {}, checks: {},
 };
 
@@ -571,6 +626,7 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
     services: readCandidates(rc.services), towns: readCandidates(rc.towns),
   };
   out.mapping = readMapping(o.mapping);
+  out.build_execution = readBuildExecution(o.build_execution);
   const seen = new Set<string>();
   out.facts = arr(o.facts).map(readFact)
     .filter((f): f is BuildFact => !!f && !seen.has(f.key) && !!seen.add(f.key)).slice(0, MAX_FACTS);
@@ -720,4 +776,38 @@ export function reconStatus(s: WebsiteBuildState, opts: { hasExistingSite: boole
   if (!s.recon.imported_at) return s.recon.prompt_copied_at ? 'prompt_copied' : 'not_started';
   if (!reconInventoryReady(s, opts.hasExistingSite)) return 'imported';
   return opts.factsAwaiting > 0 || opts.openReview > 0 ? 'needs_review' : 'complete';
+}
+
+/* ── Phase 4: build execution status — DERIVED from the stored record, never stored. ──────────── */
+
+export const BUILD_EXEC_STATUSES = ['not_started', 'prompt_ready', 'building', 'result_ready', 'needs_attention', 'preview_ready', 'failed'] as const;
+export type BuildExecStatus = (typeof BUILD_EXEC_STATUSES)[number];
+export const BUILD_EXEC_STATUS_LABELS: Record<BuildExecStatus, string> = {
+  not_started: 'Not started', prompt_ready: 'Prompt ready', building: 'Building', result_ready: 'Result ready',
+  needs_attention: 'Needs attention', preview_ready: 'Preview ready', failed: 'Failed',
+};
+
+/** What stops an imported result counting as PREVIEW READY, whatever Claude claimed. Empty = none. */
+export function previewGateProblems(b: BuildExecution): string[] {
+  const out: string[] = [];
+  if (b.result_status !== 'preview_ready') return out;
+  if (!/^https:\/\/[a-z0-9.-]+\.pages\.dev(\/|$)/i.test(b.preview_url)) out.push('Preview URL is not a pages.dev address');
+  if (b.noindex_confirmed !== true) out.push('Preview noindex not confirmed');
+  if (b.qa.seedContaminationPassed !== true || b.seed_hits.length) out.push('Seed-client contamination not cleared' + (b.seed_hits.length ? ': ' + b.seed_hits.slice(0, 5).join(', ') : ''));
+  if (b.qa.buildPassed !== true) out.push('Production build did not pass');
+  if (b.qa.linksPassed !== true) out.push('Link check did not pass');
+  if (b.errors.length) out.push(b.errors.length + ' error(s) reported');
+  return out;
+}
+
+export function buildExecutionStatus(s: WebsiteBuildState, readyToBuild: boolean): BuildExecStatus {
+  const b = s.build_execution;
+  if (b.result_imported_at) {
+    if (b.result_status === 'failed') return 'failed';
+    if (b.result_status === 'needs_attention') return 'needs_attention';
+    if (b.result_status === 'preview_ready') return previewGateProblems(b).length ? 'needs_attention' : 'preview_ready';
+    return 'result_ready';
+  }
+  if (b.started_at) return 'building';
+  return readyToBuild ? 'prompt_ready' : 'not_started';
 }

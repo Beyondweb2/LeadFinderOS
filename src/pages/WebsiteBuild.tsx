@@ -27,6 +27,9 @@ import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggest
 import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
+import { applyBuildResult, builtCoverage, configVersion, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
+import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, buildExecutionStatus, previewGateProblems, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
+import type { BuildPackInput } from '@/lib/buildPack';
 import { autoAssign, computeMapping, MAP_STATUS_LABELS, SERVICE_STATUS_LABELS, URL_DECISION_LABELS, urlDecisions, type MappedField, type Mapping, type UrlDecision } from '@/lib/templateMapping';
 import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks, templateSuitsTrade } from '@/lib/buildRoutes';
 import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
@@ -265,6 +268,11 @@ export default function WebsiteBuild() {
   const copyPrompt = async (p: StagePrompt) => {
     const done = await copyText(p.label.replace(/^Copy /, ''), p.text, p.blockedBy);
     if (done && p.id === 'recon') update((s) => ({ ...s, recon: { ...s.recon, prompt_copied_at: new Date().toISOString() } }));
+    /* Copying the Build Execution prompt records the start and the config it was built from. */
+    if (done && p.id === 'build_execution' && p.label === 'Copy Build Execution Prompt' && mapping) {
+      const ver = configVersion(mapping);
+      update((s) => ({ ...s, build_execution: { ...s.build_execution, started_at: new Date().toISOString(), config_version: ver, template_id: s.route === 'template_rebuild' ? s.template_id : '' } }));
+    }
   };
 
   if (loadError) return <div className="mx-auto max-w-6xl space-y-4 py-6"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
@@ -399,6 +407,8 @@ export default function WebsiteBuild() {
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
+      {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
+        execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}
       {state.route && mapping && <MappingPanel mapping={mapping} state={state} update={update} set={set} rows={rows} onDecide={decideRow} template={template}
         assetPrompt={promptById('asset_download')} onCopy={copyPrompt} />}
       <Section title="Claude tasks — one prompt per stage" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — always current.</span>}>
@@ -417,18 +427,19 @@ export default function WebsiteBuild() {
 
     {/* ══ PREVIEW ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'preview' && <>
+      {packInput && <PreviewResultPanel state={state} input={packInput} existingSiteUrl={existingSiteUrl} prompts={prompts} onCopy={copyPrompt} />}
       <Section title="Preview">
         <RouteGuide state={state} stage="preview" update={update} />
         <p className="rounded bg-muted p-2 text-xs"><b>Localhost is for development.</b> The <b>Cloudflare Pages preview</b> is the stable review version used for full-site comparison before the client domain is connected.</p>
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="space-y-2 rounded-md border p-3">
+          <div className="min-w-0 space-y-2 rounded-md border p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Local preview</p>
             <Field label="Local folder" value={state.local_repo_path} placeholder="C:\Users\paulj\ClientName" onChange={(v) => set('local_repo_path', v.trim())} />
             <Field label="Dev command" value={state.dev_command} placeholder={codeConfig(state, template).devCommand} onChange={(v) => set('dev_command', v)} />
             <Field label="Localhost URL" value={state.dev_url} placeholder={codeConfig(state, template).devUrl} onChange={(v) => set('dev_url', v.trim())} />
             <PackCard item={packById('local')} onCopy={copyItem} />
           </div>
-          <div className="space-y-2 rounded-md border p-3">
+          <div className="min-w-0 space-y-2 rounded-md border p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cloudflare Pages preview</p>
             <Field label="Cloudflare project" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())} />
             <Field label="pages.dev preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'paste from the preview deploy'} onChange={(v) => set('preview_url', v.trim())} />
@@ -666,7 +677,7 @@ function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl
     {prompt.blockedBy.length > 0 && <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Recon prompt is missing: {prompt.blockedBy.join(' · ')}</p>}
     <button type="button" className="text-xs text-primary underline" onClick={() => setShowPrompt((o) => !o)}>{showPrompt ? 'Hide the recon prompt' : 'Show the recon prompt'}</button>
     {showPrompt && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{prompt.text}</pre>}
-    {importOpen && <div className="space-y-2 rounded-md border p-3">
+    {importOpen && <div className="min-w-0 space-y-2 rounded-md border p-3">
       <Label className="text-xs">Paste Claude's recon result — the whole reply, or just the JSON</Label>
       <Textarea aria-label="Recon result" rows={6} className="font-mono text-xs" value={text} placeholder={'…Claude’s summary…\n```json\n{ "reconVersion": 1, "sourceUrl": "https://…", "pages": [ … ], "facts": [ … ] }\n```'} onChange={(e) => { setText(e.target.value); setParsed(null); }} />
       <div className="flex flex-wrap gap-2">
@@ -927,6 +938,155 @@ function UrlDecisionsPanel({ state }: { state: WebsiteBuildState }) {
       {r.flags.map((fl, n) => <p key={n} className="text-[11px] text-amber-700 dark:text-amber-300">⚠ {fl}</p>)}
     </div>)}</div>
     {shown.length > 60 && <button type="button" className="text-xs text-primary underline" onClick={() => setAll((x) => !x)}>{all ? 'Show fewer' : `Show all ${shown.length}`}</button>}
+  </Section>;
+}
+
+/* ══ PHASE 4 — BUILD EXECUTION + PREVIEW ═══════════════════════════════════════════════════════
+   Ready to Build → Copy Build Execution Prompt → Claude Code → Import Build Result → Open Preview.
+   The status is DERIVED (buildExecutionStatus); an imported result is checked and summarised before
+   it is merged (applyBuildResult), and a conflicting project value is only replaced if Paul ticks it. */
+
+const EXEC_TONE: Record<BuildExecStatus, string> = {
+  not_started: 'bg-muted text-muted-foreground', prompt_ready: 'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100',
+  building: 'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100', result_ready: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+  needs_attention: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100', preview_ready: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+};
+const QaChips = ({ qa }: { qa: BuildExecution['qa'] }) => <div className="flex flex-wrap gap-1">{BUILD_QA_KEYS.map((k) =>
+  <span key={k} className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${qa[k] === true ? MAP_TONE.ready : qa[k] === false ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-muted text-muted-foreground'}`}>{BUILD_QA_LABELS[k]} {qa[k] === true ? '✓' : qa[k] === false ? '✗' : '?'}</span>)}</div>;
+const ExtLink = ({ url, children }: { url: string; children: ReactNode }) => { const h = safeUrl(url); return h ? <a href={h} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{children}</a> : <span className="text-muted-foreground">—</span>; };
+
+function BuildExecutionPanel({ state, update, mapping, input, execPrompt, onCopy, toast }: {
+  state: WebsiteBuildState; update: UpdateFn; mapping: Mapping; input: BuildPackInput; execPrompt: StagePrompt;
+  onCopy: (p: StagePrompt) => void | Promise<void>; toast: ReturnType<typeof useToast>['toast'];
+}) {
+  const [importOpen, setImportOpen] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [text, setText] = useState('');
+  const [parsed, setParsed] = useState<BuildResultParse | null>(null);
+  const [accept, setAccept] = useState(false);
+  const b = state.build_execution;
+  const blocked = execPrompt.blockedBy.length > 0;
+  const status = buildExecutionStatus(state, !blocked);
+  const gate = previewGateProblems(b);
+  const urls = urlDecisions(state);
+  const cov = builtCoverage(state);
+  const retry = retryPrompt(input);
+  const changed = !!b.config_version && b.config_version !== configVersion(mapping);
+  const t = mapping.isTemplate ? input.template : null;
+  const res = parsed && 'result' in parsed ? parsed : null;
+  const conflicts = res ? projectConflicts(state, res.result) : [];
+  const doImport = () => {
+    if (!res) return;
+    const out = applyBuildResult(state, res.result, { now: new Date().toISOString(), acceptConflicts: accept });
+    update(() => out.state);
+    setText(''); setParsed(null); setImportOpen(false); setAccept(false);
+    toast({ title: 'Build result imported', description: `${res.result.status.replace('_', ' ')} · ${res.result.build.pages.length} page(s)${out.conflicts.length && !accept ? ` · kept ${out.conflicts.length} of your project value(s)` : ''}.` });
+  };
+  const row = (label: string, value: ReactNode) => <div className="min-w-0"><dt className="text-muted-foreground">{label}</dt><dd className="break-words">{value}</dd></div>;
+  const retryCard: StagePrompt = { id: 'build_execution', label: 'Copy Retry Prompt', short: 'Retry', stage: 'build_pack', blockedBy: retry.blockedBy, help: 'Only the failure, the current config and the fix — the site is not rebuilt from scratch.', text: retry.text };
+
+  return <Section title="Build website" right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${EXEC_TONE[status]}`}>{BUILD_EXEC_STATUS_LABELS[status]}</span>}>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-4">
+      {row('Route', state.route ? BUILD_ROUTE_LABELS[state.route] : '—')}
+      {row('Template', t ? `${t.name} v${t.version}` : '—')}
+      {row('Business', input.businessName || '—')}
+      {row('Target domain', state.canonical_domain || '—')}
+      {t ? row('Services selected', `${mapping.config.services.length}${mapping.config.services.length ? ' — ' + mapping.config.services.map((x) => x.name).join(', ') : ''}`) : row('Pages planned', String(state.pages.filter((p) => p.action === 'keep' || p.action === 'create').length))}
+      {t ? row('Location pages', ((mapping.config.locations.pages as string[]) ?? []).join(', ') || 'none') : row('Old URLs', String(urls.rows.length))}
+      {row('Assets assigned', `${mapping.slots.reduce((n, st) => n + st.publishable.length, 0)} USE${t && mapping.config.brand.mark === 'text_wordmark' ? ' · text wordmark' : ''}`)}
+      {row('Redirect decisions', `${urls.counts.kept} kept · ${urls.counts.redirected} redirected · ${urls.counts.retired} retired · ${urls.counts.unresolved} unresolved`)}
+    </dl>
+    {blocked ? <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"><p className="font-medium">Not ready to build — no build prompt until these are fixed:</p><ul className="mt-1 list-disc pl-4">{execPrompt.blockedBy.map((x, n) => <li key={n} className="break-words">{x}</li>)}</ul></div>
+      : <p className="text-xs text-muted-foreground">Copy the prompt, run it in Claude Code, then paste Claude's final JSON with Import Build Result.</p>}
+    {changed && <p className="text-xs text-amber-700 dark:text-amber-300">The client config has changed since the build prompt was copied — copy it again before the next run.</p>}
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" className="h-auto min-h-9 max-w-full whitespace-normal" disabled={blocked} onClick={() => void onCopy(execPrompt)}><Clipboard className="mr-1 h-4 w-4 shrink-0" />Copy Build Execution Prompt</Button>
+      <Button size="sm" variant={importOpen ? 'secondary' : 'outline'} onClick={() => { setImportOpen((o) => !o); setParsed(null); }}>Import Build Result</Button>
+      <Button size="sm" variant="ghost" onClick={() => setShowPrompt((o) => !o)}>{showPrompt ? 'Hide prompt' : 'Show prompt'}</Button>
+    </div>
+    {showPrompt && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{execPrompt.text}</pre>}
+
+    {importOpen && <div className="min-w-0 space-y-2 rounded-md border p-3">
+      <Label className="text-xs">Paste Claude's build result — the whole reply, or just the JSON</Label>
+      <Textarea aria-label="Build result" rows={6} className="font-mono text-xs" value={text} placeholder={'…Claude’s report…\n```json\n{ "buildResultVersion": 1, "status": "preview_ready", … }\n```'} onChange={(e) => { setText(e.target.value); setParsed(null); }} />
+      <div className="flex flex-wrap gap-2"><Button size="sm" disabled={!text.trim()} onClick={() => setParsed(parseBuildResult(text))}>Check</Button><Button size="sm" variant="ghost" onClick={() => { setImportOpen(false); setText(''); setParsed(null); }}>Cancel</Button></div>
+      {parsed && 'error' in parsed && <div role="alert" className="flex items-start gap-2 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{parsed.error}</span></div>}
+      {res && <div className="space-y-2 rounded bg-muted p-3 text-xs">
+        <p className="font-medium">Ready to import — status <b>{res.result.status.replace('_', ' ').toUpperCase()}</b></p>
+        <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+          {row('Repository', <ExtLink url={res.result.repository.url}>{res.result.repository.url || '—'}</ExtLink>)}
+          {row('Commit', res.result.repository.commitHash || '—')}
+          {row('Pages built', String(res.result.build.pages.length))}
+          {row('Services', res.result.build.services.join(', ') || '—')}
+          {row('Locations', res.result.build.locations.join(', ') || '—')}
+          {row('Redirects', `${res.result.redirects.kept ?? '?'} kept · ${res.result.redirects.redirected ?? '?'} redirected · ${res.result.redirects.retired ?? '?'} retired · ${res.result.redirects.unresolved.length} unresolved`)}
+          {row('Cloudflare preview', <><ExtLink url={res.result.cloudflare.previewUrl}>{res.result.cloudflare.previewUrl || '—'}</ExtLink>{res.result.cloudflare.previewUrl && <span className="ml-1">· noindex {res.result.cloudflare.noindexConfirmed === true ? 'confirmed' : 'NOT confirmed'}</span>}</>)}
+          {row('QA', <QaChips qa={res.result.qa} />)}
+        </dl>
+        {res.result.seedHits.length > 0 && <p className="text-red-700 dark:text-red-300"><b>Seed-client values found:</b> {res.result.seedHits.join(', ')} — this cannot be preview ready.</p>}
+        {res.result.errors.length > 0 && <div className="text-red-700 dark:text-red-300"><b>Errors ({res.result.errors.length}):</b><ul className="list-disc pl-4">{res.result.errors.slice(0, 10).map((e, n) => <li key={n} className="break-words">{e}</li>)}</ul></div>}
+        {res.result.warnings.length > 0 && <details><summary className="cursor-pointer">Warnings ({res.result.warnings.length})</summary><ul className="list-disc pl-4">{res.result.warnings.map((w, n) => <li key={n} className="break-words">{w}</li>)}</ul></details>}
+        {[...res.summary.dropped, ...res.summary.notes].map((d, n) => <p key={n} className="text-amber-800 dark:text-amber-200">{d}</p>)}
+        {res.summary.ignoredKeys.length > 0 && <p className="text-amber-800 dark:text-amber-200">Fields LeadFinderOS does not store: {res.summary.ignoredKeys.join(', ')}</p>}
+        {conflicts.length > 0 && <div className="rounded border border-amber-400 p-2"><p className="font-medium">The build reported different project values:</p>
+          <ul className="list-disc pl-4">{conflicts.map((c) => <li key={c.field} className="break-words">{c.label}: yours "{c.current}" — build "{c.imported}"</li>)}</ul>
+          <label className="mt-1 flex items-center gap-2"><input type="checkbox" aria-label="Replace my project values with the imported ones" checked={accept} onChange={(e) => setAccept(e.target.checked)} />Replace my values with the imported ones (otherwise yours are kept)</label></div>}
+        <p className="text-muted-foreground">Import updates the project, preview and build record only — facts, mapping, route, page plan, redirects and QA ticks stay as they are.{res.result.status === 'failed' ? ' A failed build keeps the previous preview and commit.' : ''}</p>
+        <div className="flex gap-2"><Button size="sm" onClick={doImport}>Import</Button><Button size="sm" variant="ghost" onClick={() => setParsed(null)}>Cancel</Button></div>
+      </div>}
+    </div>}
+
+    {b.result_imported_at && <div className="space-y-2 rounded-md border p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2"><span className="font-medium">Last build</span><span className="text-muted-foreground">{new Date(b.result_imported_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</span><QaChips qa={b.qa} /></div>
+      <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-3">
+        {row('Preview', <ExtLink url={b.preview_url}>{b.preview_url || '—'}</ExtLink>)}
+        {row('Repository', <ExtLink url={b.repository_url}>{b.repository_url || '—'}</ExtLink>)}
+        {row('Commit', b.commit_hash || '—')}
+      </dl>
+      {status === 'failed' && b.previous && <p className="text-muted-foreground">Previous good build kept: {b.previous.commit_hash || '—'}{b.previous.preview_url ? ' · ' + b.previous.preview_url : ''}</p>}
+      {gate.length > 0 && <p className="text-amber-700 dark:text-amber-300">Not preview ready: {gate.join(' · ')}</p>}
+      {b.errors.length > 0 && <ul className="list-disc pl-4 text-red-700 dark:text-red-300">{b.errors.map((e, n) => <li key={n} className="break-words">{e}</li>)}</ul>}
+      {(status === 'failed' || status === 'needs_attention') && <PromptCard p={retryCard} onCopy={onCopy} />}
+      {cov.assessed && <details><summary className="cursor-pointer">Old URL coverage on the REAL build — {cov.counts.kept} kept · {cov.counts.redirected} redirected · {cov.counts.retired} retired · {cov.counts.unresolved} unresolved</summary>
+        <div className="mt-1 space-y-1">{cov.rows.filter((r) => r.flags.length).slice(0, 80).map((r) => <p key={r.path} className="break-all"><b>{r.path}</b> <span className="text-muted-foreground">({r.decision}{r.target ? ' → ' + r.target : ''})</span> — <span className="text-amber-700 dark:text-amber-300">{r.flags.join('; ')}</span></p>)}
+          {!cov.rows.some((r) => r.flags.length) && <p className="text-muted-foreground">Every source URL is kept or redirected to a built page.</p>}</div></details>}
+      <details><summary className="cursor-pointer text-muted-foreground">Build details</summary>
+        <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-3">
+          {row('Branch', b.branch || '—')}{row('Deployment', `${b.deployment_id || '—'}${b.deployment_status ? ' · ' + b.deployment_status : ''}`)}{row('Noindex', b.noindex_confirmed === true ? 'confirmed' : b.noindex_confirmed === false ? 'NOT confirmed' : 'not reported')}
+          {row('Output', b.output_dir || '—')}{row('Local folder', b.local_path || '—')}{row('Cloudflare project', b.cloudflare_project || '—')}
+        </dl>
+        {b.pages.length > 0 && <p className="mt-1 break-words text-muted-foreground">Pages: {b.pages.join('  ')}</p>}
+        {b.warnings.length > 0 && <ul className="mt-1 list-disc pl-4 text-muted-foreground">{b.warnings.map((w, n) => <li key={n} className="break-words">{w}</li>)}</ul>}
+      </details>
+    </div>}
+  </Section>;
+}
+
+function PreviewResultPanel({ state, input, existingSiteUrl, prompts, onCopy }: {
+  state: WebsiteBuildState; input: BuildPackInput; existingSiteUrl: string; prompts: StagePrompt[]; onCopy: (p: StagePrompt) => void | Promise<void>;
+}) {
+  const b = state.build_execution;
+  if (!b.result_imported_at) return null;
+  const status = buildExecutionStatus(state, true);
+  const gate = previewGateProblems(b);
+  const rv = reviewPrompt(input);
+  const next: StagePrompt = state.route === 'faithful_rebuild' ? prompts.find((p) => p.id === 'visual_compare')!
+    : { id: 'visual_compare', label: rv.kind === 'template' ? 'Copy Template Review Prompt' : 'Copy Design Review Prompt', short: 'Review', stage: 'preview', blockedBy: rv.blockedBy,
+        help: rv.kind === 'template' ? 'Checks the deployed preview for the right client, services, locations, proof, images, no template leftovers and quality — no redesign for taste.' : 'Checks the deployed preview against the design references and the approved content.', text: rv.text };
+  return <Section title="Build preview" right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${EXEC_TONE[status]}`}>{BUILD_EXEC_STATUS_LABELS[status]}</span>}>
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div className="rounded border p-2 text-xs"><p className="font-medium">Source site</p>{existingSiteUrl ? <ExtLink url={existingSiteUrl}>Open {existingSiteUrl}</ExtLink> : <p className="text-muted-foreground">No existing site</p>}</div>
+      <div className="rounded border p-2 text-xs"><p className="font-medium">New preview</p><ExtLink url={b.preview_url}>{b.preview_url ? 'Open ' + b.preview_url : '—'}</ExtLink>{b.noindex_confirmed === true && <span className="ml-1 text-muted-foreground">· noindex</span>}</div>
+    </div>
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+      <div className="min-w-0"><dt className="text-muted-foreground">Repository</dt><dd className="break-all"><ExtLink url={b.repository_url}>{b.repository_url || '—'}</ExtLink></dd></div>
+      <div><dt className="text-muted-foreground">Commit</dt><dd>{b.commit_hash || '—'}</dd></div>
+      <div><dt className="text-muted-foreground">Deployment</dt><dd className="break-all">{b.deployment_id || '—'}{b.deployment_status ? ' · ' + b.deployment_status : ''}</dd></div>
+    </dl>
+    <QaChips qa={b.qa} />
+    {gate.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Not preview ready: {gate.join(' · ')} — fix it from Build Pack (Copy Retry Prompt).</p>}
+    {status === 'preview_ready' && <PromptCard p={next} onCopy={onCopy} />}
   </Section>;
 }
 

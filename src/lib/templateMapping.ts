@@ -237,6 +237,9 @@ export interface ClientConfig {
   business: Record<string, unknown>; services: Array<{ id: string; name: string; evidence: string[] }>;
   locations: Record<string, unknown>; proof: Record<string, unknown>; pricing: Record<string, unknown>;
   assets: Record<string, Array<{ source: string; file: string }>>; tracking: Record<string, unknown>;
+  /** Phase 4: how the brand is shown — the approved logo file, or a TEXT WORDMARK of the verified
+   *  business name (template typography styles it; no image is generated). */
+  brand: { mark: 'logo' | 'text_wordmark' | 'none'; wordmark: string; logo: string };
 }
 
 function setPath(o: Record<string, unknown>, path: string, v: unknown) {
@@ -264,6 +267,10 @@ export function buildClientConfig(fields: MappedField[], services: MappedService
     const held = st.assigned.length - st.publishable.length;
     if (held > 0) omitted.push(st.slot.label + ' — ' + held + ' assigned asset(s) not marked USE');
   }
+  const logo = slots.find((st) => st.slot.id === 'logo')?.publishable[0];
+  const name = String((root.business as Record<string, unknown>).name ?? '');
+  root.brand = logo ? { mark: 'logo', wordmark: name, logo: logo.location || logo.suggested_filename || logo.source_url }
+    : name ? { mark: 'text_wordmark', wordmark: name, logo: '' } : { mark: 'none', wordmark: '', logo: '' };
   return { config: root as unknown as ClientConfig, omitted };
 }
 
@@ -343,6 +350,9 @@ export function computeMapping(s: WebsiteBuildState, template: WebsiteTemplate |
     else if (st.slot.requirement === 'required') { missingRequired++; blockers.push(st.slot.label + ' asset is missing (required) — assign a USE asset'); }
     else optionalMissing++;
   }
+  /* Brand identity: an approved logo, or a text wordmark of the VERIFIED business name. */
+  if (config.brand.mark === 'text_wordmark') notes.push('No approved logo — the site uses a text wordmark of "' + config.brand.wordmark + '" (template typography; no logo image is made)');
+  if (config.brand.mark === 'none') { missingRequired++; blockers.push('Brand identity: no approved logo and no verified business name for a text wordmark'); }
   for (const h of guard.hits) (h.blocking ? blockers : notes).push('Seed-client value "' + h.value.value + '" (' + h.value.kind.replace('_', ' ') + ') appears in the config' + (h.blocking ? '' : ' — check it is really this client’s'));
   return { isTemplate: !!t, fields, services, unmapped, towns, slots, config, omitted, guard,
     readiness: { ready, needsApproval, missingRequired, optionalMissing, blockers, notes, ok: blockers.length === 0 } };

@@ -198,14 +198,14 @@ console.log('\n── G. ASSET ASSIGNMENT ──');
   ok(m.omitted.some((o) => /Credentials — 1 assigned asset\(s\) not marked USE/.test(o)), '…and says so');
   ok(m.config.assets.logo?.[0].file === 'logo.svg', 'a USE asset in a slot reaches the config with its local filename');
   const un = mapOf({ ...s, mapping: { ...s.mapping, assets: { ...s.mapping.assets, logo: [] } } });
-  ok(!un.config.assets.logo && un.readiness.blockers.some((b) => /Logo asset is missing/.test(b)), 'unassigning the logo blocks the build (the logo slot is required)');
+  ok(!un.config.assets.logo && !un.readiness.blockers.some((b) => /Logo/.test(b)) && un.config.brand.mark === 'text_wordmark' && un.config.brand.wordmark === 'Harbour Locks Ltd', 'Phase 4: with no logo the brand falls back to a TEXT WORDMARK of the verified name — it does not block');
 }
 
 console.log('\n── I/J. READINESS AND THE GENERATED CONFIG ──');
 {
   const s = imported();
   const m = mapOf(s);
-  ok(!m.readiness.ok && m.readiness.blockers.some((b) => /Domain is missing/.test(b)) && m.readiness.blockers.some((b) => /Mobile or premises is missing/.test(b)) && m.readiness.blockers.some((b) => /Logo/.test(b)), 'missing REQUIRED data blocks (domain, mobile/premises, logo)');
+  ok(!m.readiness.ok && m.readiness.blockers.some((b) => /Domain is missing/.test(b)) && m.readiness.blockers.some((b) => /Mobile or premises is missing/.test(b)) && !m.readiness.blockers.some((b) => /Logo/.test(b)), 'missing REQUIRED data blocks (domain, mobile/premises) — a missing logo does not (Phase 4 wordmark)');
   ok(!m.readiness.blockers.some((b) => /DBS|Insurance|Owner/.test(b)), 'missing / unapproved OPTIONAL proof never blocks');
   ok(m.readiness.notes.some((n) => /DBS check is left out until approved/.test(n)), '…it is left out until approved, and says so');
   ok(m.readiness.ready > 0 && m.readiness.needsApproval > 0 && m.readiness.optionalMissing > 0, `counts: ready ${m.readiness.ready} · needs approval ${m.readiness.needsApproval} · missing required ${m.readiness.missingRequired} · optional missing ${m.readiness.optionalMissing}`);

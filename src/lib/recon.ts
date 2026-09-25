@@ -175,7 +175,7 @@ export type ReconParse = { ok: true; result: ReconResult; summary: ReconSummary 
 const KNOWN_KEYS = new Set(['reconVersion', 'sourceUrl', 'capturedAt', 'platform', 'siteStatus', 'pages', 'pageFamilies', 'facts', 'assets', 'design', 'interactions', 'seo', 'tracking', 'redirectCandidates', 'unknowns', 'warnings']);
 
 /** Clean imported text: a string (or number) only, control characters out, trimmed, capped. */
-function clean(v: unknown, cap: number): string {
+export function clean(v: unknown, cap: number): string {
   if (typeof v !== 'string' && typeof v !== 'number') return '';
   return String(v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, cap);
 }
@@ -217,7 +217,7 @@ const INTERACTION_MAP: Record<string, InteractionKind> = {
 
 /** Pull the JSON out of what Paul pasted: raw JSON, or the last ```json block that parses, or the
  *  outermost {...}. Returns the parsed value or the reason it could not be read. */
-function extractJson(text: string): { value: unknown } | { error: string } {
+export function extractJson(text: string): { value: unknown } | { error: string } {
   const t = text.trim();
   const tries: string[] = [];
   if (t.startsWith('{')) tries.push(t);
