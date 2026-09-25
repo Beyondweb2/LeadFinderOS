@@ -155,3 +155,9 @@ verify_jwt = false
 # prospect sites, but it NEVER sends a message. Explicit entry in the same commit as the function.
 [functions.warm-lead-reply]
 verify_jwt = true
+
+# prospect-preview: the AI Audit screen's "Generate prospect preview" (outreach homepage mock-up +
+# evidence card + screenshots). SPA-only caller with the operator's JWT; the handler does its own
+# resolveOperator + lead-ownership check. Spends Cloudflare Browser Rendering only; NEVER sends a message.
+[functions.prospect-preview]
+verify_jwt = true
