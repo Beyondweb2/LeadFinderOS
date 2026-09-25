@@ -17,6 +17,10 @@
 //                site-fetch path, which is what makes "Regenerate never re-crawls" structural rather
 //                than remembered.
 //
+// ⛔ SALES STAGE (Paul, 2026-09-25): research and draft run only in a WARM conversation — an audit /
+//    competitor hook has gone out AND they have replied after it (src/lib/warmStage.ts). Before that
+//    the funnel's own opener → audit → hook steps are the next move, and this refuses without spending.
+//
 // Auth: the operator's own JWT (resolveOperator), and the lead must be theirs — the same ownership
 // send-whatsapp-message applies, so this can never draft for a conversation the sender would refuse.
 // The table it writes (warm_lead_research) has RLS on and NO policies: service role only.
@@ -26,9 +30,10 @@ import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import { resolveAuditReplyVars, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import { warmStage, WARM_STAGE_LABELS, type WarmStageResult } from "../../../src/lib/warmStage.ts";
 import {
   planResearch, researchFreshness, extractPageFacts, pickResearchPages, assembleResearch, noWebsiteResearch,
-  contentHash, buildResearchPrompt, RESEARCH_SYSTEM_PROMPT, RESEARCH_TOOL, RESEARCH_MODEL,
+  contentHash, buildResearchPrompt, usableFullCrawl, RESEARCH_SYSTEM_PROMPT, RESEARCH_TOOL, RESEARCH_MODEL,
   WARM_RESEARCH_FETCH_TIMEOUT_MS, WARM_RESEARCH_DEADLINE_MS, WARM_RESEARCH_MAX_PAGES,
   type AuditContext, type PageFacts, type StoredResearchRow, type WarmLeadResearch, type CrawlRowInput, type ModelResearchOutput,
 } from "../../../src/lib/warmLeadResearch.ts";
@@ -213,7 +218,7 @@ async function loadAuditContext(service: Service, lead: LeadRow): Promise<AuditC
 }
 
 async function loadCrawlRow(service: Service, leadId: string): Promise<CrawlRowInput | null> {
-  const { data } = await service.from("lead_crawl_checks").select("created_at, result").eq("lead_id", leadId).maybeSingle();
+  const { data } = await service.from("lead_crawl_checks").select("created_at, result, mode, full_evidence").eq("lead_id", leadId).maybeSingle();
   return (data as CrawlRowInput | null) ?? null;
 }
 
@@ -229,10 +234,40 @@ function researchSummary(r: WarmLeadResearch | null | undefined) {
   };
 }
 
+/* ───────────────────────── the conversation (DB only) ───────────────────────── */
+
+// deno-lint-ignore no-explicit-any
+type MsgRow = any;
+
+/** The operator's own rows for this number (the same rows send-whatsapp-message reads), oldest
+ *  first, and whether they belong to this lead: by the lead's own number or by the rows themselves. */
+async function loadConversation(service: Service, operatorId: string, lead: LeadRow, phone: string): Promise<{ rows: MsgRow[]; ours: boolean; stage: WarmStageResult }> {
+  const { data, error } = await service.from("whatsapp_messages")
+    .select("id, created_at, direction, lead_id, body, message_type, template_name, template_snapshot, status")
+    .eq("user_id", operatorId).eq("phone", phone).order("created_at", { ascending: false }).limit(60);
+  if (error) throw error;
+  const rows: MsgRow[] = (data ?? []).slice().reverse();
+  /* The last ten digits: +44 7700 900123, 07700900123 and 447700900123 are one number. */
+  const tail = (x: string | null | undefined) => (x ?? "").replace(/\D/g, "").slice(-10);
+  const ours = (tail(lead.phone).length >= 10 && tail(lead.phone) === tail(phone)) || rows.some((m) => m.lead_id === lead.id);
+  return { rows, ours, stage: warmStage(rows) };
+}
+
+/** The refusal for a conversation that is not warm yet — no fetch, no model, no spend. */
+function notWarm(stage: WarmStageResult) {
+  const detail = stage.stage === "hook_not_sent"
+    ? "They have replied, but the AI audit / competitor hook has not been sent yet. Send the hook first — the warm-reply drafter is for their reply to it."
+    : stage.stage === "waiting_for_hook_reply"
+      ? "The competitor hook has gone out and they have not replied to it yet. The drafter opens when they do."
+      : "They have not replied yet.";
+  return json({ ok: false, error: "not_warm_yet", stage: stage.stage, stage_label: WARM_STAGE_LABELS[stage.stage], detail });
+}
+
 /* ───────────────────────── actions ───────────────────────── */
 
-async function handleStatus(service: Service, lead: LeadRow) {
+async function handleStatus(service: Service, lead: LeadRow, operatorId: string, phone: string) {
   const row = await loadRow(service, lead.id);
+  const conv = phone ? await loadConversation(service, operatorId, lead, phone) : null;
   return json({
     ok: true,
     freshness: researchFreshness(row, lead.website, Date.now()),
@@ -240,6 +275,7 @@ async function handleStatus(service: Service, lead: LeadRow) {
     research: researchSummary(row?.research),
     sales_facts: row?.sales_facts ?? {},
     last_draft: row?.last_draft ?? null,
+    stage: conv?.ours ? conv.stage.stage : null,
   });
 }
 
@@ -252,9 +288,13 @@ async function saveResearch(service: Service, lead: LeadRow, r: WarmLeadResearch
   if (error) throw error;
 }
 
-async function handleResearch(service: Service, lead: LeadRow, operatorId: string, refresh: boolean) {
+async function handleResearch(service: Service, lead: LeadRow, operatorId: string, refresh: boolean, phone: string) {
   const started = Date.now();
   const nowIso = new Date().toISOString();
+  if (!phone) return json({ ok: false, error: "phone_required", detail: "Open the conversation first." }, 400);
+  const conv = await loadConversation(service, operatorId, lead, phone);
+  if (!conv.ours) return json({ ok: false, error: "forbidden", detail: "That conversation is not this lead's." }, 403);
+  if (conv.stage.stage !== "warm") return notWarm(conv.stage);
   const row = await loadRow(service, lead.id);
   const plan = planResearch({ row, leadWebsite: lead.website, refresh, nowMs: started });
 
@@ -279,15 +319,19 @@ async function handleResearch(service: Service, lead: LeadRow, operatorId: strin
     return json({ ok: true, plan: "revalidated", research: researchSummary(row.research), ms: Date.now() - started });
   }
 
+  /* ⛔ A RECENT FULL CRAWL OF THIS SITE REPLACES THE MENU-PAGE FETCHES. It already read every page and
+     paid for it; its measured findings go into the record (assembleResearch → fullCrawlFindings). The
+     homepage is still read once, for the words only page text carries (hours, positioning, summary). */
+  const crawl = await loadCrawlRow(service, lead.id);
+  const full = usableFullCrawl(crawl, homeUrl, started);
   const pages: PageFacts[] = [home];
-  if (home.ok) {
+  if (home.ok && !full) {
     const targets = pickResearchPages(home, WARM_RESEARCH_MAX_PAGES - 1);
     const deadline = fetchStarted + WARM_RESEARCH_DEADLINE_MS;
     const rest = await Promise.all(targets.map((u) => (Date.now() < deadline ? fetchSitePage(u) : Promise.resolve(extractPageFacts("", u, u, 0, false)))));
     pages.push(...rest);
   }
   const fetchMs = Date.now() - fetchStarted;
-  const crawl = await loadCrawlRow(service, lead.id);
 
   // The model reads the same pages; its findings are verified against them in assembleResearch.
   let model: ModelResearchOutput | null = null;
@@ -313,7 +357,7 @@ async function handleResearch(service: Service, lead: LeadRow, operatorId: strin
     pages, crawl, audit, model, modelError, fetchMs, analyseMs, researchMs: Date.now() - started, nowYear: new Date().getUTCFullYear(),
   });
   await saveResearch(service, lead, r);
-  return json({ ok: true, plan: plan.action === "revalidate" ? "changed" : plan.reason, research: researchSummary(r), ms: Date.now() - started });
+  return json({ ok: true, plan: plan.action === "revalidate" ? "changed" : plan.reason, used_full_crawl: !!full, research: researchSummary(r), ms: Date.now() - started });
 }
 
 // deno-lint-ignore no-explicit-any
@@ -333,19 +377,9 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   const started = Date.now();
   const phone = text(body.phone);
   if (!phone) return json({ ok: false, error: "phone_required", detail: "Open the conversation first." }, 400);
-  /* The last ten digits: +44 7700 900123, 07700900123 and 447700900123 are one number. */
-  const tail = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "").slice(-10);
-
-  const { data: msgs, error: msgErr } = await service.from("whatsapp_messages")
-    .select("id, created_at, direction, lead_id, body, message_type, template_name, template_snapshot")
-    .eq("user_id", operatorId).eq("phone", phone).order("created_at", { ascending: false }).limit(60);
-  if (msgErr) throw msgErr;
-  // deno-lint-ignore no-explicit-any
-  const rows: any[] = (msgs ?? []).slice().reverse();
-  // The conversation must belong to this lead, by the lead's own number or by the rows themselves.
-  if ((tail(lead.phone).length < 10 || tail(lead.phone) !== tail(phone)) && !rows.some((m) => m.lead_id === lead.id)) {
-    return json({ ok: false, error: "forbidden", detail: "That conversation is not this lead's." }, 403);
-  }
+  const conv = await loadConversation(service, operatorId, lead, phone);
+  const rows = conv.rows;
+  if (!conv.ours) return json({ ok: false, error: "forbidden", detail: "That conversation is not this lead's." }, 403);
 
   /* ⛔ THE WINDOW, FROM THE OPERATOR'S OWN INBOUND ROWS — the same rows send-whatsapp-message reads.
      Closed → no draft and no spend: a free-form reply could not be sent, so writing one would only
@@ -357,6 +391,8 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
       ? "Their last message was more than 24 hours ago, so WhatsApp only allows an approved template now. No draft was written."
       : "They have not replied, so there is no reply window. Only an approved template can be sent." });
   }
+  // Warm only: a hook has gone out and they have answered it. Checked before any spend.
+  if (conv.stage.stage !== "warm") return notWarm(conv.stage);
 
   const readable = (body.readable && typeof body.readable === "object" ? body.readable : {}) as Record<string, string>;
   const thread: ThreadMessage[] = rows.map((m) => ({ id: m.id, direction: m.direction === "inbound" ? "inbound" : "outbound", text: threadText(m, readable), at: m.created_at }));
@@ -375,7 +411,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
   const ctx = buildReplyContext({
     businessName: lead.business_name, contactFirstName: (lead.contact_name ?? "").trim().split(/\s+/)[0] || null,
     trade: leadTrade(lead), town: leadTown(lead), website: lead.website, latest, thread, research, audit,
-    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, variant, avoidText: variant > 0 ? text(body.avoid) || null : null,
+    salesFacts: ruled.facts, reportUrl: audit?.reportUrl ?? null, hookTemplate: conv.stage.hookTemplate, variant, avoidText: variant > 0 ? text(body.avoid) || null : null,
   });
 
   const findingIds = research?.strongestFindings.map((f) => f.id) ?? [];
@@ -433,6 +469,7 @@ async function handleDraft(service: Service, lead: LeadRow, operatorId: string, 
     operatorNote: parsed?.operatorNote || null,
     usedFallback, modelError, attempts: Math.min(attempts + 1, 2),
     window: win,
+    stage: conv.stage,
     timings: { generationMs, totalMs: Date.now() - started, researchMs: research?.timings.researchMs ?? null },
     variant,
   };
@@ -461,8 +498,9 @@ Deno.serve(async (req) => {
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
 
-    if (action === "status") return await handleStatus(service, lead);
-    if (action === "research") return await handleResearch(service, lead, who.user.id, body.refresh === true);
+    const phone = text(body.phone);
+    if (action === "status") return await handleStatus(service, lead, who.user.id, phone);
+    if (action === "research") return await handleResearch(service, lead, who.user.id, body.refresh === true, phone);
     if (action === "draft") return await handleDraft(service, lead, who.user.id, body);
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {

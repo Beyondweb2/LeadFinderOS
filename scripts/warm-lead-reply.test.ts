@@ -131,7 +131,7 @@ const ryliThread = [msg('out1', 'outbound', 'Hi, I checked whether AI recommends
 const ryliLatest = latestInbound(ryliThread)!;
 const ctxFor = (over: Partial<Parameters<typeof buildReplyContext>[0]> = {}) => buildReplyContext({
   businessName: 'Ryli Heat', contactFirstName: null, trade: 'Plumbers', town: 'Scunthorpe', website: 'https://www.ryliheat.co.uk/',
-  latest: ryliLatest, thread: ryliThread, research: ryliResearch, audit: ryliAudit, salesFacts: {}, reportUrl: REPORT, variant: 0, avoidText: null, ...over,
+  latest: ryliLatest, thread: ryliThread, research: ryliResearch, audit: ryliAudit, salesFacts: {}, reportUrl: REPORT, hookTemplate: null, variant: 0, avoidText: null, ...over,
 });
 const ryli = ctxFor();
 ok(ryliLatest.text === 'How much', 'the latest inbound is theirs, newest first');

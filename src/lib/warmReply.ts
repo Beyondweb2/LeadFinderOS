@@ -196,6 +196,8 @@ export interface ReplyContext {
   askOwnership: boolean;
   reportUrl: string | null;
   allowReportUrl: boolean;
+  /** The audit/competitor hook already sent (warmStage) — the reply must build on it, never resend it. */
+  hookTemplate: string | null;
   /** Regenerate: 0 for the first draft, then 1, 2… with the previous draft to differ from. */
   variant: number;
   avoidText: string | null;
@@ -229,7 +231,8 @@ NEVER:
 - add a hedge next to the guarantee ("the engines decide", "no one can promise");
 - claim to know how an AI model decides ("AI can't see", "AI ignores", "AI reads it as"). Say "can make it harder", "may mean", "gives it less to go on";
 - mention a website problem that is not in the FINDINGS list you are given, or state a finding more strongly than its detail does;
-- mention competitors by name unless they are in the AI VISIBILITY block;
+- resend or re-word the competitor/AI-check message Paul already sent, or list those competitors again — they have seen it and replied to it; this reply moves the conversation on;
+- name a competitor who is not in the AI VISIBILITY block;
 - call Paul a founder, CEO or agency; no signature, no "Kind regards".
 
 HOW PAUL WRITES:
@@ -318,6 +321,9 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
   }
 
   const instructions = [
+    ctx.hookTemplate
+      ? 'STAGE: Paul has already sent them the AI check naming the businesses AI mentioned, and they have replied to it. Do NOT repeat that message or list those businesses again.'
+      : '',
     ctx.askOwnership
       ? 'OWNERSHIP: the research suggests another company may build/host/manage their site. Ask, naturally, whether they own/control the current website or whether it is owned/managed by the company that built it.'
       : ctx.salesFacts.owns_website
@@ -395,6 +401,10 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   }
   if (ctx.salesFacts.owns_website && OWNERSHIP_Q.test(text)) problems.push('It asks about website ownership again, which they already answered.');
   if (!ctx.askOwnership && !ctx.salesFacts.owns_website && OWNERSHIP_Q.test(text) && /\bown|control\b/i.test(text)) warnings.push('It asks who owns the site without a reason in the research.');
+  const rivals = (ctx.audit?.competitors ?? []).filter((c) => c.trim().length >= 4);
+  if (ctx.hookTemplate && rivals.filter((c) => normaliseForMatch(text).includes(normaliseForMatch(c))).length >= 2) {
+    problems.push('It repeats the competitor hook they have already had (lists the same businesses again).');
+  }
   if (AI_ABSOLUTE.test(text)) problems.push('It claims to know how an AI model decides — hedge it ("can make it harder").');
   if ((!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
     problems.push('It describes a website problem, but the site was not researched.');

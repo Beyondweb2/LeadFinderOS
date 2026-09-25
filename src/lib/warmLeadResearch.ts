@@ -85,7 +85,7 @@ export type Positioning = 'local' | 'regional' | 'national' | 'mixed' | 'unclear
 
 export interface ResearchSource {
   url: string;
-  kind: 'page' | 'crawl_check' | 'audit';
+  kind: 'page' | 'crawl_check' | 'full_crawl' | 'audit';
   status: number | null;
   ok: boolean;
   at: string | null;
@@ -586,6 +586,9 @@ export function structuredDataFinding(home: PageFacts | null): ResearchFinding |
 
 export interface CrawlRowInput {
   created_at: string | null;
+  /** 'full' = the operator's exhaustive crawl (full_evidence holds its summary). */
+  mode?: string | null;
+  full_evidence?: FullEvidenceInput | null;
   result: { version?: number; status?: string; signals?: CrawlSignals; siteInfo?: { builtBy?: { credit?: string | null } | null; services?: string[]; towns?: string[]; openingHours?: string[] | null } | null; evidence?: SiteEvidence | null; evidenceVersion?: number } | null;
 }
 
@@ -621,6 +624,129 @@ export function crawlFindings(row: CrawlRowInput | null | undefined, nowMs: numb
     });
   }
   return { findings: out, usedAt: row.created_at, credit };
+}
+
+/* ─────────────────────────────── the operator's FULL crawl, reused ─────────────────────────────── */
+
+/** The parts of fullCrawl.ts's FullCrawlEvidence this reads. Typed loosely: a stored row is data. */
+export interface FullEvidenceInput {
+  version?: number;
+  completeness?: string;
+  servedUrl?: string;
+  requestedUrl?: string;
+  robots?: { disallowsAll?: boolean } | null;
+  families?: Array<{ family: string; count: number; examples?: string[] }>;
+  navigation?: Array<{ label: string; url: string }>;
+  footerExcerpt?: string;
+  business?: { phones?: Array<{ value: string; url: string }> } | null;
+  technical?: Array<{ kind: string; detail?: string; count: number; urls?: string[] }>;
+}
+
+/** Pages whose noindex / thinness is not a sales point: legal, booking forms, galleries, feeds. */
+const UTILITY_PAGE = /\/(?:privacy|cookie|terms|legal|policy|book|booking|basket|cart|checkout|account|login|thank|gallery|images?|feed|tag|category|author)(?:[-/]|$)/i;
+
+/**
+ * A full crawl stands in for the targeted menu-page fetch when it is:
+ *   · the operator's EXHAUSTIVE crawl (mode full, evidence version ≥ 2, not failed),
+ *   · younger than the research freshness horizon, and
+ *   · of THIS website (same host, www ignored) — a crawl of an old domain is not about this lead.
+ */
+export function usableFullCrawl(row: CrawlRowInput | null | undefined, leadWebsite: string | null | undefined, nowMs: number): FullEvidenceInput | null {
+  const full = row?.mode === 'full' ? row.full_evidence ?? null : null;
+  if (!full || Number(full.version ?? 1) < 2 || full.completeness === 'failed' || !row?.created_at) return null;
+  const at = new Date(row.created_at).getTime();
+  if (!Number.isFinite(at) || nowMs - at >= WARM_RESEARCH_FRESH_MS) return null;
+  const host = (u: string | null | undefined) => (normaliseWebsite(u) ?? '').split('/')[0];
+  const lead = host(leadWebsite);
+  if (!lead || (host(full.servedUrl) !== lead && host(full.requestedUrl) !== lead)) return null;
+  return full;
+}
+
+const pathOf = (u: string) => { try { return new URL(u).pathname.toLowerCase(); } catch { return u.toLowerCase(); } };
+const SERVICE_PATH = /service|repair|install|emergenc|boiler|plumb|electric|lock|roof|heating|area|cover|location/;
+
+/**
+ * The strongest SALES-relevant findings in a full crawl — measured facts, restated in plain words.
+ * Trivia the crawl also records (missing meta descriptions, no robots.txt, redirects, image
+ * timeouts, a missing homepage schema) is left out on purpose: a reply picks 2–4 points, and those
+ * are never among them.
+ */
+export function fullCrawlFindings(full: FullEvidenceInput | null, trade: string | null | undefined, businessName: string | null | undefined): ResearchFinding[] {
+  if (!full) return [];
+  const out: ResearchFinding[] = [];
+  const tech = new Map((full.technical ?? []).map((t) => [t.kind, t]));
+  const home = full.servedUrl ?? null;
+  const salesPages = (urls: string[] | undefined) => (urls ?? []).map((u) => u.split(' → ')[0]).filter((u) => !UTILITY_PAGE.test(pathOf(u)));
+  const add = (f: Omit<ResearchFinding, 'source' | 'verified' | 'category'> & { category?: FindingCategory }) =>
+    out.push({ category: 'technical', ...f, source: 'crawl', verified: true });
+  const many = (n: number, one: string, lots: string) => (n === 1 ? one : `${n} ${lots}`);
+
+  if (full.robots?.disallowsAll) {
+    add({ id: 'full:robots_all', kind: 'crawl_indexing', title: 'robots.txt blocks the whole site',
+      detail: 'The site’s robots.txt file tells every crawler to stay out of the whole site. That can stop search and AI tools reading any of it.',
+      evidence: ['robots.txt: Disallow: /'], pageUrl: home, strength: 5 });
+  }
+  const noindex = salesPages(tech.get('noindex')?.urls);
+  if (noindex.length) {
+    const homeHit = noindex.some((u) => pathOf(u) === '/' || pathOf(u) === '');
+    add({ id: 'full:noindex', kind: 'crawl_indexing',
+      title: homeHit ? 'Homepage is marked not to be listed' : `${many(noindex.length, 'A main page is', 'main pages are')} marked not to be listed`,
+      detail: `${many(noindex.length, 'One of your main pages carries', 'of your main pages carry')} a line asking search tools to leave ${noindex.length === 1 ? 'it' : 'them'} out of results. They look normal to a visitor, but it may mean they aren’t there to be picked up when someone searches for that service.`,
+      evidence: noindex.slice(0, 4), pageUrl: noindex[0], strength: homeHit ? 5 : 4 });
+  }
+  const canon = tech.get('canonical_off_site');
+  if (canon?.count) {
+    add({ id: 'full:canonical_off_site', kind: 'crawl_indexing', title: 'Pages point search tools at another website',
+      detail: `${many(canon.count, 'A page tells', 'pages tell')} search tools that a different website is the main version. That can give conflicting information about which site is really yours.`,
+      evidence: (canon.urls ?? []).slice(0, 3), pageUrl: (canon.urls ?? [])[0]?.split(' → ')[0] ?? home, strength: 4 });
+  }
+  const sitemap = tech.get('sitemap_off_site');
+  if (sitemap?.count) {
+    add({ id: 'full:sitemap_off_site', kind: 'crawl_indexing', title: 'Sitemap lists another website’s pages',
+      detail: 'The sitemap — the file that lists your pages for search and AI tools — points at addresses on a different website. It can send them somewhere other than your site.',
+      evidence: (sitemap.urls ?? []).slice(0, 3), pageUrl: home, strength: 4 });
+  }
+  const broken = (tech.get('broken')?.urls ?? []).map((u) => u.replace(/ \(\d+\)$/, ''));
+  const navBroken = (full.navigation ?? []).filter((n) => /^https?:/i.test(n.url) && broken.some((b) => pathOf(b) === pathOf(n.url)));
+  if (navBroken.length) {
+    add({ id: 'full:broken_nav', kind: 'crawl_indexing', title: 'Menu links go to error pages',
+      detail: `${many(navBroken.length, 'A page in your menu answers', 'pages in your menu answer')} with an error, so anyone following the menu hits a dead end there.`,
+      evidence: navBroken.slice(0, 3).map((n) => `${n.label}: ${n.url}`), pageUrl: navBroken[0].url, strength: 3 });
+  }
+  const thin = salesPages(tech.get('thin')?.urls).filter((u) => SERVICE_PATH.test(pathOf(u)));
+  if (thin.length >= 3) {
+    add({ id: 'full:thin', kind: 'thin_or_duplicate', category: 'content', title: `${thin.length} service pages have very little on them`,
+      detail: `${thin.length} of the service or area pages have only a few lines of text. There is less on them that clearly says what you do and where, which gives AI tools less to work with.`,
+      evidence: thin.slice(0, 4), pageUrl: thin[0], strength: 3 });
+  }
+  const dupTitle = tech.get('duplicate_title');
+  if (dupTitle && dupTitle.count >= 3) {
+    add({ id: 'full:duplicate_title', kind: 'title_h1', title: `${dupTitle.count} pages share one title`,
+      detail: `${dupTitle.count} different pages all carry the same page title. The title is one of the first things any search tool reads, so they all describe themselves the same way.`,
+      evidence: (dupTitle.urls ?? []).slice(0, 4), pageUrl: (dupTitle.urls ?? [])[0] ?? home, strength: dupTitle.count >= 5 ? 3 : 2 });
+  }
+  // Service architecture: judged on the crawl's own menu + page families, for trades we know.
+  const entry = CORE_SERVICE_TRADES.find((e) => e.trade.test(trade ?? ''));
+  const addresses = [...(full.navigation ?? []).map((n) => n.url), ...(full.families ?? []).flatMap((f) => f.examples ?? [])]
+    .filter((u) => /^https?:/i.test(u)).map(pathOf).filter((p) => p && p !== '/');
+  if (entry && addresses.length >= 3 && !entry.terms.some((re) => addresses.some((p) => re.test(p)))) {
+    add({ id: 'full:missing_core_service_pages', kind: 'missing_core_service_pages', category: 'content', title: 'No pages for the core services',
+      detail: `Across the whole site, no page is about ${entry.describe}. Without a page for each main service there is less that clearly says what you do and where — which can make it harder for AI tools to match you to those searches.`,
+      evidence: (full.navigation ?? []).slice(0, 10).map((n) => n.label), pageUrl: home, strength: 3 });
+  }
+  const phones = new Set((full.business?.phones ?? []).map((p) => normPhone(p.value)).filter((n) => n.length >= 10 && n.length <= 11));
+  if (phones.size >= 3) {
+    add({ id: 'full:contact_conflict', kind: 'contact_conflict', category: 'trust', title: 'Several different phone numbers',
+      detail: `Across the site there are ${phones.size} different phone numbers. Inconsistent contact details can make a business harder to pin down as one clear entity.`,
+      evidence: (full.business?.phones ?? []).slice(0, 4).map((p) => p.value), pageUrl: home, strength: 2 });
+  }
+  // The footer the crawl kept is page text: a "designed/hosted by" credit there is an ownership clue.
+  if (full.footerExcerpt) {
+    const footerPage: PageFacts = { ...extractPageFacts('', home ?? '', home ?? '', 200, true), text: full.footerExcerpt };
+    const pf = providerFinding(providerCredit([footerPage], businessName));
+    if (pf) out.push({ ...pf, id: 'full:provider_attribution', source: 'crawl' });
+  }
+  return out;
 }
 
 export interface AuditContext {
@@ -755,6 +881,8 @@ export function assembleResearch(i: AssembleInput): WarmLeadResearch {
   const home = i.pages[0] ?? null;
   const siteRead = !!home?.ok;
   const crawl = crawlFindings(i.crawl, nowMs);
+  const full = usableFullCrawl(i.crawl, i.website, nowMs);
+  const fullFindings = fullCrawlFindings(full, i.trade, i.businessName);
 
   const rules: ResearchFinding[] = [];
   if (siteRead) {
@@ -791,7 +919,10 @@ export function assembleResearch(i: AssembleInput): WarmLeadResearch {
   }
   if (i.modelError) warnings.push(`Site analysis was incomplete (${i.modelError}); only findings measured by rule are included.`);
 
-  const measured = [...rules, ...crawl.findings, ...(audit ? [audit] : [])];
+  /* The full crawl read the WHOLE site, so on a shared kind its finding beats the same rule run over
+     the few pages read today (crawl_indexing covers several distinct faults, so both are kept). */
+  const rulesNotCovered = rules.filter((f) => f.kind === 'crawl_indexing' || !fullFindings.some((x) => x.kind === f.kind));
+  const measured = [...fullFindings, ...rulesNotCovered, ...crawl.findings, ...(audit ? [audit] : [])];
   const all = mergeFindings(measured, modelKept);
   const strongest = rankStrongest(all);
   const by = (c: FindingCategory | FindingCategory[]) => all.filter((f) => (Array.isArray(c) ? c : [c]).includes(f.category));
@@ -813,6 +944,7 @@ export function assembleResearch(i: AssembleInput): WarmLeadResearch {
   const sources: ResearchSource[] = [
     ...i.pages.map((p) => ({ url: p.finalUrl, kind: 'page' as const, status: p.status || null, ok: p.ok, at: i.nowIso })),
     ...(crawl.usedAt ? [{ url: i.website ?? '', kind: 'crawl_check' as const, status: null, ok: true, at: crawl.usedAt }] : []),
+    ...(full ? [{ url: full.servedUrl ?? i.website ?? '', kind: 'full_crawl' as const, status: null, ok: true, at: i.crawl?.created_at ?? null }] : []),
     ...(i.audit?.auditId ? [{ url: i.audit.reportUrl ?? i.audit.auditId, kind: 'audit' as const, status: null, ok: true, at: i.audit.createdAt }] : []),
   ];
 

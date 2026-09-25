@@ -12,6 +12,11 @@
      · after a draft                  → "Regenerate" (same research, no site fetch) + "Refresh research"
    Progress reads "Researching site…" → "Analysing…" → "Draft ready".
 
+   ⛔ SALES STAGE (Paul, 2026-09-25): the button exists only in a WARM conversation — the audit /
+      competitor hook has gone out and they replied after it (src/lib/warmStage.ts). Before that the
+      Inbox's own audit/hook actions are the next step; this shows one muted stage line and nothing
+      else, and makes no call.
+
    Mounted per conversation (keyed by it in the Inbox), so a draft or its "why" can never follow Paul
    into someone else's thread.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -20,6 +25,7 @@ import { AlertTriangle, Check, ChevronDown, Loader2, RefreshCw, Sparkles } from 
 import { Button } from '@/components/ui/button';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { SALES_FACT_LABELS, SALES_FACT_KEYS, type SalesFacts } from '@/lib/warmReply';
+import { WARM_STAGE_LABELS, type WarmStage } from '@/lib/warmStage';
 import { cn } from '@/lib/utils';
 
 type Freshness = 'none' | 'fresh' | 'stale' | 'website_changed' | 'failed';
@@ -74,6 +80,8 @@ export interface WarmReplyAssistantProps {
   phone: string;
   /** The Meta 24h window, from the conversation's newest inbound message. */
   windowOpen: boolean;
+  /** Where the conversation is in the funnel (warmStage over this thread). Only `warm` gets the button. */
+  stage: WarmStage;
   /** Readable text for our own outbound template messages, by message id (context for the model). */
   getReadable: () => Record<string, string>;
   /** What is in the reply box now. A draft never silently replaces Paul's own typing. */
@@ -82,7 +90,7 @@ export interface WarmReplyAssistantProps {
   onDraft: (text: string) => void;
 }
 
-export function WarmReplyAssistant({ leadId, phone, windowOpen, getReadable, getComposerText, onDraft }: WarmReplyAssistantProps) {
+export function WarmReplyAssistant({ leadId, phone, windowOpen, stage, getReadable, getComposerText, onDraft }: WarmReplyAssistantProps) {
   const [freshness, setFreshness] = useState<Freshness | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -93,19 +101,28 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, getReadable, get
 
   /* The saved-research state decides the label. A read of our own table — no fetch, no model. */
   useEffect(() => {
-    if (!windowOpen) return;
+    if (!windowOpen || stage !== 'warm') return;
     let live = true;
-    invokeEdge<StatusResponse>('warm-lead-reply', { action: 'status', lead_id: leadId })
+    invokeEdge<StatusResponse>('warm-lead-reply', { action: 'status', lead_id: leadId, phone })
       .then((s) => { if (live) setFreshness(s.freshness); })
       .catch(() => { if (live) setFreshness('none'); });
     return () => { live = false; };
-  }, [leadId, windowOpen]);
+  }, [leadId, phone, windowOpen, stage]);
 
   if (!windowOpen) {
     return (
       <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
         <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
         Research &amp; draft reply needs the 24h window — only an approved Meta template can be sent now.
+      </p>
+    );
+  }
+
+  /* Not warm yet: the funnel's own opener → audit → hook steps come first. One quiet line, no button. */
+  if (stage !== 'warm') {
+    return (
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70" title="Research & draft reply opens once they reply to the audit / competitor hook">
+        Warm reply · {WARM_STAGE_LABELS[stage]}
       </p>
     );
   }
@@ -123,7 +140,7 @@ export function WarmReplyAssistant({ leadId, phone, windowOpen, getReadable, get
          draft asks only when nothing fresh is saved, and the server still reuses what it can. */
       if (mode === 'refresh' || (mode === 'draft' && freshness !== 'fresh')) {
         setPhase('researching');
-        await invokeEdge<ResearchResponse>('warm-lead-reply', { action: 'research', lead_id: leadId, refresh: mode === 'refresh' });
+        await invokeEdge<ResearchResponse>('warm-lead-reply', { action: 'research', lead_id: leadId, phone, refresh: mode === 'refresh' });
         setFreshness('fresh');
       }
       setPhase('analysing');

@@ -15,6 +15,42 @@ Once a cold prospect replies on WhatsApp, the Inbox reply box shows **Research &
 5. puts the draft **in the composer**. Paul edits and presses Send himself. **Nothing is ever
    auto-sent** — the function has no send path.
 
+## Sales-stage gate (Paul, 2026-09-25, before shipping)
+
+The drafter does **not** replace the competitor/audit hook. Funnel: cold opener → they reply → the
+audit runs and the **hook** goes (audit_reply_warm, competitor_hook, audit_followup…) → they reply
+AGAIN → only now is Research & draft reply offered. `src/lib/warmStage.ts` is the one rule, read by
+the Inbox and by the function:
+
+| Stage | When | The Inbox shows |
+|---|---|---|
+| `no_reply` | no inbound yet | nothing (no window) |
+| `hook_not_sent` | they replied, no audit hook has gone out | `Warm reply · HOOK NOT SENT` (muted line, no button, no call) |
+| `waiting_for_hook_reply` | a hook went out, nothing from them after it | `Warm reply · WAITING FOR REPLY TO HOOK` |
+| `warm` | a hook went out AND they wrote after it | the button |
+
+A hook = an outbound TEMPLATE whose `WA_TEMPLATE_REQS` entry has `needsAudit: true` (a property, so a
+new audit template counts the day it is registered), with a positive send status (`isRealSend`). A
+failed/simulated hook does not count. ⚠️ A hook Paul typed as free text is undetectable, so that thread
+reads HOOK NOT SENT — the safe direction. The function refuses `research` and `draft` with
+`not_warm_yet` before any fetch or model call. The reply prompt says the hook has already gone; a draft
+naming 2+ of the audit's competitors again is flagged "repeats the competitor hook".
+
+## Using an existing full crawl
+
+Order: fresh warm research → a recent **full crawl** of this site → the standard crawl-check row / the
+audit → the targeted homepage + menu pages. `usableFullCrawl` accepts only the operator's exhaustive
+crawl (`mode = 'full'`, evidence v2+, not failed), younger than the research horizon, of the SAME host.
+When it qualifies the menu-page fetches are skipped (the homepage is still read once, for the words
+only page text holds — hours, positioning, the summary) and `fullCrawlFindings` turns its measured
+evidence into findings: robots.txt blocking everything, noindex on MAIN pages (legal/booking/gallery
+pages excluded), off-site canonical, off-site sitemap, broken menu links, thin service pages, many
+pages sharing one title, no core-service pages across the whole site, 3+ phone numbers, a footer
+"designed/hosted by" credit (ownership clue). Trivia it also records (meta descriptions, image
+timeouts, no sitemap, no robots.txt) is left out. On a shared kind the full-crawl finding beats the
+same rule run over today's few pages. Still at most four findings reach a reply. Nothing here ever
+starts a crawl job.
+
 ## Data model — `warm_lead_research` (migration `20260925120000_warm_lead_research.sql`)
 
 One row per lead (`lead_id` unique, cascade on lead delete). RLS on, **no policies**, grants revoked

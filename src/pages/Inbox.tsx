@@ -39,6 +39,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
+import { warmStage } from '@/lib/warmStage';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
@@ -1886,6 +1887,7 @@ const Inbox = () => {
                         leadId={active.leadId}
                         phone={active.phone}
                         windowOpen
+                        stage={warmStage(thread).stage}
                         getReadable={() => readableOutbound(thread)}
                         getComposerText={() => getDraft(draftsRef.current, active.key)}
                         onDraft={(draft) => insertWarmDraft(active.key, draft)}
@@ -1937,6 +1939,7 @@ const Inbox = () => {
                         leadId={active.leadId}
                         phone={active.phone}
                         windowOpen={false}
+                        stage={warmStage(thread).stage}
                         getReadable={() => ({})}
                         getComposerText={() => ''}
                         onDraft={() => undefined}
