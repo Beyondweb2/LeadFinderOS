@@ -50,6 +50,49 @@ timeouts, no sitemap, no robots.txt) is left out. On a shared kind the full-craw
 same rule run over today's few pages. Still at most four findings reach a reply. Nothing here ever
 starts a crawl job.
 
+## The primary finding (Paul, 2026-09-25, after the first live drafts)
+
+**Why the strong finding was omitted:** the prompt offered a flat list "you may use (at most three,
+only those relevant)"; ranking was by strength alone, so the audit's vague "low AI visibility" sat
+level with "9AM–9PM / 9AM–9AM / Open 24 hours"; the positioning finding carried only long sentences
+(no short phrases to keep); and the checker never looked at whether any finding was used. The live
+drafts duly said "the opening hours aren't consistent" and "mixed signals about where you operate".
+
+**Ranking** (`findingScore`, `src/lib/warmLeadResearch.ts`): severity × 3 + sales relevance × 2
+(`KIND_RELEVANCE`: blocked/mis-pointed pages, conflicting hours and locations top; structured data,
+copyright years, the audit result bottom) + specificity (0–3, from `keyDetails` — the actual times,
+phrases, page names, domains — or concrete evidence) + confidence (code-measured 2, quote-checked
+model 1). Applied to the pooled findings from every source (live site, full crawl, crawl check,
+model), so a strong full-crawl finding beats a weak homepage one.
+
+**Selection** (`selectReplyFindings`, `src/lib/warmReply.ts`, deterministic, before the model):
+1 **primary** (score ≥ `PRIMARY_MIN_SCORE`) + up to `MAX_SECONDARY_FINDINGS` supporting (score ≥
+`SECONDARY_MIN_SCORE`, other kinds); the rest that could have led are "strong findings not used".
+Never primary: the audit's AI-visibility result (context, carried in the AI VISIBILITY block) and the
+"built/hosted by" credit (it drives the ownership question). A finding Paul already put to them since
+the hook is skipped so the next best leads. No finding strong enough → none is invented; the prompt
+says to explain the gap from the AI audit instead. Saved research from before this change is re-ranked
+at draft time (older rows lack `keyDetails` and fall back to evidence).
+
+**Prompt:** "PRIMARY FINDING — YOU MUST REFER TO THIS IN THE RESPONSE, keeping its concrete details",
+the details listed, "never water it down to 'a few inconsistencies'". Order for a price question:
+price → guarantee → "I had a look through your site as well. The biggest thing I noticed is …" →
+optional supporting finding → link/question. For tell-me-more / how-it-works / what-would-you-change /
+explain: one line, then the primary finding as the centre of the reply, then what Findable would change.
+Required for price, how_it_works, tell_me_more, show_changes, existing_provider, other — not for a
+refusal, a call request or a plain ownership answer.
+
+**Validation:** `findingMentioned` checks the SUBSTANCE per kind — an actual time for hours,
+"nationwide"-type wording plus the town for positioning, the page / noindex / other-site / sitemap /
+blocked idea for technical ones, two significant words otherwise. Missing → problem
+`Strong website finding was not used.` → one rewrite with `PRIMARY_REWRITE_INSTRUCTION` (Paul's
+wording) naming the finding → still missing → the Inbox shows **CHECK THIS DRAFT — Strong website
+finding was not used.** "Used" in the Why panel is checked against the draft text, never the model's
+own claim. Also fixed: "AI can’t read…" with a curly apostrophe slipped past the absolute-claim check.
+
+**Why this reply?** now shows Question detected (their words), Primary finding (used / NOT used),
+Evidence, Secondary findings, Strong findings not used, Already told them, Research source.
+
 ## Data model — `warm_lead_research` (migration `20260925120000_warm_lead_research.sql`)
 
 One row per lead (`lead_id` unique, cascade on lead delete). RLS on, **no policies**, grants revoked

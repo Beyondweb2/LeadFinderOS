@@ -144,9 +144,9 @@ ok(prompt.indexOf('THEIR LATEST MESSAGE') < prompt.indexOf('CONVERSATION SO FAR'
 ok(/PRICE: their message asks about price — the FIRST sentence must give it, with both figures/.test(prompt), 'the price must come first');
 ok(/OWNERSHIP: the research suggests another company may build\/host\/manage their site\. Ask/.test(prompt), 'the ownership question is asked for');
 ok(/REPORT LINK: do NOT include/.test(prompt) && !prompt.includes(REPORT), 'the report link is withheld — the URL is not even in the prompt');
-for (const k of ['positioning_conflict', 'hours_conflict', 'missing_core_service_pages', 'provider_attribution']) {
-  ok(prompt.includes(`[rule:${k}]`), `the prompt offers the ${k} finding`);
-}
+// One PRIMARY + up to two supporting findings (2026-09-25); the provider credit is an ownership clue, not a flaw.
+ok(['positioning_conflict', 'hours_conflict', 'missing_core_service_pages'].filter((k) => prompt.includes(`[rule:${k}]`)).length === 3, 'the prompt offers the three site findings (one primary, two supporting)');
+ok(!prompt.includes('[rule:provider_attribution]') && /Ownership clues: .*Keyhole/.test(prompt), 'the Keyhole credit reaches the prompt as an ownership clue, not as a finding');
 ok(!/crawl_indexing|contact_conflict/.test(prompt), 'no other finding is offered for Ryli');
 ok(REPLY_SYSTEM_PROMPT.includes(FINDABLE_OFFER_SUMMARY) && REPLY_SYSTEM_PROMPT.includes(FINDABLE_GUARANTEE), 'the offer and guarantee come verbatim from findableOffer.ts');
 ok(REPLY_SYSTEM_PROMPT.includes(FINDABLE_DETAILS_URL) && FINDABLE_DETAILS_URL === 'https://findable.live/', 'findable.live is the details link');
@@ -201,9 +201,9 @@ ok(/Their website could NOT be read\. Do NOT mention any website problem/.test(b
 ok(checkReply(`£99 to start, then £99 a month. Your website has a problem with its pages. Keen?`, failedCtx).problems.some((p) => /not researched/.test(p)), 'failed crawl: a site problem in the draft is caught');
 const noResearch = ctxFor({ research: null });
 ok(/No website research is available\. Do NOT mention anything about their website/.test(buildReplyPrompt(noResearch)), 'no evidence: a simple answer, nothing personalised invented');
-const cleanCtx = ctxFor({ research: { ...ryliResearch, technicallyClean: true, strongestFindings: [], ownershipClues: [] } });
+const cleanCtx = ctxFor({ research: { ...ryliResearch, technicallyClean: true, strongestFindings: [], technicalFindings: [], contentFindings: [], localVisibilityFindings: [], ownershipClues: [] } });
 const cleanPrompt = buildReplyPrompt(cleanCtx);
-ok(/technically fine — no technical fault was found/.test(cleanPrompt) && /none strong enough to mention\. Do not invent any/.test(cleanPrompt), 'clean site: the model is told it is fine and to invent nothing');
+ok(/technically fine — no technical fault was found/.test(cleanPrompt) && /No website finding is specific enough to lead with\. Do NOT invent one/.test(cleanPrompt), 'clean site: the model is told it is fine and to invent nothing');
 const regen = ctxFor({ variant: 1, avoidText: GOOD });
 ok(/regenerate #1\. Write a genuinely different version/.test(buildReplyPrompt(regen)) && buildReplyPrompt(regen).includes('Full details: https://findable.live/'), 'regenerate: a different version of the same facts is asked for');
 const showCtx = ctxFor({ latest: msg('q', 'inbound', "Can you show me what you'd change?", 1), thread: [msg('q', 'inbound', "Can you show me what you'd change?", 1)] });
