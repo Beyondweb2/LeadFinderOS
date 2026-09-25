@@ -45,6 +45,7 @@ const ctx = (): RebuildContextPayload => ({
 } as unknown as RebuildContextPayload);
 
 const BASE = {
+  cloudflare_mode: 'direct_upload',
   version: 2, template_id: 'mcl-local-trades', repo_name: 'SCPlumbingGas', github_owner: 'Beyondweb2',
   local_repo_path: 'C:\\Users\\paulj\\SCPlumbingGas', canonical_domain: 'scplumbing.co.uk',
   pages: [
@@ -97,9 +98,11 @@ console.log('\n── BUILD ROUTE — saved, reloaded, never inferred ──');
   }
   ok(parseWebsiteBuild({ version: 2, build_mode: 'template' }).route === '', 'on a V2 row a stray build_mode is NOT turned into a route');
   ok(parseWebsiteBuild({ version: 2, route: 'bespoke', template_id: 'mcl-local-trades' }).route === 'bespoke', 'a saved route is never changed by other data (a template id on a bespoke build)');
-  ok(templateSuitsTrade('Plumber', MCL_TEMPLATE.supportedBusinessTypes), 'the MCL template suits a plumber → Template is RECOMMENDED');
-  ok(templateSuitsTrade('Locksmiths', MCL_TEMPLATE.supportedBusinessTypes), 'and a locksmith');
-  ok(!templateSuitsTrade('Shoe repairs & key cutting', MCL_TEMPLATE.supportedBusinessTypes), 'but not a shoe repairer → Bespoke is suggested instead');
+  /* F1 (BS4 pilot): "recommended" reads the template's primary / supported TRADES only — the
+     descriptive "could be adapted for" list (plumbers, electricians…) never recommends. */
+  ok(templateSuitsTrade('Locksmiths', [MCL_TEMPLATE.primaryTrade, ...MCL_TEMPLATE.supportedTrades]), 'the MCL template is recommended to a locksmith');
+  ok(!templateSuitsTrade('Plumber', [MCL_TEMPLATE.primaryTrade, ...MCL_TEMPLATE.supportedTrades]), 'but NOT to a plumber — the adapted-for list is not a recommendation');
+  ok(!templateSuitsTrade('Shoe repairs & key cutting', [MCL_TEMPLATE.primaryTrade, ...MCL_TEMPLATE.supportedTrades]), 'nor a shoe repairer → Bespoke is suggested instead');
   ok(!templateSuitsTrade('', MCL_TEMPLATE.supportedBusinessTypes), 'an unknown trade recommends nothing');
   const page = readFileSync(new URL('../src/pages/WebsiteBuild.tsx', import.meta.url), 'utf8');
   const code = page.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -181,7 +184,7 @@ console.log('\n── STAGE PROMPTS ──');
 
   const pd = P({ ...T, cloudflare_project: 'sc-plumbing-gas' }, 'preview_deploy');
   ok(/Localhost .* is for development/.test(pd.text) && /stable review/.test(pd.text), 'preview deployment — says what localhost and the Cloudflare preview are each for');
-  ok(pd.text.includes('--project-name sc-plumbing-gas --branch preview') && /Never deploy with --branch main/.test(pd.text) && /noindex/.test(pd.text), 'deploys the preview branch only and checks noindex');
+  ok(pd.text.includes('--project-name sc-plumbing-gas --branch preview') && /Never deploy to the production branch \(main\)/.test(pd.text) && /noindex/.test(pd.text), 'deploys the preview branch only and checks noindex');
   ok(P(T, 'preview_deploy').blockedBy.some((b) => /Cloudflare project/.test(b)), 'no project → blocked, never invented');
   const prodNo = P(T, 'production_deploy');
   ok(prodNo.blockedBy.length > 0 && !/wrangler/.test(prodNo.text), 'production deployment is REFUSED until project, preview and domain are recorded');

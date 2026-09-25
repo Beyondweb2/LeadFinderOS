@@ -20,20 +20,24 @@ import {
   type ArchPage, type BuildFact, type BuildRoute, type CompareStatus, type FactStatus, type Stage, type StoredFactStatus, type WebsiteBuildState,
 } from '@/lib/websiteBuildState';
 import { CORE_BUILD_MODEL, type FieldGroup } from '@/lib/websiteTemplates';
-import { WEBSITE_TEMPLATES, templateById, templateOptionalFacts, templatePageTypes, templateRequiredFacts } from '@/lib/websiteTemplates';
-import { annotate, candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
+import { WEBSITE_TEMPLATES, recommendedRoute, recommendedTemplates, templateById, templateOptionalFacts, templatePageTypes, templateRequiredFacts, tradeFit } from '@/lib/websiteTemplates';
+import { annotate, candidateFacts, CLAIM_VERDICT_LABELS, decide, editFact, factsSummary, storedFact, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
 import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
 import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
-import { applyBuildResult, builtCoverage, configVersion, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
+import { applyBuildResult, builtCoverage, configVersion, executionBlockers, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
 import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, buildExecutionStatus, previewGateProblems, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
 import type { BuildPackInput } from '@/lib/buildPack';
 import { autoAssign, computeMapping, MAP_STATUS_LABELS, SERVICE_STATUS_LABELS, URL_DECISION_LABELS, urlDecisions, type MappedField, type Mapping, type UrlDecision } from '@/lib/templateMapping';
-import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks, templateSuitsTrade } from '@/lib/buildRoutes';
+import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks } from '@/lib/buildRoutes';
 import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
 import { MAX_PAGES } from '@/lib/websiteBuildState';
+import { createSaveQueue, type SaveQueue, type SaveStatus } from '@/lib/saveQueue';
+import { cloudflareBranches, cloudflareModeProblem, stablePreviewUrl } from '@/lib/cloudflareDeploy';
+import { AREA_STATUS_LABELS, serviceAreaView, withAreas, withServes, type AreaStatus } from '@/lib/serviceAreaCandidates';
+import { CLOUDFLARE_MODE_LABELS, CLOUDFLARE_MODES } from '@/lib/websiteBuildState';
 import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -56,7 +60,7 @@ import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
 const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
 const SAVE_DEBOUNCE_MS = 900;
 
-type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+type SaveState = SaveStatus;
 type SetFn = <K extends keyof WebsiteBuildState>(k: K, v: WebsiteBuildState[K]) => void;
 type UpdateFn = (fn: (s: WebsiteBuildState) => WebsiteBuildState) => void;
 
@@ -158,10 +162,14 @@ export default function WebsiteBuild() {
   const [reloadKey, setReloadKey] = useState(0);
   const loadedRef = useRef(false);
   const timer = useRef<number | null>(null);
-  const latest = useRef<WebsiteBuildState | null>(null);
-  /* An edit not yet sent. The debounce timer dies with the page, so leaving by an in-app link within
-     SAVE_DEBOUNCE_MS used to drop the last edit (found on the production run, 2026-09-23). */
-  const pending = useRef(false);
+  /* ONE save at a time, "Saved" only when the newest state is on the server (saveQueue.ts). Two saves
+     in flight used to be able to land out of order under a Saved label (BS4 pilot, F13). The queue
+     also remembers an edit not yet sent: the debounce timer dies with the page, so leaving by an
+     in-app link within SAVE_DEBOUNCE_MS used to drop the last edit (production run, 2026-09-23). */
+  const queue = useRef<SaveQueue<WebsiteBuildState> | null>(null);
+  if (!queue.current) queue.current = createSaveQueue<WebsiteBuildState>(
+    (s) => call({ action: 'save_website_build', lead_id: leadId, website_build: s }),
+    (st, e) => { setSave(st); setSaveError(st === 'error' ? edgeErrorMessage(e, 'Save failed') : ''); });
 
   const step = (STAGES as readonly string[]).includes(params.get('step') ?? '') ? params.get('step') as Stage : 'intake';
   const goStep = (s: Stage) => { const next = new URLSearchParams(params); next.set('step', s); setParams(next, { replace: true }); window.scrollTo({ top: 0 }); };
@@ -175,8 +183,9 @@ export default function WebsiteBuild() {
         if (cancelled) return;
         const ctx = res.context as RebuildContextPayload;
         setPayload(ctx);
-        setState(parseWebsiteBuild((ctx.lead as { website_build?: unknown } | null)?.website_build));
-        setSave('saved');
+        const loaded = parseWebsiteBuild((ctx.lead as { website_build?: unknown } | null)?.website_build);
+        setState(loaded);
+        queue.current!.reset(loaded);
         loadedRef.current = true;
       })
       .catch((e) => { if (!cancelled) setLoadError(edgeErrorMessage(e, 'Could not load this client')); });
@@ -184,41 +193,27 @@ export default function WebsiteBuild() {
   }, [leadId, reloadKey]);
 
   const flush = useCallback(async () => {
-    const s = latest.current;
-    if (!s) return;
-    pending.current = false;
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null; }
-    setSave('saving');
-    try {
-      await call({ action: 'save_website_build', lead_id: leadId, website_build: s });
-      if (latest.current === s) setSave('saved');
-      setSaveError('');
-    } catch (e) {
-      pending.current = true;
-      setSave('error');
-      setSaveError(edgeErrorMessage(e, 'Save failed'));
-    }
-  }, [leadId]);
+    await queue.current!.flush();
+  }, []);
 
   const update = useCallback((fn: (s: WebsiteBuildState) => WebsiteBuildState) => {
     setState((prev) => {
       if (!prev) return prev;
       const next = fn(prev);
-      latest.current = next;
+      if (loadedRef.current) queue.current!.change(next);
       return next;
     });
     if (!loadedRef.current) return;
-    pending.current = true;
-    setSave('dirty');
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => { void flush(); }, SAVE_DEBOUNCE_MS);
   }, [flush]);
 
   /* Send a pending edit NOW when the page is left (in-app navigation unmounts it) or hidden. */
   useEffect(() => {
-    const hide = () => { if (document.visibilityState === 'hidden' && pending.current) void flush(); };
+    const hide = () => { if (document.visibilityState === 'hidden' && queue.current!.pending()) void flush(); };
     document.addEventListener('visibilitychange', hide);
-    return () => { document.removeEventListener('visibilitychange', hide); if (pending.current) void flush(); };
+    return () => { document.removeEventListener('visibilitychange', hide); if (queue.current!.pending()) void flush(); };
   }, [flush]);
 
   useEffect(() => {
@@ -251,11 +246,13 @@ export default function WebsiteBuild() {
   const packById = (id: PackItemId) => pack.find((p) => p.id === id)!;
   const promptById = (id: StagePromptId) => prompts.find((p) => p.id === id)!;
   const mapping = useMemo(() => state ? computeMapping(state, template, rows, businessName) : null, [state, template, rows, businessName]);
+  /* ⛔ THE readiness: the same blockers gate the prompt, the Build pack stage and the Ready badge (F14). */
+  const buildBlockers = useMemo(() => packInput && mapping ? executionBlockers(packInput, mapping) : undefined, [packInput, mapping]);
   const stages = useMemo(() => state ? websiteBuildStages({
     state, hasExistingSite: !!existingSiteUrl, factsAwaiting: summary.awaiting, architectureErrors: archErrors,
     setupMissing: setupProblems(state).map((p) => p.label),
-    buildBlockers: state.route && mapping ? mapping.readiness.blockers : undefined,
-  }) : [], [state, existingSiteUrl, summary.awaiting, archErrors, mapping]);
+    buildBlockers,
+  }) : [], [state, existingSiteUrl, summary.awaiting, archErrors, buildBlockers]);
 
   const copyText = async (title: string, text: string, missing: string[]): Promise<boolean> => {
     try {
@@ -282,9 +279,11 @@ export default function WebsiteBuild() {
   /* ── fact actions ───────────────────────────────────────────────────────────────────────────── */
   const putFact = (f: BuildFact) => update((s) => ({ ...s, facts: [...s.facts.filter((x) => x.key !== f.key), f] }));
   const decideRow = (r: FactRow, status: StoredFactStatus, value?: string) => putFact(decide(r, status, value ?? r.value));
+  /* An edit is SAVED like any other change (as needs-approval), never held only in the row. */
+  const editRow = (r: FactRow, value: string) => putFact(editFact(r, value));
   const resetFact = (key: string) => update((s) => ({ ...s, facts: s.facts.filter((x) => x.key !== key) }));
 
-  const saveLabel = save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : save === 'dirty' ? 'Unsaved changes…' : 'Not saved';
+  const saveLabel = save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : save === 'dirty' ? 'Unsaved changes…' : 'Not saved — your edits are kept on this screen';
   const cur = stages.find((s) => s.stage === step);
   const captureOn = captureApplies(state, !!existingSiteUrl);
   const crawl = summariseLeadCrawl(payload.crawl, payload.crawl_job);
@@ -350,12 +349,19 @@ export default function WebsiteBuild() {
             only as a fact Paul approves below. */}
         <LeadCrawlPanel leadId={leadId} website={existingSiteUrl || String((payload.lead as { website?: string } | null)?.website ?? '')}
           summary={crawl} from="website_build"
-          onDone={async () => { if (pending.current) await flush(); setReloadKey((k) => k + 1); }} />
+          onDone={async () => {
+            if (queue.current!.pending()) await flush();
+            /* ⛔ Never reload over an edit the server has not got — the reload would silently replace it. */
+            if (queue.current!.pending()) { toast({ title: 'Not reloaded', description: 'Your last edit is not saved yet. Retry the save, then reload.', variant: 'destructive' }); return; }
+            setReloadKey((k) => k + 1);
+          }} />
         <CrawlEvidenceDetails full={payload.crawl?.mode === 'full' ? payload.crawl.full_evidence : null} />
       </Section>
 
-      <FactsSection rows={rows} template={template} onDecide={decideRow} onReset={resetFact} onPut={putFact}
+      <FactsSection rows={rows} template={template} onDecide={decideRow} onReset={resetFact} onPut={putFact} onEdit={editRow}
         onPaste={(text) => { const add = parseFactLines(text, template, 'pasted from capture'); update((s) => ({ ...s, facts: [...s.facts.filter((f) => !add.some((a) => a.key === f.key)), ...add] })); toast({ title: `${add.length} fact(s) added`, description: 'They are marked "Needs approval".' }); }} />
+
+      {state.recon.towns.length > 0 && <ServiceAreaPanel state={state} rows={rows} update={update} />}
 
       {template && <Section title={`Template fact mapping — ${template.name}`}>
         <p className="text-xs text-muted-foreground">Every client-specific claim in the template, and whether this client has a verified fact to replace it. Anything not verified is removed from the build, never adapted.</p>
@@ -373,7 +379,7 @@ export default function WebsiteBuild() {
       {!state.route ? <Section title="Source website"><p className="text-muted-foreground">Choose the build route first.</p></Section> : <>
         <ReconPanel state={state} update={update} rows={rows} candidates={candidates} template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl}
           set={set} prompt={promptById('recon')} onCopy={copyPrompt} factsAwaiting={summary.awaiting} toast={toast} />
-        {state.recon.imported_at && <NeedsReviewPanel state={state} update={update} rows={rows} onDecide={decideRow} onReset={resetFact} onPut={putFact} />}
+        {state.recon.imported_at && <NeedsReviewPanel state={state} update={update} rows={rows} onDecide={decideRow} onReset={resetFact} onPut={putFact} onEdit={editRow} />}
         {state.manifest.pages.length > 0 && <PageFamiliesPanel manifest={state.manifest} />}
         {state.manifest.assets.length > 0 && <AssetInventory state={state} update={update} />}
         <RouteGuide state={state} stage="capture" update={update} />
@@ -409,7 +415,7 @@ export default function WebsiteBuild() {
     {step === 'build_pack' && <>
       {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
         execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}
-      {state.route && mapping && <MappingPanel mapping={mapping} state={state} update={update} set={set} rows={rows} onDecide={decideRow} template={template}
+      {state.route && mapping && <MappingPanel mapping={mapping} buildBlockers={buildBlockers ?? []} state={state} update={update} set={set} rows={rows} onDecide={decideRow} onEdit={editRow} template={template}
         assetPrompt={promptById('asset_download')} onCopy={copyPrompt} />}
       <Section title="Claude tasks — one prompt per stage" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — always current.</span>}>
         <p className="text-xs text-muted-foreground">Open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} and paste one prompt at a time, in order. Each carries only what its stage needs.</p>
@@ -442,7 +448,8 @@ export default function WebsiteBuild() {
           <div className="min-w-0 space-y-2 rounded-md border p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cloudflare Pages preview</p>
             <Field label="Cloudflare project" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())} />
-            <Field label="pages.dev preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'paste from the preview deploy'} onChange={(v) => set('preview_url', v.trim())} />
+            <CloudflareModeFields state={state} set={set} />
+            <Field label="pages.dev preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? stablePreviewUrl(state) : 'paste from the preview deploy'} onChange={(v) => set('preview_url', v.trim())} />
             <div className="grid gap-2 sm:grid-cols-2">
               <Pick label="Deployment status" value={state.preview_status} options={PREVIEW_STATUSES} labels={PREVIEW_STATUS_LABELS} onChange={(v) => set('preview_status', v)} />
               <label className="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" aria-label="Noindex confirmed on the preview" checked={state.preview_noindex_confirmed} onChange={(e) => set('preview_noindex_confirmed', e.target.checked)} />Noindex confirmed</label>
@@ -494,6 +501,24 @@ function Field({ label, value, placeholder, onChange, action }: { label: string;
   return <div><div className="flex items-center justify-between gap-2"><Label className="text-xs">{label}</Label>{action}</div><Input aria-label={label} className="h-8 text-xs" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /></div>;
 }
 
+/** F17: how the Cloudflare Pages project deploys. Names and labels only — never a credential. */
+function CloudflareModeFields({ state, set }: { state: WebsiteBuildState; set: SetFn }) {
+  const b = cloudflareBranches(state);
+  const problem = state.cloudflare_project ? cloudflareModeProblem(state) : '';
+  return <div className="space-y-2 sm:col-span-2">
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div><Label className="text-xs">Cloudflare deployment</Label>
+        <select aria-label="Cloudflare deployment" className={sel} value={state.cloudflare_mode} onChange={(e) => set('cloudflare_mode', e.target.value as WebsiteBuildState['cloudflare_mode'])}>
+          <option value="">Not chosen</option>{CLOUDFLARE_MODES.map((m) => <option key={m} value={m}>{CLOUDFLARE_MODE_LABELS[m]}</option>)}</select></div>
+      <Field label="Cloudflare account (label)" value={state.cloudflare_account} placeholder="e.g. beyondwebcraft" onChange={(v) => set('cloudflare_account', v)} />
+      <Field label="Production branch" value={state.cloudflare_production_branch} placeholder={b.production} onChange={(v) => set('cloudflare_production_branch', v.trim())} />
+      <Field label="Preview branch" value={state.cloudflare_preview_branch} placeholder={b.preview} onChange={(v) => set('cloudflare_preview_branch', v.trim())} />
+    </div>
+    {state.cloudflare_mode === 'git_connected' && <p className="text-[11px] text-muted-foreground">Git-connected: you link the project to the client's GitHub repo in the Cloudflare dashboard once; after that a push deploys. No Wrangler sign-in is needed. The production branch ({b.production}) stays a placeholder until go-live.</p>}
+    {problem && <p className="break-words text-[11px] text-amber-700 dark:text-amber-300">{problem}</p>}
+  </div>;
+}
+
 function Checklist({ state, group, set, title }: { state: WebsiteBuildState; group: 'preview' | 'live'; set: SetFn; title: string }) {
   const items = QA_ITEMS.filter((q) => q.group === group);
   const done = items.filter((q) => state.qa[q.key]).length;
@@ -505,20 +530,26 @@ function Checklist({ state, group, set, title }: { state: WebsiteBuildState; gro
 }
 
 function RouteSelector({ state, update, trade }: { state: WebsiteBuildState; update: UpdateFn; trade: string }) {
-  const suits = WEBSITE_TEMPLATES.filter((t) => templateSuitsTrade(trade, [t.trade, ...t.supportedBusinessTypes]));
+  /* ⛔ One rule decides "recommended": the template's primary / supported TRADES (tradeFit). The
+     descriptive "could be adapted for" list never recommends (F1, BS4 pilot). */
+  const suits = recommendedTemplates(trade);
+  const recRoute = recommendedRoute(trade);
+  const chosenTpl = state.route === 'template_rebuild' ? templateById(state.template_id) : null;
+  const weakChoice = chosenTpl && trade && tradeFit(trade, chosenTpl) === 'weak';
   const choose = (r: BuildRoute) => update((s) => ({ ...s, route: r,
     /* Choosing Template picks a template only if none is chosen — the V1 behaviour. */
     template_id: r === 'template_rebuild' ? (s.template_id || suits[0]?.id || WEBSITE_TEMPLATES[0].id) : s.template_id }));
   return <div className="space-y-2">
     <div className="grid gap-2 md:grid-cols-3">{BUILD_ROUTES.map((r) => {
-      const recommended = r === 'template_rebuild' && suits.length > 0;
+      const recommended = r === recRoute;
       return <label key={r} className={`flex cursor-pointer flex-col gap-1 rounded-md border p-3 text-sm ${state.route === r ? 'border-primary bg-primary/5' : ''}`}>
         <span className="flex items-center gap-2"><input type="radio" name="route" value={r} aria-label={ROUTE_INFO[r].label} checked={state.route === r} onChange={() => choose(r)} />
           <span className="font-medium">{ROUTE_INFO[r].label}</span>
           {recommended && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Recommended</span>}</span>
         <span className="text-xs text-muted-foreground">{ROUTE_INFO[r].description}</span>
       </label>; })}</div>
-    <p className="text-xs text-muted-foreground">{suits.length ? `A Findable template suits this trade (${suits.map((t) => t.name).join(', ')}), so Template rebuild is the default choice.` : trade ? `No Findable template matches "${trade}" yet — consider Bespoke / new trade.` : 'Verify the trade fact to see whether a template suits it.'} Changing the route keeps everything already entered.</p>
+    <p className="text-xs text-muted-foreground">{suits.length ? `A Findable template is built for this trade (${suits.map((t) => t.name).join(', ')}), so Template rebuild is recommended.` : trade ? `No Findable template is built for "${trade}" yet, so Bespoke / new trade is recommended.` : 'Verify the trade fact to see whether a template is built for it.'} Changing the route keeps everything already entered.</p>
+    {weakChoice && <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{chosenTpl!.name} is built for {chosenTpl!.primaryTrade}s, not "{trade}" — a weak match. You can still use it deliberately; every trade-specific section, service and claim will need replacing.</span></p>}
   </div>;
 }
 
@@ -540,7 +571,8 @@ function TemplatePicker({ state, set, template }: { state: WebsiteBuildState; se
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Optional sections</dt><dd>{t.optionalSections.map((x) => x.label).join(' · ')}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Reusable components</dt><dd>{t.reusableComponents.join(' · ')}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Visual style</dt><dd>{t.visualStyle.join(' · ')}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-muted-foreground">Suits</dt><dd>{t.supportedBusinessTypes.join(', ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Built for</dt><dd>{t.supportedTrades.join(', ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Could be adapted for (never a recommendation)</dt><dd>{t.supportedBusinessTypes.join(', ')}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Required facts</dt><dd>{templateRequiredFacts(t).map((f) => f.label).join(', ')}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Optional facts</dt><dd>{templateOptionalFacts(t).map((f) => f.label).join(', ')}</dd></div>
               <div className="sm:col-span-2"><dt className="text-muted-foreground">Images the client supplies</dt><dd>{t.imageRequirements.map((x) => `${x.label}${x.required ? ' *' : ''}`).join(' · ')}</dd></div>
@@ -594,7 +626,8 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
       <G title="Preview">
         <Field label="Cloudflare project name" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())}
           action={state.repo_name && !state.cloudflare_project ? <Sugg label={`Use ${suggestCloudflareProject(state.repo_name)}`} onClick={() => set('cloudflare_project', suggestCloudflareProject(state.repo_name))} /> : undefined} />
-        <Field label="Preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'https://preview.….pages.dev'} onChange={(v) => set('preview_url', v.trim())} />
+        <CloudflareModeFields state={state} set={set} />
+        <Field label="Preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? stablePreviewUrl(state) : 'https://preview.….pages.dev'} onChange={(v) => set('preview_url', v.trim())} />
         <Pick label="Preview status" value={state.preview_status} options={PREVIEW_STATUSES} labels={PREVIEW_STATUS_LABELS} onChange={(v) => set('preview_status', v)} />
         <label className="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" aria-label="Preview noindex confirmed" checked={state.preview_noindex_confirmed} onChange={(e) => set('preview_noindex_confirmed', e.target.checked)} />Preview noindex confirmed</label>
       </G>
@@ -605,7 +638,7 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
         <Pick label="www redirect status" value={state.www_redirect_status} options={WWW_REDIRECT_STATUSES} labels={WWW_REDIRECT_STATUS_LABELS} onChange={(v) => set('www_redirect_status', v)} />
       </G>
       {problems.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Setup commands need: {problems.map((p) => `${p.label} (${p.problem})`).join(' · ')}</p>}
-      <p className="text-xs text-muted-foreground">Suggestions are only filled in when you click them. Blank commands use the {template ? 'template\u2019s' : 'Astro'} defaults shown. Cloudflare projects are created by the preview step in your own account — nothing is created automatically.</p>
+      <p className="text-xs text-muted-foreground">Suggestions are only filled in when you click them. Blank commands use the {template ? 'template\u2019s' : 'Astro'} defaults shown. A Git-connected Cloudflare project is linked by you in the dashboard (the build prompt prints the exact steps); nothing is created automatically.</p>
     </div>
   </details>;
 }
@@ -700,9 +733,9 @@ function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl
   </Section>;
 }
 
-function NeedsReviewPanel({ state, update, rows, onDecide, onReset, onPut }: {
+function NeedsReviewPanel({ state, update, rows, onDecide, onReset, onPut, onEdit }: {
   state: WebsiteBuildState; update: UpdateFn; rows: FactRow[];
-  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void; onPut: (f: BuildFact) => void;
+  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void; onPut: (f: BuildFact) => void; onEdit: (r: FactRow, value: string) => void;
 }) {
   const [all, setAll] = useState(false);
   const items = openReconReview(state, factOpen(rows));
@@ -722,7 +755,7 @@ function NeedsReviewPanel({ state, update, rows, onDecide, onReset, onPut }: {
         const chip = <span className={`mr-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${it.kind === 'conflict' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'}`}>{KIND_LABEL[it.kind]}</span>;
         const dismissBtn = it.kind !== 'conflict' && <Button size="sm" variant="ghost" onClick={() => dismiss(it)}>{it.kind === 'unknown' ? 'Wait for client' : 'Dismiss'}</Button>;
         return row ? <div key={n} className="space-y-1">
-          <FactRowEditor row={row} onDecide={onDecide} onReset={onReset} onPut={onPut} detail={KIND_LABEL[it.kind] + ': ' + it.detail} />
+          <FactRowEditor row={row} onDecide={onDecide} onReset={onReset} onPut={onPut} onEdit={onEdit} detail={KIND_LABEL[it.kind] + ': ' + it.detail} />
           {dismissBtn && <div className="flex justify-end">{dismissBtn}</div>}
         </div> : <div key={n} className="flex flex-wrap items-start justify-between gap-2 rounded-md border p-2 text-xs">
           <p className="min-w-0 flex-1 break-words">{chip}<b>{it.label}</b> — {it.detail}</p>{dismissBtn}
@@ -730,7 +763,7 @@ function NeedsReviewPanel({ state, update, rows, onDecide, onReset, onPut }: {
       })}</div>
       {items.length > 25 && <button type="button" className="text-xs text-primary underline" onClick={() => setAll((a) => !a)}>{all ? 'Show fewer' : `Show all ${items.length}`}</button>}
       {awaiting.length > 0 && <details className="text-xs" open={items.length === 0}><summary className="cursor-pointer font-medium">Other facts needing approval ({awaiting.length})</summary>
-        <div className="mt-2 space-y-2">{awaiting.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} />)}</div></details>}
+        <div className="mt-2 space-y-2">{awaiting.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} onEdit={onEdit} />)}</div></details>}
     </>}
     {requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required and not verified yet: {requiredMissing.join(', ')} — these can wait for the client; the build leaves out whatever needs them.</p>}
   </Section>;
@@ -788,6 +821,42 @@ const MAP_TONE: Record<string, string> = {
   missing: 'bg-muted text-muted-foreground', not_found: 'bg-muted text-muted-foreground',
   omitted: 'bg-muted text-muted-foreground', excluded: 'bg-muted text-muted-foreground',
 };
+/* F11 — the recon's towns as SERVICE-AREA CANDIDATES for the canonical Service areas fact. Found is
+   never verified: Add proposes (list not verified), Approve adds to a verified list, Ignore = does not
+   serve. Serving an area is wording only — no page is created here (serviceAreaCandidates.ts). */
+const AREA_TONE: Record<AreaStatus, string> = { verified: 'ready', listed: 'needs_approval', base: 'preselected', ignored: 'omitted', candidate: 'needs_review' };
+function ServiceAreaPanel({ state, rows, update }: { state: WebsiteBuildState; rows: FactRow[]; update: UpdateFn }) {
+  const v = serviceAreaView(state, rows);
+  const fact = rows.find((r) => r.key === 'service_areas');
+  const open = v.candidates.filter((c) => c.status === 'candidate');
+  const act = (names: string[], keys: string[]) => update((s) => {
+    /* read the fact from the state being updated, not the rendered rows — two quick clicks must both land */
+    const stored = s.facts.find((x) => x.key === 'service_areas');
+    const current: FactRow | undefined = stored ? { ...(fact ?? { key: 'service_areas', label: 'Service areas', note: '', decided: true, required: false }), ...stored, decided: true } as FactRow : fact;
+    const next = withAreas(current, names, current?.status === 'verified' ? 'approve' : 'add');
+    if (!next) return s;
+    return withServes({ ...s, facts: [...s.facts.filter((x) => x.key !== 'service_areas'), next] }, keys, undefined);
+  });
+  const ignore = (keys: string[], on: boolean) => update((s) => withServes(s, keys, on ? false : undefined));
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? v.candidates : v.candidates.filter((c) => c.status === 'candidate' || c.status === 'listed').slice(0, 40);
+  return <Section title="Service areas — recon candidates" right={<span className="text-xs text-muted-foreground">{v.verified.length} verified · {v.listed.length} listed · {open.length} candidate(s)</span>}>
+    <p className="text-xs text-muted-foreground">Towns the source-site recon found. <b>None is verified by being found.</b> {v.action === 'add'
+      ? 'The Service areas list is not approved yet: Add puts a town in the proposed list, then approve the list in Client Build Facts.'
+      : 'The Service areas list is verified: Approve adds one town to it (the towns already verified stay as they are).'} Serving an area is wording and schema only — dedicated town pages are planned separately in Architecture.</p>
+    {v.verified.length > 0 && <p className="break-words text-xs"><span className="font-medium">Verified areas:</span> {v.verified.join(', ')}</p>}
+    {v.listed.length > 0 && <p className="break-words text-xs"><span className="font-medium">In the list, needs approval:</span> {v.listed.join(', ')}</p>}
+    {open.length > 1 && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act(open.map((c) => c.name), open.map((c) => c.key))}>{v.action === 'add' ? `Add all ${open.length} candidates` : `Approve all ${open.length} candidates`}</Button></div>}
+    <div className="space-y-1">{shown.map((c) => <div key={c.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b py-1.5 text-xs last:border-0">
+      <span className="min-w-[110px] flex-1 font-medium">{c.name}</span><Chip tone={AREA_TONE[c.status]}>{AREA_STATUS_LABELS[c.status]}</Chip>
+      {c.status === 'candidate' && <><Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act([c.name], [c.key])}>{v.action === 'add' ? <><Plus className="mr-1 h-3 w-3" />Add</> : <><Check className="mr-1 h-3 w-3" />Approve</>}</Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => ignore([c.key], true)}>Ignore</Button></>}
+      {c.status === 'ignored' && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => ignore([c.key], false)}>Undo ignore</Button>}
+      <span className="w-full break-words text-[11px] text-muted-foreground">{c.context || 'named on the source site'}{c.source_url ? ' · ' + c.source_url : ''}</span>
+    </div>)}</div>
+    {v.candidates.length > shown.length && <button type="button" className="text-xs text-primary underline" onClick={() => setShowAll(true)}>Show all {v.candidates.length} (verified, base and ignored too)</button>}
+  </Section>;
+}
 const Chip = ({ tone, children }: { tone: string; children: ReactNode }) => <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${MAP_TONE[tone] ?? 'bg-muted'}`}>{children}</span>;
 const REQ_LABEL: Record<string, string> = { required: 'Req', optional: 'Opt', conditional: 'Cond' };
 const GROUPS: Array<{ id: string; label: string; groups: FieldGroup[] }> = [
@@ -797,12 +866,15 @@ const GROUPS: Array<{ id: string; label: string; groups: FieldGroup[] }> = [
   { id: 'tracking', label: 'Tracking', groups: ['tracking'] },
 ];
 
-function MappedFieldRow({ m, rows, onDecide, set, update }: {
-  m: MappedField; rows: FactRow[]; onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; set: SetFn; update: UpdateFn;
+function MappedFieldRow({ m, rows, onDecide, onEdit, set, update }: {
+  m: MappedField; rows: FactRow[]; onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onEdit: (r: FactRow, value: string) => void; set: SetFn; update: UpdateFn;
 }) {
+  /* Only the PROJECT field (the domain) keeps a draft + Save button; a fact-backed field is saved as
+     it is typed (needs approval) — the same rule as the fact list, so nothing is held only here (F13). */
   const [draft, setDraft] = useState<string | null>(null);
   const f = m.field;
-  const value = draft ?? m.value;
+  const isProject = 'project' in f.source;
+  const value = isProject ? (draft ?? m.value) : m.value;
   const row: FactRow | undefined = m.factKey ? (rows.find((r) => r.key === m.factKey) ?? { key: m.factKey, label: f.label, value: '', status: 'missing', source: '', note: '', decided: false, required: false, source_url: '', notes: '', basis: '' }) : undefined;
   const save = () => {
     if ('project' in f.source) set('canonical_domain', value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''));
@@ -816,10 +888,10 @@ function MappedFieldRow({ m, rows, onDecide, set, update }: {
       ? <select aria-label={f.label} className="h-8 min-w-[140px] flex-1 rounded-md border border-input bg-background px-2 text-xs" value={m.value}
           onChange={(e) => update((s) => ({ ...s, mapping: { ...s.mapping, fields: { ...s.mapping.fields, [f.id]: e.target.value } } }))}>
           <option value="">Choose…</option>{f.source.choice.map((c) => <option key={c} value={c}>{c}</option>)}</select>
-      : <Input aria-label={f.label} className="h-8 min-w-[140px] flex-1 text-xs" value={value} placeholder={f.hint ?? 'Not found'} onChange={(e) => setDraft(e.target.value)} />}
+      : <Input aria-label={f.label} className="h-8 min-w-[140px] flex-1 text-xs" value={value} placeholder={f.hint ?? 'Not found'} onChange={(e) => { if (isProject) setDraft(e.target.value); else if (row) onEdit(row, e.target.value); }} />}
     <Chip tone={tone}>{m.status === 'missing' && !m.required ? 'Omitted' : MAP_STATUS_LABELS[m.status]}</Chip>
-    {draft !== null && draft !== m.value && <Button size="sm" className="h-7 px-2 text-xs" disabled={!draft.trim()} onClick={save}>Save &amp; approve</Button>}
-    {draft === null && m.status === 'needs_approval' && row && <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onDecide(row, 'verified', m.value)}><Check className="mr-1 h-3 w-3" />Approve</Button>}
+    {isProject && draft !== null && draft !== m.value && <Button size="sm" className="h-7 px-2 text-xs" disabled={!draft.trim()} onClick={save}>Save</Button>}
+    {!isProject && m.status === 'needs_approval' && row && m.value.trim() !== '' && <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onDecide(row, 'verified', m.value)}><Check className="mr-1 h-3 w-3" />Approve</Button>}
     {m.source && <span className="w-full text-[11px] text-muted-foreground sm:w-auto">{m.source}</span>}
   </div>;
 }
@@ -831,9 +903,9 @@ function groupCounts(ms: MappedField[]) {
   return { ready, appr, miss, line: [ready && `${ready} ready`, appr && `${appr} need approval`, miss && `${miss} missing`].filter(Boolean).join(' · ') || 'nothing mapped' };
 }
 
-function MappingPanel({ mapping, state, update, set, rows, onDecide, template, assetPrompt, onCopy }: {
-  mapping: Mapping; state: WebsiteBuildState; update: UpdateFn; set: SetFn; rows: FactRow[];
-  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; template: ReturnType<typeof templateById>;
+function MappingPanel({ mapping, buildBlockers, state, update, set, rows, onDecide, onEdit, template, assetPrompt, onCopy }: {
+  mapping: Mapping; buildBlockers: string[]; state: WebsiteBuildState; update: UpdateFn; set: SetFn; rows: FactRow[];
+  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onEdit: (r: FactRow, value: string) => void; template: ReturnType<typeof templateById>;
   assetPrompt: StagePrompt; onCopy: (p: StagePrompt) => void | Promise<void>;
 }) {
   const r = mapping.readiness;
@@ -846,19 +918,22 @@ function MappingPanel({ mapping, state, update, set, rows, onDecide, template, a
   const townRev = mapping.towns.filter((x) => x.status === 'needs_review').length;
   const blockingHits = mapping.guard.hits.filter((h) => h.blocking);
 
-  return <Section title={t ? 'Template mapping' : 'Build preparation'} right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${r.ok ? MAP_TONE.ready : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>{r.ok ? 'Ready to build' : 'Not ready to build'}</span>}>
+  /* The badge and the blocker list are THE build blockers (executionBlockers) — never the mapping's
+     own subset, so this card cannot say Ready while the build is blocked, or the reverse (F14). */
+  const ready = buildBlockers.length === 0;
+  return <Section title={t ? 'Template mapping' : 'Build preparation'} right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${ready ? MAP_TONE.ready : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>{ready ? 'Ready to build' : 'Not ready to build'}</span>}>
     {t ? <p className="text-xs"><b>{t.name}</b> <span className="text-muted-foreground">v{t.version} · {t.trade}</span></p>
       : <p className="text-xs text-muted-foreground">{state.route === 'faithful_rebuild' ? 'Faithful rebuild' : 'Bespoke build'} — no template: the core business data and asset slots every Findable build needs.</p>}
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([['Ready', r.ready, 'ready'], ['Needs approval', r.needsApproval, 'needs_approval'], ['Missing required', r.missingRequired, r.missingRequired ? 'bad' : 'missing'], ['Optional missing', r.optionalMissing, 'missing']] as const).map(([l, n, tone]) =>
       <div key={l} className={`rounded border p-2 text-xs ${tone === 'bad' ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : ''}`}><div className="text-muted-foreground">{l}</div><div className="text-lg font-semibold">{n}</div></div>)}</div>
-    {r.blockers.length > 0 && <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"><p className="font-medium">Blocking the build:</p><ul className="mt-1 list-disc pl-4">{r.blockers.map((b, n) => <li key={n} className="break-words">{b}</li>)}</ul></div>}
+    {buildBlockers.length > 0 && <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"><p className="font-medium">Blocking the build:</p><ul className="mt-1 list-disc pl-4">{buildBlockers.map((b, n) => <li key={n} className="break-words">{b}</li>)}</ul></div>}
     {mapping.guard.skipped && <p className="text-xs text-muted-foreground">{mapping.guard.skipped}</p>}
     {blockingHits.length > 0 && <p className="text-xs text-red-700 dark:text-red-300">Seed-client value(s) found in the generated config: {blockingHits.map((h) => `"${h.value.value}"`).join(', ')} — fix the fact that carries it.</p>}
     {r.notes.length > 0 && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">{r.notes.length} note(s) — optional items left out, warnings</summary><ul className="mt-1 list-disc pl-4 text-muted-foreground">{r.notes.map((x, n) => <li key={n} className="break-words">{x}</li>)}</ul></details>}
 
     {GROUPS.filter((g) => g.id !== 'tracking').map((g) => { const ms = mapping.fields.filter((m) => g.groups.includes(m.field.group)); if (!ms.length) return null; const c = groupCounts(ms);
       return <details key={g.id} className="rounded-md border px-2 py-1" open={c.appr > 0 || c.miss > 0}><summary className="cursor-pointer text-sm font-medium">{g.label} <span className="text-xs font-normal text-muted-foreground">— {c.line}</span></summary>
-        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} set={set} update={update} />)}</div></details>; })}
+        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} onEdit={onEdit} set={set} update={update} />)}</div></details>; })}
 
     {t && <details className="rounded-md border px-2 py-1" open={svcCounts.inc === 0 || svcCounts.rev > 0}><summary className="cursor-pointer text-sm font-medium">Services <span className="text-xs font-normal text-muted-foreground">— {svcCounts.inc} included{svcCounts.rev ? ` · ${svcCounts.rev} to review` : ''}</span></summary>
       <p className="mt-1 text-[11px] text-muted-foreground">The template's service catalogue, matched against the client's verified services and the services the source site names. Only ticked services are built. A service nobody names stays unticked unless you tick it.</p>
@@ -911,7 +986,7 @@ function MappingPanel({ mapping, state, update, set, rows, onDecide, template, a
 
     {(() => { const g = GROUPS.find((x) => x.id === 'tracking')!; const ms = mapping.fields.filter((m) => g.groups.includes(m.field.group)); if (!ms.length) return null; const c = groupCounts(ms);
       return <details className="rounded-md border px-2 py-1" open={c.miss > 0}><summary className="cursor-pointer text-sm font-medium">Tracking <span className="text-xs font-normal text-muted-foreground">— {c.line}</span></summary>
-        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} set={set} update={update} />)}</div></details>; })()}
+        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} onEdit={onEdit} set={set} update={update} />)}</div></details>; })()}
 
     <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">View generated config (read-only{mapping.omitted.length ? ` · ${mapping.omitted.length} item(s) left out` : ''})</summary>
       <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 font-mono text-[11px]">{JSON.stringify(mapping.config, null, 2)}</pre>
@@ -1141,14 +1216,19 @@ function PromotionPanel({ state, update }: { state: WebsiteBuildState; update: U
 
 /** ONE fact row — Approve / Reject / N/A / Edit / Source & notes. The same control everywhere a fact
  *  is decided (Client Build Facts and the recon's Needs Review), so there is one approval system. */
-function FactRowEditor({ row: r, onDecide, onReset, onPut, detail }: {
+function FactRowEditor({ row: r, onDecide, onReset, onPut, onEdit, detail }: {
   row: FactRow; onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void;
-  onPut: (f: BuildFact) => void; detail?: string;
+  onPut: (f: BuildFact) => void; onEdit: (r: FactRow, value: string) => void; detail?: string;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  /* ⛔ NO LOCAL DRAFT. The input shows the STORED value and every keystroke is saved (as needs
+     approval), so Saved means the edit is on the server and Approve approves exactly what is shown
+     (BS4 pilot F13). `before` only remembers what the row was, so Undo can put it back. */
+  const [before, setBefore] = useState<{ fact: BuildFact | null } | null>(null);
   const [open, setOpen] = useState(false);
-  const value = draft ?? r.value; const changed = value !== r.value;
-  const commit = (status: StoredFactStatus) => { onDecide(r, status, value); setDraft(null); };
+  const value = r.value; const changed = before !== null;
+  const edit = (v: string) => { if (!before) setBefore({ fact: r.decided ? storedFact(r) : null }); onEdit(r, v); };
+  const undo = () => { if (!before) return; if (before.fact) onPut(before.fact); else onReset(r.key); setBefore(null); };
+  const commit = (status: StoredFactStatus) => { onDecide(r, status, value); setBefore(null); };
   return <div className="rounded-md border p-2">
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-medium">{r.label}{r.required && <span className="text-destructive"> *</span>}</span>
@@ -1159,12 +1239,13 @@ function FactRowEditor({ row: r, onDecide, onReset, onPut, detail }: {
     </div>
     {detail && <p className="mt-1 break-words text-[11px] text-amber-700 dark:text-amber-300">{detail}</p>}
     <div className="mt-1 flex flex-wrap items-center gap-2">
-      <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[180px] flex-1 text-xs" value={value} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDraft(e.target.value)} />
+      <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[180px] flex-1 text-xs" value={value} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => edit(e.target.value)} />
       <Button size="sm" variant={r.status === 'verified' && !changed ? 'secondary' : 'default'} disabled={!value.trim() || (r.status === 'verified' && !changed)} onClick={() => commit('verified')}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button>
       <Button size="sm" variant="outline" disabled={r.status === 'rejected' && !changed} onClick={() => commit('rejected')}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
       <Button size="sm" variant="outline" disabled={r.status === 'not_applicable'} onClick={() => commit('not_applicable')}>N/A</Button>
       <Button size="sm" variant="ghost" aria-label={`Source and notes for ${r.label}`} onClick={() => setOpen((o) => !o)}>{open ? 'Hide source' : 'Source / notes'}</Button>
-      {changed && <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>Undo edit</Button>}
+      {changed && <Button size="sm" variant="ghost" onClick={undo}>Undo edit</Button>}
+      {changed && r.status === 'detected' && <span className="text-[11px] text-amber-700 dark:text-amber-300">Edited — saved as needs approval</span>}
       {r.decided && !changed && <Button size="sm" variant="ghost" onClick={() => onReset(r.key)} title="Forget your decision and go back to what the records say">Reset</Button>}
     </div>
     {open && <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -1175,21 +1256,29 @@ function FactRowEditor({ row: r, onDecide, onReset, onPut, detail }: {
   </div>;
 }
 
-function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
+function FactsSection({ rows, template, onDecide, onReset, onPut, onEdit, onPaste }: {
   rows: FactRow[]; template: ReturnType<typeof templateById>;
   onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; onReset: (key: string) => void;
-  onPut: (f: BuildFact) => void; onPaste: (text: string) => void;
+  onPut: (f: BuildFact) => void; onEdit: (r: FactRow, value: string) => void; onPaste: (text: string) => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'detected' | 'missing' | 'verified'>('all');
+  /* Editing a verified row makes it needs-approval, which would re-sort it (or drop it out of the
+     Verified filter) mid-keystroke. Rows keep the order they first appeared in, and a row edited in
+     this visit stays in whatever filter is open. */
+  const order = useRef(new Map<string, number>());
+  const touched = useRef(new Set<string>());
+  for (const r of rows) if (!order.current.has(r.key)) order.current.set(r.key, order.current.size);
+  const editTracked = (r: FactRow, v: string) => { touched.current.add(r.key); onEdit(r, v); };
   const [newLabel, setNewLabel] = useState(''); const [newValue, setNewValue] = useState('');
   const [paste, setPaste] = useState(''); const [pasteOpen, setPasteOpen] = useState(false);
   const s = factsSummary(rows);
-  const shown = rows.filter((r) => filter === 'all' || r.status === filter);
+  const shown = rows.filter((r) => filter === 'all' || r.status === filter || touched.current.has(r.key))
+    .sort((a, b) => order.current.get(a.key)! - order.current.get(b.key)!);
   return <Section title="Client Build Facts" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'detected', 'missing', 'verified'] as const).map((f) =>
     <button key={f} type="button" onClick={() => setFilter(f)} className={`rounded-full border px-2 py-0.5 ${filter === f ? 'border-primary bg-primary/10' : ''}`}>{f === 'all' ? `All ${rows.length}` : f === 'detected' ? `Need approval ${s.awaiting}` : f === 'missing' ? `Missing ${s.missing}` : `Verified ${s.verified}`}</button>)}</div>}>
     <p className="rounded bg-muted p-2 text-xs"><b>Verified facts may be used. Unverified facts must not be published.</b> Preloaded from onboarding, the client record, the baseline and the stored crawl — nothing was fetched. Edit a value, then Approve it. Prompts never present a "Needs approval" value as confirmed.</p>
     {s.requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required for {template ? 'the template' : 'any build'} and not verified yet (marked *): {s.requiredMissing.join(', ')}</p>}
-    <div className="space-y-2">{shown.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} />)}
+    <div className="space-y-2">{shown.map((r) => <FactRowEditor key={r.key} row={r} onDecide={onDecide} onReset={onReset} onPut={onPut} onEdit={editTracked} />)}
       {shown.length === 0 && <p className="text-xs text-muted-foreground">Nothing in this filter.</p>}</div>
     <div className="flex flex-wrap items-end gap-2 border-t pt-3">
       <div className="min-w-[160px]"><Label className="text-xs">Add a fact the client confirmed</Label><Input className="h-8 text-xs" value={newLabel} placeholder="e.g. Gas Safe number" onChange={(e) => setNewLabel(e.target.value)} /></div>

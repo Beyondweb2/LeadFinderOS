@@ -24,7 +24,8 @@
 import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, WebsiteBuildState } from './websiteBuildState.ts';
 import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewGateProblems } from './websiteBuildState.ts';
 import type { BuildPackInput } from './buildPack.ts';
-import { cloudflareProblem, codeConfig, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
+import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
+import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
 import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
@@ -33,16 +34,52 @@ import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
 /* ── assets to download (shared with the standalone Asset Download prompt) ──────────────────── */
 
 /** Faithful: every USE asset. Template: USE assets ASSIGNED to a slot. Bespoke: assigned USE, else every USE. */
-export function assetsToDownload(i: BuildPackInput, m?: Mapping): { list: Array<{ asset: ManifestAsset; slot: string }>; held: number } {
+/**
+ * The assets a build downloads: every asset Paul marked USE — never REVIEW, never IGNORE.
+ *   assigned            USE assets placed in a slot (hero, logo, gallery lead…), with the slot named
+ *   approvedAdditional  every other USE asset: gallery / project / service evidence, used where it fits
+ * Before the BS4 pilot (2026-09-25, F12) a template build — or a bespoke one with any slot filled —
+ * downloaded ONLY the slot-assigned assets: 2 of BS4's 12 approved job photos. A gallery is a
+ * collection; it does not need a slot per photo.
+ * ⛔ An unassigned USE LOGO / FAVICON is not "additional": which logo the site uses is a slot decision.
+ */
+export interface AssetPlan {
+  assigned: Array<{ asset: ManifestAsset; slot: string }>;
+  approvedAdditional: ManifestAsset[];
+  /** assigned, then approvedAdditional — the whole download list. */
+  list: Array<{ asset: ManifestAsset; slot: string }>;
+  held: number; ignored: number; unassignedBrand: ManifestAsset[];
+}
+export function assetsToDownload(i: BuildPackInput, m?: Mapping): AssetPlan {
   const s = i.state;
   const use = s.manifest.assets.filter((a) => a.approval === 'approved');
   const held = s.manifest.assets.filter((a) => a.approval === 'pending').length;
+  const ignored = s.manifest.assets.filter((a) => a.approval === 'rejected').length;
   const map = m ?? computeMapping(s, i.template, i.facts, i.businessName);
   const slotOf = new Map<string, string>();
   for (const st of map.slots) for (const a of st.publishable) if (!slotOf.has(a.source_url)) slotOf.set(a.source_url, st.slot.label);
-  const assignedOnly = isTemplateRoute(s) || (isBespokeRoute(s) && slotOf.size > 0);
-  const chosen = assignedOnly ? use.filter((a) => slotOf.has(a.source_url)) : use;
-  return { list: chosen.map((asset) => ({ asset, slot: slotOf.get(asset.source_url) ?? '' })), held };
+  const assigned = use.filter((a) => slotOf.has(a.source_url)).map((asset) => ({ asset, slot: slotOf.get(asset.source_url)! }));
+  const isBrand = (a: ManifestAsset) => a.type === 'logo' || a.type === 'favicon';
+  const rest = use.filter((a) => !slotOf.has(a.source_url));
+  const approvedAdditional = rest.filter((a) => !isBrand(a));
+  const unassignedBrand = rest.filter(isBrand);
+  return { assigned, approvedAdditional, list: [...assigned, ...approvedAdditional.map((asset) => ({ asset, slot: '' }))], held, ignored, unassignedBrand };
+}
+
+/** The X3 / Asset Download lines: assigned by slot, then the additional approved assets. */
+export function assetPlanLines(plan: AssetPlan, name: (a: ManifestAsset, n: number) => string): string[] {
+  let n = 0;
+  const line = (a: ManifestAsset, slot: string) => '- ' + (slot ? '[' + slot + '] ' : '') + oneLine(a.source_url, 300) + ' → ' + name(a, n++) + (a.purpose ? '  (' + oneLine(a.purpose, 80) + ')' : '');
+  return [
+    'Assigned to a slot (' + plan.assigned.length + '):',
+    ...(plan.assigned.length ? plan.assigned.map((x) => line(x.asset, x.slot)) : ['- (none assigned)']),
+    '',
+    'Additional approved assets (' + plan.approvedAdditional.length + ') — gallery, project and service evidence. Use each where it genuinely fits (the gallery, the page of the service it shows); never as a stand-in for something it does not show:',
+    ...(plan.approvedAdditional.length ? plan.approvedAdditional.map((a) => line(a, '')) : ['- (none)']),
+    ...(plan.unassignedBrand.length ? ['', plan.unassignedBrand.length + ' approved logo / favicon file(s) are not assigned to the Logo slot — NOT downloaded; which logo the site uses is decided in LeadFinderOS.'] : []),
+    '',
+    'Do NOT download: ' + plan.held + ' REVIEW asset(s), ' + plan.ignored + ' IGNORE asset(s), or anything else you see on the old site.',
+  ];
 }
 export const safeAssetName = (a: ManifestAsset, n: number) =>
   (a.suggested_filename || (a.source_url.split('/').pop() || 'asset-' + (n + 1))).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 80);
@@ -84,6 +121,7 @@ export function executionBlockers(i: BuildPackInput, m: Mapping): string[] {
     ...m.readiness.blockers,
     ...setupProblems(s).map((p) => p.label + ' ' + p.problem),
     ...(cloudflareProblem(s) ? [cloudflareProblem(s)] : []),
+    ...(cloudflareModeProblem(s) ? [cloudflareModeProblem(s)] : []),
     ...(isFaithfulRoute(s) && !s.rebuild_style ? ['Rebuild fidelity not chosen'] : []),
     ...(isFaithfulRoute(s) && !s.copy_ownership ? ['Copy ownership not recorded'] : []),
     ...(!isTemplateRoute(s) && !s.pages.length ? ['Page architecture (no pages planned)'] : []),
@@ -128,7 +166,8 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
   const cfg = codeConfig(s, i.template);
   const path = winPath(s.local_repo_path);
   const remote = expectedRemote(s);
-  const { list: assets, held } = assetsToDownload(i, m);
+  const plan = assetsToDownload(i, m);
+  const { list: assets, held } = plan;
   const sourcePaths = [...new Set(s.manifest.pages.map((p) => toPath(p.url)))].slice(0, 300);
   const inPlace = sameDomainRebuild(i.existingSiteUrl, s.canonical_domain);
   const H = (x: string) => ['', '## ' + x, ''];
@@ -152,9 +191,8 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     ] : [
       '- Put every business fact in ONE config / content module (src/lib/siteConfig.ts) and have pages and components read from it. No client detail hard-coded in components.',
     ]),
-    ...H('X3. ASSETS — only these ' + assets.length),
-    ...(assets.length ? assets.map(({ asset, slot }, n) => '- ' + (slot ? '[' + slot + '] ' : '') + oneLine(asset.source_url, 300) + ' → ' + safeAssetName(asset, n)) : ['- (none — build without images; never a stock or seed image)']),
-    ...(held ? [held + ' asset(s) are still REVIEW in LeadFinderOS — do not download them.'] : []),
+    ...H('X3. ASSETS — ' + assets.length + ' approved (USE): ' + plan.assigned.length + ' assigned to a slot, ' + plan.approvedAdditional.length + ' additional'),
+    ...(assets.length ? assetPlanLines(plan, safeAssetName) : ['- (none — build without images; never a stock or seed image)', ...(held ? [held + ' asset(s) are still REVIEW in LeadFinderOS — do not download them.'] : [])]),
     '- Originals to capture/assets/original/ (never edited); optimised web copies (WebP/AVIF, longest edge ≤ 2400px; SVG as-is) to public/images/; safe lowercase filenames; each URL once; identical bytes kept once.',
     '- Never hotlink. Record every "source URL -> local file" in build.assets; a failed download goes in warnings — never substitute another image.',
     ...(t && m.config.brand.mark !== 'logo' ? ['- Text wordmark: no logo file is downloaded or created.'] : []),
@@ -185,12 +223,10 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- Commit the initial client build ("Initial ' + (i.businessName || 'client') + ' build' + (t ? ' from ' + t.name + ' v' + t.version : '') + '"), push main to ' + remote + ', record the commit hash.',
     '- Safe git only: never force push, reset, rebase, amend or clean.',
     ...H('X8. CLOUDFLARE PAGES — PREVIEW ONLY'),
-    '- npx wrangler whoami. If wrangler is not signed in / not authorised: do NOT guess credentials — set status "built" and put the exact operator step in errors ("run npx wrangler login in ' + path + '").',
-    '- Project ' + s.cloudflare_project + ': if it does not exist, npx wrangler pages project create ' + s.cloudflare_project + ' --production-branch main (a new project for THIS client; never reuse another client\'s).',
-    '- Build with tracking OFF for the preview (no analytics / ads tags emitted, whatever the config holds): "' + cfg.buildCommand + '".',
-    '- Deploy the preview: npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + s.cloudflare_project + ' --branch preview. The stable preview address is https://preview.' + s.cloudflare_project + '.pages.dev. Record the deployment ID.',
-    '- Confirm noindex: curl -sI https://preview.' + s.cloudflare_project + '.pages.dev/ must show an X-Robots-Tag noindex header. If it does not, do not call it preview_ready.',
-    '- ⛔ Never deploy the production branch, never add a custom domain, never touch DNS. Linking the project to the GitHub repository (dashboard → Settings → Builds) is an operator step — list it in warnings, do not attempt it with guessed access.',
+    '- Project: ' + s.cloudflare_project + ' · deployment: ' + modeLabel(s) + '. Build with tracking OFF for the preview (no analytics / ads tags emitted, whatever the config holds).',
+    ...previewDeploySteps(deployInputFor(s, i.template)),
+    '- Confirm noindex: curl -sI ' + stablePreviewUrl(s) + '/ must show an X-Robots-Tag noindex header. If it does not, do not call it preview_ready.',
+    '- ⛔ Never deploy to the production branch (' + cloudflareBranches(s).production + '), never add a custom domain, never touch DNS, never store or ask for a credential.',
     ...H('X9. QA — before you say preview_ready'),
     '- TECHNICAL: the production build passes; every internal link resolves; canonicals; sitemap; robots.txt; the 404 page; schema is valid JSON-LD matching the page; no accidental noindex in the production configuration; preview noindex confirmed; no broken assets; ' + (inPlace ? 'no hotlinked old-site file anywhere' : 'no old domain anywhere') + '; seed scrub clean.',
     '- CONTENT: correct business name; phone and email consistent everywhere; selected services only; selected locations only; approved facts only; no placeholder copy; no unsupported proof.',
@@ -408,7 +444,9 @@ export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: strin
     ...(b.warnings.length ? ['', 'Warnings from last time (fix only if they are part of the above): ' + b.warnings.slice(0, 15).join(' | ')] : []),
     ...(isTemplateRoute(s) ? ['', 'CURRENT CLIENT CONFIG (unchanged rules: only this data, nothing invented):', '```json', JSON.stringify(m.config, null, 2), '```'] : []),
     '',
-    'Safe git only (no force push / reset / rebase / amend / clean). Preview only: npx wrangler pages deploy ' + (b.output_dir || codeConfig(s, i.template).outputDir) + ' --project-name ' + (b.cloudflare_project || s.cloudflare_project || MARK.project) + ' --branch preview; confirm noindex.',
+    'Safe git only (no force push / reset / rebase / amend / clean). Redeploy the PREVIEW only — ' + modeLabel(s) + ':',
+    ...previewDeploySteps({ ...deployInputFor(s, i.template), project: b.cloudflare_project || s.cloudflare_project || MARK.project }),
+    'Confirm noindex on ' + stablePreviewUrl(s, b.cloudflare_project || s.cloudflare_project || MARK.project) + '.',
     '',
     'End with the same JSON result as before:', ...BUILD_RESULT_SCHEMA_LINES, '', ...BUILD_RESULT_RULES,
   ];

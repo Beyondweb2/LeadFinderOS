@@ -57,7 +57,7 @@ const parsedRecon = parseReconText(JSON.stringify(RECON)) as { result: ReconResu
 
 const BASE = {
   version: 2, route: 'template_rebuild', template_id: 'mcl-local-trades', repo_name: 'HarbourLocks', github_owner: 'Beyondweb2',
-  local_repo_path: 'C:\\Users\\paulj\\HarbourLocks', cloudflare_project: 'harbour-locks', canonical_domain: 'harbourlocks.co.uk',
+  local_repo_path: 'C:\\Users\\paulj\\HarbourLocks', cloudflare_project: 'harbour-locks', cloudflare_mode: 'direct_upload', canonical_domain: 'harbourlocks.co.uk',
   pages: [{ id: 'h', family: 'homepage', path: '/', title: 'Home', action: 'keep', old_url: SITE }],
   redirects: [{ from: '/emergency-locksmith/', to: '/services/emergency-lockouts/', reason: 'moved' }], qa: { visual_qa: true },
   mapping: { fields: { mobile_or_premises: 'mobile' } },
@@ -121,7 +121,7 @@ console.log('\n── C/D/E. THE BUILD EXECUTION PROMPT ──');
   for (const w of ['capture/assets/original/', 'never edited', 'safe lowercase filenames', 'each URL once', 'Never hotlink', 'source URL -> local file']) ok(p.text.includes(w), `  asset rule: "${w}"`);
   ok(/AFTER building, search the WHOLE source/.test(p.text) && p.text.includes('dist/') && p.text.includes('morganbusiness1') && /DO NOT deploy the preview/.test(p.text), 'post-build seed scrub of source AND build output blocks the preview');
   for (const w of ['XML sitemap', 'robots.txt allowing OAI-SearchBot', 'BreadcrumbList', 'LocalBusiness schema', 'Do NOT add: llms.txt', 'fake citations', 'review / rating schema', 'mass FAQs']) ok(p.text.includes(w), `  SEO / AI: "${w}"`);
-  for (const w of ['--branch preview', 'https://preview.harbour-locks.pages.dev', 'X-Robots-Tag noindex', 'tracking OFF', 'Never deploy the production branch, never add a custom domain, never touch DNS', 'do NOT guess credentials', 'wrangler pages project create harbour-locks'])
+  for (const w of ['--branch preview', 'https://preview.harbour-locks.pages.dev', 'X-Robots-Tag noindex', 'tracking OFF', 'Never deploy to the production branch (main), never add a custom domain, never touch DNS', 'do NOT guess credentials', 'wrangler pages project create harbour-locks'])
     ok(p.text.includes(w), `  Cloudflare preview: "${w}"`);
   for (const w of ['1440, 1024, 768, 390 and iPhone SE', 'no horizontal overflow', 'no placeholder copy', 'selected services only', 'Targeted checks on the built client site only']) ok(p.text.includes(w), `  QA: "${w}"`);
   ok(/OLD URL COVERAGE — on the REAL build/.test(p.text) && p.text.includes('/old-offers/') && /redirect target that does not exist/.test(p.text), 'real-build old-URL coverage lists every source path');
