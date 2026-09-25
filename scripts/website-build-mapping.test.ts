@@ -80,7 +80,7 @@ const RECON = {
 const parsed = parseReconText(JSON.stringify(RECON)) as { result: ReconResult };
 
 const BASE = { version: 2, route: 'template_rebuild', template_id: 'mcl-local-trades', repo_name: 'HarbourLocks', local_repo_path: 'C:\\Users\\paulj\\HarbourLocks',
-  cloudflare_project: 'harbour-locks', preview_url: 'https://preview.harbour-locks.pages.dev', qa: { visual_qa: true },
+  cloudflare_project: 'harbour-locks', cloudflare_mode: 'direct_upload', preview_url: 'https://preview.harbour-locks.pages.dev', qa: { visual_qa: true },
   pages: [{ id: 'h', family: 'homepage', path: '/', title: 'Home', action: 'keep', old_url: SITE }], redirects: [{ from: '/old', to: '/', reason: 'r' }] };
 const imported = (b: Record<string, unknown> = BASE, c = ctx()) => { const s = parseWebsiteBuild(b); return applyRecon(s, parsed.result, rowsFor(s, c), '2026-09-25T10:00:00.000Z').state; };
 const mapOf = (s: WebsiteBuildState, c = ctx(), name = 'Harbour Locks Ltd') => computeMapping(s, s.route === 'template_rebuild' ? MCL_TEMPLATE : null, rowsFor(s, c), name);
@@ -289,12 +289,13 @@ console.log('\n── H/M. PROMPTS ──');
   ok(ad.label === 'Copy Asset Download Prompt' && ad.stage === 'build_pack', 'the Asset Download prompt is on the Build Pack stage');
   ok(ad.text.includes('img/logo.svg') && ad.text.includes('img/dan.jpg') && !ad.text.includes('img/mla.png'), 'template: only USE assets assigned to a slot are listed (the REVIEW badge is not)');
   for (const w of ['capture/assets/original', 'Never edit an original', 'Safe local filenames', 'downloaded ONCE', 'Never hotlink', 'Do NOT download anything that is not on this list', 'If a download fails', 'downloads.csv']) ok(ad.text.includes(w), `  asset prompt: "${w}"`);
-  ok(/1 asset\(s\) are still REVIEW/.test(ad.text), '  …REVIEW assets are counted, not listed');
+  ok(/Do NOT download: 1 REVIEW asset\(s\)/.test(ad.text), '  …REVIEW assets are counted, not listed');
   const unassigned = { ...s, mapping: { ...s.mapping, assets: { logo: [SITE + 'img/logo.svg'] } } };
-  ok(!stagePrompts(input(unassigned)).find((p) => p.id === 'asset_download')!.text.includes('dan.jpg'), 'template: a USE asset NOT assigned to a slot is not downloaded');
+  const un = stagePrompts(input(unassigned)).find((p) => p.id === 'asset_download')!.text;
+  ok(un.includes('dan.jpg') && /Additional approved assets/.test(un.slice(0, un.indexOf('dan.jpg'))), 'template: a USE asset NOT in a slot is still downloaded, as an additional approved asset (F12)');
   const faithful = { ...s, route: 'faithful_rebuild' as const, rebuild_style: 'replica' as const, copy_ownership: 'client_wrote' as const };
   const fa = stagePrompts(input(faithful)).find((p) => p.id === 'asset_download')!.text;
-  ok(fa.includes('dan.jpg') && fa.includes('lock-job.jpg') && /every asset of the authorised site/.test(fa), 'faithful: every USE asset is downloaded, assigned or not');
+  ok(fa.includes('dan.jpg') && fa.includes('lock-job.jpg') && /every asset Paul approved \(USE\)/.test(fa), 'faithful: every USE asset is downloaded, assigned or not');
   ok(stagePrompts(input(s0)).find((p) => p.id === 'asset_download')!.blockedBy.includes('Approved assets'), 'with no USE assets the asset prompt says so');
 }
 

@@ -245,6 +245,24 @@ export function decide(row: FactRow, status: StoredFactStatus, value = row.value
   return { key: row.key, label: row.label, value: value.trim(), status, source: row.source, source_url: row.source_url, notes: row.notes, basis: status === 'verified' ? 'operator' : '' };
 }
 
+/**
+ * An operator EDIT of a row's value — stored straight away, like every other change, so what the
+ * screen shows is what is saved (BS4 pilot, F13: the edit used to live only in the row's own state,
+ * vanished on reload, and Approve then verified the stale value).
+ * ⛔ An edit is never a verification: the edited value is stored as NEEDS APPROVAL, whatever the row
+ * was before — editing a verified value un-verifies it until it is approved again. Source URL and
+ * notes travel with it. The value is not trimmed here (the operator is still typing); the save rule
+ * and decide() trim.
+ */
+export function editFact(row: FactRow, value: string): BuildFact {
+  return { key: row.key, label: row.label, value, status: 'detected', source: row.source, source_url: row.source_url, notes: row.notes, basis: '' };
+}
+
+/** The stored decision a DECIDED row came from — what Undo edit puts back. */
+export function storedFact(row: FactRow): BuildFact {
+  return { key: row.key, label: row.label, value: row.value, status: row.status === 'missing' ? 'detected' : row.status, source: row.source, source_url: row.source_url, notes: row.notes, basis: row.basis };
+}
+
 /** Change a row's source URL / notes WITHOUT deciding it: the status it already has is kept
  *  (a MISSING row is stored as needs-approval with no value, which still reads as missing). */
 export function annotate(row: FactRow, over: { source_url?: string; notes?: string }): BuildFact {

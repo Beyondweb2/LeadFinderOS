@@ -15,6 +15,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { AssetType, PageFamily } from './websiteBuildState.ts';
+import { templateSuitsTrade } from './buildRoutes.ts';
 
 /** One claim the template's source content makes that belongs to the SOURCE client. */
 export interface TemplateClaim {
@@ -125,6 +126,12 @@ export interface WebsiteTemplate {
   defaultPageFamilies: Array<{ family: PageFamily; path: string; title: string; note?: string }>;
   reusableComponents: string[];
   visualStyle: string[];
+  /** The trade this template was BUILT for, and every trade it genuinely serves as-is. These — and
+   *  only these — decide whether the template is RECOMMENDED (F1, BS4 pilot: the locksmith template
+   *  was recommended to an electrician because the list below mentions electricians). */
+  primaryTrade: string;
+  supportedTrades: string[];
+  /** Descriptive only: trades the structure could be ADAPTED for. Never a recommendation. */
   supportedBusinessTypes: string[];
   facts: TemplateFactSpec[];
   /** Optional sections, each shown only when its fact is verified for the client. */
@@ -273,6 +280,8 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     'Sticky mobile call / WhatsApp bar; mobile-first spacing',
     'Hero with photo, headline, two CTAs (call, WhatsApp)',
   ],
+  primaryTrade: 'locksmith',
+  supportedTrades: ['locksmith'],
   supportedBusinessTypes: ['Locksmiths', 'Plumbers / heating engineers', 'Electricians', 'Roofers', 'Builders', 'Other emergency or call-out local trades'],
   facts: [
     { key: 'business_name', label: 'Business name', required: true },
@@ -392,6 +401,26 @@ export const WEBSITE_TEMPLATES: readonly WebsiteTemplate[] = [MCL_TEMPLATE];
 
 /** Faithful / Bespoke: no template, the core field set and core asset slots, no catalogue. */
 export const CORE_BUILD_MODEL = { fields: CORE_FIELDS, assetSlots: CORE_ASSET_SLOTS, serviceCatalogue: [] as TemplateService[], minServices: 0 };
+
+/* ── TRADE COMPATIBILITY — the one rule for "recommended" ──────────────────────────────────────── */
+
+/** compatible = the client's trade is the template's primary trade or one of its supported trades.
+ *  weak = anything else (a template can still be CHOSEN deliberately, with a warning).
+ *  unknown = no trade recorded — nothing is recommended. */
+export type TradeFit = 'compatible' | 'weak' | 'unknown';
+export function tradeFit(trade: string, t: WebsiteTemplate): TradeFit {
+  if (!trade.trim()) return 'unknown';
+  return templateSuitsTrade(trade, [t.primaryTrade, ...t.supportedTrades]) ? 'compatible' : 'weak';
+}
+export function recommendedTemplates(trade: string): WebsiteTemplate[] {
+  return WEBSITE_TEMPLATES.filter((t) => tradeFit(trade, t) === 'compatible');
+}
+/** The route to RECOMMEND (the operator still chooses): a compatible template, else Bespoke / new
+ *  trade. '' when the trade is not known yet. */
+export function recommendedRoute(trade: string): 'template_rebuild' | 'bespoke' | '' {
+  if (!trade.trim()) return '';
+  return recommendedTemplates(trade).length ? 'template_rebuild' : 'bespoke';
+}
 
 export function templateById(id: string | null | undefined): WebsiteTemplate | null {
   return WEBSITE_TEMPLATES.find((t) => t.id === id) ?? null;

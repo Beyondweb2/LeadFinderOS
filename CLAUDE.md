@@ -730,6 +730,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The measured findings in detail | `docs/findings.md` (§5) |
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
+| Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
