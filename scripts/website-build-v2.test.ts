@@ -159,8 +159,8 @@ console.log('\n── STAGE PROMPTS ──');
 {
   const T = { ...BASE, route: 'template_rebuild' }, F = { ...BASE, route: 'faithful_rebuild', rebuild_style: 'replica', copy_ownership: 'unknown' }, B = { ...BASE, route: 'bespoke', design_references: 'findable.live typography' };
   const all = prompts(T);
-  ok(all.map((p) => p.id).join(',') === STAGE_PROMPT_IDS.join(',') && all.length === 8, 'eight stage prompts, in stage order');
-  ok(all.map((p) => p.label).join('|') === 'Copy Recon Prompt|Copy Capture Prompt|Copy Architecture Prompt|Copy Build Prompt|Copy Preview Deployment Prompt|Copy Visual Comparison Prompt|Copy QA Prompt|Copy Production Deployment Prompt', 'with the eight button labels');
+  ok(all.map((p) => p.id).join(',') === STAGE_PROMPT_IDS.join(',') && all.length === 9, 'nine stage prompts (Phase 3 added Asset Download), in stage order');
+  ok(all.map((p) => p.label).join('|') === 'Copy Recon Prompt|Copy Capture Prompt|Copy Architecture Prompt|Copy Asset Download Prompt|Copy Build Prompt|Copy Preview Deployment Prompt|Copy Visual Comparison Prompt|Copy QA Prompt|Copy Production Deployment Prompt', 'with the nine button labels');
   for (const [name, b] of [['faithful', F], ['template', T], ['bespoke', B]] as const) ok(prompts(b).every((p) => p.text.includes('Build route: ')), `every ${name} prompt states its route`);
 
   ok(/PRESERVE the existing information architecture/.test(P(F, 'architecture').text), 'architecture — faithful preserves the IA');

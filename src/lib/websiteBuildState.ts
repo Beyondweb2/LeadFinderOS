@@ -82,7 +82,15 @@ export interface BuildFact {
   source_url: string;
   /** Operator notes on this fact. Never published. V2. */
   notes: string;
+  /** Phase 3: WHY it is verified — 'operator' (Paul approved it), 'source_site' (auto-accepted
+   *  low-risk value read on the client's current website), 'client' (onboarding). '' = not said. */
+  basis: FactBasis;
 }
+export const FACT_BASES = ['operator', 'source_site', 'client'] as const;
+export type FactBasis = (typeof FACT_BASES)[number] | '';
+export const FACT_BASIS_LABELS: Record<Exclude<FactBasis, ''>, string> = {
+  operator: 'approved by you', source_site: 'verified from the source website', client: 'stated by the client',
+};
 
 export const PAGE_FAMILIES = [
   'homepage', 'services_index', 'service', 'locations_index', 'location', 'commercial', 'pricing',
@@ -245,8 +253,54 @@ export interface ReconState {
   pages_total: number | null;
   assets_total: number | null;
   review: ReconReviewItem[];
+  /** Phase 3: SOURCE-DERIVED candidates — services the site names, towns it mentions. Candidates
+   *  only: nothing here says the client still offers or serves it. */
+  services: ReconCandidate[];
+  towns: ReconCandidate[];
 }
+export interface ReconCandidate { name: string; source_url: string; context: string }
+export const MAX_RECON_CANDIDATES = 150;
 export const MAX_RECON_REVIEW = 200;
+
+export interface MappingState {
+  /** template service id → included in the build. Absent = no decision (the mapper proposes). */
+  services: Record<string, boolean>;
+  /** source service candidate (normalised name) → template service id, or 'ignore'. */
+  candidate_map: Record<string, string>;
+  /** town key → { serves, page }. Absent = no decision. page defaults OFF (no doorway pages). */
+  locations: Record<string, { serves?: boolean; page?: boolean }>;
+  /** asset slot id → assigned asset source URLs (only USE assets are ever published). */
+  assets: Record<string, string[]>;
+  /** template field id → an operator value for a field the ledger has no fact for (choices). */
+  fields: Record<string, string>;
+}
+const MAP_KEY = /^[a-z0-9][a-z0-9_.:-]{0,79}$/;
+const mapKey = (k: string) => k.toLowerCase().trim().slice(0, 80);
+function readCandidates(v: unknown): ReconCandidate[] {
+  const seen = new Set<string>();
+  return arr(v).map((x) => { const c = obj(x); return { name: str(c.name, 120), source_url: str(c.source_url, 500), context: str(c.context, 300) }; })
+    .filter((c) => c.name && !seen.has(c.name.toLowerCase()) && !!seen.add(c.name.toLowerCase())).slice(0, MAX_RECON_CANDIDATES);
+}
+function readMapping(v: unknown): MappingState {
+  const o = obj(v);
+  const out: MappingState = { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} };
+  for (const [k, b] of Object.entries(obj(o.services)).slice(0, 200)) if (MAP_KEY.test(mapKey(k)) && typeof b === 'boolean') out.services[mapKey(k)] = b;
+  for (const [k, b] of Object.entries(obj(o.candidate_map)).slice(0, 300)) { const key = str(k, 120).toLowerCase(); const val = str(b, 80); if (key && MAP_KEY.test(val)) out.candidate_map[key] = val; }
+  for (const [k, b] of Object.entries(obj(o.locations)).slice(0, 300)) {
+    const key = str(k, 120).toLowerCase(); const l = obj(b); if (!key) continue;
+    const e: { serves?: boolean; page?: boolean } = {};
+    if (typeof l.serves === 'boolean') e.serves = l.serves;
+    if (typeof l.page === 'boolean') e.page = l.page;
+    if ('serves' in e || 'page' in e) out.locations[key] = e;
+  }
+  for (const [k, list] of Object.entries(obj(o.assets)).slice(0, 40)) {
+    if (!MAP_KEY.test(mapKey(k))) continue;
+    const urls = [...new Set(arr(list).map((u) => str(u, 500)).filter((u) => /^https?:\/\//i.test(u)))].slice(0, 60);
+    if (urls.length) out.assets[mapKey(k)] = urls;
+  }
+  for (const [k, val] of Object.entries(obj(o.fields)).slice(0, 100)) if (MAP_KEY.test(mapKey(k))) { const s = str(val, 500); if (s) out.fields[mapKey(k)] = s; }
+  return out;
+}
 
 /* ── V2: visual comparison (faithful rebuild) — state only; no image comparison is run. ───────── */
 
@@ -310,6 +364,10 @@ export interface WebsiteBuildState {
   promotion: TemplatePromotion;
   /** Phase 2: the last recon import (Claude crawled; LeadFinderOS stored). */
   recon: ReconState;
+  /** Phase 3: Paul's template-mapping decisions. Values themselves live in the fact ledger; this
+   *  holds only choices the ledger has no row for (include a service, serve / page a town, which
+   *  asset fills which slot, a template choice field). */
+  mapping: MappingState;
   facts: BuildFact[];
   pages: ArchPage[];
   redirects: Redirect[];
@@ -355,7 +413,8 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   manifest: EMPTY_MANIFEST,
   visual: { source_url: '', preview_url: '', widths: [...DEFAULT_COMPARE_WIDTHS], results: [] },
   promotion: { candidate: false, proposed_name: '', proposed_trade: '', notes: '' },
-  recon: { prompt_copied_at: '', imported_at: '', source_url: '', captured_at: '', pages_total: null, assets_total: null, review: [] },
+  recon: { prompt_copied_at: '', imported_at: '', source_url: '', captured_at: '', pages_total: null, assets_total: null, review: [], services: [], towns: [] },
+  mapping: { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} },
   facts: [], pages: [], redirects: [], qa: {}, checks: {},
 };
 
@@ -388,6 +447,7 @@ function readFact(raw: unknown): BuildFact | null {
     source: str(o.source, 120),
     source_url: str(o.source_url, 500),
     notes: str(o.notes, 1000),
+    basis: oneOf(FACT_BASES, o.basis, ''),
   };
 }
 
@@ -508,7 +568,9 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
       const r = obj(x);
       return { kind: tok(RECON_REVIEW_KINDS, r.kind, 'warning'), key: str(r.key, 80), label: str(r.label, 160), detail: str(r.detail, 1000), resolved: r.resolved === true };
     }).filter((r) => r.label || r.detail).slice(0, MAX_RECON_REVIEW),
+    services: readCandidates(rc.services), towns: readCandidates(rc.towns),
   };
+  out.mapping = readMapping(o.mapping);
   const seen = new Set<string>();
   out.facts = arr(o.facts).map(readFact)
     .filter((f): f is BuildFact => !!f && !seen.has(f.key) && !!seen.add(f.key)).slice(0, MAX_FACTS);
@@ -579,6 +641,8 @@ export interface StageInputs {
   architectureErrors: number;
   /** Required setup values still blank (repo name, local path…). */
   setupMissing: string[];
+  /** Phase 3: blockers from the mapping readiness (template: required data, seed values). Absent = not assessed. */
+  buildBlockers?: string[];
 }
 
 export function websiteBuildStages(i: StageInputs): StageStatus[] {
@@ -595,8 +659,8 @@ export function websiteBuildStages(i: StageInputs): StageStatus[] {
       detail: !capApplies ? 'Not needed for this build' : s.recon.imported_at ? `Recon imported · ${s.manifest.pages.length} page(s)` : CAPTURE_STATUS_LABELS[s.capture.status] },
     { stage: 'architecture', applicable: true, done: archDone,
       detail: `${s.pages.length} page(s) · ${s.redirects.length} redirect(s)${i.architectureErrors ? ` · ${i.architectureErrors} problem(s)` : ''}` },
-    { stage: 'build_pack', applicable: true, done: intakeDone && archDone && i.setupMissing.length === 0,
-      detail: i.setupMissing.length ? `Needs: ${i.setupMissing.join(', ')}` : (intakeDone && archDone ? 'Ready' : 'Finish intake and architecture first') },
+    { stage: 'build_pack', applicable: true, done: intakeDone && archDone && i.setupMissing.length === 0 && !(i.buildBlockers?.length),
+      detail: i.buildBlockers?.length ? `Not ready to build: ${i.buildBlockers.length} blocker(s)` : i.setupMissing.length ? `Needs: ${i.setupMissing.join(', ')}` : (intakeDone && archDone ? 'Ready' : 'Finish intake and architecture first') },
     { stage: 'preview', applicable: true, done: !!s.preview_url, detail: s.preview_url ? `${s.preview_url} · ${PREVIEW_STATUS_LABELS[s.preview_status].toLowerCase()}` : 'No preview URL yet' },
     { stage: 'qa', applicable: true, done: qaDone === qaPreview.length, detail: `${qaDone} of ${qaPreview.length} checks` },
     { stage: 'live', applicable: true, done: !!s.production_url && s.qa.production_checked === true,

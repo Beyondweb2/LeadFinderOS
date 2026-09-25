@@ -14,7 +14,7 @@
    ⚠️ Edge-reachable if ever imported server-side: relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import type { PageFamily } from './websiteBuildState.ts';
+import type { AssetType, PageFamily } from './websiteBuildState.ts';
 
 /** One claim the template's source content makes that belongs to the SOURCE client. */
 export interface TemplateClaim {
@@ -41,6 +41,59 @@ export interface TemplateSection { id: string; label: string; needsFact?: string
 
 /** An image slot the template expects the client to fill with their OWN asset. */
 export interface TemplateImageSlot { id: string; label: string; required: boolean; spec: string }
+
+/* ══ PHASE 3 — THE CONFIGURABLE FIELD MODEL ════════════════════════════════════════════════════
+   A template DECLARES what it can be configured with; the mapping engine (templateMapping.ts) is
+   trade-agnostic and only ever reads these declarations. A new trade template = a new declaration,
+   no new code. */
+
+export const FIELD_GROUPS = ['identity', 'business', 'services', 'locations', 'proof', 'commerce', 'assets', 'tracking'] as const;
+export type FieldGroup = (typeof FIELD_GROUPS)[number];
+export const FIELD_REQUIREMENTS = ['required', 'optional', 'conditional'] as const;
+export type FieldRequirement = (typeof FIELD_REQUIREMENTS)[number];
+
+/** Where a field's value comes from. The fact ledger is the source of truth for anything a client
+ *  could state; a project value (the domain) or an operator choice covers the rest. */
+export type FieldSource =
+  | { fact: string }
+  | { project: 'canonical_domain' }
+  | { choice: readonly string[] };
+
+export interface TemplateField {
+  id: string;
+  group: FieldGroup;
+  label: string;
+  requirement: FieldRequirement;
+  source: FieldSource;
+  /** For a conditional field: required when this other field has a value / one of these values. */
+  requiredWhen?: { field: string; values?: readonly string[] };
+  /** Where it lands in the generated client config: "business.phone". */
+  configPath: string;
+  hint?: string;
+}
+
+export interface TemplateService {
+  id: string;
+  name: string;
+  /** Phrases that identify this service in a source site's service names, titles, H1s and URLs. */
+  synonyms: readonly string[];
+}
+
+export interface TemplateAssetSlot {
+  id: string;
+  label: string;
+  requirement: FieldRequirement;
+  multiple: boolean;
+  /** What suggests an asset for this slot: its recon type, and words in its purpose / filename / URL. */
+  suggest: { types: readonly AssetType[]; words: readonly string[] };
+}
+
+export interface TemplateLocationPolicy {
+  /** The template ships a page for the client's base / home town. */
+  primaryLocationPage: boolean;
+  /** Families a dedicated town page would use. */
+  locationFamily: PageFamily;
+}
 
 export interface WebsiteTemplate {
   id: string;
@@ -77,6 +130,14 @@ export interface WebsiteTemplate {
   /** Optional sections, each shown only when its fact is verified for the client. */
   optionalSections: TemplateSection[];
   imageRequirements: TemplateImageSlot[];
+  /** Phase 3: every configurable field, its group, requirement and source. */
+  fields: TemplateField[];
+  /** Phase 3: the services this template has pages / cards for. Belongs to the TEMPLATE. */
+  serviceCatalogue: TemplateService[];
+  /** At least this many services must be included to build. */
+  minServices: number;
+  assetSlots: TemplateAssetSlot[];
+  locations: TemplateLocationPolicy;
   /** Client-specific claim fields: every claim the source makes and the fact that must back it. */
   claims: TemplateClaim[];
   /** Every identifier of the seed client. Later QA fails a generated site that contains one. */
@@ -100,10 +161,45 @@ export const templateOptionalFacts = (t: WebsiteTemplate) => t.facts.filter((f) 
  * ⛔ Positive: a hit is a leak unless the caller has the same value VERIFIED for the new client.
  */
 export function findForbiddenSeedValues(text: string, t: WebsiteTemplate, verifiedValues: string[] = []): ForbiddenSeedValue[] {
-  const hay = text.toLowerCase();
-  const allowed = verifiedValues.join(' | ').toLowerCase();
-  return t.forbiddenSeedValues.filter((v) => hay.includes(v.value.toLowerCase()) && !allowed.includes(v.value.toLowerCase()));
+  const allowed = verifiedValues.join(' | ');
+  return t.forbiddenSeedValues.filter((v) => seedValueIn(text, v.value) && !seedValueIn(allowed, v.value));
 }
+
+/** Whole-word, case-insensitive: "Kent" is not found in "Kentish", "07395" is found in "07395 351 094". */
+export function seedValueIn(text: string, value: string): boolean {
+  if (!value) return false;
+  const esc = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^a-z0-9])' + esc + '([^a-z0-9]|$)', 'i').test(text);
+}
+
+/** The trade-agnostic core — used as-is for Faithful / Bespoke builds, and extended by a template. */
+export const CORE_FIELDS: TemplateField[] = [
+  { id: 'business_name', group: 'identity', label: 'Business name', requirement: 'required', source: { fact: 'business_name' }, configPath: 'business.name' },
+  { id: 'owner_name', group: 'identity', label: 'Owner / person customers deal with', requirement: 'optional', source: { fact: 'owner_name' }, configPath: 'business.owner' },
+  { id: 'phone', group: 'identity', label: 'Phone', requirement: 'required', source: { fact: 'phone' }, configPath: 'business.phone' },
+  { id: 'whatsapp', group: 'identity', label: 'WhatsApp number', requirement: 'optional', source: { fact: 'whatsapp_number' }, configPath: 'business.whatsapp', hint: 'Only a number the client confirmed is on WhatsApp.' },
+  { id: 'email', group: 'identity', label: 'Email', requirement: 'required', source: { fact: 'email' }, configPath: 'business.email' },
+  { id: 'domain', group: 'identity', label: 'Domain', requirement: 'required', source: { project: 'canonical_domain' }, configPath: 'business.domain' },
+  { id: 'base_location', group: 'business', label: 'Base location (home town)', requirement: 'required', source: { fact: 'primary_town' }, configPath: 'locations.primary' },
+  { id: 'service_area', group: 'business', label: 'Wider service area (wording)', requirement: 'optional', source: { fact: 'service_areas' }, configPath: 'locations.areaWording' },
+  { id: 'hours', group: 'business', label: 'Opening hours', requirement: 'optional', source: { fact: 'opening_hours' }, configPath: 'business.hours' },
+  { id: 'accreditations', group: 'proof', label: 'Accreditations / qualifications', requirement: 'optional', source: { fact: 'accreditations' }, configPath: 'proof.accreditations' },
+  { id: 'insurance', group: 'proof', label: 'Insurance', requirement: 'optional', source: { fact: 'insurance' }, configPath: 'proof.insurance' },
+  { id: 'reviews', group: 'proof', label: 'Review profiles', requirement: 'optional', source: { fact: 'review_profiles' }, configPath: 'proof.reviewProfiles' },
+  { id: 'years_trading', group: 'proof', label: 'Years trading', requirement: 'optional', source: { fact: 'years_experience' }, configPath: 'proof.yearsTrading' },
+  { id: 'prices', group: 'commerce', label: 'Prices', requirement: 'optional', source: { fact: 'prices' }, configPath: 'pricing.prices' },
+  { id: 'analytics', group: 'tracking', label: 'Analytics ID', requirement: 'optional', source: { fact: 'analytics_ids' }, configPath: 'tracking.analytics' },
+  { id: 'consent', group: 'tracking', label: 'Cookie consent', requirement: 'conditional', source: { choice: ['banner', 'none'] }, requiredWhen: { field: 'analytics' }, configPath: 'tracking.consent', hint: 'Required once any analytics or ads tag is used.' },
+];
+export const CORE_ASSET_SLOTS: TemplateAssetSlot[] = [
+  { id: 'logo', label: 'Logo', requirement: 'optional', multiple: false, suggest: { types: ['logo'], words: ['logo'] } },
+  { id: 'hero', label: 'Hero', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['hero', 'banner', 'header', 'homepage'] } },
+  { id: 'owner', label: 'Owner / team', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['owner', 'team', 'portrait', 'founder', 'staff', 'about'] } },
+  { id: 'gallery', label: 'Gallery', requirement: 'optional', multiple: true, suggest: { types: ['photo'], words: ['gallery', 'job', 'project', 'work', 'before', 'after'] } },
+  { id: 'credentials', label: 'Credentials', requirement: 'optional', multiple: true, suggest: { types: ['badge', 'brand_logo'], words: ['badge', 'accredit', 'certif', 'member', 'approved', 'logo of'] } },
+];
+const byId = <T extends { id: string }>(list: T[], over: Partial<Record<string, Partial<T>>>, extra: T[] = []): T[] =>
+  [...list.map((x) => ({ ...x, ...(over[x.id] ?? {}) })), ...extra];
 
 const MCL_FORBIDDEN: ForbiddenSeedValue[] = [
   { kind: 'owner', value: 'Morgan' },
@@ -202,6 +298,10 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { key: 'social_profiles', label: 'Social profiles', required: false },
     { key: 'photos', label: "Client's own photos / logo", required: false },
     { key: 'standout', label: 'What makes them different', required: false },
+    { key: 'availability', label: 'Availability (e.g. 24/7)', required: false, hint: '24/7 only if the client confirms it.' },
+    { key: 'dbs', label: 'DBS check', required: false },
+    { key: 'memberships', label: 'Memberships', required: false },
+    { key: 'payment_methods', label: 'Payment methods', required: false },
   ],
   optionalSections: [
     { id: 'pricing', label: 'Pricing page / price-from on cards', needsFact: 'prices' },
@@ -214,6 +314,35 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { id: 'whatsapp', label: 'WhatsApp floating action', needsFact: 'whatsapp_number' },
     { id: 'guarantee', label: 'Guarantee block', needsFact: 'guarantee' },
   ],
+  fields: byId(CORE_FIELDS, {}, [
+    { id: 'mobile_or_premises', group: 'business', label: 'Mobile or premises', requirement: 'required', source: { choice: ['mobile', 'premises', 'both'] }, configPath: 'business.mode', hint: 'Mobile = no public address on the site.' },
+    { id: 'address', group: 'business', label: 'Public address', requirement: 'conditional', source: { fact: 'address' }, requiredWhen: { field: 'mobile_or_premises', values: ['premises', 'both'] }, configPath: 'business.address' },
+    { id: 'availability', group: 'business', label: 'Availability (e.g. 24/7)', requirement: 'optional', source: { fact: 'availability' }, configPath: 'business.availability' },
+    { id: 'response_time', group: 'business', label: 'Response time', requirement: 'optional', source: { fact: 'response_time' }, configPath: 'business.responseTime' },
+    { id: 'dbs', group: 'proof', label: 'DBS check', requirement: 'optional', source: { fact: 'dbs' }, configPath: 'proof.dbs' },
+    { id: 'memberships', group: 'proof', label: 'Memberships', requirement: 'optional', source: { fact: 'memberships' }, configPath: 'proof.memberships' },
+    { id: 'guarantee', group: 'proof', label: 'Guarantee', requirement: 'optional', source: { fact: 'guarantee' }, configPath: 'proof.guarantee' },
+    { id: 'brands', group: 'proof', label: 'Brands fitted', requirement: 'optional', source: { fact: 'brands' }, configPath: 'proof.brands' },
+    { id: 'payment_methods', group: 'commerce', label: 'Payment methods', requirement: 'optional', source: { fact: 'payment_methods' }, configPath: 'pricing.paymentMethods' },
+    { id: 'ads', group: 'tracking', label: 'Google Ads ID', requirement: 'optional', source: { fact: 'ads_ids' }, configPath: 'tracking.ads' },
+  ]).map((fl) => (fl.id === 'consent' ? { ...fl, requiredWhen: { field: 'analytics' } } : fl)),
+  serviceCatalogue: [
+    { id: 'emergency-lockouts', name: 'Emergency lockouts', synonyms: ['locked out', 'lockout', 'lock out', 'emergency locksmith', 'emergency entry', 'emergency', 'gain entry', 'non destructive entry', 'lost keys'] },
+    { id: 'lock-changes', name: 'Lock changes & upgrades', synonyms: ['lock change', 'lock changes', 'change locks', 'lock replacement', 'replace locks', 'new locks', 'lock fitting', 'lock installation', 'lock upgrade', 'rekey'] },
+    { id: 'upvc-door-mechanism', name: 'uPVC & multipoint repairs', synonyms: ['upvc', 'u pvc', 'multipoint', 'multi point', 'door mechanism', 'gearbox', 'door handle', 'upvc lock repairs'] },
+    { id: 'high-security-upgrades', name: 'High-security upgrades', synonyms: ['high security', 'anti snap', 'anti-snap', 'ts007', 'sold secure', '3 star', 'british standard', 'bs3621', 'insurance approved'] },
+    { id: 'burglary-repair', name: 'Burglary repairs', synonyms: ['burglary', 'break in', 'break-in', 'forced entry', 'board up', 'boarding up', 'after a break'] },
+    { id: 'commercial', name: 'Commercial locksmith', synonyms: ['commercial', 'master key', 'access control', 'shop', 'office', 'landlord'] },
+    { id: 'safe-opening', name: 'Safe opening', synonyms: ['safe opening', 'safe engineer', 'safe cracking', 'open a safe', 'safes'] },
+    { id: 'key-safe-installation', name: 'Key safe installation', synonyms: ['key safe', 'keysafe', 'key box', 'key lock box'] },
+    { id: 'garage-locks', name: 'Garage locks', synonyms: ['garage', 'garage door', 'shed lock'] },
+  ],
+  minServices: 1,
+  assetSlots: byId(CORE_ASSET_SLOTS, { logo: { requirement: 'required' } }, [
+    { id: 'van', label: 'Van', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['van', 'vehicle', 'car'] } },
+    { id: 'map', label: 'Map / area', requirement: 'optional', multiple: false, suggest: { types: ['photo', 'other'], words: ['map', 'area', 'coverage'] } },
+  ]),
+  locations: { primaryLocationPage: true, locationFamily: 'location' },
   imageRequirements: [
     { id: 'logo', label: 'Logo', required: true, spec: 'SVG preferred, else PNG 512px+ on transparent' },
     { id: 'favicon', label: 'Favicon set', required: true, spec: 'from the logo: 32px, 180px apple-touch, SVG' },
@@ -258,6 +387,9 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
 };
 
 export const WEBSITE_TEMPLATES: readonly WebsiteTemplate[] = [MCL_TEMPLATE];
+
+/** Faithful / Bespoke: no template, the core field set and core asset slots, no catalogue. */
+export const CORE_BUILD_MODEL = { fields: CORE_FIELDS, assetSlots: CORE_ASSET_SLOTS, serviceCatalogue: [] as TemplateService[], minServices: 0 };
 
 export function templateById(id: string | null | undefined): WebsiteTemplate | null {
   return WEBSITE_TEMPLATES.find((t) => t.id === id) ?? null;

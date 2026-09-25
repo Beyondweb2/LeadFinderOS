@@ -15,7 +15,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { FACT_SOURCE_LABELS, resolveClientFacts, type ClientFacts, type FactSource, type ResolvedFact, type ResolvedListFact } from './clientFacts.ts';
-import type { BuildFact, FactStatus, StoredFactStatus } from './websiteBuildState.ts';
+import type { BuildFact, FactBasis, FactStatus, StoredFactStatus } from './websiteBuildState.ts';
 import type { WebsiteTemplate } from './websiteTemplates.ts';
 import { CORE_BUILD_FACTS } from './websiteTemplates.ts';
 import type { SiteInfo } from './siteInfo.ts';
@@ -45,6 +45,8 @@ export interface FactRow {
   source_url: string;
   /** Paul's notes on the fact. Never published. */
   notes: string;
+  /** Why it is verified (Phase 3): operator / source_site / client, '' when not verified. */
+  basis: FactBasis;
 }
 
 const CRAWL_SOURCE = "client's current website (stored crawl)";
@@ -169,17 +171,17 @@ export function mergeFacts(candidates: Candidate[], stored: BuildFact[], templat
       const drift = s.status === 'verified' && c.value && norm(c.value) !== norm(s.value)
         ? `Since you approved this, ${c.source} says "${c.value}".` : '';
       push({ key: c.key, label: s.label || c.label, value: s.value, status: s.value ? s.status : (s.status === 'verified' || s.status === 'detected' ? 'missing' : s.status),
-        source: s.source || c.source, note: drift, decided: true, required: required.has(c.key), source_url: s.source_url ?? '', notes: s.notes ?? '' });
+        source: s.source || c.source, note: drift, decided: true, required: required.has(c.key), source_url: s.source_url ?? '', notes: s.notes ?? '', basis: s.basis ?? '' });
     } else {
-      push({ ...c, decided: false, required: required.has(c.key), source_url: '', notes: '' });
+      push({ ...c, decided: false, required: required.has(c.key), source_url: '', notes: '', basis: c.status === 'verified' ? 'client' : '' });
     }
   }
   for (const s of stored) {
     push({ key: s.key, label: s.label, value: s.value, status: s.value ? s.status : (s.status === 'verified' || s.status === 'detected' ? 'missing' : s.status),
-      source: s.source || 'added by Paul', note: '', decided: true, required: required.has(s.key), source_url: s.source_url ?? '', notes: s.notes ?? '' });
+      source: s.source || 'added by Paul', note: '', decided: true, required: required.has(s.key), source_url: s.source_url ?? '', notes: s.notes ?? '', basis: s.basis ?? '' });
   }
   for (const spec of specs) {
-    push({ key: spec.key, label: spec.label, value: '', status: 'missing', source: '', note: spec.hint ?? '', decided: false, required: spec.required, source_url: '', notes: '' });
+    push({ key: spec.key, label: spec.label, value: '', status: 'missing', source: '', note: spec.hint ?? '', decided: false, required: spec.required, source_url: '', notes: '', basis: '' });
   }
   /* What needs Paul first: the ones awaiting a decision, then what is settled. Stable within a group. */
   const ORDER: Record<FactStatus, number> = { detected: 0, verified: 1, missing: 2, rejected: 3, not_applicable: 3 };
@@ -228,14 +230,15 @@ export function mapTemplateClaims(template: WebsiteTemplate, rows: FactRow[]): C
 
 /** The row → the stored decision it becomes when Paul acts on it. Source URL and notes travel with it. */
 export function decide(row: FactRow, status: StoredFactStatus, value = row.value): BuildFact {
-  return { key: row.key, label: row.label, value: value.trim(), status, source: row.source, source_url: row.source_url, notes: row.notes };
+  /* Approving is Paul's decision, whatever the value's origin. */
+  return { key: row.key, label: row.label, value: value.trim(), status, source: row.source, source_url: row.source_url, notes: row.notes, basis: status === 'verified' ? 'operator' : '' };
 }
 
 /** Change a row's source URL / notes WITHOUT deciding it: the status it already has is kept
  *  (a MISSING row is stored as needs-approval with no value, which still reads as missing). */
 export function annotate(row: FactRow, over: { source_url?: string; notes?: string }): BuildFact {
   const status: StoredFactStatus = row.status === 'missing' ? 'detected' : row.status;
-  return { ...decide(row, status), ...over };
+  return { ...decide(row, status), basis: row.status === 'verified' ? row.basis : '', ...over };
 }
 
 /**
@@ -256,7 +259,7 @@ export function parseFactLines(text: string, template: WebsiteTemplate | null, s
     const key = spec?.key ?? ('custom_' + slug).slice(0, 80);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ key, label: spec?.label ?? label, value, status: 'detected', source, source_url: '', notes: '' });
+    out.push({ key, label: spec?.label ?? label, value, status: 'detected', source, source_url: '', notes: '', basis: '' });
   }
   return out;
 }

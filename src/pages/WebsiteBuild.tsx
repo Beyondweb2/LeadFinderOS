@@ -19,6 +19,7 @@ import {
   captureApplies, compareFamilies, websiteBuildStages,
   type ArchPage, type BuildFact, type BuildRoute, type CompareStatus, type FactStatus, type Stage, type StoredFactStatus, type WebsiteBuildState,
 } from '@/lib/websiteBuildState';
+import { CORE_BUILD_MODEL, type FieldGroup } from '@/lib/websiteTemplates';
 import { WEBSITE_TEMPLATES, templateById, templateOptionalFacts, templatePageTypes, templateRequiredFacts } from '@/lib/websiteTemplates';
 import { annotate, candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
@@ -26,6 +27,7 @@ import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggest
 import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
+import { autoAssign, computeMapping, MAP_STATUS_LABELS, SERVICE_STATUS_LABELS, URL_DECISION_LABELS, urlDecisions, type MappedField, type Mapping, type UrlDecision } from '@/lib/templateMapping';
 import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks, templateSuitsTrade } from '@/lib/buildRoutes';
 import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
 import { MAX_PAGES } from '@/lib/websiteBuildState';
@@ -245,10 +247,12 @@ export default function WebsiteBuild() {
   const prompts = useMemo(() => packInput ? stagePrompts(packInput) : [], [packInput]);
   const packById = (id: PackItemId) => pack.find((p) => p.id === id)!;
   const promptById = (id: StagePromptId) => prompts.find((p) => p.id === id)!;
+  const mapping = useMemo(() => state ? computeMapping(state, template, rows, businessName) : null, [state, template, rows, businessName]);
   const stages = useMemo(() => state ? websiteBuildStages({
     state, hasExistingSite: !!existingSiteUrl, factsAwaiting: summary.awaiting, architectureErrors: archErrors,
     setupMissing: setupProblems(state).map((p) => p.label),
-  }) : [], [state, existingSiteUrl, summary.awaiting, archErrors]);
+    buildBlockers: state.route && mapping ? mapping.readiness.blockers : undefined,
+  }) : [], [state, existingSiteUrl, summary.awaiting, archErrors, mapping]);
 
   const copyText = async (title: string, text: string, missing: string[]): Promise<boolean> => {
     try {
@@ -390,10 +394,13 @@ export default function WebsiteBuild() {
       {state.route && <Section title="Architecture — route guidance"><RouteGuide state={state} stage="architecture" update={update} /><PromptCard p={promptById('architecture')} onCopy={copyPrompt} /></Section>}
       <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
         checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} leadId={leadId} />
+      <UrlDecisionsPanel state={state} />
     </>}
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
+      {state.route && mapping && <MappingPanel mapping={mapping} state={state} update={update} set={set} rows={rows} onDecide={decideRow} template={template}
+        assetPrompt={promptById('asset_download')} onCopy={copyPrompt} />}
       <Section title="Claude tasks — one prompt per stage" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — always current.</span>}>
         <p className="text-xs text-muted-foreground">Open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} and paste one prompt at a time, in order. Each carries only what its stage needs.</p>
         {prompts.map((p) => <PromptCard key={p.id} p={p} onCopy={copyPrompt} />)}
@@ -757,6 +764,172 @@ function AssetInventory({ state, update }: { state: WebsiteBuildState; update: U
   </Section>;
 }
 
+/* ══ PHASE 3 — TEMPLATE MAPPING / BUILD PREPARATION ════════════════════════════════════════════
+   The mapping is DERIVED (templateMapping.ts computeMapping) from the ledger, the recon and Paul's
+   decisions. Editing a value here writes the FACT LEDGER (approved by Paul) — one approval system;
+   include / serve / page / slot choices go to website_build.mapping. */
+
+const MAP_TONE: Record<string, string> = {
+  ready: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  preselected: 'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100',
+  needs_approval: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+  needs_review: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+  missing: 'bg-muted text-muted-foreground', not_found: 'bg-muted text-muted-foreground',
+  omitted: 'bg-muted text-muted-foreground', excluded: 'bg-muted text-muted-foreground',
+};
+const Chip = ({ tone, children }: { tone: string; children: ReactNode }) => <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${MAP_TONE[tone] ?? 'bg-muted'}`}>{children}</span>;
+const REQ_LABEL: Record<string, string> = { required: 'Req', optional: 'Opt', conditional: 'Cond' };
+const GROUPS: Array<{ id: string; label: string; groups: FieldGroup[] }> = [
+  { id: 'business', label: 'Business', groups: ['identity', 'business'] },
+  { id: 'proof', label: 'Proof', groups: ['proof'] },
+  { id: 'pricing', label: 'Pricing', groups: ['commerce'] },
+  { id: 'tracking', label: 'Tracking', groups: ['tracking'] },
+];
+
+function MappedFieldRow({ m, rows, onDecide, set, update }: {
+  m: MappedField; rows: FactRow[]; onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; set: SetFn; update: UpdateFn;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const f = m.field;
+  const value = draft ?? m.value;
+  const row: FactRow | undefined = m.factKey ? (rows.find((r) => r.key === m.factKey) ?? { key: m.factKey, label: f.label, value: '', status: 'missing', source: '', note: '', decided: false, required: false, source_url: '', notes: '', basis: '' }) : undefined;
+  const save = () => {
+    if ('project' in f.source) set('canonical_domain', value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''));
+    else if (row) onDecide(row, 'verified', value);
+    setDraft(null);
+  };
+  const tone = m.status === 'missing' && !m.required ? 'omitted' : m.status;
+  return <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b py-1.5 text-xs last:border-0">
+    <div className="w-full min-w-0 sm:w-48"><span className="font-medium">{f.label}</span> <span className="text-[10px] text-muted-foreground">{m.required ? 'REQUIRED' : REQ_LABEL[f.requirement] === 'Cond' ? 'if needed' : 'optional'}</span></div>
+    {'choice' in f.source
+      ? <select aria-label={f.label} className="h-8 min-w-[140px] flex-1 rounded-md border border-input bg-background px-2 text-xs" value={m.value}
+          onChange={(e) => update((s) => ({ ...s, mapping: { ...s.mapping, fields: { ...s.mapping.fields, [f.id]: e.target.value } } }))}>
+          <option value="">Choose…</option>{f.source.choice.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+      : <Input aria-label={f.label} className="h-8 min-w-[140px] flex-1 text-xs" value={value} placeholder={f.hint ?? 'Not found'} onChange={(e) => setDraft(e.target.value)} />}
+    <Chip tone={tone}>{m.status === 'missing' && !m.required ? 'Omitted' : MAP_STATUS_LABELS[m.status]}</Chip>
+    {draft !== null && draft !== m.value && <Button size="sm" className="h-7 px-2 text-xs" disabled={!draft.trim()} onClick={save}>Save &amp; approve</Button>}
+    {draft === null && m.status === 'needs_approval' && row && <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onDecide(row, 'verified', m.value)}><Check className="mr-1 h-3 w-3" />Approve</Button>}
+    {m.source && <span className="w-full text-[11px] text-muted-foreground sm:w-auto">{m.source}</span>}
+  </div>;
+}
+
+function groupCounts(ms: MappedField[]) {
+  const ready = ms.filter((m) => m.status === 'ready').length;
+  const appr = ms.filter((m) => m.status === 'needs_approval').length;
+  const miss = ms.filter((m) => m.status === 'missing' && m.required).length;
+  return { ready, appr, miss, line: [ready && `${ready} ready`, appr && `${appr} need approval`, miss && `${miss} missing`].filter(Boolean).join(' · ') || 'nothing mapped' };
+}
+
+function MappingPanel({ mapping, state, update, set, rows, onDecide, template, assetPrompt, onCopy }: {
+  mapping: Mapping; state: WebsiteBuildState; update: UpdateFn; set: SetFn; rows: FactRow[];
+  onDecide: (r: FactRow, s: StoredFactStatus, value?: string) => void; template: ReturnType<typeof templateById>;
+  assetPrompt: StagePrompt; onCopy: (p: StagePrompt) => void | Promise<void>;
+}) {
+  const r = mapping.readiness;
+  const t = mapping.isTemplate ? template : null;
+  const setMap = (fn: (m: WebsiteBuildState['mapping']) => WebsiteBuildState['mapping']) => update((s) => ({ ...s, mapping: fn(s.mapping) }));
+  const useAssets = state.manifest.assets.filter((a) => a.approval === 'approved');
+  const assign = (slot: string, url: string, multiple: boolean) => setMap((m) => ({ ...m, assets: { ...m.assets, [slot]: multiple ? [...new Set([...(m.assets[slot] ?? []), url])] : [url] } }));
+  const unassign = (slot: string, url: string) => setMap((m) => { const left = (m.assets[slot] ?? []).filter((u) => u !== url); const next = { ...m.assets }; if (left.length) next[slot] = left; else delete next[slot]; return { ...m, assets: next }; });
+  const svcCounts = { inc: mapping.services.filter((x) => x.include).length, rev: mapping.services.filter((x) => x.status === 'needs_review').length + mapping.unmapped.filter((x) => !x.byOperator).length };
+  const townRev = mapping.towns.filter((x) => x.status === 'needs_review').length;
+  const blockingHits = mapping.guard.hits.filter((h) => h.blocking);
+
+  return <Section title={t ? 'Template mapping' : 'Build preparation'} right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${r.ok ? MAP_TONE.ready : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'}`}>{r.ok ? 'Ready to build' : 'Not ready to build'}</span>}>
+    {t ? <p className="text-xs"><b>{t.name}</b> <span className="text-muted-foreground">v{t.version} · {t.trade}</span></p>
+      : <p className="text-xs text-muted-foreground">{state.route === 'faithful_rebuild' ? 'Faithful rebuild' : 'Bespoke build'} — no template: the core business data and asset slots every Findable build needs.</p>}
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([['Ready', r.ready, 'ready'], ['Needs approval', r.needsApproval, 'needs_approval'], ['Missing required', r.missingRequired, r.missingRequired ? 'bad' : 'missing'], ['Optional missing', r.optionalMissing, 'missing']] as const).map(([l, n, tone]) =>
+      <div key={l} className={`rounded border p-2 text-xs ${tone === 'bad' ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30' : ''}`}><div className="text-muted-foreground">{l}</div><div className="text-lg font-semibold">{n}</div></div>)}</div>
+    {r.blockers.length > 0 && <div className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"><p className="font-medium">Blocking the build:</p><ul className="mt-1 list-disc pl-4">{r.blockers.map((b, n) => <li key={n} className="break-words">{b}</li>)}</ul></div>}
+    {mapping.guard.skipped && <p className="text-xs text-muted-foreground">{mapping.guard.skipped}</p>}
+    {blockingHits.length > 0 && <p className="text-xs text-red-700 dark:text-red-300">Seed-client value(s) found in the generated config: {blockingHits.map((h) => `"${h.value.value}"`).join(', ')} — fix the fact that carries it.</p>}
+    {r.notes.length > 0 && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">{r.notes.length} note(s) — optional items left out, warnings</summary><ul className="mt-1 list-disc pl-4 text-muted-foreground">{r.notes.map((x, n) => <li key={n} className="break-words">{x}</li>)}</ul></details>}
+
+    {GROUPS.filter((g) => g.id !== 'tracking').map((g) => { const ms = mapping.fields.filter((m) => g.groups.includes(m.field.group)); if (!ms.length) return null; const c = groupCounts(ms);
+      return <details key={g.id} className="rounded-md border px-2 py-1" open={c.appr > 0 || c.miss > 0}><summary className="cursor-pointer text-sm font-medium">{g.label} <span className="text-xs font-normal text-muted-foreground">— {c.line}</span></summary>
+        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} set={set} update={update} />)}</div></details>; })}
+
+    {t && <details className="rounded-md border px-2 py-1" open={svcCounts.inc === 0 || svcCounts.rev > 0}><summary className="cursor-pointer text-sm font-medium">Services <span className="text-xs font-normal text-muted-foreground">— {svcCounts.inc} included{svcCounts.rev ? ` · ${svcCounts.rev} to review` : ''}</span></summary>
+      <p className="mt-1 text-[11px] text-muted-foreground">The template's service catalogue, matched against the client's verified services and the services the source site names. Only ticked services are built. A service nobody names stays unticked unless you tick it.</p>
+      <div className="mt-1">{mapping.services.map((x) => <label key={x.service.id} className="flex cursor-pointer flex-wrap items-center gap-2 border-b py-1.5 text-xs last:border-0">
+        <input type="checkbox" aria-label={`Include ${x.service.name}`} checked={x.include} onChange={(e) => setMap((m) => ({ ...m, services: { ...m.services, [x.service.id]: e.target.checked } }))} />
+        <span className="font-medium">{x.service.name}</span><Chip tone={x.status}>{SERVICE_STATUS_LABELS[x.status]}</Chip>
+        {x.confidence !== 'none' && !x.decided && <span className="text-[10px] uppercase text-muted-foreground">{x.confidence} confidence</span>}
+        <span className="w-full break-words text-[11px] text-muted-foreground sm:w-auto">{x.matches.length ? 'from ' + x.matches.map((mm) => `"${mm.candidate.name}" (${mm.candidate.origin === 'verified' ? 'verified' : 'source site'})`).join(', ') : 'not found on the site or in the facts'}</span>
+      </label>)}</div>
+      {mapping.unmapped.length > 0 && <div className="mt-2 space-y-1"><p className="text-xs font-medium">Source services that match nothing in the template ({mapping.unmapped.length})</p>
+        {mapping.unmapped.map((u) => <div key={u.candidate.name} className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="min-w-0 flex-1 break-words">"{u.candidate.name}" <span className="text-muted-foreground">({u.candidate.origin === 'verified' ? 'verified' : u.candidate.context || 'source site'})</span></span>
+          <select aria-label={`Map ${u.candidate.name}`} className="h-8 max-w-full rounded-md border border-input bg-background px-2 text-xs" value={state.mapping.candidate_map[u.candidate.name.toLowerCase()] ?? ''}
+            onChange={(e) => setMap((m) => { const cm = { ...m.candidate_map }; if (e.target.value) cm[u.candidate.name.toLowerCase()] = e.target.value; else delete cm[u.candidate.name.toLowerCase()]; return { ...m, candidate_map: cm }; })}>
+            <option value="">Needs review — map to…</option>{t.serviceCatalogue.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}<option value="ignore">Ignore (not offered)</option></select>
+        </div>)}</div>}
+    </details>}
+
+    {t && <details className="rounded-md border px-2 py-1" open={townRev > 0}><summary className="cursor-pointer text-sm font-medium">Locations <span className="text-xs font-normal text-muted-foreground">— {mapping.towns.filter((x) => x.serves).length} served · {mapping.towns.filter((x) => x.page).length} dedicated page(s){townRev ? ` · ${townRev} to review` : ''}</span></summary>
+      <p className="mt-1 text-[11px] text-muted-foreground"><b>Serves this area</b> is coverage (named in the service-area wording and schema). <b>Dedicated page</b> is a separate, genuinely local page — off unless you turn it on (no cloned town pages).</p>
+      <div className="mt-1">{mapping.towns.length === 0 ? <p className="py-1 text-xs text-muted-foreground">No base location or areas yet.</p> : mapping.towns.map((x) => <div key={x.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b py-1.5 text-xs last:border-0">
+        <span className="min-w-[120px] flex-1 font-medium">{x.name}{x.isBase && <span className="ml-1 text-[10px] font-normal uppercase text-muted-foreground">base</span>}</span>
+        <label className="flex items-center gap-1"><input type="checkbox" aria-label={`Serves ${x.name}`} checked={x.serves} onChange={(e) => setMap((m) => ({ ...m, locations: { ...m.locations, [x.key]: { ...m.locations[x.key], serves: e.target.checked } } }))} />Serves this area</label>
+        <label className={`flex items-center gap-1 ${x.serves ? '' : 'opacity-50'}`}><input type="checkbox" aria-label={`Dedicated page for ${x.name}`} disabled={!x.serves} checked={x.page} onChange={(e) => setMap((m) => ({ ...m, locations: { ...m.locations, [x.key]: { ...m.locations[x.key], page: e.target.checked } } }))} />Dedicated page</label>
+        {x.status === 'needs_review' && <Chip tone="needs_review">Needs review</Chip>}
+        <span className="w-full text-[11px] text-muted-foreground">{x.evidence}</span>
+      </div>)}</div>
+    </details>}
+
+    <details className="rounded-md border px-2 py-1" open={mapping.slots.some((x) => x.slot.requirement === 'required' && !x.publishable.length)}><summary className="cursor-pointer text-sm font-medium">Assets <span className="text-xs font-normal text-muted-foreground">— {mapping.slots.filter((x) => x.publishable.length).length} of {mapping.slots.length} slot(s) filled</span></summary>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="min-w-0 flex-1">Only assets marked USE (Capture → Asset inventory) can be published. Suggestions come from each asset's type and purpose.</span>
+        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={!useAssets.length} onClick={() => setMap((m) => ({ ...m, assets: autoAssign(t ? t.assetSlots : CORE_BUILD_MODEL.assetSlots, state) }))}>Auto-assign suggestions</Button>
+      </div>
+      <div className="mt-1">{mapping.slots.map((st) => <div key={st.slot.id} className="border-b py-1.5 text-xs last:border-0">
+        <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{st.slot.label}</span><span className="text-[10px] text-muted-foreground">{st.slot.requirement === 'required' ? 'REQUIRED' : 'optional'}{st.slot.multiple ? ' · several' : ''}</span>
+          {!st.publishable.length && <Chip tone={st.slot.requirement === 'required' ? 'needs_approval' : 'omitted'}>{st.slot.requirement === 'required' ? 'Missing' : 'Omitted'}</Chip>}
+          <select aria-label={`Assign an asset to ${st.slot.label}`} className="h-7 max-w-full rounded-md border border-input bg-background px-1 text-[11px]" value="" onChange={(e) => e.target.value && assign(st.slot.id, e.target.value, st.slot.multiple)}>
+            <option value="">Assign a USE asset…</option>{useAssets.filter((a) => !st.assigned.some((x) => x.source_url === a.source_url)).map((a) => <option key={a.source_url} value={a.source_url}>{a.suggested_filename || a.source_url.split('/').pop()}{a.purpose ? ' — ' + a.purpose.slice(0, 40) : ''}</option>)}</select>
+        </div>
+        {st.assigned.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{st.assigned.map((a) => <span key={a.source_url} className={`inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 ${a.approval === 'approved' ? '' : 'border-amber-400 text-amber-800 dark:text-amber-200'}`}>
+          <span className="truncate">{a.suggested_filename || a.source_url.split('/').pop()}</span>{a.approval !== 'approved' && <span className="text-[10px]">(not USE — held back)</span>}
+          <button type="button" aria-label={`Unassign ${a.suggested_filename || a.source_url}`} className="text-muted-foreground hover:text-foreground" onClick={() => unassign(st.slot.id, a.source_url)}><X className="h-3 w-3" /></button></span>)}</div>}
+        {st.suggestions.length > 0 && <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]"><span className="text-muted-foreground">Suggested:</span>{st.suggestions.slice(0, st.slot.multiple ? 6 : 3).map((a) =>
+          <button key={a.source_url} type="button" disabled={a.approval !== 'approved'} title={a.approval === 'approved' ? 'Assign' : 'Mark it USE in the asset inventory first'} onClick={() => assign(st.slot.id, a.source_url, st.slot.multiple)}
+            className="max-w-full truncate rounded-full border px-2 py-0.5 hover:bg-muted disabled:opacity-50">+ {a.suggested_filename || a.source_url.split('/').pop()}{a.approval !== 'approved' ? ' (REVIEW)' : ''}</button>)}</div>}
+      </div>)}</div>
+      <div className="mt-2"><PromptCard p={assetPrompt} onCopy={onCopy} /></div>
+    </details>
+
+    {(() => { const g = GROUPS.find((x) => x.id === 'tracking')!; const ms = mapping.fields.filter((m) => g.groups.includes(m.field.group)); if (!ms.length) return null; const c = groupCounts(ms);
+      return <details className="rounded-md border px-2 py-1" open={c.miss > 0}><summary className="cursor-pointer text-sm font-medium">Tracking <span className="text-xs font-normal text-muted-foreground">— {c.line}</span></summary>
+        <div className="mt-1">{ms.map((m) => <MappedFieldRow key={m.field.id} m={m} rows={rows} onDecide={onDecide} set={set} update={update} />)}</div></details>; })()}
+
+    <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">View generated config (read-only{mapping.omitted.length ? ` · ${mapping.omitted.length} item(s) left out` : ''})</summary>
+      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 font-mono text-[11px]">{JSON.stringify(mapping.config, null, 2)}</pre>
+      {mapping.omitted.length > 0 && <ul className="mt-1 list-disc pl-4 text-muted-foreground">{mapping.omitted.map((o, n) => <li key={n}>{o}</li>)}</ul>}
+    </details>
+  </Section>;
+}
+
+function UrlDecisionsPanel({ state }: { state: WebsiteBuildState }) {
+  const d = urlDecisions(state);
+  const [filter, setFilter] = useState<'all' | UrlDecision>('all');
+  const [all, setAll] = useState(false);
+  if (!d.rows.length) return null;
+  const shown = d.rows.filter((r) => filter === 'all' || r.decision === filter);
+  const visible = all ? shown : shown.slice(0, 60);
+  const TONE: Record<UrlDecision, string> = { kept: 'ready', redirected: 'preselected', retired: 'omitted', unresolved: 'needs_review' };
+  return <Section title="Old URL decisions" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'unresolved', 'kept', 'redirected', 'retired'] as const).map((k) =>
+    <button key={k} type="button" onClick={() => setFilter(k)} className={`rounded-full border px-2 py-0.5 ${filter === k ? 'border-primary bg-primary/10' : ''}`}>{k === 'all' ? `All ${d.rows.length}` : `${URL_DECISION_LABELS[k]} ${d.counts[k]}`}</button>)}</div>}>
+    <p className="text-xs text-muted-foreground">Every old URL (recon + page plan) against the page plan and the redirect map. Read-only — decide in the page plan above or the redirect map; nothing is redirected automatically.</p>
+    {d.issues.map((x, n) => <p key={n} className="flex items-start gap-2 text-xs text-destructive"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{x}</p>)}
+    <div className="space-y-1">{visible.map((r) => <div key={r.url} className="rounded border px-2 py-1 text-xs">
+      <div className="flex flex-wrap items-center gap-2"><Chip tone={TONE[r.decision]}>{URL_DECISION_LABELS[r.decision]}</Chip><span className="min-w-0 flex-1 break-all">{r.path}</span><span className="text-[11px] text-muted-foreground">{PAGE_FAMILY_LABELS[r.family]}</span></div>
+      {r.target && r.decision !== 'kept' && <p className="break-all text-[11px] text-muted-foreground">→ {r.target}</p>}
+      {r.flags.map((fl, n) => <p key={n} className="text-[11px] text-amber-700 dark:text-amber-300">⚠ {fl}</p>)}
+    </div>)}</div>
+    {shown.length > 60 && <button type="button" className="text-xs text-primary underline" onClick={() => setAll((x) => !x)}>{all ? 'Show fewer' : `Show all ${shown.length}`}</button>}
+  </Section>;
+}
+
 function VisualComparison({ state, update, existingSiteUrl, prompt, onCopy, toast }: {
   state: WebsiteBuildState; update: UpdateFn; existingSiteUrl: string; prompt: StagePrompt; onCopy: (p: StagePrompt) => void; toast: ReturnType<typeof useToast>['toast'];
 }) {
@@ -863,7 +1036,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
       <div className="min-w-[200px] flex-1"><Label className="text-xs">Value</Label><Input className="h-8 text-xs" value={newValue} placeholder="e.g. 123456" onChange={(e) => setNewValue(e.target.value)} /></div>
       <Button size="sm" disabled={!newLabel.trim() || !newValue.trim()} onClick={() => {
         const spec = template?.facts.find((f) => f.label.toLowerCase() === newLabel.trim().toLowerCase());
-        onPut({ key: spec?.key ?? ('custom_' + newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).slice(0, 80), label: spec?.label ?? newLabel.trim(), value: newValue.trim(), status: 'verified', source: 'added by Paul', source_url: '', notes: '' });
+        onPut({ key: spec?.key ?? ('custom_' + newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).slice(0, 80), label: spec?.label ?? newLabel.trim(), value: newValue.trim(), status: 'verified', source: 'added by Paul', source_url: '', notes: '', basis: 'operator' });
         setNewLabel(''); setNewValue('');
       }}><Plus className="mr-1 h-3.5 w-3.5" />Add as verified</Button>
       <Button size="sm" variant="outline" onClick={() => setPasteOpen((o) => !o)}>Paste facts from capture</Button>
