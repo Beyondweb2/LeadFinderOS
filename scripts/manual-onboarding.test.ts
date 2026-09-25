@@ -169,9 +169,11 @@ console.log('\n── 13. WEBSITE BUILD SEES THE MANUALLY ENTERED ANSWERS ──
   const facts = candidateFacts({ lead: { business_name: 'BS4 Electrical Services Ltd', website: 'https://bs4.example' }, onboarding, baseline_audit: null, discovery_audit: null,
     crawl: { mode: 'full', result: { siteInfo: { services: ['Gallery', 'EICRs'], towns: ['Weston'] } as never }, full_evidence: { business: { credentials: [{ value: 'NICEIC — "…"', url: 'u' }] } } as never } });
   const svc = facts.find((f) => f.key === 'services');
-  ok(!!svc && svc.value.includes('EICRs') && svc.status === 'verified' && /entered by operator/.test(svc.source), '13. manual services are a verified onboarding fact, labelled as entered by the operator');
+  /* 2026-09-25 (BS4 pilot, Paul): operator-entered onboarding is SOURCE MATERIAL — it pre-fills the
+     facts but never verifies them (scripts/operator-onboarding-facts.test.ts). */
+  ok(!!svc && svc.value.includes('EICRs') && svc.status === 'detected' && /entered by operator/.test(svc.source), '13. manual services pre-fill the build as NEEDS APPROVAL, labelled as entered by the operator');
   const town = facts.find((f) => f.key === 'primary_town');
-  ok(town?.value === 'Bristol' && town.status === 'verified', '13. the manual home town is the build\'s home town');
+  ok(town?.value === 'Bristol' && town.status === 'detected', '13. the manual home town pre-fills the build\'s home town — for approval, not verified');
   ok(facts.find((f) => f.key === 'services_on_site')?.status === 'detected' && facts.find((f) => f.key === 'towns_on_site')?.status === 'detected', '13. the crawl\'s services and towns stay DETECTED beside them');
   ok(facts.find((f) => f.key === 'credentials_on_site')?.status === 'detected', '13. full-crawl credentials arrive as DETECTED, never verified');
   ok(/HUB_ONBOARDING_COLUMNS[\s\S]*operator_edited_at/.test(hub), '13. rebuild_context reads the provenance column');
