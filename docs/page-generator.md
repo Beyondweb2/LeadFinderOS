@@ -234,3 +234,11 @@
 
 ---
 
+
+## The `plan` action crash (fixed 2026-09-25)
+
+From 474b7625 (2026-09-18) the `plan` action read the stored action plan with `.eq("user_id", user.id)`;
+the handler names the operator `userId` and no `user` is in scope, so every plan request threw
+"user is not defined" → 500. The Page Generator showed an error; the Page Plan Queue's "Build this"
+fell through to "Couldn't match this row to a page". Fix: `user.id` → `userId` (two lines).
+Guarded by `scripts/page-generator-plan-owner.test.ts` and `check-edge-undefined.mjs` (now green).
