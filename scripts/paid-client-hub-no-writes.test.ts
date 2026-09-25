@@ -108,9 +108,9 @@ ok(/<Stage title="5\. Website Build">/.test(clientHub), 'Section 5 is titled Web
 
 console.log('\n── THE PROMPTS ARE NEVER STORED ──');
 const websiteBuild = read('src/pages/WebsiteBuild.tsx');
-ok(!/from "[^"]*buildPack|buildPack\(|buildRebuildPrompt/.test(hub), 'the server never imports or calls a prompt builder');
+ok(!/from "[^"]*(buildPack|stagePrompts)|buildPack\(|stagePrompts\(|buildRebuildPrompt/.test(hub), 'the server never imports or calls a prompt builder (Build Pack or stage prompts)');
 ok(!/rebuild_prompt|prompt_text|master_prompt/.test(hub), 'and there is no column for a stored prompt');
-ok(/buildPack\(\{/.test(websiteBuild), 'the Build Pack is assembled in the browser from the loaded records');
+ok(/buildPack\(packInput\)/.test(websiteBuild) && /stagePrompts\(packInput\)/.test(websiteBuild), 'the Build Pack and the stage prompts are assembled in the browser from the loaded records');
 ok(/action: 'rebuild_context'/.test(websiteBuild), 'from a fresh rebuild_context read when the page opens');
 ok(!/setInterval/.test(websiteBuild), 'and the page never polls');
 

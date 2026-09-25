@@ -245,7 +245,7 @@ export function CrawlInventory({ leadId, onAdd, addRoom }: { leadId: string; onA
         <select aria-label="Page family" className={sel} value={filters.family} onChange={(e) => set('family', e.target.value)}><option value="">All families</option>{['homepage', 'service', 'location', 'about', 'contact', 'faq', 'pricing', 'reviews', 'gallery', 'blog', 'legal', 'other'].map((f) => <option key={f} value={f}>{f}</option>)}</select>
         <Input aria-label="Search URLs" className="h-8 w-44 text-xs" placeholder="Search URLs" value={filters.q} onChange={(e) => set('q', e.target.value)} />
         <Button size="sm" variant="outline" disabled={busy || !total} onClick={() => void download()}><Download className="mr-1 h-3.5 w-3.5" />CSV (all {total.toLocaleString('en-GB')})</Button>
-        {onAdd && <Button size="sm" variant="outline" disabled={busy || !total} onClick={() => void addFiltered()}><Plus className="mr-1 h-3.5 w-3.5" />Add fetched pages to architecture{typeof addRoom === 'number' ? ` (room for ${addRoom})` : ''}</Button>}
+        {onAdd && <Button size="sm" variant="outline" className="h-auto min-h-9 max-w-full whitespace-normal text-left" disabled={busy || !total} onClick={() => void addFiltered()}><Plus className="mr-1 h-3.5 w-3.5" />Add fetched pages to architecture{typeof addRoom === 'number' ? ` (room for ${addRoom})` : ''}</Button>}
       </div>
     </div>
     {error && <p role="alert" className="text-destructive">{error}</p>}

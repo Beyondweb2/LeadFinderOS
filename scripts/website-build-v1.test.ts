@@ -48,12 +48,12 @@ const ctx = (over: Partial<RebuildContextPayload> = {}): RebuildContextPayload =
   ...over,
 });
 
-const facts = (state: WebsiteBuildState, c = ctx()) => mergeFacts(candidateFacts(c as unknown as FactsContext, state.canonical_domain), state.facts, state.build_mode === 'template' ? templateById(state.template_id) : null);
+const facts = (state: WebsiteBuildState, c = ctx()) => mergeFacts(candidateFacts(c as unknown as FactsContext, state.canonical_domain), state.facts, state.route === 'template_rebuild' ? templateById(state.template_id) : null);
 const pack = (build: Record<string, unknown>, c = ctx()) => {
   const state = parseWebsiteBuild(build);
   const rows = facts(state, c);
   const evidence = toRebuildPromptInput(c);
-  return buildPack({ state, template: state.build_mode === 'template' ? templateById(state.template_id) : null, facts: rows, evidence,
+  return buildPack({ state, template: state.route === 'template_rebuild' ? templateById(state.template_id) : null, facts: rows, evidence,
     businessName: 'SC Plumbing & Gas Ltd', existingSiteUrl: evidence.facts.website.value ?? '', mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-23T00:00:00Z' });
 };
 const text = (build: Record<string, unknown>, id: string, c = ctx()) => pack(build, c).find((p) => p.id === id)!;

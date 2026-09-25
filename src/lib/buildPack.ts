@@ -60,9 +60,31 @@ export interface BuildPackInput {
   generatedAt?: string;
 }
 
+/* ── the route, read one way everywhere ─────────────────────────────────────────────────────────── */
+
+export const isTemplateRoute = (s: WebsiteBuildState) => s.route === 'template_rebuild';
+export const isFaithfulRoute = (s: WebsiteBuildState) => s.route === 'faithful_rebuild';
+export const isBespokeRoute = (s: WebsiteBuildState) => s.route === 'bespoke';
+
+export interface CodeConfig { devCommand: string; devUrl: string; buildCommand: string; outputDir: string; installCommand: string }
+
+/** The project's commands: what Paul recorded, else the template's, else the Astro defaults. */
+export function codeConfig(s: WebsiteBuildState, t: WebsiteTemplate | null): CodeConfig {
+  const tpl = isTemplateRoute(s) ? t : null;
+  return {
+    devCommand: s.dev_command || tpl?.devCommand || 'npm run dev',
+    devUrl: s.dev_url || tpl?.devUrl || 'http://localhost:4321',
+    buildCommand: s.build_command || tpl?.buildCommand || 'npm run build',
+    outputDir: s.build_output_dir || tpl?.buildOutputDir || 'dist',
+    installCommand: tpl?.installCommand || 'npm install',
+  };
+}
+
 /* ── required values and their markers ───────────────────────────────────────────────────────── */
 
 export const MARK = {
+  site: '[CURRENT WEBSITE URL REQUIRED]',
+  preview: '[PREVIEW URL REQUIRED]',
   repo: '[REPO NAME REQUIRED]',
   owner: '[GITHUB ACCOUNT REQUIRED]',
   path: '[LOCAL FOLDER REQUIRED]',
@@ -103,7 +125,7 @@ export function suggestCloudflareProject(repoName: string): string {
   return repoName.replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 58);
 }
 
-const winPath = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '');
+export const winPath = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '');
 function splitPath(p: string): { parent: string; folder: string } {
   const w = winPath(p);
   const i = w.lastIndexOf('\\');
@@ -178,7 +200,7 @@ function setupCommands(i: BuildPackInput): PackItem {
     'git --version',
     '',
   ];
-  if (s.build_mode === 'template' && t) {
+  if (isTemplateRoute(s) && t) {
     const cache = parent + '\\_templates\\' + t.id;
     lines.push(
       '# -- 2. Get the latest copy of the ' + t.name + ' (kept in one folder, reused per client) --',
@@ -209,7 +231,7 @@ function setupCommands(i: BuildPackInput): PackItem {
       '# -- 4. Start this project\'s history --',
       'git init -b main',
       'git add .',
-      'git commit -m "Start the ' + (i.businessName || repo).replace(/"/g, '') + ' rebuild"',
+      'git commit -m "Start the ' + (i.businessName || repo).replace(/"/g, '') + (isBespokeRoute(s) ? ' site"' : ' rebuild"'),
       '',
     );
   }
@@ -228,7 +250,7 @@ function setupCommands(i: BuildPackInput): PackItem {
     'git push -u origin main',
     '',
     '# -- 7. Install the packages (a minute or two) --',
-    t && s.build_mode === 'template' ? t.installCommand : 'npm install',
+    codeConfig(s, t).installCommand,
     '',
     '# -- Done. In LeadFinderOS, fill in:',
     '#    Repository URL = https://github.com/' + owner + '/' + repo,
@@ -243,18 +265,63 @@ function setupCommands(i: BuildPackInput): PackItem {
 
 /* ── 2. CAPTURE ───────────────────────────────────────────────────────────────────────────────── */
 
-function capturePrompt(i: BuildPackInput): PackItem {
+/** The capture's machine-readable output — the Source Site Manifest shape LeadFinderOS accepts
+ *  (websiteBuildState.ts parseManifest). Paul pastes the file's contents into the Capture step. */
+export const MANIFEST_SPEC: string[] = [
+  'capture/manifest.json — ONE JSON object, exactly these keys (Paul pastes it into LeadFinderOS):',
+  '  {',
+  '    "pages": [{ "url", "type", "title", "h1", "purpose", "screenshots": ["capture/screenshots/..."] }],',
+  '    "assets": [{ "source_url", "type", "purpose", "location", "approval": "pending" }],',
+  '    "design": { "fonts", "colours", "layout_notes", "component_notes" },',
+  '    "interactions": [{ "kind", "where", "notes" }],',
+  '    "seo": { "metadata", "canonical", "schema", "sitemap", "robots", "tracking" }',
+  '  }',
+  '  page "type": homepage, services_index, service, locations_index, location, commercial, pricing, about,',
+  '  faq, gallery, contact, legal, other. asset "type": logo, photo, icon, badge, brand_logo, favicon,',
+  '  document, video, other. "location" = the local file path. interaction "kind": form, menu, accordion,',
+  '  slider, sticky, booking, contact_flow, popup, other. Strings only; "" when unknown — never guess.',
+];
+
+export function capturePrompt(i: BuildPackInput): PackItem {
   const s = i.state;
   const applicable = captureApplies(s, !!i.existingSiteUrl);
-  const visual = s.build_mode === 'rebuild';
+  const visual = isFaithfulRoute(s);
+  const bespokeNoSite = isBespokeRoute(s) && !i.existingSiteUrl;
   const path = s.local_repo_path ? winPath(s.local_repo_path) : MARK.path;
-  const site = i.existingSiteUrl || '[CURRENT WEBSITE URL REQUIRED]';
+  const site = i.existingSiteUrl || MARK.site;
   const preserve = mayPreserveCopy(s.copy_ownership);
   const blockedBy = [
-    ...(!i.existingSiteUrl ? ['Current website URL (verify the Current website fact)'] : []),
+    ...(!i.existingSiteUrl && !isBespokeRoute(s) ? ['Current website URL (verify the Current website fact)'] : []),
     ...(!s.local_repo_path ? ['Local folder'] : []),
-    ...(s.build_mode === 'rebuild' && !s.copy_ownership ? ['Copy ownership'] : []),
+    ...(isFaithfulRoute(s) && !s.copy_ownership ? ['Copy ownership'] : []),
   ];
+  if (bespokeNoSite) {
+    const D: string[] = [
+      '# BUSINESS DISCOVERY — ' + (i.businessName || 'this client') + ' (Bespoke / new trade, no current website)',
+      '',
+      'There is no website to capture. Build the discovery record the architecture will be designed from.',
+      'Work in: ' + path + '. Do not start building. Do not contact the business.',
+      '',
+      'VERIFIED FACTS (use these; never invent the rest):', ...verifiedFactLines(i.facts),
+      '',
+      'Write capture/discovery.md with these headings, filling each ONLY from the facts above:',
+      '- What the business does (every service, and what each one involves)',
+      '- Who the customers are (homeowners, landlords, businesses…) and what they search for',
+      '- Where they work, and where they want more work',
+      '- Proof available: credentials, reviews, photos, case studies — and what is MISSING',
+      '- Owned assets: logo, photos (list what Paul must collect from the client)',
+      '- QUESTIONS FOR THE CLIENT: every gap above, as one plain question each',
+      '',
+      'Then paste back to Paul: the QUESTIONS FOR THE CLIENT list, and any new facts as "Label: value" lines.',
+      'THEN STOP.',
+    ];
+    return {
+      id: 'capture', title: '2. Business discovery prompt', kind: 'prompt', applicable, blockedBy,
+      help: 'No current website — this prompt turns what we know into a discovery record and a list of questions for the client.',
+      expect: 'A list of questions for the client and any facts. Paste the facts into Intake → Client Build Facts.',
+      text: D.join('\n'),
+    };
+  }
   const L: string[] = [
     '# EXISTING SITE CAPTURE — ' + (i.businessName || 'this client'),
     '',
@@ -262,8 +329,9 @@ function capturePrompt(i: BuildPackInput): PackItem {
     'written. Capture only. Do not start building. Work in: ' + path,
     '',
     'Site to capture: ' + site,
-    visual ? 'Purpose: ' + (s.rebuild_style ? REBUILD_STYLE_LABELS[s.rebuild_style as keyof typeof REBUILD_STYLE_LABELS] : 'a rebuild') + ' — the capture is the visual and factual source of truth.'
-      : 'Purpose: a fresh build from a Findable template. Capture URLs, SEO metadata, facts and the client\'s own assets. The old DESIGN is not being kept, so no design capture is needed.',
+    visual ? 'Purpose: FAITHFUL REBUILD (' + (s.rebuild_style ? REBUILD_STYLE_LABELS[s.rebuild_style as keyof typeof REBUILD_STYLE_LABELS] : 'fidelity not chosen') + ') — the capture is the visual and factual source of truth.'
+      : isBespokeRoute(s) ? 'Purpose: BESPOKE / NEW TRADE build. Capture the business completely — URLs, facts, services, locations, proof and the client\'s own assets. The old design is a reference only.'
+      : 'Purpose: TEMPLATE REBUILD. Capture URLs, SEO metadata, facts and the client\'s own assets. The old DESIGN is not being kept, so no design capture is needed.',
     '',
     '## RULES',
     '- Crawl politely: one request at a time, a short pause between pages. Stay on the client\'s own domain.',
@@ -304,13 +372,16 @@ function capturePrompt(i: BuildPackInput): PackItem {
       '  level), colours as hex, gradients, container widths and gutters, spacing rhythm, card styles and',
       '  sizes, buttons (all states), sticky bars, floating actions, mobile menu behaviour, forms, CTAs,',
       '  icons and SVGs, the navigation, the footer, and the SECTION ORDER of each page family.',
+      'capture/interactions.md — every form (fields, where it submits — do NOT submit), menus, accordions,',
+      '  sliders, popups, sticky controls and booking / contact flows, with the page each is on.',
     );
   }
+  L.push('', ...MANIFEST_SPEC);
   L.push(
     '',
     '## FINISH WITH capture/SUMMARY.md, and paste three blocks from it back to Paul',
     '',
-    '1. Counts — "URLs: N · Assets: N" (Paul records these in LeadFinderOS).',
+    '1. Counts — "URLs: N · Assets: N" (Paul records these in LeadFinderOS), and the contents of capture/manifest.json.',
     '2. PROPOSED PAGE ARCHITECTURE, one line per page, exactly this format (Paul pastes it in):',
     '       action | family | /new-path/ | Title | old url | redirect target | note',
     '   action is one of keep, create, consolidate, redirect, remove.',
@@ -336,7 +407,7 @@ function capturePrompt(i: BuildPackInput): PackItem {
 
 /* ── 3. MASTER BUILD PROMPT ───────────────────────────────────────────────────────────────────── */
 
-function pageLines(s: WebsiteBuildState): string[] {
+export function pageLines(s: WebsiteBuildState): string[] {
   if (!s.pages.length) return ['(No page architecture approved yet. Do not build until Paul approves one.)'];
   const build = s.pages.filter((p) => p.action === 'keep' || p.action === 'create');
   const fold = s.pages.filter((p) => p.action === 'consolidate' || p.action === 'redirect');
@@ -360,7 +431,7 @@ function pageLines(s: WebsiteBuildState): string[] {
   return out;
 }
 
-function redirectLines(s: WebsiteBuildState, hasOldSite: boolean): string[] {
+export function redirectLines(s: WebsiteBuildState, hasOldSite: boolean): string[] {
   if (!s.redirects.length) {
     return hasOldSite
       ? ['(No redirect map approved yet. The old site exists, so every old URL that will not exist at the same path needs one — ask Paul before launch.)']
@@ -377,9 +448,19 @@ function redirectLines(s: WebsiteBuildState, hasOldSite: boolean): string[] {
 
 function sourceOfTruth(i: BuildPackInput): string[] {
   const s = i.state, t = i.template;
-  if (s.build_mode === 'template' && t) {
+  if (isBespokeRoute(s)) {
     return [
-      'THE TEMPLATE IS THE DESIGN SOURCE OF TRUTH: ' + t.name + '.',
+      'BESPOKE / NEW TRADE — there is no template and nothing to copy. Design this site fresh from the',
+      'approved architecture (H) and the verified facts (D).',
+      ...(s.design_references ? ['Design references Paul chose (look, do not copy their content): ' + s.design_references] : ['No design references recorded — follow the Findable standard (K) and keep it clean, bold and mobile-first.']),
+      ...(i.existingSiteUrl ? ['The current site ' + i.existingSiteUrl + ' is a CONTENT reference only (capture/), not a design to reproduce.'] : []),
+      'Build it so it could later become a reusable template: every client fact in one config / content',
+      'layer (src/lib), components free of hard-coded business details.',
+    ];
+  }
+  if (isTemplateRoute(s) && t) {
+    return [
+      'THE TEMPLATE IS THE DESIGN SOURCE OF TRUTH: ' + t.name + ' (v' + t.version + ').',
       t.description,
       '',
       '- Framework: ' + t.framework + ' (Node ' + t.nodeVersion + ')',
@@ -400,7 +481,7 @@ function sourceOfTruth(i: BuildPackInput): string[] {
   }
   const style = s.rebuild_style ? REBUILD_STYLE_LABELS[s.rebuild_style as keyof typeof REBUILD_STYLE_LABELS] : '(rebuild style not chosen)';
   const out = [
-    'THE CAPTURED EXISTING SITE IS THE SOURCE OF TRUTH (' + style + ').',
+    'FAITHFUL REBUILD — THE CAPTURED EXISTING SITE IS THE SOURCE OF TRUTH (' + style + ').',
     'Read the capture folder first: capture/SUMMARY.md, capture/urls.csv, capture/design.md, capture/screenshots/,',
     'capture/assets/manifest.csv, capture/facts.md. If it does not exist, STOP and ask Paul to run the capture prompt.',
     '',
@@ -416,7 +497,7 @@ function sourceOfTruth(i: BuildPackInput): string[] {
 
 function contentRules(i: BuildPackInput): string[] {
   const s = i.state;
-  const preserve = s.build_mode === 'rebuild' && mayPreserveCopy(s.copy_ownership);
+  const preserve = isFaithfulRoute(s) && mayPreserveCopy(s.copy_ownership);
   return [
     'Every page answers real customer questions in this shape:',
     '    CUSTOMER QUESTION → DIRECT ANSWER → SUPPORTING DETAIL → EVIDENCE',
@@ -424,7 +505,7 @@ function contentRules(i: BuildPackInput): string[] {
     '    BUSINESS → SERVICE → LOCATION → EVIDENCE',
     'Plain, specific, useful. Say exactly what the business does, where, and for whom.',
     '',
-    s.build_mode === 'rebuild'
+    isFaithfulRoute(s)
       ? (preserve
         ? 'Copy: ' + COPY_OWNERSHIP_LABELS[s.copy_ownership as keyof typeof COPY_OWNERSHIP_LABELS] + ' — the existing wording MAY be preserved where it is accurate and useful.'
         : 'Copy: ' + (s.copy_ownership ? COPY_OWNERSHIP_LABELS[s.copy_ownership as keyof typeof COPY_OWNERSHIP_LABELS] : 'ownership not recorded') + '. ⛔ Do NOT reproduce the old site\'s marketing passages verbatim. Keep the FACTS and the visual requirements; write the marketing expression freshly. Keep only genuine client-owned assets.')
@@ -440,7 +521,7 @@ function contentRules(i: BuildPackInput): string[] {
   ];
 }
 
-const FINDABLE_STANDARD: string[] = [
+export const FINDABLE_STANDARD: string[] = [
   'The finished site must be: CRAWLABLE · CLEAR · SPECIFIC · CONSISTENT · USEFUL · VERIFIABLE · SOURCEABLE · MEASURABLE.',
   '',
   'Entity clarity: the exact business name, what it does, its genuine services, genuine locations and',
@@ -455,17 +536,20 @@ const FINDABLE_STANDARD: string[] = [
   'Schema: one LocalBusiness entity (stable @id) per site, only verified facts, matching what is visible.',
 ];
 
-function masterPrompt(i: BuildPackInput): PackItem {
+/** lean = the stage Build prompt: the same brief without the deployment, QA and definition-of-done
+ *  sections, which are their own stage prompts now (stagePrompts.ts). */
+export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean } = {}): PackItem {
   const s = i.state, t = i.template;
+  const lean = !!opts.lean;
   const path = s.local_repo_path ? winPath(s.local_repo_path) : MARK.path;
   const domain = s.canonical_domain || MARK.domain;
   const hasOld = !!i.existingSiteUrl;
   const e = i.evidence;
   const blockedBy = [
-    ...(!s.build_mode ? ['Build mode'] : []),
-    ...(s.build_mode === 'template' && !t ? ['Template'] : []),
-    ...(s.build_mode === 'rebuild' && !s.rebuild_style ? ['Rebuild style'] : []),
-    ...(s.build_mode === 'rebuild' && !s.copy_ownership ? ['Copy ownership'] : []),
+    ...(!s.route ? ['Build route'] : []),
+    ...(isTemplateRoute(s) && !t ? ['Template'] : []),
+    ...(isFaithfulRoute(s) && !s.rebuild_style ? ['Rebuild fidelity'] : []),
+    ...(isFaithfulRoute(s) && !s.copy_ownership ? ['Copy ownership'] : []),
     ...(!s.local_repo_path ? ['Local folder'] : []),
     ...(!s.canonical_domain ? ['Domain (canonical)'] : []),
     ...(!s.pages.length ? ['Page architecture'] : []),
@@ -474,7 +558,7 @@ function masterPrompt(i: BuildPackInput): PackItem {
   ];
   const H = (x: string) => ['', '## ' + x, ''];
   const L: string[] = [
-    '# MASTER BUILD — ' + (i.businessName || 'this client'),
+    (lean ? '# BUILD — ' : '# MASTER BUILD — ') + (i.businessName || 'this client'),
     '',
     'Generated by LeadFinderOS at ' + (i.generatedAt ?? new Date().toISOString()) + ' from the approved build decisions.',
     'Read the whole brief before you start.',
@@ -486,14 +570,19 @@ function masterPrompt(i: BuildPackInput): PackItem {
     'baseline questions after launch. The job is a site that makes this business easy to discover, crawl,',
     'understand, verify and cite — honestly.',
     '',
-    'Work autonomously. Continue through implementation, testing, visual QA, technical QA and the preview',
-    'deployment without stopping after each file. Stop only where a genuinely missing fact or decision',
-    'cannot safely be inferred — then ask Paul one clear question and carry on with everything else.',
+    ...(lean
+      ? ['Work autonomously through the build without stopping after each file. Stop only where a genuinely',
+         'missing fact or decision cannot safely be inferred — then ask Paul one clear question and carry on.',
+         'Deployment and QA are separate prompts: do not deploy anything.']
+      : ['Work autonomously. Continue through implementation, testing, visual QA, technical QA and the preview',
+         'deployment without stopping after each file. Stop only where a genuinely missing fact or decision',
+         'cannot safely be inferred — then ask Paul one clear question and carry on with everything else.']),
     ...H('B. BUILD MODE'),
-    s.build_mode === 'template' ? 'FRESH BUILD FROM A FINDABLE TEMPLATE: ' + (t?.name ?? '(no template chosen)') + '.'
-      : s.build_mode === 'rebuild' ? 'REBUILD OF THE EXISTING WEBSITE — ' + (s.rebuild_style ? REBUILD_STYLE_LABELS[s.rebuild_style as keyof typeof REBUILD_STYLE_LABELS] : '(style not chosen)') + '.'
-      : '(Build mode not chosen — STOP and ask Paul.)',
-    ...(s.build_mode === 'rebuild' ? ['Copy ownership: ' + (s.copy_ownership ? COPY_OWNERSHIP_LABELS[s.copy_ownership as keyof typeof COPY_OWNERSHIP_LABELS] : 'not recorded') + '.'] : []),
+    isTemplateRoute(s) ? 'TEMPLATE REBUILD — the client\'s facts mapped into a Findable template: ' + (t?.name ?? '(no template chosen)') + '.'
+      : isFaithfulRoute(s) ? 'FAITHFUL REBUILD OF THE EXISTING WEBSITE — ' + (s.rebuild_style ? REBUILD_STYLE_LABELS[s.rebuild_style as keyof typeof REBUILD_STYLE_LABELS] : '(fidelity not chosen)') + '.'
+      : isBespokeRoute(s) ? 'BESPOKE / NEW TRADE — a new architecture and design.'
+      : '(Build route not chosen — STOP and ask Paul.)',
+    ...(isFaithfulRoute(s) ? ['Copy ownership: ' + (s.copy_ownership ? COPY_OWNERSHIP_LABELS[s.copy_ownership as keyof typeof COPY_OWNERSHIP_LABELS] : 'not recorded') + '.'] : []),
     ...H('C. SOURCE OF TRUTH'),
     ...sourceOfTruth(i),
     ...H('D. VERIFIED BUSINESS FACTS — the ONLY facts that may appear on the site'),
@@ -502,7 +591,7 @@ function masterPrompt(i: BuildPackInput): PackItem {
     'UNVERIFIED FACTS MUST NOT BE PUBLISHED.',
     '',
     ...forbiddenFactLines(i.facts),
-    ...(t && s.build_mode === 'template' ? ['', ...claimMappingLines(t, i.facts)] : []),
+    ...(t && isTemplateRoute(s) ? ['', ...claimMappingLines(t, i.facts)] : []),
     '',
     ...confirmationsSection(e),
     ...H('F. EXISTING SITE INVENTORY'),
@@ -513,9 +602,12 @@ function masterPrompt(i: BuildPackInput): PackItem {
     ...(hasOld ? doNotBreak(e) : []),
     ...(e.crawlFindings.length ? ['', ...crawlSection(e)] : []),
     ...H('G. VISUAL REQUIREMENTS'),
-    ...(s.build_mode === 'template'
+    ...(isTemplateRoute(s)
       ? ['Inherit the template\'s design system exactly (tokens, type scale, components, spacing, mobile patterns).',
          'Replace or remove all business content. Colours may change only to the client\'s VERIFIED brand colours.']
+      : isBespokeRoute(s)
+        ? ['A fresh design: mobile-first, accessible contrast, bold clear CTAs (call, WhatsApp only if verified).',
+           ...(s.design_references ? ['Take the look and feel from: ' + s.design_references + '. Never their content.'] : [])]
       : s.rebuild_style === 'replica'
         ? ['The captured site is the visual reference. Compare rendered pages at 1440x900 and 375x812 against',
            'capture/screenshots/ and fix material differences. HTML/CSS similarity is NOT proof of parity.']
@@ -535,7 +627,7 @@ function masterPrompt(i: BuildPackInput): PackItem {
     ...H('L. ASSET RULES'),
     '- Only genuine assets: the client\'s own photos, logo, favicon, and third-party marks they are entitled to show.',
     '- All assets are local files in the repo. No hotlinking — not to the old site, not anywhere.',
-    ...(s.build_mode === 'template' ? ['- Every template image, badge, brand logo, favicon and share image is DELETED unless it is the new client\'s own.'] : ['- Use capture/assets/ (check manifest.csv ownership; skip anything marked unknown until Paul confirms).']),
+    ...(isTemplateRoute(s) ? ['- Every template image, badge, brand logo, favicon and share image is DELETED unless it is the new client\'s own.'] : ['- Use capture/assets/ (check manifest.csv ownership; skip anything marked unknown until Paul confirms).']),
     '- A missing photo is left out or shown as a plain designed block — never a stock photo passed off as their work.',
     '- Every image has width, height and meaningful alt text; compress to WebP/AVIF where sensible.',
     ...H('M. TECHNICAL REQUIREMENTS'),
@@ -546,13 +638,23 @@ function masterPrompt(i: BuildPackInput): PackItem {
     '- tel: links in E.164-safe form, WhatsApp links only to a VERIFIED WhatsApp number, mailto: links.',
     '- Forms: wire to the real handler. ⛔ Never submit a test lead to the client\'s real inbox without Paul\'s say-so.',
     '- Keep "npm run build" (and "npm test" if present) passing at every commit.',
-    ...(s.build_mode === 'template' && t ? ['- Rewrite the template\'s tests for this client; a test that asserts ' + t.sourceClient + ' content must go.'] : []),
+    ...(isTemplateRoute(s) && t ? ['- Rewrite the template\'s tests for this client; a test that asserts ' + t.sourceClient + ' content must go.'] : []),
     ...H('N. GIT RULES'),
     '- Work on main in ' + path + '. Logical commits, one coherent change each, clear messages.',
     '- Check "git remote -v": origin must be ' + (s.repo_url || 'the client\'s own repository') + '. NEVER push to the template repository.',
     '- ⛔ NEVER force push, reset, rebase, squash, amend or run git clean. Never commit secrets or .env files.',
     '- Push to origin after each finished page family so the work is never only on this computer.',
-    ...H('O. PREVIEW / DEPLOYMENT PROCESS'),
+    ...(lean ? [
+      ...H('O. BEFORE YOU REPORT'),
+      '- "' + codeConfig(s, t).buildCommand + '" passes; every page renders locally ("' + codeConfig(s, t).devCommand + '" → ' + codeConfig(s, t).devUrl + ').',
+      '- Every fact on every page is in section D. Anything not in D comes out.',
+      ...(t && isTemplateRoute(s) ? ['- Search the repo for these seed-client values; each hit is removed or backed by D: ' + t.leftoverNeedles.join(' · ')] : []),
+      '- ⛔ Do not deploy. Preview deployment, visual comparison and QA are separate prompts Paul gives you next.',
+      '',
+      'Report to Paul in plain English: pages built (count per family), anything removed or left out and why,',
+      'and every question you still need answered.',
+    ] : []),
+    ...(lean ? [] : [...H('O. PREVIEW / DEPLOYMENT PROCESS'),
     '- Local: "npm run dev" → http://localhost:4321.',
     ...(s.cloudflare_project && CF_PROJECT.test(s.cloudflare_project)
       ? ['- Preview: you MAY deploy a preview when the build is ready for review:',
@@ -566,7 +668,7 @@ function masterPrompt(i: BuildPackInput): PackItem {
     '- Crawl the built site (dist/): every link resolves, every page has one H1, a unique title and meta',
     '  description, a canonical on ' + domain + ', valid JSON-LD; the sitemap matches section H.',
     '- Check every fact on every page against section D. Anything not in D comes out.',
-    ...(t && s.build_mode === 'template' ? [
+    ...(t && isTemplateRoute(s) ? [
       '- LEFTOVER CHECK — search the whole repo (src, public, functions, astro.config, tests, docs) for each of:',
       '    ' + t.leftoverNeedles.join(' · '),
       '  Every hit is either REMOVED or backed by a VERIFIED fact in section D. Report the final count.',
@@ -578,9 +680,10 @@ function masterPrompt(i: BuildPackInput): PackItem {
     'Then report to Paul in plain English: what you built (page count per family), anything you removed or',
     'left out and why, every question you still need answered, the preview URL, and the QA results as a',
     'list he can tick in LeadFinderOS.',
+    ]),
   ];
   return {
-    id: 'master', title: '3. Master build prompt', kind: 'prompt', applicable: true, blockedBy,
+    id: 'master', title: lean ? 'Build prompt' : '3. Master build prompt (all stages in one)', kind: 'prompt', applicable: true, blockedBy,
     help: 'The whole build in one brief. Open Claude Code (Opus) in the client folder and paste it. It works through to a preview on its own.',
     expect: 'Claude reports the pages built, open questions and the preview URL. Paste the preview URL into the Preview step.',
     text: L.join('\n'),
@@ -592,14 +695,15 @@ function masterPrompt(i: BuildPackInput): PackItem {
 function localCommands(i: BuildPackInput): PackItem {
   const s = i.state;
   const path = s.local_repo_path ? winPath(s.local_repo_path) : MARK.path;
-  const dev = i.template && s.build_mode === 'template' ? i.template.devUrl : 'http://localhost:4321';
+  const cfg = codeConfig(s, i.template);
+  const dev = cfg.devUrl;
   const L = [
     '# ============================================================',
     '# LOCAL PREVIEW — see the site on this computer',
     '# ============================================================',
     'Set-Location ' + q(path),
-    'npm install      # only needed the first time, or after Claude adds a package',
-    'npm run dev',
+    cfg.installCommand + '      # only needed the first time, or after Claude adds a package',
+    cfg.devCommand,
     '',
     '# It prints a line like:  Local  ' + dev + '/',
     '# Open ' + dev + ' in your browser. Leave this window open; press Ctrl+C to stop.',
@@ -626,7 +730,8 @@ function previewCommands(i: BuildPackInput): PackItem {
   const path = s.local_repo_path ? winPath(s.local_repo_path) : MARK.path;
   const problem = cloudflareProblem(s);
   const project = problem ? MARK.project : s.cloudflare_project;
-  const t = i.template && s.build_mode === 'template' ? i.template : null;
+  const t = i.template && isTemplateRoute(s) ? i.template : null;
+  const cfg = codeConfig(s, i.template);
   const L = [
     '# ============================================================',
     '# CLOUDFLARE PREVIEW — a private-ish link to review before going live',
@@ -642,8 +747,8 @@ function previewCommands(i: BuildPackInput): PackItem {
     'npx wrangler pages project create ' + project + ' --production-branch main',
     '',
     '# -- 3. Build and upload as a PREVIEW (not production) --',
-    'npm run build',
-    'npx wrangler pages deploy ' + (t ? t.buildOutputDir : 'dist') + ' --project-name ' + project + ' --branch preview',
+    cfg.buildCommand,
+    'npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + project + ' --branch preview',
     '',
     '# It ends with "Deployment complete! Take a peek over at https://xxxxxxxx.' + project + '.pages.dev".',
     '# The address that stays the same between previews is:',
@@ -669,7 +774,7 @@ function previewCommands(i: BuildPackInput): PackItem {
 
 /* ── 6. VISUAL QA ─────────────────────────────────────────────────────────────────────────────── */
 
-function visualQaPrompt(i: BuildPackInput): PackItem {
+export function visualQaPrompt(i: BuildPackInput): PackItem {
   const s = i.state, t = i.template;
   const target = s.preview_url || 'http://localhost:4321 (run "npm run dev")';
   const L: string[] = [
@@ -680,16 +785,19 @@ function visualQaPrompt(i: BuildPackInput): PackItem {
     'Use Playwright screenshots (npm install --save-dev playwright; npx playwright install chromium) saved under qa/visual/.',
     '',
   ];
-  if (s.build_mode === 'rebuild' && s.rebuild_style === 'replica') {
+  if (isFaithfulRoute(s) && s.rebuild_style === 'replica') {
     L.push('REPLICA CHECK — old vs new, side by side, page by page, section by section:',
       'Compare against capture/screenshots/ (or the live old site ' + (i.existingSiteUrl || '') + ') at the SAME widths.',
       'For every page family check: section order · typography (family, size, weight, line height) · spacing ·',
       'layout and container width · card dimensions · buttons (size, colour, radius, states) · imagery and',
       'crops · navigation and mobile menu · footer · sticky bars and floating buttons · responsiveness between widths.',
       'List each material difference, fix it, re-screenshot, and show before/after for anything you changed.');
-  } else if (s.build_mode === 'rebuild') {
+  } else if (isFaithfulRoute(s)) {
     L.push('BRAND CHECK — the new design keeps the brand (logo, colours, fonts, imagery) from capture/design.md,',
       'every captured page family has its new equivalent, and nothing looks broken at any width.');
+  } else if (isBespokeRoute(s)) {
+    L.push('DESIGN CHECK — the site is clean, consistent and mobile-first' + (s.design_references ? ', in the spirit of: ' + s.design_references : '') + '.',
+      'Every page family in the approved architecture exists and nothing looks broken at any width.');
   } else if (t) {
     L.push('TEMPLATE CHECK — the site should look like the ' + t.name + ' design system, with this client\'s content:',
       '- Components, spacing, type scale and mobile patterns match the template (run the template itself with',
@@ -705,7 +813,7 @@ function visualQaPrompt(i: BuildPackInput): PackItem {
     '', 'VERIFIED FACTS (the only business facts that should be visible):', ...verifiedFactLines(i.facts),
     '', 'Finish with a pass/fail list using these exact lines so Paul can tick them in LeadFinderOS:',
     '- Visual QA complete (desktop)', '- Mobile QA complete', '- All assets load (nothing hotlinked from the old site)',
-    ...(t && s.build_mode === 'template' ? ['- No template / previous-client content left'] : []),
+    ...(t && isTemplateRoute(s) ? ['- No template / previous-client content left'] : []),
     '', 'Commit fixes with clear messages. Never force push, reset, rebase, amend or clean.');
   return {
     id: 'visual_qa', title: '6. Visual QA prompt', kind: 'prompt', applicable: true, blockedBy: [],
@@ -717,7 +825,7 @@ function visualQaPrompt(i: BuildPackInput): PackItem {
 
 /* ── 7. SEO / GEO QA ──────────────────────────────────────────────────────────────────────────── */
 
-function seoQaPrompt(i: BuildPackInput): PackItem {
+export function seoQaPrompt(i: BuildPackInput): PackItem {
   const s = i.state;
   const domain = s.canonical_domain || MARK.domain;
   const target = s.preview_url || 'the built site in dist/ served with "npm run preview"';
@@ -764,7 +872,7 @@ function seoQaPrompt(i: BuildPackInput): PackItem {
 
 /* ── 8. PRODUCTION ────────────────────────────────────────────────────────────────────────────── */
 
-function productionCommands(i: BuildPackInput): PackItem {
+export function productionCommands(i: BuildPackInput): PackItem {
   const s = i.state;
   const problem = cloudflareProblem(s);
   const blockedBy = [
@@ -782,7 +890,7 @@ function productionCommands(i: BuildPackInput): PackItem {
     };
   }
   const path = winPath(s.local_repo_path);
-  const t = i.template && s.build_mode === 'template' ? i.template : null;
+  const cfg = codeConfig(s, i.template);
   const L = [
     '# ============================================================',
     '# PRODUCTION — only after you have reviewed the preview and the QA boxes are ticked',
@@ -794,8 +902,8 @@ function productionCommands(i: BuildPackInput): PackItem {
     'git push',
     '',
     '# -- 2. Build and publish to PRODUCTION --',
-    'npm run build',
-    'npx wrangler pages deploy ' + (t ? t.buildOutputDir : 'dist') + ' --project-name ' + s.cloudflare_project + ' --branch main',
+    cfg.buildCommand,
+    'npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + s.cloudflare_project + ' --branch main',
     '#    Live at https://' + s.cloudflare_project + '.pages.dev when it finishes.',
     '',
     '# -- 3. Record the commit that went live (paste into "Latest commit") --',
@@ -819,7 +927,7 @@ function productionCommands(i: BuildPackInput): PackItem {
 
 /* ── 9. FINAL PRODUCTION QA ───────────────────────────────────────────────────────────────────── */
 
-function finalQaPrompt(i: BuildPackInput): PackItem {
+export function finalQaPrompt(i: BuildPackInput): PackItem {
   const s = i.state;
   const prod = s.production_url || (s.canonical_domain ? 'https://' + s.canonical_domain : MARK.domain);
   const L = [

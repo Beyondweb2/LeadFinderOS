@@ -10,39 +10,47 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { toRebuildPromptInput, type RebuildContextPayload } from '@/lib/rebuildContext';
 import {
-  BUILD_MODE_LABELS, BUILD_MODES, CAPTURE_STATUS_LABELS, CAPTURE_STATUSES, COPY_OWNERSHIP_LABELS, COPY_OWNERSHIPS,
-  DEPLOY_STATUS_LABELS, DEPLOY_STATUSES, FACT_STATUS_LABELS, mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_ACTIONS,
-  PAGE_FAMILIES, PAGE_FAMILY_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS, REBUILD_STYLES, STAGE_LABELS,
-  STAGES, captureApplies, websiteBuildStages,
-  type ArchPage, type BuildFact, type FactStatus, type Stage, type StoredFactStatus, type WebsiteBuildState,
+  ASSET_APPROVALS, BUILD_ROUTE_LABELS, BUILD_ROUTES, CAPTURE_STATUS_LABELS, CAPTURE_STATUSES, COMPARE_STATUS_LABELS, COMPARE_STATUSES,
+  COPY_OWNERSHIP_LABELS, COPY_OWNERSHIPS, CUSTOM_DOMAIN_STATUS_LABELS, CUSTOM_DOMAIN_STATUSES, DEFAULT_COMPARE_WIDTHS, FACT_STATUS_LABELS,
+  mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_ACTIONS, PAGE_FAMILIES, PAGE_FAMILY_LABELS, parseCompareReply, parseManifest, parseWebsiteBuild,
+  PREVIEW_STATUS_LABELS, PREVIEW_STATUSES, PRODUCTION_STATUS_LABELS, PRODUCTION_STATUSES, QA_ITEMS, REBUILD_STYLE_LABELS, REBUILD_STYLES,
+  SITE_LIVE_LABELS, SITE_LIVE_STATES, STAGE_LABELS, STAGES, WWW_REDIRECT_STATUS_LABELS, WWW_REDIRECT_STATUSES,
+  captureApplies, compareFamilies, websiteBuildStages,
+  type ArchPage, type BuildFact, type BuildRoute, type CompareStatus, type FactStatus, type Stage, type StoredFactStatus, type WebsiteBuildState,
 } from '@/lib/websiteBuildState';
-import { WEBSITE_TEMPLATES, templateById } from '@/lib/websiteTemplates';
-import { candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
+import { WEBSITE_TEMPLATES, templateById, templateOptionalFacts, templatePageTypes, templateRequiredFacts } from '@/lib/websiteTemplates';
+import { annotate, candidateFacts, CLAIM_VERDICT_LABELS, decide, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactRow } from '@/lib/buildFacts';
 import { applyAction, checkArchitecture, newPageId, parsePageLines, parseRedirectText, redirectsFromPages, redirectsToText, seedFromCited, seedFromCrawl, seedFromTemplate } from '@/lib/buildArchitecture';
-import { buildPack, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
+import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggestRepoName, type PackItem, type PackItemId } from '@/lib/buildPack';
+import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
+import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks, templateSuitsTrade } from '@/lib/buildRoutes';
 import { CrawlEvidenceDetails, CrawlInventory, LeadCrawlPanel, type InventoryRow } from '@/components/LeadCrawlPanel';
 import { MAX_PAGES } from '@/lib/websiteBuildState';
 import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   WEBSITE BUILD COMMAND CENTRE — /paid-clients/:leadId/website-build
+   WEBSITE BUILD COMMAND CENTRE (V2) — /paid-clients/:leadId/website-build
 
    A workflow and prompt/command generator, NOT a website builder. It turns what Findable already
-   knows about one paid client, plus Paul's decisions, into a Build Pack of exact commands and
-   Claude Code prompts.
+   knows about one paid client, plus Paul's decisions, into stage-by-stage Claude Code prompts and
+   the exact commands, for one of three BUILD ROUTES (faithful rebuild · template rebuild · bespoke).
+   The seven stages are unchanged; what each stage asks for changes with the route (buildRoutes.ts).
 
    ⛔ OPENING THIS PAGE SPENDS NOTHING AND SENDS NOTHING. The one read is paid-client-hub
    `rebuild_context` (stored rows only — no audit, no crawl, no model). The one write is
    `save_website_build`, which touches outreach_leads.website_build on this operator's row and nothing
-   else. No WhatsApp, no email, no prospect contact exists on this screen.
+   else. No message, no email, no prospect contact exists on this screen.
    ⛔ SAVING IS AUTOMATIC and debounced; the header says Saved / Saving / Not saved, so a failed save
    is never silent.
+   ⛔ THE ROUTE IS ONLY EVER SET BY A CLICK. The Template card may say "recommended"; nothing selects it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
 const SAVE_DEBOUNCE_MS = 900;
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+type SetFn = <K extends keyof WebsiteBuildState>(k: K, v: WebsiteBuildState[K]) => void;
+type UpdateFn = (fn: (s: WebsiteBuildState) => WebsiteBuildState) => void;
 
 const sel = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs';
 
@@ -71,6 +79,10 @@ function Choice<T extends string>({ value, options, labels, onChange, name }: { 
     </label>)}</div>;
 }
 
+function Pick<T extends string>({ label, value, options, labels, onChange }: { label: string; value: T; options: readonly T[]; labels: Record<T, string>; onChange: (v: T) => void }) {
+  return <div><Label className="text-xs">{label}</Label><select aria-label={label} className={sel} value={value} onChange={(e) => onChange(e.target.value as T)}>{options.map((o) => <option key={o} value={o}>{labels[o]}</option>)}</select></div>;
+}
+
 function PackCard({ item, onCopy }: { item: PackItem; onCopy: (item: PackItem) => void }) {
   const [open, setOpen] = useState(false);
   const refusing = item.id === 'production' && item.blockedBy.length > 0;
@@ -89,6 +101,40 @@ function PackCard({ item, onCopy }: { item: PackItem; onCopy: (item: PackItem) =
     {item.blockedBy.length > 0 && <div className="mt-2 flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{refusing ? 'Not generated until you record: ' : 'Fill in first (the text shows a REQUIRED marker where it is missing): '}{item.blockedBy.join(' · ')}</span></div>}
     {open && <pre className="mt-2 max-h-[480px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{item.text}</pre>}
+  </div>;
+}
+
+/** A stage prompt: one line, a Copy button, the text on demand. */
+function PromptCard({ p, onCopy }: { p: StagePrompt; onCopy: (p: StagePrompt) => void }) {
+  const [open, setOpen] = useState(false);
+  const refusing = p.id === 'production_deploy' && p.blockedBy.length > 0;
+  return <div className="rounded-md border border-primary/30 bg-primary/[0.03] p-3">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="min-w-0 flex-1"><p className="font-medium">{p.label.replace(/^Copy /, '')}</p><p className="text-xs text-muted-foreground">{p.help}</p></div>
+      <div className="flex max-w-full flex-wrap gap-2">
+        <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)}>{open ? 'Hide' : 'Show'}</Button>
+        <Button size="sm" className="h-auto min-h-9 max-w-full whitespace-normal text-left" disabled={refusing} onClick={() => onCopy(p)}><Clipboard className="mr-1 h-4 w-4 shrink-0" />{p.label}</Button>
+      </div>
+    </div>
+    {p.blockedBy.length > 0 && <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{refusing ? 'Not generated until you record: ' : 'Missing (shown as REQUIRED in the text): '}{p.blockedBy.join(' · ')}</p>}
+    {open && <pre className="mt-2 max-h-[420px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{p.text}</pre>}
+  </div>;
+}
+
+/** What this stage is for on the chosen route, and its ticks. */
+function RouteGuide({ state, stage, update }: { state: WebsiteBuildState; stage: Stage; update: UpdateFn }) {
+  const route = state.route;
+  if (!route) return null;
+  const items = routeChecks(route, stage);
+  const focus = ROUTE_STAGE_FOCUS[route][stage];
+  if (!items.length && !focus) return null;
+  const done = items.filter((c) => state.checks[checkId(route, stage, c.key)]).length;
+  const toggle = (id: string, on: boolean) => update((s) => { const next = { ...s.checks }; if (on) next[id] = true; else delete next[id]; return { ...s, checks: next }; });
+  return <div className="rounded-md border bg-muted/40 p-3 text-xs">
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-medium">{BUILD_ROUTE_LABELS[route]} — {STAGE_LABELS[stage]}</p>{items.length > 0 && <span className="text-muted-foreground">{done} of {items.length}</span>}</div>
+    {focus && <p className="mt-1 text-muted-foreground">{focus}</p>}
+    {items.length > 0 && <div className="mt-2 grid gap-1 sm:grid-cols-2">{items.map((c) => { const id = checkId(route, stage, c.key);
+      return <label key={id} className="flex cursor-pointer items-start gap-2"><input type="checkbox" aria-label={c.label} className="mt-0.5" checked={state.checks[id] === true} onChange={(e) => toggle(id, e.target.checked)} /><span>{c.label}</span></label>; })}</div>}
   </div>;
 }
 
@@ -173,34 +219,42 @@ export default function WebsiteBuild() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [save]);
 
-  const set = <K extends keyof WebsiteBuildState>(k: K, v: WebsiteBuildState[K]) => update((s) => ({ ...s, [k]: v }));
+  const set: SetFn = (k, v) => update((s) => ({ ...s, [k]: v }));
 
   /* ── derived — everything recomputed from the payload + state, nothing cached ───────────────── */
-  const template = state?.build_mode === 'template' ? templateById(state.template_id) : null;
+  const template = state?.route === 'template_rebuild' ? templateById(state.template_id) : null;
   const evidence = useMemo(() => payload ? toRebuildPromptInput(payload) : null, [payload]);
   const candidates = useMemo(() => payload ? candidateFacts(payload as never, state?.canonical_domain ?? '') : [], [payload, state?.canonical_domain]);
   const rows = useMemo(() => state ? mergeFacts(candidates, state.facts, template) : [], [candidates, state, template]);
   const summary = useMemo(() => factsSummary(rows), [rows]);
   const websiteRow = rows.find((r) => r.key === 'website');
-  const existingSiteUrl = websiteRow && websiteRow.status !== 'rejected' && websiteRow.status !== 'not_applicable' ? websiteRow.value : '';
+  const factSiteUrl = websiteRow && websiteRow.status !== 'rejected' && websiteRow.status !== 'not_applicable' ? websiteRow.value : '';
+  /* The source website: what Paul typed in Project Details, else the Current website fact. */
+  const existingSiteUrl = state?.source_site_url || factSiteUrl;
+  const tradeRow = rows.find((r) => r.key === 'trade');
   const issues = useMemo(() => state ? checkArchitecture(state.pages, state.redirects) : [], [state]);
   const archErrors = issues.filter((i) => i.level === 'error').length;
   const businessName = rows.find((r) => r.key === 'business_name')?.value || String((payload?.lead as { business_name?: string } | null)?.business_name ?? '');
-  const pack = useMemo(() => (state && evidence) ? buildPack({
+  const packInput = useMemo(() => (state && evidence) ? {
     state, template, facts: rows, evidence, businessName, existingSiteUrl, mustNotSay: evidence.facts.mustNotSay.value ?? '',
-  }) : [], [state, template, rows, evidence, businessName, existingSiteUrl]);
+  } : null, [state, template, rows, evidence, businessName, existingSiteUrl]);
+  const pack = useMemo(() => packInput ? buildPack(packInput) : [], [packInput]);
+  const prompts = useMemo(() => packInput ? stagePrompts(packInput) : [], [packInput]);
   const packById = (id: PackItemId) => pack.find((p) => p.id === id)!;
+  const promptById = (id: StagePromptId) => prompts.find((p) => p.id === id)!;
   const stages = useMemo(() => state ? websiteBuildStages({
     state, hasExistingSite: !!existingSiteUrl, factsAwaiting: summary.awaiting, architectureErrors: archErrors,
     setupMissing: setupProblems(state).map((p) => p.label),
   }) : [], [state, existingSiteUrl, summary.awaiting, archErrors]);
 
-  const copyItem = async (item: PackItem) => {
+  const copyText = async (title: string, text: string, missing: string[]) => {
     try {
-      await navigator.clipboard.writeText(item.text);
-      toast({ title: `${item.title.replace(/^\d+\.\s*/, '')} copied`, description: item.blockedBy.length ? `Still missing: ${item.blockedBy.join(', ')}` : `${item.text.length.toLocaleString()} characters.` });
+      await navigator.clipboard.writeText(text);
+      toast({ title: `${title} copied`, description: missing.length ? `Still missing: ${missing.join(', ')}` : `${text.length.toLocaleString()} characters.` });
     } catch { toast({ title: 'Could not copy', description: 'Open "Show" and copy the text by hand.', variant: 'destructive' }); }
   };
+  const copyItem = (item: PackItem) => copyText(item.title.replace(/^\d+\.\s*/, ''), item.text, item.blockedBy);
+  const copyPrompt = (p: StagePrompt) => copyText(p.label.replace(/^Copy /, ''), p.text, p.blockedBy);
 
   if (loadError) return <div className="mx-auto max-w-6xl space-y-4 py-6"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
     <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{loadError}</span></div><Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}><RefreshCw className="mr-1 h-4 w-4" />Try again</Button></CardContent></Card></div>;
@@ -214,13 +268,15 @@ export default function WebsiteBuild() {
   const saveLabel = save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : save === 'dirty' ? 'Unsaved changes…' : 'Not saved';
   const cur = stages.find((s) => s.stage === step);
   const captureOn = captureApplies(state, !!existingSiteUrl);
+  const crawl = summariseLeadCrawl(payload.crawl, payload.crawl_job);
+  const faithful = state.route === 'faithful_rebuild';
 
-  return <div className="mx-auto max-w-6xl space-y-4 py-6">
+  return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-0">
     <Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
-    <Card><CardContent className="p-5">
+    <Card><CardContent className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h1 className="text-2xl font-semibold">Website Build — {businessName || 'client'}</h1>
-          <p className="text-sm text-muted-foreground">{state.build_mode ? BUILD_MODE_LABELS[state.build_mode] : 'Build route not chosen yet'}{template ? ` · ${template.name}` : ''}{state.build_mode === 'rebuild' && state.rebuild_style ? ` · ${REBUILD_STYLE_LABELS[state.rebuild_style]}` : ''}</p></div>
+        <div className="min-w-0"><h1 className="text-xl font-semibold sm:text-2xl">Website Build — {businessName || 'client'}</h1>
+          <p className="text-sm text-muted-foreground">{state.route ? BUILD_ROUTE_LABELS[state.route] : 'Build route not chosen yet'}{template ? ` · ${template.name} v${template.version}` : ''}{faithful && state.rebuild_style ? ` · ${REBUILD_STYLE_LABELS[state.rebuild_style]}` : ''}</p></div>
         <div className={`flex items-center gap-2 text-xs ${save === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">
           {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className="h-3.5 w-3.5 text-emerald-600" />}{saveLabel}
           {save === 'error' && <><span>— {saveError}</span><Button size="sm" variant="outline" onClick={() => void flush()}>Retry save</Button></>}
@@ -230,47 +286,44 @@ export default function WebsiteBuild() {
         {stages.map((s) => <button key={s.stage} type="button" onClick={() => goStep(s.stage)}
           className={`rounded-md border p-2 text-left text-xs transition ${step === s.stage ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'} ${!s.applicable ? 'opacity-60' : ''}`}>
           <div className="flex items-center gap-1.5 font-medium"><StatusDot done={s.done} applicable={s.applicable} />{STAGE_LABELS[s.stage]}</div>
-          <div className="mt-1 line-clamp-2 break-all text-muted-foreground">{s.stage === 'intake' ? `${summary.verified} verified · ${summary.awaiting} to confirm` : s.stage === 'capture' && !state.build_mode ? 'Choose the build route first' : s.stage === 'capture' && captureOn && state.capture.url_count != null ? `${state.capture.url_count} URLs · ${state.capture.asset_count ?? 0} assets` : s.detail}</div>
+          <div className="mt-1 line-clamp-2 break-all text-muted-foreground">{s.stage === 'intake' ? `${summary.verified} verified · ${summary.awaiting} to confirm` : s.stage === 'capture' && !state.route ? 'Choose the build route first' : s.stage === 'capture' && captureOn && state.capture.url_count != null ? `${state.capture.url_count} URLs · ${state.capture.asset_count ?? 0} assets` : s.detail}</div>
         </button>)}
       </div>
+      {/* The eight Claude tasks, one click each. Each prompt carries only its stage's context. */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-3">
+        <span className="mr-1 text-xs text-muted-foreground">Claude tasks:</span>
+        {prompts.map((p) => { const refusing = p.id === 'production_deploy' && p.blockedBy.length > 0;
+          return <Button key={p.id} size="sm" variant={p.stage === step ? 'default' : 'outline'} className="h-7 px-2 text-xs" disabled={refusing}
+            title={p.blockedBy.length ? `${p.label} — missing: ${p.blockedBy.join(', ')}` : p.label} aria-label={p.label} onClick={() => void copyPrompt(p)}>
+            <Clipboard className="mr-1 h-3 w-3" />{p.short}{p.blockedBy.length > 0 && !refusing && <span className="ml-1 text-amber-500">•</span>}</Button>; })}
+      </div>
     </CardContent></Card>
+
+    <ProjectDetails key={step === 'build_pack' ? 'open' : 'closed'} defaultOpen={step === 'build_pack'} state={state} set={set} businessName={businessName}
+      template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} tradeRow={tradeRow} crawlLabel={crawl.label} crawledAt={crawl.crawledAt} />
 
     {cur && <p className="text-xs text-muted-foreground">{STAGE_LABELS[cur.stage]}: {cur.detail}</p>}
 
     {/* ══ INTAKE ═══════════════════════════════════════════════════════════════════════════ */}
     {step === 'intake' && <>
-      <Section title="How are we building this website?">
-        <Choice name="mode" value={state.build_mode} options={BUILD_MODES} labels={BUILD_MODE_LABELS} onChange={(v) => update((s) => ({ ...s, build_mode: v, template_id: v === 'template' ? (s.template_id || WEBSITE_TEMPLATES[0].id) : s.template_id }))} />
-        {state.build_mode === 'template' && <div className="space-y-2">
-          <Label>Template</Label>
-          {WEBSITE_TEMPLATES.map((t) => <label key={t.id} className={`block cursor-pointer rounded-md border p-3 ${state.template_id === t.id ? 'border-primary bg-primary/5' : ''}`}>
-            <div className="flex items-start gap-2"><input type="radio" name="tpl" value={t.id} aria-label={t.name} className="mt-1" checked={state.template_id === t.id} onChange={() => set('template_id', t.id)} />
-              <div className="min-w-0"><p className="font-medium">{t.name}</p><p className="text-xs text-muted-foreground">{t.description}</p>
-                <details className="mt-2 text-xs"><summary className="cursor-pointer text-primary">Template profile</summary>
-                  <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
-                    <div><dt className="text-muted-foreground">Source repo</dt><dd className="break-all">{t.sourceRepoUrl} ({t.sourceRepoPrivate ? 'private' : 'public'})</dd></div>
-                    <div><dt className="text-muted-foreground">Framework</dt><dd>{t.framework} · Node {t.nodeVersion}</dd></div>
-                    <div><dt className="text-muted-foreground">Dev</dt><dd>{t.devCommand} → {t.devUrl}</dd></div>
-                    <div><dt className="text-muted-foreground">Build</dt><dd>{t.buildCommand} → {t.buildOutputDir}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Cloudflare</dt><dd>{t.cloudflare}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Page families</dt><dd>{t.defaultPageFamilies.map((f) => f.title).join(' · ')}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Reusable components</dt><dd>{t.reusableComponents.join(' · ')}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Visual style</dt><dd>{t.visualStyle.join(' · ')}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Suits</dt><dd>{t.supportedBusinessTypes.join(', ')}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Required facts</dt><dd>{t.facts.filter((f) => f.required).map((f) => f.label).join(', ')}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-muted-foreground">Never carried over ({t.sourceClient})</dt><dd>{t.claims.map((c) => c.label).join(' · ')}</dd></div>
-                  </dl></details></div></div>
-          </label>)}
-          <p className="text-xs text-muted-foreground">Template reuse means structure and design only. Every {template?.sourceClient ?? 'source-client'} claim is checked against this client's verified facts below and removed if there is no match.</p>
-        </div>}
-        {state.build_mode === 'rebuild' && <div className="space-y-3">
-          <div><Label>Rebuild style</Label><div className="mt-1"><Choice name="style" value={state.rebuild_style} options={REBUILD_STYLES} labels={REBUILD_STYLE_LABELS} onChange={(v) => set('rebuild_style', v)} /></div></div>
+      <Section title="Build route">
+        <RouteSelector state={state} update={update} trade={tradeRow?.value ?? ''} />
+        {state.route === 'template_rebuild' && <TemplatePicker state={state} set={set} template={template} />}
+        {faithful && <div className="space-y-3">
+          <div><Label>How close to the original?</Label><div className="mt-1"><Choice name="style" value={state.rebuild_style} options={REBUILD_STYLES} labels={REBUILD_STYLE_LABELS} onChange={(v) => set('rebuild_style', v)} /></div></div>
           <div><Label>Who owns / supplied the current website copy &amp; design?</Label><div className="mt-1"><Choice name="own" value={state.copy_ownership} options={COPY_OWNERSHIPS} labels={COPY_OWNERSHIP_LABELS} onChange={(v) => set('copy_ownership', v)} /></div>
             {state.copy_ownership && <p className={`mt-2 rounded p-2 text-xs ${mayPreserveCopy(state.copy_ownership) ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'}`}>
               {mayPreserveCopy(state.copy_ownership) ? 'The existing wording may be kept where it is accurate.' : 'Facts and the visual requirements are kept; the marketing wording is rewritten freshly, never copied. Only genuine client-owned assets are reused.'}</p>}
           </div>
-          {!existingSiteUrl && <p className="flex items-start gap-2 text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5" />No current website is recorded for this client. A rebuild needs one — add it under Client Build Facts.</p>}
+          {!existingSiteUrl && <p className="flex items-start gap-2 text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5" />No current website is recorded for this client. A faithful rebuild needs one — add it in Project details or under Client Build Facts.</p>}
         </div>}
+        {state.route === 'bespoke' && <div className="space-y-2">
+          <Label className="text-xs">Design references (existing Findable sites / templates to take the look from)</Label>
+          <Textarea rows={2} className="text-xs" value={state.design_references} placeholder="e.g. MCL Local Trades Template for the card system; findable.live for the typography" onChange={(e) => set('design_references', e.target.value)} />
+          <p className="text-xs text-muted-foreground">When this build is finished it can be marked as a template candidate on the Live step.</p>
+        </div>}
+        <RouteGuide state={state} stage="intake" update={update} />
+        {state.route && <PromptCard p={promptById('recon')} onCopy={copyPrompt} />}
       </Section>
 
       <Section title="Website evidence (latest crawl)">
@@ -278,7 +331,7 @@ export default function WebsiteBuild() {
             same row; Re-crawl here writes it too. Everything read is DETECTED — it reaches the build
             only as a fact Paul approves below. */}
         <LeadCrawlPanel leadId={leadId} website={existingSiteUrl || String((payload.lead as { website?: string } | null)?.website ?? '')}
-          summary={summariseLeadCrawl(payload.crawl, payload.crawl_job)} from="website_build"
+          summary={crawl} from="website_build"
           onDone={async () => { if (pending.current) await flush(); setReloadKey((k) => k + 1); }} />
         <CrawlEvidenceDetails full={payload.crawl?.mode === 'full' ? payload.crawl.full_evidence : null} />
       </Section>
@@ -299,59 +352,86 @@ export default function WebsiteBuild() {
 
     {/* ══ CAPTURE ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'capture' && <>
-      {!captureOn ? <Section title="Existing site capture"><p className="text-muted-foreground">{state.build_mode ? 'No current website is recorded, so there is nothing to capture.' : 'Choose the build route first.'}</p></Section> : <>
-        <Section title="Existing site capture">
-          <p className="text-xs text-muted-foreground">Run the <b>Project setup</b> commands (Build Pack, item 1) first so the client folder exists. Then open Claude Code in that folder and paste the capture prompt. It saves the old site locally in a <code>capture</code> folder and replies with counts, a page list, redirects and facts — paste those into this screen.</p>
+      {!captureOn ? <Section title="Existing site capture"><p className="text-muted-foreground">{state.route ? 'No current website is recorded, so there is nothing to capture.' : 'Choose the build route first.'}</p></Section> : <>
+        <Section title={state.route === 'bespoke' && !existingSiteUrl ? 'Business discovery' : 'Existing site capture'}>
+          <RouteGuide state={state} stage="capture" update={update} />
+          <p className="text-xs text-muted-foreground">Run the <b>Project setup</b> commands first so the client folder exists. Then open Claude Code in that folder and paste the capture prompt. It saves what it finds in a <code>capture</code> folder and replies with counts, a manifest, a page list, redirects and facts — paste those into this screen.</p>
           <PackCard item={packById('setup')} onCopy={copyItem} />
-          <PackCard item={packById('capture')} onCopy={copyItem} />
+          <PromptCard p={promptById('capture')} onCopy={copyPrompt} />
         </Section>
         <Section title="Capture results">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div><Label className="text-xs">Status</Label><select className={sel} value={state.capture.status} onChange={(e) => set('capture', { ...state.capture, status: e.target.value as typeof state.capture.status })}>{CAPTURE_STATUSES.map((c) => <option key={c} value={c}>{CAPTURE_STATUS_LABELS[c]}</option>)}</select></div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div><Label className="text-xs">Status</Label><select aria-label="Capture status" className={sel} value={state.capture.status} onChange={(e) => set('capture', { ...state.capture, status: e.target.value as typeof state.capture.status })}>{CAPTURE_STATUSES.map((c) => <option key={c} value={c}>{CAPTURE_STATUS_LABELS[c]}</option>)}</select></div>
             <div><Label className="text-xs">URLs captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.url_count ?? ''} onChange={(e) => set('capture', { ...state.capture, url_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
             <div><Label className="text-xs">Assets captured</Label><Input className="h-8 text-xs" inputMode="numeric" value={state.capture.asset_count ?? ''} onChange={(e) => set('capture', { ...state.capture, asset_count: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></div>
+            <div><Label className="text-xs">Last captured</Label><Input type="date" className="h-8 text-xs" value={state.last_captured_at} onChange={(e) => set('last_captured_at', e.target.value)} /></div>
           </div>
           <div><Label className="text-xs">Capture notes</Label><Textarea rows={3} className="text-xs" value={state.capture.notes} placeholder="Anything notable Claude reported (e.g. the gallery is on Facebook, not the site)." onChange={(e) => set('capture', { ...state.capture, notes: e.target.value })} /></div>
           <p className="text-xs text-muted-foreground">Paste the capture's <b>facts</b> in Intake → Client Build Facts, and its <b>page list</b> and <b>redirects</b> in Architecture.</p>
         </Section>
+        <ManifestPanel state={state} update={update} toast={toast} />
       </>}
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('intake')}>Back</Button><Button onClick={() => goStep('architecture')}>Next: Architecture</Button></div>
     </>}
 
     {/* ══ ARCHITECTURE ═════════════════════════════════════════════════════════════════════ */}
-    {step === 'architecture' && <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
-      checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} leadId={leadId} />}
+    {step === 'architecture' && <>
+      {state.route && <Section title="Architecture — route guidance"><RouteGuide state={state} stage="architecture" update={update} /><PromptCard p={promptById('architecture')} onCopy={copyPrompt} /></Section>}
+      <ArchitectureSection state={state} template={template} rows={rows} issues={issues}
+        checkedPages={crawlOldUrls(payload.crawl)} cited={evidence.signals} update={update} goStep={goStep} toast={toast} leadId={leadId} />
+    </>}
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
-      <ProjectDetails state={state} set={set} businessName={businessName} template={template} existingSiteUrl={existingSiteUrl} />
-      <Section title="Build Pack" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — nothing is stored, so it is always current.</span>}>
-        <div className="rounded bg-muted p-3 text-xs"><p className="font-medium">Work down the list, in order.</p><ul className="mt-1 list-disc space-y-0.5 pl-4"><li><b>PowerShell</b> items: open PowerShell, paste one block at a time, read what it prints.</li><li><b>Claude Code prompt</b> items: open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} — desktop app → Code → choose that folder — then paste the prompt.</li><li>Paste back what each step tells you to (repository URL, preview URL, capture counts) — this page saves as you type.</li></ul></div>
-        {pack.filter((p) => p.applicable).map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}
-        {pack.filter((p) => !p.applicable).map((p) => <p key={p.id} className="text-xs text-muted-foreground">{p.title} — not needed for this build.</p>)}
+      <Section title="Claude tasks — one prompt per stage" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — always current.</span>}>
+        <p className="text-xs text-muted-foreground">Open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} and paste one prompt at a time, in order. Each carries only what its stage needs.</p>
+        {prompts.map((p) => <PromptCard key={p.id} p={p} onCopy={copyPrompt} />)}
       </Section>
+      <Section title="Commands (PowerShell)">
+        <div className="rounded bg-muted p-3 text-xs"><p className="font-medium">Paste one block at a time and read what it prints. Paste back what each step asks for (repository URL, preview URL) — this page saves as you type.</p></div>
+        {pack.filter((p) => p.applicable && p.kind === 'commands').map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}
+      </Section>
+      <details className="rounded-md border p-3 text-sm"><summary className="cursor-pointer text-xs font-medium">Full brief (V1: every stage in one prompt, plus the separate V1 QA prompts)</summary>
+        <div className="mt-3 space-y-2">{pack.filter((p) => p.applicable && p.kind === 'prompt' && p.id !== 'capture').map((p) => <PackCard key={p.id} item={p} onCopy={copyItem} />)}</div>
+      </details>
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('architecture')}>Back</Button><Button onClick={() => goStep('preview')}>Next: Preview</Button></div>
     </>}
 
     {/* ══ PREVIEW ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'preview' && <>
       <Section title="Preview">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Dev URL (local)" value={state.dev_url} placeholder={template?.devUrl ?? 'http://localhost:4321'} onChange={(v) => set('dev_url', v)} />
-          <Field label="Cloudflare project" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())} />
-          <Field label="Preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'paste from the preview command output'} onChange={(v) => set('preview_url', v.trim())} />
-          <div><Label className="text-xs">Deployment status</Label><select className={sel} value={state.deploy_status} onChange={(e) => set('deploy_status', e.target.value as typeof state.deploy_status)}>{DEPLOY_STATUSES.map((d) => <option key={d} value={d}>{DEPLOY_STATUS_LABELS[d]}</option>)}</select></div>
+        <RouteGuide state={state} stage="preview" update={update} />
+        <p className="rounded bg-muted p-2 text-xs"><b>Localhost is for development.</b> The <b>Cloudflare Pages preview</b> is the stable review version used for full-site comparison before the client domain is connected.</p>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Local preview</p>
+            <Field label="Local folder" value={state.local_repo_path} placeholder="C:\Users\paulj\ClientName" onChange={(v) => set('local_repo_path', v.trim())} />
+            <Field label="Dev command" value={state.dev_command} placeholder={codeConfig(state, template).devCommand} onChange={(v) => set('dev_command', v)} />
+            <Field label="Localhost URL" value={state.dev_url} placeholder={codeConfig(state, template).devUrl} onChange={(v) => set('dev_url', v.trim())} />
+            <PackCard item={packById('local')} onCopy={copyItem} />
+          </div>
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cloudflare Pages preview</p>
+            <Field label="Cloudflare project" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())} />
+            <Field label="pages.dev preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'paste from the preview deploy'} onChange={(v) => set('preview_url', v.trim())} />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Pick label="Deployment status" value={state.preview_status} options={PREVIEW_STATUSES} labels={PREVIEW_STATUS_LABELS} onChange={(v) => set('preview_status', v)} />
+              <label className="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" aria-label="Noindex confirmed on the preview" checked={state.preview_noindex_confirmed} onChange={(e) => set('preview_noindex_confirmed', e.target.checked)} />Noindex confirmed</label>
+            </div>
+            {state.preview_url && <a href={state.preview_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Open preview</a>}
+            <PromptCard p={promptById('preview_deploy')} onCopy={copyPrompt} />
+            <PackCard item={packById('preview')} onCopy={copyItem} />
+          </div>
         </div>
-        {state.preview_url && <a href={state.preview_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Open preview</a>}
-        <PackCard item={packById('local')} onCopy={copyItem} />
-        <PackCard item={packById('preview')} onCopy={copyItem} />
       </Section>
+      {faithful ? <VisualComparison state={state} update={update} existingSiteUrl={existingSiteUrl} prompt={promptById('visual_compare')} onCopy={copyPrompt} toast={toast} />
+        : <Section title="Visual check"><PromptCard p={promptById('visual_compare')} onCopy={copyPrompt} /></Section>}
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('build_pack')}>Back</Button><Button onClick={() => goStep('qa')}>Next: QA</Button></div>
     </>}
 
     {/* ══ QA ═══════════════════════════════════════════════════════════════════════════════ */}
     {step === 'qa' && <>
-      <Section title="QA prompts"><PackCard item={packById('visual_qa')} onCopy={copyItem} /><PackCard item={packById('seo_qa')} onCopy={copyItem} /></Section>
+      <Section title="QA prompts"><PromptCard p={promptById('qa')} onCopy={copyPrompt} /><PackCard item={packById('visual_qa')} onCopy={copyItem} /></Section>
       <Checklist state={state} group="preview" set={set} title="Definition of done — before production" />
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('preview')}>Back</Button><Button onClick={() => goStep('live')}>Next: Live</Button></div>
     </>}
@@ -362,14 +442,18 @@ export default function WebsiteBuild() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} />
           <Field label="Latest commit" value={state.latest_commit} placeholder="output of: git log -1 --format=&quot;%h %s&quot;" onChange={(v) => set('latest_commit', v)} />
+          <Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} />
+          <Pick label="Custom domain" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} />
+          <Pick label="www redirect" value={state.www_redirect_status} options={WWW_REDIRECT_STATUSES} labels={WWW_REDIRECT_STATUS_LABELS} onChange={(v) => set('www_redirect_status', v)} />
           <Field label="GitHub repository URL" value={state.repo_url} placeholder="https://github.com/…" onChange={(v) => set('repo_url', v.trim())} />
-          <div><Label className="text-xs">Deployment status</Label><select className={sel} value={state.deploy_status} onChange={(e) => set('deploy_status', e.target.value as typeof state.deploy_status)}>{DEPLOY_STATUSES.map((d) => <option key={d} value={d}>{DEPLOY_STATUS_LABELS[d]}</option>)}</select></div>
         </div>
         {state.production_url && <a href={state.production_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Open production site</a>}
+        <PromptCard p={promptById('production_deploy')} onCopy={copyPrompt} />
         <PackCard item={packById('production')} onCopy={copyItem} />
         <PackCard item={packById('final_qa')} onCopy={copyItem} />
       </Section>
       <Checklist state={state} group="live" set={set} title="Live checks" />
+      {state.route === 'bespoke' && <PromotionPanel state={state} update={update} />}
       <div className="flex justify-start"><Button variant="outline" onClick={() => goStep('qa')}>Back</Button></div>
     </>}
   </div>;
@@ -378,10 +462,10 @@ export default function WebsiteBuild() {
 /* ── small pieces ─────────────────────────────────────────────────────────────────────────────── */
 
 function Field({ label, value, placeholder, onChange, action }: { label: string; value: string; placeholder?: string; onChange: (v: string) => void; action?: ReactNode }) {
-  return <div><div className="flex items-center justify-between"><Label className="text-xs">{label}</Label>{action}</div><Input className="h-8 text-xs" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /></div>;
+  return <div><div className="flex items-center justify-between gap-2"><Label className="text-xs">{label}</Label>{action}</div><Input aria-label={label} className="h-8 text-xs" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /></div>;
 }
 
-function Checklist({ state, group, set, title }: { state: WebsiteBuildState; group: 'preview' | 'live'; set: <K extends keyof WebsiteBuildState>(k: K, v: WebsiteBuildState[K]) => void; title: string }) {
+function Checklist({ state, group, set, title }: { state: WebsiteBuildState; group: 'preview' | 'live'; set: SetFn; title: string }) {
   const items = QA_ITEMS.filter((q) => q.group === group);
   const done = items.filter((q) => state.qa[q.key]).length;
   return <Section title={title} right={<span className="text-xs text-muted-foreground">{done} of {items.length}</span>}>
@@ -391,30 +475,196 @@ function Checklist({ state, group, set, title }: { state: WebsiteBuildState; gro
   </Section>;
 }
 
-function ProjectDetails({ state, set, businessName, template, existingSiteUrl }: {
-  state: WebsiteBuildState; set: <K extends keyof WebsiteBuildState>(k: K, v: WebsiteBuildState[K]) => void;
-  businessName: string; template: ReturnType<typeof templateById>; existingSiteUrl: string;
+function RouteSelector({ state, update, trade }: { state: WebsiteBuildState; update: UpdateFn; trade: string }) {
+  const suits = WEBSITE_TEMPLATES.filter((t) => templateSuitsTrade(trade, [t.trade, ...t.supportedBusinessTypes]));
+  const choose = (r: BuildRoute) => update((s) => ({ ...s, route: r,
+    /* Choosing Template picks a template only if none is chosen — the V1 behaviour. */
+    template_id: r === 'template_rebuild' ? (s.template_id || suits[0]?.id || WEBSITE_TEMPLATES[0].id) : s.template_id }));
+  return <div className="space-y-2">
+    <div className="grid gap-2 md:grid-cols-3">{BUILD_ROUTES.map((r) => {
+      const recommended = r === 'template_rebuild' && suits.length > 0;
+      return <label key={r} className={`flex cursor-pointer flex-col gap-1 rounded-md border p-3 text-sm ${state.route === r ? 'border-primary bg-primary/5' : ''}`}>
+        <span className="flex items-center gap-2"><input type="radio" name="route" value={r} aria-label={ROUTE_INFO[r].label} checked={state.route === r} onChange={() => choose(r)} />
+          <span className="font-medium">{ROUTE_INFO[r].label}</span>
+          {recommended && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Recommended</span>}</span>
+        <span className="text-xs text-muted-foreground">{ROUTE_INFO[r].description}</span>
+      </label>; })}</div>
+    <p className="text-xs text-muted-foreground">{suits.length ? `A Findable template suits this trade (${suits.map((t) => t.name).join(', ')}), so Template rebuild is the default choice.` : trade ? `No Findable template matches "${trade}" yet — consider Bespoke / new trade.` : 'Verify the trade fact to see whether a template suits it.'} Changing the route keeps everything already entered.</p>
+  </div>;
+}
+
+function TemplatePicker({ state, set, template }: { state: WebsiteBuildState; set: SetFn; template: ReturnType<typeof templateById> }) {
+  return <div className="space-y-2">
+    <Label>Template</Label>
+    {WEBSITE_TEMPLATES.map((t) => <label key={t.id} className={`block cursor-pointer rounded-md border p-3 ${state.template_id === t.id ? 'border-primary bg-primary/5' : ''}`}>
+      <div className="flex items-start gap-2"><input type="radio" name="tpl" value={t.id} aria-label={t.name} className="mt-1" checked={state.template_id === t.id} onChange={() => set('template_id', t.id)} />
+        <div className="min-w-0"><p className="font-medium">{t.name} <span className="text-xs font-normal text-muted-foreground">v{t.version} · {t.trade}</span></p><p className="text-xs text-muted-foreground">{t.description}</p>
+          <details className="mt-2 text-xs"><summary className="cursor-pointer text-primary">Template profile</summary>
+            <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+              <div><dt className="text-muted-foreground">Source repo</dt><dd className="break-all">{t.sourceRepoUrl} ({t.sourceRepoPrivate ? 'private' : 'public'})</dd></div>
+              <div><dt className="text-muted-foreground">Framework</dt><dd>{t.framework} · Node {t.nodeVersion}</dd></div>
+              <div><dt className="text-muted-foreground">Dev</dt><dd>{t.devCommand} → {t.devUrl}</dd></div>
+              <div><dt className="text-muted-foreground">Build</dt><dd>{t.buildCommand} → {t.buildOutputDir}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Template preview</dt><dd>{t.previewUrl || 'None deployed yet'}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Cloudflare</dt><dd>{t.cloudflare}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Page types</dt><dd>{templatePageTypes(t).map((f) => PAGE_FAMILY_LABELS[f]).join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Optional sections</dt><dd>{t.optionalSections.map((x) => x.label).join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Reusable components</dt><dd>{t.reusableComponents.join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Visual style</dt><dd>{t.visualStyle.join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Suits</dt><dd>{t.supportedBusinessTypes.join(', ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Required facts</dt><dd>{templateRequiredFacts(t).map((f) => f.label).join(', ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Optional facts</dt><dd>{templateOptionalFacts(t).map((f) => f.label).join(', ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Images the client supplies</dt><dd>{t.imageRequirements.map((x) => `${x.label}${x.required ? ' *' : ''}`).join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Never carried over ({t.sourceClient})</dt><dd>{t.claims.map((c) => c.label).join(' · ')}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Forbidden seed-client values ({t.forbiddenSeedValues.length})</dt><dd>{t.forbiddenSeedValues.map((v) => v.value).join(' · ')}</dd></div>
+            </dl></details></div></div>
+    </label>)}
+    <p className="text-xs text-muted-foreground">Template reuse means structure and design only. Every {template?.sourceClient ?? 'source-client'} claim is checked against this client's verified facts below and removed if there is no match.</p>
+  </div>;
+}
+
+function ProjectDetails({ defaultOpen, state, set, businessName, template, existingSiteUrl, factSiteUrl, tradeRow, crawlLabel, crawledAt }: {
+  defaultOpen: boolean; state: WebsiteBuildState; set: SetFn; businessName: string; template: ReturnType<typeof templateById>;
+  existingSiteUrl: string; factSiteUrl: string; tradeRow: FactRow | undefined; crawlLabel: string; crawledAt: string | null;
 }) {
   const repoSuggestion = suggestRepoName(businessName);
   const problems = setupProblems(state);
+  const cfg = codeConfig(state, template);
   const domainFromSite = (() => { try { return existingSiteUrl ? new URL(existingSiteUrl).hostname.replace(/^www\./, '') : ''; } catch { return ''; } })();
-  const Sugg = ({ label, onClick }: { label: string; onClick: () => void }) => <button type="button" className="text-[11px] text-primary underline" onClick={onClick}>{label}</button>;
-  return <Section title="Project details — used in every command">
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Repository name" value={state.repo_name} placeholder={repoSuggestion || 'ClientName'} onChange={(v) => set('repo_name', v.trim())}
-        action={repoSuggestion && state.repo_name !== repoSuggestion ? <Sugg label={`Use ${repoSuggestion}`} onClick={() => set('repo_name', repoSuggestion)} /> : undefined} />
-      <Field label="GitHub account (owner)" value={state.github_owner} placeholder="your GitHub username" onChange={(v) => set('github_owner', v.trim())}
-        action={template && state.github_owner !== template.sourceRepoOwner ? <Sugg label={`Use ${template.sourceRepoOwner} (where the template lives)`} onClick={() => set('github_owner', template.sourceRepoOwner)} /> : undefined} />
-      <Field label="Local folder" value={state.local_repo_path} placeholder="C:\Users\paulj\ClientName" onChange={(v) => set('local_repo_path', v.trim())}
-        action={state.repo_name && !state.local_repo_path ? <Sugg label={`Use C:\\Users\\paulj\\${state.repo_name}`} onClick={() => set('local_repo_path', `C:\\Users\\paulj\\${state.repo_name}`)} /> : undefined} />
-      <Field label="Cloudflare project name" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())}
-        action={state.repo_name && !state.cloudflare_project ? <Sugg label={`Use ${suggestCloudflareProject(state.repo_name)}`} onClick={() => set('cloudflare_project', suggestCloudflareProject(state.repo_name))} /> : undefined} />
-      <Field label="Domain the new site will live on (canonical)" value={state.canonical_domain} placeholder="example.co.uk" onChange={(v) => set('canonical_domain', v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))}
-        action={domainFromSite && state.canonical_domain !== domainFromSite ? <Sugg label={`Use ${domainFromSite}`} onClick={() => set('canonical_domain', domainFromSite)} /> : undefined} />
-      <Field label="GitHub repository URL (after setup step 5)" value={state.repo_url} placeholder={state.github_owner && state.repo_name ? `https://github.com/${state.github_owner}/${state.repo_name}` : 'https://github.com/…'} onChange={(v) => set('repo_url', v.trim())} />
+  const Sugg = ({ label, onClick }: { label: string; onClick: () => void }) => <button type="button" className="truncate text-[11px] text-primary underline" onClick={onClick}>{label}</button>;
+  const G = ({ title, children }: { title: string; children: ReactNode }) => <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p><div className="grid gap-3 sm:grid-cols-2">{children}</div></div>;
+  const summaryLine = [state.repo_name || 'no repo', state.cloudflare_project || 'no Cloudflare project', state.canonical_domain || 'no domain'].join(' · ');
+  return <details open={defaultOpen} className="rounded-lg border bg-card p-4 text-sm">
+    <summary className="cursor-pointer"><span className="font-semibold">Project details</span> <span className="text-xs text-muted-foreground">— {summaryLine}{problems.length ? ` · setup needs ${problems.length} value(s)` : ''}</span></summary>
+    <div className="mt-4 space-y-5">
+      <G title="Source website">
+        <Field label="Existing site URL" value={state.source_site_url} placeholder={factSiteUrl || 'https://…'} onChange={(v) => set('source_site_url', v.trim())} />
+        <Pick label="Original site still live?" value={state.source_still_live} options={SITE_LIVE_STATES} labels={SITE_LIVE_LABELS} onChange={(v) => set('source_still_live', v)} />
+        <Field label="Source platform" value={state.source_platform} placeholder="WordPress, Wix, hand-coded… (from the recon)" onChange={(v) => set('source_platform', v)} />
+        <div><Label className="text-xs">Crawl status</Label><p className="h-8 truncate py-1.5 text-xs">{crawlLabel}{crawledAt ? ` · ${new Date(crawledAt).toLocaleDateString('en-GB')}` : ''}</p></div>
+        <div><Label className="text-xs">Last captured</Label><Input type="date" aria-label="Last captured" className="h-8 text-xs" value={state.last_captured_at} onChange={(e) => set('last_captured_at', e.target.value)} /></div>
+      </G>
+      {!state.source_site_url && factSiteUrl && <p className="-mt-3 text-[11px] text-muted-foreground">Blank uses the Current website fact: {factSiteUrl}</p>}
+      <G title="Target">
+        <Field label="Target domain (canonical)" value={state.canonical_domain} placeholder="example.co.uk" onChange={(v) => set('canonical_domain', v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))}
+          action={domainFromSite && state.canonical_domain !== domainFromSite ? <Sugg label={`Use ${domainFromSite}`} onClick={() => set('canonical_domain', domainFromSite)} /> : undefined} />
+        <div><Label className="text-xs">Trade / category</Label><p className="flex h-8 items-center gap-2 text-xs">{tradeRow?.value || '—'}{tradeRow && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${FACT_TONE[tradeRow.status]}`}>{FACT_STATUS_LABELS[tradeRow.status]}</span>}<span className="text-muted-foreground">(a fact — edit in Client Build Facts)</span></p></div>
+      </G>
+      <G title="Code">
+        <Field label="Repository name" value={state.repo_name} placeholder={repoSuggestion || 'ClientName'} onChange={(v) => set('repo_name', v.trim())}
+          action={repoSuggestion && state.repo_name !== repoSuggestion ? <Sugg label={`Use ${repoSuggestion}`} onClick={() => set('repo_name', repoSuggestion)} /> : undefined} />
+        <Field label="GitHub account (owner)" value={state.github_owner} placeholder="your GitHub username" onChange={(v) => set('github_owner', v.trim())}
+          action={template && state.github_owner !== template.sourceRepoOwner ? <Sugg label={`Use ${template.sourceRepoOwner}`} onClick={() => set('github_owner', template.sourceRepoOwner)} /> : undefined} />
+        <Field label="Repository URL" value={state.repo_url} placeholder={state.github_owner && state.repo_name ? `https://github.com/${state.github_owner}/${state.repo_name}` : 'https://github.com/…'} onChange={(v) => set('repo_url', v.trim())} />
+        <Field label="Local folder" value={state.local_repo_path} placeholder="C:\Users\paulj\ClientName" onChange={(v) => set('local_repo_path', v.trim())}
+          action={state.repo_name && !state.local_repo_path ? <Sugg label={`Use C:\\Users\\paulj\\${state.repo_name}`} onClick={() => set('local_repo_path', `C:\\Users\\paulj\\${state.repo_name}`)} /> : undefined} />
+        <Field label="Dev command" value={state.dev_command} placeholder={cfg.devCommand} onChange={(v) => set('dev_command', v)} />
+        <Field label="Build command" value={state.build_command} placeholder={cfg.buildCommand} onChange={(v) => set('build_command', v)} />
+        <Field label="Build output directory" value={state.build_output_dir} placeholder={cfg.outputDir} onChange={(v) => set('build_output_dir', v.trim())} />
+      </G>
+      <G title="Preview">
+        <Field label="Cloudflare project name" value={state.cloudflare_project} placeholder="lowercase-with-dashes" onChange={(v) => set('cloudflare_project', v.trim().toLowerCase())}
+          action={state.repo_name && !state.cloudflare_project ? <Sugg label={`Use ${suggestCloudflareProject(state.repo_name)}`} onClick={() => set('cloudflare_project', suggestCloudflareProject(state.repo_name))} /> : undefined} />
+        <Field label="Preview URL" value={state.preview_url} placeholder={state.cloudflare_project ? `https://preview.${state.cloudflare_project}.pages.dev` : 'https://preview.….pages.dev'} onChange={(v) => set('preview_url', v.trim())} />
+        <Pick label="Preview status" value={state.preview_status} options={PREVIEW_STATUSES} labels={PREVIEW_STATUS_LABELS} onChange={(v) => set('preview_status', v)} />
+        <label className="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" aria-label="Preview noindex confirmed" checked={state.preview_noindex_confirmed} onChange={(e) => set('preview_noindex_confirmed', e.target.checked)} />Preview noindex confirmed</label>
+      </G>
+      <G title="Production">
+        <Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} />
+        <Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} />
+        <Pick label="Custom domain status" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} />
+        <Pick label="www redirect status" value={state.www_redirect_status} options={WWW_REDIRECT_STATUSES} labels={WWW_REDIRECT_STATUS_LABELS} onChange={(v) => set('www_redirect_status', v)} />
+      </G>
+      {problems.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Setup commands need: {problems.map((p) => `${p.label} (${p.problem})`).join(' · ')}</p>}
+      <p className="text-xs text-muted-foreground">Suggestions are only filled in when you click them. Blank commands use the {template ? 'template\u2019s' : 'Astro'} defaults shown. Cloudflare projects are created by the preview step in your own account — nothing is created automatically.</p>
     </div>
-    {problems.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Setup commands need: {problems.map((p) => `${p.label} (${p.problem})`).join(' · ')}</p>}
-    <p className="text-xs text-muted-foreground">Suggestions are only filled in when you click them. The Cloudflare project is created by the preview commands in your own Cloudflare account.</p>
+  </details>;
+}
+
+function ManifestPanel({ state, update, toast }: { state: WebsiteBuildState; update: UpdateFn; toast: ReturnType<typeof useToast>['toast'] }) {
+  const [paste, setPaste] = useState('');
+  const m = state.manifest;
+  const setM = (fn: (x: WebsiteBuildState['manifest']) => WebsiteBuildState['manifest']) => update((s) => ({ ...s, manifest: fn(s.manifest) }));
+  const importIt = () => {
+    let raw: unknown;
+    try { raw = JSON.parse(paste); } catch { toast({ title: 'Not valid JSON', description: 'Paste the whole contents of capture/manifest.json.', variant: 'destructive' }); return; }
+    const next = parseManifest(raw);
+    update((s) => ({ ...s, manifest: next, capture: { ...s.capture,
+      /* Counts fill only a blank field — a number Paul typed is never overwritten. */
+      url_count: s.capture.url_count ?? (next.pages.length || null), asset_count: s.capture.asset_count ?? (next.assets.length || null) } }));
+    setPaste('');
+    toast({ title: 'Manifest imported', description: `${next.pages.length} page(s), ${next.assets.length} asset(s), ${next.interactions.length} interaction(s). Assets start "pending".` });
+  };
+  const D = m.design, S = m.seo;
+  return <Section title="Source site manifest" right={<span className="text-xs text-muted-foreground">{m.pages.length} pages · {m.assets.length} assets · {m.interactions.length} interactions</span>}>
+    <p className="text-xs text-muted-foreground">What the capture found, in one place — pages, assets, design, interactions and SEO. Filled by pasting the capture's <code>capture/manifest.json</code>; nothing here crawls.</p>
+    <div className="space-y-2"><Textarea rows={3} className="font-mono text-xs" value={paste} placeholder='{"pages":[{"url":"https://…","type":"service","title":"…","h1":"…","purpose":"…","screenshots":[]}],"assets":[…]}' onChange={(e) => setPaste(e.target.value)} />
+      <Button size="sm" disabled={!paste.trim()} onClick={importIt}>Import manifest (replaces the current one)</Button></div>
+    {m.pages.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Pages ({m.pages.length})</summary>
+      <div className="mt-2 max-h-72 overflow-auto"><table className="w-full min-w-[640px]"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">URL</th><th className="py-1 pr-2">Type</th><th className="py-1 pr-2">Title / H1</th><th className="py-1">Purpose</th></tr></thead>
+        <tbody>{m.pages.map((p, n) => <tr key={n} className="border-b align-top"><td className="py-1 pr-2 break-all">{p.url}</td><td className="py-1 pr-2">{PAGE_FAMILY_LABELS[p.type]}</td><td className="py-1 pr-2">{p.title}{p.h1 && p.h1 !== p.title ? <span className="text-muted-foreground"> / {p.h1}</span> : null}</td><td className="py-1">{p.purpose}{p.screenshots.length ? <span className="text-muted-foreground"> · {p.screenshots.length} shot(s)</span> : null}</td></tr>)}</tbody></table></div></details>}
+    {m.assets.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Assets ({m.assets.filter((a) => a.approval === 'approved').length} approved of {m.assets.length})</summary>
+      <div className="mt-2 max-h-72 overflow-auto"><table className="w-full min-w-[640px]"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">Asset</th><th className="py-1 pr-2">Type</th><th className="py-1 pr-2">Purpose</th><th className="py-1">Use it?</th></tr></thead>
+        <tbody>{m.assets.map((a, n) => <tr key={n} className="border-b align-top"><td className="py-1 pr-2 break-all">{a.location || a.source_url}</td><td className="py-1 pr-2">{a.type}</td><td className="py-1 pr-2">{a.purpose}</td>
+          <td className="py-1"><select aria-label={`Approval for ${a.location || a.source_url}`} className={sel} value={a.approval} onChange={(e) => setM((x) => ({ ...x, assets: x.assets.map((y, k) => k === n ? { ...y, approval: e.target.value as typeof y.approval } : y) }))}>{ASSET_APPROVALS.map((v) => <option key={v} value={v}>{v === 'pending' ? 'Needs approval' : v === 'approved' ? 'Approved' : 'Rejected'}</option>)}</select></td></tr>)}</tbody></table></div></details>}
+    {m.interactions.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-medium">Interactions ({m.interactions.length})</summary>
+      <ul className="mt-2 space-y-1">{m.interactions.map((it, n) => <li key={n}><b>{it.kind.replace('_', ' ')}</b> — {it.where}{it.notes ? `: ${it.notes}` : ''}</li>)}</ul></details>}
+    <details className="text-xs"><summary className="cursor-pointer font-medium">Design and SEO notes</summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {([['fonts', 'Fonts'], ['colours', 'Colours'], ['layout_notes', 'Layout notes'], ['component_notes', 'Component notes']] as const).map(([k, l]) =>
+          <div key={k}><Label className="text-xs">{l}</Label><Textarea rows={2} className="text-xs" value={D[k]} onChange={(e) => setM((x) => ({ ...x, design: { ...x.design, [k]: e.target.value } }))} /></div>)}
+        {([['metadata', 'Metadata'], ['canonical', 'Canonical'], ['schema', 'Schema'], ['sitemap', 'Sitemap'], ['robots', 'Robots'], ['tracking', 'Tracking']] as const).map(([k, l]) =>
+          <div key={k}><Label className="text-xs">SEO — {l}</Label><Textarea rows={2} className="text-xs" value={S[k]} onChange={(e) => setM((x) => ({ ...x, seo: { ...x.seo, [k]: e.target.value } }))} /></div>)}
+      </div></details>
+  </Section>;
+}
+
+function VisualComparison({ state, update, existingSiteUrl, prompt, onCopy, toast }: {
+  state: WebsiteBuildState; update: UpdateFn; existingSiteUrl: string; prompt: StagePrompt; onCopy: (p: StagePrompt) => void; toast: ReturnType<typeof useToast>['toast'];
+}) {
+  const v = state.visual;
+  const [widthText, setWidthText] = useState(v.widths.join(', '));
+  const [reply, setReply] = useState('');
+  const setV = (over: Partial<WebsiteBuildState['visual']>) => update((s) => ({ ...s, visual: { ...s.visual, ...over } }));
+  const fams = compareFamilies(state);
+  const result = (f: (typeof fams)[number]) => v.results.find((r) => r.family === f) ?? { family: f, status: 'not_checked' as CompareStatus, notes: '' };
+  const putResult = (f: (typeof fams)[number], over: Partial<{ status: CompareStatus; notes: string }>) =>
+    setV({ results: [...v.results.filter((r) => r.family !== f), { ...result(f), ...over }] });
+  const approved = fams.filter((f) => result(f).status === 'approved').length;
+  return <Section title="Visual comparison — source vs preview" right={<span className="text-xs text-muted-foreground">{approved} of {fams.length} page families approved</span>}>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Field label="Source URL" value={v.source_url} placeholder={existingSiteUrl || 'https://…'} onChange={(x) => setV({ source_url: x.trim() })} />
+      <Field label="Preview URL" value={v.preview_url} placeholder={state.preview_url || 'https://preview.….pages.dev'} onChange={(x) => setV({ preview_url: x.trim() })} />
+      <div><Label className="text-xs">Viewport widths (px)</Label><Input aria-label="Viewport widths" className="h-8 text-xs" value={widthText} onChange={(e) => setWidthText(e.target.value)}
+        onBlur={() => { const w = widthText.split(/[^0-9]+/).map(Number).filter((n) => n >= 240 && n <= 3840); const next = w.length ? [...new Set(w)].slice(0, 8) : [...DEFAULT_COMPARE_WIDTHS]; setV({ widths: next }); setWidthText(next.join(', ')); }} /></div>
+    </div>
+    <PromptCard p={prompt} onCopy={onCopy} />
+    {fams.length === 0 ? <p className="text-xs text-muted-foreground">No page families yet — they come from the pages being kept or created in Architecture (or the manifest).</p> :
+      <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-xs"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-2">Page family</th><th className="py-1 pr-2">Result</th><th className="py-1">Notes</th></tr></thead>
+        <tbody>{fams.map((f) => { const r = result(f); return <tr key={f} className="border-b align-top">
+          <td className="py-1 pr-2 font-medium">{PAGE_FAMILY_LABELS[f]}</td>
+          <td className="py-1 pr-2"><select aria-label={`Comparison result for ${PAGE_FAMILY_LABELS[f]}`} className={sel} value={r.status} onChange={(e) => putResult(f, { status: e.target.value as CompareStatus })}>{COMPARE_STATUSES.map((c) => <option key={c} value={c}>{COMPARE_STATUS_LABELS[c]}</option>)}</select></td>
+          <td className="py-1"><Input aria-label={`Comparison notes for ${PAGE_FAMILY_LABELS[f]}`} className="h-8 text-xs" value={r.notes} onChange={(e) => putResult(f, { notes: e.target.value })} /></td></tr>; })}</tbody></table></div>}
+    <div className="flex flex-wrap items-end gap-2">
+      <Textarea rows={2} className="min-w-[240px] flex-1 font-mono text-xs" value={reply} placeholder={'Paste Claude\u2019s reply lines:\nhomepage: approved\nservice: differences — card spacing'} onChange={(e) => setReply(e.target.value)} />
+      <Button size="sm" variant="outline" disabled={!reply.trim()} onClick={() => { const next = parseCompareReply(reply, v.results); setV({ results: next }); setReply(''); toast({ title: 'Comparison results recorded' }); }}>Record results</Button>
+    </div>
+    <p className="text-xs text-muted-foreground">No automatic image comparison runs — Claude screenshots and compares; you record the result here.</p>
+  </Section>;
+}
+
+function PromotionPanel({ state, update }: { state: WebsiteBuildState; update: UpdateFn }) {
+  const p = state.promotion;
+  const setP = (over: Partial<WebsiteBuildState['promotion']>) => update((s) => ({ ...s, promotion: { ...s.promotion, ...over } }));
+  return <Section title="Promote to template (later)">
+    <p className="text-xs text-muted-foreground">A successful bespoke / new-trade build can become a reusable trade template: client-specific values removed, the structure saved to the Template Library. Template extraction is not built yet — record the intent here so it is ready when it is.</p>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label="Template candidate" checked={p.candidate} onChange={(e) => setP({ candidate: e.target.checked })} />This build is a template candidate</label>
+    {p.candidate && <div className="grid gap-3 sm:grid-cols-2">
+      <Field label="Proposed template name" value={p.proposed_name} placeholder="e.g. Findable Shoe Repair Template" onChange={(v) => setP({ proposed_name: v })} />
+      <Field label="Trade it would serve" value={p.proposed_trade} placeholder="e.g. Cobblers / key cutting" onChange={(v) => setP({ proposed_trade: v })} />
+      <div className="sm:col-span-2"><Label className="text-xs">Notes (what is reusable, what is client-specific)</Label><Textarea rows={2} className="text-xs" value={p.notes} onChange={(e) => setP({ notes: e.target.value })} /></div>
+    </div>}
+    <Button size="sm" variant="outline" disabled title="Template extraction is a later piece of work">Promote to template — coming later</Button>
   </Section>;
 }
 
@@ -425,6 +675,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
 }) {
   const [filter, setFilter] = useState<'all' | 'detected' | 'missing' | 'verified'>('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState(''); const [newValue, setNewValue] = useState('');
   const [paste, setPaste] = useState(''); const [pasteOpen, setPasteOpen] = useState(false);
   const s = factsSummary(rows);
@@ -433,7 +684,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
   const commit = (r: FactRow, status: StoredFactStatus) => { onDecide(r, status, valueOf(r)); setDrafts((d) => { const n = { ...d }; delete n[r.key]; return n; }); };
   return <Section title="Client Build Facts" right={<div className="flex flex-wrap gap-1 text-xs">{(['all', 'detected', 'missing', 'verified'] as const).map((f) =>
     <button key={f} type="button" onClick={() => setFilter(f)} className={`rounded-full border px-2 py-0.5 ${filter === f ? 'border-primary bg-primary/10' : ''}`}>{f === 'all' ? `All ${rows.length}` : f === 'detected' ? `Need approval ${s.awaiting}` : f === 'missing' ? `Missing ${s.missing}` : `Verified ${s.verified}`}</button>)}</div>}>
-    <p className="rounded bg-muted p-2 text-xs"><b>Verified facts may be used. Unverified facts must not be published.</b> Preloaded from onboarding, the client record, the baseline and the stored crawl — nothing was fetched. Edit a value, then Approve it.</p>
+    <p className="rounded bg-muted p-2 text-xs"><b>Verified facts may be used. Unverified facts must not be published.</b> Preloaded from onboarding, the client record, the baseline and the stored crawl — nothing was fetched. Edit a value, then Approve it. Prompts never present a "Needs approval" value as confirmed.</p>
     {s.requiredMissing.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Required for {template ? 'the template' : 'any build'} and not verified yet (marked *): {s.requiredMissing.join(', ')}</p>}
     <div className="space-y-2">{shown.map((r) => {
       const draft = valueOf(r); const changed = draft !== r.value;
@@ -442,15 +693,22 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
           <span className="text-xs font-medium">{r.label}{r.required && <span className="text-destructive"> *</span>}</span>
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${FACT_TONE[r.status]}`}>{FACT_STATUS_LABELS[r.status]}</span>
           {r.source && <span className="text-[11px] text-muted-foreground">from {r.source}</span>}
+          {r.source_url && <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">· {r.source_url}</span>}
+          {r.notes && <span className="text-[11px] text-muted-foreground">· note</span>}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[240px] flex-1 text-xs" value={draft} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))} />
+          <Input aria-label={`Value for ${r.label}`} className="h-8 min-w-[200px] flex-1 text-xs" value={draft} placeholder="No value — type one only if the client has confirmed it" onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))} />
           <Button size="sm" variant={r.status === 'verified' && !changed ? 'secondary' : 'default'} disabled={!draft.trim() || (r.status === 'verified' && !changed)} onClick={() => commit(r, 'verified')}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button>
           <Button size="sm" variant="outline" disabled={r.status === 'rejected' && !changed} onClick={() => commit(r, 'rejected')}><X className="mr-1 h-3.5 w-3.5" />Reject</Button>
           <Button size="sm" variant="outline" disabled={r.status === 'not_applicable'} onClick={() => commit(r, 'not_applicable')}>N/A</Button>
+          <Button size="sm" variant="ghost" aria-label={`Source and notes for ${r.label}`} onClick={() => setOpenKey((k) => (k === r.key ? null : r.key))}>{openKey === r.key ? 'Hide source' : 'Source / notes'}</Button>
           {changed && <Button size="sm" variant="ghost" onClick={() => setDrafts((d) => { const n = { ...d }; delete n[r.key]; return n; })}>Undo edit</Button>}
           {r.decided && !changed && <Button size="sm" variant="ghost" onClick={() => onReset(r.key)} title="Forget your decision and go back to what the records say">Reset</Button>}
         </div>
+        {openKey === r.key && <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <Field label="Source URL / context" value={r.source_url} placeholder="https://… or 'phone call 24 Sep'" onChange={(v) => onPut(annotate(r, { source_url: v }))} />
+          <Field label="Notes (never published)" value={r.notes} placeholder="e.g. client confirmed on the call" onChange={(v) => onPut(annotate(r, { notes: v }))} />
+        </div>}
         {r.note && <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{r.note}</p>}
       </div>;
     })}{shown.length === 0 && <p className="text-xs text-muted-foreground">Nothing in this filter.</p>}</div>
@@ -459,7 +717,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
       <div className="min-w-[200px] flex-1"><Label className="text-xs">Value</Label><Input className="h-8 text-xs" value={newValue} placeholder="e.g. 123456" onChange={(e) => setNewValue(e.target.value)} /></div>
       <Button size="sm" disabled={!newLabel.trim() || !newValue.trim()} onClick={() => {
         const spec = template?.facts.find((f) => f.label.toLowerCase() === newLabel.trim().toLowerCase());
-        onPut({ key: spec?.key ?? ('custom_' + newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).slice(0, 80), label: spec?.label ?? newLabel.trim(), value: newValue.trim(), status: 'verified', source: 'added by Paul' });
+        onPut({ key: spec?.key ?? ('custom_' + newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).slice(0, 80), label: spec?.label ?? newLabel.trim(), value: newValue.trim(), status: 'verified', source: 'added by Paul', source_url: '', notes: '' });
         setNewLabel(''); setNewValue('');
       }}><Plus className="mr-1 h-3.5 w-3.5" />Add as verified</Button>
       <Button size="sm" variant="outline" onClick={() => setPasteOpen((o) => !o)}>Paste facts from capture</Button>
@@ -472,7 +730,7 @@ function FactsSection({ rows, template, onDecide, onReset, onPut, onPaste }: {
 function ArchitectureSection({ state, template, rows, issues, checkedPages, cited, update, goStep, toast, leadId }: {
   state: WebsiteBuildState; template: ReturnType<typeof templateById>; rows: FactRow[];
   issues: ReturnType<typeof checkArchitecture>; checkedPages: Array<{ url: string; kind?: string }>; cited: Array<{ url: string; questions: string[] }>;
-  update: (fn: (s: WebsiteBuildState) => WebsiteBuildState) => void; goStep: (s: Stage) => void;
+  update: UpdateFn; goStep: (s: Stage) => void;
   toast: ReturnType<typeof useToast>['toast']; leadId: string;
 }) {
   const [redirectText, setRedirectText] = useState(() => redirectsToText(state.redirects));
@@ -483,6 +741,7 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
   const applyRedirects = (text: string) => { setRedirectText(text); update((s) => ({ ...s, redirects: parseRedirectText(text) })); };
   const errors = issues.filter((i) => i.level === 'error'); const warnings = issues.filter((i) => i.level === 'warning');
   const counts = PAGE_ACTIONS.map((a) => [a, state.pages.filter((p) => p.action === a).length] as const).filter(([, n]) => n > 0);
+  const manifestPages = state.manifest.pages;
 
   return <>
     <Section title="Page architecture" right={<span className="text-xs text-muted-foreground">{state.pages.length} page(s){counts.length ? ' · ' + counts.map(([a, n]) => `${n} ${PAGE_ACTION_LABELS[a].toLowerCase().replace('…', '')}`).join(' · ') : ''}</span>}>
@@ -491,6 +750,7 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
         {template && <Button size="sm" variant="outline" onClick={() => addPages(seedFromTemplate(template, rows).filter((n) => !state.pages.some((p) => p.path && p.path === n.path)), 'From the template, for verified services only.')}>Add template pages (verified services only)</Button>}
         {cited.length > 0 && <Button size="sm" variant="outline" onClick={() => addPages(seedFromCited(cited, state.pages), 'Old URLs AI engines cited in the baseline — decide each one.')}>Add URLs AI engines cited ({cited.length})</Button>}
         {checkedPages.length > 0 && <Button size="sm" variant="outline" onClick={() => addPages(seedFromCrawl(checkedPages, state.pages), 'Old URLs from the stored crawl — decide each one.')}>Add old URLs from stored crawl ({checkedPages.length})</Button>}
+        {manifestPages.length > 0 && <Button size="sm" variant="outline" onClick={() => addPages(seedFromCrawl(manifestPages.map((p) => ({ url: p.url, kind: p.type })), state.pages).slice(0, Math.max(0, MAX_PAGES - state.pages.length)), 'Pages from the source site manifest — decide each one.')}>Add pages from manifest ({manifestPages.length})</Button>}
         <Button size="sm" variant="outline" onClick={() => setPasteOpen((o) => !o)}>Paste page list from capture</Button>
         <Button size="sm" variant="outline" onClick={() => setPages((ps) => [...ps, { id: newPageId(), family: 'other', title: '', path: '', action: 'undecided', old_url: '', target: '', notes: '' }])}><Plus className="mr-1 h-3.5 w-3.5" />Add page</Button>
       </div>
@@ -523,7 +783,7 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
     <Section title="Redirect map" right={<span className="text-xs text-muted-foreground">{state.redirects.length} redirect(s)</span>}>
       <p className="text-xs text-muted-foreground">One line per old URL that will not exist at the same path: <code>/old-path -&gt; /new-path/ | reason</code>. One hop each, no chains, not everything to the homepage.</p>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => { const add = redirectsFromPages(state.pages, state.redirects); if (!add.length) { toast({ title: 'Nothing to add', description: 'No consolidated / redirected page with an old URL and a destination is missing from the map.' }); return; } applyRedirects([redirectText.trim(), redirectsToText(add)].filter(Boolean).join('\n')); toast({ title: `${add.length} redirect(s) added from the page plan` }); }}>Add redirects from consolidated / redirected pages</Button>
+        <Button size="sm" variant="outline" className="h-auto min-h-9 max-w-full whitespace-normal text-left" onClick={() => { const add = redirectsFromPages(state.pages, state.redirects); if (!add.length) { toast({ title: 'Nothing to add', description: 'No consolidated / redirected page with an old URL and a destination is missing from the map.' }); return; } applyRedirects([redirectText.trim(), redirectsToText(add)].filter(Boolean).join('\n')); toast({ title: `${add.length} redirect(s) added from the page plan` }); }}>Add redirects from consolidated / redirected pages</Button>
       </div>
       <Textarea rows={10} className="font-mono text-xs" value={redirectText} placeholder={'/old-page -> /services/new-page/ | merged into the service page'} onChange={(e) => applyRedirects(e.target.value)} />
     </Section>

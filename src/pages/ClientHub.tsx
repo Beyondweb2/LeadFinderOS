@@ -18,7 +18,7 @@ import { hubBaselineStatus, isFrozenBaselineStatus, isStartedBaselineStatus, pai
 import { approveAndStart, createSingleFlight, startApproved, type ApproveAndStartResult } from '@/lib/paidBaselineFlow';
 import { welcomePackReadiness, welcomePackUrl } from '@/lib/welcomePackData';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
-import { BUILD_MODE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } from '@/lib/websiteBuildState';
+import { BUILD_ROUTE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS } from '@/lib/websiteBuildState';
 import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
@@ -352,12 +352,12 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
     savedCanonicalDomain: build.canonical_domain || null,
   }), [lead, onboarding, audit, build.canonical_domain]);
   const confirmations = useMemo(() => clientConfirmationsNeeded(facts), [facts]);
-  const template = build.build_mode === 'template' ? templateById(build.template_id) : null;
+  const template = build.route === 'template_rebuild' ? templateById(build.template_id) : null;
   const qaTotal = QA_ITEMS.length;
   const qaDone = QA_ITEMS.filter((q) => build.qa[q.key]).length;
   const ro = (label: string, value: string) => <div><div className="text-xs text-muted-foreground">{label}</div><div className="break-words">{value || '—'}</div></div>;
-  const route = build.build_mode
-    ? BUILD_MODE_LABELS[build.build_mode] + (template ? ' · ' + template.name : '') + (build.build_mode === 'rebuild' && build.rebuild_style ? ' · ' + REBUILD_STYLE_LABELS[build.rebuild_style] : '')
+  const route = build.route
+    ? BUILD_ROUTE_LABELS[build.route] + (template ? ' · ' + template.name : '') + (build.route === 'faithful_rebuild' && build.rebuild_style ? ' · ' + REBUILD_STYLE_LABELS[build.rebuild_style] : '')
     : 'Not chosen yet';
 
   return <Stage title="5. Website Build">

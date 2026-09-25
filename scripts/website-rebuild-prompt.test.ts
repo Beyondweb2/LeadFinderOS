@@ -256,8 +256,9 @@ console.log('\n── THE REUSABLE RULES ARE PRESENT IN FULL ──');
 
 console.log('\n── WEBSITE BUILD STATE PARSING ──');
 {
-  ok(parseWebsiteBuild(null).build_mode === '', 'an absent record has no build mode');
-  ok(parseWebsiteBuild({ build_mode: 'nonsense' }).build_mode === '', 'an unknown mode falls to none, never through');
+  ok(parseWebsiteBuild(null).route === '', 'an absent record has no build route');
+  ok(parseWebsiteBuild({ build_mode: 'nonsense' }).route === '', 'an unknown V1 mode falls to no route, never through');
+  ok(parseWebsiteBuild({ route: 'nonsense', version: 2 }).route === '', 'an unknown route falls to none, never through');
   ok(parseWebsiteBuild({ repo_url: ' x ' }).repo_url === 'x', 'values are trimmed');
   ok(parseWebsiteBuild({ status: 'qa', repo_url: 'y' }).repo_url === 'y', 'the 2026-09-22 shape (with a status token) still reads');
 }
