@@ -9,9 +9,8 @@
    prompt): answer THEIR message → the strongest relevant findings → one simple next step. A pitch
    that ignores the question they just asked is the failure this file exists to prevent.
 
-   ⛔ THE OFFER IS READ FROM findableOffer.ts, NEVER RETYPED. The model is handed
-      FINDABLE_OFFER_SUMMARY and FINDABLE_GUARANTEE verbatim, and `checkReply` refuses a draft that
-      names any other price. Change the offer there and every draft follows.
+   ⛔ NO PRICE AT THIS STAGE (Paul, 2026-09-25, superseding the first version that answered "how
+      much" with the offer). See "WHAT THIS REPLY IS FOR" below; the offer stays in findableOffer.ts.
 
    ⛔ SALES FACTS ARE WHAT THE PROSPECT SAID, NOT WHAT WE GUESS. A fact is kept only when its quote is
       found, verbatim, in one of THEIR inbound messages. Facts live on the research row and are never
@@ -19,10 +18,9 @@
 
    Pure and edge-reachable (relative `.ts` imports only).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import {
-  FINDABLE_OFFER_SUMMARY, FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP,
-  FINDABLE_CONTRACT_TOTAL_GBP, REPORT_PUBLIC_ORIGIN,
-} from './findableOffer.ts';
+/* ⛔ The offer constants (findableOffer.ts) are deliberately NOT imported: this stage carries no price
+   (Paul, 2026-09-25). A later sales stage will use them; the canonical data is untouched. */
+import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
 import {
   normaliseForMatch, MIN_QUOTE_CHARS, MIN_SALES_STRENGTH, rankFindings, findingScore,
   type AuditContext, type ResearchFinding, type WarmLeadResearch,
@@ -121,6 +119,7 @@ export interface SalesFactProposal { key: string; value: string; quote: string; 
 const FACT_RULES: ReadonlyArray<{ key: SalesFactKey; value: 'yes' | 'no'; re: RegExp }> = [
   { key: 'owns_website', value: 'no', re: /\b(?:i|we)\s+(?:don'?t|do not|dont)\s+(?:own|control)\s+(?:the|my|our|it)\b[^.?!]*/i },
   { key: 'owns_website', value: 'yes', re: /\b(?:i|we)\s+(?:do\s+)?(?:own|control)\s+(?:the|my|our)\s+(?:web\s*site|site)\b[^.?!]*|\b(?:it'?s|its|the (?:web)?site is)\s+(?:mine|ours|my own)\b[^.?!]*/i },
+  { key: 'has_existing_provider', value: 'yes', re: /\b(?:my|our|an|the|a)\s+(?:agency|developer|web ?designer|web guy|it company|website company|web company)\s+(?:manages|looks after|runs|does|handles|built|hosts|sorts)\b[^.?!]*/i },
   { key: 'has_existing_provider', value: 'yes', re: /\b(?:already|currently)\b.{0,40}\b(?:seo|someone|somebody|a company|an agency|a guy|web ?designer|marketing)\b[^.?!]*|\b(?:i|we)\s+(?:have|'ve got|got|use|pay)\s+(?:someone|somebody|a (?:company|guy|firm|bloke|lad)|an agency)\b[^.?!]*/i },
   { key: 'prefers_call', value: 'yes', re: /\b(?:call me|ring me|give me a (?:call|ring|bell)|phone me|can you (?:call|ring)|rather (?:talk|speak) on the phone)\b[^.?!]*/i },
   { key: 'not_interested', value: 'yes', re: /\b(?:not interested|no thanks|no thank you|not for us|stop messaging|unsubscribe|remove me)\b[^.?!]*/i },
@@ -200,7 +199,7 @@ export const SECONDARY_MIN_SCORE = 14;
 export const MAX_SECONDARY_FINDINGS = 2;
 /** The questions where the strongest website finding must feature. A refusal, a request for a call
  *  or a plain "yes I own it" is answered on its own terms. */
-export const PRIMARY_QUESTION_TYPES: ReadonlySet<WarmQuestionType> = new Set(['price', 'how_it_works', 'tell_me_more', 'show_changes', 'existing_provider', 'other']);
+export const PRIMARY_QUESTION_TYPES: ReadonlySet<WarmQuestionType> = new Set(['price', 'how_it_works', 'tell_me_more', 'show_changes', 'existing_provider', 'ownership_answer', 'other']);
 /** The words the operator sees when the primary finding is missing — the brief's own wording. */
 export const PRIMARY_MISSING_PROBLEM = 'Strong website finding was not used.';
 export const PRIMARY_REWRITE_INSTRUCTION = 'The previous response ignored the strongest evidence. Rewrite it while keeping it conversational and explicitly include the primary website finding, with its concrete details.';
@@ -266,7 +265,12 @@ export function findingMentioned(text: string, f: ResearchFinding, town?: string
       if (/noindex/.test(id)) return /\b(noindex|not to be (listed|shown|included)|left out|leave (it|them) out|hidden|excluded|out of (the )?(search )?results|not (listed|showing) in)\b/.test(t);
       if (/canonical/.test(id)) return /\b((another|different|other) (web ?site|site|domain|address)|main version|canonical)\b/.test(t);
       if (/sitemap/.test(id)) return /\bsitemap\b/.test(t);
-      if (/robots|blocked|crawler/.test(id) || /block/i.test(f.title)) return /\b(block\w*|robots|shut out|locked out|keep\w* out|can t (get in|reach|read))\b/.test(t);
+      if (/robots|blocked|crawler/.test(id) || /block/i.test(f.title)) {
+        const blockedIdea = /\b(block\w*|robots|shut out|locked out|keep\w* out|can t (get in|reach|read))\b/.test(t);
+        // When the crawlers are known, at least one must be named: "crawlers are blocked" alone is generic.
+        const names = (f.keyDetails ?? []).map(flat).filter((n) => n.length >= 4);
+        return blockedIdea && (names.length === 0 || names.some((n) => tf.includes(n)));
+      }
       if (/client_rendered|unreadable/.test(id) || /javascript/i.test(f.title)) return /\b(javascript|nearly empty|blank|no text|almost nothing)\b/.test(t);
       if (/broken/.test(id)) return /\b(broken|error|dead end|404|doesn t load|don t load)\b/.test(t);
       break;
@@ -314,11 +318,57 @@ export function findingSourceLabel(f: ResearchFinding): string {
 
 /* ─────────────────────────────── what the reply should do ─────────────────────────────── */
 
-/** Ask "do you own/control the site?" only when the research gives a reason AND they have not
- *  already answered it. No reason → never ask; answered → never ask again. */
-export function shouldAskOwnership(research: WarmLeadResearch | null | undefined, facts: SalesFacts | null | undefined): boolean {
-  if (facts?.owns_website) return false;
-  return (research?.ownershipClues?.length ?? 0) > 0;
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   🔴 WHAT THIS REPLY IS FOR (Paul, 2026-09-25, third pass). It goes AFTER opener → reply → the AI /
+   competitor hook → their reply to it. Its job is exactly three things:
+        PROVE THERE IS A REAL ISSUE → SAY WHAT WE CAN DO ABOUT IT → FIND OUT WHO CONTROLS THE WEBSITE
+   ⛔ NO PRICE AT THIS STAGE. No figure, no monthly, no payments, no guarantee, no pricing link — even
+      when they ask "how much" (the reply says it depends on which route suits them, which is what
+      the ownership question finds out). The canonical offer in findableOffer.ts is untouched; a
+      later stage uses it. `checkReply` refuses any of it.
+   ⛔ IT ENDS WITH THE WEBSITE QUESTION ("are you with an agency or do you manage the site
+      yourself?") unless they have ALREADY told us (sales facts) — then it is never asked again.
+   It always leads from the AI search that started the conversation, uses the strongest finding with
+   its specifics, offers BOTH routes (fix the current site / build a new one — research leans which
+   way), and sounds like Paul typed it on WhatsApp.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Has the prospect already told us who controls the site? Either answer closes the question. */
+export function websiteControlKnown(facts: SalesFacts | null | undefined): boolean {
+  return !!facts?.owns_website || facts?.has_existing_provider?.value === 'yes';
+}
+
+/** The ownership / agency question ends the reply unless they have already answered it. */
+export function shouldAskOwnership(_research: WarmLeadResearch | null | undefined, facts: SalesFacts | null | undefined): boolean {
+  return !websiteControlKnown(facts);
+}
+
+export type RouteLean = 'fix_existing' | 'consider_new' | 'new_only';
+
+/** Which of the two routes the research points to. Both are always offered; this only says which
+ *  sounds more natural. A site with no website gets the build route alone. */
+export function routeLean(r: WarmLeadResearch | null | undefined): RouteLean {
+  if (!r || r.status === 'no_website') return r?.status === 'no_website' ? 'new_only' : 'fix_existing';
+  const all = [...r.technicalFindings, ...r.contentFindings];
+  const broken = all.some((f) => /client_rendered|unreadable/.test(f.id) || /nearly empty without javascript/i.test(f.title));
+  const agencyHosted = r.ownershipClues.some((c) => /host|manage/i.test(c));
+  const noCore = all.some((f) => f.kind === 'missing_core_service_pages');
+  return broken || (agencyHosted && noCore) ? 'consider_new' : 'fix_existing';
+}
+
+export const ROUTE_LABELS: Record<RouteLean, string> = {
+  fix_existing: 'optimise the existing site (a Findable rebuild offered as the other route)',
+  consider_new: 'optimise the existing site or a Findable rebuild (research leans rebuild)',
+  new_only: 'Findable builds a new site (no website on record)',
+};
+
+/** "electrician in Addlestone" — what AI was asked, in the lead's own terms. */
+export function aiSearchContext(ctx: { audit: AuditContext | null; trade: string | null; town: string | null }): string | null {
+  const raw = (ctx.audit?.trade || ctx.trade || '').trim().toLowerCase();
+  const town = (ctx.audit?.town || ctx.town || '').trim();
+  if (!raw) return null;
+  const trade = raw.replace(/ies$/, 'y').replace(/(?<!s)s$/, '');
+  return town ? `${trade} in ${town}` : trade;
 }
 
 export interface ReplyContext {
@@ -348,10 +398,14 @@ export interface ReplyContext {
   selection: ReplySelection;
   /** Must this reply use the primary finding? (a primary exists AND the question calls for it) */
   primaryRequired: boolean;
+  /** Which route the research leans to (derived). */
+  route: RouteLean;
+  /** "electrician in Addlestone" (derived). */
+  searchContext: string | null;
   avoidText: string | null;
 }
 
-export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered' | 'selection' | 'primaryRequired'>): ReplyContext {
+export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnership' | 'allowReportUrl' | 'alreadyAnswered' | 'selection' | 'primaryRequired' | 'route' | 'searchContext'>): ReplyContext {
   const question = classifyInbound(i.latest.text);
   const selection = selectReplyFindings(i.research, i.thread, i.town, i.hookAt ?? null);
   return {
@@ -362,42 +416,46 @@ export function buildReplyContext(i: Omit<ReplyContext, 'question' | 'askOwnersh
     alreadyAnswered: i.thread.some((m) => m.direction === 'outbound' && m.at > i.latest.at),
     askOwnership: shouldAskOwnership(i.research, i.salesFacts),
     allowReportUrl: !!i.reportUrl && reportUrlAllowed(i.latest.text, question.all),
+    route: routeLean(i.research),
+    searchContext: aiSearchContext(i),
   };
 }
 
 /* ─────────────────────────────── the prompt ─────────────────────────────── */
 
-export const REPLY_SYSTEM_PROMPT = `You write WhatsApp replies for Paul, who runs Findable. A UK local business owner replied to Paul's cold WhatsApp message and Paul wants a draft reply. Paul reads and edits every draft before sending — you never send anything. Return ONLY structured data via the return_reply tool.
+export const REPLY_SYSTEM_PROMPT = `You draft WhatsApp replies for Paul, who helps UK local businesses show up when people ask AI tools (google ai, chatgpt, gemini, perplexity) for their trade in their area. Paul reads and edits every draft before sending; you never send anything. Return ONLY structured data via the return_reply tool.
 
-WHAT FINDABLE IS (use these facts, never contradict them):
-- Findable measures how often AI assistants such as ChatGPT and Gemini name a business when people ask for that trade in that area, then works on what those tools read — the business's own website pages and its presence in the sources that get cited for that trade — and re-measures on the same questions after four weeks.
-- There are two ways to work together: (A) Findable improves the client's EXISTING website, which stays theirs; or (B) Findable builds and hosts a NEW website under its website-build agreement. Never suggest Findable can take over, take down or own a client's existing site.
-- PRICE, exactly: ${FINDABLE_OFFER_SUMMARY}
-- GUARANTEE, exactly what it covers: ${FINDABLE_GUARANTEE} In plain words: if their measured AI visibility has not gone up at the four-week re-measure, they can claim back the first £${FINDABLE_SETUP_PRICE_GBP}.
-- Full details live at ${FINDABLE_DETAILS_URL}
+WHERE THIS CONVERSATION IS: Paul messaged them cold, they replied, Paul sent a message saying he asked AI for their trade in their area and it named other businesses, and now they have replied to that. This reply has exactly three jobs:
+1. PROVE THERE IS A REAL ISSUE: AI was asked for their service in their area, it recommended their competitors, not them, and (where the research found one) here is a specific reason on their website.
+2. SAY WHAT WE CAN DO ABOUT IT: we can fix it on the site they already have, OR build them a new site properly set up for ai visibility and seo. Offer both routes; never imply everyone needs a new site.
+3. FIND OUT WHO CONTROLS THE WEBSITE: end by asking whether they are with an agency or own/manage the site themselves (unless FOR THIS REPLY says they already told us).
+
+THE SHAPE (normally 3 or 4 short paragraphs):
+- respond naturally to what they just said (if they misread the hook, e.g. "do you need an electrician?", put them right in a friendly way: "nah mate, i was checking what google ai recommends when someone's looking for an electrician in addlestone")
+- the AI search: what was asked and that it brought up their competitors instead of them. Do not list the competitors again; they have just seen them.
+- the specific issue from the PRIMARY FINDING, with its real details, and what it means in plain english ("so a lot of the ai tools can't properly access and understand the site")
+- what we'd do: "that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo"
+- the website question last: "are you currently with an agency or do you own/manage the website yourself?"
+
+NO PRICE AT THIS STAGE. Do not mention any price, figure, monthly fee, number of payments, guarantee, refund or pricing link. If they asked how much, say it depends on which route makes sense for them, which is why you're asking about the website, and carry on.
+
+HOW PAUL WRITES ON WHATSAPP:
+- conversational, short, simple sentences. lowercase is fine and natural. "mate" where it fits.
+- product names in normal lowercase is fine: google ai, chatgpt, claude, perplexity.
+- no headings, no bullet points, no bold, no emojis, no dashes of any kind (no "—" or "–"): use a comma or a new sentence.
+- never: "i'd love to", "great question", "thanks for getting back to me", "ai-powered", "solutions", "leverage", "boost", "online presence", "seamless", "unlock", "don't hesitate", fake urgency, exaggerated claims.
+- it should read like Paul checked THEIR business himself and found something worth fixing, not like a sales script.
 
 NEVER:
-- promise or imply guaranteed rankings, recommendations, citations, leads, calls or customers;
-- name any price other than £${FINDABLE_SETUP_PRICE_GBP} to start and £${FINDABLE_MONTHLY_GBP} a month (the £${FINDABLE_CONTRACT_TOTAL_GBP.toLocaleString('en-GB')} total only if they ask what it comes to);
-- say "cancel any time", "no contract" or "no minimum" — there is a real 12-month minimum;
-- add a hedge next to the guarantee ("the engines decide", "no one can promise");
-- claim to know how an AI model decides ("AI can't see", "AI ignores", "AI reads it as"). Say "can make it harder", "may mean", "gives it less to go on";
-- mention a website problem that is not in the FINDINGS list you are given, or state a finding more strongly than its detail does;
-- resend or re-word the competitor/AI-check message Paul already sent, or list those competitors again — they have seen it and replied to it; this reply moves the conversation on;
-- name a competitor who is not in the AI VISIBILITY block;
-- call Paul a founder, CEO or agency; no signature, no "Kind regards".
+- invent a website problem. Use ONLY the findings you are given, and state them no more strongly than their detail does;
+- water a specific finding down to "a few technical issues" or "your website could be better optimised";
+- promise or imply rankings, recommendations, citations, customers or leads;
+- claim to know how an AI model decides ("ai ignores", "ai reads it as"). Say what is on the site and that it "can make it harder" / means ai "can't properly access" when access is actually blocked;
+- repeat or re-word the competitor message Paul already sent;
+- say Findable can take over, take down or own their existing site;
+- call Paul a founder, CEO or agency; no sign-off.
 
-HOW PAUL WRITES:
-- Short, direct, normal British English. Friendly, not corporate. An occasional "mate" is fine; never gushing, never salesy.
-- Usually 2 to 5 short paragraphs separated by a blank line. No bullet lists unless they explicitly asked for detail. No emojis, or one at most.
-- ANSWER THEIR ACTUAL MESSAGE FIRST, in the first line. "How much?" gets the price in the first sentence. "How does it work?" gets what Findable does. "I already have someone doing SEO" gets a straight answer to that — what Findable measures is different from ranking work, and it can sit alongside it. "What would you change?" gets the findings.
-- Then, only where it helps, two or three of the strongest FINDINGS that fit what they asked, in plain words, as something Paul noticed himself ("I had a look through your site as well…"). If no findings are provided, do not invent any — just answer them well.
-- If the site research says the site is technically fine, do not suggest it is broken; talk about AI visibility and content instead.
-- End with one simple next step or question. Do not ask something the conversation has already answered.
-- If they said they are not interested: a short, polite, no-pressure close. Nothing else.
-- Do not repeat what Paul already said earlier in the conversation word for word.
-
-SALES FACTS: if their messages EXPLICITLY state one of these, return it in sales_facts with their exact words as the quote: owns_website, has_existing_provider, interested_in_rebuild, requested_price, prefers_call, not_interested. Values are "yes" or "no". Never guess; if it is not explicit, leave it out.`;
+SALES FACTS: if their messages EXPLICITLY state one of these, return it in sales_facts with their exact words as the quote: owns_website, has_existing_provider (an agency, developer or someone else manages the site or their marketing), interested_in_rebuild, requested_price, prefers_call, not_interested. Values are "yes" or "no". Never guess.`;
 
 export const REPLY_TOOL = {
   type: 'function',
@@ -446,61 +504,59 @@ export function buildReplyPrompt(ctx: ReplyContext): string {
 
   let research: string;
   if (!r) {
-    research = 'No website research is available. Do NOT mention anything about their website. Answer their message using the facts above.';
+    research = 'No website research is available. Do NOT mention anything specific about their website. Lead with the AI search result instead.';
   } else if (r.status === 'no_website') {
-    research = 'They have NO website on record. Do not critique a website. If it fits, mention Findable can build one (route B).';
+    research = 'They have NO website on record. Do not critique a website. The route is: we can build them one that is properly set up for ai visibility and seo.';
   } else if (r.status === 'failed') {
-    research = 'Their website could NOT be read. Do NOT mention any website problem. Answer their message using the facts above.';
+    research = 'Their website could NOT be read. Do NOT mention any website problem. Lead with the AI search result instead.';
   } else {
     const { primary, secondary } = ctx.selection;
     const concrete = (f: ResearchFinding) => sayableDetails(f).map((d) => `"${d}"`).join(' / ');
     research = [
       `Researched ${hhmm(r.generatedAt)} (${r.status}). ${r.businessSummary ?? ''}`.trim(),
-      r.technicallyClean ? 'The site is technically fine — no technical fault was found. Do not say or suggest it is broken.' : '',
       primary
         ? [
-          `PRIMARY FINDING — YOU MUST REFER TO THIS IN THE RESPONSE, keeping its concrete details:\n- [${primary.id}] ${primary.title}: ${primary.detail}\n  Concrete details to keep: ${concrete(primary)}`,
-          secondary.length ? `SUPPORTING FINDINGS (optional, at most two, only if they fit):\n${secondary.map((f) => `- [${f.id}] ${f.title}: ${f.detail}\n  Concrete details: ${concrete(f)}`).join('\n')}` : '',
-          'Say the finding the way Paul would, but keep the specifics (the actual times, the actual wording, the actual pages). Never water it down to "a few inconsistencies", "a few things we\'d improve" or "your site could be clearer".',
+          `PRIMARY FINDING — YOU MUST USE THIS AS THE SPECIFIC ISSUE, keeping its concrete details:\n- [${primary.id}] ${primary.title}: ${primary.detail}\n  Concrete details to keep: ${concrete(primary)}`,
+          secondary.length ? `SUPPORTING FINDINGS (use at most ONE, and only if it genuinely strengthens the point):\n${secondary.map((f) => `- [${f.id}] ${f.title}: ${f.detail}\n  Concrete details: ${concrete(f)}`).join('\n')}` : '',
+          'Specificity beats quantity: one clear issue with its real details, not a mini audit.',
         ].filter(Boolean).join('\n')
-        : 'No website finding is specific enough to lead with. Do NOT invent one. If it helps, explain the gap using the AI VISIBILITY result instead.',
-      ctx.selection.alreadyMentioned.length ? `Paul has ALREADY told them about: ${ctx.selection.alreadyMentioned.map((f) => f.title).join('; ')} — do not repeat it.` : '',
-      r.ownershipClues.length ? `Ownership clues: ${r.ownershipClues.join(' ')}` : '',
+        : `No website finding is strong enough to use. Do NOT invent one. ${r.technicallyClean ? 'The site itself is not badly built: say so honestly, then ' : ''}use the strongest true point you have: AI still isn't linking them strongly enough with ${ctx.searchContext ?? 'their trade in their area'}, while it is with those other businesses, and we would make their services, areas and business evidence much clearer so google and the ai tools understand exactly what they do and where.`,
+      ctx.selection.alreadyMentioned.length ? `Paul has ALREADY told them about: ${ctx.selection.alreadyMentioned.map((f) => f.title).join('; ')}. Do not repeat it.` : '',
     ].filter(Boolean).join('\n');
   }
 
-  let visibility = 'No AI-visibility check is available.';
+  let visibility = 'No AI check result is available beyond the hook Paul sent.';
   const a = ctx.audit;
-  if (a?.namedEverywhere) visibility = 'Our check named them on every AI engine it tried. Do NOT say AI is missing them.';
+  if (a?.namedEverywhere) visibility = 'Our check named them on every AI engine it tried. Do NOT say AI is recommending competitors instead of them.';
   else if (a && a.totalDatapoints) {
-    visibility = `Our AI check (${a.createdAt ? hhmm(a.createdAt) : 'date unknown'}): named in ${a.namedDatapoints ?? 0} of ${a.totalDatapoints} answers for ${a.trade ?? 'their trade'}${a.town ? ` in ${a.town}` : ''}.${a.competitors.length ? ` Also named: ${a.competitors.slice(0, 3).join(', ')}.` : ''}`;
+    visibility = `When we asked AI for ${ctx.searchContext ?? 'their trade'}, they were named in ${a.namedDatapoints ?? 0} of ${a.totalDatapoints} answers. (The competitors were in Paul's hook; do not list them again.)`;
   }
 
+  const lean = ctx.route === 'new_only'
+    ? 'ROUTE: they have no website, so the route is building them one properly set up for ai visibility and seo.'
+    : `ROUTES: offer both, fixing it on the site they've already got or building a new one properly set up for ai visibility and seo. ${ctx.route === 'consider_new' ? 'The research suggests the current setup may not be worth working with, so the new-site route can sound the more natural of the two.' : 'Fixing the current site is the natural first route here.'}`;
+  const known = ctx.salesFacts.owns_website ?? (ctx.salesFacts.has_existing_provider?.value === 'yes' ? ctx.salesFacts.has_existing_provider : null);
   const instructions = [
-    ctx.hookTemplate
-      ? 'STAGE: Paul has already sent them the AI check naming the businesses AI mentioned, and they have replied to it. Do NOT repeat that message or list those businesses again.'
-      : '',
+    ctx.searchContext ? `AI SEARCH CONTEXT: AI was asked for "${ctx.searchContext}".` : '',
+    ctx.hookTemplate ? 'STAGE: Paul has already sent them the AI check naming the businesses AI mentioned, and they have replied to it. Do NOT repeat that message or list those businesses again.' : '',
+    ctx.primaryRequired ? 'ISSUE: the PRIMARY FINDING is the specific issue in this reply, with its real details.' : '',
+    lean,
     ctx.askOwnership
-      ? 'OWNERSHIP: the research suggests another company may build/host/manage their site. Ask, naturally, whether they own/control the current website or whether it is owned/managed by the company that built it.'
-      : ctx.salesFacts.owns_website
-        ? `OWNERSHIP: already answered (owns_website = ${ctx.salesFacts.owns_website.value}). Do NOT ask about it again; build on the answer.`
-        : 'OWNERSHIP: no reason to ask. Do not ask who owns the site.',
+      ? (ctx.route === 'new_only'
+        ? 'LAST LINE: ask, naturally, whether they have a website at the moment or have been going without one.'
+        : 'LAST LINE: end with the website question, naturally, e.g. "are you currently with an agency or do you own/manage the website yourself?"')
+      : `WEBSITE QUESTION: they have ALREADY told us (they said: "${clip(known?.quote ?? '', 160)}"). Do NOT ask who owns or manages the site again. Build on what they said and end with one simple next step instead.`,
+    ctx.question.all.includes('price') ? 'THEY ASKED THE PRICE: do not give one at this stage. Say it depends which route makes sense for them, which is why you are asking about the website.' : '',
     ctx.allowReportUrl && ctx.reportUrl
-      ? `REPORT LINK: they asked for it or for what we found — you may include ${ctx.reportUrl}`
-      : 'REPORT LINK: do NOT include the audit/report link in this reply.',
-    ctx.question.primary === 'price' ? 'PRICE: their message asks about price — the FIRST sentence must give it, with both figures; then the four-week first-payment guarantee; and include the Full details link.' : '',
-    ctx.primaryRequired && ctx.question.primary === 'price'
-      ? 'ORDER: price → guarantee → "I had a look through your site as well. The biggest thing I noticed is …" (the PRIMARY FINDING, concretely) → optionally one supporting finding → the link / a question. Never open with the website issue.'
-      : ctx.primaryRequired
-        ? 'ORDER: answer their message in a line, then make the PRIMARY FINDING the centre of the reply ("For yours, one of the clearest issues I found is …", concretely), then what Findable would change about it, then a simple question.'
-        : '',
-    ctx.alreadyAnswered ? 'ALREADY ANSWERED: Paul has already replied after their latest message (see the conversation). Do not repeat what he said; write a short, natural follow-up that adds something new.' : '',
+      ? `REPORT LINK: they asked for it or for what we found, so you may include ${ctx.reportUrl}`
+      : 'REPORT LINK: do NOT include any link.',
+    ctx.alreadyAnswered ? 'ALREADY ANSWERED: Paul has already replied after their latest message (see the conversation). Do not repeat what he said; write a short follow-up that adds something new.' : '',
     ctx.variant > 0 && ctx.avoidText
       ? `ALTERNATIVE: this is regenerate #${ctx.variant}. Write a genuinely different version (different opening and wording, same facts) from:\n"""${clip(ctx.avoidText, 1500)}"""`
       : '',
   ].filter(Boolean).join('\n');
 
-  return `THEIR LATEST MESSAGE — answer this first:
+  return `THEIR LATEST MESSAGE, respond to this naturally first:
 """${clip(ctx.latest.text || '(they sent a photo or file with no text)', 1500)}"""
 Keyword hint (may be wrong): ${ctx.question.all.join(', ')}
 
@@ -534,83 +590,111 @@ export interface ReplyCheck {
 }
 
 const GUARANTEE_OVERREACH = /\b(guarantee[ds]?|promise[ds]?|guaranteed)\b[^.?!\n]{0,50}\b(rank(?:ing|ed)?s?|top|first page|number one|#1|recommend(?:ed|ation)?s?|cit(?:ed|ation)s?|leads|customers|calls|enquiries|more work)\b/i;
-const TOP_CLAIM = /\bwe(?:'ll| will| can)\s+(?:get|put|make)\s+you\s+(?:to\s+)?(?:the\s+)?(?:top|number one|#1|first)\b/i;
-const NO_MINIMUM = /\b(cancel (?:any ?time|whenever)|stop (?:any ?time|whenever)|no contract|no minimum|no tie[- ]in)\b/i;
-const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:['\u2019]|no)?t|cannot|doesn['\u2019]?t|does not|won['\u2019]?t|will not|never)\s+(?:see|read|find|understand|index|crawl|trust)\b|\b(?:AI|ChatGPT|Gemini)\s+(?:ignores|reads (?:it|them|those) as)\b/i;
-const OWNERSHIP_Q = /\b(own|control|manage[sd]?|built|host(?:s|ed)?)\b[^?\n]{0,80}\?/i;
+const TOP_CLAIM = /\bwe(?:['’]ll| will| can)\s+(?:get|put|make)\s+you\s+(?:to\s+)?(?:the\s+)?(?:top|number one|#1|first)\b/i;
+const AI_ABSOLUTE = /\b(?:AI|ChatGPT|Gemini|Google)\s+(?:can(?:['’]|no)?t|cannot|doesn['’]?t|does not|won['’]?t|will not|never)\s+(?:see|read|find|understand|index|crawl|trust)\b|\b(?:AI|ChatGPT|Gemini)\s+(?:ignores|reads (?:it|them|those) as)\b/i;
+/** Price talk of any kind — this stage carries none (Paul, 2026-09-25). */
+const PRICE_TALK = /£\s?\d|\b\d+\s?(?:quid|pounds?)\b|\bper month\b|\ba month\b|\/\s?month|\bmonthly\b|\b\d+\s+payments?\b|\bpayments? in total\b|\brefund\w*\b|\bmoney back\b|\bguarantee\w*\b|\bminimum term\b/i;
+/** The website question, in its natural forms. */
+const WEBSITE_Q = /\b(agency|agencies|developer|web (?:guy|designer|company|person)|own|owns|manage|manages|control|look(?:s|ing)? after|built|runs?|in charge of|have a (?:web)?site|got a (?:web)?site)\b[^?]{0,140}\?/i;
+const ROUTE_EXISTING = /\b(site|website) you(?:['’]ve| have)? (?:already )?got\b|\b(?:current|existing) (?:web)?site\b|\bsite you already have\b|\byour (?:current )?(?:web)?site as it is\b|\bon (?:the|your) (?:current )?(?:web)?site\b/i;
+const ROUTE_NEW = /\bnew (?:one|site|website)\b|\bbuild (?:you )?(?:a|one|a new)\b|\brebuild\b/i;
+const AI_SEARCH = /\b(ai|chatgpt|gemini|perplexity|claude|google)\b[^.?!\n]{0,80}\b(asked|ask|recommend\w*|search\w*|brought up|came up|mention\w*|suggest\w*|shows?|named)\b|\b(asked|checking|checked|searched|looked)\b[^.?!\n]{0,60}\b(ai|chatgpt|gemini|perplexity|google)\b/i;
+/** An em/en dash, or a spaced hyphen used as one. A hyphen inside a quoted time range ("9AM - 9PM")
+ *  is the site's own wording, not Paul's punctuation, so it is allowed. */
+export function usesDash(text: string): boolean {
+  if (/[—–]/.test(text)) return true;
+  return [...text.matchAll(/\s-\s/g)].some((m) => {
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 8), m.index ?? 0);
+    const after = text.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 3);
+    return !(/\d\s*(?:am|pm)?$/i.test(before) && /^\d/.test(after));
+  });
+}
+const SALESY = /\b(i['’]?d love to|great question|thanks for (?:getting back|your reply|reaching out|coming back)|ai[- ]powered|solutions|leverage|cutting[- ]edge|game[- ]changer|boost(?:ing)? your|online presence|seamless\w*|unlock\w*|elevate|don['’]?t hesitate|act now|limited time|spaces are limited)\b/i;
+const HEADING = /^\s*(?:#{1,6}\s|\*\*[^*]+\*\*\s*$|[A-Z][A-Za-z ]{2,30}:\s*$)/m;
 const LIST_LINE = /^\s*(?:[-•*]|\d+[.)])\s+/m;
+export const REPLY_STAGE_SOFT_MAX_CHARS = 750;
 
 export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   const problems: string[] = [];
   const warnings: string[] = [];
   const text = (reply ?? '').trim();
   if (!text) return { problems: ['The draft is empty.'], warnings };
+  const refusal = ctx.question.primary === 'not_interested';
+  const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const last = paras[paras.length - 1] ?? '';
 
   if (GUARANTEE_OVERREACH.test(text) || TOP_CLAIM.test(text)) problems.push('It implies guaranteed rankings, recommendations or leads.');
-  if (NO_MINIMUM.test(text)) problems.push('It says they can cancel any time — there is a 12-month minimum.');
   if (/\bfounder\b|\bCEO\b/i.test(text)) problems.push('It calls Paul a founder/CEO.');
-  const allowed = new Set([String(FINDABLE_SETUP_PRICE_GBP), String(FINDABLE_MONTHLY_GBP), String(FINDABLE_CONTRACT_TOTAL_GBP), FINDABLE_CONTRACT_TOTAL_GBP.toLocaleString('en-GB')]);
-  const prices = [...text.matchAll(/£\s?([\d,]+(?:\.\d{2})?)/g)].map((m) => m[1].replace(/\.00$/, ''));
-  const wrong = prices.filter((p) => !allowed.has(p) && !allowed.has(p.replace(/,/g, '')));
-  if (wrong.length) problems.push(`It names a price that is not the offer: £${wrong.join(', £')}.`);
-  if (ctx.question.primary === 'price') {
-    const firstPara = text.split(/\n\s*\n/)[0] ?? '';
-    if (!new RegExp(`£\\s?${FINDABLE_SETUP_PRICE_GBP}\\b`).test(firstPara)) problems.push('They asked the price and the first paragraph does not give it.');
-    if (!/\bmonth/i.test(text)) problems.push('It names the start price without the monthly.');
-    /* Measured on the first live draft (Adcock Heat, 2026-09-25): price and findings, but no guarantee
-       and no link. A price answer without the four-week first-payment guarantee undersells the one
-       thing that makes the setup fee low-risk, so it is a problem, not a note. */
-    // "refund", "money back", "claim/get/have … back" ("you can get your first … back", live 2026-09-25).
-    if (!/\b(refund|money back|guarantee|(?:claim|get|have|give)[^.?!\n]{0,40}\bback)\b/i.test(text)) problems.push('They asked the price and it leaves out the four-week first-payment guarantee.');
-    if (!text.includes('findable.live')) problems.push(`They asked the price and it leaves out ${FINDABLE_DETAILS_URL}.`);
-  }
+  if (PRICE_TALK.test(text)) problems.push('It talks about price, payments or the guarantee. This stage carries no price.');
+  if (/findable\.live(?!\/(?:r|report)\/)/i.test(text)) problems.push('It links the pricing/details page. This stage carries no price.');
   if (ctx.reportUrl && !ctx.allowReportUrl && (text.includes(ctx.reportUrl) || /findable\.live\/(?:r|report)\//i.test(text))) {
     problems.push('It includes the report link when nothing in their message called for it.');
   }
-  if (ctx.salesFacts.owns_website && OWNERSHIP_Q.test(text)) problems.push('It asks about website ownership again, which they already answered.');
-  if (!ctx.askOwnership && !ctx.salesFacts.owns_website && OWNERSHIP_Q.test(text) && /\bown|control\b/i.test(text)) warnings.push('It asks who owns the site without a reason in the research.');
   const rivals = (ctx.audit?.competitors ?? []).filter((c) => c.trim().length >= 4);
   if (ctx.hookTemplate && rivals.filter((c) => normaliseForMatch(text).includes(normaliseForMatch(c))).length >= 2) {
     problems.push('It repeats the competitor hook they have already had (lists the same businesses again).');
   }
   if (ctx.primaryRequired && ctx.selection.primary && !findingMentioned(text, ctx.selection.primary, ctx.town)) problems.push(PRIMARY_MISSING_PROBLEM);
-  if (AI_ABSOLUTE.test(text)) problems.push('It claims to know how an AI model decides — hedge it ("can make it harder").');
+  if (AI_ABSOLUTE.test(text) && !(ctx.selection.primary && /block|robots|javascript/i.test(`${ctx.selection.primary.id} ${ctx.selection.primary.title}`))) {
+    problems.push('It claims to know how an AI model decides — hedge it ("can make it harder").');
+  }
   if ((!ctx.research || ctx.research.status === 'failed' || ctx.research.status === 'no_website') && /\b(your|the) (web)?site\b[^.?!]{0,60}\b(problem|issue|wrong|broken|missing|doesn'?t|isn'?t)\b/i.test(text)) {
     problems.push('It describes a website problem, but the site was not researched.');
   }
 
-  if (text.length > REPLY_SOFT_MAX_CHARS) warnings.push(`It is long for WhatsApp (${text.length} characters).`);
-  const paras = text.split(/\n\s*\n/).filter((p) => p.trim()).length;
-  if (paras > 5) warnings.push(`It has ${paras} paragraphs.`);
-  if (LIST_LINE.test(text) && !/\b(detail|list|breakdown|everything)\b/i.test(ctx.latest.text)) warnings.push('It uses a list they did not ask for.');
-  if (!/\?/.test(text) && ctx.question.primary !== 'not_interested') warnings.push('It ends without a question or next step.');
-  if (ctx.question.primary === 'how_it_works' && !text.includes('findable.live')) warnings.push(`No link to ${FINDABLE_DETAILS_URL}.`);
+  if (!refusal) {
+    if (!AI_SEARCH.test(text)) problems.push('It does not mention the AI search that started this conversation.');
+    if (ctx.route === 'new_only') {
+      if (!ROUTE_NEW.test(text)) problems.push('It does not say we can build them a site.');
+    } else if (!ROUTE_EXISTING.test(text) || !ROUTE_NEW.test(text)) {
+      problems.push('It does not offer both routes (fix the site they have, or build a new one).');
+    }
+    if (ctx.askOwnership && !WEBSITE_Q.test(last)) problems.push('It does not end with the website question (agency, or do they own/manage it).');
+  }
+  if (!ctx.askOwnership && WEBSITE_Q.test(text) && /\b(agency|own|owns|manage|manages|control)\b/i.test(text)) {
+    problems.push('It asks who owns/manages the website again, which they already told us.');
+  }
+  if (usesDash(text)) problems.push('It uses a dash (— or –). Paul writes with commas and full stops.');
+  if (SALESY.test(text)) problems.push(`It uses sales-script wording ("${text.match(SALESY)![0]}").`);
+  if (HEADING.test(text)) problems.push('It has a heading. WhatsApp messages from Paul have none.');
+  if (LIST_LINE.test(text)) problems.push('It uses a bullet or numbered list.');
+
+  if (text.length > REPLY_STAGE_SOFT_MAX_CHARS) warnings.push(`It is long for WhatsApp (${text.length} characters).`);
+  if (paras.length > 5) warnings.push(`It has ${paras.length} paragraphs.`);
   if (ctx.alreadyAnswered) warnings.push('You have already replied since their last message — this draft answers it again. Check it adds something new.');
-  if (ctx.askOwnership && !OWNERSHIP_Q.test(text)) warnings.push('The research suggests asking who owns the site, and the draft does not.');
+  if (!ctx.selection.primary && ctx.research && ctx.research.status !== 'failed' && ctx.research.status !== 'no_website') {
+    warnings.push('No website finding was strong enough to use, so the draft leans on the AI search result. Nothing was invented.');
+  }
   return { problems, warnings };
 }
 
 /* ─────────────────────────────── when the model is unavailable ─────────────────────────────── */
 
-/** A plain, rule-built reply for the questions it can answer without a model — price, how it works,
- *  tell me more. Anything else returns null and the operator is told the model is unavailable. */
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** A plain, rule-built reply in the same shape, for when the model is unavailable. Not for a
+ *  refusal (Paul answers that himself). */
 export function fallbackReply(ctx: ReplyContext): string | null {
-  const t = ctx.question.primary;
-  if (t !== 'price' && t !== 'how_it_works' && t !== 'tell_me_more') return null;
+  if (ctx.question.primary === 'not_interested') return null;
+  const search = ctx.searchContext ?? 'your trade in your area';
   const paras: string[] = [];
-  if (t === 'price') {
-    paras.push(FINDABLE_OFFER_SUMMARY);
-  } else {
-    paras.push('We measure how often AI tools like ChatGPT and Gemini name you when people ask for your trade locally, then work on what they read — your site’s pages and the places that get cited for your trade — and re-measure after four weeks.');
-    paras.push(FINDABLE_OFFER_SUMMARY);
+  paras.push(`i was checking what ai recommends when someone is looking for ${/^[aeiou]/i.test(search) ? 'an' : 'a'} ${search} and it brought up your competitors instead of you.`);
+  const f = ctx.selection.primary;
+  if (f) {
+    const details = sayableDetails(f).join(', ');
+    const first = f.detail.split(/(?<=\.)\s/)[0].replace(/\.$/, '');
+    paras.push(`i checked your site to see why and one of the main issues is ${lowerFirst(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
+  } else if (ctx.research && ctx.research.status !== 'failed' && ctx.research.status !== 'no_website') {
+    paras.push(`your site itself isn't badly built, but ai still isn't linking you strongly enough with ${search} searches, while it is with those other businesses.`);
   }
-  paras.push(`If your measured AI visibility hasn’t gone up at the four-week re-measure, you can claim the first £${FINDABLE_SETUP_PRICE_GBP} back.`);
-  const f = ctx.research && ctx.research.status !== 'failed' ? ctx.research.strongestFindings[0] : undefined;
-  if (f) paras.push(`I had a look through your site as well. ${f.detail.split(/(?<=\.)\s/)[0]}`);
-  paras.push(`Full details: ${FINDABLE_DETAILS_URL}`);
-  paras.push(ctx.askOwnership
-    ? 'Do you own and control the current website, or is it owned or managed by the company that built it?'
-    : 'Want me to send over what I’d change first?');
+  paras.push(ctx.route === 'new_only'
+    ? `that's the sort of thing we sort out, we can build you a site that's properly set up for ai visibility and seo.`
+    : `that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.`);
+  if (ctx.askOwnership) {
+    paras.push(ctx.route === 'new_only' ? 'have you got a website at the moment or have you been going without one?' : 'are you currently with an agency or do you own/manage the website yourself?');
+  } else {
+    paras.push('happy to go through what we’d change on here or on a quick call, whichever suits?');
+  }
   return paras.join('\n\n');
 }
 

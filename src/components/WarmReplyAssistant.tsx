@@ -52,6 +52,11 @@ interface DraftWhy {
   strongNotUsed?: FindingCard[];
   alreadyMentioned?: string[];
   researchSources?: string[];
+  aiSearchContext?: string | null;
+  proposedSolution?: string;
+  websiteOwnership?: string;
+  finalQuestion?: string;
+  noFindingNote?: string | null;
   questionSummary: string | null;
   detectedByRules: string[];
   findingsUsed: Array<{ id: string; title: string; source: string }>;
@@ -221,15 +226,16 @@ function WhyPanel({ why }: { why: DraftWhy }) {
       <Row label="Question detected">
         {why.latestInbound?.text ? `“${why.latestInbound.text}” · ` : ''}{QUESTION_LABELS[why.questionType] ?? why.questionType}
       </Row>
+      {why.aiSearchContext && <Row label="AI search context">{why.aiSearchContext}</Row>}
       {why.primaryFinding ? (
         <>
-          <Row label="Primary finding" tone={why.primaryFinding.used ? undefined : why.primaryFinding.required ? 'bad' : 'warn'}>
+          <Row label="Primary issue" tone={why.primaryFinding.used ? undefined : why.primaryFinding.required ? 'bad' : 'warn'}>
             {why.primaryFinding.title} · {why.primaryFinding.used ? 'used' : why.primaryFinding.required ? 'NOT used' : 'not used (not needed for this message)'}
           </Row>
           {why.primaryFinding.evidence.length > 0 && <Row label="Evidence">{why.primaryFinding.evidence.join(' / ')}</Row>}
         </>
       ) : (
-        <Row label="Primary finding">None strong enough to lead with — nothing was invented</Row>
+        <Row label="Primary issue">{why.noFindingNote ?? 'None strong enough to lead with, nothing was invented'}</Row>
       )}
       {why.secondaryFindings && why.secondaryFindings.length > 0 && (
         <Row label="Secondary findings">{why.secondaryFindings.map((f) => `${f.title}${f.used ? ' (used)' : ''}`).join(' · ')}</Row>
@@ -240,6 +246,9 @@ function WhyPanel({ why }: { why: DraftWhy }) {
       {why.alreadyMentioned && why.alreadyMentioned.length > 0 && (
         <Row label="Already told them">{why.alreadyMentioned.join(' · ')}</Row>
       )}
+      {why.proposedSolution && <Row label="Proposed solution">{why.proposedSolution}</Row>}
+      {why.websiteOwnership && <Row label="Website ownership">{why.websiteOwnership}</Row>}
+      {why.finalQuestion && <Row label="Final question">{why.finalQuestion}</Row>}
       <Row label="Research source">
         {[why.primaryFinding?.source, ...(why.researchSources ?? [])].filter((x, i, a) => x && a.indexOf(x) === i).join(' · ') || '—'}
       </Row>

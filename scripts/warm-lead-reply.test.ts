@@ -136,80 +136,83 @@ const ctxFor = (over: Partial<Parameters<typeof buildReplyContext>[0]> = {}) => 
 const ryli = ctxFor();
 ok(ryliLatest.text === 'How much', 'the latest inbound is theirs, newest first');
 ok(ryli.question.primary === 'price', 'Ryli: "How much" is a price question');
-ok(ryli.askOwnership === true, 'Ryli: the provider credit is a reason to ask about ownership');
+ok(ryli.askOwnership === true, 'Ryli: the website question ends the reply (nothing is known about who controls the site)');
 ok(ryli.allowReportUrl === false, 'Ryli: the report link is NOT allowed for "How much"');
 const prompt = buildReplyPrompt(ryli);
-ok(prompt.startsWith('THEIR LATEST MESSAGE — answer this first:\n"""How much"""'), 'the prompt opens with their message, to be answered first');
+ok(prompt.startsWith('THEIR LATEST MESSAGE, respond to this naturally first:\n"""How much"""'), 'the prompt opens with their message, to be responded to first');
 ok(prompt.indexOf('THEIR LATEST MESSAGE') < prompt.indexOf('CONVERSATION SO FAR'), '…before the history');
-ok(/PRICE: their message asks about price — the FIRST sentence must give it, with both figures/.test(prompt), 'the price must come first');
-ok(/OWNERSHIP: the research suggests another company may build\/host\/manage their site\. Ask/.test(prompt), 'the ownership question is asked for');
-ok(/REPORT LINK: do NOT include/.test(prompt) && !prompt.includes(REPORT), 'the report link is withheld — the URL is not even in the prompt');
-// One PRIMARY + up to two supporting findings (2026-09-25); the provider credit is an ownership clue, not a flaw.
-ok(['positioning_conflict', 'hours_conflict', 'missing_core_service_pages'].filter((k) => prompt.includes(`[rule:${k}]`)).length === 3, 'the prompt offers the three site findings (one primary, two supporting)');
-ok(!prompt.includes('[rule:provider_attribution]') && /Ownership clues: .*Keyhole/.test(prompt), 'the Keyhole credit reaches the prompt as an ownership clue, not as a finding');
+ok(/THEY ASKED THE PRICE: do not give one at this stage/.test(prompt), '"How much" gets no price at this stage (Paul, 2026-09-25)');
+ok(/LAST LINE: end with the website question/.test(prompt), 'the website question is asked for as the last line');
+ok(/REPORT LINK: do NOT include any link/.test(prompt) && !prompt.includes(REPORT), 'the report link is withheld — the URL is not even in the prompt');
+ok(['positioning_conflict', 'hours_conflict', 'missing_core_service_pages'].filter((k) => prompt.includes(`[rule:${k}]`)).length === 3, 'the prompt carries the primary and its supporting findings');
+ok(!prompt.includes('[rule:provider_attribution]'), 'the Keyhole credit is not offered as a flaw');
 ok(!/crawl_indexing|contact_conflict/.test(prompt), 'no other finding is offered for Ryli');
-ok(REPLY_SYSTEM_PROMPT.includes(FINDABLE_OFFER_SUMMARY) && REPLY_SYSTEM_PROMPT.includes(FINDABLE_GUARANTEE), 'the offer and guarantee come verbatim from findableOffer.ts');
-ok(REPLY_SYSTEM_PROMPT.includes(FINDABLE_DETAILS_URL) && FINDABLE_DETAILS_URL === 'https://findable.live/', 'findable.live is the details link');
-ok(!/£\s?\d/.test(LIB.replace(/\$\{[^}]+\}/g, '')), 'warmReply.ts writes no price as a literal — every figure is a findableOffer constant');
-ok(/never suggest Findable can take over, take down or own a client's existing site/i.test(REPLY_SYSTEM_PROMPT), 'the two commercial models are stated, and taking over an existing site is ruled out');
-ok(/guaranteed rankings, recommendations, citations, leads/.test(REPLY_SYSTEM_PROMPT), 'guaranteed rankings / recommendations / citations / leads are ruled out');
+ok(!REPLY_SYSTEM_PROMPT.includes(FINDABLE_OFFER_SUMMARY) && !REPLY_SYSTEM_PROMPT.includes(FINDABLE_GUARANTEE) && !/£\s?\d/.test(REPLY_SYSTEM_PROMPT + prompt),
+  'NO price, offer or guarantee reaches the model at this stage');
+ok(/NO PRICE AT THIS STAGE/.test(REPLY_SYSTEM_PROMPT), 'the system prompt says so explicitly');
+ok(!/£\s?\d/.test(LIB.replace(/\$\{[^}]+\}/g, '')), 'warmReply.ts writes no price as a literal');
+ok(!/import \{[^}]*FINDABLE_OFFER_SUMMARY[^}]*\} from '\.\/findableOffer\.ts'/.test(LIB), 'the offer constants are not even imported by the reply module (the canonical data is untouched)');
+ok(/fix it on the site they already have, OR build them a new site/.test(REPLY_SYSTEM_PROMPT) && /never imply everyone needs a new site/.test(REPLY_SYSTEM_PROMPT), 'both routes are stated; a rebuild is not assumed');
+ok(/say Findable can take over, take down or own their existing site/.test(REPLY_SYSTEM_PROMPT), 'taking over an existing site is ruled out');
+ok(/promise or imply rankings, recommendations, citations, customers or leads/.test(REPLY_SYSTEM_PROMPT), 'rankings / recommendations / customers / leads are never promised');
 
-// A Paul-style draft for Ryli — what the model is asked to produce — passes the checks.
-const GOOD = `£${FINDABLE_SETUP_PRICE_GBP} to start mate, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — 12 payments in total.
+// A Paul-style draft for Ryli at this stage passes the checks.
+const GOOD = `no worries mate, it depends which route makes sense for you so i'll go through that once i know how the site's set up.
 
-If your measured AI visibility hasn't gone up at the four-week re-measure, you can claim the first £${FINDABLE_SETUP_PRICE_GBP} back.
+i asked google ai who it recommends for a plumber in scunthorpe and it brought up other businesses instead of you. i checked your site to see why and one of the main things is it says "nationwide across england" in one place and scunthorpe-based in another, so ai is getting mixed signals about where you actually work.
 
-I had a look through your site as well. It says nationwide across England in one place and Scunthorpe-based in another, the opening hours say three different things, and there's no page for the core plumbing and boiler work — the menu is all grants and insulation.
+that's the sort of thing we fix, either on the site you've already got or we can build you a new one that's properly set up for ai visibility and seo.
 
-Full details: https://findable.live/
-
-Do you own and control the site yourself, or is it managed by Keyhole who built it?`;
+are you currently with an agency or do you own/manage the website yourself?`;
 const good = checkReply(GOOD, ryli);
-ok(good.problems.length === 0, `the Ryli model answer passes (problems: ${good.problems.join(' | ') || 'none'})`);
+ok(good.problems.length === 0, `the Ryli stage answer passes (problems: ${good.problems.join(' | ') || 'none'})`);
 ok(good.warnings.length === 0, `…with no warnings (${good.warnings.join(' | ') || 'none'})`);
 
-const BAD = `Hi! Findable guarantees you'll rank top on Google and get more leads. Here's your report ${REPORT} — AI can't read your site because it is really slow. Cancel any time, £29.99 a month.`;
+const BAD = `Hi! Findable guarantees you'll rank top on Google and get more leads. Here's your report ${REPORT} — AI can't read your site because it is really slow. £99 to start, then £99 a month.`;
 const bad = checkReply(BAD, ryli);
 ok(bad.problems.some((p) => /guaranteed rankings/.test(p)), 'a guaranteed-ranking claim is caught');
-ok(bad.problems.some((p) => /first paragraph does not give it/.test(p)), 'not leading with the price is caught');
+ok(bad.problems.some((p) => /carries no price/.test(p)), 'any price talk is caught');
 ok(bad.problems.some((p) => /report link/.test(p)), 'an uninvited report link is caught');
 ok(bad.problems.some((p) => /how an AI model decides/.test(p)), 'an absolute claim about AI is caught');
-ok(bad.problems.some((p) => /12-month minimum/.test(p)), '"cancel any time" is caught');
-ok(bad.problems.some((p) => /£29\.99/.test(p)), 'a retired price is caught');
+ok(bad.problems.some((p) => /dash/.test(p)), 'an em dash is caught');
+ok(bad.problems.some((p) => /website question/.test(p)), 'no website question at the end is caught');
+ok(bad.problems.some((p) => /both routes/.test(p)), 'not offering both routes is caught');
 
-// No model? The rule-built fallback still answers the price correctly.
+// No model? The rule-built fallback has the same shape and carries no price.
 const fb = fallbackReply(ryli)!;
-ok(!!fb && fb.split('\n\n')[0] === FINDABLE_OFFER_SUMMARY, 'fallback: the price, from the constant, is the first paragraph');
-ok(/four-week re-measure, you can claim the first £99 back/.test(fb), 'fallback: the four-week first-payment guarantee');
-ok(fb.includes('https://findable.live/') && !fb.includes(REPORT), 'fallback: findable.live, and no report link');
-ok(/own and control the current website/.test(fb), 'fallback: asks who owns the site (Ryli has a provider credit)');
+ok(!!fb && /ai recommends when someone is looking for a plumber in Scunthorpe/.test(fb), 'fallback: leads from the AI search');
+ok(!/£\s?\d|refund|guarantee|findable\.live/i.test(fb), 'fallback: no price, no guarantee, no pricing link');
+ok(/either on the site you've already got or we can build you a new one/.test(fb), 'fallback: both routes');
+ok(fb.trim().endsWith('are you currently with an agency or do you own/manage the website yourself?'), 'fallback: ends with the website question');
 ok(checkReply(fb, ryli).problems.length === 0, `fallback passes its own checks (${checkReply(fb, ryli).problems.join(' | ') || 'none'})`);
-ok(fallbackReply(ctxFor({ latest: msg('x', 'inbound', 'I already have someone doing SEO', 1), thread: [msg('x', 'inbound', 'I already have someone doing SEO', 1)] })) === null,
-  'an objection is never answered by a canned fallback — the operator is told the model is unavailable');
+ok(fallbackReply(ctxFor({ latest: msg('x', 'inbound', 'Not interested thanks', 1), thread: [msg('x', 'inbound', 'Not interested thanks', 1)] })) === null,
+  'a refusal is never answered by a canned fallback');
 
 /* ─────────── 7. ownership answered → never asked again ─────────── */
 const owned: SalesFacts = { owns_website: { value: 'yes', quote: 'Yeah I own the site', messageId: 'i1', at: at(HOUR), source: 'rule' } };
 const followUp = ctxFor({ latest: msg('i1', 'inbound', 'Yeah I own the site', 1), thread: [...ryliThread, msg('i1', 'inbound', 'Yeah I own the site', 1)], salesFacts: owned });
 ok(shouldAskOwnership(ryliResearch, owned) === false && followUp.askOwnership === false, 'once they have answered, ownership is not asked again');
-ok(/OWNERSHIP: already answered \(owns_website = yes\)\. Do NOT ask about it again/.test(buildReplyPrompt(followUp)), 'the prompt says it was answered');
-ok(checkReply('Great, that makes it simple. Do you own the site outright?', followUp).problems.some((p) => /already answered/.test(p)), 'a draft that re-asks is caught');
-ok(shouldAskOwnership({ ...ryliResearch, ownershipClues: [] }, {}) === false, 'no ownership clue → no reason to ask');
+ok(/WEBSITE QUESTION: they have ALREADY told us \(they said: "Yeah I own the site"\)\. Do NOT ask/.test(buildReplyPrompt(followUp)), 'the prompt says it was answered, in their words');
+ok(checkReply('Great, that makes it simple. Do you own the site outright?', followUp).problems.some((p) => /already told us/.test(p)), 'a draft that re-asks is caught');
+const agency: SalesFacts = { has_existing_provider: { value: 'yes', quote: 'our agency looks after the website', messageId: 'i1', at: at(HOUR), source: 'rule' } };
+ok(shouldAskOwnership(ryliResearch, agency) === false, 'an agency / developer answer also closes the question');
+ok(shouldAskOwnership({ ...ryliResearch, ownershipClues: [] }, {}) === true, 'with nothing known, the website question is always asked');
 
 /* ─────────── 8. failed crawl / clean site / regenerate prompts ─────────── */
 const failedCtx = ctxFor({ research: { ...ryliResearch, status: 'failed', strongestFindings: [] } });
 ok(/Their website could NOT be read\. Do NOT mention any website problem/.test(buildReplyPrompt(failedCtx)), 'failed crawl: the model is told not to mention the site');
-ok(checkReply(`£99 to start, then £99 a month. Your website has a problem with its pages. Keen?`, failedCtx).problems.some((p) => /not researched/.test(p)), 'failed crawl: a site problem in the draft is caught');
+ok(checkReply(`i asked ai and it showed others. Your website has a problem with its pages. are you with an agency or do you manage it yourself?`, failedCtx).problems.some((p) => /not researched/.test(p)), 'failed crawl: a site problem in the draft is caught');
 const noResearch = ctxFor({ research: null });
-ok(/No website research is available\. Do NOT mention anything about their website/.test(buildReplyPrompt(noResearch)), 'no evidence: a simple answer, nothing personalised invented');
+ok(/No website research is available\. Do NOT mention anything specific about their website/.test(buildReplyPrompt(noResearch)), 'no evidence: nothing personalised invented');
 const cleanCtx = ctxFor({ research: { ...ryliResearch, technicallyClean: true, strongestFindings: [], technicalFindings: [], contentFindings: [], localVisibilityFindings: [], ownershipClues: [] } });
 const cleanPrompt = buildReplyPrompt(cleanCtx);
-ok(/technically fine — no technical fault was found/.test(cleanPrompt) && /No website finding is specific enough to lead with\. Do NOT invent one/.test(cleanPrompt), 'clean site: the model is told it is fine and to invent nothing');
+ok(/No website finding is strong enough to use\. Do NOT invent one\. The site itself is not badly built: say so honestly/.test(cleanPrompt), 'clean site: say it is not badly built, invent nothing, use the visibility gap');
 const regen = ctxFor({ variant: 1, avoidText: GOOD });
-ok(/regenerate #1\. Write a genuinely different version/.test(buildReplyPrompt(regen)) && buildReplyPrompt(regen).includes('Full details: https://findable.live/'), 'regenerate: a different version of the same facts is asked for');
+ok(/regenerate #1\. Write a genuinely different version/.test(buildReplyPrompt(regen)) && buildReplyPrompt(regen).includes('are you currently with an agency'), 'regenerate: a different version of the same facts is asked for');
 const showCtx = ctxFor({ latest: msg('q', 'inbound', "Can you show me what you'd change?", 1), thread: [msg('q', 'inbound', "Can you show me what you'd change?", 1)] });
 ok(showCtx.allowReportUrl === true && buildReplyPrompt(showCtx).includes(REPORT), 'show-me-what-you-would-change: the report link is allowed');
 const provCtx = ctxFor({ latest: msg('s', 'inbound', 'I already have someone doing SEO', 1), thread: [msg('s', 'inbound', 'I already have someone doing SEO', 1)] });
-ok(provCtx.question.primary === 'existing_provider' && /"I already have someone doing SEO" gets a straight answer/.test(REPLY_SYSTEM_PROMPT), 'SEO-provider objection: the prompt says how to answer it');
+ok(provCtx.question.primary === 'existing_provider' && provCtx.askOwnership === true, 'SEO-provider objection: still a warm reply; "someone doing SEO" alone does not say who controls the site');
 
 /* ─────────── 9. parsing the model ─────────── */
 ok(parseModelReply({ reply: '   ' }, []) === null, 'an empty model reply is a failure, never an empty draft');
