@@ -1,7 +1,6 @@
 # Warm lead research + reply drafter (2026-09-25)
 
-Branch `feat/warm-lead-reply`. **Built and tested; not merged, not deployed, SQL not run** — Paul
-reviews first.
+Branch `feat/warm-lead-reply`, **merged and live 2026-09-25** (see Shipped at the end).
 
 ## What it is
 
@@ -153,8 +152,37 @@ Per research pass: ≤ 6 page fetches (free) + one gpt-4o-mini call (~15k tokens
 draft: one call (~5k in, ≈ $0.001), two if the checker forces a retry. Both logged to `api_usage_log`
 (`openai_warm_research`, `openai_warm_reply`). No Apify, no Google.
 
-## To ship (Paul's call)
+## Shipped (2026-09-25)
 
-1. Run the migration SQL; read `warm_lead_research` back (columns, RLS on, no policies).
-2. `npx supabase functions deploy warm-lead-reply` — the only function reaching the new code.
-3. Merge → the SPA auto-deploys. Order: SQL → function → SPA (the button calls the function).
+1. **Migration** `20260925120000_warm_lead_research.sql` run; read back: 15 columns, RLS on, 0 policies,
+   no anon/authenticated grants, `lead_id` unique + FK.
+2. **Function** `warm-lead-reply` deployed (three times: the gate/full-crawl build, then two checker
+   fixes below). Verified by grepping the deployed bundle for markers only the new code has
+   (`not_warm_yet`, `usableFullCrawl`, `leaves out the four-week first-payment guarantee`); OPTIONS 200,
+   no-auth POST 401.
+3. **Merged** `8cadb166` (feature) and `e4684288` (follow-up) into `main`.
+4. **Operator app**: leadfinderos-next serves `Inbox-CpxxONUF.js` carrying `WAITING FOR REPLY TO HOOK`,
+   the closed-window line, the replace prompt and the `warm-lead-reply` call.
+
+### First real test — Adcock Heat (ryliheat.co.uk, Scunthorpe), the funnel exactly
+
+Opener (`initial_opener_v2`) → "Yeah" → hook (`audit_followup_call`, 04:03) → "How much" (06:04) →
+Paul's own hand-typed answer (10:52). Called through the deployed function with a short-lived session
+for the data account (admin magic link, revoked by logout straight after — 204). Nothing was sent.
+
+- `status`: stage `warm`, no research yet. `research`: targeted pass, 6 pages, 15 s (fetch 6.6 s,
+  model 5.9 s); strongest = positioning conflict, low AI visibility (named 0 of 2), hours conflict,
+  no core-service pages; the Keyhole IT credit as the ownership clue; two MODEL findings dropped
+  because their quotes were not on the page (the rules had both anyway).
+- **Draft 1 (before the fix)**: price first, three real findings, ownership question, no hook resend,
+  no report link — but **no guarantee and no findable.live**. → both are now PROBLEMS on a price
+  answer (retry), not warnings.
+- **Draft after the fix** (research reused, 3.9 s, no fetch): price, guarantee, two findings,
+  ownership question, findable.live — no problems. A regenerate stated the guarantee as "you can get
+  your first £99 back" and was wrongly sent back → the check now accepts claim/get/have/give … back.
+- Paul had already answered "How much" by hand, so the draft answered it again. That case is now
+  recognised (`alreadyAnswered`): the model is told not to repeat him and Why this reply? warns.
+- The research row for this lead is kept (that is what the button reuses).
+
+**Not yet done:** nobody has pressed the button in the real signed-in Inbox — this session cannot
+sign in to the browser. The function the button calls is the one tested above.
