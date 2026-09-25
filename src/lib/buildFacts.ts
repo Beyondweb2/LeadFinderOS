@@ -149,8 +149,19 @@ export function candidateFacts(ctx: FactsContext, savedCanonicalDomain = ''): Ca
   const operatorEntered = String((ob as { client_source?: unknown }).client_source ?? '') === 'manual'
     || !!String((ob as { operator_edited_at?: unknown }).operator_edited_at ?? '').trim();
   const onboardingLabel = FACT_SOURCE_LABELS.onboarding;
+  /* ⛔ An onboarding the OPERATOR typed (client_source 'manual' — no client ever submitted it) is
+     SOURCE MATERIAL, not the client's word: every value starts NEEDS APPROVAL (Paul, 2026-09-25, the
+     BS4 pilot — 26 pasted crawl service strings and a disputed base town had auto-verified). A
+     client-submitted form that an operator later edited keeps the client's standing. */
+  const manual = String((ob as { client_source?: unknown }).client_source ?? '') === 'manual';
   return list.filter((c): c is Candidate => !!c)
-    .map((c) => (operatorEntered && c.source === onboardingLabel ? { ...c, source: onboardingLabel + ' (entered by operator)' } : c));
+    .map((c) => {
+      if (!(operatorEntered && c.source === onboardingLabel)) return c;
+      const relabelled = { ...c, source: onboardingLabel + ' (entered by operator)' };
+      return manual && c.status === 'verified'
+        ? { ...relabelled, status: 'detected' as const, note: [c.note, 'Entered by an operator, not submitted by the client — confirm before publishing.'].filter(Boolean).join(' ') }
+        : relabelled;
+    });
 }
 
 /**
