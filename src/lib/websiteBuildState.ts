@@ -59,6 +59,16 @@ export function mayPreserveCopy(o: CopyOwnership | ''): boolean {
   return o === 'client_wrote' || o === 'client_permission';
 }
 
+/** How the client's Cloudflare Pages project deploys (F17, BS4 pilot). Git-connected is the normal
+ *  Findable workflow: the project is linked to the client's GitHub repo in the Cloudflare dashboard
+ *  and a push to a branch deploys it — no Wrangler sign-in needed. '' = not chosen (the Build
+ *  Execution prompt refuses until it is). ⛔ Never store a credential here — names and labels only. */
+export const CLOUDFLARE_MODES = ['git_connected', 'direct_upload', 'manual'] as const;
+export type CloudflareMode = (typeof CLOUDFLARE_MODES)[number];
+export const CLOUDFLARE_MODE_LABELS: Record<CloudflareMode, string> = {
+  git_connected: 'Git-connected Pages (recommended)', direct_upload: 'Direct Wrangler upload', manual: 'Manual / not configured',
+};
+
 /** A stored fact decision. `missing` is never stored — it is what "no value anywhere" derives to.
  *  `detected` is shown as NEEDS APPROVAL (the V1 token is kept so V1 rows read unchanged). */
 export const FACT_STATUSES = ['verified', 'detected', 'rejected', 'not_applicable'] as const;
@@ -396,6 +406,12 @@ export interface WebsiteBuildState {
   build_output_dir: string;
   /* preview */
   cloudflare_project: string;
+  /** F17: how that project deploys, which account it lives in (a label — never a credential), and
+   *  its production / preview branches. Blank branches read as the defaults (cloudflareBranches). */
+  cloudflare_mode: CloudflareMode | '';
+  cloudflare_account: string;
+  cloudflare_production_branch: string;
+  cloudflare_preview_branch: string;
   dev_url: string;
   preview_url: string;
   preview_status: PreviewStatus;
@@ -434,6 +450,7 @@ export interface WebsiteBuildState {
 const STRING_FIELDS = {
   template_id: 80, repo_name: 100, github_owner: 100, repo_url: 500, local_repo_path: 500,
   cloudflare_project: 100, dev_url: 500, preview_url: 500, production_url: 500,
+  cloudflare_account: 120, cloudflare_production_branch: 100, cloudflare_preview_branch: 100,
   canonical_domain: 253, latest_commit: 80, notes: 8000,
   source_site_url: 500, source_platform: 100, last_captured_at: 40,
   dev_command: 200, build_command: 200, build_output_dir: 200, design_references: 2000,
@@ -461,6 +478,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   source_site_url: '', source_still_live: 'unknown', source_platform: '', last_captured_at: '',
   repo_name: '', github_owner: '', repo_url: '', local_repo_path: '', dev_command: '', build_command: '', build_output_dir: '',
   cloudflare_project: '', dev_url: '', preview_url: '', preview_status: 'not_deployed', preview_noindex_confirmed: false,
+  cloudflare_mode: '', cloudflare_account: '', cloudflare_production_branch: '', cloudflare_preview_branch: '',
   production_url: '', production_status: 'not_live', custom_domain_status: 'not_started', www_redirect_status: 'not_checked',
   canonical_domain: '', latest_commit: '', design_references: '', notes: '',
   capture: { status: 'not_started', url_count: null, asset_count: null, notes: '' },
@@ -588,6 +606,7 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
     source_still_live: tok(SITE_LIVE_STATES, o.source_still_live, 'unknown'),
     preview_status: tok(PREVIEW_STATUSES, o.preview_status, v1Deploy === 'preview' || v1Deploy === 'production' ? 'deployed' : 'not_deployed'),
     preview_noindex_confirmed: o.preview_noindex_confirmed === true,
+    cloudflare_mode: oneOf(CLOUDFLARE_MODES, o.cloudflare_mode, ''),
     production_status: tok(PRODUCTION_STATUSES, o.production_status, v1Deploy === 'production' ? 'deployed' : 'not_live'),
     custom_domain_status: tok(CUSTOM_DOMAIN_STATUSES, o.custom_domain_status, 'not_started'),
     www_redirect_status: tok(WWW_REDIRECT_STATUSES, o.www_redirect_status, 'not_checked'),
@@ -688,6 +707,16 @@ export function captureApplies(s: WebsiteBuildState, hasExistingSite: boolean): 
   return s.route === 'template_rebuild' && hasExistingSite;
 }
 
+/** How far capture has got — ONE wording for the Capture stage and every prompt (F15, BS4 pilot:
+ *  the build prompt said "Capture: not started" after a 298-page recon had been imported). An
+ *  imported recon IS proof of capture; nobody has to tick it again. */
+export function captureSummary(s: WebsiteBuildState): string {
+  const counts = (u: number | null, a: number | null) => (u != null ? ' · ' + u + ' URLs' : '') + (a != null ? ' · ' + a + ' assets' : '');
+  if (s.capture.status === 'captured') return 'Captured' + counts(s.capture.url_count, s.capture.asset_count);
+  if (s.recon.imported_at) return 'Recon imported ' + s.recon.imported_at.slice(0, 10) + counts(s.manifest.pages.length, s.manifest.assets.length);
+  return CAPTURE_STATUS_LABELS[s.capture.status] + counts(s.capture.url_count, s.capture.asset_count);
+}
+
 export interface StageInputs {
   state: WebsiteBuildState;
   hasExistingSite: boolean;
@@ -697,7 +726,10 @@ export interface StageInputs {
   architectureErrors: number;
   /** Required setup values still blank (repo name, local path…). */
   setupMissing: string[];
-  /** Phase 3: blockers from the mapping readiness (template: required data, seed values). Absent = not assessed. */
+  /** THE build blockers — executionBlockers (buildExecution.ts), the same list that gates the Build
+   *  Execution prompt and the "Ready to build" badge. Absent = not assessed. (F14, BS4 pilot: the
+   *  stage said "Finish intake and architecture first" while the pack said Ready to build, because
+   *  the stage demanded every fact decided — held claims are allowed; they are left out.) */
   buildBlockers?: string[];
 }
 
@@ -712,11 +744,16 @@ export function websiteBuildStages(i: StageInputs): StageStatus[] {
     { stage: 'intake', applicable: true, done: intakeDone,
       detail: !modeComplete(s) ? 'Choose the build route' : i.factsAwaiting ? `${i.factsAwaiting} fact(s) need a decision` : 'Route chosen, facts reviewed' },
     { stage: 'capture', applicable: capApplies, done: !capApplies || s.capture.status === 'captured' || reconInventoryReady(s, i.hasExistingSite),
-      detail: !capApplies ? 'Not needed for this build' : s.recon.imported_at ? `Recon imported · ${s.manifest.pages.length} page(s)` : CAPTURE_STATUS_LABELS[s.capture.status] },
+      detail: !capApplies ? 'Not needed for this build' : captureSummary(s) },
     { stage: 'architecture', applicable: true, done: archDone,
       detail: `${s.pages.length} page(s) · ${s.redirects.length} redirect(s)${i.architectureErrors ? ` · ${i.architectureErrors} problem(s)` : ''}` },
-    { stage: 'build_pack', applicable: true, done: intakeDone && archDone && i.setupMissing.length === 0 && !(i.buildBlockers?.length),
-      detail: i.buildBlockers?.length ? `Not ready to build: ${i.buildBlockers.length} blocker(s)` : i.setupMissing.length ? `Needs: ${i.setupMissing.join(', ')}` : (intakeDone && archDone ? 'Ready' : 'Finish intake and architecture first') },
+    (() => {
+      /* ⛔ ONE readiness: the build blockers (+ plan errors, which block the architecture). Never a
+         second rule that can disagree with the Ready to build badge. */
+      const blockers = i.buildBlockers ? [...i.buildBlockers, ...(i.architectureErrors ? [i.architectureErrors + ' page-plan problem(s)'] : [])] : null;
+      return { stage: 'build_pack' as Stage, applicable: true, done: !!blockers && blockers.length === 0,
+        detail: !blockers ? 'Not assessed yet' : blockers.length ? `Not ready to build: ${blockers.length} blocker(s)` : 'Ready to build' };
+    })(),
     { stage: 'preview', applicable: true, done: !!s.preview_url, detail: s.preview_url ? `${s.preview_url} · ${PREVIEW_STATUS_LABELS[s.preview_status].toLowerCase()}` : 'No preview URL yet' },
     { stage: 'qa', applicable: true, done: qaDone === qaPreview.length, detail: `${qaDone} of ${qaPreview.length} checks` },
     { stage: 'live', applicable: true, done: !!s.production_url && s.qa.production_checked === true,

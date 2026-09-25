@@ -21,8 +21,9 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { WebsiteBuildState } from './websiteBuildState.ts';
+import { modeLabel, previewCommandLines, previewDeploySteps, productionDeploySteps, stablePreviewUrl, type DeployInput } from './cloudflareDeploy.ts';
 import {
-  captureApplies, COPY_OWNERSHIP_LABELS, mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_FAMILY_LABELS,
+  captureApplies, captureSummary, COPY_OWNERSHIP_LABELS, mayPreserveCopy, PAGE_ACTION_LABELS, PAGE_FAMILY_LABELS,
   QA_ITEMS, REBUILD_STYLE_LABELS,
 } from './websiteBuildState.ts';
 import type { WebsiteTemplate } from './websiteTemplates.ts';
@@ -112,7 +113,17 @@ export function setupProblems(s: WebsiteBuildState): SetupCheck[] {
   return out;
 }
 
+/** Everything the deploy steps need, with the markers standing in for anything not recorded yet. */
+export function deployInputFor(s: WebsiteBuildState, t: WebsiteTemplate | null): DeployInput {
+  const cfg = codeConfig(s, t);
+  const owner = s.github_owner || MARK.owner, repo = s.repo_name || MARK.repo;
+  return { s, project: cloudflareProblem(s) ? MARK.project : s.cloudflare_project, path: s.local_repo_path ? winPath(s.local_repo_path) : MARK.path,
+    remote: 'https://github.com/' + owner + '/' + repo + '.git', owner, repo, buildCommand: cfg.buildCommand, outputDir: cfg.outputDir };
+}
+
 export function cloudflareProblem(s: WebsiteBuildState): string {
+  /* The deployment MODE is checked separately (cloudflareModeProblem, cloudflareDeploy.ts) so a
+     missing mode never hides a project name that is set. */
   if (!s.cloudflare_project) return 'Cloudflare project name not set';
   if (!CF_PROJECT.test(s.cloudflare_project)) return 'Cloudflare project name must be lowercase letters, numbers and dashes';
   return '';
@@ -595,7 +606,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean; executio
     ...(isTemplateRoute(s) && t ? templateConfigSection(i, computeMapping(s, t, i.facts, i.businessName)) : []),
     ...H('F. EXISTING SITE INVENTORY'),
     hasOld ? 'Current website: ' + i.existingSiteUrl : 'The client has no current website.',
-    ...(hasOld ? ['Capture: ' + s.capture.status.replace('_', ' ') + (s.capture.url_count != null ? ' · ' + s.capture.url_count + ' URLs' : '') + (s.capture.asset_count != null ? ' · ' + s.capture.asset_count + ' assets' : '') + (s.capture.status === 'captured' ? ' — in capture/.' : '')] : []),
+    ...(hasOld ? ['Capture: ' + captureSummary(s) + (s.capture.status === 'captured' ? ' — in capture/.' : '')] : []),
     ...(s.capture.notes ? ['Capture notes: ' + s.capture.notes] : []),
     '',
     ...manifestBuildLines(s, i.existingSiteUrl),
@@ -658,10 +669,9 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean; executio
     ...(lean ? [] : [...H('O. PREVIEW / DEPLOYMENT PROCESS'),
     '- Local: "npm run dev" → http://localhost:4321.',
     ...(s.cloudflare_project && CF_PROJECT.test(s.cloudflare_project)
-      ? ['- Preview: you MAY deploy a preview when the build is ready for review:',
-         '      npm run build',
-         '      npx wrangler pages deploy dist --project-name ' + s.cloudflare_project + ' --branch preview',
-         '  It prints the preview address (https://preview.' + s.cloudflare_project + '.pages.dev). Give it to Paul.']
+      ? ['- Preview: you MAY deploy a preview when the build is ready for review (' + modeLabel(s) + '):',
+         ...previewDeploySteps(deployInputFor(s, t)).map((x) => '  ' + x),
+         '  Give Paul the preview address (' + stablePreviewUrl(s) + ').']
       : ['- Preview: the Cloudflare project name is not recorded yet. Do NOT create a Cloudflare project; ask Paul.']),
     '- ⛔ PRODUCTION: never. Paul deploys production himself from LeadFinderOS after he approves the preview.',
     ...H('P. QA — do this yourself before you report'),
@@ -771,26 +781,13 @@ function previewCommands(i: BuildPackInput): PackItem {
   const L = [
     '# ============================================================',
     '# CLOUDFLARE PREVIEW — a private-ish link to review before going live',
-    '# Run from the client folder. Uses YOUR Cloudflare account (wrangler is already logged in here).',
+    '# Run from the client folder. Deployment: ' + modeLabel(s) + (s.cloudflare_account ? ' · account ' + s.cloudflare_account : '') + '.',
     '# ============================================================',
     'Set-Location ' + q(path),
     '',
-    '# -- 1. Confirm which Cloudflare account wrangler will use (it prints the account name) --',
-    'npx wrangler whoami',
-    '',
-    '# -- 2. FIRST TIME ONLY: create the Pages project in that account --',
-    '#    If it says the project already exists, that is fine — go to step 3.',
-    'npx wrangler pages project create ' + project + ' --production-branch main',
-    '',
-    '# -- 3. Build and upload as a PREVIEW (not production) --',
-    cfg.buildCommand,
-    'npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + project + ' --branch preview',
-    '',
-    '# It ends with "Deployment complete! Take a peek over at https://xxxxxxxx.' + project + '.pages.dev".',
-    '# The address that stays the same between previews is:',
-    '#     https://preview.' + project + '.pages.dev',
-    '# Paste that into the Preview URL field in LeadFinderOS.',
-    '# Cloudflare marks preview addresses "noindex" itself, so Google will not list them. That is expected.',
+    ...previewCommandLines({ ...deployInputFor(s, i.template), project }),
+    '# Paste the preview address into the Preview URL field in LeadFinderOS.',
+    '# Every *.pages.dev address is noindexed (public/_headers), so Google will not list the preview.',
   ];
   if (t?.serverFunctions.length) {
     L.push('',
@@ -938,9 +935,8 @@ export function productionCommands(i: BuildPackInput): PackItem {
     'git push',
     '',
     '# -- 2. Build and publish to PRODUCTION --',
-    cfg.buildCommand,
-    'npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + s.cloudflare_project + ' --branch main',
-    '#    Live at https://' + s.cloudflare_project + '.pages.dev when it finishes.',
+    ...(s.cloudflare_mode === 'direct_upload' ? [cfg.buildCommand] : []),
+    ...productionDeploySteps(deployInputFor(s, i.template)).map((x) => (s.cloudflare_mode === 'direct_upload' ? x : '# ' + x)),
     '',
     '# -- 3. Record the commit that went live (paste into "Latest commit") --',
     'git log -1 --format="%h %s"',

@@ -23,8 +23,10 @@ import type { FactRow } from './buildFacts.ts';
 import { reconPrompt } from './recon.ts';
 import { manifestArchitectureLines, oneLine } from './manifestSummary.ts';
 import type { ManifestAsset } from './websiteBuildState.ts';
-import { assetsToDownload, executionPrompt, safeAssetName } from './buildExecution.ts';
+import { assetPlanLines, assetsToDownload, executionPrompt, safeAssetName } from './buildExecution.ts';
 import { isPublishable } from './buildFacts.ts';
+import { deployInputFor } from './buildPack.ts';
+import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, productionDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
 import {
   capturePrompt, cloudflareProblem, codeConfig, finalQaPrompt, isBespokeRoute, isFaithfulRoute,
   isTemplateRoute, MARK, masterPrompt, pageLines, seoQaPrompt, winPath, type BuildPackInput,
@@ -128,14 +130,12 @@ function previewDeploy(i: BuildPackInput): StagePrompt {
     'version used for full-site comparison before the client domain is connected. Deploy the PREVIEW only.',
     '',
     '1. "git status" is clean (commit first if not) and "' + cfg.buildCommand + '" passes.',
-    '2. npx wrangler whoami — say which Cloudflare account it is.',
-    '3. If the Pages project "' + project + '" does not exist yet: npx wrangler pages project create ' + project + ' --production-branch main',
-    '4. npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + project + ' --branch preview',
-    '5. Fetch https://preview.' + project + '.pages.dev/ and confirm: it returns 200, it is THIS build (a',
-    '   string only this site has), and the response carries "X-Robots-Tag: noindex" (Cloudflare adds it',
-    '   to preview addresses). Say plainly whether noindex is present.',
+    '2. Deploy the preview — ' + modeLabel(s) + ':',
+    ...previewDeploySteps({ ...deployInputFor(s, i.template), project }).map((x) => '   ' + x),
+    '3. Fetch ' + stablePreviewUrl(s, project) + '/ and confirm: it returns 200, it is THIS build (a',
+    '   string only this site has), and the response carries "X-Robots-Tag: noindex". Say plainly whether noindex is present.',
     '',
-    '⛔ Never deploy with --branch main. Never touch DNS or custom domains. Production is a separate prompt.',
+    '⛔ Never deploy to the production branch (' + cloudflareBranches(s).production + '). Never touch DNS or custom domains. Production is a separate prompt.',
     '',
     'Reply with exactly:',
     'Preview URL: https://preview.' + project + '.pages.dev',
@@ -200,8 +200,10 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
   const s = i.state;
   const cfg = codeConfig(s, i.template);
   const problem = cloudflareProblem(s);
+  const modeProblem = cloudflareModeProblem(s);
   const blockedBy = [
     ...(problem ? [problem] : []),
+    ...(modeProblem ? [modeProblem] : []),
     ...(!s.preview_url ? ['Preview URL (deploy and review a preview first)'] : []),
     ...(!s.canonical_domain ? ['Domain (canonical)'] : []),
     ...(!s.local_repo_path ? ['Local folder'] : []),
@@ -222,7 +224,8 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
     '',
     '1. "git status" clean, "git push" done — GitHub has exactly what goes live.',
     '2. "' + cfg.buildCommand + '" passes.',
-    '3. npx wrangler pages deploy ' + cfg.outputDir + ' --project-name ' + s.cloudflare_project + ' --branch main',
+    '3. Publish to production — ' + modeLabel(s) + ':',
+    ...productionDeploySteps(deployInputFor(s, i.template)).map((x) => '   ' + x),
     '4. Custom domain: Cloudflare → Workers & Pages → ' + s.cloudflare_project + ' → Custom domains. ' + d + ' and www.' + d + '.',
     '   ⚠ Only if the DNS is in Paul\'s Cloudflare account. If someone else manages it, STOP and tell Paul.',
     '5. www / non-www and http:// all end on https://' + s.canonical_domain + ' in ONE hop.',
@@ -240,11 +243,12 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
 /* ── ASSET DOWNLOAD — Claude Code fetches ONLY the approved assets (assetsToDownload, buildExecution.ts). */
 function assetDownload(i: BuildPackInput): StagePrompt {
   const s = i.state;
-  const { list, held } = assetsToDownload(i);
+  const plan = assetsToDownload(i);
+  const { list, held } = plan;
   const safeName = (a: ManifestAsset, n: number) => safeAssetName(a, n);
   const L = [
     ...header('ASSET DOWNLOAD', i),
-    'Work in: ' + folder(s) + '. Download ONLY the ' + list.length + ' asset(s) below — ' + (isTemplateRoute(s) ? 'approved (USE) in LeadFinderOS AND assigned to a template slot.' : isFaithfulRoute(s) ? 'every asset of the authorised site that Paul marked USE.' : 'approved (USE) in LeadFinderOS.'),
+    'Work in: ' + folder(s) + '. Download ONLY the ' + list.length + ' asset(s) below — every asset Paul approved (USE) in LeadFinderOS: ' + plan.assigned.length + ' assigned to a slot, ' + plan.approvedAdditional.length + ' additional (gallery / project / service evidence).',
     '',
     'Rules:',
     '- Originals: capture/assets/original/<filename>, byte-for-byte as served. Never edit an original.',
@@ -257,9 +261,8 @@ function assetDownload(i: BuildPackInput): StagePrompt {
     '- Record every one in capture/assets/downloads.csv: source_url, original_file, web_file, bytes, status (ok / failed: reason).',
     '',
     'Assets:',
-    ...(list.length ? list.map(({ asset, slot }, n) => '- ' + (slot ? '[' + slot + '] ' : '') + oneLine(asset.source_url, 300) + ' → ' + safeName(asset, n) + (asset.purpose ? '  (' + oneLine(asset.purpose, 80) + ')' : ''))
-      : ['(nothing to download yet — mark assets USE' + (isTemplateRoute(s) ? ' and assign them to template slots' : '') + ' in LeadFinderOS)']),
-    ...(held ? ['', held + ' asset(s) are still REVIEW in LeadFinderOS and are NOT on this list — do not download them.'] : []),
+    ...(list.length ? assetPlanLines(plan, safeName)
+      : ['(nothing to download yet — mark assets USE in LeadFinderOS)', ...(held ? ['', held + ' asset(s) are still REVIEW in LeadFinderOS — do not download them.'] : [])]),
     '',
     'Reply with one line per asset:  <source_url> -> <web_file>   and a FAILED list.',
   ];
