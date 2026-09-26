@@ -322,6 +322,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   live columns. **`.neq()` drops NULLs** — use `.or("col.is.null,col.neq.x")`.
 - **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`. A
   `.in()` over many keys can hit the cap too; read the distinct set once and intersect in memory.
+- **`ai_audits` / `ai_audit_runs` are NOT in the `supabase_realtime` publication** (only `outreach_leads`,
+  `whatsapp_messages`): a `postgres_changes` subscription on them never fires. Poll, or read the card's
+  state (`hookReportState`, `docs/hook-audit.md`).
 - **RLS enabled with no policies reads as "no data"** (`200 []`), not "denied". Check `pg_policies`,
   not the prose. Route such reads through an edge function on the service role.
 - **An allowlist is not an address book** — never read `ALLOWED_ORIGINS[0]` as canonical; when a

@@ -344,6 +344,8 @@ Deno.serve(async (req) => {
     // intentionally represented by silence; no findings are invented.
     const runCrawl = (run.results as { crawl_check?: StoredCrawl } | null)?.crawl_check;
     if (runCrawl?.status === "complete" && (runCrawl.version ?? 0) >= CRAWL_CHECK_VERSION && runCrawl.signals) {
+      // A current crawl completed: the quick report may say truthfully that it found nothing.
+      if (!runCrawl.signals.fetchFailed) data.siteChecked = true;
       const faults = buildFaultLines(runCrawl.signals);
       if (faults.length) data.crawlFaults = faults;
     }
@@ -374,6 +376,7 @@ Deno.serve(async (req) => {
       const currentVer = (stored?.version ?? 1) >= CRAWL_CHECK_VERSION;
       const sig = stored?.signals;
       if (fresh && currentVer && sig) {
+        if (!sig.fetchFailed) data.siteChecked = true;
         const faults = buildFaultLines(sig);
         if (faults.length && !data.crawlFaults) data.crawlFaults = faults;
       }
