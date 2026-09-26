@@ -33,6 +33,7 @@ import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
 import { cellNamed, hasModelNamedEvidence } from './namedSignal.ts';
 import { buildHookReportSummary } from './hookAudit.ts';
+import { hookEngineLabel } from './hookScore.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
@@ -1216,8 +1217,13 @@ export function buildReportData(
       state: (run?.results as { hook?: unknown } | null | undefined)?.hook,
       rows: queueRows,
       engineOrder: SCORED_ENGINES,
-      engineLabel: (e) => ENGINE_LABELS[e] ?? e,
+      // Hook surfaces say "Google AI", never "Gemini" (Paul, 2026-09-26); the rest of the report keeps ENGINE_LABELS.
+      engineLabel: hookEngineLabel,
       namedInstead: (competitors) => rivalsSuppressed ? [] : competitors.filter((n) => !isProvableJunkName(n)).slice(0, 5),
+      // Version 2 only (six-result hook): the same ruler the hero and per-question counts use.
+      namedCtx,
+      town: ctx.locationText || null,
+      trade: ctx.businessType || null,
     }),
     questionBreakdown,
     questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows

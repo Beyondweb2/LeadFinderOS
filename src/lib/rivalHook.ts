@@ -213,3 +213,32 @@ export function excludeSelfRivals(
   if (!String(business ?? '').trim()) return list;
   return list.filter((c) => !isSelfRival(c, business, matches));
 }
+
+/* ── WHICH ENGINE A TEMPLATE SAYS IT ASKED (Paul, 2026-09-26) ─────────────────────────────────────
+   Since the six-result hook, the rival names a template carries are ONE engine's answer to ONE
+   question (resolveAuditReplyVars reads the hook pick's own cell). Most registered bodies attribute
+   the answer generically ("i asked AI", "AI tools like ChatGPT", "ChatGPT and Gemini"), and those
+   stay true whichever engine the hook came from. A body that names ONE engine as the one it asked
+   does not: audit_followup's approved text is "I asked chatgpt … It came back with {{3}}…", so a
+   Google AI hook's names under it would be a false statement to a stranger.
+   ⛔ So such a template is REFUSED for a hook from another engine, never re-worded (the words are
+   Meta's) and never re-sourced from a different engine's answer (that would break the
+   question + engine + competitors pairing). The map says what each REGISTERED body claims. A new
+   single-engine body must be added here, and scripts/hook-score.test.ts scans the bodies for it. */
+export const TEMPLATE_SINGLE_ENGINE_CLAIM: Readonly<Record<string, string>> = {
+  audit_followup: 'chatgpt',
+};
+
+const ENGINE_WORDS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
+
+/** Null when the template can carry this hook's rivals truthfully. Otherwise the refusal reason. */
+export function templateEngineConflict(templateName: string | null | undefined, hookEngine: string | null | undefined): string | null {
+  if (!templateName || !hookEngine) return null;
+  const claimed = TEMPLATE_SINGLE_ENGINE_CLAIM[templateName];
+  if (!claimed || claimed === hookEngine) return null;
+  const said = ENGINE_WORDS[claimed] ?? claimed;
+  const got = ENGINE_WORDS[hookEngine] ?? hookEngine;
+  return `hook_engine_mismatch: ${templateName}'s approved wording says it asked ${said}, but this lead's hook ` +
+    `search was measured on ${got}, so its competitors cannot be attributed to ${said}. Send a template ` +
+    `that does not name one engine instead.`;
+}

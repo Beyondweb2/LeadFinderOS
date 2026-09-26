@@ -45,6 +45,7 @@ import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { warmStage } from '@/lib/warmStage';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
+import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
@@ -151,8 +152,8 @@ function EngagementPills(
         <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
       )}
       {showGemini && (
-        <span className={pill + gemTone} title={`Already named on Gemini in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
-          Gemini {geminiNamed}/{geminiAnswers}
+        <span className={pill + gemTone} title={`Already named on Google AI in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
+          Google AI {geminiNamed}/{geminiAnswers}
         </span>
       )}
     </>
@@ -1185,8 +1186,8 @@ const Inbox = () => {
         // default happening to be 3; one edit to that default would have silently multiplied the
         // cost of the highest-volume path in the system.
         question_count: OUTREACH_HOOK_QUESTIONS,
-        // The EXPLICIT hook marker (2026-09-20): adaptive 1→3 execution and the Quick AI Visibility
-        // Check report. fresh_audit is a separate fact — a re-run is a NEW hook that starts at Q1,
+        // The EXPLICIT hook marker (2026-09-20): since 2026-09-25 three questions × ChatGPT + Google AI,
+        // six results, never stopping early (src/lib/hookScore.ts), and the Quick AI Visibility Check report. fresh_audit is a separate fact — a re-run is a NEW hook that starts at Q1,
         // never run 2 on the old audit. Neither is inferred from the question count.
         hook_audit: true,
         fresh_audit: true,
@@ -1201,6 +1202,8 @@ const Inbox = () => {
     // invalidates it) — without this, an audit fired from here sits invisible on that page
     // until an unrelated refetch happens to land. Same key AiAudit.tsx's own creation paths use.
     void queryClient.invalidateQueries({ queryKey: auditListQueryKey(user?.id) });
+    // The AI visibility card reads the newest audit, so it picks up the one just started and shows its progress.
+    void queryClient.invalidateQueries({ queryKey: ['hook-visibility', active.leadId] });
     toast({
       title: hasCompletedAudit ? 'Audit re-running' : 'Audit started',
       description: data.pitch_queued
@@ -1872,6 +1875,9 @@ const Inbox = () => {
                   ) : null}
                 </div>
               )}
+
+              {/* AI visibility: the lead's hook audit (3 questions × ChatGPT + Google AI), read-only. */}
+              {active.leadId && <HookVisibilityCard leadId={active.leadId} />}
 
               {/* Messages */}
               <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">

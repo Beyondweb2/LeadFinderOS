@@ -291,8 +291,8 @@ export async function fireOutreachAudit(
         has_website: ownWebsite(lead.website) !== null,
         question_count: OUTREACH_AUDIT_QUESTIONS,
         /* hook_audit: the EXPLICIT hook marker (2026-09-20). This is the genuine prospecting audit,
-           so it runs adaptively — Q1, stop on the first visibility gap, else Q2, else Q3 — and its
-           report is the Quick AI Visibility Check. Never inferred from the question count. */
+           so since 2026-09-25 it asks three questions on ChatGPT + Google AI (six results, never
+           stopping early; src/lib/hookScore.ts), and its report is the Quick AI Visibility Check. Never inferred from the question count. */
         hook_audit: true,
         /* skip_seo: the scan is the dearest call in an audit (~4p) and nothing in
            audit_result_hook renders a website grade. The email lane's audit_and_push has forced it

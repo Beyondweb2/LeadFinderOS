@@ -252,7 +252,7 @@ ok(!read('src/lib/hookAudit.ts').includes('hookForbidsAbsenceCopy'), 'reply: the
 }
 ok(/if \(!a\.ok\) return json\(\{ ok: false, error: "audit_reply_unavailable", reason: a\.reason \}, 200\);/.test(sender), 'Inbox: send-whatsapp-message turns the refusal into audit_reply_unavailable with the reason (existing convention)');
 ok(/if \(!vars\.ok\) \{ await finish\("flagged_no_audit", vars\.reason\);/.test(drip), 'first-reply lane: process-whatsapp-queue flags the parked pitch with the reason (existing convention)');
-ok(/whatsapp_delivery_status: "audit_reply_unavailable"/.test(drip) && /const ar = await resolveAuditReplyVars\(service, lead\.id as string\);/.test(drip), 'drip: the queued lead is dequeued as audit_reply_unavailable with the reason (existing convention)');
+ok(/whatsapp_delivery_status: "audit_reply_unavailable"/.test(drip) && /const ar = await resolveAuditReplyVars\(service, lead\.id as string, \{ templateName \}\);/.test(drip), 'drip: the queued lead is dequeued as audit_reply_unavailable with the reason (existing convention)');
 ok(!/cleaner hasn.?t run|haven.?t been extracted/.test(HOOK_NO_GAP_REASON), 'the refusal does not match the Inbox’s "re-clean and retry" regex, so a no-gap hook is never re-cleaned to get past it');
 
 if (failures) throw new Error(`${failures} audit finalisation checks failed`);

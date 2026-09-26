@@ -39,7 +39,8 @@ import {
   clampDiscoveryRuns, isValidDiscoveryQuestionCount, isValidDiscoveryRuns,
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
-import { initialHookState, planHookQuestions, type HookState } from "../../../src/lib/hookAudit.ts";
+import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
+import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
@@ -611,7 +612,10 @@ Deno.serve(async (req) => {
       : isDiscovery ? DISCOVERY_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
-    /* ⛔ THE HOOK AUDIT IS ADAPTIVE, AND ONLY WHEN THE CALLER SAYS SO (Paul, 2026-09-20). A request
+    /* ⛔ 2026-09-25: A HOOK IS NO LONGER ADAPTIVE. It plans three questions and queues ALL of them, each
+       on both engines: 3 × 2 = 6 results, never stopping early (src/lib/hookScore.ts). The rest of
+       this note is the 2026-09-20 record. The "only when the caller says so" rule is unchanged.
+       ⛔ THE HOOK AUDIT IS ADAPTIVE, AND ONLY WHEN THE CALLER SAYS SO (Paul, 2026-09-20). A request
        carrying `hook_audit: true` — the reply chain, the drip's pre-send audit, the Inbox hook
        button — plans up to HOOK_MAX_QUESTIONS in order, queues ONLY the first, and the queue
        processor asks the next only while every scored engine keeps naming the business. It stops
@@ -1327,14 +1331,33 @@ Deno.serve(async (req) => {
       console.warn(`[create-ai-audit] ${finalQ.duplicates.length} case-duplicate question(s) dropped before queueing: ${finalQ.duplicates.join(" | ")}`);
     }
     questions = finalQ.questions;
-    /* THE HOOK PLAN: broadest commercial intent first, capped at HOOK_MAX_QUESTIONS. `questions`
-       becomes the ordered plan (it is what the response, the money flag and the cost estimate
-       describe); only planned[0] is queued below, the processor queues the rest one at a time. */
-    let hookState: HookState | null = null;
+    /* THE HOOK PLAN (2026-09-25): broadest commercial intent first, capped at HOOK_MAX_QUESTIONS (3).
+       Every planned question is queued below, and each queue row asks BOTH engines, so the same three
+       questions are measured on ChatGPT and on Google AI. That makes six like-for-like results.
+       Nothing stops early. The processor finalises the run once all three rows settle, exactly as
+       it does for any ordinary audit. results.hook (version 2) only marks the run as a six-result
+       hook, so the score, the report, the Inbox card and the 6/6 rule know how to read it. */
+    let hookState: HookStateV2 | null = null;
     if (isHookAudit) {
       questions = planHookQuestions(questions, { town: locationText });
-      hookState = initialHookState(questions);
-      console.log(`[create-ai-audit] adaptive hook: ${questions.length} planned, queueing Q1 only`);
+      /* ⛔ EXACTLY THREE (2026-09-26). If the generator and its guards left fewer, top up with safe
+         generic trade + place questions (no service is ever invented). The place gets the same UK
+         disambiguation the generator applies, so an engine cannot answer about a same-named town
+         abroad. If even that cannot reach three, the audit runs short and scoreHookRun marks it
+         incomplete: no X/6, no hook, no auto Not Interested. */
+      if (questions.length < HOOK_SCORE_QUESTIONS) {
+        const isUkHook = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
+        const hookPlace = locationText && isUkHook && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText)
+          ? `${locationText} UK` : locationText;
+        const before = questions.length;
+        questions = topUpHookQuestions(questions, { trade: businessType, place: hookPlace });
+        console.log(`[create-ai-audit] hook: ${before} generated question(s) topped up to ${questions.length} with generic trade/place questions`);
+        if (questions.length < HOOK_SCORE_QUESTIONS) {
+          console.warn(`[create-ai-audit] hook: only ${questions.length} valid question(s) for "${businessName}" — the audit will be marked incomplete (unable to create ${HOOK_SCORE_QUESTIONS} valid questions)`);
+        }
+      }
+      hookState = initialHookStateV2(questions, AUDIT_ENGINES);
+      console.log(`[create-ai-audit] hook: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines, all queued`);
     }
     /* ⛔ THE MONEY FLAG, INTERSECTED WITH WHAT IS ACTUALLY QUEUED. dedupeQuestions above can drop a
        money question that collided with a standard one, and the guards can reject one earlier — so a
@@ -1378,7 +1401,7 @@ Deno.serve(async (req) => {
     /* Same schema-free mechanism as `measurement` above (results is jsonb — no migration). Inert
        downstream: the queue keys on results.seo and the report on results.seo.categories. */
     if (moneyQueued.length) runResults.money_questions = moneyQueued;
-    // The adaptive plan and its progress live on the run (results.hook); the processor advances it.
+    // The hook marker (version 2) lives on the run (results.hook). Nothing advances it: every row is queued now.
     if (hookState) runResults.hook = hookState;
     const { data: run, error: runErr } = await service
       .from("ai_audit_runs")
@@ -1400,9 +1423,8 @@ Deno.serve(async (req) => {
     const runId = run.id;
 
     // ── Enqueue one row per question ──────────────────────────────────────────
-    // Adaptive hook: ONLY the first planned question goes on the queue now; process-ai-audit-queue
-    // adds Q2/Q3 to this same run only if the business is still being named (src/lib/hookAudit.ts).
-    const queueRows = (hookState ? questions.slice(0, 1) : questions).map((q) => ({
+    // Every question is queued now, the hook's three included (2026-09-25; no early stop).
+    const queueRows = questions.map((q) => ({
       audit_id: auditId,
       run_id: runId,
       user_id: userId,

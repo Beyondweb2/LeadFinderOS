@@ -1034,7 +1034,7 @@ Deno.serve(async (req) => {
              and fell to the plain branch, which resolves none of them. */
           if (buildsFromAudit(tmpl.vars)) {
             // audit_reply-class: needs the lead's own completed audit.
-            const vars = await resolveAuditReplyVars(service, row.lead_id);
+            const vars = await resolveAuditReplyVars(service, row.lead_id, { templateName });
             if (!vars.ok) { await finish("flagged_no_audit", vars.reason); results[row.lead_id] = "flagged_no_audit"; continue; }
             /* ⛔ THE EXTRA IS BUILT FROM WHAT THE TEMPLATE DECLARES, NOT FROM A GUESSED CLASS.
                This branch is entered on `vars.includes("trade") || vars.includes("competitors")` and
@@ -1645,7 +1645,7 @@ Deno.serve(async (req) => {
       templateExtra.onboardingUrl = ob.url;
     }
     if (buildsFromAudit(tvars)) {
-      const ar = await resolveAuditReplyVars(service, lead.id as string);
+      const ar = await resolveAuditReplyVars(service, lead.id as string, { templateName });
       if (!ar.ok) {
         /* 🔴 NO COMPLETED AUDIT. THIS USED TO DEQUEUE UNCONDITIONALLY, AND THAT WAS THE BUG.
            `status: "not_contacted"` is right for a lead that can NEVER be audited - a gated lead
