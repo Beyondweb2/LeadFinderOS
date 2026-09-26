@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
 import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
+import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
 import type { VoiceClip } from '@/lib/voiceRecorderState';
 import { Input } from '@/components/ui/input';
@@ -1954,6 +1955,12 @@ const Inbox = () => {
                         like the composer, so switching thread discards a recording in progress. The
                         text composer is HIDDEN while the recorder has the row — still mounted, so a
                         half-typed reply is exactly where it was when the voice note is sent or deleted. */}
+                    {/* Voice-note script — text for Paul to read out when he records. Never sends. */}
+                    {active.leadId && (
+                      <div className="flex justify-end">
+                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} compact />
+                      </div>
+                    )}
                     <div className="flex min-w-0 items-end gap-2">
                       <div className={cn('min-w-0 flex-1', voiceActive && active.leadId && 'hidden')}>
                         <InboxComposer
@@ -1993,6 +2000,13 @@ const Inbox = () => {
                         getComposerText={() => ''}
                         onDraft={() => undefined}
                       />
+                    )}
+                    {/* A cold lead is usually outside the window: the script is still useful — Paul
+                        records and sends the note from his own phone. Nothing sends from here. */}
+                    {active.leadId && (
+                      <div className="flex justify-end">
+                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} compact />
+                      </div>
                     )}
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:

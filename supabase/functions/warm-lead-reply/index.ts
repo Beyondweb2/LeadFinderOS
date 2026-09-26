@@ -27,16 +27,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveOperator, isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
-import { resolveAuditReplyVars, HOOK_NO_GAP_REASON } from "../_shared/audit-reply.ts";
-import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import {
+  runSiteResearch, callModel, loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, WARM_RESEARCH_TABLE,
+  type ResearchLead,
+} from "../_shared/site-research.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import { warmStage, WARM_STAGE_LABELS, type WarmStageResult } from "../../../src/lib/warmStage.ts";
-import {
-  planResearch, researchFreshness, extractPageFacts, pickResearchPages, assembleResearch, noWebsiteResearch,
-  contentHash, buildResearchPrompt, usableFullCrawl, RESEARCH_SYSTEM_PROMPT, RESEARCH_TOOL, RESEARCH_MODEL,
-  WARM_RESEARCH_FETCH_TIMEOUT_MS, WARM_RESEARCH_DEADLINE_MS, WARM_RESEARCH_MAX_PAGES,
-  type AuditContext, type PageFacts, type StoredResearchRow, type WarmLeadResearch, type CrawlRowInput, type ModelResearchOutput,
-} from "../../../src/lib/warmLeadResearch.ts";
+import { researchFreshness, type StoredResearchRow, type WarmLeadResearch } from "../../../src/lib/warmLeadResearch.ts";
 import {
   buildReplyContext, buildReplyPrompt, checkReply, fallbackReply, parseModelReply, ruleSalesFacts, mergeSalesFacts,
   latestInbound, REPLY_SYSTEM_PROMPT, REPLY_TOOL, REPLY_MODEL,
@@ -55,123 +52,20 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
-const TABLE = "warm_lead_research";
+const TABLE = WARM_RESEARCH_TABLE;
 const ROW_COLUMNS = "lead_id, website, research, research_status, generated_at, revalidated_at, sales_facts, last_draft";
-const MAX_BODY_BYTES = 1_000_000;
-const OPENAI_TIMEOUT_MS = 45_000;
-const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
-interface LeadRow {
-  id: string; user_id: string; business_name: string | null; website: string | null; phone: string | null; country: string | null;
-  category: string | null; search_keyword: string | null; search_location: string | null; derived_town: string | null; contact_name: string | null;
-  is_archived: boolean | null;
-  place_id?: string | null;
-  google_maps_url?: string | null;
-}
-
-/* ───────────────────────── fetching (research action ONLY) ───────────────────────── */
-
-/** Public http(s) only. A lead's website comes from Google Places or an operator, but this runs a
- *  server-side fetch, so a loopback / private-range address is refused rather than followed. */
-function isPublicHttpUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw);
-    if (!/^https?:$/.test(u.protocol)) return false;
-    const h = u.hostname.toLowerCase();
-    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return false;
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
-      const [a, b] = h.split(".").map(Number);
-      if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return false;
-    }
-    if (h.startsWith("[") || h.includes(":")) return false;
-    return true;
-  } catch { return false; }
-}
-
-async function readCapped(res: Response): Promise<string> {
-  if (!res.body) return await res.text().catch(() => "");
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (total < MAX_BODY_BYTES) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) { chunks.push(value); total += value.byteLength; }
-    }
-  } catch { /* keep what arrived */ } finally { try { await reader.cancel(); } catch { /* closed */ } }
-  const joined = new Uint8Array(Math.min(total, MAX_BODY_BYTES));
-  let at = 0;
-  for (const c of chunks) { const n = Math.min(c.byteLength, joined.length - at); if (n <= 0) break; joined.set(c.subarray(0, n), at); at += n; }
-  return new TextDecoder("utf-8", { fatal: false }).decode(joined);
-}
-
-async function fetchSitePage(url: string): Promise<PageFacts> {
-  if (!isPublicHttpUrl(url)) return extractPageFacts("", url, url, 0, false);
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), WARM_RESEARCH_FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8" }, redirect: "follow", signal: controller.signal });
-    const type = res.headers.get("content-type") ?? "";
-    const html = /html|xml|text/i.test(type) || !type ? await readCapped(res) : "";
-    const finalUrl = res.url && /^https?:\/\//i.test(res.url) ? res.url : url;
-    return extractPageFacts(html, url, finalUrl, res.status, res.ok && html.length > 0);
-  } catch {
-    return extractPageFacts("", url, url, 0, false);
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-/* ───────────────────────── the model ───────────────────────── */
-
-type ModelCall =
-  | { ok: true; args: unknown; promptTokens: number; completionTokens: number }
-  | { ok: false; error: string };
-
-// deno-lint-ignore no-explicit-any
-async function callModel(model: string, system: string, user: string, tool: any, temperature: number): Promise<ModelCall> {
-  const key = Deno.env.get("OPENAI_API_KEY");
-  if (!key) return { ok: false, error: "openai_not_configured" };
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model, temperature,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        tools: [tool], tool_choice: { type: "function", function: { name: tool.function.name } },
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      if (res.status === 429 || /insufficient_quota|credit_balance_exhausted/i.test(body)) return { ok: false, error: "no_credits" };
-      return { ok: false, error: `openai_http_${res.status}` };
-    }
-    const data = await res.json();
-    const raw = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (typeof raw !== "string") return { ok: false, error: "model_no_tool_output" };
-    let args: unknown;
-    try { args = JSON.parse(raw); } catch { return { ok: false, error: "model_bad_json" }; }
-    return { ok: true, args, promptTokens: data.usage?.prompt_tokens ?? 0, completionTokens: data.usage?.completion_tokens ?? 0 };
-  } catch (e) {
-    return { ok: false, error: (e as Error)?.name === "AbortError" ? "openai_timeout" : "openai_request_failed" };
-  } finally {
-    clearTimeout(t);
-  }
-}
+/* The lead row, the site fetch and the model call live in _shared/site-research.ts (2026-09-26), shared
+   with voice-note-script so there is one research path, not two. */
+type LeadRow = ResearchLead;
 
 /* ───────────────────────── reading what we already hold (no spend) ───────────────────────── */
 
 async function loadLead(service: Service, leadId: string, operatorId: string): Promise<LeadRow | null> {
   const { data, error } = await service.from("outreach_leads")
-    .select("id, user_id, business_name, website, phone, country, category, search_keyword, search_location, derived_town, contact_name, is_archived, place_id, google_maps_url")
+    .select(RESEARCH_LEAD_COLUMNS)
     .eq("id", leadId).maybeSingle();
   if (error) throw error;
   const l = data as LeadRow | null;
@@ -182,49 +76,6 @@ async function loadRow(service: Service, leadId: string): Promise<(StoredResearc
   const { data, error } = await service.from(TABLE).select(ROW_COLUMNS).eq("lead_id", leadId).maybeSingle();
   if (error) throw error;
   return data ?? null;
-}
-
-const leadTrade = (l: LeadRow) => (l.category || l.search_keyword || "").trim() || null;
-const leadTown = (l: LeadRow) => (l.derived_town || l.search_location || "").trim() || null;
-
-/** The lead's newest ordinary audit (hook / free check), as the reply needs it. DB reads only. */
-async function loadAuditContext(service: Service, lead: LeadRow): Promise<AuditContext | null> {
-  const { data: audits } = await service.from("ai_audits")
-    .select("id, short_code, created_at, business_type, location_text, audit_purpose, is_measurement, ai_audit_runs(status, run_number, summary:results->summary)")
-    .eq("lead_id", lead.id).order("created_at", { ascending: false }).limit(10);
-  // deno-lint-ignore no-explicit-any
-  const list: any[] = Array.isArray(audits) ? audits : [];
-  // deno-lint-ignore no-explicit-any
-  let audit: any = null; let summary: any = null;
-  for (const a of list) {
-    const purpose = a.audit_purpose ?? null;
-    if (a.is_measurement === true || !(purpose === null || purpose === "audit" || purpose === "free_check")) continue;
-    // deno-lint-ignore no-explicit-any
-    const runs = (Array.isArray(a.ai_audit_runs) ? [...a.ai_audit_runs] : []).sort((x: any, y: any) => (y.run_number ?? 0) - (x.run_number ?? 0));
-    // deno-lint-ignore no-explicit-any
-    const done = runs.find((r: any) => r.status === "complete" || r.status === "capped");
-    if (done) { audit = a; summary = done.summary ?? null; break; }
-  }
-  if (!audit) return null;
-  const vars = await resolveAuditReplyVars(service, lead.id).catch((e: unknown) => ({ ok: false as const, reason: String((e as Error)?.message ?? e) }));
-  const sameAudit = vars.ok && vars.auditId === audit.id;
-  return {
-    auditId: audit.id,
-    reportUrl: audit.short_code ? shortReportUrl(audit.short_code) : null,
-    createdAt: audit.created_at ?? null,
-    trade: (audit.business_type ?? "").trim() || leadTrade(lead),
-    town: (audit.location_text ?? "").trim() || leadTown(lead),
-    competitors: sameAudit && vars.ok ? vars.rivals.slice(0, 3) : [],
-    namedEverywhere: !vars.ok && vars.reason.startsWith(HOOK_NO_GAP_REASON),
-    namedDatapoints: typeof summary?.named_datapoints === "number" ? summary.named_datapoints : null,
-    totalDatapoints: typeof summary?.total_datapoints === "number" ? summary.total_datapoints : null,
-    unavailableReason: !vars.ok && !vars.reason.startsWith(HOOK_NO_GAP_REASON) ? vars.reason : null,
-  };
-}
-
-async function loadCrawlRow(service: Service, leadId: string): Promise<CrawlRowInput | null> {
-  const { data } = await service.from("lead_crawl_checks").select("created_at, result, mode, full_evidence").eq("lead_id", leadId).maybeSingle();
-  return (data as CrawlRowInput | null) ?? null;
 }
 
 /** What the Inbox shows about saved research — never the raw page text. */
@@ -284,85 +135,14 @@ async function handleStatus(service: Service, lead: LeadRow, operatorId: string,
   });
 }
 
-async function saveResearch(service: Service, lead: LeadRow, r: WarmLeadResearch) {
-  const { error } = await service.from(TABLE).upsert({
-    lead_id: lead.id, user_id: lead.user_id, website: r.website, research: r, research_status: r.status,
-    generated_at: r.generatedAt, source_crawl_at: r.sourceCrawlAt, content_hash: r.contentHash,
-    revalidated_at: null, research_ms: r.timings.researchMs, updated_at: new Date().toISOString(),
-  }, { onConflict: "lead_id" });
-  if (error) throw error;
-}
-
 async function handleResearch(service: Service, lead: LeadRow, operatorId: string, refresh: boolean, phone: string) {
-  const started = Date.now();
-  const nowIso = new Date().toISOString();
   if (!phone) return json({ ok: false, error: "phone_required", detail: "Open the conversation first." }, 400);
   const conv = await loadConversation(service, operatorId, lead, phone);
   if (!conv.ours) return json({ ok: false, error: "forbidden", detail: "That conversation is not this lead's." }, 403);
   if (conv.stage.stage !== "warm") return notWarm(conv.stage);
-  const row = await loadRow(service, lead.id);
-  const plan = planResearch({ row, leadWebsite: lead.website, refresh, nowMs: started });
-
-  if (plan.action === "reuse") {
-    return json({ ok: true, plan: "reuse", research: researchSummary(row?.research), ms: Date.now() - started });
-  }
-  const audit = await loadAuditContext(service, lead);
-  if (plan.action === "no_website") {
-    const r = noWebsiteResearch(nowIso, audit);
-    await saveResearch(service, lead, r);
-    return json({ ok: true, plan: "no_website", research: researchSummary(r), ms: Date.now() - started });
-  }
-
-  const website = (lead.website ?? "").trim();
-  const homeUrl = /^https?:\/\//i.test(website) ? website : `https://${website}`;
-  const fetchStarted = Date.now();
-  const home = await fetchSitePage(homeUrl);
-
-  // Stale research, same homepage text → the site has not materially changed: keep it.
-  if (plan.action === "revalidate" && home.ok && row?.research?.contentHash && contentHash(home.text) === row.research.contentHash) {
-    await service.from(TABLE).update({ revalidated_at: nowIso, updated_at: nowIso }).eq("lead_id", lead.id);
-    return json({ ok: true, plan: "revalidated", research: researchSummary(row.research), ms: Date.now() - started });
-  }
-
-  /* ⛔ A RECENT FULL CRAWL OF THIS SITE REPLACES THE MENU-PAGE FETCHES. It already read every page and
-     paid for it; its measured findings go into the record (assembleResearch → fullCrawlFindings). The
-     homepage is still read once, for the words only page text carries (hours, positioning, summary). */
-  const crawl = await loadCrawlRow(service, lead.id);
-  const full = usableFullCrawl(crawl, homeUrl, started);
-  const pages: PageFacts[] = [home];
-  if (home.ok && !full) {
-    const targets = pickResearchPages(home, WARM_RESEARCH_MAX_PAGES - 1);
-    const deadline = fetchStarted + WARM_RESEARCH_DEADLINE_MS;
-    const rest = await Promise.all(targets.map((u) => (Date.now() < deadline ? fetchSitePage(u) : Promise.resolve(extractPageFacts("", u, u, 0, false)))));
-    pages.push(...rest);
-  }
-  const fetchMs = Date.now() - fetchStarted;
-
-  // The model reads the same pages; its findings are verified against them in assembleResearch.
-  let model: ModelResearchOutput | null = null;
-  let modelError: string | null = null;
-  let analyseMs: number | null = null;
-  if (home.ok) {
-    const analyseStarted = Date.now();
-    const observed = assembleResearch({ nowIso, website: homeUrl, businessName: lead.business_name, trade: leadTrade(lead), town: leadTown(lead), pages, crawl, audit, model: null, modelError: null, fetchMs, analyseMs: null, researchMs: 0, nowYear: new Date().getUTCFullYear() });
-    // Everything code already measured (rules, the crawl row, the audit) — the model must not repeat it.
-    const measured = [...observed.technicalFindings, ...observed.contentFindings, ...observed.localVisibilityFindings];
-    const call = await callModel(RESEARCH_MODEL, RESEARCH_SYSTEM_PROMPT, buildResearchPrompt({ businessName: lead.business_name, trade: leadTrade(lead), town: leadTown(lead), pages, observed: measured }), RESEARCH_TOOL, 0.2);
-    analyseMs = Date.now() - analyseStarted;
-    if (call.ok) {
-      model = call.args as ModelResearchOutput;
-      await logOpenAiUsage(service, { functionName: "warm-lead-reply", apiType: "openai_warm_research", model: RESEARCH_MODEL, promptTokens: call.promptTokens, completionTokens: call.completionTokens, userId: operatorId, triggerSource: "user" });
-    } else {
-      modelError = call.error;
-    }
-  }
-
-  const r = assembleResearch({
-    nowIso, website: homeUrl, businessName: lead.business_name, trade: leadTrade(lead), town: leadTown(lead),
-    pages, crawl, audit, model, modelError, fetchMs, analyseMs, researchMs: Date.now() - started, nowYear: new Date().getUTCFullYear(),
-  });
-  await saveResearch(service, lead, r);
-  return json({ ok: true, plan: plan.action === "revalidate" ? "changed" : plan.reason, used_full_crawl: !!full, research: researchSummary(r), ms: Date.now() - started });
+  // The research itself (reuse → revalidate → full crawl → targeted fetch) is the shared path.
+  const out = await runSiteResearch(service, lead, operatorId, refresh, { functionName: "warm-lead-reply" });
+  return json({ ok: true, plan: out.plan, ...(out.usedFullCrawl === null ? {} : { used_full_crawl: out.usedFullCrawl }), research: researchSummary(out.research), ms: out.ms });
 }
 
 // deno-lint-ignore no-explicit-any
