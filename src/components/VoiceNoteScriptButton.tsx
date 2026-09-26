@@ -25,7 +25,9 @@ interface ScriptRow {
   hook_engine: string;
   competitors: string[];
   findings: FindingRecord[];
-  site_mode: 'findings' | 'clean' | 'unread' | 'no_website';
+  site_mode: 'findings' | 'clean' | 'unread' | 'profile' | 'no_website';
+  site_source: 'own_site' | 'directory_profile' | 'social_profile' | 'none' | null;
+  site_source_label: string | null;
   research_basis: { plan?: string | null; usedFullCrawl?: boolean | null; status?: string | null; generatedAt?: string | null; sourceCrawlAt?: string | null; sources?: string[] } | null;
   script: string;
   word_count: number | null;
@@ -41,6 +43,7 @@ const ENGINE_LABEL: Record<string, string> = { gemini: 'Google AI', chatgpt: 'Ch
 const SITE_MODE_TEXT: Record<Exclude<ScriptRow['site_mode'], 'findings'>, string> = {
   clean: 'Nothing strong found on the site, so the script uses the "nothing obviously broken" line.',
   unread: 'The site could not be read, so the script says nothing specific about it.',
+  profile: 'The website on record is a profile page, not their own site. It was not researched.',
   no_website: 'No website on record.',
 };
 const SOURCE_TEXT: Record<string, string> = { page: 'live site', full_crawl: 'full crawl', crawl_check: 'crawl check', audit: 'AI audit' };
@@ -156,7 +159,9 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
                           </li>
                         ))}
                       </ul>
-                    ) : SITE_MODE_TEXT[row.site_mode]}
+                    ) : row.site_mode === 'profile'
+                      ? `The website on record is a ${row.site_source_label ?? 'directory'} profile, not their own site. It was not researched.`
+                      : SITE_MODE_TEXT[row.site_mode]}
                   </Row>
                   {basis && (basis.sources?.length ?? 0) > 0 && (
                     <Row label="Research">
@@ -190,8 +195,21 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
   );
 }
 
-export function VoiceNoteScriptButton({ leadId, compact, className }: { leadId: string; compact?: boolean; className?: string }) {
+export function VoiceNoteScriptButton({ leadId, compact, prominent, className }: { leadId: string; compact?: boolean; prominent?: boolean; className?: string }) {
   const [open, setOpen] = useState(false);
+  /* PROMINENT: the Inbox's open 24h window, beside the voice-note recorder (Paul, 2026-09-26). A real
+     button, not a pill; closed-window threads do not get one at all. */
+  if (prominent) {
+    return (
+      <>
+        <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          className={cn('h-8 gap-1.5 border-violet-500/50 text-violet-700 hover:bg-violet-500/10 dark:text-violet-300', className)}>
+          <Mic className="h-4 w-4" /> {VOICE_NOTE_SCRIPT_LABEL}
+        </Button>
+        {open && <VoiceNoteScriptPanel leadId={leadId} open={open} onOpenChange={setOpen} />}
+      </>
+    );
+  }
   return (
     <>
       <button

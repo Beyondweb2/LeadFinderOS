@@ -24,7 +24,7 @@ import { scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, parseVoiceNoteScript, checkVoiceNoteScript,
-  betterAttempt, findingRecord, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
+  betterAttempt, findingRecord, classifyLeadWebsite, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
   type VoiceNoteCheck, type VoiceNoteEvidence,
 } from "../../../src/lib/voiceNoteScript.ts";
 
@@ -38,7 +38,7 @@ const json = (b: unknown, s = 200) =>
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
 const TABLE = "voice_note_scripts";
-const ROW_COLUMNS = "id, lead_id, audit_id, run_id, hook_question, hook_engine, hook_question_index, competitors, findings, site_mode, research_basis, script, word_count, problems, warnings, operator_note, model, generator_version, regenerated_from, generated_at";
+const ROW_COLUMNS = "id, lead_id, audit_id, run_id, hook_question, hook_engine, hook_question_index, competitors, findings, site_mode, site_source, site_source_label, research_basis, script, word_count, problems, warnings, operator_note, model, generator_version, regenerated_from, generated_at";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -132,10 +132,14 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     if (data && data.lead_id === lead.id) previous = { id: data.id, script: data.script };
   }
 
-  // 3) The website: the shared research path (reuses what is saved; never a crawl job).
-  const hasWebsite = !!(lead.website ?? "").trim();
-  const research = await runSiteResearch(service, lead, operatorId, false, { functionName: "voice-note-script" });
-  const site = selectVoiceNoteFindings(research.research, hasWebsite, hook.area);
+  // 3) The website: classified first — a directory / social profile is not their site and is never
+  //    researched. Their own site goes through the shared research path (reuses what is saved; never a
+  //    crawl job).
+  const websiteKind = classifyLeadWebsite(lead.website);
+  const research = websiteKind.source === "own_site"
+    ? await runSiteResearch(service, lead, operatorId, false, { functionName: "voice-note-script" })
+    : null;
+  const site = selectVoiceNoteFindings(research?.research ?? null, lead.website, hook.area);
 
   // 4) The model, then the checks; one rewrite if a fact is wrong.
   const promptBase = {
@@ -151,7 +155,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     calls++; promptTokens += call.promptTokens; completionTokens += call.completionTokens;
     const raw = parseVoiceNoteScript(call.args);
     if (!raw) { modelError = "model_empty_script"; continue; }
-    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area });
+    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade });
     best = best ? betterAttempt(best, checked) : checked;
     if (!best.problems.length) break;
   }
@@ -164,15 +168,18 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
   }
 
   // 5) Saved, so it can be reopened and later compared against replies.
-  const r = research.research;
+  const r = research?.research ?? null;
   const row = {
     lead_id: lead.id, user_id: lead.user_id, audit_id: hook.auditId, run_id: hook.runId,
     hook_question: hook.evidence.question, hook_engine: hook.evidence.engine, hook_question_index: hook.evidence.questionIndex,
     competitors: hook.evidence.competitors,
     findings: site.findings.map(findingRecord),
     site_mode: site.mode,
+    site_source: site.source,
+    site_source_label: site.sourceLabel,
     research_basis: {
-      plan: research.plan, usedFullCrawl: research.usedFullCrawl, status: r?.status ?? null,
+      plan: research?.plan ?? `not_researched_${site.source}`, usedFullCrawl: research?.usedFullCrawl ?? null, status: r?.status ?? null,
+      services: site.services,
       generatedAt: r?.generatedAt ?? null, sourceCrawlAt: r?.sourceCrawlAt ?? null, technicallyClean: r?.technicallyClean ?? null,
       sources: r ? [...new Set(r.sources.map((s) => s.kind))] : [],
     },

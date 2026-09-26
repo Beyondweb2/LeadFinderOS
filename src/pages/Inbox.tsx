@@ -1955,10 +1955,11 @@ const Inbox = () => {
                         like the composer, so switching thread discards a recording in progress. The
                         text composer is HIDDEN while the recorder has the row — still mounted, so a
                         half-typed reply is exactly where it was when the voice note is sent or deleted. */}
-                    {/* Voice-note script — text for Paul to read out when he records. Never sends. */}
+                    {/* Voice-note script — prominent in the OPEN window, beside the recorder: text for Paul to
+                        read out when he records. Never sends. Closed-window threads do not get one. */}
                     {active.leadId && (
                       <div className="flex justify-end">
-                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} compact />
+                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />
                       </div>
                     )}
                     <div className="flex min-w-0 items-end gap-2">
@@ -2000,13 +2001,6 @@ const Inbox = () => {
                         getComposerText={() => ''}
                         onDraft={() => undefined}
                       />
-                    )}
-                    {/* A cold lead is usually outside the window: the script is still useful — Paul
-                        records and sends the note from his own phone. Nothing sends from here. */}
-                    {active.leadId && (
-                      <div className="flex justify-end">
-                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} compact />
-                      </div>
                     )}
                     <p className="text-[11px] text-muted-foreground">
                       Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:

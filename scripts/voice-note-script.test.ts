@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, checkVoiceNoteScript, tidyScript,
   competitorNamed, wordCount, betterAttempt, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_MODEL,
+  classifyLeadWebsite, servicesNamed, serviceSupported, findingRecord,
   type VoiceNoteEvidence, type VoiceNoteSite,
 } from '../src/lib/voiceNoteScript.ts';
 import type { HookResult } from '../src/lib/hookScore.ts';
@@ -86,17 +87,18 @@ const research = (findings: ResearchFinding[], status: WarmLeadResearch['status'
   contentHash: null, timings: { researchMs: 0, fetchMs: 0, analyseMs: null },
 });
 const blocked = F({});
-ok(selectVoiceNoteFindings(research([blocked]), true).mode === 'findings' && selectVoiceNoteFindings(research([blocked]), true).findings[0] === blocked, 'a strong measured finding is used');
-ok(selectVoiceNoteFindings(research([]), true).mode === 'clean', 'nothing strong → the "nothing obviously broken" fallback');
-ok(selectVoiceNoteFindings(research([], 'failed'), true).mode === 'unread', 'an unreadable site with nothing measured → nothing specific is said');
-ok(selectVoiceNoteFindings(null, false).mode === 'no_website', 'no website → the no-website line');
-ok(selectVoiceNoteFindings(research([F({ id: 'model:x', kind: 'hours_conflict', source: 'model' })]), true).mode === 'clean', 'a model reading may not author an hours conflict (the warm drafter\'s rule)');
-ok(selectVoiceNoteFindings(research([blocked, F({ id: 'rule:hours', kind: 'hours_conflict', source: 'rule', title: 'Opening hours conflict', keyDetails: ['9AM - 9PM', 'Open 24 hours'] }), F({ id: 'rule:thin', kind: 'thin_or_duplicate', source: 'rule', title: 'Thin pages' })]), true).findings.length <= 2, 'at most two findings reach a voice note');
+ok(selectVoiceNoteFindings(research([blocked]), 'https://acme.example').mode === 'findings' && selectVoiceNoteFindings(research([blocked]), 'https://acme.example').findings[0] === blocked, 'a strong measured finding is used');
+ok(selectVoiceNoteFindings(research([]), 'https://acme.example').mode === 'clean', 'nothing strong → the "nothing obviously broken" fallback');
+ok(selectVoiceNoteFindings(research([], 'failed'), 'https://acme.example').mode === 'unread', 'an unreadable site with nothing measured → nothing specific is said');
+ok(selectVoiceNoteFindings(null, null).mode === 'no_website', 'no website → the no-website line');
+ok(selectVoiceNoteFindings(research([F({ id: 'model:x', kind: 'hours_conflict', source: 'model' })]), 'https://acme.example').mode === 'clean', 'a model reading may not author an hours conflict (the warm drafter\'s rule)');
+ok(selectVoiceNoteFindings(research([blocked, F({ id: 'rule:hours', kind: 'hours_conflict', source: 'rule', title: 'Opening hours conflict', keyDetails: ['9AM - 9PM', 'Open 24 hours'] }), F({ id: 'rule:thin', kind: 'thin_or_duplicate', source: 'rule', title: 'Thin pages' })]), 'https://acme.example').findings.length <= 2, 'at most two findings reach a voice note');
 
 /* ─────────── 3. the prompt ─────────── */
 const EV: VoiceNoteEvidence = { questionIndex: 0, question: 'Who is the best plumber in Leicester?', engine: 'gemini', engineLabel: 'Google AI', competitors: ['Smith & Sons Plumbing', 'Leicester Heating Co', 'PipeFix'], answerExcerpt: '', thin: false };
-const SITE_F: VoiceNoteSite = { mode: 'findings', findings: [blocked] };
-const SITE_C: VoiceNoteSite = { mode: 'clean', findings: [] };
+const OWN_SITE = { source: 'own_site' as const, sourceLabel: null, services: [] as string[], serviceEvidence: '' };
+const SITE_F: VoiceNoteSite = { ...OWN_SITE, mode: 'findings', findings: [blocked], serviceEvidence: 'OAI-SearchBot | PerplexityBot' };
+const SITE_C: VoiceNoteSite = { ...OWN_SITE, mode: 'clean', findings: [] };
 const P = buildVoiceNotePrompt({ business: 'Acme Plumbing', trade: 'Plumbers', area: 'Leicester', website: 'acme.example', evidence: EV, site: SITE_F });
 ok(P.includes('ENGINE NAME (say exactly this): Google AI') && EV.competitors.every((c) => P.includes(c)), 'the prompt carries the engine label and exactly the picked competitors');
 ok(P.includes('say it like "a plumber"'), 'a plural trade is given in speakable form');
@@ -107,7 +109,7 @@ ok(/never say a website issue is why/i.test(VOICE_NOTE_SYSTEM_PROMPT) && /No em 
 ok(VOICE_NOTE_MODEL === 'gpt-4o', 'the stronger writing model');
 
 /* ─────────── 4. the checks ─────────── */
-const GOOD = "hi mate, i was looking for a plumber in Leicester and asked Google AI who the best one was. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but not you, which isn't ideal because that's people going straight to someone else. so i had a quick look at your site to see what might be contributing, and one thing stood out. some of the AI search crawlers, like OAI-SearchBot and PerplexityBot, are actually blocked from reading it, which could be making it harder for AI to properly understand the business. that's the sort of thing i work on, i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
+const GOOD = "hi mate, i was looking for a plumber in Leicester and asked Google AI who the best one was. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but not you, which isn't ideal because that can mean potential customers going elsewhere. so i had a quick look at your site to see what might be contributing, and one thing stood out. some of the AI search crawlers, like OAI-SearchBot and PerplexityBot, are actually blocked from reading it, which could be making it harder for AI to properly understand the business. that's the sort of thing i work on, i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
 const g = checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_F, town: 'Leicester' });
 ok(g.problems.length === 0, `a good script passes (${g.problems.join(' | ')})`);
 ok(g.wordCount > 110 && g.wordCount < 140, `word count is sensible (${g.wordCount})`);
@@ -149,6 +151,55 @@ const a = { script: 'a', wordCount: 1, problems: ['x', 'y'], warnings: [] };
 const b = { script: 'b', wordCount: 1, problems: ['x'], warnings: [] };
 ok(betterAttempt(a, b) === b && betterAttempt(b, a) === b, 'the attempt with fewer factual problems is kept');
 
+/* ─────────── 4b. Paul's corrections (2026-09-26) ─────────── */
+// 1. A directory / profile page is not "your website".
+ok(classifyLeadWebsite('https://tradehq.co.uk/firebeardelectrical').source === 'directory_profile' && classifyLeadWebsite('https://tradehq.co.uk/firebeardelectrical').label === 'TradeHQ', 'TradeHQ is a directory profile, labelled TradeHQ');
+ok(classifyLeadWebsite('www.checkatrade.com/trades/acme').source === 'directory_profile', 'Checkatrade is a directory profile');
+ok(classifyLeadWebsite('https://m.facebook.com/acmeplumbing').source === 'social_profile' && classifyLeadWebsite('https://m.facebook.com/acmeplumbing').label === 'Facebook', 'Facebook is a social profile');
+ok(classifyLeadWebsite('https://www.rpelectrics.com/').source === 'own_site', 'a business domain is their own site');
+ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source === 'none', 'no website → none');
+{
+  const prof = selectVoiceNoteFindings(research([blocked]), 'https://tradehq.co.uk/firebeardelectrical', 'Shrewsbury');
+  ok(prof.mode === 'profile' && prof.findings.length === 0 && prof.sourceLabel === 'TradeHQ', 'a profile page is never mined for findings, even when research exists');
+  const pp = buildVoiceNotePrompt({ business: 'Firebeard Electrical', trade: 'Electricians', area: 'Shrewsbury', website: 'https://tradehq.co.uk/firebeardelectrical', evidence: EV, site: prof });
+  ok(pp.includes('WEBSITE SOURCE: a TradeHQ profile page, NOT their own website') && pp.includes('just their TradeHQ profile') && !pp.includes('{LABEL}'), 'the prompt says it is a TradeHQ profile, not their website');
+  const bad = checkVoiceNoteScript(fallback.replace("i had a look through the site to see what might be contributing and there isn't anything obviously broken", "i had a look at your website and there isn't anything obviously broken"), { evidence: EV, site: prof });
+  ok(bad.problems.some((x) => /Calls the TradeHQ profile their website/.test(x)), 'calling the TradeHQ profile "your website" is a problem');
+  const good = "hi mate, i was looking for a plumber in Leicester and asked Google AI who it'd recommend. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, but not you, and that can mean potential customers going elsewhere. i had a look to see what might be contributing, and i couldn't actually find a website of your own, just your TradeHQ profile. without your own site there's a lot less for AI to go on about what you do and where you work. i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
+  const g2 = checkVoiceNoteScript(good, { evidence: EV, site: prof });
+  ok(g2.problems.length === 0, `an honest profile script passes (${g2.problems.join(' | ')})`);
+}
+// 2. Services need evidence.
+{
+  const missing = F({ id: 'rule:missing_core', kind: 'missing_core_service_pages', source: 'rule', title: 'No pages for the core services',
+    detail: 'None of the pages linked from the homepage is about electrical work such as rewiring, fuse boards, testing or emergency call-outs. The menu is about other things.',
+    keyDetails: ['electrical work such as rewiring, fuse boards, testing or emergency call-outs', 'contact us', 'legal notice'] });
+  const site = selectVoiceNoteFindings(research([missing]), 'https://jg-electrics.co.uk', 'Woking');
+  const pr = buildVoiceNotePrompt({ business: 'JG Electrics', trade: 'Electricians', area: 'Woking', website: 'https://jg-electrics.co.uk', evidence: EV, site });
+  ok(site.mode === 'findings' && !/rewiring|fuse board/i.test(pr), 'the rule\'s generic examples ("rewiring, fuse boards") never reach the prompt');
+  ok(pr.includes('SERVICES THEY OFFER: none confirmed'), '…and the model is told no services are confirmed');
+  ok(!findingRecord(missing).details.some((d) => /such as/.test(d)), '…nor the "Based on" record');
+  const script = "hi mate, i was looking for an electrician in Woking and asked Google AI who it'd recommend. it came back with Smith & Sons Plumbing, Leicester Heating Co and PipeFix, and you weren't in there, which could mean work going elsewhere. i had a look at your site to see what might be contributing. there aren't really pages for the actual work, like rewiring or fuse boards, the menu's mostly contact us and legal bits. i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of getting named in those searches.";
+  const c1 = checkVoiceNoteScript(script, { evidence: EV, site, trade: 'Electricians' });
+  ok(c1.problems.some((x) => /"rewiring"/.test(x)) && c1.problems.some((x) => /"fuse boards"/.test(x)), `naming rewiring / fuse boards with no evidence is a problem (${c1.problems.join(' | ')})`);
+  const withServices = { ...site, services: ['Full and partial rewires', 'Fuse board upgrades'], serviceEvidence: site.serviceEvidence + ' | Full and partial rewires | Fuse board upgrades' };
+  ok(!checkVoiceNoteScript(script, { evidence: EV, site: withServices, trade: 'Electricians' }).problems.some((x) => /service/.test(x)), '…but fine when their own site lists those services');
+  const bq = { ...EV, question: 'Who does emergency boiler repairs in Leicester?' };
+  ok(!checkVoiceNoteScript(GOOD.replace('who the best one was', 'who does emergency boiler repairs'), { evidence: bq, site: SITE_F, trade: 'plumber' }).problems.some((x) => /service/.test(x)), '…and fine when the service is in the search itself');
+  ok(servicesNamed('the work you do and your main services').length === 0, 'generic wording names no service');
+  ok(serviceSupported('rewiring', 'full rewires') && !serviceSupported('boiler repairs', 'full rewires'), 'service support is by word stem');
+}
+// 3. Lost work is a possibility, never a fact.
+{
+  const hard = GOOD.replace('that can mean potential customers going elsewhere', "that's work going straight to someone else");
+  ok(checkVoiceNoteScript(hard, { evidence: EV, site: SITE_F }).problems.some((x) => /lost work as a fact/.test(x)), '"that\'s work going straight to someone else" is rejected');
+  ok(checkVoiceNoteScript(GOOD.replace('that can mean potential customers going elsewhere', "you're losing jobs to them"), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work as a fact/.test(x)), '"you\'re losing jobs" is rejected');
+  ok(checkVoiceNoteScript(GOOD.replace('that can mean potential customers going elsewhere', "that's someone local ringing them instead"), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work as a fact/.test(x)), '"someone ringing them instead" is rejected');
+  ok(!checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_F }).problems.some((x) => /lost work/.test(x)), '"that can mean potential customers going elsewhere" is fine');
+  ok(!checkVoiceNoteScript(GOOD.replace('that can mean potential customers going elsewhere', 'that could be work going to someone else'), { evidence: EV, site: SITE_F }).problems.some((x) => /lost work/.test(x)), '"that could be work going to someone else" is fine');
+  ok(/LOST WORK IS A POSSIBILITY, NEVER A FACT/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt says so too');
+}
+
 /* ─────────── 5. structure ─────────── */
 const FN = read('supabase/functions/voice-note-script/index.ts');
 const UI = read('src/components/VoiceNoteScriptButton.tsx');
@@ -162,6 +213,7 @@ ok(!/onSend|doSend|onDraft|setDraft/.test(UI), 'the button has no send or compos
 const gen = FN.match(/async function handleGenerate[\s\S]*?\n}\n/)?.[0] ?? '';
 ok(gen.length > 0 && gen.indexOf('if (!hook.ok) return') > 0 && gen.indexOf('if (!hook.ok) return') < gen.indexOf('runSiteResearch(') && gen.indexOf('runSiteResearch(') < gen.indexOf('callModel('), 'no honest hook result → refused BEFORE any site read or model call');
 ok(/runSiteResearch\(service, lead, operatorId, false,/.test(gen), 'the research is the shared path, never forced to refresh');
+ok(/websiteKind\.source === "own_site"\s*\? await runSiteResearch/.test(gen), 'a directory / social profile is never researched as their site');
 ok(!/mode: "full"|crawl-worker|createCrawlJob/.test(FN + SHARED), 'no crawl job is ever started');
 ok(/resolveOperator\(req\)/.test(FN) && /l\.user_id === operatorId/.test(FN), 'a signed-in operator who owns the lead');
 ok(/score\.shape === "six" && !score\.complete/.test(FN), 'an incomplete six-result hook is refused, never quoted in part');
@@ -172,7 +224,15 @@ const MIG = read('supabase/migrations/20260926150000_voice_note_scripts.sql');
 ok(/enable row level security/.test(MIG) && /revoke all on table public\.voice_note_scripts from anon, authenticated/.test(MIG) && !/create policy/i.test(MIG), 'the table is service-role only');
 ok(/hook_engine text not null check \(hook_engine in \('chatgpt', 'gemini'\)\)/.test(MIG) && /competitors text\[\] not null/.test(MIG), 'the evidence tuple is stored with the script');
 ok(/\[functions\.voice-note-script\]\nverify_jwt = true/.test(read('supabase/config.toml')), 'config.toml names the new function');
-ok((read('src/pages/Inbox.tsx').match(/<VoiceNoteScriptButton key=\{active\.key\} leadId=\{active\.leadId\} compact \/>/g) ?? []).length === 2, 'the Inbox shows the button in both window states, keyed by conversation');
+{
+  const INBOX = read('src/pages/Inbox.tsx');
+  const prominent = INBOX.match(/<VoiceNoteScriptButton key=\{active\.key\} leadId=\{active\.leadId\} prominent \/>/g) ?? [];
+  ok(prominent.length === 1 && (INBOX.match(/<VoiceNoteScriptButton/g) ?? []).length === 1, 'the Inbox shows ONE voice-note script button, the prominent one, keyed by conversation');
+  const openBranch = INBOX.slice(INBOX.indexOf('{win.open ? ('), INBOX.indexOf('Outside the 24h window'));
+  const closedBranch = INBOX.slice(INBOX.indexOf('Outside the 24h window') - 1500, INBOX.indexOf('Outside the 24h window'));
+  ok(openBranch.includes('prominent />') && openBranch.indexOf('prominent />') < openBranch.indexOf('<VoiceNoteRecorder'), '…in the OPEN window, beside the recorder');
+  ok(!closedBranch.includes('VoiceNoteScriptButton'), 'closed-window threads do not get an equal active control');
+}
 ok(/<VoiceNoteScriptButton leadId=\{lead\.id\} \/>/.test(read('src/components/LeadDetailDialog.tsx')), 'the lead popup shows the button');
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? '' : 'S'}`); process.exit(1); }

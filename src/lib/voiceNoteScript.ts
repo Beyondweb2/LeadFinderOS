@@ -33,6 +33,7 @@ import { nameMatches } from './nameMatch.ts';
 import { articleTrade } from './templateVars.ts';
 import { findingMentioned, sayableDetails, findingSourceLabel, selectReplyFindings } from './warmReply.ts';
 import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
+import { isAggregatorUrl, domainOf } from './aggregators.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows. */
 export const VOICE_NOTE_GENERATOR_VERSION = 1;
@@ -120,6 +121,43 @@ export function selectVoiceNoteEvidence(
 
 /* ─────────────────────────────── 2. the website findings ─────────────────────────────── */
 
+/* ⛔ A PROFILE PAGE IS NOT "YOUR WEBSITE" (Paul, 2026-09-26). Firebeard Electrical's website on record
+   is tradehq.co.uk/firebeardelectrical — a directory profile. Researching it as their site produced
+   "nothing obviously broken" about a page they do not own. So the lead's website is CLASSIFIED first:
+   a directory / social profile is never researched, and the script says what it really is. The host
+   lists are aggregators.ts (the shared "not an own website" sets) plus the trade-profile platforms it
+   does not carry; the additions live here so this does not change what other features call a directory. */
+const EXTRA_PROFILE_HOSTS = ['tradehq.co.uk', 'houzz.co.uk', 'houzz.com', 'linktr.ee', 'myhammer.co.uk', 'localheroes.com', 'yably.co.uk'];
+const SOCIAL_HOSTS = ['facebook.com', 'fb.com', 'fb.me', 'm.me', 'instagram.com', 'instagr.am', 'tiktok.com', 'x.com', 'twitter.com', 'linkedin.com', 'youtube.com', 'pinterest.com', 'linktr.ee'];
+const PROFILE_LABELS: Record<string, string> = {
+  'tradehq.co.uk': 'TradeHQ', 'checkatrade.com': 'Checkatrade', 'mybuilder.com': 'MyBuilder', 'ratedpeople.com': 'Rated People',
+  'trustatrader.com': 'TrustATrader', 'bark.com': 'Bark', 'yell.com': 'Yell', 'yell.co.uk': 'Yell', 'houzz.co.uk': 'Houzz', 'houzz.com': 'Houzz',
+  'freeindex.co.uk': 'FreeIndex', 'thomsonlocal.com': 'Thomson Local', 'yelp.com': 'Yelp', 'yelp.co.uk': 'Yelp', 'nextdoor.co.uk': 'Nextdoor',
+  'nextdoor.com': 'Nextdoor', 'facebook.com': 'Facebook', 'fb.com': 'Facebook', 'fb.me': 'Facebook', 'instagram.com': 'Instagram',
+  'linkedin.com': 'LinkedIn', 'tiktok.com': 'TikTok', 'x.com': 'X', 'twitter.com': 'X', 'youtube.com': 'YouTube', 'linktr.ee': 'Linktree',
+  'google.com': 'Google', 'business.google.com': 'Google', 'myhammer.co.uk': 'MyHammer', 'localheroes.com': 'Local Heroes', 'yably.co.uk': 'Yably',
+};
+
+export type SiteSource = 'own_site' | 'directory_profile' | 'social_profile' | 'none';
+export interface LeadWebsiteKind { source: SiteSource; host: string; label: string | null }
+
+const onHost = (host: string, list: readonly string[]) => list.find((d) => host === d || host.endsWith(`.${d}`)) ?? null;
+
+export function classifyLeadWebsite(url: string | null | undefined): LeadWebsiteKind {
+  const raw = (url ?? '').trim();
+  if (!raw) return { source: 'none', host: '', label: null };
+  const host = domainOf(raw);
+  if (!host) return { source: 'none', host: '', label: null };
+  const social = onHost(host, SOCIAL_HOSTS);
+  if (social) return { source: 'social_profile', host, label: PROFILE_LABELS[social] ?? social };
+  const extra = onHost(host, EXTRA_PROFILE_HOSTS);
+  if (extra || isAggregatorUrl(raw)) {
+    const key = extra ?? Object.keys(PROFILE_LABELS).find((d) => host === d || host.endsWith(`.${d}`)) ?? host;
+    return { source: 'directory_profile', host, label: PROFILE_LABELS[key] ?? host };
+  }
+  return { source: 'own_site', host, label: null };
+}
+
 /** What the script may say about the site. */
 export type VoiceNoteSiteMode =
   /** One or two real findings to explain. */
@@ -128,20 +166,53 @@ export type VoiceNoteSiteMode =
   | 'clean'
   /** The site could not be read today and no earlier crawl measured anything → say nothing specific. */
   | 'unread'
+  /** The "website" on record is a directory or social profile, not their own site. Never researched. */
+  | 'profile'
   /** No website on record. */
   | 'no_website';
 
 export interface VoiceNoteSite {
   mode: VoiceNoteSiteMode;
   findings: ResearchFinding[];
+  source: SiteSource;
+  /** The profile platform's name ("TradeHQ") when source is a profile. */
+  sourceLabel: string | null;
+  /** Services their OWN site says they offer (research). Empty = none confirmed. */
+  services: string[];
+  /** Everything that may license naming a service: their services, the site summary, and the
+   *  findings' own page-derived details (never a rule's generic examples). */
+  serviceEvidence: string;
 }
 
-export function selectVoiceNoteFindings(research: WarmLeadResearch | null | undefined, hasWebsite: boolean, town?: string | null): VoiceNoteSite {
-  if (!hasWebsite || research?.status === 'no_website') return { mode: 'no_website', findings: [] };
+/* ⛔ A RULE'S GENERIC EXAMPLES ARE NOT THE BUSINESS'S SERVICES. The missing-core-pages finding says
+   "electrical work such as rewiring, fuse boards, testing or emergency call-outs" for EVERY electrician
+   — those are the rule's examples of what a page could cover, not something this business was seen to
+   offer. They reached a draft as "there aren't pages for rewiring, fuse boards or testing". So they are
+   stripped from what the model sees, from "Based on", and from the service evidence. */
+const GENERIC_EXAMPLES = /\bsuch as\b/i;
+export function findingDetailsForScript(f: ResearchFinding): string[] {
+  return sayableDetails(f).filter((d) => !GENERIC_EXAMPLES.test(d));
+}
+export function findingTextForScript(f: ResearchFinding): string {
+  if (f.kind === 'missing_core_service_pages') {
+    return 'None of the pages linked from their homepage is about one of the services they offer, so there is less on the site that clearly says what they do and where.';
+  }
+  return f.detail.replace(/,?\s*such as [^.;]*/gi, '').trim();
+}
+
+export function selectVoiceNoteFindings(research: WarmLeadResearch | null | undefined, website: string | null | undefined, town?: string | null): VoiceNoteSite {
+  const kind = classifyLeadWebsite(website);
+  const base = { source: kind.source, sourceLabel: kind.label, services: [] as string[], serviceEvidence: '' };
+  if (kind.source === 'none' || research?.status === 'no_website') return { ...base, mode: 'no_website', findings: [] };
+  if (kind.source !== 'own_site') return { ...base, mode: 'profile', findings: [] };
+  const readOk = !!research && research.status !== 'failed';
+  const services = readOk ? (research!.services ?? []).map((s) => s.trim()).filter(Boolean) : [];
   const sel = selectReplyFindings(research, [], town ?? null, null);
   const findings = sel.primary ? [sel.primary, ...sel.secondary].slice(0, VOICE_NOTE_MAX_FINDINGS) : [];
-  if (findings.length) return { mode: 'findings', findings };
-  return { mode: !research || research.status === 'failed' ? 'unread' : 'clean', findings: [] };
+  const serviceEvidence = [...services, readOk ? research!.businessSummary ?? '' : '', ...findings.flatMap(findingDetailsForScript)].join(' | ');
+  const withEvidence = { ...base, services, serviceEvidence };
+  if (findings.length) return { ...withEvidence, mode: 'findings', findings };
+  return { ...withEvidence, mode: readOk ? 'clean' : 'unread', findings: [] };
 }
 
 /** The compact record of a finding kept with the script and shown under "Based on". */
@@ -149,7 +220,7 @@ export interface VoiceNoteFindingRecord {
   id: string; kind: string; title: string; source: string; details: string[];
 }
 export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
-  return { id: f.id, kind: f.kind, title: f.title, source: findingSourceLabel(f), details: sayableDetails(f) };
+  return { id: f.id, kind: f.kind, title: f.title, source: findingSourceLabel(f), details: findingDetailsForScript(f) };
 }
 
 /* ─────────────────────────────── 3. the prompt ─────────────────────────────── */
@@ -166,7 +237,7 @@ GOAL. It must sound like Paul personally:
 This is NOT a hard sell. It sounds like a genuine voice note from a trades-focused marketer, not a scripted sales pitch.
 
 FLOW (broadly):
-"hi mate, i was looking for a [trade] in [area]..." → say which AI engine you asked, using the ENGINE NAME you are given, exactly → name the competitors it recommended, exactly as given, all of them and no others → explain naturally that if AI is recommending other firms instead, that can mean potential customers going elsewhere → say you had a look at their site to see what might be contributing → explain the website point(s) you are given, in very plain English, keeping their concrete details → say you specialise in AI visibility for local businesses → offer softly to explain what you'd change to give them a better chance of being named in those searches.
+"hi mate, i was looking for a [trade] in [area]..." → say which AI engine you asked, using the ENGINE NAME you are given, exactly → name the competitors it recommended, exactly as given, all of them and no others → explain naturally, and hedged, that if AI is recommending other firms instead, that can mean potential customers going elsewhere → say you had a look at their site to see what might be contributing → explain the website point(s) you are given, in very plain English, keeping their concrete details → say you specialise in AI visibility for local businesses → offer softly to explain what you'd change to give them a better chance of being named in those searches.
 
 STYLE: relaxed, conversational, straightforward, British. "mate" is natural. Short sentences. Spoken, not written: it should sound right read aloud. Not corporate, not over-polished, not aggressive, not cheesy, not salesy. Natural phrases like "i had a quick look", "a couple of things stood out", "that's probably not ideal", "that's the sort of thing i work on" are good. Lowercase is fine.
 NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee of rankings or recommendations. No em dash or en dash, anywhere. No price, no figures about money, no link, no website address. Do not ask for a call unless it flows naturally.
@@ -178,6 +249,9 @@ EVIDENCE RULES, which override everything:
 - Say the engine exactly as given ("Google AI" or "ChatGPT"). Never name the other engine as the one you asked.
 - Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
 - If there are no website points, follow the NO WEBSITE POINTS instruction exactly in spirit, with a natural variation.
+- LOST WORK IS A POSSIBILITY, NEVER A FACT. Never "that's work going straight to someone else", "you're losing jobs", "that's people ringing them instead". Say "that can mean potential customers going elsewhere", "that could be work going to someone else".
+- SERVICES: never name a specific service or job type (rewiring, fuse boards, boiler repairs, lock changes...) unless it is listed under SERVICES THEY OFFER or is in the search itself. Otherwise say "the work you do" or "your main services".
+- If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website" or "your site", and never say you looked through their site.
 - CAUSATION: never say a website issue is why the AI engine left them out. Never "this is why", "that's why", "the reason you're not showing". Use "might be contributing", "could be making it harder for AI to properly understand the site", "a couple of things stood out".
 
 OUTPUT: only the script text Paul will read. No heading, no bullet points, no notes, no quotation marks around it.`;
@@ -212,6 +286,7 @@ export interface VoiceNotePromptInput {
 const NO_POINT_LINES: Record<Exclude<VoiceNoteSiteMode, 'findings'>, string> = {
   clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say something like: "i had a look through the site and there isn\'t anything obviously broken, but there are definitely a few things i\'d strengthen around how clearly it tells Google and AI what you do, where you work and why it should trust the business." Do not claim any specific fault.',
   unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say something like: "i had a quick look at how the business comes across online and there are a few things i\'d strengthen around how clearly it tells Google and AI what you do, where you work and why it should trust you." Do not claim any specific fault.',
+  profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally, that you couldn\'t find a website of their own, just their {LABEL} profile, and that without their own site there\'s a lot less for AI to go on about what they do and where they work. Never call the profile their website. Do not claim anything else.',
   no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally, that you couldn\'t find a website for them, and that without one it is much harder for AI to find much about the business. Do not claim anything else.',
 };
 
@@ -228,6 +303,10 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
     `TRADE: ${input.trade} (say it like "${spokenTrade(input.trade)}")`,
     `AREA: ${input.area}`,
     `WEBSITE: ${input.website?.trim() || 'none on record'}`,
+    `WEBSITE SOURCE: ${input.site.source === 'own_site' ? 'their own website' : input.site.source === 'none' ? 'none' : `a ${input.site.sourceLabel ?? 'directory'} profile page, NOT their own website`}`,
+    input.site.services.length
+      ? `SERVICES THEY OFFER (from their own site): ${input.site.services.slice(0, 8).join(', ')}`
+      : 'SERVICES THEY OFFER: none confirmed. Do not name any specific service or job type unless it is in the search.',
     '',
     `ENGINE NAME (say exactly this): ${e.engineLabel}`,
     `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()}: "${e.question}"`,
@@ -239,11 +318,11 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   if (input.site.mode === 'findings') {
     lines.push('WEBSITE POINTS (use the first; the second only if it fits naturally; nothing else about the site):');
     input.site.findings.forEach((f, i) => {
-      const details = sayableDetails(f);
-      lines.push(`${i + 1}. ${f.title}: ${f.detail}${details.length ? ` Concrete details to keep: ${details.join(' | ')}` : ''}`);
+      const details = findingDetailsForScript(f);
+      lines.push(`${i + 1}. ${f.title}: ${findingTextForScript(f)}${details.length ? ` Concrete details to keep: ${details.join(' | ')}` : ''}`);
     });
   } else {
-    lines.push(NO_POINT_LINES[input.site.mode]);
+    lines.push(NO_POINT_LINES[input.site.mode].split('{LABEL}').join(input.site.sourceLabel ?? 'directory'));
   }
   if (input.avoid?.trim()) {
     lines.push('', 'A PREVIOUS VERSION (write a fresh one; same facts, different wording and rhythm):', input.avoid.trim());
@@ -331,7 +410,52 @@ export interface VoiceNoteCheck {
   warnings: string[];
 }
 
-export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null }): VoiceNoteCheck {
+/* ⛔ NAMED SERVICES NEED EVIDENCE (Paul, 2026-09-26). A model writing for "an electrician" reaches for
+   rewiring and fuse boards whether or not this business does them. Common trade services are listed
+   here; any one in the script must appear in the search, the trade, or what their OWN site says. */
+const SERVICE_TERMS: readonly string[] = [
+  // electrical
+  'rewire', 'rewires', 'rewiring', 'fuse board', 'fuse boards', 'fuseboard', 'fuseboards', 'consumer unit', 'consumer units', 'eicr', 'eicrs',
+  'pat testing', 'electrical testing', 'ev charger', 'ev chargers', 'ev charging', 'car charger', 'car chargers', 'lighting', 'sockets',
+  'security lighting', 'cctv', 'solar panels', 'solar', 'call outs', 'callouts',
+  // plumbing and heating
+  'boiler', 'boilers', 'boiler repair', 'boiler repairs', 'boiler servicing', 'boiler installation', 'boiler installations', 'central heating',
+  'bathroom', 'bathrooms', 'bathroom fitting', 'leak', 'leaks', 'drain', 'drains', 'drainage', 'blocked drains', 'radiator', 'radiators',
+  'gas safety', 'landlord certificates', 'underfloor heating', 'heat pump', 'heat pumps', 'powerflush', 'power flush', 'power flushing',
+  // locks
+  'lock change', 'lock changes', 'lockout', 'lockouts', 'upvc', 'car keys', 'safes', 'key cutting', 'burglary repairs',
+  // roofing and building
+  'flat roof', 'flat roofs', 'guttering', 'gutters', 'chimney', 'chimneys', 'fascias', 'soffits', 'lead work', 'leadwork',
+  'extension', 'extensions', 'loft conversion', 'loft conversions', 'plastering', 'rendering', 'driveway', 'driveways', 'patio', 'patios',
+  'fencing', 'decking', 'landscaping', 'tarmac', 'block paving', 'kitchen', 'kitchens', 'kitchen fitting',
+  // finishing and cleaning
+  'painting', 'decorating', 'tiling', 'flooring', 'double glazing', 'conservatory', 'conservatories', 'carpet cleaning', 'oven cleaning',
+  'end of tenancy', 'window cleaning', 'gutter cleaning',
+];
+const SERVICE_RE = new RegExp(`\\b(${[...SERVICE_TERMS].sort((a, b) => b.length - a.length).map((t) => t.replace(/ /g, ' ?')).join('|')})\\b`, 'g');
+const stem = (w: string) => w.replace(/(ings|ing|es|s)$/, '');
+
+/** The common trade services a (normalised) script names, longest match first. */
+export function servicesNamed(normText: string): string[] {
+  return [...new Set(normText.match(SERVICE_RE) ?? [])];
+}
+/** Does the (normalised) evidence support this service? Every word's stem must be present. */
+export function serviceSupported(term: string, normEvidence: string): boolean {
+  const words = term.split(' ').filter(Boolean);
+  return words.length > 0 && words.every((w) => normEvidence.includes(stem(w)));
+}
+
+/* ⛔ LOST WORK IS A POSSIBILITY, NEVER A FACT (Paul, 2026-09-26). "that's work going straight to someone
+   else" asserts what happened to a stranger's customers; nobody measured that. A lost-work sentence must
+   carry a hedge (can / could / may / might / potentially). */
+const LOST_WORK = /\b(going|goes|go|went) (straight |right )?(to (someone|somebody|them|whoever|another)|elsewhere)|\bto someone else\b|\b(losing|lose|lost) (out|work|jobs|customers|business|money|calls|enquiries)\b|\b(ringing|calling|phoning) (them|someone else) instead\b|\bmissing out on (work|jobs|customers|calls)\b|\bgoes to whoever\b/;
+const HEDGE = /\b(can|could|may|might|potentially|possibly|probably|likely|perhaps)\b/;
+const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim());
+
+/** "had a look at your site", "your website says", "on your site" — said of a page they do not own. */
+const CALLS_IT_THEIR_SITE = /\b((look|looked|looking) (at|through|over) your (web ?site|site)|on your (web ?site|site)|your (web ?site|site) (is|has|says|shows|doesnt|isnt|looks|needs))\b/;
+
+export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null }): VoiceNoteCheck {
   const script = tidyScript(raw);
   const t = norm(script);
   /* The claim, link and phrase checks read the script WITHOUT the competitor names: "Block Paving Co"
@@ -370,6 +494,22 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   const ownWords = (f: ResearchFinding) => norm([f.title, f.detail, ...sayableDetails(f)].join(' '));
   for (const claim of CLAIMS) {
     if (claim.re.test(claimText) && !supplied.some((f) => claim.backed(f) || claim.re.test(ownWords(f)))) problems.push(`Mentions ${claim.label}, but no website finding supports that.`);
+  }
+  // Services: only ones the search, the trade or their own site support.
+  const supportedServices = norm([ctx.evidence.question, ctx.trade ?? '', ctx.site.serviceEvidence].join(' | '));
+  for (const term of servicesNamed(tb)) {
+    if (!serviceSupported(term, supportedServices)) problems.push(`Names a service ("${term}") that nothing on record says they offer.`);
+  }
+  // Lost work: a possibility, never a fact.
+  for (const sentence of sentencesOf(bare)) {
+    const s = norm(sentence);
+    if (LOST_WORK.test(s) && !HEDGE.test(s)) {
+      problems.push(`States lost work as a fact ("${sentence.trim().slice(0, 80)}"). Hedge it: "that can mean potential customers going elsewhere".`);
+    }
+  }
+  // A profile page is not their website.
+  if (ctx.site.mode === 'profile' && CALLS_IT_THEIR_SITE.test(tb)) {
+    problems.push(`Calls the ${ctx.site.sourceLabel ?? 'directory'} profile their website.`);
   }
   // The strongest finding must actually be said.
   const primary = supplied[0];
