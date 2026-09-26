@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
        blank-secret guard means an unset CRON_SECRET can never be matched by a blank header. */
     let userId: string | null = null;
     const internal = req.headers.get("x-internal-job") === "1"
-      && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || " __unset__");
+      && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
     if (!internal) {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Auth required" }, 401);
