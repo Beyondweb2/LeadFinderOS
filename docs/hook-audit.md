@@ -79,3 +79,39 @@ Branch `feat/hook-audit-visibility-score`. Replaced the adaptive (early-stop) ho
   still short of three is `questionShortfall` → never complete: no X/6, no hook, no 6/6, the resolver refuses.
 - Found in passing, not fixed: `generateQuestions`' `locQ` regex in create-ai-audit contains literal
   backspace characters where `` was meant, so it never detects "UK" already in the town.
+
+## Inbox card, report state and the Quick report redesign (2026-09-26, branch `fix/hook-audit-inbox-report`)
+- **Why E.E.S read 1/2:** its audit (`acdf2eca…`, 2026-09-25 11:33) is a **version-1** hook that stopped on
+  question 1 (`stop_reason: visibility_gap_found`, `executed: 1`): ChatGPT named, Google AI missed. Historical,
+  scored on its own 2 results. Kept as is.
+- **Card, compact by default** (`src/components/HookVisibilityView.tsx`, loader `HookVisibilityCard.tsx`):
+  one row with the engine split and `50% named (3/6)`, the best missed search on one line, then
+  `View details` + the report action. Details (selected search + its competitors, other misses by engine,
+  named searches, all results) only after the click, inside a `max-h-[20vh]` scrolling panel. The Inbox
+  pane is a fixed `h-[60vh]`, so every pixel of the card comes out of the thread. Measured in a throwaway
+  harness of the real Inbox page: collapsed 82 px at 1440, 122 px at 375; expanded ≈ 270–290 px.
+- **Older checks say so:** an "Older quick check" pill, "This used the previous early-stop method…", and a
+  **Run new 3 × 2 audit** button (`Inbox.tsx startHookRerun`): `hook_audit + fresh_audit`, **never
+  `queue_pitch_on_complete`** (the header's Audit button still passes it). Old audit untouched; the newest
+  outreach audit wins the card.
+- **"No public report yet — run an audit" beside a visible result — root cause:** (1) the report bar read
+  useInbox's audit cache, patched only by realtime events on `ai_audits`/`ai_audit_runs`, and **neither
+  table is in the `supabase_realtime` publication** (only `outreach_leads`, `whatsapp_messages`), so it
+  changed only on window focus; (2) the six results land while the run is still `processing`
+  (extract-competitors, crawl), so the card showed a score before the run was usable.
+- **Fix:** `hookReportState` (`src/lib/hookVisibility.ts`), computed from the card's own poll:
+  running → preparing → ready / failed / incomplete / historical_no_report / slow. Ready = run in
+  `RUN_USABLE` (and, for v2, complete). The link is the resolver's (`resolveLeadReportAudit`), `isCurrent`
+  says whether it is the card's audit; a running audit offers the older one only as "Previous report".
+  Polls every 10 s while running/preparing, stops on ready/failed/incomplete and after
+  `MEASURING_STALL_MS`. On ready it refetches the Inbox cache once so list pills and templates agree.
+  The report bar above now carries only the follow-up buttons.
+- **Quick report** (`renderQuickCheckTop` in `aiAuditReportHtml.ts`): percentage hero, raw count and
+  "3 questions × 2 AI engines", three verdicts from `hookReportCopy` (0 / some / all), ONE featured miss
+  (the hook pick, its own competitors, **no model prose**), "The questions we asked" table (3 rows ×
+  ChatGPT / Google AI), website issues capped at 5, and a truthful "No technical faults found" line only
+  when a current crawl completed (`siteChecked`, set by render-audit-report). "The fix" section is dropped;
+  the CTA stays. An incomplete v2 run renders a no-figure notice (`hookIncomplete`), no CTA. PDF: 2 pages.
+  Version-1 hooks and every other report render as before.
+- Found, not fixed: the Inbox page's top filter row and the thread's icon row do not wrap, so the whole
+  Inbox page is ~830 px wide on a phone (pre-existing).

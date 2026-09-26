@@ -46,6 +46,7 @@ import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { warmStage } from '@/lib/warmStage';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
+import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
@@ -807,15 +808,6 @@ const Inbox = () => {
     return out;
   };
 
-  const [reportCopied, setReportCopied] = useState(false);
-  const copyReportUrl = () => {
-    if (!reportUrl) return;
-    navigator.clipboard?.writeText(reportUrl);
-    setReportCopied(true);
-    setTimeout(() => setReportCopied(false), 1500);
-    toast({ title: 'Report URL copied' });
-  };
-
   /* ══ SEND THE hook_followup — manual, per-lead, mirrors the questionnaire nudge ═══════════════
      Fires the approved hook_followup template via send-whatsapp-message, which resolves {{1}} from
      the lead's contact_name server-side and enforces one-per-lead (pitchEverSent, no allow_resend).
@@ -1218,6 +1210,67 @@ const Inbox = () => {
     });
     refetch(); // pick up the pending run → spinner state survives reloads
   };
+
+  /* ══ RUN NEW 3 × 2 AUDIT — from the AI visibility card, for an older or incomplete check ═══════
+     ⛔ NEVER QUEUES A PITCH. Unlike startAudit (the header's Audit button, which passes
+     queue_pitch_on_complete), this is an operator asking "what does this business look like now",
+     so it sends no queue_pitch_on_complete and nothing is parked in whatsapp_auto_replies.
+     ⛔ A NEW AUDIT, NEVER A MUTATION. hook_audit + fresh_audit make create-ai-audit insert a fresh
+     ai_audits row (3 questions × ChatGPT + Google AI). The old audit and its results are untouched,
+     and the card shows the new one because the newest outreach audit always wins.
+     The business, trade and town come from the audit being re-run (what was measured last time),
+     falling back to the lead's own inputs. */
+  const hookData = useHookVisibility(active?.leadId ?? null).data;
+  const [hookRerunBusy, setHookRerunBusy] = useState(false);
+  const startHookRerun = async () => {
+    if (!active?.leadId || !activeLead || hookRerunBusy) return;
+    const leadId = active.leadId;
+    const old = hookData?.audit ?? null;
+    const bizType = (old?.business_type || auditInputs?.type || '').trim();
+    const loc = (old?.location_text || auditInputs?.loc || '').trim();
+    if (!bizType || !loc) {
+      toast({ title: 'Need a trade and a town', description: 'Add them with the Audit button first.', variant: 'destructive' });
+      return;
+    }
+    if (!window.confirm(`Run a new ${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI audit for ${activeLead.business_name}?\n\nThe old result is kept. Nothing is sent to the lead.`)) return;
+    setHookRerunBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
+        body: {
+          lead_id: leadId,
+          business_name: old?.business_name || activeLead.business_name,
+          business_type: bizType,
+          location_text: loc,
+          country: activeLead.country ?? null,
+          website: (activeLead.website && !isAggregatorUrl(activeLead.website)) ? activeLead.website : undefined,
+          has_website: !!(activeLead.website && !isAggregatorUrl(activeLead.website)),
+          question_count: OUTREACH_HOOK_QUESTIONS,
+          hook_audit: true,
+          fresh_audit: true,
+        },
+      });
+      if (error || !data?.ok) {
+        toast({ title: "Couldn't start the audit", description: error?.message ?? data?.error ?? 'Try again', variant: 'destructive' });
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: auditListQueryKey(user?.id) });
+      await queryClient.invalidateQueries({ queryKey: hookVisibilityQueryKey(leadId) });
+      toast({ title: 'New audit started', description: `${OUTREACH_HOOK_QUESTIONS} questions × ChatGPT + Google AI. The old result is kept, and nothing will be sent.` });
+    } finally {
+      setHookRerunBusy(false);
+    }
+  };
+  /* When the card sees this lead's report become ready, bring the Inbox's own audit cache up to date
+     once, so the thread list and the report-link templates agree with the card without waiting for a
+     window focus (the realtime events that should do this are never published). Once per audit id. */
+  const syncedReportRef = useRef(new Set<string>());
+  const readyAuditId = hookData?.report.kind === 'ready' ? hookData.report.link.auditId : null;
+  useEffect(() => {
+    if (!active?.leadId || !readyAuditId) return;
+    if (auditByLeadId[active.leadId]?.auditId === readyAuditId || syncedReportRef.current.has(readyAuditId)) return;
+    syncedReportRef.current.add(readyAuditId);
+    void refetch();
+  }, [active?.leadId, readyAuditId, auditByLeadId, refetch]);
 
   const fireAuditFromInbox = async () => {
     if (!active?.leadId || !activeLead || auditInFlight) return;
@@ -1827,26 +1880,14 @@ const Inbox = () => {
                 </div>
               </div>
 
-              {/* Public audit-report state for this lead — the /a/<slug> is resolved strictly by
-                  this lead's own record (auditReportByLeadId), so it can never show another
-                  business's URL. Ready → Copy/Open; not yet → nudge to run an audit. */}
-              {active.leadId && (
+              {/* ⛔ THE REPORT STATE MOVED INTO THE AI VISIBILITY CARD BELOW (2026-09-26). This bar
+                  read useInbox's audit cache, which the realtime events it listens for never
+                  patch (ai_audits / ai_audit_runs are not in the realtime publication), so it said
+                  "No public report yet — run an audit" beside a visible result. The card computes
+                  running / preparing / ready / failed from its own poll (hookReportState). The bar
+                  keeps only the follow-up actions and renders only when one applies. */}
+              {active.leadId && (hookState.hookSent.has(active.key) || hookState.eligible.has(active.key) || contactState.contactSent.has(active.key) || contactState.eligible.has(active.key)) && (
                 <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-[11px]">
-                  {reportUrl ? (
-                    <>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 font-semibold text-green-600 dark:text-green-400">
-                        <FileText className="h-3 w-3" /> Report ready
-                      </span>
-                      <button type="button" onClick={copyReportUrl} className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
-                        {reportCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />} {reportCopied ? 'Copied' : 'Copy URL'}
-                      </button>
-                      <a href={reportUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
-                        <ExternalLink className="h-3 w-3" /> Open
-                      </a>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">No public report yet — run an audit for this lead.</span>
-                  )}
                   {/* hook_followup — report sent, went quiet 3+ days. Right-aligned so it reads as a
                       follow-up action on the report, not part of the copy/open controls. */}
                   {hookState.hookSent.has(active.key) ? (
@@ -1876,8 +1917,9 @@ const Inbox = () => {
                 </div>
               )}
 
-              {/* AI visibility: the lead's hook audit (3 questions × ChatGPT + Google AI), read-only. */}
-              {active.leadId && <HookVisibilityCard leadId={active.leadId} />}
+              {/* AI visibility: the lead's hook audit (3 questions × ChatGPT + Google AI) and its report
+                  state. Compact by default; "Run new 3 × 2 audit" never queues a pitch. */}
+              {active.leadId && <HookVisibilityCard leadId={active.leadId} onRunNew={startHookRerun} runNewBusy={hookRerunBusy} />}
 
               {/* Messages */}
               <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">
