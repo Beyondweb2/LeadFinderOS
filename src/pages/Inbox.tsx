@@ -152,8 +152,8 @@ function EngagementPills(
         <span className={pill + ' bg-emerald-500/20 text-emerald-400'} title={'Visited findable.live · ' + when(siteVisitedAt)}>Site</span>
       )}
       {showGemini && (
-        <span className={pill + gemTone} title={`Already named on Gemini in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
-          Gemini {geminiNamed}/{geminiAnswers}
+        <span className={pill + gemTone} title={`Already named on Google AI in ${geminiNamed} of ${geminiAnswers} answers — the engine pages move`}>
+          Google AI {geminiNamed}/{geminiAnswers}
         </span>
       )}
     </>

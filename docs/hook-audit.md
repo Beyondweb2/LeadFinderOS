@@ -57,10 +57,25 @@ Branch `feat/hook-audit-visibility-score`. Replaced the adaptive (early-stop) ho
 
 ## Not changed, and known gaps
 - Question generation is unchanged: the same generator, 3 questions, ordered by `planHookQuestions`.
-  If guards leave fewer than 3, the audit is scored out of what was planned and can never auto-qualify
-  as 6/6.
-- **The WhatsApp senders still pick rival names audit-wide** (`resolveAuditReplyVars`,
-  `topCompetitors`), not from the hook question. That is WhatsApp sending, which was out of scope.
-  The card shows the exact per-cell names. See the branch report for whether to switch.
 - Deploy order: every function except `create-ai-audit` first (so the send guard, report and 6/6 rule
   understand v2), `create-ai-audit` last.
+
+## Final corrections (2026-09-26, before merge)
+- **WhatsApp rivals = the hook result's own competitors.** `resolveAuditReplyVars` uses
+  `data.hook.gap.namedInstead` (the pick's cell: same question, same engine, report suppression/junk
+  gates) whenever the audit has a hook gap, and never `topCompetitors`. An incomplete v2 hook is refused
+  (`hook_incomplete`), never backfilled. Audits with no hook are unchanged. The vars carry
+  `hookQuestion` and `hookEngine`.
+- **Single-engine bodies:** `audit_followup`'s Meta body says "I asked chatgpt". `TEMPLATE_SINGLE_ENGINE_CLAIM`
+  (`rivalHook.ts`) makes the resolver refuse it (`hook_engine_mismatch`) for a Google AI hook. Senders
+  pass `{ templateName }`. A test scans every registered body for "asked <one engine>".
+- **Google AI everywhere on hook surfaces:** `HOOK_ENGINE_LABELS` / `hookEngineLabel` feed the hook report
+  (headline, evidence box, "Measured on" footer when `d.hook`), the cold-call playbook script, the
+  Inbox card and the Inbox list pill. Ordinary (non-hook) reports still say Gemini.
+  ⚠️ competitor_hook's **Meta-registered** body says "ChatGPT and Gemini" and explain_offer_v2's says
+  "chatgpt and gemini". Code cannot change those. Re-registering them at Meta is Paul's call.
+- **Exactly three questions:** `topUpHookQuestions` adds generic "best / reliable / recommended local
+  <trade> in <place>" questions (the trade via `articleTrade`, the place UK-disambiguated). A v2 plan
+  still short of three is `questionShortfall` → never complete: no X/6, no hook, no 6/6, the resolver refuses.
+- Found in passing, not fixed: `generateQuestions`' `locQ` regex in create-ai-audit contains literal
+  backspace characters where `` was meant, so it never detects "UK" already in the town.

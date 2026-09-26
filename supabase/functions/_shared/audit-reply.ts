@@ -8,7 +8,7 @@
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { countAnsweredCells, readCleaningStamp } from "../../../src/lib/competitorCleaning.ts";
-import { usableRivals, excludeSelfRivals } from "../../../src/lib/rivalHook.ts";
+import { usableRivals, excludeSelfRivals, templateEngineConflict } from "../../../src/lib/rivalHook.ts";
 import { nameMatches } from "../../../src/lib/nameMatch.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { auditShowsVisibilityGap, resolveSiteFault, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
@@ -27,6 +27,10 @@ import { HOOK_SCORE_RESULTS, isHookStateV2, scoreHookRun, type HookScoreContext,
    twelve edge functions and this rule is only ever read by the two that send. The check is the
    PROPERTY (a full run with no gap), never a template name. */
 export const HOOK_NO_GAP_REASON = "hook_no_visibility_gap";
+
+/** A six-result hook with no final score (a failed result, or fewer than three valid questions) has
+ *  no hook search, so it has no competitor evidence a message could quote. */
+export const HOOK_INCOMPLETE_REASON = "hook_incomplete";
 
 /** True when the hook ran to its ceiling and every answering scored engine named the business on
  *  every tested question — there is no absence to claim. A gap, a still-running hook, a provider
@@ -109,7 +113,10 @@ export type AuditReplyVars =
   /* `siteFindingsKinds` is the ORDERED list of finding kinds that went into `siteFindings` — what
      whatsapp_messages.findings_shown records, so that "which findings actually sell" is a question
      the data can answer later. Null whenever siteFindings is null; never derived from the text. */
-  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null }
+  /* `hookQuestion` / `hookEngine`: the hook search the rivals were read from (the report's hook gap,
+     which for a six-result hook is the pick). Null for an audit with no hook gap, whose rivals come
+     from the audit-wide leaders as before. */
+  | { ok: true; trade: string; competitors: string; rivals: string[]; business: string; link: string; town: string; auditId: string; siteFault: string | null; siteFindings: string | null; siteFindingsKinds: string[] | null; hookQuestion: string | null; hookEngine: string | null }
   | { ok: false; reason: string };
 
 /**
@@ -118,7 +125,9 @@ export type AuditReplyVars =
  * audit lacks a business name/type — so the caller can refuse rather than send a broken template.
  */
 // deno-lint-ignore no-explicit-any
-export async function resolveAuditReplyVars(service: any, leadId: string): Promise<AuditReplyVars> {
+/* `opts.templateName`: the template these vars will fill. Senders pass it so a body that names ONE
+   engine is refused for a hook from another (templateEngineConflict, src/lib/rivalHook.ts). */
+export async function resolveAuditReplyVars(service: any, leadId: string, opts: { templateName?: string | null } = {}): Promise<AuditReplyVars> {
   // 1) The lead's newest audit that has a COMPLETE (or capped) run — strictly by lead_id.
   const { data: audits } = await service
     .from("ai_audits")
@@ -216,11 +225,29 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
      was right to. topCompetitors is grouped and frequency-ranked (Chapman’s and Chapman's are one
      firm), so the pitch and the report still agree BY CONSTRUCTION — they now agree on the right
      names. gutPunch rivals remain the fallback for an audit built before topCompetitors existed. */
+  /* ⛔ A HOOK AUDIT'S RIVALS ARE THE HOOK SEARCH'S RIVALS (Paul, 2026-09-26). When the audit has a hook
+     gap (a six-result hook's pick: the strongest Google AI miss, else ChatGPT, or a v1 hook's Gemini
+     gap), the names are that ONE cell's list: the same question and the same engine, already
+     through the report's suppression and junk gates. They are never the audit-wide leaders, never
+     another question's and never another engine's. Question A + engine A + engine A's answer to
+     question A stay together.
+     ⛔ A six-result hook with NO final score has no hook search, so nothing here can quote it. It is
+     refused, never backfilled from the whole audit. (6/6 was already refused above.) */
+  const hookGap = data?.hook?.gap ?? null;
+  if (!hookGap && isHookStateV2(hookState)) {
+    return {
+      ok: false,
+      reason: `${HOOK_INCOMPLETE_REASON}: the quick check for ${String(audit.business_name ?? "").trim() || "this business"} has no final ` +
+        `score yet (a result failed, or it could not be given three valid questions), so there is no hook search to quote. Re-run the audit.`,
+    };
+  }
+  const engineConflict = templateEngineConflict(opts.templateName, hookGap?.engine ?? null);
+  if (engineConflict) return { ok: false, reason: engineConflict };
   const topNames = (data?.topCompetitors ?? [])
     .map((c: { name?: string }) => (c?.name ?? "").trim()).filter(Boolean);
   const gutRivals = (data?.gutPunch?.rivals ?? []).map((c: string) => (c ?? "").trim()).filter(Boolean);
-  let pool: string[] = topNames.length ? topNames : gutRivals;
-  if (pool.length === 0) {
+  let pool: string[] = hookGap ? [...hookGap.namedInstead] : topNames.length ? topNames : gutRivals;
+  if (pool.length === 0 && !hookGap) {
     pool = data?.competitors ?? [];
     const cc = (audit.country ?? "").trim().toUpperCase();
     if (cc === "UK" || cc === "GB") pool = pool.filter((c: string) => !US_MARKERS.test(c));
@@ -360,5 +387,5 @@ export async function resolveAuditReplyVars(service: any, leadId: string): Promi
   );
   const siteFindings = siteFindingsDetail?.text ?? null;
   const siteFindingsKinds = siteFindingsDetail?.kinds ?? null;
-  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds };
+  return { ok: true, trade, competitors, rivals: usableRivals(rivalPool), business, link, town: (audit.location_text ?? "").trim(), auditId: audit.id, siteFault, siteFindings, siteFindingsKinds, hookQuestion: hookGap?.question ?? null, hookEngine: hookGap?.engine ?? null };
 }

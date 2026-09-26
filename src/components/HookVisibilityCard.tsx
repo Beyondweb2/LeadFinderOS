@@ -118,6 +118,7 @@ export function HookVisibilityView({ card, inFlight, state }: { card: HookCardSc
   if (score.expected === 0) return null;
 
   const legacy = score.shape !== 'six';
+  const askedQuestions = new Set(score.results.map((r) => r.questionIndex)).size;
   const autoMoved = isHookStateV2(state) ? state.auto_not_interested ?? null : null;
   const hookKey = score.hook ? `${score.hook.questionIndex}:${score.hook.engine}` : null;
 
@@ -145,10 +146,14 @@ export function HookVisibilityView({ card, inFlight, state }: { card: HookCardSc
         <div className="mt-0.5 flex items-center gap-1.5 text-sm">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           <span>Checking AI results {score.valid + score.failed}/{score.expected}</span>
+          {score.questionShortfall && <span className="text-muted-foreground">· only {askedQuestions} valid question(s), so no final score</span>}
         </div>
       ) : (
         <div className="mt-0.5 text-sm">
           <span className="font-semibold">Incomplete</span>
+          {score.questionShortfall && (
+            <span className="text-muted-foreground"> · unable to create 3 valid questions (only {askedQuestions} could be asked).</span>
+          )}
           <span className="text-muted-foreground"> · {score.valid} of {score.expected} results valid{score.failed ? `, ${score.failed} failed` : ''}{score.pending ? `, ${score.pending} not run` : ''}. No final score. Failed results are not counted as “not named”.</span>
         </div>
       )}

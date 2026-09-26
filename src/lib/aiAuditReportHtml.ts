@@ -2271,7 +2271,7 @@ ${d.hidePitch ? "" : `
       <div class="foot-grid">
         <div><span class="foot-k">Prepared for</span><span class="foot-v">${esc(d.businessName)}</span></div>
         <div><span class="foot-k">Report date</span><span class="foot-v">${esc(d.generatedAtLabel)}</span></div>
-        <div><span class="foot-k">Measured on</span><span class="foot-v">ChatGPT &amp; Gemini</span></div>
+        <div><span class="foot-k">Measured on</span><span class="foot-v">${d.hook ? 'ChatGPT &amp; Google AI' : 'ChatGPT &amp; Gemini'}</span></div>
       </div>
       <div class="foot-note">A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after.</div>
     </footer>

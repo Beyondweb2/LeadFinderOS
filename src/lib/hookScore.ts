@@ -32,6 +32,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
+import { articleTrade } from './templateVars.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
  *  runs on both. */
@@ -41,9 +42,15 @@ export const HOOK_ENGINES = ['chatgpt', 'gemini'] as const;
  *  (Paul, 2026-09-25). Named once so the pick and its test cannot disagree. */
 export const HOOK_PICK_ENGINE_ORDER = ['gemini', 'chatgpt'] as const;
 
-/** Operator-facing engine names for the Inbox card. The prospect-facing report keeps its own
- *  label map (auditReport.ts ENGINE_LABELS). */
+/** The user-facing engine names for EVERY hook-audit surface: the Inbox card, the hook report, the
+ *  cold-call playbook's hook evidence (Paul, 2026-09-26: "Google AI", never "Gemini" on one surface
+ *  and "Google AI" on another). `gemini` stays the internal key. */
 export const HOOK_ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
+
+/** The label for an engine key, for any hook surface. */
+export function hookEngineLabel(engine: string): string {
+  return HOOK_ENGINE_LABELS[engine] ?? engine;
+}
 
 /** Questions per new hook audit. */
 export const HOOK_SCORE_QUESTIONS = 3;
@@ -74,6 +81,39 @@ export function isHookStateV2(v: unknown): v is HookStateV2 {
 
 export function initialHookStateV2(planned: readonly string[], engines: readonly string[] = HOOK_ENGINES): HookStateV2 {
   return { version: 2, planned: [...planned], engines: [...engines] };
+}
+
+/* ── Exactly three questions (Paul, 2026-09-26) ─────────────────────────────────────────────────
+   A new hook is 3 questions × 2 engines. When the generator (and its guards) leave fewer than three,
+   the plan is TOPPED UP with safe generic trade + place questions. They are commercial and local,
+   and they name no service, so nothing is invented. The trade goes through articleTrade (the same
+   vocabulary the WhatsApp templates use), which REFUSES a trade it cannot read. In that case, or
+   with no place, nothing is added and the audit stays short. A short v2 hook is never complete
+   (scoreHookRun): no X/6, no hook, no 6/6. */
+function genericHookQuestions(trade: string, place: string): string[] {
+  const t = articleTrade(trade);
+  const where = place.trim();
+  if (!t.ok || !where) return [];
+  const noun = t.value.replace(/^an? /, '');
+  return [
+    `Who is the best ${noun} in ${where}?`,
+    `Can you recommend a reliable ${noun} in ${where}?`,
+    `Who is a recommended local ${noun} in ${where}?`,
+  ];
+}
+
+/** Top the ordered plan up to HOOK_SCORE_QUESTIONS with generic questions it does not already hold.
+ *  Never reorders or drops a planned question, and never returns more than three. */
+export function topUpHookQuestions(planned: readonly string[], ctx: { trade: string; place: string }): string[] {
+  const out = planned.slice(0, HOOK_SCORE_QUESTIONS);
+  const seen = new Set(out.map((q) => q.trim().toLowerCase()));
+  for (const q of genericHookQuestions(ctx.trade, ctx.place)) {
+    if (out.length >= HOOK_SCORE_QUESTIONS) break;
+    if (seen.has(q.toLowerCase())) continue;
+    seen.add(q.toLowerCase());
+    out.push(q);
+  }
+  return out;
 }
 
 /* ── Shared cell helpers (hookAudit.ts re-exports these; one copy) ───────────────────────────── */
@@ -170,6 +210,8 @@ export interface HookScore {
   hook: HookPick | null;
   /** Complete, and every expected result named the business. */
   allNamed: boolean;
+  /** A NEW hook that could not be given three valid questions. It is never complete. */
+  questionShortfall: boolean;
 }
 
 export interface HookScoreRow {
@@ -266,7 +308,10 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
   /* A version-1 hook that stopped on a provider failure, or never stopped, is not complete, even
      if the cells it has are all valid: the plan itself did not finish. */
   const v1Finished = !v1 || v1.stop_reason === 'visibility_gap_found' || v1.stop_reason === 'max_questions_reached';
-  const complete = expected > 0 && valid === expected && v1Finished;
+  /* A NEW hook must have exactly three questions. Fewer (the plan could not be topped up) means
+     incomplete, whatever the results say. Old audits keep their own denominators. */
+  const questionShortfall = !!v2 && v2.planned.length < HOOK_SCORE_QUESTIONS;
+  const complete = expected > 0 && valid === expected && v1Finished && !questionShortfall;
 
   const perEngine: HookEngineTally[] = HOOK_ENGINES.map((engine) => {
     const mine = results.filter((r) => r.engine === engine);
@@ -286,6 +331,7 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
     perEngine, results, misses,
     hook: complete ? pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '' }) : null,
     allNamed: complete && named === expected,
+    questionShortfall,
   };
 }
 

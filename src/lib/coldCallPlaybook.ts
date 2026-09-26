@@ -372,7 +372,7 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
   if (!hasWebsite) {
     return {
       findings: [], crawlAtMs: newestMs, crawlStale,
-      note: 'No website on file, so there is nothing to crawl. In everything we have measured, Gemini has not named a business without a website of its own — that is the conversation to have.',
+      note: 'No website on file, so there is nothing to crawl. In everything we have measured, Google AI has not named a business without a website of its own — that is the conversation to have.',
     };
   }
   const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
@@ -519,7 +519,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       opening.push('It\'s Paul from Findable. I was looking at ' + lookingAt + ' ' + when + ', so I asked AI who it would recommend.');
       opening.push(aiFact);
     } else {
-      opening.push('It\'s Paul from Findable. I look at how clearly local businesses come across to AI assistants like ChatGPT and Gemini when someone asks for ' + lookingAt + '.');
+      opening.push('It\'s Paul from Findable. I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
     }
     opening.push('Have you got a minute? I\'ll explain why I\'m ringing.');
   } else {
@@ -543,7 +543,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   /* ── E. how to explain it ── */
   const explain: string[] = [];
   if (evidence.kind === 'gap') {
-    explain.push('When someone asks ChatGPT or Gemini for ' + lookingAt + ', it gives them a short list of names rather than ten links. On the question I asked, you weren\'t on that list' + (top.length ? ' — ' + joinNames(top) + ' were.' : '.'));
+    explain.push('When someone asks ChatGPT or Google AI for ' + lookingAt + ', it gives them a short list of names rather than ten links. On the question I asked, you weren\'t on that list' + (top.length ? ' — ' + joinNames(top) + ' were.' : '.'));
   } else if (evidence.kind === 'named') {
     explain.push('When someone asks AI for ' + lookingAt + ', it gives a short list of names. You were on it for the question I checked — the aim is to keep it that way across more of the questions people actually ask.');
   }
@@ -592,7 +592,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
     {
       objection: 'I already come up on Google',
-      answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Gemini instead of scrolling Google, they get a short list of names' + (evidence.kind === 'gap' ? ' — and on the question I asked, you weren\'t on it.' : '.'),
+      answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Google AI instead of scrolling Google, they get a short list of names' + (evidence.kind === 'gap' ? ' — and on the question I asked, you weren\'t on it.' : '.'),
     },
     {
       objection: 'Nobody uses AI for this',

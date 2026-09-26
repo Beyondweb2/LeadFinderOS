@@ -470,7 +470,7 @@ Deno.serve(async (req) => {
         if (!allowResend && await pitchEverSent(service, resolvedLeadId, templateName)) {
           return json({ ok: false, error: "pitch_already_sent" }, 200);
         }
-        let a = await resolveAuditReplyVars(service, resolvedLeadId);
+        let a = await resolveAuditReplyVars(service, resolvedLeadId, { templateName });
         /* ⛔ TRIGGER THE CLEANER AND SEND WHEN READY — DON'T REFUSE (Paul, 2026-09-16). The common
            refusal here is "the cleaner hasn't run": extract-competitors ran at finalisation but gpt-4o
            returned a malformed batch, so it stamped complete:false and left no competitors. Refusing
@@ -498,7 +498,7 @@ Deno.serve(async (req) => {
             } catch (e) {
               console.error(`[send-whatsapp-message] on-send cleaner invoke error for run ${runId}:`, (e as Error).message);
             }
-            a = await resolveAuditReplyVars(service, resolvedLeadId);   // re-resolve after the fresh clean
+            a = await resolveAuditReplyVars(service, resolvedLeadId, { templateName });   // re-resolve after the fresh clean
           }
         }
         if (!a.ok) return json({ ok: false, error: "audit_reply_unavailable", reason: a.reason }, 200);
