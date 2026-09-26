@@ -44,8 +44,22 @@ doubles it. First script for a lead with no fresh research adds one gpt-4o-mini 
 ## State at build
 - Live data has **no six-result hooks yet** (every recent run is v1, Gemini-led); v1 and ordinary
   audits are read on their own valid results.
-- Examples were produced by a read-only local dry run (real pick + real rules-only research + real
-  prompt); the model step could not run locally (no OpenAI key) — the example scripts were written
-  from the built prompts and passed through the real checker. Real gpt-4o output needs the deploy.
-- Not deployed, migration not applied, nobody has seen the panel rendered.
-- Deploy order: SQL → `voice-note-script` and `warm-lead-reply` (shares `_shared/site-research.ts`).
+- Nobody has seen the panel rendered.
+
+## Paul's corrections (2026-09-26, second pass)
+- **Profile pages:** `classifyLeadWebsite` — a directory/social profile (TradeHQ, Checkatrade,
+  Facebook…) is `profile` mode, never researched, never "your website" (checked).
+- **Services need evidence:** the missing-core-pages rule's generic examples are stripped; any common
+  trade service named must be in the search, the trade or their own site's services (checked).
+- **Lost work is hedged:** "that's work going straight to someone else" etc. rejected unless hedged.
+- **Inbox:** one prominent button in the OPEN window only; lead popup keeps its button.
+
+## Live (2026-09-26)
+- Migration applied by hand, read back: 27 columns, RLS on, 0 policies, anon/authenticated no access.
+- `voice-note-script` deployed (only it; `warm-lead-reply` still runs its pre-refactor code, which is
+  behaviourally identical — redeploy it with the merge).
+- Three real gpt-4o scripts generated (RP Electrics, JG Electrics, Firebeard Electrical) through an
+  admin magic-link session for the data account, revoked straight after (204). Recorded cost
+  $0.0089 (2 calls) / $0.0049 + $0.0004 research / $0.0046. No sends, no status changes.
+- The first live run found a checker bug: quoting the crawler "ChatGPT-User" read as claiming
+  ChatGPT was asked. Fixed (crawler names are ignored for the engine check) with a regression.

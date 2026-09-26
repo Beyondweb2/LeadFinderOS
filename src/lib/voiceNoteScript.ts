@@ -471,8 +471,11 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
     if (!competitorNamed(script, c)) problems.push(`Competitor not named exactly: ${c}.`);
   }
   // The engine: the one actually asked, never the other.
-  const saysGoogleAi = /\b(google ai|googles ai|google s ai|gemini)\b/.test(t);
-  const saysChatGpt = /\bchat ?gpt\b/.test(t);
+  /* ⛔ A CRAWLER'S NAME IS NOT AN ENGINE CLAIM. The first live script (RP Electrics) was flagged
+     "mentions ChatGPT" for quoting the blocked crawler "ChatGPT-User" from its own finding. */
+  const tEngine = t.replace(/\b(chat ?gpt user|oai searchbot|gptbot|claude user|perplexitybot|google extended|googlebot)\b/g, ' ');
+  const saysGoogleAi = /\b(google ai|googles ai|google s ai|gemini)\b/.test(tEngine);
+  const saysChatGpt = /\bchat ?gpt\b/.test(tEngine);
   if (ctx.evidence.engine === 'gemini') {
     if (!saysGoogleAi) problems.push('Does not say it was Google AI that was asked.');
     if (saysChatGpt) problems.push('Mentions ChatGPT, but these competitors came from Google AI.');

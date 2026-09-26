@@ -200,6 +200,14 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(/LOST WORK IS A POSSIBILITY, NEVER A FACT/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt says so too');
 }
 
+// 4. The first live script (RP Electrics, 2026-09-26): quoting the crawler "ChatGPT-User" is not an engine claim.
+{
+  const rp = "hi mate, i was looking for an electrician in Woking on Google AI, specifically for commercial work, and it suggested Smith & Sons Plumbing, Leicester Heating Co, and PipeFix. if AI's recommending others, that could be potential customers going elsewhere. i had a quick look at your site and noticed some of the AI search crawlers are blocked, like OAI-SearchBot and ChatGPT-User. that might be making it harder for AI to properly understand your site. i specialise in AI visibility for local businesses, so if you'd like, i can explain what i'd change to give you a better chance of being named in those searches. just let me know.";
+  const c = checkVoiceNoteScript(rp, { evidence: EV, site: SITE_F });
+  ok(c.problems.length === 0, `naming the ChatGPT-User crawler is not claiming ChatGPT was asked (${c.problems.join(' | ')})`);
+  ok(checkVoiceNoteScript(rp.replace('on Google AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /came from Google AI/.test(x)), '…while actually saying ChatGPT for a Google AI result is still caught');
+}
+
 /* ─────────── 5. structure ─────────── */
 const FN = read('supabase/functions/voice-note-script/index.ts');
 const UI = read('src/components/VoiceNoteScriptButton.tsx');
