@@ -1772,7 +1772,7 @@ async function generateQuestions(
   // UK disambiguation for LOCAL question text (mirrors fallbackQuestions.ukTown): always name the
   // place as "<town> UK" so engines can't resolve an ambiguous town to a non-UK city.
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
-  const locQ = isUK && locationText && !/(uk|united kingdom|england|scotland|wales)/i.test(locationText) ? `${locationText} UK` : loc;
+  const locQ = isUK && locationText && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText) ? `${locationText} UK` : loc;
   /* ⛔ THE MONEY-QUESTION BLOCK — EMPTY STRING WHEN OFF, so a caller that did not opt in gets a
      prompt byte-identical to the one it got before this existed. The text lives in
      src/lib/moneyQuestions.ts rather than inline here: it is the part Paul tunes, it has to be

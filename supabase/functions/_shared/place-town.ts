@@ -118,7 +118,7 @@ async function stampTownFetch(service: any, leadId: string, patch: {
      that has not landed yet must never cost us the town itself. Retry with the base only. */
   const { error } = await service.from("outreach_leads")
     .update({ ...base, ...optional }).eq("id", leadId);
-  if (error && /town_fetch_note|lat|lng|column/i.test(error.message ?? "")) {
+  if (error && /town_fetch_note|\blat\b|\blng\b|column/i.test(error.message ?? "")) {
     console.warn(`[place-town] optional column missing (${error.message}) — stamping without them`);
     await service.from("outreach_leads").update(base).eq("id", leadId);
   } else if (error) {
