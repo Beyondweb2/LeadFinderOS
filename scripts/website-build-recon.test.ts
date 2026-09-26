@@ -192,7 +192,7 @@ console.log('\n── MERGING INTO THE FACT LEDGER ──');
   ok(row('address').value === '7 Lowdham, Tamworth', '…and the value LeadFinderOS already showed is kept, the site values named — nothing replaced unseen');
   ok(row('opening_hours').status === 'detected', 'medium confidence → NEEDS APPROVAL');
   ok(row('insurance').status === 'detected' && /inferred/.test(row('insurance').notes), 'an inferred value → NEEDS APPROVAL, and says why');
-  ok(row('years_experience').status === 'detected' && row('years_experience').value === '20 years' && /always needs your approval/.test(row('years_experience').notes), 'a missing fact is filled from the site — but years trading is a claim, so it NEEDS APPROVAL (Phase 3 risk rule)');
+  ok(row('years_experience').status === 'verified' && row('years_experience').value === '20 years' && row('years_experience').basis === 'source_site', 'a missing fact is filled from the site: years trading stated verbatim and consistently is SOURCE-SITE information (Paul, 2026-09-25)');
   ok(row('custom_gas_safe_number')?.value === '123456', 'an "other" fact lands under its own label');
   ok(report.keptVerified >= 2 && report.conflicts >= 1 && report.verified >= 1 && report.needsApproval >= 4, `the merge report counts it all (${JSON.stringify(report)})`);
   ok(s.recon.review.some((r) => r.kind === 'unknown' && r.key === 'insurance') && s.recon.review.some((r) => r.kind === 'unknown' && /privacy policy/.test(r.detail)) && s.recon.review.some((r) => r.kind === 'warning' && /addressed to AI/.test(r.detail)), 'unknowns and warnings reach Needs Review');

@@ -33,6 +33,7 @@ import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
 import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
 import { manifestBuildLines } from './manifestSummary.ts';
+import { QUALITY_STANDARD_LINES } from './websiteQuality.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
 
 export const PACK_ITEM_IDS = ['setup', 'capture', 'master', 'local', 'preview', 'visual_qa', 'seo_qa', 'production', 'final_qa'] as const;
@@ -632,6 +633,9 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean; executio
     ...contentRules(i),
     ...H('K. SEO / GEO REQUIREMENTS — the Findable standard'),
     ...FINDABLE_STANDARD,
+    '',
+    'THE FINDABLE QUALITY STANDARD — perceived website quality (half of Preview Ready):',
+    ...QUALITY_STANDARD_LINES,
     '',
     ...AI_VISIBILITY.slice(1),
     '',

@@ -105,9 +105,14 @@ console.log('\n── A. RISK-BASED APPROVAL ──');
     const b0 = parseWebsiteBuild(BASE);
     const sa = applyRecon(b0, parsed.result, rowsFor(b0, noAreas), '2026-09-25T10:00:00.000Z').state;
     const ra = rowsFor(sa, noAreas).find((r) => r.key === 'service_areas')!;
-    ok(ra.status === 'detected' && /always needs your approval/.test(ra.notes), 'service-area claims from the site → NEEDS APPROVAL');
+    // The source-site rule (Paul, 2026-09-25, the quality standard): genuine service areas the client's own site states
+    // verbatim and consistently are client-supplied source information — accepted, basis source_site, never "verified" by us.
+    ok(ra.status === 'verified' && ra.basis === 'source_site', 'service areas the site states consistently → accepted as SOURCE-SITE information');
   }
   ok(isHighRiskFact('business_name', ['Best Locksmiths Ltd']) && !isHighRiskFact('business_name', ['Harbour Locks Ltd']), 'a strong-claim word ("best") makes even a low-risk field need approval');
+  ok(!isHighRiskFact('accreditations', ['NICEIC Approved Contractor']) && !isHighRiskFact('years_experience', ['Over 20 years']), 'source-site rule: a credential or years trading the site states is NOT held back for approval');
+  ok(isHighRiskFact('prices', ['£80 call-out']) && isHighRiskFact('review_rating', ['4.9 from 120']) && isHighRiskFact('insurance', ['Fully insured']), 'prices, ratings and insurance still always need Paul');
+  ok(isHighRiskFact('accreditations', ['24/7 emergency call outs']) && isHighRiskFact('availability', ['24/7']) && isHighRiskFact('standout', ['The best electrician in Bristol']), '24/7 and superlatives need Paul whatever the field (the BS4 hours contradiction)');
   ok(isHighRiskFact('custom_anything', ['x']), 'an unrecognised key is high-risk (positive allowlist)');
   const svcOnly = parseWebsiteBuild({ ...BASE, route: 'faithful_rebuild' });
   const noOnb = ctx({ services_list: [] });

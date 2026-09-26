@@ -56,12 +56,15 @@ const RECON = {
   ],
 };
 const parsed = parseReconText(JSON.stringify(RECON)) as { result: ReconResult };
+/** The quality standard, fully decided — for fixtures that test something else (websiteQuality.ts). */
+const DECIDED_QUALITY = { strengths_reviewed: true, strengths: [], intents: Object.fromEntries(['services_hub', 'service_pages', 'areas_hub', 'location_pages', 'faq_hub', 'quotes_pricing', 'about', 'our_work', 'contact', 'customer_types', 'urgent_services'].map((k) => [k, { need: 'needed', page: 'section on /', note: '' }])) };
 const BASE = {
   version: 2, route: 'bespoke', repo_name: 'BS4ElectricalServices', github_owner: 'Beyondweb2', local_repo_path: 'C:\\Users\\paulj\\BS4ElectricalServices',
   cloudflare_project: 'bs4-electrical-services', canonical_domain: 'bs4electricalservices.co.uk', cloudflare_mode: 'git_connected', cloudflare_account: 'beyondwebcraft',
   pages: [{ id: 'h', family: 'homepage', path: '/', title: 'Home', action: 'keep', old_url: SITE }, { id: 'e', family: 'service', path: '/eicrs/', title: 'EICRs', action: 'keep', old_url: SITE + 'eicrs' }],
   redirects: [{ from: '/eicrs-locations/*', to: '/eicrs/', reason: 'town clones' }],
   checks: {},
+  quality: DECIDED_QUALITY,
 };
 function bs4(over: Record<string, unknown> = {}): WebsiteBuildState {
   const s0 = parseWebsiteBuild({ ...BASE, ...over });

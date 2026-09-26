@@ -16,13 +16,16 @@
    ⛔ THE SEED TEMPLATE IS READ-ONLY. The prompt names the ONE destination repository, forbids the
       template's repository by URL, and makes Claude verify the git remote before writing.
    ⛔ CONTAMINATION BLOCKS THE PREVIEW. A seed hit, a missing noindex, a failed build or link check,
-      or a non-pages.dev preview can never read as PREVIEW READY (previewGateProblems).
+      or a non-pages.dev preview can never read as PREVIEW READY (previewGateProblems) — and neither can a
+      preview that fails the Findable quality standard (previewReadyProblems, websiteQuality.ts): an
+      undecided existing-site strength, an unassessed intent, or no old-vs-new "clearly an upgrade".
    ⛔ PREVIEW ONLY. pages.dev, noindex, tracking off, no custom domain.
    ⚠️ Browser + prompt module. Never a backtick inside a template literal (§3).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, WebsiteBuildState } from './websiteBuildState.ts';
-import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewGateProblems } from './websiteBuildState.ts';
+import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewReadyProblems } from './websiteBuildState.ts';
+import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, readUpgradeReview, strengthProblems, type UpgradeReview } from './websiteQuality.ts';
 import type { BuildPackInput } from './buildPack.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
 import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
@@ -97,6 +100,7 @@ export const BUILD_RESULT_SCHEMA_LINES: string[] = [
   '  "build": { "pages": ["/", "/services/…/"], "services": [], "locations": [], "assets": ["<source url> -> <local file>"], "unsupportedFields": [] },',
   '  "redirects": { "kept": 0, "redirected": 0, "retired": 0, "unresolved": ["/old-path/"], "issues": [] },',
   '  "qa": { "buildPassed": true, "seedContaminationPassed": true, "linksPassed": true, "responsivePassed": true, "schemaPassed": true },',
+  '  "quality": { "oldVsNew": { "verdict": "upgrade", "widths": [1440, 390], "stillStronger": [], "notes": "" } },',
   '  "seedHits": [],',
   '  "warnings": [],',
   '  "errors": []',
@@ -110,6 +114,9 @@ export const BUILD_RESULT_RULES: string[] = [
   '  failed), "failed" (the build did not complete).',
   '- Every qa value is true only if you RAN the check and it passed. seedHits lists every forbidden value you found.',
   '- build.pages: every route the built site serves (paths). redirects.unresolved: every source path with no decision.',
+  '- quality.oldVsNew (existing-site rebuilds): verdict "upgrade" ONLY if you compared old and new side by side at the widths listed',
+  '  and the new site is clearly an upgrade; otherwise "not_upgrade" with every place the old site still wins in stillStronger.',
+  '  status may be "preview_ready" only with verdict "upgrade" and an empty stillStronger (no old site: leave verdict "").',
 ];
 
 /* ── blockers ─────────────────────────────────────────────────────────────────────────────────── */
@@ -127,6 +134,9 @@ export function executionBlockers(i: BuildPackInput, m: Mapping): string[] {
     ...(!isTemplateRoute(s) && !s.pages.length ? ['Page architecture (no pages planned)'] : []),
     ...(s.pages.some((p) => p.action === 'undecided') ? ['Undecided pages in the page plan'] : []),
     ...(isFaithfulRoute(s) && !i.existingSiteUrl ? ['Source website URL'] : []),
+    /* The quality standard: the builder needs every strength decided and every intent assessed. */
+    ...strengthProblems(s.quality, !!i.existingSiteUrl),
+    ...intentProblems(s.quality, []),
     /* ⛔ The destination may never be the template's own repository. */
     ...(i.template && isTemplateRoute(s) && s.github_owner && s.repo_name && sameRepo(expectedRemote(s), i.template.sourceRepoUrl)
       ? ['Destination repository is the TEMPLATE’s own repository (' + i.template.sourceRepoUrl + ') — choose a new repository name for this client'] : []),
@@ -215,6 +225,16 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
       '- Plus the template\'s required core pages (home, services index, about, contact, legal) and any optional page whose data is in the config. Nothing mass-generated.',
     ] : isFaithfulRoute(s) ? ['- The approved source architecture (section H): every kept / created page, nothing else.'] : ['- The approved Architecture (section H): every kept / created page, nothing else.']),
     '- One important intent = one primary page. Copy, where it must be written: CUSTOMER QUESTION → DIRECT ANSWER → SUPPORTING DETAIL → EVIDENCE, from approved facts only. No padding, no keyword stuffing.',
+    ...H('X5b. THE FINDABLE QUALITY STANDARD — perceived quality is half of Preview Ready'),
+    ...QUALITY_STANDARD_LINES.map((l) => '- ' + l),
+    '',
+    ...(s.quality.strengths.length ? [
+      'EXISTING-SITE STRENGTHS and Paul\'s decision for each (the no-downgrade rule — every one must be honoured):',
+      ...s.quality.strengths.map((x) => '- [' + STRENGTH_CATEGORY_LABELS[x.category] + '] ' + oneLine(x.label) + ' → ' + (x.disposition ? STRENGTH_DISPOSITION_LABELS[x.disposition].toUpperCase() : 'UNDECIDED') + (x.where ? ' at ' + oneLine(x.where) : '') + (x.reason ? ' (' + oneLine(x.reason) + ')' : '')),
+    ] : [i.existingSiteUrl ? 'Existing-site strengths: none recorded.' : 'No existing site: enforce the completeness standard anyway — never a sparse site because there is nothing to compare with.']),
+    '',
+    'CONTENT INTENTS — one primary page each:',
+    ...CONTENT_INTENTS.map((k) => { const d = s.quality.intents[k]; return '- ' + CONTENT_INTENT_LABELS[k] + ': ' + (!d?.need ? 'NOT ASSESSED' : d.need === 'needed' ? 'needed → ' + (oneLine(d.page) || '(no page)') : 'not needed') + (d?.note ? ' — ' + oneLine(d.note) : ''); }),
     ...H('X6. SEO / AI VISIBILITY'),
     '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
     '- Clear internal linking; BreadcrumbList where the template has breadcrumbs; Organization / LocalBusiness schema from the config (service relationships only for built service pages); entity and contact details identical everywhere.',
@@ -231,6 +251,8 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- TECHNICAL: the production build passes; every internal link resolves; canonicals; sitemap; robots.txt; the 404 page; schema is valid JSON-LD matching the page; no accidental noindex in the production configuration; preview noindex confirmed; no broken assets; ' + (inPlace ? 'no hotlinked old-site file anywhere' : 'no old domain anywhere') + '; seed scrub clean.',
     '- CONTENT: correct business name; phone and email consistent everywhere; selected services only; selected locations only; approved facts only; no placeholder copy; no unsupported proof.',
     '- RESPONSIVE (Playwright screenshots under qa/): 1440, 1024, 768, 390 and iPhone SE (375×667) — no horizontal overflow; navigation, hero, cards, CTAs, footer, floating controls, images and forms (fill, never submit) all correct.',
+    ...UPGRADE_QA_LINES,
+    ...(i.existingSiteUrl ? ['- The OLD site for the comparison: ' + i.existingSiteUrl + ' (read-only — never submit its forms).'] : []),
     '- Targeted checks on the built client site only — do not run large unrelated test suites.',
     ...H('X10. OLD URL COVERAGE — on the REAL build'),
     ...(sourcePaths.length ? [
@@ -257,12 +279,14 @@ export interface BuildResult {
   redirects: { kept: number | null; redirected: number | null; retired: number | null; unresolved: string[]; issues: string[] };
   qa: Partial<Record<BuildQaKey, boolean>>;
   seedHits: string[]; warnings: string[]; errors: string[];
+  /** The old-vs-new comparison (quality.oldVsNew). Optional in the contract: an old result reads as not reported. */
+  upgrade: UpgradeReview;
 }
 export interface BuildResultSummary { dropped: string[]; ignoredKeys: string[]; notes: string[] }
 export type BuildResultParse = { ok: true; result: BuildResult; summary: BuildResultSummary } | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-const KNOWN = new Set(['buildResultVersion', 'status', 'repository', 'local', 'cloudflare', 'build', 'redirects', 'qa', 'seedHits', 'warnings', 'errors']);
+const KNOWN = new Set(['buildResultVersion', 'status', 'repository', 'local', 'cloudflare', 'build', 'redirects', 'qa', 'quality', 'seedHits', 'warnings', 'errors']);
 const num = (v: unknown) => { const n = Math.floor(Number(v)); return v != null && v !== '' && Number.isFinite(n) && n >= 0 && n < 100000 ? n : null; };
 
 export function parseBuildResult(input: string): BuildResultParse {
@@ -304,7 +328,10 @@ export function parseBuildResult(input: string): BuildResultParse {
     build: { pages, services: list(bd.services, 100, 160, 'service(s)'), locations: list(bd.locations, 100, 160, 'location(s)'), assets: list(bd.assets, 300, 600, 'asset line(s)'), unsupportedFields: list(bd.unsupportedFields, 50, 160, 'unsupported field(s)') },
     redirects: { kept: num(rd.kept), redirected: num(rd.redirected), retired: num(rd.retired), unresolved: list(rd.unresolved, 600, 500, 'unresolved URL(s)'), issues: list(rd.issues, 200, 500, 'redirect issue(s)') },
     qa, seedHits: list(o.seedHits, 100, 300, 'seed hit(s)'), warnings: list(o.warnings, 100, 500, 'warning(s)'), errors: list(o.errors, 100, 500, 'error(s)'),
+    upgrade: isObj(o.quality) && isObj(o.quality.oldVsNew) ? readUpgradeReview(o.quality.oldVsNew) : EMPTY_UPGRADE,
   };
+  const rawVerdict = isObj(o.quality) && isObj(o.quality.oldVsNew) ? clean(o.quality.oldVsNew.verdict, 30) : '';
+  if (rawVerdict && !(UPGRADE_VERDICTS as readonly string[]).includes(rawVerdict)) dropped.push('quality.oldVsNew.verdict "' + rawVerdict + '" is not upgrade / not_upgrade');
   if (result.build.unsupportedFields.length) result.warnings = [...result.warnings, 'Template cannot hold yet: ' + result.build.unsupportedFields.join(', ')].slice(0, 100);
   return { ok: true, result, summary: { dropped, ignoredKeys: Object.keys(o).filter((k) => !KNOWN.has(k)), notes } };
 }
@@ -375,7 +402,7 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     result_imported_at: opts.now, result_status: r.status,
     warnings: [...r.warnings, ...kept].slice(0, 100), errors: r.errors.slice(0, 100), qa: r.qa,
     pages: r.build.pages, services: r.build.services, locations: r.build.locations, assets: r.build.assets,
-    redirects: r.redirects, seed_hits: r.seedHits, previous,
+    redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, previous,
   };
   next.build_execution = be;
   return { state: next, conflicts };
@@ -424,11 +451,11 @@ export function builtCoverage(s: WebsiteBuildState): { rows: CoverageRow[]; coun
 
 export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: string[] } {
   const s = i.state, b = s.build_execution;
-  if (!b.result_imported_at || (b.result_status !== 'failed' && b.result_status !== 'needs_attention' && !previewGateProblems(b).length))
+  const gate = previewReadyProblems(s, !!i.existingSiteUrl);
+  if (!b.result_imported_at || (b.result_status !== 'failed' && b.result_status !== 'needs_attention' && !gate.length))
     return { text: 'No failed or incomplete build to retry.', blockedBy: ['A failed / needs-attention build result'] };
   const m = computeMapping(s, i.template, i.facts, i.businessName);
   const failedQa = BUILD_QA_KEYS.filter((k) => b.qa[k] === false);
-  const gate = previewGateProblems(b);
   const L = [
     '# BUILD RETRY — ' + (i.businessName || 'this client'),
     '',
@@ -440,6 +467,8 @@ export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: strin
     ...(failedQa.length ? ['', 'FAILED CHECKS: ' + failedQa.join(', ')] : []),
     ...(b.seed_hits.length ? ['', 'SEED-CLIENT VALUES STILL PRESENT (remove each, unless it is in the config below): ' + b.seed_hits.join(' · ')] : []),
     ...(gate.length ? ['', 'WHY IT IS NOT PREVIEW READY: ' + gate.join('; ')] : []),
+    ...(b.upgrade.still_stronger.length ? ['', 'WHERE THE OLD SITE STILL LOOKS STRONGER (fix each, then compare old and new again):', ...b.upgrade.still_stronger.map((x) => '- ' + x)] : []),
+    ...(b.upgrade.verdict === 'not_upgrade' || gate.some((g) => /upgrade|old site|strength|Content completeness/i.test(g)) ? ['', 'THE QUALITY STANDARD (unchanged):', ...QUALITY_STANDARD_LINES.map((l) => '- ' + l), ...UPGRADE_QA_LINES] : []),
     ...(b.redirects.unresolved.length ? ['', 'UNRESOLVED OLD URLs (ask Paul — do not invent a target): ' + b.redirects.unresolved.slice(0, 50).join('  ')] : []),
     ...(b.warnings.length ? ['', 'Warnings from last time (fix only if they are part of the above): ' + b.warnings.slice(0, 15).join(' | ')] : []),
     ...(isTemplateRoute(s) ? ['', 'CURRENT CLIENT CONFIG (unchanged rules: only this data, nothing invented):', '```json', JSON.stringify(m.config, null, 2), '```'] : []),

@@ -570,6 +570,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `baseline_discovery`; a finished pool refuses a re-run; regenerate is refused mid-run and keeps the
   old job in `history`. A job is attached only if its questions all belong to the pool.
 
+**Website Build**
+- ⛔ **Preview Ready = technical AND perceived quality** (`websiteQuality.ts`, 2026-09-25): read it through `previewReadyProblems`, never `previewGateProblems` alone (a test fails if the page or the retry prompt does). An existing-site rebuild is not Preview Ready until every old-site strength is decided (preserve / modernise / improve, or removed WITH a reason), every content intent is assessed, and the build reports old vs new at 1440 + a phone width as `upgrade` with nothing the old site still wins. Recon reads strengths from the RENDERED page (BS4: a JS reviews widget was invisible to an HTML read).
+
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.
@@ -735,6 +738,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | How things stood on 2026-09-09, the harness repair | `docs/state-of-play-2026-09-09.md` (§0) |
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
 | Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
+| Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule | `docs/website-build-quality-standard.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,

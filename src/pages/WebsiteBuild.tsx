@@ -28,7 +28,8 @@ import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stageP
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
 import { applyBuildResult, builtCoverage, configVersion, executionBlockers, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
-import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, buildExecutionStatus, previewGateProblems, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
+import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, builtOrPlannedPaths, buildExecutionStatus, previewReadyProblems, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
+import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, STRENGTH_CATEGORIES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITIONS, STRENGTH_DISPOSITION_LABELS, UPGRADE_VERDICT_LABELS, intentProblems, proposeIntents, strengthId, strengthProblems, upgradeProblems, type ContentIntent, type ExistingStrength, type IntentDecision, type QualityState, type StrengthCategory } from '@/lib/websiteQuality';
 import type { BuildPackInput } from '@/lib/buildPack';
 import { autoAssign, computeMapping, MAP_STATUS_LABELS, SERVICE_STATUS_LABELS, URL_DECISION_LABELS, urlDecisions, type MappedField, type Mapping, type UrlDecision } from '@/lib/templateMapping';
 import { checkId, ROUTE_INFO, ROUTE_STAGE_FOCUS, routeChecks } from '@/lib/buildRoutes';
@@ -413,6 +414,7 @@ export default function WebsiteBuild() {
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
+      {state.route && <QualityPanel state={state} update={update} hasExistingSite={!!existingSiteUrl} />}
       {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
         execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}
       {state.route && mapping && <MappingPanel mapping={mapping} buildBlockers={buildBlockers ?? []} state={state} update={update} set={set} rows={rows} onDecide={decideRow} onEdit={editRow} template={template}
@@ -434,6 +436,7 @@ export default function WebsiteBuild() {
     {/* ══ PREVIEW ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'preview' && <>
       {packInput && <PreviewResultPanel state={state} input={packInput} existingSiteUrl={existingSiteUrl} prompts={prompts} onCopy={copyPrompt} />}
+      {state.route && <QualityPanel state={state} update={update} hasExistingSite={!!existingSiteUrl} />}
       <Section title="Preview">
         <RouteGuide state={state} stage="preview" update={update} />
         <p className="rounded bg-muted p-2 text-xs"><b>Localhost is for development.</b> The <b>Cloudflare Pages preview</b> is the stable review version used for full-site comparison before the client domain is connected.</p>
@@ -1042,8 +1045,8 @@ function BuildExecutionPanel({ state, update, mapping, input, execPrompt, onCopy
   const [accept, setAccept] = useState(false);
   const b = state.build_execution;
   const blocked = execPrompt.blockedBy.length > 0;
-  const status = buildExecutionStatus(state, !blocked);
-  const gate = previewGateProblems(b);
+  const status = buildExecutionStatus(state, !blocked, !!input.existingSiteUrl);
+  const gate = previewReadyProblems(state, !!input.existingSiteUrl);
   const urls = urlDecisions(state);
   const cov = builtCoverage(state);
   const retry = retryPrompt(input);
@@ -1143,8 +1146,8 @@ function PreviewResultPanel({ state, input, existingSiteUrl, prompts, onCopy }: 
 }) {
   const b = state.build_execution;
   if (!b.result_imported_at) return null;
-  const status = buildExecutionStatus(state, true);
-  const gate = previewGateProblems(b);
+  const status = buildExecutionStatus(state, true, !!existingSiteUrl);
+  const gate = previewReadyProblems(state, !!existingSiteUrl);
   const rv = reviewPrompt(input);
   const next: StagePrompt = state.route === 'faithful_rebuild' ? prompts.find((p) => p.id === 'visual_compare')!
     : { id: 'visual_compare', label: rv.kind === 'template' ? 'Copy Template Review Prompt' : 'Copy Design Review Prompt', short: 'Review', stage: 'preview', blockedBy: rv.blockedBy,
@@ -1369,4 +1372,74 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
     </Section>}
     <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('capture')}>Back</Button><Button onClick={() => goStep('build_pack')}>Next: Build Pack</Button></div>
   </>;
+}
+
+/* ── The Findable quality standard (websiteQuality.ts): the old site's strengths and what happens to
+   each (the no-downgrade rule), content completeness (one primary page per intent), and the old-vs-new
+   upgrade verdict the build reported. Operator decisions only — Claude proposes, Paul decides. ── */
+function QualityPanel({ state, update, hasExistingSite }: { state: WebsiteBuildState; update: UpdateFn; hasExistingSite: boolean }) {
+  const q = state.quality;
+  const [draft, setDraft] = useState<{ category: StrengthCategory; label: string }>({ category: 'photography', label: '' });
+  const setQ = (fn: (x: QualityState) => QualityState) => update((s) => ({ ...s, quality: fn(s.quality) }));
+  const putStrength = (id: string, over: Partial<ExistingStrength>) => setQ((x) => ({ ...x, strengths: x.strengths.map((st) => (st.id === id ? { ...st, ...over } : st)) }));
+  const putIntent = (k: ContentIntent, over: Partial<IntentDecision>) => setQ((x) => {
+    const cur: IntentDecision = x.intents[k] ?? { need: '', page: '', note: '' };
+    return { ...x, intents: { ...x.intents, [k]: { ...cur, ...over } } };
+  });
+  const addStrength = () => {
+    const label = draft.label.trim();
+    if (!label) return;
+    const id = strengthId(draft.category, label);
+    setQ((x) => (x.strengths.some((st) => st.id === id) ? x : { ...x, strengths: [...x.strengths, { id, category: draft.category, label, evidence: '', source_url: '', disposition: '', where: '', reason: '' }] }));
+    setDraft({ ...draft, label: '' });
+  };
+  const problems = [...strengthProblems(q, hasExistingSite), ...intentProblems(q, builtOrPlannedPaths(state))];
+  const up = state.build_execution.upgrade;
+  const upProblems = state.build_execution.result_imported_at ? upgradeProblems(up, hasExistingSite) : [];
+  return <Section title="Quality standard — perceived quality is half of Preview Ready"
+    right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${problems.length ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'}`}>{problems.length ? problems.length + ' to decide' : 'Decided'}</span>}>
+    <p className="text-xs text-muted-foreground">{hasExistingSite ? 'Would the owner, seeing old and new side by side with no SEO explanation, feel the new site is an upgrade? A good feature of the old site is kept, modernised or improved; it is removed only with a reason.' : 'No existing site: the completeness standard still applies — never a sparse site because there is nothing to compare with.'}</p>
+
+    {hasExistingSite && <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What the old site does well ({q.strengths.length})</p>
+      {q.strengths.length === 0 && <p className="text-xs text-muted-foreground">None recorded yet — the recon lists them under "strengths", or add them here.</p>}
+      {q.strengths.map((st) => <div key={st.id} className="grid gap-2 rounded border p-2 text-xs sm:grid-cols-[1.4fr_0.8fr_1fr_1fr_auto]">
+        <div className="min-w-0"><p className="font-medium">{st.label}</p><p className="text-muted-foreground">{STRENGTH_CATEGORY_LABELS[st.category]}{st.evidence ? ' · ' + st.evidence : ''}</p></div>
+        <select aria-label={'Decision for ' + st.label} className={sel} value={st.disposition} onChange={(e) => putStrength(st.id, { disposition: e.target.value as ExistingStrength['disposition'] })}>
+          <option value="">Decide…</option>{STRENGTH_DISPOSITIONS.map((d) => <option key={d} value={d}>{STRENGTH_DISPOSITION_LABELS[d]}</option>)}
+        </select>
+        <Input aria-label={'Where on the new site: ' + st.label} className="h-8 text-xs" placeholder="where on the new site (/our-work/)" value={st.where} onChange={(e) => putStrength(st.id, { where: e.target.value })} />
+        <Input aria-label={'Reason or note: ' + st.label} className="h-8 text-xs" placeholder={st.disposition === 'remove' ? 'why it goes (required)' : 'note'} value={st.reason} onChange={(e) => putStrength(st.id, { reason: e.target.value })} />
+        <Button size="icon" variant="ghost" aria-label={'Remove ' + st.label + ' from the list'} onClick={() => setQ((x) => ({ ...x, strengths: x.strengths.filter((y) => y.id !== st.id) }))}><Trash2 className="h-3.5 w-3.5" /></Button>
+      </div>)}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-44"><Pick label="Add a strength" value={draft.category} options={STRENGTH_CATEGORIES} labels={STRENGTH_CATEGORY_LABELS} onChange={(v) => setDraft({ ...draft, category: v })} /></div>
+        <Input aria-label="New strength" className="h-8 min-w-[12rem] flex-1 text-xs" placeholder="e.g. 20 genuine job photos" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') addStrength(); }} />
+        <Button size="sm" variant="outline" onClick={addStrength}><Plus className="mr-1 h-3.5 w-3.5" />Add</Button>
+      </div>
+      <label className="flex items-center gap-2 text-xs"><input type="checkbox" aria-label="The strengths inventory is complete" checked={q.strengths_reviewed} onChange={(e) => setQ((x) => ({ ...x, strengths_reviewed: e.target.checked }))} />I have looked at the old site (desktop and mobile) and this list is complete</label>
+    </div>}
+
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Content completeness — one primary page per intent</p>
+        <Button size="sm" variant="outline" onClick={() => setQ((x) => ({ ...x, intents: proposeIntents(x, state.pages) }))}>Propose from the page plan</Button></div>
+      {CONTENT_INTENTS.map((k) => { const d = q.intents[k]; return <div key={k} className="grid gap-2 text-xs sm:grid-cols-[1.4fr_0.8fr_1fr_1fr]">
+        <span className="self-center">{CONTENT_INTENT_LABELS[k]}</span>
+        <select aria-label={'Need: ' + CONTENT_INTENT_LABELS[k]} className={sel} value={d?.need ?? ''} onChange={(e) => putIntent(k, { need: e.target.value as IntentDecision['need'] })}>
+          <option value="">Assess…</option><option value="needed">Needed</option><option value="not_needed">Not needed</option>
+        </select>
+        <Input aria-label={'Primary page: ' + CONTENT_INTENT_LABELS[k]} className="h-8 text-xs" placeholder={d?.need === 'not_needed' ? '—' : '/faqs/ or "section on /"'} value={d?.page ?? ''} disabled={d?.need === 'not_needed'} onChange={(e) => putIntent(k, { page: e.target.value })} />
+        <Input aria-label={'Note: ' + CONTENT_INTENT_LABELS[k]} className="h-8 text-xs" placeholder="why / what it covers" value={d?.note ?? ''} onChange={(e) => putIntent(k, { note: e.target.value })} />
+      </div>; })}
+    </div>
+
+    {hasExistingSite && state.build_execution.result_imported_at && <div className="rounded border p-2 text-xs">
+      <p className="font-medium">Old vs new (reported with the build): {up.verdict ? UPGRADE_VERDICT_LABELS[up.verdict] : 'not reported'}{up.widths.length ? ' · compared at ' + up.widths.join(', ') + ' px' : ''}</p>
+      {up.still_stronger.length > 0 && <ul className="mt-1 list-disc pl-4 text-amber-700 dark:text-amber-300">{up.still_stronger.map((x) => <li key={x}>Old site still stronger: {x}</li>)}</ul>}
+      {up.notes && <p className="mt-1 text-muted-foreground">{up.notes}</p>}
+      {upProblems.length > 0 && <p className="mt-1 text-amber-700 dark:text-amber-300">{upProblems.join(' · ')}</p>}
+    </div>}
+
+    {problems.length > 0 && <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-300">{problems.map((p) => <li key={p} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{p}</li>)}</ul>}
+  </Section>;
 }
