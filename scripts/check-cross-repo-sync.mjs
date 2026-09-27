@@ -231,7 +231,12 @@ const SAME_REPO_GROUPS = [
        Both are now named exports for the sole reason that this checker can only read a named const;
        the value in sources.ts used to be an object property and was therefore unguardable. */
     what: 'the per-question audit cost',
-    why: 'marketView quotes this to the operator and sources.ts reserves against it in the cap pre-check. A mismatch means the estimate on screen is not the spend being enforced.',
+    /* ⛔ SINCE 2026-09-28 THE QUOTE MAY BE HIGHER, NEVER LOWER (Paul: forecast at the observed cost,
+       ledger unchanged). The screen quotes the observed billed cost ($0.014, incl. Apify's corrections);
+       sources.ts still writes and reserves the ledger rate. A quote BELOW the reserve would be the old
+       fault — an estimate on screen smaller than the spend enforced. */
+    rule: 'quote >= reserve',
+    why: 'marketView quotes this to the operator and sources.ts reserves against it in the cap pre-check. The quote must never be lower than the reserve.',
     places: [
       { file: path.join(LFOS_ROOT, 'src', 'lib', 'marketView.ts'), name: 'AUDIT_EST_USD_PER_QUESTION', kind: 'number', role: 'QUOTED to the operator' },
       { file: path.join(LFOS_ROOT, 'supabase', 'functions', '_shared', 'enrichment', 'sources.ts'), name: 'AI_SEARCH_USD_PER_QUESTION', kind: 'number', role: 'RESERVED against the cap' },
@@ -258,6 +263,17 @@ function checkGroups() {
     } catch (e) {
       console.error(`ERROR reading ${g.what}: ${e.message}`);
       bad++;
+      continue;
+    }
+    if (g.rule === 'quote >= reserve') {
+      const [quote, reserve] = values;
+      if (typeof quote.value === 'number' && typeof reserve.value === 'number' && quote.value >= reserve.value) {
+        console.log(`PASS  ${g.what}: the quote (${quote.value}) is at least the reserve (${reserve.value})`);
+        continue;
+      }
+      bad++;
+      console.error(`\nFAIL  ${g.what}: the quote ${quote.value} (${quote.name}) is below the reserve ${reserve.value} (${reserve.name}).`);
+      console.error(`  ${g.why}`);
       continue;
     }
     const distinct = [...new Set(values.map((v) => v.value))];

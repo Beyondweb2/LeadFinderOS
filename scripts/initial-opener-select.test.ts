@@ -77,7 +77,7 @@ console.log('\n── bulk: the template chosen for the batch is the template st
 const table = strip(read('src/components/OutreachTable.tsx'));
 ok(/whatsapp_template: template,/.test(table), "the admin's queue write stores the dialog's template as chosen");
 ok(/if \(!perms\.queueControls\) \{ await handleSalesQueue\(template\); return; \}/.test(table) && /salesQueueOpener\(ids, template\)/.test(table), "a salesperson's batch goes to sales_queue_opener with the chosen template");
-ok(/disabled=\{!queueTemplate \|\| openerBlocked\(queueTemplate\)\}/.test(table), 'nothing is queued until a template is chosen (no default)');
+ok(/disabled=\{(!listComplete \|\| )?!queueTemplate \|\| openerBlocked\(queueTemplate\)\}/.test(table), 'nothing is queued until a template is chosen (no default)');
 const mig = read('supabase/migrations/20260927140000_sales_shared_workflow.sql');
 const two = mig.slice(mig.indexOf('create or replace function public.sales_queue_opener(_lead_ids uuid[], _template text)'), mig.indexOf('revoke all on function public.sales_queue_opener(uuid[], text)'));
 ok(two.length > 0 && /v_template text := btrim\(coalesce\(_template, ''\)\);/.test(two), 'sales_queue_opener takes the template as an argument');

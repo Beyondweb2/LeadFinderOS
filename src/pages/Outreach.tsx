@@ -20,6 +20,7 @@ import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { datasetComplete, leadLoadNotice, leadCountLabel } from '@/lib/outreachLoad';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus } from '@/lib/queueStatus';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -48,9 +49,15 @@ const Outreach = () => {
     bulkImportLeads,
     bulkLookupPhones,
     fetchLeads,
+    leadLoad,
+    retryLeadLoad,
     phoneFetchStatus,
     retryPhoneFetch,
-  } = useOutreach({ history: false });
+  } = useOutreach({ history: false, progressive: true });
+  /* ⚡ PROGRESSIVE (2026-09-28, src/lib/outreachLoad.ts): the table appears with the newest 1,000 and
+     the rest load behind it. Everything that needs the whole list gates on this ONE value. */
+  const listComplete = datasetComplete(leadLoad);
+  const loadNotice = leadLoadNotice(leadLoad);
 
   const { user } = useAuth();
   /* ⛔ ONE OUTREACH, BOTH ROLES (2026-09-27). A salesperson opens this same page with the same table;
@@ -240,7 +247,7 @@ const Outreach = () => {
       {perms.claimPool && (
         <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'mine' | 'claim')}>
           <TabsList>
-            <TabsTrigger value="mine">My leads ({leads.length})</TabsTrigger>
+            <TabsTrigger value="mine">My leads ({leadCountLabel(leadLoad, leads.length)})</TabsTrigger>
             <TabsTrigger value="claim">Available to claim</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -250,7 +257,7 @@ const Outreach = () => {
       )}
 
       {/* WhatsApp outreach queue (admin-only). */}
-      {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} />}
+      {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} listComplete={listComplete} />}
 
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
@@ -301,7 +308,20 @@ const Outreach = () => {
         </div>
       )}
 
+      {/* ⛔ NEVER A SILENT PARTIAL LIST: while the rest load (or after they failed) the page says so. */}
+      {!(perms.claimPool && salesTab === 'claim') && loadNotice && (
+        <div role="status" aria-live="polite" data-testid="lead-load-notice"
+          className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${loadNotice.tone === 'error' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-primary/30 bg-primary/5 text-muted-foreground'}`}>
+          {loadNotice.tone === 'info' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
+          <span>{loadNotice.text}</span>
+          {loadNotice.tone === 'error' && (
+            <Button variant="outline" size="sm" className="ml-auto h-7 text-xs" onClick={() => { void retryLeadLoad(); }}>Retry</Button>
+          )}
+        </div>
+      )}
+
       {!(perms.claimPool && salesTab === 'claim') && <OutreachTable
+        leadLoad={leadLoad}
         leads={allLeads}
         onLeadClick={() => {}}
         onStatusChange={(leadId, status) => {

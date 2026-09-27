@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
+import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
+import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { salesPatchLead } from '@/lib/leadRpc';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
@@ -143,9 +144,22 @@ async function applyPlaceDetailsToLead(
    dialog never call addLead or isInOutreach — the only two readers of outreach_history — yet every
    mount downloaded all ~5,400 rows of it (7 requests, 1.2 MB). They opt out. A mount that opts out
    must not call either (scripts/outreach-list-columns.test.ts checks the two that do). */
-export function useOutreach({ history = true }: { history?: boolean } = {}) {
+/* ⚡ `progressive: true` — the Outreach page only (2026-09-28, src/lib/outreachLoad.ts). The first load
+   shows the newest OUTREACH_FIRST_BATCH leads as soon as they arrive and loads the rest behind them;
+   `leadLoad` says how complete the list is, and everything that needs the whole dataset gates on
+   datasetComplete(leadLoad). Every other caller loads the whole list first, exactly as before. */
+export function useOutreach({ history = true, progressive = false }: { history?: boolean; progressive?: boolean } = {}) {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
+  const [leadLoad, setLeadLoad] = useState<LeadLoadState>(LEAD_LOAD_INITIAL);
+  const leadLoadRef = useRef<LeadLoadState>(LEAD_LOAD_INITIAL);
+  leadLoadRef.current = leadLoad;
+  /* The rows as they are NOW (for the merge when the background load lands), the rows first put on
+     screen (identity = "not edited since"), and a generation so a superseded load never lands. */
+  const latestRef = useRef<{ active: OutreachLead[]; archived: OutreachLead[] }>({ active: [], archived: [] });
+  latestRef.current = { active: leads, archived: archivedLeads };
+  const shownRef = useRef<{ active: OutreachLead[]; archived: OutreachLead[]; first: OutreachLead[]; total: number | null } | null>(null);
+  const loadGenRef = useRef(0);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
   const [outreachHistory, setOutreachHistory] = useState<OutreachHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -246,11 +260,16 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   const coverageSig = useMemo(() => coverageSignature(leads, archivedLeads), [leads, archivedLeads]);
   /* Skips the FIRST value, which is the initial load (0 leads → N) rather than an operator action.
      Invalidating there would refetch coverage once per Outreach visit for no change. */
+  /* ⚡ (2026-09-28) Watching starts when the list is COMPLETE: the empty mount value and every step of
+     a load (the first 1,000, then the rest) are loading, not an operator action — before, the load
+     itself invalidated coverage once per visit. */
   const seenFirstSig = useRef(false);
+  const listComplete = datasetComplete(leadLoad);
   useEffect(() => {
+    if (!listComplete) return;
     if (!seenFirstSig.current) { seenFirstSig.current = true; return; }
     void queryClient.invalidateQueries({ queryKey: coverageQueryKey(user?.id) });
-  }, [coverageSig, queryClient, user?.id]);
+  }, [coverageSig, queryClient, user?.id, listComplete]);
 
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed.
   // `email` (if the lead already has one) rides along so a no-phone lead is only
@@ -363,9 +382,110 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
     processPhoneQueue();
   }, [processPhoneQueue]);
 
+  /* ── THE BACKGROUND HALF: every page after the first, then the merge. ───────────────────────── */
+  const loadRemainingLeads = useCallback(async (gen: number) => {
+    const shown = shownRef.current;
+    if (!shown) return;
+    const src = leadSourceFor(roleRef.current);
+    const buildActive = (from: number, to: number) => (supabase as unknown as { from: (t: string) => any })
+      .from(src.table).select(src.listSelect).eq('is_archived', false)
+      .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
+    try {
+      const all = await fetchPagesAfterFirst<OutreachLead>(buildActive, (l) => l.id, shown.first, shown.total);
+      if (gen !== loadGenRef.current) return;
+      // Page 0's rows come back as the very objects already on screen; only the new ones are guarded.
+      const fetchedActive = [...all.slice(0, shown.first.length), ...guardListRows(all.slice(shown.first.length), 'useOutreach')];
+      const merged = mergeAfterBackgroundLoad({
+        shownActive: shown.active, shownArchived: shown.archived,
+        localActive: latestRef.current.active, localArchived: latestRef.current.archived,
+        fetchedActive, fetchedArchived: shown.archived,
+      });
+      setLeads(merged.active);
+      setArchivedLeads(merged.archived);
+      setLeadLoad(LEAD_LOAD_COMPLETE(merged.active.length));
+    } catch (e) {
+      if (gen !== loadGenRef.current) return;
+      const message = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
+      console.error('Outreach: the remaining leads failed to load:', message);
+      /* ⛔ NEVER COMPLETE ON A FAILURE. The first batch stays on screen and everything that needs the
+         whole list stays off; Retry runs this half again. */
+      setLeadLoad((s) => ({ phase: 'failed', loaded: latestRef.current.active.length, total: s.total, error: message }));
+    }
+  }, []);
+
+  /* ── THE PROGRESSIVE FIRST LOAD (Outreach page) ─────────────────────────────────────────────────
+     One request for the newest OUTREACH_FIRST_BATCH active leads WITH the exact count (same source,
+     same filter: a salesperson's count is their own view's), and the archived list alongside (small,
+     and complete before anything shows, so it is never partial). Then the table appears, and the
+     remaining pages load behind it. A list that fits in the first batch — every salesperson today —
+     is complete at once. */
+  const progressiveLoad = useCallback(async () => {
+    const gen = ++loadGenRef.current;
+    if (!hasLoadedOnceRef.current) setIsLoading(true);
+    setLeadLoad(LEAD_LOAD_INITIAL);
+    const src = leadSourceFor(roleRef.current);
+    const sb = supabase as unknown as { from: (t: string) => any };
+    let first: OutreachLead[] = [];
+    let archived: OutreachLead[] = [];
+    let total: number | null = null;
+    try {
+      const [p0, arc] = await Promise.all([
+        sb.from(src.table).select(src.listSelect, { count: 'exact' }).eq('is_archived', false)
+          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(0, OUTREACH_FIRST_BATCH - 1),
+        fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => sb
+          .from(src.table).select(src.listSelect).eq('is_archived', true)
+          .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
+      ]);
+      if (p0.error) throw p0.error;
+      first = guardListRows((p0.data ?? []) as OutreachLead[], 'useOutreach');
+      total = typeof p0.count === 'number' ? p0.count : null;
+      archived = guardListRows(arc.rows, 'useOutreach');
+    } catch (e) {
+      if (gen !== loadGenRef.current) return;
+      hasLoadedOnceRef.current = true;
+      setIsLoading(false);
+      const message = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
+      console.error('Error fetching leads:', message);
+      setLeadLoad({ phase: 'failed', loaded: 0, total: null, error: message });
+      toast({ title: 'Error loading leads', description: message, variant: 'destructive' });
+      return;
+    }
+    if (gen !== loadGenRef.current) return;
+    shownRef.current = { active: first, archived, first, total };
+    setLeads(first);
+    setArchivedLeads(archived);
+    hasLoadedOnceRef.current = true;
+    setIsLoading(false);
+    // Complete at once only when the count says the first batch IS the list.
+    if (first.length === 0 || (total != null && first.length >= total && first.length < OUTREACH_FIRST_BATCH)) {
+      setLeadLoad(LEAD_LOAD_COMPLETE(first.length));
+      return;
+    }
+    setLeadLoad({ phase: 'partial', loaded: first.length, total, error: null });
+    await loadRemainingLeads(gen);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadRemainingLeads]);
+
+  /** The notice's Retry: the background half again if the first batch is on screen, else the lot. */
+  const retryLeadLoad = useCallback(async () => {
+    if (leadLoadRef.current.phase !== 'failed') return;
+    if (shownRef.current && shownRef.current.first.length > 0) {
+      const gen = ++loadGenRef.current;
+      setLeadLoad((s) => ({ ...s, phase: 'partial', error: null }));
+      await loadRemainingLeads(gen);
+    } else {
+      await progressiveLoad();
+    }
+  }, [loadRemainingLeads, progressiveLoad]);
+
   const fetchLeads = useCallback(async () => {
     const uid = userIdRef.current;
     if (!uid) return;
+    /* Progressive only while the list is not yet complete; a refresh of a COMPLETE list (after a bulk
+       job, an import, a claim) reloads it whole in the background and swaps it in, so the page never
+       drops back to "loading" and never re-locks the bulk actions. */
+    if (progressive && !datasetComplete(leadLoadRef.current)) { await progressiveLoad(); return; }
+    const gen = ++loadGenRef.current;
     
     // Only show loading spinner on initial load
     if (!hasLoadedOnceRef.current) {
@@ -422,9 +542,12 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
       console.error('Error fetching archived leads:', archivedError);
     }
 
+    if (gen !== loadGenRef.current) return;
     setLeads((activeData || []) as OutreachLead[]);
     setArchivedLeads((archivedData || []) as OutreachLead[]);
-  }, []);
+    setLeadLoad(LEAD_LOAD_COMPLETE((activeData || []).length));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressive, progressiveLoad]);
 
   const fetchOutreachHistory = useCallback(async (): Promise<OutreachHistoryEntry[] | null> => {
     const uid = userIdRef.current;
@@ -1739,6 +1862,8 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
     bulkImportLeads,
     fetchLeads,
     refetch: fetchLeads,
+    leadLoad,
+    retryLeadLoad,
     phoneFetchStatus,
     retryPhoneFetch,
   };

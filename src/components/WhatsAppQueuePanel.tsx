@@ -48,9 +48,13 @@ interface QueueStatus {
 export function WhatsAppQueuePanel({
   leads,
   onUpdateLead,
+  listComplete = true,
 }: {
   leads: OutreachLead[];
   onUpdateLead: (leadId: string, data: Partial<OutreachLead>) => Promise<unknown> | void;
+  /** False while Outreach is still loading the rest of the leads: the queued list is built from the
+   *  rows held, so until then it is "so far", never the whole queue. */
+  listComplete?: boolean;
 }) {
   const { toast } = useToast();
   const [status, setStatus] = useState<QueueStatus | null>(null);
@@ -266,7 +270,7 @@ export function WhatsAppQueuePanel({
         >
           <span>
             <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</span>
-            <span className="font-semibold text-foreground/90">{queued.length}</span>
+            <span className="font-semibold text-foreground/90">{queued.length}{listComplete ? '' : ' so far'}</span>
             {/* The hook_followup lane paces through the SAME cap/window but is a separate marker, so
                 the opener count above never includes it. Shown here so a bulk hook-queue is visible
                 and doesn't look like it failed. Only when there's a backlog. Display only. */}
@@ -310,6 +314,9 @@ export function WhatsAppQueuePanel({
       {expanded && (
         <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
           <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first)</div>
+          {!listComplete && (
+            <p className="mb-2 text-[11px] text-muted-foreground">Queued leads so far — the rest of the leads are still loading.</p>
+          )}
           {queued.length === 0 && contactQueued.length === 0 ? (
             <p className="px-1 py-1 text-xs text-muted-foreground/60">Queue is empty.</p>
           ) : (

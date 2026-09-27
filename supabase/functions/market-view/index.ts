@@ -24,6 +24,7 @@ import { nicheTradeKey, ENGINE_LABELS_NICHE } from "../../../src/lib/nicheView.t
    whatever it is called, because a verdict from something that read the answer beats a guess from
    the name. That is what the 148-audit backfill bought. */
 import { nameIsJudgeable } from "../_shared/derivable.ts";
+import { nicheFoldResult } from "../_shared/niche-result.ts";
 /* ⛔ src/lib/marketView.ts IS NO LONGER IMPORTED HERE, AND THAT IS THE POINT OF THE 2026-09-09
    PRUNE. This file used to pull seventeen symbols out of it — every one of them for the deleted
    `view` action. The `niche` fold referenced none of them, so the market panel's whole evidence
@@ -166,20 +167,22 @@ Deno.serve(async (req) => {
 
       const auditIds = new Set(mine.map((a) => a.id));
       const wantedRuns = runs.filter((r) => auditIds.has(r.audit_id)).map((r) => r.id);
-      /* ⛔ ONE BATCH AT A TIME, ON PURPOSE (measured 2026-09-27). This read is the niche call's floor:
-         Plumbers = 14 batches, 1,741 rows, 19 MB of stored results, and the database spends ~8.4 s
-         of server time unpacking them however they are asked for — four batches at a time was no
-         faster (10 s, the instance is CPU-bound) and held four of the API's ~10 shared connections.
-         Selecting only the fields the fold reads saved just 22% (every path still opens the whole
-         value). What DID move it: running the function next to the database (the SPA pins
-         forceFunctionRegion — src/lib/edgeRegion.ts) and one sign-in check. Going lower needs a
-         slim stored copy of each result (docs/site-wide-speed.md, proposed, not built). */
+      /* ⚡ THE TRIMMED COPY, NOT THE FULL RESULT (2026-09-28, migration 20260928090000). This read was
+         the niche call's floor: Plumbers = 1,741 rows, 19 MB of stored results, ~8.4 s of database
+         time unpacking them (four batches at a time was no faster and held pool connections;
+         picking fields out through PostgREST saved 22%). result_niche holds only what the fold reads —
+         each engine's named / self_named / position / competitors / citation urls / whether an
+         answer exists — kept equal to niche_result_slim(result) by the parts trigger and verified at
+         0 differences over all 8,251 rows before this switch. nicheFoldResult turns each row back
+         into the shape below reads, so the fold itself is untouched. result stays the source of
+         truth. Still one batch at a time: it is light now, and the pool is shared. */
       const qrows: { audit_id: string; run_id: string; question: string; result: unknown }[] = [];
       for (let i = 0; i < wantedRuns.length; i += 40) {
         const batch = wantedRuns.slice(i, i + 40);
-        qrows.push(...await all<{ audit_id: string; run_id: string; question: string; result: unknown }>(
-          service, "ai_audit_queue", "audit_id, run_id, question, result",
-          (q) => q.in("run_id", batch).eq("status", "done")));
+        const rows = await all<{ audit_id: string; run_id: string; question: string; result: unknown }>(
+          service, "ai_audit_queue", "audit_id, run_id, question, result:result_niche",
+          (q) => q.in("run_id", batch).eq("status", "done"));
+        for (const r of rows) qrows.push({ ...r, result: nicheFoldResult(r.result) });
       }
 
       step("queue"); stepMs.queueRows = qrows.length; stepMs.queueBatches = Math.ceil(wantedRuns.length / 40);

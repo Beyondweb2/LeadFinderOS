@@ -26,19 +26,7 @@ export interface ApifyUsage {
   cycleEnd: string | null;
 }
 
-/** Amber from here. Chosen to match apify-usage.ts's own USAGE_WARN_PCT so the log and the UI agree. */
-export const APIFY_WARN_PCT = 0.75;
-/** Red from here — matches USAGE_CRITICAL_PCT. */
-export const APIFY_CRITICAL_PCT = 0.90;
-
-export type ApifyTone = 'ok' | 'warn' | 'critical';
-
-export function apifyTone(pct: number | null | undefined): ApifyTone {
-  if (pct == null) return 'ok';
-  if (pct >= APIFY_CRITICAL_PCT) return 'critical';
-  if (pct >= APIFY_WARN_PCT) return 'warn';
-  return 'ok';
-}
+export { APIFY_WARN_PCT, APIFY_HIGH_PCT, APIFY_CRITICAL_PCT, apifyTone, apifyWarningText, type ApifyTone } from '@/lib/apifyTiers';
 
 /** `enabled: false` defers the read until it turns true (2026-09-27, site-wide speed pass): the
  *  Outreach table only shows the usage inside its bulk-audit dialog, and was calling the edge
