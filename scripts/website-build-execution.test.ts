@@ -85,7 +85,7 @@ const OK_RESULT = {
   qa: { buildPassed: true, seedContaminationPassed: true, linksPassed: true, responsivePassed: true, schemaPassed: true },
   quality: {
     oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' },
-    standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'none_available', form: 'none', formTest: 'not_run', credentialsProminent: true, photosUsed: 1, repeatedImages: [] },
+    standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'none_available', rating: 'none_available', form: 'none', formTest: 'not_run', credentialsProminent: true, photosUsed: 1, photographyPreserved: true, repeatedImages: [] },
   },
   seedHits: [], warnings: ['Link the Pages project to GitHub in the dashboard (operator step).'], errors: [],
 };
@@ -268,9 +268,9 @@ console.log('\n── X5c/X5d. THE BUILD STANDARD IN THE PROMPT, THE RESULT AND 
 {
   const s = ready();
   const p = executionPrompt(input(s)).text;
-  ok(p.includes('X5c. THE FINDABLE BUILD STANDARD') && p.includes('AREAS: THE MAP') && p.includes('MOBILE HERO — ONE COHERENT FIRST SCREEN') && p.includes('GENUINE REVIEWS ARE SHOWN BY DEFAULT'), 'the build prompt prints the build standard: image roles (areas → map), the mobile hero, reviews by default');
+  ok(p.includes('X5c. THE FINDABLE BUILD STANDARD') && p.includes('AREAS: THE MAP') && p.includes('MOBILE HERO — ONE COHERENT FIRST SCREEN') && p.includes('GENUINE, SOURCE-BACKED REVIEWS ARE SHOWN BY DEFAULT'), 'the build prompt prints the build standard: image roles (areas → map), the mobile hero, reviews by default');
   ok(p.includes('X5d. ENQUIRY FORM') && p.includes('functions/v1/site-enquiry?site=') && p.includes('company_website') && p.includes('fill_ms') && /never a mailto/i.test(p), '…and the site-enquiry form contract (endpoint, honeypot, fill time, never a mailto form)');
-  ok(/WHAT THIS CLIENT HAS[\s\S]*Approved genuine photos: 2[\s\S]*Areas hub: needed — it leads with a genuine map/.test(p), '…with what this client has — the same evidence the gate checks');
+  ok(/WHAT THIS CLIENT HAS[\s\S]*Approved genuine photos: 2[\s\S]*Areas hub: needed — it leads with a genuine map by default/.test(p), '…with what this client has — the same evidence the gate checks');
   ok(p.includes('"standard": { "heroImage"') && p.includes('quality.standard (every build)'), '…and the result contract asks for quality.standard');
   const noStd = { ...OK_RESULT, quality: { oldVsNew: OK_RESULT.quality.oldVsNew } };
   ok(buildExecutionStatus(importInto(s, noStd).state, true) === 'needs_attention', 'a claimed preview_ready result with NO build-standard report → NEEDS ATTENTION (absent is never a pass)');
@@ -278,7 +278,7 @@ console.log('\n── X5c/X5d. THE BUILD STANDARD IN THE PROMPT, THE RESULT AND 
   ok(bad.build_execution.standard.areasVisual === 'other' && bad.build_execution.standard.form === 'mailto_form', 'the imported standard report is stored on the build record');
   ok(JSON.stringify(normaliseWebsiteBuild(bad).build_execution.standard) === JSON.stringify(bad.build_execution.standard), '…and survives the save rule (paid-client-hub keeps it)');
   const rp = retryPrompt(input(bad)).text;
-  ok(/Areas hub does not lead with a map/.test(rp) && /mailto/.test(rp) && rp.includes('THE BUILD STANDARD (unchanged'), 'the retry names the build-standard failures and re-prints the standard');
+  ok(/Areas hub leads with an image unrelated to the locality/.test(rp) && /mailto/.test(rp) && rp.includes('THE BUILD STANDARD (unchanged'), 'the retry names the build-standard failures and re-prints the standard');
   ok(!rp.includes('X5c.') && !rp.includes('X5d.'), '…as a delta, never the full brief');
 }
 

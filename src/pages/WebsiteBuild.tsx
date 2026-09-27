@@ -1401,9 +1401,10 @@ function QualityPanel({ state, update, hasExistingSite }: { state: WebsiteBuildS
   const stdProblems = state.build_execution.result_imported_at ? standardProblems(std, standardEvidence(state)) : [];
   const stdRows: Array<[string, string]> = [
     ['Hero image', std.heroImage], ['Mobile hero', std.mobileHero + (std.mobileHeroReason ? ' — ' + std.mobileHeroReason : '')],
-    ['Areas visual', std.areasVisual + (std.mapUnavailableReason ? ' — ' + std.mapUnavailableReason : '')], ['Reviews', std.reviews],
+    ['Areas visual', std.areasVisual + (std.mapUnavailableReason ? ' — ' + std.mapUnavailableReason : '')], ['Reviews', std.reviews], ['Rating', std.rating + (std.ratingAsOf ? ' · ' + std.ratingAsOf : '') + (std.ratingHeldReason ? ' — ' + std.ratingHeldReason : '')],
     ['Form', std.form + (std.formTest ? ' · test ' + std.formTest : '')], ['Credentials prominent', std.credentialsProminent == null ? '' : std.credentialsProminent ? 'yes' : 'no'],
-    ['Genuine photos used', std.photosUsed == null ? '' : String(std.photosUsed)],
+    ['Photography preserved', std.photographyPreserved == null ? '' : (std.photographyPreserved ? 'yes' : 'no') + (std.photographyNote ? ' — ' + std.photographyNote : '')],
+    ['Genuine photos used (for the record)', std.photosUsed == null ? '' : String(std.photosUsed)],
   ];
   return <Section title="Quality standard — perceived quality is half of Preview Ready"
     right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${problems.length ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'}`}>{problems.length ? problems.length + ' to decide' : 'Decided'}</span>}>

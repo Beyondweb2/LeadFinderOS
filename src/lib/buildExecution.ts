@@ -30,7 +30,7 @@ import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, Webs
 import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewReadyProblems, standardEvidence } from './websiteBuildState.ts';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, readUpgradeReview, strengthProblems, type UpgradeReview } from './websiteQuality.ts';
 import type { BuildPackInput } from './buildPack.ts';
-import { BUILD_STANDARD_LINES, EMPTY_STANDARD, MIN_PHOTO_USE_SHARE, PHOTO_USE_RULE_FROM, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
+import { BUILD_STANDARD_LINES, EMPTY_STANDARD, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
 import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
@@ -96,9 +96,9 @@ function standardEvidenceLines(s: WebsiteBuildState): string[] {
   const e = standardEvidence(s);
   return [
     'WHAT THIS CLIENT HAS (LeadFinderOS — the gate checks the build against it):',
-    '- Approved genuine photos: ' + e.approvedPhotos + (e.approvedPhotos >= PHOTO_USE_RULE_FROM ? ' — use at least ' + Math.ceil(e.approvedPhotos * MIN_PHOTO_USE_SHARE) + ' across the site.' : '.'),
-    '- Review evidence: ' + (e.hasReviewEvidence ? 'YES — show genuine reviews (rating / count only if approved as a fact; excerpts, attribution, source link).' : 'none recorded — if the client has public reviews, report them in warnings rather than leaving them out.'),
-    '- Areas hub: ' + (e.areasHubNeeded ? 'needed — it leads with a genuine map.' : 'not marked needed.'),
+    '- Approved genuine photos: ' + e.approvedPhotos + (e.hasPhotoStrength ? ' — the old site\'s photography / gallery / project work is a strength: the rebuild must not feel sparser.' : '.') + ' Use enough to represent the business and cover every image role; never pad with weak or redundant shots.',
+    '- Review evidence: ' + (e.hasReviewEvidence ? 'YES — show genuine excerpts, attribution and the source link, and the current rating / count with its snapshot date where confidently sourced (hold only for a conflict, uncertain identity or an unsourced figure).' : 'none recorded — if the client has public reviews, report them in warnings rather than leaving them out.'),
+    '- Areas hub: ' + (e.areasHubNeeded ? 'needed — it leads with a genuine map by default (a fallback must be relevant to the locality and say why).' : 'not marked needed.'),
     '- Old site had a working enquiry form: ' + (e.hadWorkingForm ? 'YES — the new site keeps a working form (X5d).' : 'no.'),
     '- Verified credentials: ' + (e.hasCredentials ? 'YES — give them visual weight near the top.' : 'none verified.'),
   ];
