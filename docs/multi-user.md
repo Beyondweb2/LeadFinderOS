@@ -244,3 +244,20 @@ normal Outreach and Inbox — the same pages, the same components — with fewer
   reassign keeps the record and history); `multi-user-rls.sql` 70/70 (its team-directory count now
   counts real members — the real Test salesperson made the old fixed 3 stale), `multi-user-queue.sql`
   11/11 (now with the chosen template), `sales-media-rls.sql` 23/23.
+- **Live verification (2026-09-27, main `a2134d9d`, leadfinderos-next).** Deployed: migration 140000
+  (all 15 statements, the 1-arg `sales_queue_opener` refusal last — after the frontend was live),
+  `send-whatsapp-message` (preflight `2026-09-27c` / `any_approved_opener`), `process-whatsapp-queue`,
+  `review-reply`, `warm-lead-reply` (bundle markers read back). Sales Test via a one-time link: `/sales`
+  → Outreach; nav Outreach/Inbox/Find Leads/Coverage; claimed Cardiff Bay Dental from Available to
+  claim; note, follow-up (note kept), call booked, call outcome, website control, star — all through
+  the lead functions, zero browser requests to `outreach_leads`; Hook Audit run and its rivals shown;
+  both openers dry-run OK on an own lead; Inbox lists only own leads, both openers enabled. Refused:
+  Paul's lead/messages, the table, `notes`, a direct PATCH (0 rows), `lead_set_details` on Paul's lead,
+  review-reply / paid-client-hub / submissions / admin-users / queue settings (403). No real message
+  was sent or queued (dry run is the same send path; the batch queue is proven by the rolled-back SQL
+  suite). Admin: full nav, queue panel, all bulk tools, both openers in the queue dialog with no global
+  control, payment/playbook/private note in the detail, reassigned Cardiff Bay Dental back to
+  Unassigned (same record, 9 activity rows kept), Inbox automation + Send now, Review Replies opens.
+  Both QA sessions ended with `logout?scope=local` (refresh refused after). ⚠️ Cardiff Bay Dental keeps
+  the QA values (star, follow-up 2 Oct, call booked 1 Oct, website control "agency", QA note) — clear
+  them by hand if wanted.
