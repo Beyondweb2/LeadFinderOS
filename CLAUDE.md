@@ -28,9 +28,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (210 suites). **Honest green is 202/210 (2026-09-27, all eight also fail on untouched
+  (212 suites). **Honest green is 205/212 (2026-09-27, all seven also fail on untouched
   `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
-  Deno), `onboarding-audit-fields`, `initial-opener-select`, `manual-onboarding`, and
+  Deno), `onboarding-audit-fields`, `manual-onboarding`, and
   `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
   count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
