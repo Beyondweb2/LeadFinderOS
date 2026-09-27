@@ -64,6 +64,12 @@ verify_jwt = false
 [functions.request-call]
 verify_jwt = false
 
+# site-enquiry: the enquiry form on Findable client websites (BS4 first). Public by design — the
+# handler takes the recipient from its own site list, delivers only from the production origin
+# (preview / localhost = test mode), rate-limits and stores every enquiry. NEVER takes a recipient from the request.
+[functions.site-enquiry]
+verify_jwt = false
+
 [functions.process-ai-audit-queue]
 verify_jwt = false
 
