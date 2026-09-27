@@ -160,8 +160,7 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
 ## 7. Known limitations (2026-09-27)
 
 - **The Inbox list** does not show owner avatars (the header does). The Inbox is admin-only.
-- Sales cannot see inbound **media** (voice notes/images from prospects): the `whatsapp-media` bucket
-  policy is own-folder or admin. The thread shows "[voice note]".
+- ~~Sales cannot see inbound media~~ — fixed the same day, see §8.
 - A disabled user's **access token** stays valid until expiry (≤1 h), but every RLS policy and edge
   function refuses them at once (role row removed); the ban stops refreshes.
 - **Per-user send limits**: the column and the check exist; no limit is set. The global WhatsApp cap
@@ -172,3 +171,25 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
   cannot).
 - Auth config: `site_url` must be the production app and the redirect allow-list must include
   `/set-password`, or invite links land on localhost.
+
+## 8. Sales and WhatsApp media (2026-09-27, migration 20260927120000)
+
+- **Why it failed:** every stored file sits under the BOOK OWNER's folder (inbound:
+  `<lead owner>/<sha256(wamid)>.<ext>`; sent voice notes: `<book owner>/voice-out-<id>.ogg`), and the
+  bucket's only read policy was "own folder or admin". A salesperson owns no folder, so
+  `createSignedUrl` refused; the sales thread also never asked (it showed "[voice note]").
+- **The rule:** storage policy `whatsapp media read assigned sales` (SELECT only, additive; the admin
+  policy is untouched) = `bucket_id = 'whatsapp-media'` AND `(select my_role()) = 'sales'` AND
+  `name in (select my_sales_media_paths())`. The set is built from `whatsapp_messages.media_path`:
+  media → message → lead in `my_sales_lead_ids()` (assigned to the caller, not a client); a message
+  with NO lead id counts through the rep's own phones. Never from the object's name, so a guessed
+  path matches nothing. Disabled (role row removed) and reassigned fall out on the next request.
+- **One viewer:** `src/components/WhatsAppMedia.tsx` (`InboundMedia`, `isPlayableVoice`), moved out of
+  Inbox.tsx and used by Inbox and SalesLead. It asks Storage under the caller's session; a refusal
+  shows "Attachment unavailable".
+- **Limit:** a signed link already issued stays valid until it expires (5 minutes). A reassigned or
+  disabled rep cannot get a NEW link; one fetched in the last five minutes still opens.
+- **Tests:** `scripts/sales-media-access.test.ts` (shape, in `npm test`);
+  `supabase/tests/sales-media-rls.sql` (23 checks on the live schema, always rolled back: own image,
+  voice note and document open; Paul's, another rep's, a paid client's, an unreferenced object,
+  another private bucket, anon, a reassigned lead and a disabled account refused; admin sees all).

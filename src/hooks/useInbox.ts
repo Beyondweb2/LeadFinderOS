@@ -13,6 +13,7 @@ import { hasSiteFindings } from '@/lib/siteFindings';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
+import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -763,6 +764,18 @@ export function useInbox() {
     return { ok: true, simulated: data.simulated };
   }, [queryClient, queryKey]);
 
+  /* ONE ATTACHMENT (image / video / document) inside the 24-hour window — send-whatsapp-media, the
+     voice note's twin (src/lib/sendMediaAttachment.ts holds the call, shared with the sales page).
+     The sent row is merged the same way, so it appears in the thread at once. */
+  const sendMedia = useCallback(async (args: { phone: string; leadId: string; file: File; caption: string; sendId: string }) => {
+    const res = await sendMediaAttachmentRequest(sb, args);
+    if (res.ok && res.message?.id) {
+      queryClient.setQueryData<InboxData>(queryKey, (current) => current
+        ? { ...current, messages: mergeInboxMessages(current.messages, [res.message as unknown as WaMessage]) } : current);
+    }
+    return res;
+  }, [queryClient, queryKey]);
+
   /* ⛔ PREVIEW WHAT WOULD BE SENT — the SAME endpoint, the same guards, nothing sent.
      `mode: "dry_run"` returns the built Meta payload and the transcript body immediately before the
      Graph POST, or the refusal it would have given. It exists because `audit_followup` failed twice
@@ -816,5 +829,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev);
   }, [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, sendVoice, preview, patchLeadStatus, patchLeadPotentialWork };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, sendVoice, sendMedia, preview, patchLeadStatus, patchLeadPotentialWork };
 }

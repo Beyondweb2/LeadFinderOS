@@ -361,11 +361,15 @@ console.log('\n── WIRING: ONE WINDOW RULE, ONE RECIPIENT, THE INBOX ──')
   const rec = inbox.indexOf('<VoiceNoteRecorder');
   ok(open > 0 && rec > open && rec < closed, 'A/B. the mic is rendered ONLY in the open-window branch of the composer');
   ok(inbox.indexOf('<VoiceNoteRecorder', closed) === -1, 'B. …and nowhere in the closed-window branch');
-  ok(/\{active\.leadId && \(\s*<VoiceNoteRecorder\s+key=\{active\.key\}/.test(inbox), 'H. keyed by conversation (a thread switch discards a recording) and only on a lead-linked thread');
-  ok(/className=\{cn\('min-w-0 flex-1', voiceActive && active\.leadId && 'hidden'\)\}>\s*<InboxComposer/.test(inbox), 'I. the text composer is HIDDEN, not unmounted, while recording — its draft survives');
-  ok(/\(m\.direction === 'inbound' \|\| m\.message_type === 'audio'\) && <InboundMedia message=\{m\} \/>/.test(inbox), 'J. audio renders for outbound as well as inbound, through the same signed-URL component');
-  ok(/message\.message_type === 'audio'\) return <VoiceNotePlayer/.test(inbox), 'J. …with the one shared voice-note player (inbound audio no longer a bare native control)');
-  ok(!/<audio src=\{url\} controls/.test(inbox), '   the old native <audio controls> is gone');
+  /* 2026-09-27: the recorder shares the row with the attachment paperclip; each hides the other (and
+     the text box) while it holds the row — still keyed by conversation, still lead-only. */
+  ok(/\{active\.leadId && \(\s*<div className=\{cn\('contents', attachActive && '\[&>\*\]:hidden'\)\}>\s*<VoiceNoteRecorder\s+key=\{active\.key\}/.test(inbox), 'H. keyed by conversation (a thread switch discards a recording) and only on a lead-linked thread');
+  ok(/className=\{cn\('min-w-0 flex-1', \(voiceActive \|\| attachActive\) && active\.leadId && 'hidden'\)\}>\s*<InboxComposer/.test(inbox), 'I. the text composer is HIDDEN, not unmounted, while recording — its draft survives');
+  ok(/\{showsAttachment\(m\) && <MessageMedia message=\{m\} \/>\}/.test(inbox) && /return m\.message_type === 'audio' \|\| /.test(read('src/components/WhatsAppMedia.tsx')), 'J. audio renders for outbound as well as inbound, through the same signed-URL component');
+  /* The viewer moved to src/components/WhatsAppMedia.tsx (2026-09-27) so the salesperson's lead page shares it. */
+  const mediaViewer = read('src/components/WhatsAppMedia.tsx');
+  ok(/message\.message_type === 'audio'\) return <VoiceNotePlayer/.test(mediaViewer), 'J. …with the one shared voice-note player (inbound audio no longer a bare native control)');
+  ok(!/<audio src=\{url\} controls/.test(inbox + mediaViewer), '   the old native <audio controls> is gone');
   const player = read('src/components/VoiceNotePlayer.tsx');
   ok(/aria-label=\{playing \? 'Pause voice note' : 'Play voice note'\}/.test(player), 'accessible play/pause label');
   const ui = read('src/components/VoiceNoteRecorder.tsx');
