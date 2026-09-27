@@ -3,7 +3,7 @@ import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconc
 import { newestUsableAudit, resolveReportsByLead } from '@/lib/auditReportResolver';
 import { RUN_USABLE } from '@/lib/queueAuditStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchAllRows } from '@/lib/fetchAllRows';
+import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { isPaidLead } from '@/lib/leadPayment';
@@ -28,7 +28,7 @@ const sb = supabase as unknown as { from: (t: string) => any; functions: typeof 
  * are what resolveLeadReportAudit/resolveReportsByLead need to exclude a Full Measurement / day-28
  * replay from ever being resolved as "the report" — without them auditKind() cannot tell one from
  * an ordinary audit and the resolver would (wrongly) treat every purpose as Inbox-eligible. */
-const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results->summary, crawl_check:results->crawl_check)';
+const AUDIT_SELECT = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, mention_rate, audit_summary:results_summary, crawl_check:results_crawl_check)';
 const AUDIT_SELECT_FALLBACK = 'id, short_code, lead_id, created_at, open_count, first_opened_at, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(status, run_number, created_at, crawl_check:results->crawl_check)';
 
 async function fetchInboxAudits(from: number, to: number) {
@@ -192,9 +192,9 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
        This is the fastest-growing table in the system — every send and every reply. */
-    fetchAllRows<WaMessage>('Inbox (messages)', (from, to) =>
+    fetchAllRowsParallel<WaMessage>('Inbox (messages)', (from, to) =>
       sb.from('whatsapp_messages').select('*')
-        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to), (m) => m.id),
     // is_archived = false: an archived lead is one the operator has stopped working, so its thread
     // leaves the Inbox and it also leaves the start-a-conversation picker below. Un-archiving
     // brings the whole thread back — nothing is deleted, and the messages are untouched.
@@ -210,10 +210,10 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        `.order('id')` is the unique tiebreaker fetchAllRows needs: on a non-unique sort a tied row
        can be fetched twice and another missed at a page boundary — the same reasoning already
        written above the messages read. */
-    fetchAllRows<LeadLite>('Inbox (leads)', (from, to) =>
+    fetchAllRowsParallel<LeadLite>('Inbox (leads)', (from, to) =>
       sb.from('outreach_leads').select(LEAD_COLUMNS)
         .eq('is_archived', false).not('phone', 'is', null)
-        .order('id', { ascending: true }).range(from, to)),
+        .order('id', { ascending: true }).range(from, to), (l) => l.id),
     // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
     // audit_reply guard + the running-audit spinner. Newest-first; RLS scopes to own audits.
     /* ⛔ PAGINATED — truncation here would silently drop the report-ready pill and the audit_reply
@@ -224,7 +224,7 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        refresh" recurs after an audit-logic change shifts completion timing. Focus/reconnect
        reconciliation is the stated safety net for that gap (CLAUDE.md architecture rule), so it
        must actually refresh audits rather than reusing the possibly-stale `previous` copy. */
-    optionalInboxRows<InboxData['audits'][number]>(fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits)),
+    optionalInboxRows<InboxData['audits'][number]>(fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits, (a) => a.id)),
     /* Sign-up page hits → the SITE pill. The SAME table and the SAME paginated read the campaign
        card uses (id tiebreaker); the SITE_TRACKING_START cutoff is applied in leadSiteVisitedAt. A
        failed read degrades to no pill, never to a wrong one. */
@@ -270,9 +270,14 @@ export function useInbox() {
      mutating caller in Inbox.tsx (remove-from-inbox, the follow-up sends, starting an audit)
      await refetch/fetchAll, which BYPASSES staleTime — so an action is never followed by a stale
      list. patchLeadStatus keeps its optimistic no-spinner behaviour by patching the CACHE. */
+  /* When the current full load started — the catch-up below reads only what changed after it. */
+  const loadStartedAtRef = useRef<number>(0);
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchInboxData(queryClient.getQueryData<InboxData>(queryKey)),
+    queryFn: () => {
+      loadStartedAtRef.current = Date.now();
+      return fetchInboxData(queryClient.getQueryData<InboxData>(queryKey));
+    },
     enabled: !!user?.id,
   });
 
@@ -321,6 +326,45 @@ export function useInbox() {
     pendingLeadPatchesRef.current.delete(leadId);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? { ...current, leads: patchInboxLead(current.leads, fresh) } : current);
+  }, [queryClient, queryKey]);
+
+  /* ⚡ THE FIRST CONNECT DOES NOT RELOAD EVERYTHING AGAIN (2026-09-27). The subscription usually
+     comes up while the initial load is still running, and reconcile() then re-read every message,
+     lead and audit IN PARALLEL with it — the whole Inbox fetched twice on every visit, the second
+     copy competing with the first for the database (measured on the live app). The gap reconcile
+     exists to cover — rows written between the load's snapshot and the subscription going live — is
+     covered instead by waiting for that load, then reading only rows changed since it STARTED (a
+     minute of overlap for clock skew): messages by created_at, leads by updated_at, and the audit
+     list (small and fast since migration 20260927110000). A later reconnect or focus still runs the
+     full reconcile(), exactly as before. */
+  const catchUpAfterFirstLoad = useCallback(async () => {
+    try {
+      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(queryClient.getQueryData<InboxData>(queryKey)) });
+    } catch { return; }
+    const since = new Date((loadStartedAtRef.current || Date.now()) - 60_000).toISOString();
+    const [msgs, leadRows, audits] = await Promise.all([
+      fetchAllRows<WaMessage>('Inbox (catch-up messages)', (from, to) =>
+        sb.from('whatsapp_messages').select('*').gte('created_at', since)
+          .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null),
+      fetchAllRows<LeadLite & { is_archived?: boolean }>('Inbox (catch-up leads)', (from, to) =>
+        sb.from('outreach_leads').select(`${LEAD_COLUMNS}, is_archived`).gte('updated_at', since)
+          .order('id', { ascending: true }).range(from, to)).catch(() => null),
+      optionalInboxRows<InboxData['audits'][number]>(fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (catch-up audits)', fetchInboxAudits, (a) => a.id)),
+    ]);
+    queryClient.setQueryData<InboxData>(queryKey, (current) => {
+      if (!current) return current;
+      let leads = current.leads;
+      for (const row of leadRows?.rows ?? []) {
+        if (pendingLeadPatchesRef.current.has(row.id)) continue; // an optimistic patch still wins
+        leads = patchInboxLead(leads, row);
+      }
+      return {
+        ...current,
+        messages: msgs ? mergeInboxMessages(current.messages, msgs.rows) : current.messages,
+        leads,
+        audits: audits?.rows ?? current.audits,
+      };
+    });
   }, [queryClient, queryKey]);
 
   /* Subscription only patches cache. It never calls the six-read loader on connect. */
@@ -382,7 +426,10 @@ export function useInbox() {
         void patchOneAudit(payload.new?.audit_id);
       })
       .subscribe((status: string) => {
-        if (status === 'SUBSCRIBED') void reconcile();
+        if (status !== 'SUBSCRIBED') return;
+        const state = queryClient.getQueryState(queryKey);
+        if (!state?.data || state.fetchStatus === 'fetching') void catchUpAfterFirstLoad();
+        else void reconcile();
       });
     const onFocus = () => { if (document.visibilityState === 'visible') void reconcile(); };
     window.addEventListener('focus', onFocus);
@@ -392,7 +439,7 @@ export function useInbox() {
       document.removeEventListener('visibilitychange', onFocus);
       void (supabase as any).removeChannel(channel);
     };
-  }, [user?.id, queryClient, queryKey, reconcile, patchOneAudit, patchOneLead]);
+  }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, patchOneAudit, patchOneLead]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;

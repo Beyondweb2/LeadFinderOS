@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fetchAllRows } from '@/lib/fetchAllRows';
+import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -317,15 +317,21 @@ export function useOutreach() {
     let activeError: { message?: string } | null = null;
     let archivedError: { message?: string } | null = null;
     try {
-      activeData = (await fetchAllRows<OutreachLead>('Outreach (active leads)', (from, to) => supabase
-        .from('outreach_leads').select('*').eq('is_archived', false)
-        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to))).rows;
+      /* ⚡ Pages fetched four at a time, and active + archived together (2026-09-27): the six
+         sequential round trips were ~9 s of the Outreach page's load. Same rows, same order. */
+      const [act, arc] = await Promise.allSettled([
+        fetchAllRowsParallel<OutreachLead>('Outreach (active leads)', (from, to) => supabase
+          .from('outreach_leads').select('*').eq('is_archived', false)
+          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
+        fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => supabase
+          .from('outreach_leads').select('*').eq('is_archived', true)
+          .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
+      ]);
+      if (act.status === 'fulfilled') activeData = act.value.rows;
+      else activeError = { message: act.reason instanceof Error ? act.reason.message : String(act.reason) };
+      if (arc.status === 'fulfilled') archivedData = arc.value.rows;
+      else archivedError = { message: arc.reason instanceof Error ? arc.reason.message : String(arc.reason) };
     } catch (e) { activeError = { message: e instanceof Error ? e.message : String(e) }; }
-    try {
-      archivedData = (await fetchAllRows<OutreachLead>('Outreach (archived leads)', (from, to) => supabase
-        .from('outreach_leads').select('*').eq('is_archived', true)
-        .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to))).rows;
-    } catch (e) { archivedError = { message: e instanceof Error ? e.message : String(e) }; }
 
     hasLoadedOnceRef.current = true;
     setIsLoading(false);
@@ -352,11 +358,15 @@ export function useOutreach() {
     const uid = userIdRef.current;
     if (!uid) return;
 
-    const { data, error } = await supabase
-      .from('outreach_history')
-      .select('business_name, google_maps_url');
-
-    if (error) {
+    /* ⛔ PAGINATED (2026-09-27). It was one unordered select, so PostgREST silently returned 1,000 of
+       the 5,333 rows and the add-lead pre-filter could not see the rest. The database dedupe stays the
+       authority; this is the fast local pre-check, and now it sees everything. */
+    let data: OutreachHistoryEntry[] = [];
+    try {
+      data = (await fetchAllRowsParallel<OutreachHistoryEntry & { id: string }>('Outreach (history)', (from, to) => supabase
+        .from('outreach_history').select('id, business_name, google_maps_url')
+        .order('id', { ascending: true }).range(from, to), (h) => h.id)).rows;
+    } catch (error) {
       console.error('Error fetching outreach history:', error);
       return;
     }

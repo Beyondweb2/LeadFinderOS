@@ -514,44 +514,85 @@ Deno.serve(async (req) => {
 
     // --- Shared status numbers ---
     const dayStart = londonDayStartUtcIso();
-    const { count: sentToday } = await service
-      .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart);
-    /* Queue depth counts what this processor will ACTUALLY send: archived leads are excluded here
-       for the same reason they are excluded from the selection below. The archived-but-queued count
-       is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
-       archived" are distinguishable from the outside. */
-    const { count: queuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .eq("status", "queued").eq("is_archived", false);
-    const { count: archivedQueuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .eq("status", "queued").eq("is_archived", true);
-    /* ⛔ THE TOWN GATE'S SKIP COUNT — reported, never a silent shrink (Paul's rule, 2026-08-14:
-       money and messages never move on an unverified town, and this gate is BLANKET by his call —
-       it holds the plain opener too). Counted the same way archived-but-queued is, so "nothing to
-       send" and "N held back as unverifiable" are distinguishable from the outside. The predicate
-       is townVerdict's: settled note + no town; unchecked leads are NOT counted and NOT gated. */
-    const { count: unverifiedQueuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .eq("status", "queued").eq("is_archived", false)
-      .is("derived_town", null).in("town_fetch_note", [...SETTLED_TOWN_NOTES]);
-    /* The phone-history seatbelt's tally — how many rows it has bounced, ever. Its own count so a
-       skip is never silent (Paul's rule from the duplicate-openers incident, 2026-08-18). */
-    const { count: phoneHistorySkippedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .eq("whatsapp_delivery_status", "phone_already_contacted");
-    /* The hook_followup lane's depth — leads marked for the report follow-up, awaiting their paced
-       turn. Reported so the panel/observer can see the backlog draining. Counted like queuedCount. */
-    const { count: hookQueuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .not("hook_followup_queued_at", "is", null).eq("is_archived", false);
-    /* The contact_followup lane's depth — leads marked for the OPENER follow-up (never replied),
-       awaiting their paced turn. Same shape as hookQueuedCount. */
-    const { count: contactQueuedCount } = await service
-      .from("outreach_leads").select("id", { count: "exact", head: true })
-      .not("contact_followup_queued_at", "is", null).eq("is_archived", false);
-    const { data: stateRow } = await service
-      .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle();
+    /* ⚡ EVERY STATUS READ AT ONCE (2026-09-27). These ran one after another — ~15 round trips, several
+       seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
+       another, so they run in parallel; the payload is built from the same values, unchanged. */
+    const [
+      { count: sentToday }, { count: queuedCount }, { count: archivedQueuedCount }, { count: unverifiedQueuedCount }, { count: phoneHistorySkippedCount }, { count: hookQueuedCount }, { count: contactQueuedCount }, { data: stateRow },
+      autoReplyEnabledV, auditCompleteTemplateV, firstReplyTemplateV, selectedOpenerV, firstReplyModeV, auditOnlyReadyCountV,
+    ] = await Promise.all([
+      service
+        .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart),
+      /* Queue depth counts what this processor will ACTUALLY send: archived leads are excluded here
+         for the same reason they are excluded from the selection below. The archived-but-queued count
+         is reported alongside it rather than silently dropped, so "nothing to send" and "skipping N
+         archived" are distinguishable from the outside. */
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .eq("status", "queued").eq("is_archived", false),
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .eq("status", "queued").eq("is_archived", true),
+      /* ⛔ THE TOWN GATE'S SKIP COUNT — reported, never a silent shrink (Paul's rule, 2026-08-14:
+         money and messages never move on an unverified town, and this gate is BLANKET by his call —
+         it holds the plain opener too). Counted the same way archived-but-queued is, so "nothing to
+         send" and "N held back as unverifiable" are distinguishable from the outside. The predicate
+         is townVerdict's: settled note + no town; unchecked leads are NOT counted and NOT gated. */
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .eq("status", "queued").eq("is_archived", false)
+        .is("derived_town", null).in("town_fetch_note", [...SETTLED_TOWN_NOTES]),
+      /* The phone-history seatbelt's tally — how many rows it has bounced, ever. Its own count so a
+         skip is never silent (Paul's rule from the duplicate-openers incident, 2026-08-18). */
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .eq("whatsapp_delivery_status", "phone_already_contacted"),
+      /* The hook_followup lane's depth — leads marked for the report follow-up, awaiting their paced
+         turn. Reported so the panel/observer can see the backlog draining. Counted like queuedCount. */
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .not("hook_followup_queued_at", "is", null).eq("is_archived", false),
+      /* The contact_followup lane's depth — leads marked for the OPENER follow-up (never replied),
+         awaiting their paced turn. Same shape as hookQueuedCount. */
+      service
+        .from("outreach_leads").select("id", { count: "exact", head: true })
+        .not("contact_followup_queued_at", "is", null).eq("is_archived", false),
+      service
+        .from("whatsapp_outreach_state").select("next_send_at, paused").eq("id", 1).maybeSingle(),
+      autoReplyToggleOn(service),
+      (async () => {
+        try {
+          const { data: st, error: stErr } = await service
+            .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
+          return stErr ? null : ((st?.audit_complete_template as string | null) ?? null);
+        } catch { return null; }
+      })(),
+      firstReplyTemplate(service),
+      readSelectedOpener(service),
+      firstReplyMode(service),
+      (async () => {
+        try {
+          const { data: rows, error: rErr } = await service
+            .from("whatsapp_auto_replies").select("lead_id").eq("status", AUDIT_ONLY_STATUS).limit(500);
+          if (rErr || !Array.isArray(rows) || rows.length === 0) return rErr ? null : 0;
+          const leadIds = [...new Set(rows.map((r: { lead_id: string }) => r.lead_id).filter(Boolean))];
+          if (leadIds.length === 0) return 0;
+          const { data: auds, error: aErr } = await service
+            .from("ai_audits").select("id, lead_id").in("lead_id", leadIds);
+          if (aErr || !Array.isArray(auds) || auds.length === 0) return aErr ? null : 0;
+          const { data: done, error: dErr } = await service
+            .from("ai_audit_runs").select("audit_id")
+            .in("audit_id", auds.map((a: { id: string }) => a.id))
+            .in("status", ["complete", "capped"]);
+          if (dErr || !Array.isArray(done)) return null;
+          const doneAuditIds = new Set(done.map((r: { audit_id: string }) => r.audit_id));
+          const readyLeads = new Set(
+            auds.filter((a: { id: string; lead_id: string }) => doneAuditIds.has(a.id)).map((a: { lead_id: string }) => a.lead_id),
+          );
+          return readyLeads.size;
+        } catch { return null; }
+      })(),
+    ]);
     const nextSendAt: string | null = stateRow?.next_send_at ?? null;
     const paused: boolean = stateRow?.paused === true;
     const uk = londonNow();
@@ -579,52 +620,25 @@ Deno.serve(async (req) => {
       // Auto audit_reply rule state: BOTH must be on for the rule to run. Toggle read is
       // defensive (missing column → false), so status works before the SQL has been run.
       autoReplyEnvOn: autoReplyEnvOn(),
-      autoReplyEnabled: await autoReplyToggleOn(service),
+      autoReplyEnabled: autoReplyEnabledV,
       // D2 — the completion auto-send template (null = off). Defensive read: missing column → null.
-      auditCompleteTemplate: await (async () => {
-        try {
-          const { data: st, error: stErr } = await service
-            .from("whatsapp_outreach_state").select("audit_complete_template").eq("id", 1).maybeSingle();
-          return stErr ? null : ((st?.audit_complete_template as string | null) ?? null);
-        } catch { return null; }
-      })(),
+      auditCompleteTemplate: auditCompleteTemplateV,
       // The reply-trigger template (null = the shared default). Defensive like the others.
-      firstReplyTemplate: await firstReplyTemplate(service),
+      firstReplyTemplate: firstReplyTemplateV,
       /* THE SELECTED INITIAL OPENER (src/lib/openerVariant.ts). null = nothing stored (the default);
          ABSENT from the payload when it could not be read, so every picker fails closed on openers. */
-      ...(await (async () => { const v = await readSelectedOpener(service); return v === undefined ? {} : { initialOpenerTemplate: v }; })()),
+      ...(selectedOpenerV === undefined ? {} : { initialOpenerTemplate: selectedOpenerV }),
       /* The three-way reply MODE. Absent column / failed read → 'audit_only' (never 'send'), so
          the panel can render before the SQL has been run and never shows a sending state that
          is not real. */
-      firstReplyMode: await firstReplyMode(service),
+      firstReplyMode: firstReplyModeV,
       /* ⛔ HOW MANY LEADS ARE ACTUALLY WAITING FOR THE OPERATOR, not how many rows exist. An
          audit_only row is written the moment the reply lands, while its audit is still running —
          counting rows would tell Paul "3 ready to send" about audits that have not finished. So
          this counts only rows whose lead HAS a completed run, which is the same test the send
          path's resolver uses. Best-effort: any failure returns null and the panel says nothing
          rather than a wrong number. */
-      auditOnlyReadyCount: await (async () => {
-        try {
-          const { data: rows, error: rErr } = await service
-            .from("whatsapp_auto_replies").select("lead_id").eq("status", AUDIT_ONLY_STATUS).limit(500);
-          if (rErr || !Array.isArray(rows) || rows.length === 0) return rErr ? null : 0;
-          const leadIds = [...new Set(rows.map((r: { lead_id: string }) => r.lead_id).filter(Boolean))];
-          if (leadIds.length === 0) return 0;
-          const { data: auds, error: aErr } = await service
-            .from("ai_audits").select("id, lead_id").in("lead_id", leadIds);
-          if (aErr || !Array.isArray(auds) || auds.length === 0) return aErr ? null : 0;
-          const { data: done, error: dErr } = await service
-            .from("ai_audit_runs").select("audit_id")
-            .in("audit_id", auds.map((a: { id: string }) => a.id))
-            .in("status", ["complete", "capped"]);
-          if (dErr || !Array.isArray(done)) return null;
-          const doneAuditIds = new Set(done.map((r: { audit_id: string }) => r.audit_id));
-          const readyLeads = new Set(
-            auds.filter((a: { id: string; lead_id: string }) => doneAuditIds.has(a.id)).map((a: { lead_id: string }) => a.lead_id),
-          );
-          return readyLeads.size;
-        } catch { return null; }
-      })(),
+      auditOnlyReadyCount: auditOnlyReadyCountV,
     };
 
     // Status-only probe (the dashboard panel).
