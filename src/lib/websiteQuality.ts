@@ -263,6 +263,9 @@ export const STRENGTH_RECON_LINES: string[] = [
   '  galleries and badges are often drawn by JavaScript and are invisible in the source (BS4 pilot: a Google',
   '  reviews widget, "138 Google Reviews", was missed by an HTML-only recon). Count what is there',
   '  ("20 job photos", "6 credential badges"). One "strengths" item each, with where it is.',
+  '  Also record, as strengths where present: the review rating + count as shown and the review source (reviews);',
+  '  whether the enquiry form GENUINELY submits (its action / handler — a mailto or text/plain post is not a working',
+  '  form) (contact_form); any map or location visual (service_areas); and the customer groups served (customer_groups).',
 ];
 
 /** The standard itself — the master prompt and the build prompt both print it. */
@@ -298,12 +301,12 @@ export const QUALITY_STANDARD_LINES: string[] = [
   'location → evidence → customer questions → next step. No arbitrary word counts, no thin pages.',
   'FAQ: question → direct answer → supporting detail → link to the primary page. One strong FAQ hub plus',
   'contextual service FAQs — never hundreds of FAQ pages.',
-  'AREAS: a genuine /areas/ hub where useful; never service × town doorway pages; a standalone location page',
-  'only with genuinely distinct information (not a swapped town name).',
+  'AREAS: a genuine /areas/ hub where useful, led by a genuine MAP (the build standard below); never service × town',
+  'doorway pages; a standalone location page only with genuinely distinct information (not a swapped town name).',
   'PRICING: real prices published accurately; without them, a quotes / pricing resource on genuine buying',
   'questions (what affects the price, how quoting works, what helps a quote). Never an invented figure.',
   'CONTACT: never harder to contact than before — phone, WhatsApp, email, enquiry / quote where supported. A',
-  'form must genuinely submit before production; a form with no handler is a pre-go-live blocker, never faked.',
+  'form must genuinely submit (the Findable site-enquiry backend); a form with no handler is never faked.',
   'TRADE TEMPLATES: the Findable core system (design quality, technical baseline, responsive behaviour, core',
   'components) + a TRADE VARIANT (imagery, icons, terminology, customer questions, service structure,',
   'high-intent problems, relevant proof). Never simply recolour another client\'s site.',

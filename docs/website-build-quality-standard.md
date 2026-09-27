@@ -52,8 +52,8 @@ AND perceived website quality.
   stars) because it is drawn by JavaScript — the new preview had no reviews at all. Hence the
   rendered-page instruction in the recon.
 - The old site's enquiry form submits; the new one opened the visitor's email app — a contact
-- **Fixed 2026-09-27: fn `site-enquiry`** (`_shared/site-enquiry.ts`, table `site_enquiries`) — the enquiry backend for every Findable client site. Recipient from `CLIENT_SITES` by site key, never the request; ONLY the production origin delivers, preview / localhost are test mode (Resend test inbox, `[TEST]`), other origins refused; honeypot + fill time + rate limits; stored before the email is sent. Add a client = one `CLIENT_SITES` entry + redeploy. Verified with a test-mode send (row + Resend id); the production path is the same code with the real recipient.
   downgrade and a pre-go-live blocker until a real handler exists.
+- **Fixed 2026-09-27: fn `site-enquiry`** (`_shared/site-enquiry.ts`, table `site_enquiries`) — the enquiry backend for every Findable client site. Recipient from `CLIENT_SITES` by site key, never the request; ONLY the production origin delivers, preview / localhost are test mode (Resend test inbox, `[TEST]`), other origins refused; honeypot + fill time + rate limits; stored before the email is sent. Add a client = one `CLIENT_SITES` entry + redeploy. Verified with a test-mode send (row + Resend id); the production path is the same code with the real recipient.
 - The rest of the BS4 record: `C:/Users/paulj/BS4ElectricalServices` (its README and commits).
 
 ## Trade template family (direction, not yet code)
@@ -61,3 +61,56 @@ Findable core system (design quality, technical baseline, responsive behaviour, 
 a trade variant per trade (imagery, icons, terminology, customer questions, service structure,
 high-intent problems, relevant proof). Never simply recolour MCL. BS4 is the electrician variant's
 first instance; `WEBSITE_TEMPLATES` still holds only MCL.
+
+## The build standard (2026-09-27) — what MCL and BS4 had to be rescued for, now required up front
+
+Paul's brief: a new build should START close to the finished MCL and BS4, not need several design-rescue
+passes. Both reference sites were corrected by hand for the SAME things after generation, and the
+generator had no rule for any of them — the prompt said "use genuine photos" in general, the template's
+image slots had no map outside MCL, reviews were never required, the form rule said "must submit" but
+named no backend, and Preview Ready could not see any of it.
+
+**Where it lives.** `src/lib/websiteBuildStandard.ts` (leaf, edge-reachable): `IMAGE_ROLES` +
+`IMAGE_ROLE_RULES`, `BUILD_STANDARD_LINES` (printed as X5c of the Build Execution prompt, and again in a
+retry that fails it), `SITE_ENQUIRY_ENDPOINT` (X5d), the `StandardReport` the build must return as
+`quality.standard`, and `standardProblems(report, evidence)`. `standardEvidence(state)` in
+`websiteBuildState.ts` DERIVES what the client has (approved photos, review evidence, a working old form,
+the areas-hub decision, verified credentials); the X5c prompt prints the same evidence, so prompt and gate
+cannot disagree. `previewReadyProblems` = technical + quality + **build standard** — still one gate.
+The Quality panel shows the reported standard and its problems. The map is now a CORE asset slot
+(`CORE_ASSET_SLOTS`), so bespoke / faithful builds get it (BS4 was bespoke and had none).
+Tests: `scripts/website-build-standard.test.ts` (rules, evidence, gate, slot, the two regressions) and a
+block in `website-build-execution.test.ts` (prompt, result import, save round trip, retry).
+
+**The lessons, and what became a rule:**
+
+| Corrected by hand on | Lesson | Now |
+|---|---|---|
+| both | the hero photo sat as a block under the text on phones | mobile hero = the photo behind the copy (one first screen); `stacked` needs a stated reason |
+| both | neither first build showed any genuine reviews | reviews shown by default when there is review evidence; never invented, no review schema |
+| BS4 (`/areas/`, 2026-09-27) | the areas hub led with an EV-charger job photo | Areas hub → the MAP is its primary visual; a map is never a background; phone crop keeps labels legible |
+| MCL (`/locations/`, 2026-09-27) | the map was scaled down whole on phones (~6px labels) | the same legibility rule; MCL got a phone crop |
+| MCL (9780737) | a ring diagram stood in for a map | never drawn, no pins / radius / polygons |
+| BS4 (cb5e08e) | a mailto / text-plain "form" | `mailto_form` always fails; a working old form cannot become `none`; a real form must pass a test-mode submission (site-enquiry) |
+| BS4 (7e58ee2, c347e59) | photos repeated; the owner portrait twice | a photo once per page; repeats reported and gated; 50% of a large approved set must be used |
+| BS4 (4cbefa8) | NICEIC / SMAS held back from the first build | verified credentials reported as prominent |
+| both | card-grid sections, generic copy | section-rhythm and evidence-first rules in the prompt (judged in the old-vs-new review, not a number) |
+
+**Deliberately NOT generalised (human / client judgement):** WHICH genuine photo is the hero (BS4 went
+ceiling-light → owner portrait → conservatory on Paul's taste); the brand accent (MCL recoloured its logo
+orange); which towns are listed (MCL waits on Morgan); whether a rating is published (a fact Paul
+approves); a referral-only service (MCL car keys); whether the old site's content is Morgan's words.
+The standard names the ROLE and the rule; the choice inside it stays Paul's.
+
+**Regression.** MCL and BS4 are fixtures, not regenerated: each site as first generated fails the gate
+for exactly the corrections made by hand, and each as it stands on 2026-09-27 passes
+(`website-build-standard.test.ts` F).
+
+**Deploy order.** `paid-client-hub` imports `websiteBuildState.ts` (the save rule) — deploy it BEFORE
+the SPA, or a save strips `build_execution.standard`. `prospect-preview` also reaches
+`websiteTemplates.ts` but only reads the seed values, which did not change.
+
+**Still not decidable by the generator:** whether a photo is good enough at hero size, whether the
+owner would feel the new site is an upgrade (the old-vs-new review stays Claude's report + Paul's tick),
+whether a map crop is legible (reported, not measured), and whether the site key is registered in
+`CLIENT_SITES` (an operator step; the build reports `formTest` `not_run` until it is).

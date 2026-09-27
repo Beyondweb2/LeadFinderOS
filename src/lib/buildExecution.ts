@@ -19,14 +19,18 @@
       or a non-pages.dev preview can never read as PREVIEW READY (previewGateProblems) — and neither can a
       preview that fails the Findable quality standard (previewReadyProblems, websiteQuality.ts): an
       undecided existing-site strength, an unassessed intent, or no old-vs-new "clearly an upgrade".
+      Nor one that fails the BUILD standard (websiteBuildStandard.ts, X5c): the areas hub not led by its
+      map, genuine reviews left off, a mailto form or a dropped working form, a stacked mobile hero with
+      no reason, repeated or unused photos — judged from quality.standard against standardEvidence().
    ⛔ PREVIEW ONLY. pages.dev, noindex, tracking off, no custom domain.
    ⚠️ Browser + prompt module. Never a backtick inside a template literal (§3).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, WebsiteBuildState } from './websiteBuildState.ts';
-import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewReadyProblems } from './websiteBuildState.ts';
+import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewReadyProblems, standardEvidence } from './websiteBuildState.ts';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, readUpgradeReview, strengthProblems, type UpgradeReview } from './websiteQuality.ts';
 import type { BuildPackInput } from './buildPack.ts';
+import { BUILD_STANDARD_LINES, EMPTY_STANDARD, MIN_PHOTO_USE_SHARE, PHOTO_USE_RULE_FROM, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
 import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
@@ -87,6 +91,19 @@ export function assetPlanLines(plan: AssetPlan, name: (a: ManifestAsset, n: numb
 export const safeAssetName = (a: ManifestAsset, n: number) =>
   (a.suggested_filename || (a.source_url.split('/').pop() || 'asset-' + (n + 1))).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 80);
 
+/** What this client HAS, so the build standard's defaults are not guesses: the gate checks the same. */
+function standardEvidenceLines(s: WebsiteBuildState): string[] {
+  const e = standardEvidence(s);
+  return [
+    'WHAT THIS CLIENT HAS (LeadFinderOS — the gate checks the build against it):',
+    '- Approved genuine photos: ' + e.approvedPhotos + (e.approvedPhotos >= PHOTO_USE_RULE_FROM ? ' — use at least ' + Math.ceil(e.approvedPhotos * MIN_PHOTO_USE_SHARE) + ' across the site.' : '.'),
+    '- Review evidence: ' + (e.hasReviewEvidence ? 'YES — show genuine reviews (rating / count only if approved as a fact; excerpts, attribution, source link).' : 'none recorded — if the client has public reviews, report them in warnings rather than leaving them out.'),
+    '- Areas hub: ' + (e.areasHubNeeded ? 'needed — it leads with a genuine map.' : 'not marked needed.'),
+    '- Old site had a working enquiry form: ' + (e.hadWorkingForm ? 'YES — the new site keeps a working form (X5d).' : 'no.'),
+    '- Verified credentials: ' + (e.hasCredentials ? 'YES — give them visual weight near the top.' : 'none verified.'),
+  ];
+}
+
 /* ── the result contract ──────────────────────────────────────────────────────────────────────── */
 
 export const BUILD_RESULT_VERSION = 1;
@@ -100,7 +117,10 @@ export const BUILD_RESULT_SCHEMA_LINES: string[] = [
   '  "build": { "pages": ["/", "/services/…/"], "services": [], "locations": [], "assets": ["<source url> -> <local file>"], "unsupportedFields": [] },',
   '  "redirects": { "kept": 0, "redirected": 0, "retired": 0, "unresolved": ["/old-path/"], "issues": [] },',
   '  "qa": { "buildPassed": true, "seedContaminationPassed": true, "linksPassed": true, "responsivePassed": true, "schemaPassed": true },',
-  '  "quality": { "oldVsNew": { "verdict": "upgrade", "widths": [1440, 390], "stillStronger": [], "notes": "" } },',
+  '  "quality": {',
+  '    "oldVsNew": { "verdict": "upgrade", "widths": [1440, 390], "stillStronger": [], "notes": "" },',
+  STANDARD_RESULT_SCHEMA_LINE,
+  '  },',
   '  "seedHits": [],',
   '  "warnings": [],',
   '  "errors": []',
@@ -117,6 +137,8 @@ export const BUILD_RESULT_RULES: string[] = [
   '- quality.oldVsNew (existing-site rebuilds): verdict "upgrade" ONLY if you compared old and new side by side at the widths listed',
   '  and the new site is clearly an upgrade; otherwise "not_upgrade" with every place the old site still wins in stillStronger.',
   '  status may be "preview_ready" only with verdict "upgrade" and an empty stillStronger (no old site: leave verdict "").',
+  ...STANDARD_RESULT_RULES,
+  '  status may be "preview_ready" only when quality.standard meets X5c (LeadFinderOS re-checks it and says why not).',
 ];
 
 /* ── blockers ─────────────────────────────────────────────────────────────────────────────────── */
@@ -235,6 +257,15 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '',
     'CONTENT INTENTS — one primary page each:',
     ...CONTENT_INTENTS.map((k) => { const d = s.quality.intents[k]; return '- ' + CONTENT_INTENT_LABELS[k] + ': ' + (!d?.need ? 'NOT ASSESSED' : d.need === 'needed' ? 'needed → ' + (oneLine(d.page) || '(no page)') : 'not needed') + (d?.note ? ' — ' + oneLine(d.note) : ''); }),
+    ...H('X5c. THE FINDABLE BUILD STANDARD — what MCL and BS4 had to be corrected for, required from the first build'),
+    ...BUILD_STANDARD_LINES.map((l) => '- ' + l),
+    '',
+    ...standardEvidenceLines(s),
+    ...H('X5d. ENQUIRY FORM — the Findable site-enquiry backend'),
+    '- If the site has an enquiry / quote form (required where the old site had a working one), it posts to ' + SITE_ENQUIRY_ENDPOINT + '?site=<site key> — JSON from the page script, or a plain form post without JavaScript (answered with a 303 back to the site). Fields: name, phone, email, service, location, message; a hidden honeypot input named company_website; fill_ms = milliseconds from page load to submit (a duration, never a timestamp).',
+    '- The recipient is NEVER in the page: it comes from the site key\'s CLIENT_SITES entry in LeadFinderOS (supabase/functions/_shared/site-enquiry.ts). The preview origin is TEST mode automatically (the Resend test inbox, never the client). Show the real success / failure state; no fake thank-you.',
+    '- If the site key is not registered yet, the form cannot be proven: say so in warnings as an operator step (add the CLIENT_SITES entry for this client\'s production and *.pages.dev origins, redeploy site-enquiry), report formTest "not_run", and do NOT call it preview_ready. Once registered, submit ONE test enquiry from the preview and report formTest "passed" only if it succeeded.',
+    '- No form (phone / WhatsApp / email only) is allowed only when the old site had no working form. Never a mailto or text/plain post dressed as a form.',
     ...H('X6. SEO / AI VISIBILITY'),
     '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
     '- Clear internal linking; BreadcrumbList where the template has breadcrumbs; Organization / LocalBusiness schema from the config (service relationships only for built service pages); entity and contact details identical everywhere.',
@@ -252,6 +283,7 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- CONTENT: correct business name; phone and email consistent everywhere; selected services only; selected locations only; approved facts only; no placeholder copy; no unsupported proof.',
     '- RESPONSIVE (Playwright screenshots under qa/): 1440, 1024, 768, 390 and iPhone SE (375×667) — no horizontal overflow; navigation, hero, cards, CTAs, footer, floating controls, images and forms (fill, never submit) all correct.',
     ...UPGRADE_QA_LINES,
+    '- BUILD STANDARD (X5c): at 390 and 375 check the hero is one first screen (photo behind the copy, readable, call button visible), the areas map labels are legible, reviews and credentials are visible, tap targets are 44px+ and the form works; then fill quality.standard with what you BUILT.',
     ...(i.existingSiteUrl ? ['- The OLD site for the comparison: ' + i.existingSiteUrl + ' (read-only — never submit its forms).'] : []),
     '- Targeted checks on the built client site only — do not run large unrelated test suites.',
     ...H('X10. OLD URL COVERAGE — on the REAL build'),
@@ -281,6 +313,8 @@ export interface BuildResult {
   seedHits: string[]; warnings: string[]; errors: string[];
   /** The old-vs-new comparison (quality.oldVsNew). Optional in the contract: an old result reads as not reported. */
   upgrade: UpgradeReview;
+  /** The build standard (quality.standard). Optional in the contract: an old result reads as not reported. */
+  standard: StandardReport;
 }
 export interface BuildResultSummary { dropped: string[]; ignoredKeys: string[]; notes: string[] }
 export type BuildResultParse = { ok: true; result: BuildResult; summary: BuildResultSummary } | { ok: false; error: string };
@@ -329,6 +363,7 @@ export function parseBuildResult(input: string): BuildResultParse {
     redirects: { kept: num(rd.kept), redirected: num(rd.redirected), retired: num(rd.retired), unresolved: list(rd.unresolved, 600, 500, 'unresolved URL(s)'), issues: list(rd.issues, 200, 500, 'redirect issue(s)') },
     qa, seedHits: list(o.seedHits, 100, 300, 'seed hit(s)'), warnings: list(o.warnings, 100, 500, 'warning(s)'), errors: list(o.errors, 100, 500, 'error(s)'),
     upgrade: isObj(o.quality) && isObj(o.quality.oldVsNew) ? readUpgradeReview(o.quality.oldVsNew) : EMPTY_UPGRADE,
+    standard: isObj(o.quality) && isObj(o.quality.standard) ? readStandardReport(o.quality.standard) : EMPTY_STANDARD,
   };
   const rawVerdict = isObj(o.quality) && isObj(o.quality.oldVsNew) ? clean(o.quality.oldVsNew.verdict, 30) : '';
   if (rawVerdict && !(UPGRADE_VERDICTS as readonly string[]).includes(rawVerdict)) dropped.push('quality.oldVsNew.verdict "' + rawVerdict + '" is not upgrade / not_upgrade');
@@ -402,7 +437,7 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     result_imported_at: opts.now, result_status: r.status,
     warnings: [...r.warnings, ...kept].slice(0, 100), errors: r.errors.slice(0, 100), qa: r.qa,
     pages: r.build.pages, services: r.build.services, locations: r.build.locations, assets: r.build.assets,
-    redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, previous,
+    redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, standard: r.standard ?? EMPTY_STANDARD, previous,
   };
   next.build_execution = be;
   return { state: next, conflicts };
@@ -469,6 +504,7 @@ export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: strin
     ...(gate.length ? ['', 'WHY IT IS NOT PREVIEW READY: ' + gate.join('; ')] : []),
     ...(b.upgrade.still_stronger.length ? ['', 'WHERE THE OLD SITE STILL LOOKS STRONGER (fix each, then compare old and new again):', ...b.upgrade.still_stronger.map((x) => '- ' + x)] : []),
     ...(b.upgrade.verdict === 'not_upgrade' || gate.some((g) => /upgrade|old site|strength|Content completeness/i.test(g)) ? ['', 'THE QUALITY STANDARD (unchanged):', ...QUALITY_STANDARD_LINES.map((l) => '- ' + l), ...UPGRADE_QA_LINES] : []),
+    ...(standardProblems(b.standard, standardEvidence(s)).length ? ['', 'THE BUILD STANDARD (unchanged — fix what the gate names, then report quality.standard again):', ...BUILD_STANDARD_LINES.map((l) => '- ' + l)] : []),
     ...(b.redirects.unresolved.length ? ['', 'UNRESOLVED OLD URLs (ask Paul — do not invent a target): ' + b.redirects.unresolved.slice(0, 50).join('  ')] : []),
     ...(b.warnings.length ? ['', 'Warnings from last time (fix only if they are part of the above): ' + b.warnings.slice(0, 15).join(' | ')] : []),
     ...(isTemplateRoute(s) ? ['', 'CURRENT CLIENT CONFIG (unchanged rules: only this data, nothing invented):', '```json', JSON.stringify(m.config, null, 2), '```'] : []),
