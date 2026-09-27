@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
    conversation is the Inbox's primary content. Collapsed, the card is a glance: the percentage and
    count, the engine split, the best missed search, and the report action. Everything else (the
    hook's competitors, the other misses, the named searches, the six results) sits behind "View
-   details", and even then inside a height-capped panel that scrolls on its own.
+   details", in a height-capped panel that floats OVER the conversation (2026-09-27) and scrolls on
+   its own, so opening it never pushes the thread down.
 
    ⛔ NO PERCENTAGE UNTIL COMPLETE. A running check shows progress ("Checking AI results 2/6"). A
    finished check with a failed result says INCOMPLETE, and a failure is never shown as "not named".
@@ -137,7 +138,7 @@ function Details({ score, rivalsWithheld, legacy }: { score: HookScore; rivalsWi
     .filter((g) => score.perEngine.some((t) => t.engine === g.engine));
   const named = score.results.filter((r) => r.status === 'named');
   return (
-    <div className="mt-2 max-h-[20vh] space-y-2.5 overflow-y-auto overscroll-contain rounded-md border border-border bg-muted/30 p-2 text-xs" data-testid="hook-visibility-details">
+    <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-[40vh] space-y-2.5 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg" data-testid="hook-visibility-details">
       {score.hook && (
         <div>
           <div className={EYEBROW}>Selected outreach search</div>
@@ -273,7 +274,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   );
 
   return (
-    <div className="border-b border-border px-3 py-1.5 text-sm" data-testid="hook-visibility-card" data-expanded={expanded ? 'true' : 'false'}>
+    <div className="relative border-b border-border px-3 py-1.5 text-sm" data-testid="hook-visibility-card" data-expanded={expanded ? 'true' : 'false'}>
       {/* Row 1: label, engine split, headline. One line on desktop so the thread keeps its room. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -313,7 +314,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
             {autoMoved && <span className="text-muted-foreground" title={autoMoved.reason}> Moved to Not interested automatically ({HOOK_ALL_NAMED_REASON}). Nothing was deleted or sent.</span>}
           </p>
         ) : score.hook ? (
-          <p className={cn('mt-1 break-words text-xs', !expanded && 'line-clamp-2')} data-testid="hook-best-miss" title={score.hook.question}>
+          <p className="mt-1 line-clamp-2 break-words text-xs" data-testid="hook-best-miss" title={score.hook.question}>
             <span className="text-muted-foreground">Best missed search: </span>
             <span className="font-medium">“{score.hook.question}”</span>{' '}
             <span className="whitespace-nowrap"><span className="font-semibold">{score.hook.label}</span><span className="text-amber-700 dark:text-amber-400"> · Not named</span></span>
@@ -336,7 +337,14 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
         <ReportAction report={report} legacy={legacy} onRefresh={onRefresh} refreshing={refreshing} />
       </div>
 
-      {expanded && <Details score={score} rivalsWithheld={rivalsWithheld} legacy={legacy} />}
+      {/* ⛔ AN OVERLAY, NOT A GROWING BLOCK (2026-09-27): the details float over the thread, capped and
+          scrolling on their own, so the conversation stays where it was. A click outside closes them. */}
+      {expanded && (
+        <>
+          <button type="button" aria-label="Close details" className="fixed inset-0 z-20 cursor-default" onClick={() => setExpanded(false)} />
+          <Details score={score} rivalsWithheld={rivalsWithheld} legacy={legacy} />
+        </>
+      )}
     </div>
   );
 }

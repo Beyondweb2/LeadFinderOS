@@ -21,6 +21,7 @@ export const VOICE_NOTE_SCRIPT_LABEL = 'Voice-note script';
 interface FindingRecord { id: string; kind: string; title: string; source: string; details: string[] }
 interface ScriptRow {
   id: string;
+  audit_id: string | null;
   hook_question: string;
   hook_engine: string;
   competitors: string[];
@@ -61,7 +62,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+/** The panel's content: the saved script (or Write), Copy, Regenerate, word count, "Based on". Shared by the
+ *  dialog below and the Cold Call Playbook's Voice note tab (2026-09-27). Nothing sends from here. */
+export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string; currentAuditId?: string | null }) {
   const [row, setRow] = useState<ScriptRow | null>(null);
   const [versions, setVersions] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -101,13 +104,7 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
   const basis = row?.research_basis;
   const words = row?.word_count ?? 0;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Mic className="h-4 w-4" /> {VOICE_NOTE_SCRIPT_LABEL}</DialogTitle>
-          <DialogDescription>For you to read out and record. Nothing is sent from here.</DialogDescription>
-        </DialogHeader>
-
+    <div data-testid="voice-note-script-body">
         {loading ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>
         ) : (
@@ -120,6 +117,13 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
 
             {row ? (
               <>
+                {/* The playbook's AI opportunity reads the lead's current audit; a script saved from an
+                    earlier one would name different firms beside it. Say so; never regenerate silently. */}
+                {currentAuditId && row.audit_id && row.audit_id !== currentAuditId && (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-older-audit">
+                    This script was written from an earlier audit, so its search and competitors differ from the AI opportunity above. Regenerate to use the latest audit.
+                  </p>
+                )}
                 {row.problems.length > 0 && (
                   <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
                     <p className="font-semibold">Check this script before recording:</p>
@@ -190,6 +194,19 @@ function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; 
             )}
           </div>
         )}
+    </div>
+  );
+}
+
+function VoiceNoteScriptPanel({ leadId, open, onOpenChange }: { leadId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Mic className="h-4 w-4" /> {VOICE_NOTE_SCRIPT_LABEL}</DialogTitle>
+          <DialogDescription>For you to read out and record. Nothing is sent from here.</DialogDescription>
+        </DialogHeader>
+        <VoiceNoteScriptBody leadId={leadId} />
       </DialogContent>
     </Dialog>
   );
