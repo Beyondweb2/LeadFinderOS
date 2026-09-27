@@ -29,7 +29,14 @@ import type { TablesInsert } from '@/integrations/supabase/types';
  *  high, so the screen overstated a 47-question × 3-run measurement as £1.41 against a real ~£1.17.
  *  CLAUDE.md §8's constants table already recorded 0.0104 as the re-measured truth; this is the
  *  copy that was left behind. */
-export const RE_AUDIT_EST_USD_PER_QUESTION = 0.0104;
+/* ⛔ FORECAST, NOT LEDGER (Paul, 2026-09-28). Raised to the OBSERVED cost: this Apify cycle's
+   ledger (enrichment_usage, 17–27 Sep) billed $17.35 of ai_search + $5.80 of ai_search_correction
+   over 1,668 questions = $0.0139 a question once Apify's billing corrections land — so $0.0104
+   told the operator ~25% less than a batch really costs. Rounded UP to $0.014 (conservative).
+   The LEDGER rate (AI_SEARCH_USD_PER_QUESTION, sources.ts) is unchanged: it is what each question
+   writes and what the cap pre-check reserves, and the correction rows true it up to Apify's bill.
+   scripts/check-cross-repo-sync.mjs now asserts this forecast is AT LEAST that rate. */
+export const RE_AUDIT_EST_USD_PER_QUESTION = 0.014;
 
 export type ReAuditOutcome =
   | { ok: true; auditId: string; runId: string | null }

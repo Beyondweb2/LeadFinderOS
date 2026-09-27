@@ -116,6 +116,7 @@ import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
+import { datasetComplete, leadCountLabel, partialResultsSuffix, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
 /** Module-level so an empty map keeps one identity across renders. */
@@ -133,7 +134,7 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
-import { useApifyUsage } from '@/hooks/useApifyUsage';
+import { useApifyUsage, apifyWarningText } from '@/hooks/useApifyUsage';
 import {
   splitAlreadyAudited, oldestFirst, estimateBatchCost, budgetVerdict, monthlyRemainingUsd,
   resolveTake,
@@ -183,6 +184,8 @@ interface OutreachTableProps {
   onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
+  /** How complete the lead list is (Outreach progressive loading). Absent = complete. */
+  leadLoad?: LeadLoadState;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
   readOnly?: boolean;
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
@@ -282,6 +285,7 @@ export function OutreachTable({
   onBulkLookupPhones,
   showArchiveButton = true,
   isArchiveView = false,
+  leadLoad,
   readOnly = false,
   phoneFetchStatus = {},
   onRetryPhoneFetch,
@@ -301,6 +305,16 @@ export function OutreachTable({
   onAssignCampaign,
 }: OutreachTableProps) {
   const { toast } = useToast();
+  /* ⛔ THE ONE GATE (src/lib/outreachLoad.ts). Select all, every bulk action, CSV, the Paid filter and
+     the shared-phone count need the WHOLE list; until it has finished loading they are off — the
+     toolbar sits in a disabled fieldset and each handler refuses on its own as well. */
+  const loadState = leadLoad ?? LEAD_LOAD_COMPLETE(leads.length);
+  const listComplete = datasetComplete(loadState);
+  const needsFullList = (): boolean => {
+    if (listComplete) return false;
+    toast({ title: 'Still loading the rest of the leads', description: 'This works on the whole list, so it unlocks when every lead has loaded.' });
+    return true;
+  };
   /* ⛔ ONE TABLE, BOTH ROLES (2026-09-27). `perms` (src/lib/access.ts) hides only the admin, system,
      enrichment and delivery controls from a salesperson; everything that works or closes a lead
      stays. Presentation only — a salesperson's rows come from the sales_leads view and every change
@@ -712,6 +726,7 @@ export function OutreachTable({
 
   // Recover missing phone numbers via edge function
   const handleRecoverPhones = async () => {
+    if (needsFullList()) return;
     if (leadsWithMissingPhones.length === 0) {
       toast({
         title: 'All phones available',
@@ -759,6 +774,7 @@ export function OutreachTable({
 
   // Selection handlers
   const handleSelectAll = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === filteredAndSortedLeads.length) {
       setSelectedIds(new Set());
     } else {
@@ -780,6 +796,7 @@ export function OutreachTable({
 
   // Copy selected phones in bulk format: "447477932564, 447477932565"
   const copySelectedPhones = async () => {
+    if (needsFullList()) return;
     const leadsWithPhones = filteredAndSortedLeads
       .filter(l => selectedIds.has(l.id) && l.phone);
     
@@ -809,6 +826,7 @@ export function OutreachTable({
   // ids to the bulk-jobs edge function, clear the selection. The job runs
   // server-side (leave-safe); progress renders in the page-level banner.
   const handleBulkEnrichJob = async () => {
+    if (needsFullList()) return;
     if (!onBulkJob || bulkJobActive) return;
     const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
     if (!ids.length) return;
@@ -981,6 +999,7 @@ export function OutreachTable({
 
   /** Ask what it would do and what it would cost. Spends nothing. */
   const openTownFix = async () => {
+    if (needsFullList()) return;
     setTownFixOpen(true);
     setTownFixPreview(null);
     const { data, error } = await supabase.functions.invoke('backfill-lead-towns', {
@@ -995,6 +1014,7 @@ export function OutreachTable({
   };
 
   const confirmTownFix = async () => {
+    if (needsFullList()) return;
     setTownFixBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('backfill-lead-towns', {
@@ -1048,6 +1068,7 @@ export function OutreachTable({
      ⛔ IT WRITES A COLUMN AND SENDS NOTHING. `product` is an operator's note about intent — no
      send path reads it, and Paul's rule when he approved it was that none ever may. */
   const setProductOn = async (ids: string[], value: ProductValue | null) => {
+    if (needsFullList()) return;
     if (!onUpdateLead || !ids.length) return;
     setProductBusy(true);
     try {
@@ -1076,6 +1097,7 @@ export function OutreachTable({
      questions and the report print — and trades.ts maps labels back onto the fixed list at read
      time, so grouping still collapses the spellings. */
   const confirmSetTrade = async () => {
+    if (needsFullList()) return;
     if (!tradeChoice || !onUpdateLead) return;
     setTradeBusy(true);
     try {
@@ -1097,6 +1119,7 @@ export function OutreachTable({
 
   // Open the question-count + cost-confirm dialog (validates there's something eligible first).
   const handleBulkRunAudit = () => {
+    if (needsFullList()) return;
     if (!onBulkJob || bulkJobActive) return;
     if (!auditEligibleIds.length) {
       toast({ title: 'Nothing to audit', description: 'Selected leads are already audited or missing a business type / location.' });
@@ -1108,6 +1131,7 @@ export function OutreachTable({
   // Fire the bulk audit: one queued audit per eligible lead, drained by the existing
   // process-ai-audit-queue cron (no direct Apify). Clears the selection on success.
   const confirmBulkAudit = async () => {
+    if (needsFullList()) return;
     if (!onBulkJob || bulkJobActive) return;
     /* ⛔ THE ORDERED SLICE, not auditEligibleIds. auditBatch is oldest-added first and already cut
        to the typed number and the job cap, so the ids sent are exactly the ones the dialog priced.
@@ -1127,6 +1151,7 @@ export function OutreachTable({
 
   // Mark selected leads as contacted (Initial Contact)
   const handleMarkAsContacted = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     // Update each lead's status to 'initial_contact'
@@ -1143,6 +1168,7 @@ export function OutreachTable({
      contacted 3+ days ago are queued; everything held back is reported with a count, nothing is
      silently dropped. The server (contactFollowupEligible) re-verifies each at send time. */
   const handleQueueContactFollowup = async () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0 || !onUpdateLead) return;
     const now = new Date().toISOString();
     const cutoff = Date.now() - CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
@@ -1216,6 +1242,7 @@ export function OutreachTable({
   };
 
   const handleSalesQueue = async (template: string) => {
+    if (needsFullList()) return;
     if (!isInitialOpener(template)) {
       toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener. Other templates go from the Inbox conversation.', variant: 'destructive' });
       return;
@@ -1236,6 +1263,7 @@ export function OutreachTable({
   };
 
   const handleQueueForWhatsApp = async (template: string) => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0 || !onUpdateLead) return;
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
        would queue them with no template, and the drainer would then flag every one of them. */
@@ -1369,6 +1397,7 @@ export function OutreachTable({
 
   // Archive selected leads
   const handleArchiveSelected = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0) return;
     if (onArchiveSelected) {
       onArchiveSelected(Array.from(selectedIds));
@@ -1378,6 +1407,7 @@ export function OutreachTable({
 
   // Delete selected leads
   const handleDeleteSelected = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0) return;
     if (onDeleteSelected) {
       onDeleteSelected(Array.from(selectedIds));
@@ -1388,6 +1418,7 @@ export function OutreachTable({
   // Reset selected leads: fully wipe (outreach_leads + added-history) so they're
   // re-addable. Deliberate, confirmed — different from Remove which keeps the ledger.
   const handleResetSelected = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0 || !onResetSelected) return;
     const n = selectedIds.size;
     const ok = window.confirm(
@@ -1403,6 +1434,7 @@ export function OutreachTable({
   // the site + nulls enrichment + clears cache; keeps the lead/identity/notes/status/
   // history. Runs only after the dialog's action is clicked.
   const handleResetToFreshSelected = () => {
+    if (needsFullList()) return;
     if (selectedIds.size === 0 || !onResetToFreshSelected) return;
     onResetToFreshSelected(Array.from(selectedIds));
     setSelectedIds(new Set());
@@ -1410,6 +1442,7 @@ export function OutreachTable({
   };
 
   const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
+    if (needsFullList()) return;
     const leadsToExport = selectedIds.size > 0 
       ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
       : filteredAndSortedLeads;
@@ -1563,7 +1596,10 @@ export function OutreachTable({
          It must come BEFORE statusesForFilter, which returns [] for this value on purpose — falling
          through would show an empty table and read as "no paying customers". */
       if (isPaidFilterValue(statusFilter)) {
-        result = result.filter((lead) => isPaidLead(lead));
+        /* ⛔ NOT ON A PARTIAL LIST. A paying client outside the newest 1,000 would simply be missing
+           from "Paid (money in)" — the one place customers are listed. Until every lead has loaded the
+           filter is not applied (and cannot be chosen); the filters row says so. */
+        if (listComplete) result = result.filter((lead) => isPaidLead(lead));
       } else {
         /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
            no account and the landline — everyone unreachable that way. statusesForFilter returns the
@@ -1579,7 +1615,8 @@ export function OutreachTable({
        twin is hidden by the current filter is still a duplicate — computing it after filtering
        would quietly under-report exactly the pairs that matter, which is how the August incident
        stayed invisible. */
-    if (sharedPhoneOnly) {
+    // Same rule: a twin that has not loaded yet would hide the pair, so this waits for the whole list.
+    if (sharedPhoneOnly && listComplete) {
       result = result.filter((lead) => sharedPhoneIds.has(lead.id));
     }
 
@@ -1664,7 +1701,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1687,6 +1724,7 @@ export function OutreachTable({
   /* Replaces the selection rather than adding to it: "select all with email" is a statement about
      what should be ticked, not an increment. Pressing it twice is idempotent. */
   const handleSelectAllWithEmail = () => {
+    if (needsFullList()) return;
     setSelectedIds(new Set(leadsWithEmail.map((l) => l.id)));
   };
 
@@ -1772,7 +1810,7 @@ export function OutreachTable({
             <CardTitle className="text-base sm:text-lg">
               {isArchiveView ? 'Archived' : 'Outreach'}
               <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
-                ({leads.length})
+                ({leadCountLabel(loadState, leads.length)})
               </span>
               {selectedIds.size > 0 && (
                 <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-primary">
@@ -1787,7 +1825,12 @@ export function OutreachTable({
             </CardTitle>
           </div>
           
-          {/* Actions rows — all buttons equal-weight outline; two tidy rows. */}
+          {/* Actions rows — all buttons equal-weight outline; two tidy rows.
+              ⛔ Inside a fieldset that is DISABLED until the whole list has loaded: every button,
+              select and input in both rows (bulk WhatsApp, audits, product, trade, status, Sales'
+              opener, Copy Numbers, CSV export/import, Select-with-email, crawl-in-view) is off at once,
+              including any added here later. */}
+          <fieldset disabled={!listComplete} data-testid="outreach-bulk-toolbar" className="m-0 min-w-0 border-0 p-0" title={listComplete ? undefined : 'Unlocks when every lead has loaded'}>
           <div className="flex flex-col gap-2">
             {/* Row 1 — primary actions (selection-only) */}
             {selectedIds.size > 0 && (
@@ -2142,7 +2185,13 @@ export function OutreachTable({
               )}
             </div>
           </div>
+          </fieldset>
           
+          {!listComplete && (isPaidFilterValue(statusFilter) || sharedPhoneOnly) && (
+            <p className="text-xs text-amber-600 dark:text-amber-500" data-testid="whole-list-filter-waiting">
+              {isPaidFilterValue(statusFilter) ? 'Paid (money in)' : 'Shares a phone'} applies once every lead has loaded — until then the table shows results so far from the newest {loadState.loaded.toLocaleString('en-GB')} leads.
+            </p>
+          )}
           {/* Filters row */}
           <div className="flex flex-wrap gap-2">
             {/* ⛔ THE FILTERED PILL — filters PERSIST across navigation (the tableState restore
@@ -2220,8 +2269,8 @@ export function OutreachTable({
                     It leads with "Paid (money in)", which is NOT a status: it matches amount_paid > 0,
                     so an in_delivery customer is included and a £0 payment_received lead is not. */}
                 {OUTREACH_STATUS_FILTER_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                  <SelectItem key={opt.value} value={opt.value} disabled={!listComplete && isPaidFilterValue(opt.value)}>
+                    {opt.label}{!listComplete && isPaidFilterValue(opt.value) ? ' (when all leads have loaded)' : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2324,8 +2373,8 @@ export function OutreachTable({
                     {/* ⛔ A WARNING, NOT A HIDE — it is under "Show only" for that reason. Paul:
                         "I would rather see them than trust a send-time catch." The count is on the
                         label so the size of the problem is visible without switching it on. */}
-                    <DropdownMenuCheckboxItem checked={sharedPhoneOnly} onCheckedChange={toggle(setSharedPhoneOnly)} onSelect={(e) => e.preventDefault()}>
-                      <Users className="h-3.5 w-3.5 mr-2 text-amber-600" /> Shares a phone ({sharedPhoneIds.size})
+                    <DropdownMenuCheckboxItem checked={sharedPhoneOnly} disabled={!listComplete} onCheckedChange={toggle(setSharedPhoneOnly)} onSelect={(e) => e.preventDefault()}>
+                      <Users className="h-3.5 w-3.5 mr-2 text-amber-600" /> Shares a phone ({listComplete ? sharedPhoneIds.size : 'when all leads have loaded'})
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Hide</DropdownMenuLabel>
@@ -2454,6 +2503,7 @@ export function OutreachTable({
                     <Checkbox
                       checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
                       onCheckedChange={handleSelectAll}
+                      disabled={!listComplete}
                       aria-label="Select all"
                     />
                   </TableHead>
@@ -2804,7 +2854,7 @@ export function OutreachTable({
             <p className="text-sm text-muted-foreground">
               Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
               {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedLeads.length)} of{' '}
-              {filteredAndSortedLeads.length}
+              {filteredAndSortedLeads.length}{partialResultsSuffix(loadState)}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -2980,6 +3030,10 @@ export function OutreachTable({
           )}
           {/* ⚠️ AN UNREADABLE BUDGET SAYS SO. Rendering nothing would imply headroom nobody checked —
               the absent-value fault on a spend guard. Nothing is blocked by it. */}
+          {/* 80 / 90 / 95% warning (Paul, 2026-09-28) — never a block; the Apify cap is. */}
+          {apifyUsage && apifyWarningText(apifyUsage.usagePct) && (
+            <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs">{apifyWarningText(apifyUsage.usagePct)}</p>
+          )}
           {auditMonthlyVerdict.unknown && !apifyUsageLoaded && (
             <p className="text-[11px] text-muted-foreground">Checking the Apify monthly budget…</p>
           )}
@@ -3120,7 +3174,7 @@ export function OutreachTable({
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!queueTemplate || openerBlocked(queueTemplate)} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+            <Button size="sm" disabled={!listComplete || !queueTemplate || openerBlocked(queueTemplate)} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               Queue {selectedIds.size}
             </Button>

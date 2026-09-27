@@ -631,6 +631,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.
 - **`useOutreach` is the one hook not on React Query** — its own piece of work; do not tack it on.
+- ⛔ **Outreach loads progressively** (newest 1,000 first, `src/lib/outreachLoad.ts`): anything that
+  needs the WHOLE list gates on `datasetComplete(leadLoad)` (positive match on `'complete'`) — a new
+  bulk action goes inside the toolbar's disabled `<fieldset>` AND calls `needsFullList()`. Never let the
+  first 1,000 stand in for the whole dataset (`docs/site-wide-speed.md` §7d).
+- **The Coverage niche reads `ai_audit_queue.result_niche`**, a trigger-kept trimmed copy of `result`
+  (`niche_result_slim`). A field the niche fold starts reading must be added to that SQL function AND
+  backfilled first, or it reads as absent. Everything else reads `result`.
 - **The shell mounts once** (`<Route element={<AppLayout/>}>`); page-level caches must survive it.
 
 **Facts about a client**

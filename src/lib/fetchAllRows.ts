@@ -90,6 +90,55 @@ export function resetRowCountHints() {
   try { globalThis.localStorage?.removeItem(HINT_KEY); } catch { /* ignore */ }
 }
 
+/**
+ * The rest of a list whose FIRST page is already on screen (Outreach progressive loading, 2026-09-28).
+ * Same rows as fetchAllRowsParallel would return, given page 0 and the exact row count that came
+ * with it: page 0's length is the page size (a server cap below PAGE cannot leave gaps); a short
+ * page 0 is the end only when the count agrees (otherwise the cap is lower and paging continues);
+ * the waves are sized from the count and stop at the first short page, so a list that grew still
+ * finishes. Deduped by key, page order kept. Throws on any page error — the caller shows what it has
+ * and says the rest failed; it never treats a partial list as complete.
+ */
+export async function fetchPagesAfterFirst<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+  keyOf: (row: T) => string,
+  firstRows: readonly T[],
+  total: number | null,
+  concurrency = 6,
+): Promise<T[]> {
+  const size = firstRows.length;
+  const pages: T[][] = [[...firstRows]];
+  const endAtFirst = size === 0 || (size < PAGE && total != null && total <= size);
+  if (!endAtFirst) {
+    let next = 1;
+    let waveLen = total != null && size > 0
+      ? Math.min(concurrency, Math.max(1, Math.ceil(Math.max(0, total - size) / size) + (total % size === 0 ? 1 : 0)))
+      : concurrency;
+    outer: for (;;) {
+      if (next >= MAX_PAGES) { console.warn(`fetchPagesAfterFirst: stopped at ${MAX_PAGES} pages.`); break; }
+      const wave = Array.from({ length: Math.min(waveLen, MAX_PAGES - next) }, (_, i) => next + i);
+      waveLen = concurrency;
+      const results = await Promise.all(wave.map((p) => build(p * size, p * size + size - 1)));
+      for (const r of results) {
+        if (r.error) throw r.error;
+        const batch = (r.data ?? []) as T[];
+        pages.push(batch);
+        if (batch.length < size) break outer;
+      }
+      next += wave.length;
+    }
+  }
+  const seen = new Set<string>();
+  const rows: T[] = [];
+  for (const batch of pages) for (const row of batch) {
+    const k = keyOf(row);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    rows.push(row);
+  }
+  return rows;
+}
+
 export async function fetchAllRowsParallel<T>(
   label: string,
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,

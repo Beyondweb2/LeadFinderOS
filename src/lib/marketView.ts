@@ -32,10 +32,14 @@
    market audit. The mean would put it at 0.0110; on a 25-audit batch the difference is 8p, not
    worth the inconsistency. Both figures are recorded so the next person need not guess which was
    intended.
-   ⚠️ GUARDED: must equal AI_SEARCH_USD_PER_QUESTION in _shared/enrichment/sources.ts, which
-   RESERVES against it in the cap pre-check. A mismatch means the estimate on screen is not the
-   spend being enforced. */
-export const AUDIT_EST_USD_PER_QUESTION = 0.0104;
+   ⛔ FORECAST, NOT LEDGER (Paul, 2026-09-28). Raised to the OBSERVED cost: this Apify cycle's
+   ledger (enrichment_usage, 17–27 Sep) billed $17.35 of ai_search + $5.80 of ai_search_correction
+   over 1,668 questions = $0.0139 a question once Apify's billing corrections land — so $0.0104
+   told the operator ~25% less than a batch really costs. Rounded UP to $0.014 (conservative).
+   The LEDGER rate (AI_SEARCH_USD_PER_QUESTION, sources.ts) is unchanged: it is what each question
+   writes and what the cap pre-check reserves, and the correction rows true it up to Apify's bill.
+   scripts/check-cross-repo-sync.mjs now asserts this forecast is AT LEAST that rate. */
+export const AUDIT_EST_USD_PER_QUESTION = 0.014;
 
 /* ── APIFY ON-PAGE SEO SCAN, per audited business that HAS a website ─────────────────────────
    ⛔ WAS 0.12, AND IT WAS THE ONLY CONSTANT IN THE APP DERIVED FROM A PRICE LIST RATHER THAN

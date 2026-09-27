@@ -48,7 +48,7 @@ import { auditMatches, auditSearchTerms } from '@/lib/auditSearch';
 import { explainAuditFailure, shortDate } from '@/lib/auditErrors';
 import { readFunctionErrorBody, functionErrorSentence, functionErrorWrapper } from '@/lib/functionError';
 import { shortReportUrl } from '@/lib/reportSlug';
-import { useApifyUsage, apifyTone, type ApifyUsage } from '@/hooks/useApifyUsage';
+import { useApifyUsage, apifyTone, apifyWarningText, type ApifyUsage } from '@/hooks/useApifyUsage';
 import {
   WIZARD_MIN_QUESTIONS, WIZARD_MAX_QUESTIONS, WIZARD_DEFAULT_QUESTIONS, FULL_MEASURE_QUESTIONS,
   DISCOVERY_QUESTIONS, DISCOVERY_MIN_QUESTIONS, DISCOVERY_MAX_QUESTIONS,
@@ -3809,8 +3809,8 @@ const AiAudit = () => {
    both stop dead — which is what happened on 2026-07-30, when the account had been at 99.8% since
    lunchtime and the page blamed the question wording.
 
-   Amber at 75%, red at 90%, matching apify-usage.ts's own WARN/CRITICAL thresholds so the log line
-   and this line can never disagree. Renders NOTHING when there is no snapshot or no cap recorded:
+   Amber at 80%, orange at 90%, red at 95% (Paul, 2026-09-28) — warnings only; the Apify account cap is
+   the only block. Renders NOTHING when there is no snapshot or no cap recorded:
    an empty gap is honest, a "0%" would be a lie about a number we do not have. */
 function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
   if (!usage || usage.monthlyUsageUsd == null || !usage.maxMonthlyUsageUsd) return null;
@@ -3824,6 +3824,8 @@ function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
 
   const cls = tone === 'critical'
     ? 'border-destructive/40 bg-destructive/10 text-destructive'
+    : tone === 'high'
+      ? 'border-orange-500/50 bg-orange-500/10 text-orange-600 dark:text-orange-400'
     : tone === 'warn'
       ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-500'
       : 'border-border/60 bg-card/60 text-muted-foreground';
@@ -3835,13 +3837,7 @@ function ApifyUsageLine({ usage }: { usage: ApifyUsage | null }) {
       <span className="tabular-nums">({(pct * 100).toFixed(1)}%)</span>
       <span>this billing cycle{resets ? `, resets ${resets}` : ''}.</span>
       {/* The consequence, stated only when it is actually near — no crying wolf at 40%. */}
-      {tone !== 'ok' && (
-        <span className="font-medium">
-          {pct >= 1
-            ? 'At the cap: audit questions and SEO scans will both fail until it is raised or the cycle rolls.'
-            : 'At 100% audit questions and SEO scans both stop.'}
-        </span>
-      )}
+      {tone !== 'ok' && <span className="font-medium">{apifyWarningText(pct)}</span>}
     </div>
   );
 }

@@ -28,7 +28,10 @@ type Client = any;
 export const DISCOVERY_RUNS = 3;
 /** The Discovery engine's own ceiling (create-ai-audit refuses more). */
 export const DISCOVERY_MAX_QUESTIONS = 80;
-export const DISCOVERY_USD_PER_QUESTION_RUN = 0.0104;   // = AI_SEARCH_USD_PER_QUESTION (billed rows)
+/* The Discovery confirm's ESTIMATE only (estimate_usd, shown before a run — it decides nothing).
+   Raised 0.0104 → 0.014 on 2026-09-28 to the observed billed cost ($0.0139/question incl. Apify's
+   corrections); the ledger rate AI_SEARCH_USD_PER_QUESTION is unchanged. */
+export const DISCOVERY_USD_PER_QUESTION_RUN = 0.014;
 
 export interface PoolItem { question: string; town: string | null; service: string | null; intent: string }
 /** Stored on onboarding_responses.baseline_discovery. `pool_version` identifies the pool (a stable

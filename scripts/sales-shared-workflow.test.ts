@@ -146,7 +146,7 @@ console.log("\n── the recent Inbox and speed work is intact ──");
   for (const [needle, what] of [["<VoiceNoteRecorder", "voice notes"], ["<AttachmentPicker", "attachments"], ["MessageMedia", "media viewing"], ["windowFor(", "the 24-hour window"], ["<LeadDetailFromInbox", "the lead detail overlay"]]) {
     ok(inbox.includes(needle), `the Inbox still has ${what}`);
   }
-  ok(/useOutreach\(\{ history: false \}\)/.test(read("src/pages/Outreach.tsx")), "Outreach still opts out of the history download");
+  ok(/useOutreach\(\{ history: false(, progressive: true)? \}\)/.test(read("src/pages/Outreach.tsx")), "Outreach still opts out of the history download");
   ok(/prefetchOutreachAuditMap\(queryClient, user\.id\)/.test(read("src/pages/Outreach.tsx")), "…and still prefetches the audit map");
 }
 

@@ -215,11 +215,48 @@ Leads (Google Places), WhatsApp, OpenAI work, crawl checks. Our own caps: per-us
 (queue) and $2 (enrichment runner); the 75%/90% thresholds only log. RG's remeasure (6 Oct) and
 Ronnie's (13 Oct) fall inside this cycle.
 
+## 7d. Part 4 (2026-09-28, Paul approved)
+
+**Outreach progressive loading** (`src/lib/outreachLoad.ts`, `useOutreach({ progressive: true })`, the
+Outreach page only). One request for the newest 1,000 active leads WITH the exact count, from
+`leadSourceFor(role)` (admin: outreach_leads, 41 columns; Sales: the sales_leads view, their own
+prospects, safe columns — the count is their view's), plus the archived list (116 rows, loaded whole
+before first paint so it is never partial). Then the table shows and `fetchPagesAfterFirst` loads the
+rest behind it. Gate: `datasetComplete()` — a positive match on `'complete'`. Until then: the bulk
+toolbar sits in a disabled `<fieldset>` (bulk WhatsApp, audits, product/trade/status, Sales' opener,
+Copy Numbers, CSV import/export, select-with-email), every whole-list handler refuses on its own
+(`needsFullList()`), select-all is disabled, the Paid filter can't be chosen and a remembered one is
+not applied (a note says so), the shared-phone filter and count wait, the queue dialog's send button is
+off, and the WhatsApp queue panel says "so far". Search and other filters work, with "— results so far
+from the newest 1,000 leads". A failed background load keeps the 1,000, says the rest failed, offers
+Retry, and never flips to complete. Edits during the load: `mergeAfterBackgroundLoad` (row identity —
+local edits, moves, additions win; deletions stay deleted). A refresh of a complete list reloads it
+whole behind the table and never re-locks. Measured (admin, 5,370 active, 3 runs each): first batch +
+archived **1.0–1.4 s** vs the old full load **2.1–3.2 s**; complete **2.3–3.5 s** (page 0 must land
+before the rest are asked for, so completion is no faster — first useful render is what moved).
+
+**Coverage niche: `ai_audit_queue.result_niche`** (migration 20260928090000). A trimmed copy of
+`result`: the four display engines, each cut to named / self_named / position / competitors /
+citations[{url}] / answer_present (JS truthiness of answer_text). Filled by the existing parts trigger
+on every write of result; result stays the source of truth. Backfill: primary-key walk, 100 rows a
+call, triggers off for that session only (updated_at untouched), 84 calls of ~2 s, 8,251 scanned /
+8,246 written; zero-difference check over every row: **0**. Only market-view's niche read switched
+(`result:result_niche`, folded back by `_shared/niche-result.ts`). All 14 trades' output IDENTICAL to
+before. Plumbers 8.4 → 1.6 s, Electricians 5.7 → 1.2 s, Locksmiths 16.6 → 2.1 s (warm; first warm pass
+1.8–5.0 s). Stopped there (Paul: ~1–2 s is enough).
+
+**Apify.** The only cap that blocks is Apify's own account limit (`limits.maxMonthlyUsageUsd`), read
+every 15 min into `apify_account_usage`; the screen (`apify-usage-status`) shows that stored number —
+no cap constant of ours anywhere; the $175 was an older Apify setting (to 17 Sep), not a stored value.
+The app cannot change it: Paul sets it in the Apify Console. Warnings (`src/lib/apifyTiers.ts`) at 80 /
+90 / 95%, never blocking. Forecasts now quote the observed billed $0.014/question (AI search $17.35 +
+corrections $5.80 over 1,668 questions = $0.0139): `AUDIT_EST_USD_PER_QUESTION`,
+`RE_AUDIT_EST_USD_PER_QUESTION`, `DISCOVERY_USD_PER_QUESTION_RUN`. The ledger/reserve rate
+`AI_SEARCH_USD_PER_QUESTION` is unchanged; the sync check enforces quote ≥ reserve.
+
 ## 8. Still slow / open
 
-- The Outreach leads are primary data: the table still waits for all ~5,300. Showing page 0 (the
-  newest 1,000 — the whole first screen) first would cut first paint to ~1 s, but filters, counts and
-  bulk actions would be partial until the rest arrive — its own piece of work.
+- Outreach completion (all ~5,300) is still ~2.3–3.5 s; only the first screen got faster.
 - `useOutreach` is still not on React Query (CLAUDE.md), so every visit re-downloads the list.
 - Pre-existing, found: `useOutreach.addLead` depends on `[user]` only, so its local "previously added"
   and in-list checks read whatever the lists held when the user object last changed (usually empty) —
