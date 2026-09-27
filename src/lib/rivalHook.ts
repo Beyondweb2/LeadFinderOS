@@ -231,9 +231,17 @@ export const TEMPLATE_SINGLE_ENGINE_CLAIM: Readonly<Record<string, string>> = {
 
 const ENGINE_WORDS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Google AI' };
 
+/* ⛔ PAUL'S EXPLICIT APPROVAL (2026-09-27): audit_followup may carry a hook from EITHER engine, even
+   though its approved words say "I asked chatgpt". The claim stays recorded above (the body still says
+   it, and the body scan still checks it); only the refusal is waived, for these templates alone. The
+   competitors are unchanged: still that one selected result's own names. A new single-engine body is
+   NOT waived unless it is added here by name. */
+export const TEMPLATE_ENGINE_CLAIM_WAIVED: ReadonlySet<string> = new Set(['audit_followup']);
+
 /** Null when the template can carry this hook's rivals truthfully. Otherwise the refusal reason. */
 export function templateEngineConflict(templateName: string | null | undefined, hookEngine: string | null | undefined): string | null {
   if (!templateName || !hookEngine) return null;
+  if (TEMPLATE_ENGINE_CLAIM_WAIVED.has(templateName)) return null;
   const claimed = TEMPLATE_SINGLE_ENGINE_CLAIM[templateName];
   if (!claimed || claimed === hookEngine) return null;
   const said = ENGINE_WORDS[claimed] ?? claimed;

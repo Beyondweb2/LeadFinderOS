@@ -146,6 +146,9 @@ export function groupSkips(skipped: readonly BulkSkip[]): { reason: string; coun
    src/lib/rivalHook.ts) — correctly, because Google AI's competitors under "I asked chatgpt" would
    be a false statement to a stranger. Nineteen such leads were planned, confirmed and "sent", and
    every one came back refused.
+   ⚠️ UPDATE, same day: Paul approved audit_followup for EITHER engine (TEMPLATE_ENGINE_CLAIM_WAIVED),
+   so it no longer produces this refusal. The pre-check stays: it is how any server refusal is seen
+   before Send.
 
    ⛔ SO THE CONFIRM ASKS THE SERVER FIRST, ONE LEAD AT A TIME, IN DRY-RUN MODE. send-whatsapp-message
    `mode: "dry_run"` is the same code path — every guard, the same hook pick (resolveAuditReplyVars:

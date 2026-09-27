@@ -511,7 +511,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   claims; every finding is WHAT I SAW → WHAT IT MEANS → WHY IT MAY MAKE AI VISIBILITY HARDER.
 - **The send window binds the QUEUE only** (07:00–21:30 London); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
-- **The Inbox bulk confirm dry-runs every lead first** and sends only those that passed (`inboxBulkSend.ts` `applyBulkChecks`). A single-engine body (`audit_followup`, "I asked chatgpt") is refused for a Google AI hook — use `audit_followup_call`/`_fault`. See `docs/whatsapp-templates.md` (2026-09-27).
+- **The Inbox bulk confirm dry-runs every lead first** and sends only those that passed (`inboxBulkSend.ts` `applyBulkChecks`). A single-engine body is refused for a hook from the other engine UNLESS waived by name: `audit_followup` ("I asked chatgpt") is waived for either engine by Paul (`TEMPLATE_ENGINE_CLAIM_WAIVED`). See `docs/whatsapp-templates.md` (2026-09-27).
 - **`mode: "dry_run"`** on `send-whatsapp-message` builds the real payload and stops before the Graph
   POST — the same code path, refusals reported. Use it before a first real send. `test_send` costs a
   real message and is the only proof Meta accepts a template.

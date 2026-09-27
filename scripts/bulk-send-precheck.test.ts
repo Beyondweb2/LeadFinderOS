@@ -75,7 +75,7 @@ await (async () => {
     ok(v.ok && v.auditId === 'a-new' && v.hookEngine === 'gemini' && v.hookQuestion === Q[1], '1: re-audited lead → the NEWEST audit\'s best miss (Google AI, Q2), never the older one');
     ok(v.ok && JSON.stringify(v.rivals) === JSON.stringify(RIVALS['1:gemini']), '1: …with exactly that answer\'s own three competitors (tuple intact)');
     const af = await resolve([older, newer], 'audit_followup');
-    ok(!af.ok && af.reason.startsWith('hook_engine_mismatch'), '1: audit_followup ("I asked chatgpt") is STILL refused for the Google AI hook — the guard is not weakened');
+    ok(af.ok && af.hookEngine === 'gemini' && af.hookQuestion === Q[1] && JSON.stringify(af.rivals) === JSON.stringify(RIVALS['1:gemini']), '1/2: audit_followup + Google AI miss → ALLOWED (Paul, 2026-09-27), same exact tuple');
     const oldOnly = await resolve([older], 'audit_followup');
     ok(oldOnly.ok && oldOnly.hookEngine === 'chatgpt', '1: before the re-audit the same lead WAS sendable with audit_followup (its hook was ChatGPT) — a rerun changes the answer, resolved fresh at send time');
   }
@@ -98,7 +98,7 @@ await (async () => {
       gap: { question_index: 1, question: Q[1], engine: 'gemini', target_named: false, named_instead: RIVALS['1:gemini'], citations: [], named_on_engines: ['chatgpt'], answer_excerpt: 'x' } };
     const a: FakeAudit = { id: 'a', created_at: '2026-09-20T00:00:00Z', hook: v1, qrows: rows([[true, true], [true, false]]).slice(0, 2) };
     const af = await resolve([a], 'audit_followup');
-    ok(!af.ok && af.reason.startsWith('hook_engine_mismatch'), '4: old early-stop Google AI gap → audit_followup refused the same way');
+    ok(af.ok && af.hookEngine === 'gemini' && af.hookQuestion === Q[1] && JSON.stringify(af.rivals) === JSON.stringify(RIVALS['1:gemini']), '7: old early-stop audit → audit_followup uses its STORED gap (Q2, Google AI) and that answer\'s names');
     const call = await resolve([a], 'audit_followup_call');
     ok(call.ok && call.hookEngine === 'gemini', '4: …and an engine-neutral template carries it');
   }
@@ -117,6 +117,13 @@ await (async () => {
     ok(send.ok && JSON.stringify(send.rivals) === JSON.stringify(card.score.hook?.competitors.slice(0, 3)), '4b: …with the same competitors, from that one answer');
     const voice = selectVoiceNoteEvidence(card.score.results, { business: BIZ, town: 'Shrewsbury', trade: 'electricians' }, card.score.hook);
     ok(voice.ok && voice.evidence.questionIndex === 2 && voice.evidence.engine === 'gemini', '4b: and the voice note uses it too');
+  }
+  /* 5. No competitors in the selected result → refused, nothing invented. */
+  {
+    const bare = rows([[true, true], [true, false], [true, true]]).map((r, i) => i === 1 ? { ...r, result: { ...(r.result as object), gemini: { named: false, self_named: false, answer_text: 'Options: none listed.', competitors: [], citations: [] } } } : r);
+    const a: FakeAudit = { id: 'a', created_at: '2026-09-27T00:00:00Z', hook: V2, qrows: bare };
+    const v = await resolve([a], 'audit_followup');
+    ok(!v.ok && !/hook_engine_mismatch/.test(v.reason), `5: selected result has no competitors → audit_followup refused (${v.ok ? '' : v.reason.slice(0, 60)})`);
   }
   /* 6. Result did not change: resolving twice gives the same tuple. */
   {
@@ -140,6 +147,8 @@ await (async () => {
   const send = [c('a'), c('b'), c('d'), c('e')];
   const mismatch = "hook_engine_mismatch: audit_followup's approved wording says it asked ChatGPT, but this lead's hook search was measured on Google AI";
   const r = applyBulkChecks(send, { a: { ok: true }, b: { ok: false, error: 'audit_reply_unavailable', reason: mismatch }, d: { ok: false, error: 'pitch_already_sent' } });
+  // 8. What the server's dry run now answers for a Google AI lead on audit_followup (the resolver passes it).
+  ok(applyBulkChecks([c('g')], { g: { ok: true } }).ready.length === 1, '8: a Google AI lead whose dry run passes is "Checked, will be sent" for audit_followup');
   ok(r.ready.map((x) => x.key).join() === 'a', 'only a lead whose dry run PASSED is ready to send');
   ok(r.pending.map((x) => x.key).join() === 'e', 'a lead with no check yet is pending — never sent (fail closed)');
   ok(r.refused.length === 2 && /missed search is on Google AI/.test(r.refused.find((x) => x.key === 'b')!.reason) && /Audit follow-up \+ call/.test(r.refused.find((x) => x.key === 'b')!.reason), 'hook_engine_mismatch is listed before sending, with the template to use instead');
@@ -164,6 +173,9 @@ await (async () => {
   ok(/onClick=\{openBulkConfirm\}/.test(INBOX), 'opening the confirm starts the checks');
   const HOOK = read('src/hooks/useInbox.ts');
   ok(/mode: 'dry_run'/.test(HOOK) && /data\?\.mode !== 'dry_run'/.test(HOOK), 'the preview refuses to count an old deploy (which would SEND) as a check');
+  const SWM = read('supabase/functions/send-whatsapp-message/index.ts');
+  const auditBranch = SWM.slice(SWM.indexOf('} else if (needsAudit) {'), SWM.indexOf('let a = await resolveAuditReplyVars(service, resolvedLeadId, { templateName });'));
+  ok(/if \(!allowResend && await pitchEverSent\(service, resolvedLeadId, templateName\)\) \{\s*return json\(\{ ok: false, error: "pitch_already_sent" \}, 200\);/.test(auditBranch), '6: a duplicate audit_followup is still refused (pitch_already_sent) before the audit is even read');
   const RES = read('supabase/functions/_shared/audit-reply.ts');
   ok(/\.eq\("lead_id", leadId\)\s*\n\s*\.order\("created_at", \{ ascending: false \}\)/.test(RES), 'the server always resolves the lead\'s NEWEST audit at send time — nothing prepared can go stale');
 }
