@@ -128,6 +128,51 @@ guard logged nothing. One fault found and fixed: the new loading dialog lacked a
 - Team (`admin-users team_list`) reads each member one after another; page-generator does ~10
   sequential reads and two sign-in checks per call; coverage `pairs` is a fully sequential chain.
 
+## 7b. Part 2 (same day, Paul approved items 1, 2, 4, 5)
+
+**AI Audit SEO grade column** (migration `20260927130000_ai_audit_runs_seo_grade.sql`). Step 1 (plain
+nullable `results_seo_grade` + one line in the existing `fill_ai_audit_run_parts` trigger, lock_timeout
+3 s) read back: column present, function fills it, no execute grant to anon/authenticated. Step 2 the
+backfill: a first batch that SEARCHED for rows with a grade took 8 s (it opened every row it passed)
+and was stopped; redone as a primary-key walk, 100 rows a call, SKIP LOCKED — 21 calls, each ~2 s
+(mostly API overhead), 609 grades written. The parts trigger is UPDATE OF results, so the backfill fired
+nothing. Step 3: all 2,042 runs checked in id batches — 609 graded, **0 differences**. AiAudit.tsx then
+switched to `seo_grade:results_seo_grade` (runs paged in parallel). **First load 7.8 s → 2.7 s.**
+
+**Stuck-cleaning sweep every 2 minutes** (`_shared/cleaning-sweep.ts`). What it is: the audit-queue
+tick's LAST housekeeping step — re-invokes extract-competitors for runs ALREADY released as `complete`
+whose cleaning stamp is incomplete and that have no competitor names (1 of 158 runs matched). NOT gated:
+starting/polling/finalising questions, the finaliser's own hold-and-retry (which is what decides a
+run's release, so completion and customer-visible results are unaffected), SEO, baselines, remeasures.
+Effect: such a retry can start up to 2 minutes later (each run is spaced 4 minutes between retries
+anyway). Gate: one tick per 2 minutes, the one landing 15–45 s into the cycle (cron fires at ~:04.5/
+~:34.5). Its statement (`pg_stat_statements` queryid -5565264217997628283): **before 2.0 runs/min,
+1.15% of one core (6.0 min); after 0.49/min, 0.47% (12.2 min)** — each run is slower cold (575 vs 345 ms).
+Deploying it also shipped two Paul-approved main commits (rivalHook, hookScore) that had not reached
+this function; checked — neither changes anything this function does.
+
+**Coverage** (`pairs`): one sign-in check (resolveActor; the handler's own getUser was a duplicate), the
+four source reads side by side, the completed-run chunks together, the ~5,300-lead read in waves, and
+an id tiebreaker on every paged read (they had none). Timing header `x-coverage-timing` found the real
+cost: the lead read, six sequential pages, ~3 s. **pairs 4.6–4.8 s → 2.3–2.6 s**, output identical to
+before (lead pairs compared as a multiset); towns identical except 35 positions among 67 towns TIED on
+population (now in a fixed order). Remaining: sign-in 0.5–0.9 s inside the function, leads ~1.2–1.5 s.
+
+**Page Generator**: one sign-in check (requireAdmin), the audit-actions preamble's two reads together,
+measuredSetForLead's reads together, the plan's three inputs together, the clients list read only by
+`clients`. Outputs identical. clients 1.6–1.7 → 1.1 s; qa_clients 1.3–1.8 → 0.8–1.5 s; plan 2.8 → 2.7–3.1 s
+(unchanged — its remaining time is sign-in and the queue-question read).
+
+**Team** (`admin-users team_list`): every member at once. Output identical. 1.3–1.8 s → 1.9 s — no
+measurable change at 2 members; it stops growing per person.
+
+**Signed-in production QA** (one-time magic link as the data account): Dashboard, Outreach (5,486 leads,
+no `select=*`, no history, no Apify read), RG's lead dialog (one full-row read by id; baseline 11 Aug,
+re-measure 6 Oct, £19.99), the paid filter (the three paying clients), Inbox, AI Audit (new column),
+Coverage, Page Generator (RG's plan), Page Plan, Team — no console errors, no failed request, nothing
+sent or changed. ⚠️ The app's **Sign out is GLOBAL** (`supabase.auth.signOut()` defaults to
+scope global): signing the QA browser out ended EVERY session on the data account, Paul's included.
+
 ## 8. Still slow / open
 
 - The Outreach leads are primary data: the table still waits for all ~5,300. Showing page 0 (the
