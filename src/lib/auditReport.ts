@@ -33,7 +33,7 @@ import { nameIsJudgeable } from "../../supabase/functions/_shared/derivable.ts";
 import { classifyKnownEntity } from './knownEntities.ts';
 import { cellNamed, hasModelNamedEvidence } from './namedSignal.ts';
 import { buildHookReportSummary } from './hookAudit.ts';
-import { hookEngineLabel } from './hookScore.ts';
+import { hookEngineLabel, isHookStateV2 } from './hookScore.ts';
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from './competitorCleaning.ts';
 import { sourceMix } from './sourceType.ts';
 import type { AiAuditReportData, AiAuditSeo, SeoFinding } from './aiAuditReportHtml.ts';
@@ -1204,17 +1204,9 @@ export function buildReportData(
     return { question, namedYou, namedCount, answers, rivals, citations, perEngine, winnability };
   });
 
-  return {
-    businessName: ctx.businessName || 'This business',
-    businessType: ctx.businessType || '',
-    named,
-    total,
-    /* ADAPTIVE HOOK SUMMARY (2026-09-20). Present only for a hook run that has stopped on a gap or
-       on its question ceiling (src/lib/hookAudit.ts); null on every baseline, measurement, wizard
-       and free-check run, and on a hook that failed at the provider — those render exactly as
-       before. Rival names go through the same cleanliness gate as the rest of this report. */
-    hook: buildHookReportSummary({
-      state: (run?.results as { hook?: unknown } | null | undefined)?.hook,
+  const hookStateOnRun = (run?.results as { hook?: unknown } | null | undefined)?.hook;
+  const hookSummary = buildHookReportSummary({
+      state: hookStateOnRun,
       rows: queueRows,
       engineOrder: SCORED_ENGINES,
       // Hook surfaces say "Google AI", never "Gemini" (Paul, 2026-09-26); the rest of the report keeps ENGINE_LABELS.
@@ -1224,7 +1216,23 @@ export function buildReportData(
       namedCtx,
       town: ctx.locationText || null,
       trade: ctx.businessType || null,
-    }),
+    });
+
+  return {
+    businessName: ctx.businessName || 'This business',
+    businessType: ctx.businessType || '',
+    named,
+    total,
+    /* ADAPTIVE HOOK SUMMARY (2026-09-20). Present only for a hook run that has stopped on a gap or
+       on its question ceiling (src/lib/hookAudit.ts); null on every baseline, measurement, wizard
+       and free-check run, and on a hook that failed at the provider — those render exactly as
+       before. Rival names go through the same cleanliness gate as the rest of this report. */
+    hook: hookSummary,
+    /* ⛔ A SIX-RESULT HOOK WITHOUT SIX VALID RESULTS IS NOT A REPORT (Paul, 2026-09-26). It used to
+       fall back to the ordinary rendering, which printed a count over whatever answers existed.
+       The renderer now shows a plain "incomplete" notice with no figure. (A run still in flight is
+       caught earlier by `measuring`.) */
+    hookIncomplete: isHookStateV2(hookStateOnRun) && !hookSummary,
     questionBreakdown,
     questionsAsked: distinctQuestions, // DISTINCT questions (each asked runsCount times), not run-rows
     measurementRuns: runsCount,        // how many times each question was asked (per engine)

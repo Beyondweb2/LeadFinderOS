@@ -1,4 +1,5 @@
 import { hookReportCopy, type HookReportSummary } from './hookAudit.ts';
+import { articleTrade } from './templateVars.ts';
 // Client-facing AI Visibility Audit report — shared data shape + a standalone,
 // self-contained, PRINT-READY one-page HTML document for download (Findable-branded,
 // inline styles, no dependencies). Deliberately client-friendly: no engine keys, no
@@ -140,6 +141,13 @@ export interface AiAuditReportData {
    *  a one-to-three-question snapshot must never read as a statistic. Everything else renders as
    *  before. Built by src/lib/hookAudit.ts; the copy is hookReportCopy, tested directly. */
   hook?: HookReportSummary | null;
+  /** A six-result hook that ended without six valid results (2026-09-26). The renderer shows a plain
+   *  "incomplete" notice with no figure instead of the ordinary count-over-whatever-answered hero. */
+  hookIncomplete?: boolean;
+  /** A current-version crawl of the prospect's own site COMPLETED (run-level or fresh lead-level).
+   *  Only the quick report reads it: when true and nothing was found, it may say so truthfully
+   *  rather than inventing a finding. Absent = unknown, and the report says nothing. */
+  siteChecked?: boolean;
   /* ⛔ HOW THE WEBSITE SLOT IS PRESENTED. 'graded' (the DEFAULT) is the original: grade circles,
      /100 scores and a lead sentence naming the grade. 'issues' drops all of that and prints the
      findings alone under a plain heading.
@@ -860,8 +868,9 @@ function trimQuote(text: string, max: number): string {
  *      been extracted). The red line already states the one fact that IS true.
  *  Names are deduplicated case-insensitively (a single answer can repeat one) and capped to 5
  *  defensively, on top of the 5-cap already applied upstream. */
-function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string, dateLabel?: string): string {
+function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string, dateLabel?: string, opts: { quote?: boolean } = {}): string {
   if (!g) return "";
+  const withQuote = opts.quote !== false;
   const seen = new Set<string>();
   const competitors = g.namedInstead.filter((n) => {
     const key = n.trim().toLowerCase();
@@ -888,7 +897,9 @@ function renderHookEvidenceBox(g: HookReportSummary['gap'], businessName: string
   const excerpt = (isJunkAnswer(rawExcerpt) || isMapCardAnswer(rawExcerpt))
     ? ""
     : trimQuote(cleanAnswerText(rawExcerpt), HOOK_QUOTE_CHARS);
-  const quoteBlock = excerpt
+  /* The quick report (six-result hook) passes quote:false: the question, the engine and the names are
+     the evidence, and the model's prose is not (Paul, 2026-09-26). The answer stays stored. */
+  const quoteBlock = excerpt && withQuote
     ? `
           <p class="cc-label">${esc(g.engineLabel)} replied</p>
           <blockquote class="ev-quote">${esc(excerpt)}</blockquote>`
@@ -949,6 +960,75 @@ export function renderHookSection(h: HookReportSummary, businessName: string, da
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE QUICK AI VISIBILITY CHECK — the six-result hook's report (Paul, 2026-09-26).
+
+   Modelled on the older Findable AI Visibility Report, which Paul prefers: a large metric, a short
+   verdict, ONE featured AI search with the businesses it named and a "you weren't named" strip, and a
+   table of every question tested. Adapted to 3 questions × ChatGPT + Google AI = 6 answers:
+     1. the PERCENTAGE is the big number, the raw count and the method sit under it;
+     2. the verdict is hookReportCopy's (three bands on the complete score, per-engine counts under it);
+     3. the featured search is the hook pick (Google AI miss first, else ChatGPT), its competitors from
+        that exact cell, and NO model prose: the question, engine and names are the evidence;
+     4. "The questions we asked": all three questions, a ChatGPT and a Google AI mark on each row, so
+        the table itself shows 3 × 2 = 6. The featured question appears in it too, on purpose.
+   ⛔ ONLY FOR A COMPLETE SIX-RESULT HOOK (`h.shape === 'six'` with a score). Version-1 hooks keep
+   renderHookSection exactly as before, and an incomplete v2 never reaches here (hookIncomplete).
+   ⛔ NO "Gemini" ON THIS SURFACE. Labels arrive on the summary as ChatGPT / Google AI.
+   ⛔ 6/6 MANUFACTURES NOTHING. No featured block, the table shows every tick.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export function renderQuickCheckTop(h: HookReportSummary, businessName: string, dateLabel?: string): string {
+  const s = h.score;
+  if (h.shape !== 'six' || !s) return renderHookSection(h, businessName, dateLabel);
+  const c = hookReportCopy(h, businessName);
+  const { band } = verdictBand(s.named, s.total);
+  const engineCount = s.perEngine.length;
+  const labels = s.perEngine.map((e) => e.label);
+  const mark = (v: boolean | null) => v === null
+    ? `<span class="qm qm-na" title="no answer">&ndash;</span>`
+    : v ? `<span class="qm qm-yes" title="named">&check;</span>`
+        : `<span class="qm qm-no" title="not named">&times;</span>`;
+  const rows = h.tested.map((q) => `
+        <div class="qrow"><span class="qrow-q">${esc(q.question)}</span>${s.perEngine.map((e) => {
+          const cell = q.perEngine.find((pe) => pe.engine === e.engine);
+          return `<span class="qrow-e">${mark(cell ? cell.named : null)}</span>`;
+        }).join("")}</div>`).join("");
+  return `
+    <!-- QUICK CHECK: percentage first -->
+    <div class="hero qc-hero">
+      <div class="hero-num">
+        <span class="num qc-num ${band}">${s.percent}<span class="qc-pct">%</span></span>
+        <div class="num-cap">
+          <div class="l1">of AI answers named ${esc(businessName)}</div>
+          <div class="l2">${s.named} of ${s.total} ${plural(s.total, "answer")}</div>
+          <div class="l3">${s.questions} ${plural(s.questions, "question")} &times; ${engineCount} AI ${plural(engineCount, "engine")}</div>
+        </div>
+      </div>
+      <div class="hero-rule"></div>
+      <div class="hero-verdict">
+        <div class="vk">The verdict</div>
+        <div class="punch">${esc(c.headline)}</div>
+        <div class="punch-sub">${esc(c.lede)}</div>
+      </div>
+    </div>
+${h.gap ? renderHookEvidenceBox(h.gap, businessName, dateLabel, { quote: false }) : ""}
+    <section class="qlist qc-table">
+      <div class="sec-eyebrow">The questions we asked</div>
+      <div class="qrow qrow-head"><span class="qrow-q"></span>${labels.map((l) => `<span class="qrow-e">${esc(l)}</span>`).join("")}</div>${rows}
+      <p class="qc-caveat">${esc(c.caveat)}</p>
+    </section>`;
+}
+
+/** The notice a six-result hook shows when it ended without six valid answers. No figure at all. */
+function renderQuickCheckIncomplete(): string {
+  return `
+    <section class="measuring">
+      <div class="sec-eyebrow">Quick AI Visibility Check</div>
+      <div class="sec-title">This check didn&rsquo;t finish.</div>
+      <p>An AI engine didn&rsquo;t return a usable answer to every question, so there is no score to show. A number built on missing answers would be wrong, so we don&rsquo;t show one.</p>
+    </section>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
    ONE PLAIN-ENGLISH LINE UNDER THE ENGINE CARDS (paid summary only).
 
    ⛔ IT IS NOT A SCORE, A GRADE OR A RANKING, AND IT MUST NOT BECOME ONE. It says which engine names
@@ -996,6 +1076,16 @@ export function engineVisibilitySentence(
 
 export function renderReportHtml(d: AiAuditReportData): string {
   const type = d.businessType.trim() || "business like yours";
+  /* THE QUICK AI VISIBILITY CHECK (2026-09-26): a complete six-result hook gets the short,
+     percentage-first layout (renderQuickCheckTop); an incomplete one gets a notice with no figure.
+     Both drop the long "the fix" section so the page stays one to two pages. Every other report,
+     version-1 hooks included, renders exactly as before. */
+  const quick = d.hook?.shape === 'six' && !!d.hook.score;
+  const quickIncomplete = !quick && d.hookIncomplete === true;
+  /* "an electrician", not "an Electricians": businessType is stored plural on most audits. The quick
+     report uses the WhatsApp templates' own singulariser; every other report is unchanged. */
+  const quickTradeCheck = quick || quickIncomplete ? articleTrade(d.businessType) : null;
+  const quickTrade = quickTradeCheck && quickTradeCheck.ok ? quickTradeCheck.value.toLowerCase() : null;
   /* hasRivals gates every clause that mentions competitors: with no rival names measured, saying
      they "get the rest" is a claim about data we do not have. */
   const v = heroVerdict(d.named, d.total, d.questionsAsked ?? 0);
@@ -1158,6 +1248,45 @@ export function renderReportHtml(d: AiAuditReportData): string {
     /* ⛔ SILENCE, NOT REASSURANCE (2026-09-21, Paul — reverting the previous session's "we also
        checked your website" line). A clean crawl or one that never completed both render nothing:
        the earlier reassurance text read as a claim worth making on its own, when it isn't one. */
+    : "";
+
+  /* ── THE QUICK CHECK'S WEBSITE SECTION (2026-09-26) ────────────────────────────────────────────
+     The older report's "Website issues we can fix" card, capped at QUICK_MAX_WEBSITE_ISSUES so a
+     prospect reads the strongest few, not a crawl dump. Deep-crawl evidence first (it carries proof),
+     then the crawl-check faults, each as ISSUE + one plain sentence. No raw bytes on this page.
+     ⛔ NOTHING INVENTED. No findings and a crawl that COMPLETED (siteChecked) → a truthful line that
+     nothing technical was found. No completed crawl → nothing. No website → the build-one slot. */
+  const QUICK_MAX_WEBSITE_ISSUES = 5;
+  const quickIssues = [
+    ...(d.siteEvidence ?? []).flatMap((e) => {
+      const copy = EVIDENCE_REPORT_COPY[e.kind];
+      return copy ? [{ title: copy.title, detail: copy.why, minor: false }] : [];
+    }),
+    ...(d.crawlFaults ?? []).map((f) => ({ title: f.title, detail: f.detail, minor: !!f.minor })),
+  ].filter((x, i, all) => all.findIndex((y) => y.title.trim().toLowerCase() === x.title.trim().toLowerCase()) === i)
+    .slice(0, QUICK_MAX_WEBSITE_ISSUES);
+  const quickWebsiteSection = quickIssues.length ? `
+    <section class="seo qc-web">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">Website issues we can fix</div>
+      <div class="seo-body">
+        <ul class="seo-findings">${quickIssues.map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${f.minor ? "var(--amber)" : "var(--red)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("")}
+        </ul>
+      </div>
+    </section>`
+    : d.hasWebsite === false ? noWebsiteSection()
+    : d.siteChecked === true ? `
+    <section class="seo qc-web">
+      <div class="sec-eyebrow">Your website</div>
+      <div class="sec-title">No technical faults found</div>
+      <div class="seo-body">
+        <p class="qc-web-p">We checked your website and didn&rsquo;t find a technical fault stopping AI from reading it. So the work here isn&rsquo;t fixing faults: it&rsquo;s making sure your site clearly sets out the services you offer, the areas you cover and who you are.</p>
+      </div>
+    </section>`
     : "";
 
   /* ── ONE REAL AI ANSWER, RECREATED (2026-09-16, Paul) ─────────────────────────────────────────
@@ -1666,6 +1795,18 @@ ${REPORT_CHROME_CSS_CORE}
 
   /* GUT-PUNCH &mdash; a written summary of the worst answer (never the raw AI text) */
   .gutbox{ margin:0 28px 16px; padding:14px 18px; background:var(--red-tint); border-left:6px solid var(--red); border-radius:0 12px 12px 0; }
+  /* Quick AI Visibility Check (six-result hook): the percentage is the hero number. The % sign is
+     smaller so "100%" still sits beside its caption on a phone-width column. */
+  .qc-num{ font-size:92px; white-space:nowrap; }
+  .qc-pct{ font-size:.5em; font-weight:800; letter-spacing:0; margin-left:2px; vertical-align:top; position:relative; top:.12em; }
+  .qc-hero .num-cap{ max-width:22ch; }
+  .qc-hero .num-cap .l1{ overflow-wrap:anywhere; }
+  .qc-table .qrow-q{ overflow-wrap:anywhere; }
+  .qc-caveat{ font-size:12.5px; color:var(--muted); font-style:italic; margin:12px 0 0; }
+  .qc-web-p{ margin:0; max-width:70ch; font-size:14px; line-height:1.55; color:var(--muted); }
+  .qc-web .find-body{ overflow-wrap:anywhere; }
+  @media(max-width:560px){ .qc-num{ font-size:68px; } }
+  @media print{ .qc-hero,.qc-table,.qc-web,.evcard{ break-inside:avoid; page-break-inside:avoid; } }
   /* Adaptive hook hero — the missed search IS the result, so it gets the size the number used to have. */
   .hook{ padding:14px 28px 20px; }
   .hook-eyebrow{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:8px; }
@@ -2079,9 +2220,9 @@ ${REPORT_CHROME_CSS_PRINT}
 </head>
 <body>
   <div class="sheet">
-    ${renderWaveBand(`AI Visibility Report &middot; ${esc(d.generatedAtLabel)}`)}
+    ${renderWaveBand(`${quick || quickIncomplete ? "Quick AI Visibility Check" : "AI Visibility Report"} &middot; ${esc(d.generatedAtLabel)}`)}
 
-    <div class="explainer">We asked AI the kinds of questions customers ask when they&rsquo;re looking for ${article(type)} <b>${esc(type)}</b>, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
+    <div class="explainer">We asked ${quick || quickIncomplete ? "ChatGPT and Google AI" : "AI"} the kinds of questions customers ask when they&rsquo;re looking for ${quickTrade ? `<b>${esc(quickTrade)}</b>` : `${article(type)} <b>${esc(type)}</b>`}, and checked how often <b>${esc(d.businessName)}</b> came up.</div>
 ${d.measuring ? `
     <!-- STILL MEASURING: every figure below this point is withheld. See AiAuditReportData.measuring. -->
     <section class="measuring">
@@ -2091,6 +2232,9 @@ ${d.measuring ? `
       <p class="measuring-progress"><b>${d.measuring.runsDone} of ${d.measuring.runsTarget}</b> ${plural(d.measuring.runsTarget, "round")} of questions ${d.measuring.runsDone === 1 ? "is" : "are"} complete. Each round takes a few minutes. This page updates itself &mdash; check back shortly.</p>
     </section>` : d.nameNotJudgeable ? `${nameCheckSection}
 ${seoSlot}
+` : quick && d.hook ? `${renderQuickCheckTop(d.hook, d.businessName, d.generatedAtLabel)}
+${quickWebsiteSection}
+` : quickIncomplete ? `${renderQuickCheckIncomplete()}
 ` : d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}
 ${hookCrawlSection}
 ` : d.paidSummary ? `${paidSummarySection}
@@ -2132,7 +2276,7 @@ ${seoSlot}
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
-${d.hidePitch || d.measuring ? "" : `
+${d.hidePitch || d.measuring || quick || quickIncomplete ? "" : `
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
       <!-- The title names the ARGUMENT this section makes, not an inventory. It read "Here's what we
@@ -2232,7 +2376,7 @@ ${d.hidePitch || d.measuring ? "" : `
          number here goes stale the moment the cut changes and nobody is standing next to it to
          notice. The length IS claimed on findable.live ("under a minute"), which is true at 49s and
          sits directly above the player, where a re-cut cannot be made without seeing it. -->
-${d.hidePitch ? "" : `
+${d.hidePitch || quickIncomplete ? "" : `
     <!-- 🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
          was here: "Ready to get started?", three paragraphs, Email us / WhatsApp us / Who we are,
          and directly below it the whole founder-offer block - "first 10 at £49.99", "normally £99",
@@ -2271,7 +2415,7 @@ ${d.hidePitch ? "" : `
       <div class="foot-grid">
         <div><span class="foot-k">Prepared for</span><span class="foot-v">${esc(d.businessName)}</span></div>
         <div><span class="foot-k">Report date</span><span class="foot-v">${esc(d.generatedAtLabel)}</span></div>
-        <div><span class="foot-k">Measured on</span><span class="foot-v">${d.hook ? 'ChatGPT &amp; Google AI' : 'ChatGPT &amp; Gemini'}</span></div>
+        <div><span class="foot-k">Measured on</span><span class="foot-v">${d.hook || quickIncomplete ? 'ChatGPT &amp; Google AI' : 'ChatGPT &amp; Gemini'}</span></div>
       </div>
       <div class="foot-note">A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after.</div>
     </footer>

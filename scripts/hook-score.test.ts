@@ -191,10 +191,11 @@ ok(HOOK_ALL_NAMED_REASON === 'Hook audit: named in 6/6 ChatGPT + Google AI resul
   ok(sum?.gap?.question === Q[1] && sum.gap.engine === 'gemini' && JSON.stringify(sum.gap.namedInstead) === JSON.stringify(['gemini-q1-A', 'gemini-q1-B']), 'report: the gap is the hook pick, with that cell\'s own rivals');
   ok(JSON.stringify(sum?.gap?.namedOnEngineLabels) === JSON.stringify(['ChatGPT']), 'report: the truthful qualifier (ChatGPT named them on the same search)');
   const copy = hookReportCopy(sum!, BIZ);
-  ok(copy.headline === "Gemini didn't name you for this search." && !/\bAI isn't\b/.test(copy.headline), 'report: the headline is engine-specific, never "AI isn\'t recommending you"');
+  // 2026-09-26: the quick report's verdict covers the whole score (5/6 here); the featured card names the engine.
+  ok(copy.headline === "You're being named, but not consistently." && !/AI isn't/.test(copy.headline) && sum?.score?.named === 5 && sum.score.total === 6 && sum.score.percent === 83, 'report: the verdict reads the complete score (5/6 = 83%), never "AI is not recommending you"');
   ok(buildHookReportSummary({ ...base, state, rows: rows([[true, true], [null, false], [true, true]]) }) === null, 'report: an incomplete six-result hook gets no hook summary (ordinary rendering)');
   const all = buildHookReportSummary({ ...base, state, rows: rows([[true, true], [true, true], [true, true]]) });
-  ok(all?.gap === null && all.stopReason === 'max_questions_reached' && /all 6 results/.test(hookReportCopy(all, BIZ).lede), 'report: 6/6 says so, with its own count');
+  ok(all?.gap === null && all.stopReason === 'max_questions_reached' && /in all 6 answers/.test(hookReportCopy(all, BIZ).lede) && all.score?.percent === 100, 'report: 6/6 says so, with its own count');
 }
 
 /* ── Deep crawl gate (version 2) ─────────────────────────────────────────────────────────────── */

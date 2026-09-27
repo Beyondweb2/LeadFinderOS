@@ -345,7 +345,7 @@ ok(!baseline.includes('hookAudit') && !baseline.includes('planHookQuestions'), '
 ok(createAudit.includes('isMeasurement ? MEASUREMENT_AUDIT_PURPOSE') && /isHookAudit: boolean = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE/.test(createAudit), 'J: a measurement (or any non-ordinary purpose) can never be adaptive, marker or not');
 
 // Report: the hook summary is attached by the builder and rendered by its own section.
-ok(report.includes('hook: buildHookReportSummary({') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
+ok(report.includes('const hookSummary = buildHookReportSummary({') && report.includes('hook: hookSummary,') && report.includes('engineOrder: SCORED_ENGINES'), 'the report builder attaches the hook summary from the run state, scored engines only');
 ok(report.includes('namedInstead: (competitors) => rivalsSuppressed ? [] :'), 'rival names on the hook card obey the same cleanliness gate as the rest of the report');
 ok(html.includes('export function renderHookSection(') && html.includes('d.hook ? `${renderHookSection(d.hook, d.businessName, d.generatedAtLabel)}'), 'the renderer branches narrowly on d.hook — the counted hero is replaced, nothing else is forked');
 ok(html.includes('hookReportCopy(h, businessName)'), 'the renderer uses the tested copy verbatim');

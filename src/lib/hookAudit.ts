@@ -39,7 +39,7 @@
 
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { OUTREACH_HOOK_QUESTIONS } from './auditQuestionCounts.ts';
-import { HOOK_SCORE_QUESTIONS, hasAnswer, hookBreadthScore, hookMissSentence, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
+import { HOOK_SCORE_QUESTIONS, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
 
 /* One copy of each: the v2 score (hookScore.ts) owns them, this v1 module re-exports them. */
 export { hasAnswer, hookBreadthScore };
@@ -303,6 +303,16 @@ export interface HookReportSummary {
      *  carried it. Empty string (never fabricated) when the stored gap predates this field. */
     answerExcerpt: string;
   } | null;
+  /** VERSION 2 ONLY: the complete score, straight from scoreHookRun (the same numbers the Inbox card,
+   *  the 6/6 rule and the send guard read). The quick report's percentage is `percent`, and its raw
+   *  count is `named` of `total`. Never set on an incomplete score, so it cannot print a partial one. */
+  score?: {
+    named: number;
+    total: number;
+    percent: number;
+    questions: number;
+    perEngine: Array<{ engine: string; label: string; named: number; total: number }>;
+  };
   /** Every tested question, in order, with what each answering engine did. `named: null` = no answer. */
   tested: Array<{
     question: string;
@@ -434,6 +444,16 @@ function buildHookReportSummaryV2(
     maxQuestions: HOOK_SCORE_QUESTIONS,
     stopReason: pick ? 'visibility_gap_found' : 'max_questions_reached',
     gap,
+    score: {
+      named: score.named,
+      total: score.expected,
+      percent: score.percent ?? 0,
+      questions: state.planned.length,
+      perEngine: input.engineOrder
+        .map((e) => score.perEngine.find((t) => t.engine === e))
+        .filter((t): t is NonNullable<typeof t> => !!t)
+        .map((t) => ({ engine: t.engine, label: input.engineLabel(t.engine), named: t.named, total: t.expected })),
+    },
     tested,
   };
 }
@@ -458,17 +478,43 @@ export function hookReportCopy(summary: HookReportSummary, businessName: string)
   const n = summary.questionsTested;
   /* VERSION 2 (2026-09-25): engine-specific, always. The six-result hook knows exactly which engine
      missed, and a Gemini miss beside a ChatGPT naming must never read as "AI doesn't recommend you". */
+  /* 🔴 REDESIGNED 2026-09-26 (Paul): the quick report now leads with the PERCENTAGE, like the older
+     Findable report led with its count, so the verdict is about the whole check, not one search.
+     Three verdicts, keyed on the complete score only. The sub-line states the per-engine counts, which
+     the reader can check against the table below it. No sales fluff, and never a claim that three
+     questions are their full AI visibility (the caveat says so). */
   if (summary.shape === 'six') {
-    if (!summary.gap) {
-      const results = summary.tested.reduce((t, q) => t + q.perEngine.length, 0);
+    const s = summary.score;
+    const named = s?.named ?? summary.tested.reduce((t, q) => t + q.perEngine.filter((e) => e.named === true).length, 0);
+    const total = s?.total ?? summary.tested.reduce((t, q) => t + q.perEngine.length, 0);
+    const engines = s?.perEngine ?? [];
+    const quickCaveat = `This is a quick check of ${n === 1 ? 'one question' : `${n} questions`}, not your full AI visibility measurement.`;
+    if (total > 0 && named === 0) {
       return {
         eyebrow,
-        headline: 'Strong initial AI visibility',
-        lede: `${businessName} was named in all ${results} results tested (${n} ${n === 1 ? 'search' : 'searches'}, each asked on ${summary.tested[0]?.perEngine.map((e) => e.label).join(' and ') || 'each engine'}). This is still only a quick snapshot rather than a full visibility baseline.`,
-        caveat,
+        headline: "You're not being named in these AI searches yet.",
+        lede: engines.length === 2
+          ? `Neither ${engines[0].label} nor ${engines[1].label} named ${businessName} in any of the ${total} answers.`
+          : `${businessName} wasn't named in any of the ${total} answers.`,
+        caveat: quickCaveat,
       };
     }
-    return { eyebrow, headline: hookMissSentence(summary.gap.engineLabel), lede: '', caveat };
+    if (total > 0 && named === total) {
+      return {
+        eyebrow,
+        headline: "You're being named consistently in this quick check.",
+        lede: `${engines.length ? engines.map((e) => e.label).join(' and ') : 'Every engine'} named ${businessName} in all ${total} answers.`,
+        caveat: quickCaveat,
+      };
+    }
+    return {
+      eyebrow,
+      headline: "You're being named, but not consistently.",
+      lede: engines.length
+        ? `${engines.map((e) => `${e.label} named you in ${e.named} of ${e.total}`).join(', and ')} answers.`
+        : `${businessName} was named in ${named} of ${total} answers.`,
+      caveat: quickCaveat,
+    };
   }
   if (!summary.gap) {
     return {

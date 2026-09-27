@@ -193,11 +193,12 @@ await (async () => {
     const text = html.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
     const label = g.every(Boolean) ? '6/6 hook report' : 'gap hook report';
     ok(!/gemini/i.test(text) && /Google AI/.test(text), `E: the ${label} says Google AI and never Gemini`);
-    if (d?.hook?.gap) ok(hookReportCopy(d.hook, BIZ).headline === "Google AI didn't name you for this search.", 'E: the prospect headline is "Google AI didn\'t name you for this search."');
+    // Redesigned 2026-09-26: the quick report's verdict covers the whole score; the featured miss names its engine.
+    if (d?.hook?.gap) ok(/^You're (not being named|being named)/.test(hookReportCopy(d.hook, BIZ).headline) && /Asked Google AI/.test(text), 'E: the verdict covers the whole check and the featured miss says "Asked Google AI"');
   }
   const root = resolve(import.meta.dirname, '..');
   const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  const card = strip(readFileSync(resolve(root, 'src/components/HookVisibilityCard.tsx'), 'utf8'));
+  const card = strip(readFileSync(resolve(root, 'src/components/HookVisibilityCard.tsx'), 'utf8') + readFileSync(resolve(root, 'src/components/HookVisibilityView.tsx'), 'utf8'));
   ok(!/Gemini/.test(card), 'E: the Inbox AI visibility card never says Gemini');
   const inbox = readFileSync(resolve(root, 'src/pages/Inbox.tsx'), 'utf8');
   ok(inbox.includes('Google AI {geminiNamed}/{geminiAnswers}') && !/>\s*Gemini \{geminiNamed\}/.test(inbox), 'E: the Inbox list pill reads "Google AI n/m"');
