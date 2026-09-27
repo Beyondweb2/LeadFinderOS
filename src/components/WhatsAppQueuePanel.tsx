@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getQueueStatus, rememberQueueStatus } from '@/lib/queueStatus';
 import { MessageSquare, Loader2, Play, Pause, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -126,20 +128,22 @@ export function WhatsAppQueuePanel({
     [leads],
   );
 
-  const refresh = useCallback(async () => {
+  const qc = useQueryClient();
+  /* The shared status read (src/lib/queueStatus.ts): on open it joins/reuses a recent read; the
+     Refresh button and the post-tick refresh pass fresh=true and always ask the server. */
+  const refresh = useCallback(async (fresh = false) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'status' } });
-      if (error) throw error;
-      if (data?.ok) setStatus(data as QueueStatus);
+      const data = await getQueueStatus(qc, fresh);
+      if (data?.ok) setStatus(data as unknown as QueueStatus);
     } catch {
       /* non-admin / unavailable → leave null (panel hides) */
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [qc]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const runTick = async () => {
     setTicking(true);
@@ -154,7 +158,7 @@ export function WhatsAppQueuePanel({
       } else {
         toast({ title: 'No send this tick', description: `Skipped: ${data?.skipped ?? 'unknown'}` });
       }
-      await refresh();
+      await refresh(true);
     } catch (e) {
       toast({ title: "Couldn't run the tick", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
     } finally {
@@ -173,6 +177,7 @@ export function WhatsAppQueuePanel({
       });
       if (error) throw error;
       if (data?.ok) setStatus(data as QueueStatus);
+      rememberQueueStatus(qc, data);
       toast({ title: nextPaused ? 'Queue paused' : 'Queue resumed', description: nextPaused ? 'No WhatsApp messages will send until you resume.' : 'Sending continues on the next tick.' });
     } catch (e) {
       toast({ title: "Couldn't change pause state", description: (e as Error)?.message ?? 'Failed', variant: 'destructive' });
@@ -219,7 +224,7 @@ export function WhatsAppQueuePanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={refresh} disabled={loading}>
+          <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => void refresh(true)} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
           <Button

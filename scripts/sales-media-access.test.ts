@@ -2,7 +2,7 @@
    SALES CAN OPEN THE MEDIA OF THE LEADS THEY WORK — AND NOTHING ELSE (2026-09-27).
 
    ⛔ The boundary is the storage policy "whatsapp media read assigned sales" (migration
-   20260927110000). Its behaviour against real rows — own image/voice/document open; Paul's, another
+   20260927120000). Its behaviour against real rows — own image/voice/document open; Paul's, another
    rep's, a paid client's, an unreferenced object, a reassigned lead and a disabled account refused;
    the admin unchanged — is proved by supabase/tests/sales-media-rls.sql against the live database.
    This suite fences the SHAPE so a later edit cannot quietly undo it:
@@ -20,7 +20,7 @@ const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "u
 /** SQL without its comments, so a rule written in prose cannot satisfy an assertion about code. */
 const code = (s: string) => s.replace(/--[^\n]*/g, "");
 
-const mig = code(read("supabase/migrations/20260927110000_sales_whatsapp_media.sql"));
+const mig = code(read("supabase/migrations/20260927120000_sales_whatsapp_media.sql"));
 const policy = mig.slice(mig.indexOf('create policy "whatsapp media read assigned sales"'));
 const fn = mig.slice(mig.indexOf("create or replace function public.my_sales_media_paths()"), mig.indexOf("revoke execute"));
 

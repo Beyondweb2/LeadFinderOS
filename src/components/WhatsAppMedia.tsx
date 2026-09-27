@@ -10,7 +10,7 @@ import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
  * ⛔ It asks Storage for a short-lived signed link under the CALLER's session. Whether that link is
  * issued is decided by the storage policies, never here: the admin reads the whole bucket; a
  * salesperson reads only files referenced by messages on leads assigned to them
- * (migration 20260927110000, "whatsapp media read assigned sales"). A refused request shows the
+ * (migration 20260927120000, "whatsapp media read assigned sales"). A refused request shows the
  * same "Attachment unavailable" as a missing file. */
 
 export interface WhatsAppMediaMessage {

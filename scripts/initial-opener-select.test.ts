@@ -145,7 +145,10 @@ console.log('\n── 12. READING OR CHANGING THE SETTING SENDS NOTHING ──')
   const setter = q.slice(setterAt, q.indexOf('/* ══ mode \'contact_check\''));
   ok(/return json\(\{ ok: true, \.\.\.statusPayload, initialOpenerTemplate: raw \}\);/.test(setter) && !/sendViaGraph|fetch\(/.test(setter), '12. the setter returns without sending');
   const hook = read('src/hooks/useSelectedOpener.ts');
-  ok(/mode: 'status'/.test(hook) && /mode: 'set_initial_opener_template'/.test(hook) && !/mode: 'tick'|mode: 'auto_replies'/.test(hook), '12. the UI only ever calls "status" and the setter');
+  /* 2026-09-27: the status read goes through the SHARED loader (src/lib/queueStatus.ts), which asks for
+     mode 'status' and nothing else — the hook itself names only the setter. */
+  const statusLib = read('src/lib/queueStatus.ts');
+  ok(/getQueueStatus\(qc\)/.test(hook) && /mode: 'status'/.test(statusLib) && !/mode: '(tick|auto_replies|send)/.test(statusLib) && /mode: 'set_initial_opener_template'/.test(hook) && !/mode: 'tick'|mode: 'auto_replies'/.test(hook), '12. the UI only ever calls "status" and the setter');
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');

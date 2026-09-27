@@ -172,7 +172,7 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
 - Auth config: `site_url` must be the production app and the redirect allow-list must include
   `/set-password`, or invite links land on localhost.
 
-## 8. Sales and WhatsApp media (2026-09-27, migration 20260927110000)
+## 8. Sales and WhatsApp media (2026-09-27, migration 20260927120000)
 
 - **Why it failed:** every stored file sits under the BOOK OWNER's folder (inbound:
   `<lead owner>/<sha256(wamid)>.<ext>`; sent voice notes: `<book owner>/voice-out-<id>.ogg`), and the

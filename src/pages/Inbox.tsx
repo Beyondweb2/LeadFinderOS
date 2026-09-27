@@ -53,6 +53,7 @@ import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibi
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
+import { getQueueStatus, QUEUE_STATUS_KEY } from '@/lib/queueStatus';
 import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
@@ -234,6 +235,7 @@ function listPreview(m: { body: string | null; template_name: string | null; cre
  *  separately — the eye takes in "on" and stops. Three buttons where exactly one is lit can only
  *  be read as one answer, and the lit one either says the word "send" or it does not. */
 function AutoReplyToggle() {
+  const statusQc = useQueryClient();
   const { toast } = useToast();
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<FirstReplyMode>(DEFAULT_FIRST_REPLY_MODE);
@@ -245,8 +247,9 @@ function AutoReplyToggle() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'status' } });
-      if (cancelled || error || !data?.ok) return; // non-admin (403) or failure → stay hidden
+      /* The shared status read (src/lib/queueStatus.ts) — one call, not one per panel. */
+      const data = await getQueueStatus(statusQc).catch(() => null);
+      if (cancelled || !data?.ok) return; // non-admin (403) or failure → stay hidden
       /* The rule is OFF unless the boolean says so; the stored mode only chooses between the two
          working behaviours. Reading it the other way round would paint "Run audit only" over a
          rule the trigger treats as paused. */
@@ -273,6 +276,7 @@ function AutoReplyToggle() {
       toast({ title: "Couldn't set the reply template", description: error?.message ?? data?.detail ?? data?.error ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
       return;
     }
+    void statusQc.invalidateQueries({ queryKey: QUEUE_STATUS_KEY });
     toast({ title: 'Reply template set', description: `Auto-sends now use "${value}" (guards + 3-min cancel window unchanged).` });
   };
 
@@ -290,6 +294,7 @@ function AutoReplyToggle() {
       toast({ title: "Couldn't change the reply mode", description: error?.message ?? data?.detail ?? data?.error ?? 'Failed (has the SQL been run?)', variant: 'destructive' });
       return;
     }
+    void statusQc.invalidateQueries({ queryKey: QUEUE_STATUS_KEY });
     /* The confirmation states what WILL happen, and for send mode it leads with the risk. A toast
        that only says "saved" is how an operator ends up unsure which mode is live. */
     toast({

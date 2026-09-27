@@ -1,5 +1,5 @@
 -- Sales WhatsApp media security tests (2026-09-27). RUN AGAINST THE LIVE DATABASE; ALWAYS ROLLED BACK.
--- Proves the storage policy "whatsapp media read assigned sales" (migration 20260927110000) at the
+-- Proves the storage policy "whatsapp media read assigned sales" (migration 20260927120000) at the
 -- layer the Storage API asks: a SELECT on storage.objects under the caller's JWT. createSignedUrl,
 -- download and the Inbox player all go through that SELECT, so a row the caller cannot select is a
 -- file they cannot open, whatever path or id they send.

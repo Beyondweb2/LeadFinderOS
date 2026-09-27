@@ -36,3 +36,57 @@ export async function fetchAllRows<T>(
   console.warn(`${label}: stopped paging at ${MAX_PAGES} pages (${rows.length} rows) — numbers may be incomplete.`);
   return { rows, truncated: true };
 }
+
+/**
+ * The same result as fetchAllRows, fetched several pages at a time (2026-09-27, Inbox/Outreach speed).
+ *
+ * 🔴 WHY. The Outreach page's 5,200 leads came in six sequential round trips (~1.4 s each on the
+ * live app) — nine seconds of waiting for a database that answers each page in a fraction of one.
+ *
+ * ⛔ STILL CORRECT WHEN THE SERVER'S CAP IS BELOW PAGE. The first page is fetched alone and its
+ * length becomes the page size for the rest, so a cap of 500 cannot leave a gap between parallel
+ * offsets. The waves stop at the first SHORT page (fewer rows than the page size) — exactly the end
+ * condition the sequential loop reaches one page later.
+ * ⛔ DEDUPED BY KEY. Separate requests are separate snapshots: a row inserted mid-read shifts the
+ * offsets, and the row at a boundary can then arrive twice. `keyOf` (the unique id) drops the copy.
+ * The sequential loop has the same snapshot gap; this does not widen it.
+ * Order is preserved: pages are concatenated in offset order. Six at a time: 5-6k-row lists (leads, messages) arrive in two round trips after the first.
+ */
+export async function fetchAllRowsParallel<T>(
+  label: string,
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+  keyOf: (row: T) => string,
+  concurrency = 6,
+): Promise<{ rows: T[]; truncated: boolean }> {
+  const first = await build(0, PAGE - 1);
+  if (first.error) throw first.error;
+  const firstRows = (first.data ?? []) as T[];
+  const size = firstRows.length;
+  const pages: T[][] = [firstRows];
+  let truncated = false;
+  if (size > 0) {
+    let next = 1;
+    outer: for (;;) {
+      if (next >= MAX_PAGES) { truncated = true; break; }
+      const wave = Array.from({ length: Math.min(concurrency, MAX_PAGES - next) }, (_, i) => next + i);
+      const results = await Promise.all(wave.map((p) => build(p * size, p * size + size - 1)));
+      for (const r of results) {
+        if (r.error) throw r.error;
+        const batch = (r.data ?? []) as T[];
+        pages.push(batch);
+        if (batch.length < size) break outer;
+      }
+      next += wave.length;
+    }
+  }
+  const seen = new Set<string>();
+  const rows: T[] = [];
+  for (const batch of pages) for (const row of batch) {
+    const k = keyOf(row);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    rows.push(row);
+  }
+  if (truncated) console.warn(`${label}: stopped paging at ${MAX_PAGES} pages (${rows.length} rows) — numbers may be incomplete.`);
+  return { rows, truncated };
+}

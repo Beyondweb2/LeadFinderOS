@@ -326,7 +326,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **supabase-js errors are plain objects** — `String(e)` is `[object Object]`; read `.message`.
 - **`CREATE TABLE IF NOT EXISTS` against a table in a different shape is a silent no-op**; diff the
   live columns. **`.neq()` drops NULLs** — use `.or("col.is.null,col.neq.x")`.
-- **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`. A
+- ⛔ **Never add a `generated … stored` column (or anything that rewrites) to a large live table** — it
+  holds ACCESS EXCLUSIVE for the whole rewrite and queues every read (ai_audit_runs/queue ran past
+  100 s, 2026-09-27). Plain column + trigger + batched backfill; DDL with `set local lock_timeout`.
+  Never read a small key out of `results` in bulk — use `results_summary` / `results_crawl_check` /
+  `gemini_answered` (`docs/inbox-outreach-speed.md`). A policy's `auth.uid()` goes in `(select …)`.
+- **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`; for a big
+  list use `fetchAllRowsParallel` (waves of 6, same rows, deduped by id). A
   `.in()` over many keys can hit the cap too; read the distinct set once and intersect in memory.
 - **`ai_audits` / `ai_audit_runs` are NOT in the `supabase_realtime` publication** (only `outreach_leads`,
   `whatsapp_messages`): a `postgres_changes` subscription on them never fires. Poll, or read the card's
@@ -746,6 +752,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
