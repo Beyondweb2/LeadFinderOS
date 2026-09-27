@@ -1844,7 +1844,8 @@ const Inbox = () => {
                     <CrawlCheckButton
                       lead={{ id: activeLead.id, website: activeLead.website }}
                       crawl={crawlByLeadId.get(active.leadId) ?? null}
-                      onDone={refetch}
+                      /* No onDone refetch: the button invalidates ['inbox'] itself, and a second
+                         refetch here only cancelled that one and started the full six-read load again. */
                       className="self-center"
                       iconOnly
                       from="inbox"

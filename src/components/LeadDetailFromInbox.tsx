@@ -52,7 +52,7 @@ function LeadDetailFromInboxInner({ leadId, onOpenChange, onStatusPatched }: {
   const {
     leads, isLoading,
     updateStatus, updateNextAction, updateLead, updateNotes, updateBusinessName, fetchActivities,
-  } = useOutreach();
+  } = useOutreach({ history: false });
   const lead = useMemo(() => leads.find((l) => l.id === leadId) ?? null, [leads, leadId]);
 
   /* The two handlers that can move status are wrapped so Inbox's pill follows live. Everything

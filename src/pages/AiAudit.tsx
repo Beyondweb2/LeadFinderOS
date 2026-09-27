@@ -205,6 +205,12 @@ const SEARCH_MIN_BUSINESSES = 8;
 /** Landing-list refresh cadence while ANY run is in flight. The effect is not armed at all when
  *  nothing is draining, so an idle page makes zero requests. */
 const LIST_POLL_MS = 5000;
+/** While draining, every Nth landing tick reloads the whole book instead of just the moving audits
+ *  (12 × 5 s = once a minute) — see refreshInFlight. */
+const LIST_FULL_RELOAD_EVERY = 12;
+/** Up to this many audits hydrate from their OWN runs/reports (an .in() filter, one request each);
+ *  more than this reads each table straight through. */
+const SCOPED_HYDRATE_MAX = 100;
 /** Stable empty list — a new [] each render would break every memo downstream. */
 const EMPTY_AUDITS: AuditLite[] = [];
 const EMPTY_LEADS: LeadOption[] = [];
@@ -641,7 +647,14 @@ const AiAudit = () => {
   // refresh the landing list polls while anything is draining.
   /* HYDRATE a set of audit rows into AuditLite (runs + report pill + live queue progress). Shared
      with the server-side search so both shape a row identically. */
-  const hydrateAudits = useCallback(async (auditRows: RawAuditRow[]): Promise<AuditLite[]> => {
+  /* ⚡ SCOPED OR WHOLE (2026-09-27, site-wide speed pass). `scope` = the audit ids to read runs and
+     reports FOR, or null for the whole book. The whole-book path is unchanged (one straight,
+     paginated pass — see the note below for why it must not chunk). But the SAME whole-table pass
+     used to run for EVERY caller, including the 5-second in-flight poll and the name search that
+     hydrates a handful of matches: every run's results blob opened for its SEO grade (2,042 runs,
+     ~6 s of database time) to refresh three audits. A small scope now reads only its own audits'
+     runs and reports — one request each. Runs and reports are read side by side, not in turn. */
+  const loadRunParts = useCallback(async (scope: string[] | null) => {
     /* 🔴 THIS USED TO CHUNK BY AUDIT ID, AND THE CHUNKING WAS THE WHOLE COST OF OPENING THE PAGE.
        Runs and reports were fetched with `.in('audit_id', batch)` over 60-id batches, awaited ONE
        AFTER ANOTHER — 16 sequential round trips for 958 audits. Measured against the live database
@@ -654,15 +667,25 @@ const AiAudit = () => {
        anything extra. */
     const runsByAudit = new Map<string, RunLite[]>();
     const inFlightRunIds: string[] = [];
-    const { rows: runRows } = await fetchAllRows<{
-      id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
-      created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
-    }>('AiAudit (runs)', (from, to) =>
-      (supabase as unknown as SupabaseClient)
-        .from('ai_audit_runs')
-        .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade')
-        .order('id', { ascending: true })
-        .range(from, to));
+    if (scope && scope.length === 0) return { runsByAudit, reportByAudit: new Map<string, string>() };
+    const sb = supabase as unknown as SupabaseClient;
+    const [{ rows: runRows }, { rows: reportRowsAll }] = await Promise.all([
+      fetchAllRows<{
+        id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
+        created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
+      }>('AiAudit (runs)', (from, to) => {
+        let q = sb.from('ai_audit_runs')
+          .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade');
+        if (scope) q = q.in('audit_id', scope);
+        return q.order('id', { ascending: true }).range(from, to);
+      }),
+      // Published report per audit → the "report" pill. Existence only. Same one-pass read.
+      fetchAllRows<{ audit_id: string | null; slug: string }>('AiAudit (reports)', (from, to) => {
+        let q = sb.from('business_reports').select('audit_id, slug');
+        if (scope) q = q.in('audit_id', scope);
+        return q.order('id', { ascending: true }).range(from, to);
+      }),
+    ]);
     for (const r of runRows) {
       const list = runsByAudit.get(r.audit_id) ?? [];
       list.push({
@@ -683,15 +706,7 @@ const AiAudit = () => {
        per audit afterwards is the same result and cannot be broken by paging. */
     for (const list of runsByAudit.values()) list.sort((a, b) => b.run_number - a.run_number);
 
-    // Published report per audit → the "report" pill. Existence only. Same one-pass read.
     const reportByAudit = new Map<string, string>();
-    const { rows: reportRowsAll } = await fetchAllRows<{ audit_id: string | null; slug: string }>(
-      'AiAudit (reports)', (from, to) =>
-        (supabase as unknown as SupabaseClient)
-          .from('business_reports')
-          .select('audit_id, slug')
-          .order('id', { ascending: true })
-          .range(from, to));
     for (const r of reportRowsAll) {
       if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
     }
@@ -704,14 +719,24 @@ const AiAudit = () => {
         if (c) { r.done = c.done; r.total = c.total; }
       }
     }
+    return { runsByAudit, reportByAudit };
+  }, [fetchQueueCounts]);
 
-    return auditRows.map((a) => ({
+  const assembleAudits = (auditRows: RawAuditRow[], { runsByAudit, reportByAudit }: Awaited<ReturnType<typeof loadRunParts>>): AuditLite[] =>
+    auditRows.map((a) => ({
       ...a,
       baseline_runs_counted: a.baseline_runs_counted === null ? null : Number(a.baseline_runs_counted),
       report_slug: reportByAudit.get(a.id) ?? null,
       runs: runsByAudit.get(a.id) ?? [],
     }));
-  }, [fetchQueueCounts]);
+
+  /** Rows → AuditLite. A small set (a search's matches, the in-flight poll) reads only its own runs
+   *  and reports; a large one reads each table straight through, exactly as before. */
+  const hydrateAudits = useCallback(async (auditRows: RawAuditRow[]): Promise<AuditLite[]> => {
+    const scope = auditRows.length <= SCOPED_HYDRATE_MAX ? auditRows.map((a) => a.id) : null;
+    return assembleAudits(auditRows, await loadRunParts(scope));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadRunParts]);
 
   /* ⛔ ONE QUERY FOR THE WHOLE AUDIT BOOK, AND `loadSaved` IS NOW ITS REFRESH.
      Every existing caller of loadSaved() still works — it invalidates instead of re-running a
@@ -743,16 +768,20 @@ const AiAudit = () => {
          empty book. `archivedReady` tells the UI to hide the archive controls instead of offering
          a button that cannot work. fetchAllRows THROWS the PostgREST error, so the shed is a catch. */
       let archivedReady = true;
-      let fetched: { rows: RawAuditRow[]; truncated: boolean };
-      try {
-        fetched = await pageWith(AUDIT_SELECT);
-      } catch (e) {
-        if (!isMissingArchivedColumn(e as { code?: string; message?: string })) throw e;
-        archivedReady = false;
-        fetched = await pageWith(AUDIT_SELECT_BASE);
-      }
+      const readAudits = async (): Promise<{ rows: RawAuditRow[]; truncated: boolean }> => {
+        try {
+          return await pageWith(AUDIT_SELECT);
+        } catch (e) {
+          if (!isMissingArchivedColumn(e as { code?: string; message?: string })) throw e;
+          archivedReady = false;
+          return await pageWith(AUDIT_SELECT_BASE);
+        }
+      };
+      /* ⚡ The book's three reads side by side (2026-09-27): the whole-table runs/reports pass does not
+         depend on the audit rows, so it no longer waits for them (was audits → runs → reports, ~10 s). */
+      const [fetched, parts] = await Promise.all([readAudits(), loadRunParts(null)]);
       return {
-        audits: await hydrateAudits(fetched.rows),
+        audits: assembleAudits(fetched.rows, parts),
         /* Only true if the reader hit its runaway guard (50 pages = 50,000 audits). */
         capped: fetched.truncated,
         archivedReady,
@@ -895,12 +924,40 @@ const AiAudit = () => {
   // Derived here rather than from the grouped memo below, which is declared further down the
   // component: this effect must not reference a block-scoped value before its declaration.
   const anyRunInFlight = savedAudits.some((a) => a.runs.some((r) => r.status === 'pending' || r.status === 'running'));
+  /* ⚡ ONLY THE AUDITS THAT ARE MOVING (2026-09-27, site-wide speed pass). Every tick used to reload
+     the WHOLE book — every audit, every run (opening each results blob for its SEO grade), every
+     report — every five seconds for as long as anything drained: the heaviest read pattern in the
+     app, repeated. Now a tick re-reads just the in-flight audits (their row, runs, report and queue
+     counts — the same hydrate, scoped) and patches them into the cached list. The whole book is
+     still reloaded once a minute while draining (so an audit started from another page appears) and
+     once more when the last run settles. */
+  const refreshInFlight = useCallback(async () => {
+    const cached = queryClient.getQueryData<{ audits: AuditLite[]; capped: boolean; archivedReady: boolean }>(auditListKey);
+    const ids = (cached?.audits ?? []).filter((a) => a.runs.some((r) => r.status === 'pending' || r.status === 'running')).map((a) => a.id);
+    if (!ids.length || ids.length > SCOPED_HYDRATE_MAX) { loadSaved(); return; }
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from('ai_audits').select(cached?.archivedReady ? AUDIT_SELECT : AUDIT_SELECT_BASE).in('id', ids);
+    if (error || !data) { loadSaved(); return; }
+    const fresh = new Map((await hydrateAudits(data as unknown as RawAuditRow[])).map((a) => [a.id, a]));
+    setSavedAudits((prev) => prev.map((a) => fresh.get(a.id) ?? a));
+  }, [queryClient, auditListKey, loadSaved, hydrateAudits, setSavedAudits]);
+  const wasInFlight = useRef(false);
+  useEffect(() => {
+    // The last run settled while the page was open: one whole-book reload picks up everything else.
+    if (wasInFlight.current && !anyRunInFlight) loadSaved();
+    wasInFlight.current = anyRunInFlight;
+  }, [anyRunInFlight, loadSaved]);
   useEffect(() => {
     if (step === 'results') return;   // the results step has its own pollers
     if (!anyRunInFlight) return;      // nothing draining → no timer at all
-    const t = setInterval(() => { loadSaved(); }, LIST_POLL_MS);
+    let ticks = 0;
+    const t = setInterval(() => {
+      ticks += 1;
+      if (ticks % LIST_FULL_RELOAD_EVERY === 0) loadSaved();
+      else void refreshInFlight();
+    }, LIST_POLL_MS);
     return () => clearInterval(t);
-  }, [step, anyRunInFlight, loadSaved]);
+  }, [step, anyRunInFlight, loadSaved, refreshInFlight]);
 
   // One-shot fetch of a run's queue rows (used when opening a report for a past audit that
   // has no cached snapshot yet — we need the raw rows to build the report data once).
@@ -981,11 +1038,17 @@ const AiAudit = () => {
   useEffect(() => {
     if (step !== 'results' || !runId) return;
     let stop = false;
+    /* ⚡ Only a run SEEN draining refreshes the book when it finishes (2026-09-27). Opening an audit
+       that was already complete hit this branch on the very first tick and reloaded the whole audit
+       book for nothing. The delayed re-read below stays: it is one run, and it is what picks up the
+       cleaned competitor lists. */
+    let sawLive = false;
     const tick = async () => {
       const r = await pollRun(runId);
+      if (r && !TERMINAL.has(r.status)) sawLive = true;
       if (!stop && r && TERMINAL.has(r.status)) {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-        loadSaved(); // refresh the saved-audits rates
+        if (sawLive) loadSaved(); // refresh the saved-audits rates
         // extract-competitors rewrites the competitor lists a few seconds AFTER the run flips to
         // complete (it runs post-status-write in the finalisation tick). Polling stops the instant
         // we see a terminal status, so do ONE bounded delayed refetch to pick up the cleaned lists —

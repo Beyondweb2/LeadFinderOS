@@ -40,8 +40,13 @@ export function apifyTone(pct: number | null | undefined): ApifyTone {
   return 'ok';
 }
 
-export function useApifyUsage(): { usage: ApifyUsage | null; reload: () => void } {
+/** `enabled: false` defers the read until it turns true (2026-09-27, site-wide speed pass): the
+ *  Outreach table only shows the usage inside its bulk-audit dialog, and was calling the edge
+ *  function on every visit. `loaded` separates "not answered yet" from "answered with nothing", so a
+ *  screen never says the usage was unreadable while it is still being read. */
+export function useApifyUsage({ enabled = true }: { enabled?: boolean } = {}): { usage: ApifyUsage | null; reload: () => void; loaded: boolean } {
   const [usage, setUsage] = useState<ApifyUsage | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -51,10 +56,12 @@ export function useApifyUsage(): { usage: ApifyUsage | null; reload: () => void 
       setUsage(data?.usage ?? null);
     } catch {
       setUsage(null);
+    } finally {
+      setLoaded(true);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (enabled) load(); }, [load, enabled]);
 
-  return { usage, reload: load };
+  return { usage, reload: load, loaded };
 }

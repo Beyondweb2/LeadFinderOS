@@ -49,17 +49,18 @@ type State =
  * niche verdict button at the top of Coverage is the market read now).
  */
 function TownRow({
-  trade, town, businesses, cells, state, onSearch, onAdded,
+  trade, town, businesses, cells, state, onSearch, onAdded, addLead,
 }: {
   trade: string; town: string; businesses: number; cells: number;
   state: TownSearchState;
   onSearch: () => void;
   onAdded: (added: number, dupes: number) => void;
+  /** From the panel's ONE useOutreach — see NichePanel. */
+  addLead: ReturnType<typeof useOutreach>['addLead'];
 }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { adoptResults } = useLeadSearchContext();
-  const { addLead } = useOutreach();
   const { campaigns } = useCampaigns();
   const [adding, setAdding] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -170,8 +171,16 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
   /* ⛔ THE SEARCHES LIVE IN THE PANEL, KEYED BY TOWN, so they survive a row re-render and several
      can be in flight at once. `isLeadExcluded` comes from the context so a row drops exactly the
      businesses the Find Leads page would drop — one rule, not a copy. */
-  const { isLeadExcluded } = useLeadSearchContext();
+  const { isLeadExcluded, loadExclusions } = useLeadSearchContext();
+  /* The viewed / in-list lists isLeadExcluded matches against are no longer read on every page load
+     (LeadSearchContext) — this panel asks for them when it opens, long before a town search lands. */
+  useEffect(() => { void loadExclusions(); }, [loadExclusions]);
   const { stateFor, start, markAdded, searchingCount } = useTownLeadSearch(isLeadExcluded);
+  /* ⚡ ONE useOutreach FOR THE WHOLE PANEL (2026-09-27, site-wide speed pass). Each of the up-to-8
+     town rows used to mount its own, and every instance downloads the whole lead list (it is not
+     shared or cached) — eight copies of the CRM to reach one function, addLead. The rows share this
+     one; the add path is unchanged. */
+  const { addLead } = useOutreach();
   /* Ticks only while the fold is in flight; cleared on unmount and on completion, so nothing
      keeps running behind a finished panel. */
   const [elapsed, setElapsed] = useState(0);
@@ -424,6 +433,7 @@ export default function NichePanel({ trade, autoLoad = false }: { trade: string;
                 state={stateFor(trade, t.town)}
                 onSearch={() => start(trade, t.town)}
                 onAdded={(added, dupes) => markAdded(trade, t.town, added, dupes)}
+                addLead={addLead}
               />
             ))}
             {n.towns.length > 8 && <p className="text-[11px] text-muted-foreground">+{n.towns.length - 8} more towns</p>}

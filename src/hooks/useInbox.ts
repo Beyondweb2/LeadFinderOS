@@ -236,9 +236,11 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        (security_invoker, so the operator's own-row RLS on ai_audit_queue still applies) rather than
        the 6.7k result blobs behind it: the DB does the count, the Inbox gets two ints per audit.
        audit_id is unique → the pagination tiebreaker. A failed read degrades to no pill. */
-    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchAllRows<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
+    /* ⚡ Paged in parallel (2026-09-27, site-wide speed pass): at 1,554 rows it was three waits in a
+       row (~3 s), level with the slowest essential read — and the list waits for all six. */
+    essentialOnly ? { rows: previous?.geminiSignals ?? NO_GEMINI } : optionalInboxRows<InboxData['geminiSignals'][number]>(fetchAllRowsParallel<InboxData['geminiSignals'][number]>('Inbox (gemini signal)', (from, to) =>
       sb.from('audit_gemini_signal').select('audit_id, lead_id, gemini_answers, gemini_named')
-        .order('audit_id', { ascending: true }).range(from, to))),
+        .order('audit_id', { ascending: true }).range(from, to), (g) => g.audit_id)),
     /* Stored crawl checks → whether a lead's site has a nameable fault, which gates the
        audit_followup_fault template in the picker (its {{6}} names one and Meta rejects an empty
        parameter). Paginated with the id tiebreaker; newest-per-lead is chosen in the hook. A failed
