@@ -468,6 +468,9 @@ function toWhatsAppNumber(raw: string, country?: string | null): string | null {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  /* x-queue-timing on mode 'status': where a status call's time goes (auth vs the reads), so a slow
+     panel can be diagnosed from the browser without logs. Numbers only. */
+  const tRequest = Date.now();
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -513,6 +516,8 @@ Deno.serve(async (req) => {
     const sendNow = sendNowReq && isAdmin;
 
     // --- Shared status numbers ---
+    const tStatus = Date.now();
+    const authMs = tStatus - tRequest;
     const dayStart = londonDayStartUtcIso();
     /* ⚡ EVERY STATUS READ AT ONCE (2026-09-27). These ran one after another — ~15 round trips, several
        seconds on the Outreach and Inbox loads AND on every one-minute cron tick. None depends on
@@ -642,7 +647,16 @@ Deno.serve(async (req) => {
     };
 
     // Status-only probe (the dashboard panel).
-    if (mode === "status") return json({ ok: true, ...statusPayload });
+    if (mode === "status") {
+      return new Response(JSON.stringify({ ok: true, ...statusPayload }), {
+        status: 200,
+        headers: {
+          ...corsHeaders, "Content-Type": "application/json",
+          "x-queue-timing": `auth=${authMs};status=${Date.now() - tStatus}`,
+          "Access-Control-Expose-Headers": "x-queue-timing",
+        },
+      });
+    }
 
     // Pause / resume (admin-gated, same as this whole handler). Flip the shared flag via
     // the service client (whatsapp_outreach_state is service-role-only RLS). Return the

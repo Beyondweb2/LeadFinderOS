@@ -50,13 +50,13 @@ export async function fetchAllRows<T>(
  * ⛔ DEDUPED BY KEY. Separate requests are separate snapshots: a row inserted mid-read shifts the
  * offsets, and the row at a boundary can then arrive twice. `keyOf` (the unique id) drops the copy.
  * The sequential loop has the same snapshot gap; this does not widen it.
- * Order is preserved: pages are concatenated in offset order.
+ * Order is preserved: pages are concatenated in offset order. Six at a time: 5-6k-row lists (leads, messages) arrive in two round trips after the first.
  */
 export async function fetchAllRowsParallel<T>(
   label: string,
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
   keyOf: (row: T) => string,
-  concurrency = 4,
+  concurrency = 6,
 ): Promise<{ rows: T[]; truncated: boolean }> {
   const first = await build(0, PAGE - 1);
   if (first.error) throw first.error;

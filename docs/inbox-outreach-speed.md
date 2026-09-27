@@ -45,7 +45,7 @@ batched backfill.
 
 **Code:**
 - `fetchAllRowsParallel` (`src/lib/fetchAllRows.ts`): first page alone (its length = the page size,
-  so a server cap below 1,000 cannot leave gaps), then waves of 4, stop at the first short page,
+  so a server cap below 1,000 cannot leave gaps), then waves of 6, stop at the first short page,
   dedupe by id. Test: `scripts/fetch-all-rows-parallel.test.ts` (identical to the sequential loader
   for 0…12,345 rows and cap 500). Used for Inbox messages/leads/audits, Outreach active + archived
   leads (now also read together), outreach history, the Outreach audit map.
