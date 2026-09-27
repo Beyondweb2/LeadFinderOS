@@ -63,3 +63,13 @@ doubles it. First script for a lead with no fresh research adds one gpt-4o-mini 
   $0.0089 (2 calls) / $0.0049 + $0.0004 research / $0.0046. No sends, no status changes.
 - The first live run found a checker bug: quoting the crawler "ChatGPT-User" read as claiming
   ChatGPT was asked. Fixed (crawler names are ignored for the engine check) with a regression.
+
+## Tone and evidence pass (2026-09-27, generator v2)
+- Search paraphrased, never quoted or read out (`readsSearchVerbatim`); the business name in the script
+  is rejected (talk to them); polished endings rejected; mate once or twice; target 100-125 words,
+  over 140 shortened.
+- Concrete findings first; an interpretive one only when nothing concrete exists, sent as OBSERVATION
+  ONLY; "weak evidence" / "no evidence" wording rejected.
+- Regenerated RP Electrics, JG Electrics, Firebeard Electrical with the real model: all pass the
+  checks, 119 / 124 / 126 words, recorded cost $0.0058 (1 call) / $0.0124 (2 calls) / $0.0060 (1 call).
+- Known: all three ended on nearly the same approved line.
