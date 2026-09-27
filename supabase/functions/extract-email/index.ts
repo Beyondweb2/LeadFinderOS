@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userTeamRole } from "../_shared/access.ts";
 
 // extract-email — Phase 1 email enrichment (website scrape).
 //
@@ -194,6 +195,9 @@ Deno.serve(async (req) => {
       );
     }
     const userId = claimsData.claims.sub as string;
+    /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
+       the admin disabled (role removed), is refused even while its token is still valid. */
+    if (!(await userTeamRole(userId))) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { websiteUrl } = await req.json();
 

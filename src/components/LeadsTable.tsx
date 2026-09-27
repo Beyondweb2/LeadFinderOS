@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
+import { salesOwnershipCell, adminOwnerMarker, type OwnershipInfo } from '@/components/FindLeadsOwnership';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -94,12 +95,17 @@ interface LeadsTableProps {
    *  provided, the action cell shows a three-state Add / Remove / In-CRM toggle;
    *  when absent, falls back to the legacy "ever added" indicator. */
   getCrmState?: (lead: Lead) => { inCrm: boolean; isFresh: boolean; crmLeadId: string | null };
+  /** Multi-user: the server's ownership state for a result (lead_identity_lookup). */
+  ownership?: (lead: Lead) => OwnershipInfo | null;
+  onClaim?: (leadId: string) => void;
+  claiming?: boolean;
+  viewerRole?: 'admin' | 'sales' | null;
   /** Remove a FRESH lead from the CRM (Index opens a confirm, then deletes with a
    *  live freshness re-check). */
   onRemoveFromCrm?: (leadId: string, businessName: string) => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { user } = useAuth();
@@ -645,7 +651,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                      </TooltipTrigger>
                      <TooltipContent>{viewDetailsExhausted ? 'Start trial to view more' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                    </Tooltip>
-                  {onAddToOutreach && (
+                  {onAddToOutreach && viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)}
+                  {onAddToOutreach && !(viewerRole === 'sales' && salesOwnershipCell(ownership?.(lead), onClaim, claiming)) && (
                     inOutreach ? (
                       <span className="inline-flex items-center gap-1 h-8 px-2 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-medium whitespace-nowrap">
                         <Check className="h-3.5 w-3.5" />
@@ -803,6 +810,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <TableCell>
                     <div className="flex items-center">
                       {onAddToOutreach && (() => {
+                        /* Multi-user: a salesperson sees the SERVER's ownership state first — no Add or
+                           Claim on anything owned or contacted. 'new' falls through to the Add button. */
+                        if (viewerRole === 'sales') {
+                          const cell = salesOwnershipCell(ownership?.(lead), onClaim, claiming);
+                          if (cell) return cell;
+                        }
                         // Three-state action when Index supplies live CRM state:
                         //   in CRM + fresh   → Remove (destructive; deletes after a live re-check)
                         //   in CRM + actioned → "In CRM" (disabled, protected)
@@ -890,6 +903,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           </Tooltip>
                         );
                       })()}
+                      {viewerRole === 'admin' && adminOwnerMarker(ownership?.(lead))}
                     </div>
                   </TableCell>
                 </TableRow>

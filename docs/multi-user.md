@@ -1,0 +1,158 @@
+# Multi-user: ADMIN + SALES on one book (2026-09-27)
+
+Built on branch `feat/multi-user-sales`. Paul's decisions for this work (asked 2026-09-27, not to be
+re-asked): **overturn deep-clean step 7** (the multi-user surface is kept and extended, not deleted);
+**leave the existing duplicate leads and block new ones** (merge later, if ever); **salespeople may
+browse the unassigned pool**; **invites are a one-time link Paul sends himself** (no SMTP). Peer
+pipelines are private by default: a rep sees another rep's lead only as "Already added · <name>".
+
+## 1. The model
+
+- **One book.** Every row keeps `user_id` = the data account (`team_members.is_book_owner`,
+  `public.book_owner_id()`). Crons, queues, reports and dashboards read one book exactly as before.
+- **Who works a lead** is `outreach_leads.assigned_to_user_id` (+ `assigned_at`, `added_by_user_id`).
+- **Roles:** `admin`, `sales` only. Source: `public.user_roles` (deny-all writes for every signed-in
+  role; only the service role, i.e. `admin-users`, writes it). `public.my_role()` in SQL,
+  `resolveActor()` in `_shared/access.ts`, `useSubscription().role` in the SPA — all positive match.
+  Pure rules: `src/lib/roleRules.ts` (`pickRole`, `canWorkLead`, `isClientLead`, `salesAuditRefusal`).
+  A future `sales_manager` = one more role value + one branch in `canWorkLead` / `can_work_lead`.
+- **Disable** = remove the `sales` role row (every RLS policy and edge function refuses on the next
+  request) + ban the auth user (no refresh) + `team_members.status = 'disabled'`. Nothing deleted;
+  `admin-users` refuses to delete a team member.
+
+## 2. Permission matrix
+
+The SPA copy is `PERMISSION_MATRIX` in `src/lib/access.ts` (shown on /team). Routes a salesperson may
+open: `/sales`, `/sales/lead/:leadId`, `/find-leads`, `/coverage`, `/review-replies` — everything
+else redirects to `/sales` before the page mounts (`RequireAccess`). **Presentation only**; the rows
+below are what the server enforces.
+
+| Feature | Admin | Sales |
+|---|---|---|
+| My leads / lead page | all prospects | own assigned prospects |
+| Conversations, replies, templates, voice notes | all | own leads (send-whatsapp-message / -voice check the assignment) |
+| Bulk outreach | Outreach table | `sales_queue_opener`: the admin's selected opener only, never-contacted own leads |
+| Hook audit | yes | own leads only (`create-ai-audit` → `salesAuditRefusal`) |
+| Full measurement / Discovery / Baseline / Remeasure | yes | no |
+| Coverage, niche verdict | yes | yes (book-wide counts, no lead names) |
+| Find Leads search | yes | yes (`search-leads` requires admin or sales) |
+| Add a business | as before | `sales_add_lead` — refuses an existing one |
+| Claim | (assigns) | unassigned + never contacted + not archived + not a client |
+| Assign / reassign / unassign | `assign_lead`, Team "move all" | no |
+| Notes, follow-up, call booked, call outcome, website control | all | own leads |
+| Stages | all | interested, price_given, not_interested, won_pending_onboarding |
+| Paid clients, delivery, website build, welcome packs, page generator, page plan, mockups, playbook | yes | no |
+| Dashboard, revenue, Stripe/payment data, submissions | yes | no |
+| Team, invites, disable | yes | no |
+| API usage, Apify usage, queue controls, templates page | yes | no |
+
+## 3. Database (migrations 20260927100000 … 100400, applied one at a time and read back)
+
+- `app_role` gains `sales`.
+- `team_members` (name, status, book owner, invited/disabled by, `daily_send_limit` — nothing sets a
+  limit yet; `sales_queue_opener` honours one if set). RLS: admin reads all, a member reads own row.
+- `lead_activity` — append-only (no write policy; only the SECURITY DEFINER functions insert).
+  Kinds: added, claimed, assigned/unassigned (from→to), note, stage_changed, follow_up_set,
+  call_booked, call_outcome, website_control_set, audit_run, bulk_queued.
+- `outreach_leads` + `assigned_to_user_id, assigned_at, added_by_user_id, website_control,
+  website_control_note, next_action_note`. `whatsapp_messages` + `sent_by_user_id`.
+- **`sales_leads` view** — security_barrier, SELECT-only grant, no anon. No money/delivery columns
+  (`amount_paid` is a literal NULL), never a client (`lead_is_client`), only `assigned_to = auth.uid()`
+  for sales.
+- **Restrictive policies**: `outreach_leads` (all commands) and INSERT/UPDATE/DELETE on `ai_audits`,
+  `ai_audit_runs`, `ai_audit_queue` require `my_role() = 'admin'`. Without them the old
+  `auth.uid() = user_id` policies would let a sales login insert its own leads (dodging one-record)
+  or its own audit-queue rows (spending Apify money). `lead_claims`/`lead_notes` (dead, `SELECT true`)
+  closed the same way.
+- **Additive sales SELECT policies**: hook audits (+ runs, queue) on own leads; messages on own leads
+  or their phones; crawl checks; page hits; the book's templates; own activity.
+- **Functions** (all role-checked inside, all `revoke … from public, anon`): `my_role`,
+  `book_owner_id`, `can_work_lead`, `lead_first_contact_at`, `lead_identity_lookup`, `claim_lead`
+  (row lock, `FOR UPDATE`), `assign_lead` (admin), `sales_add_lead`, `lead_set_stage`,
+  `lead_set_follow_up`, `lead_set_call_booked`, `lead_add_note`, `lead_record_call`,
+  `lead_set_website_control`, `sales_pool`, `team_directory`, `sales_queue_opener`.
+- **Triggers**: `trg_outreach_leads_identity` (BEFORE INSERT: a place id already in the book is
+  refused, advisory-locked; updates are not checked); `trg_whatsapp_messages_assign` (a sent/read or
+  inbound message on an UNASSIGNED lead assigns it to the sender if a team member, else the book
+  owner; never reassigns; never blocks the message).
+- **Found in the audit and closed**: the pg_cron invokers (`invoke_whatsapp_queue` etc.) were
+  EXECUTE-able by anon — revoked (cron runs as postgres; runs verified succeeding after).
+
+### One business = one record
+
+- **Identity**: place id, then `phone_key(phone)` (digits, `0`/`44`/`0044` removed), then Maps URL.
+  Name alone never matches (chains). The trigger enforces place id for EVERY insert path; phone and
+  Maps URL are enforced for sales adds in `sales_add_lead` (a shared phone can be ambiguous; the
+  free-check lane keeps its town rule). The admin's browser dedupe is unchanged.
+- **Existing duplicates left alone** (Paul): 83 place ids on 172 rows (39 groups contacted more than
+  once), 124 repeated phones, measured 2026-09-27.
+- **Contacted = genuine stored history** (`lead_first_contact_at`): an outbound message
+  sent/delivered/read, ANY inbound message, a successful `whatsapp_sends` row — by lead OR by the same
+  phone — the lead's legacy send stamps, or a questionnaire on file. Never: found, crawled, audited,
+  added. A contacted lead is never claimable, whatever its assignment.
+
+### Migration outcome (2026-09-27)
+
+Backfill filled the NEW column only (`updated_at` untouched): **2,880 leads → the book owner (Paul)**
+(contacted by the rule above, or a client), **2,431 unassigned**, of 5,311. Message authorship was
+not rewritten.
+
+## 4. Edge functions (all 26 redeployed — see the commit)
+
+- `_shared/access.ts`: `resolveActor` (operator-auth + role), `requireAdmin`, `userTeamRole`,
+  `leadAccess` (admin: exactly the old `lead.user_id === caller`; sales: assigned + not a client,
+  book = the lead's owner), `mayWriteLeadId`, `bookOwnerId`, `isInternalCall`.
+- **Admin-only now**: `paid-client-hub`, `paid-baseline`, `page-generator`, `submissions` (was:
+  every signed-in user got every questionnaire + amount paid), `apify-usage-status` (was: callable
+  with the anon key), `admin-users`, and `coverage` suppress/unsuppress.
+- **Role required** (a disabled account is refused even with a live token): `google-place-details`,
+  `check-website`, `extract-email`, `extract-facebook`, `review-reply`, `scan-site-details`,
+  `playbook-evidence` (was: anon-callable; `check-directory-listings` now sends CRON_SECRET),
+  `search-leads` (admin OR sales).
+- **Sales on own leads**: `send-whatsapp-message` (+ `sent_by_user_id`; BUILD_ID `2026-09-27b`),
+  `send-whatsapp-voice`, `voice-note-script`, `warm-lead-reply`, `prospect-preview`,
+  `enrich-business`/`enrich-lead` (were: any lead id), `create-ai-audit` (hook only, audit filed in the
+  book), `process-whatsapp-queue` (`contact_check` only), `coverage`/`market-view` (book-wide read).
+
+## 5. Screens
+
+- `/sales` SalesHome — needs attention (replies, follow-ups due/overdue, calls), pipeline counts, my
+  leads with filters + "Send opener to N", the available pool with Claim, recent activity.
+- `/sales/lead/:id` SalesLead — owner, stage, conversation, reply / template (Preview = dry run) /
+  voice note, voice-note script, call playbook, hook check + run, next action, call booked, call
+  outcome, website control, INTERNAL note, activity timeline. The admin can open it too (Inbox → CRM).
+- `/team` — invite (link), new link, disable / re-enable, move all leads, the matrix.
+- `/set-password` — where an invite lands.
+- Find Leads — sales: Add (new) / Claim / Yours / "[PS] Already added · Paul"; admin: unchanged
+  buttons + an owner marker. Inbox header: `LeadOwnerControl` (owner + assign + CRM link).
+- Stages are a READING of `status` (`salesStageOf`); the only new status is
+  `won_pending_onboarding` (not money: `isPaidLead` ignores it; grants nothing).
+
+## 6. Tests
+
+- `scripts/role-rules.test.ts`, `scripts/access-matrix.test.ts`, `scripts/sales-crm.test.ts` (in
+  `npm test`).
+- **Re-running the security tests** against the live database:
+  `supabase/tests/multi-user-rls.sql` (70 checks) and `supabase/tests/multi-user-queue.sql` (8). Send
+  each file as one query to the Management API (CLAUDE.md §2). Each starts `begin;` and ends by
+  RAISING its results, so it can never commit; fake users are on `example.invalid`. 2026-09-27:
+  70/70 and 8/8 on the live schema.
+- **Concurrency** (two real sessions, same lead): A's claim 25 ms and held; B's claim waited
+  5,959 ms on A's row lock. (A was rolled back, so B then won; the in-transaction test shows a second
+  claim after a committed first one gets `already_owned`.)
+
+## 7. Known limitations (2026-09-27)
+
+- **The Inbox list** does not show owner avatars (the header does). The Inbox is admin-only.
+- Sales cannot see inbound **media** (voice notes/images from prospects): the `whatsapp-media` bucket
+  policy is own-folder or admin. The thread shows "[voice note]".
+- A disabled user's **access token** stays valid until expiry (≤1 h), but every RLS policy and edge
+  function refuses them at once (role row removed); the ban stops refreshes.
+- **Per-user send limits**: the column and the check exist; no limit is set. The global WhatsApp cap
+  is shared by the whole team (one number).
+- `request-call`, `stripe-webhook`, `notify-onboarding-submit` still email the admin address, not
+  the lead's owner.
+- Sales-added leads skip the browser's Place Details top-up (it writes the row directly, which sales
+  cannot).
+- Auth config: `site_url` must be the production app and the redirect allow-list must include
+  `/set-password`, or invite links land on localhost.

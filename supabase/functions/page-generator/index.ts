@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
+import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHonesty, FALSE_BASE_RE, MAX_TOWN_MENTIONS, MAX_SERVICE_PHRASE_REPEATS, MAX_SINGLE_WORD_PCT, type PagePlan, type PlannedPage, type StuffingVerdict } from "../../../src/lib/pagePlan.ts";
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
@@ -275,6 +276,9 @@ Deno.serve(async (req) => {
     const userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    /* ⛔ ADMIN ONLY (2026-09-27, multi-user): client pages are delivery work. */
+    const gate = await requireAdmin(req, service);
+    if (!gate.ok) return json(refusalBody(gate), gate.status);
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "";
 

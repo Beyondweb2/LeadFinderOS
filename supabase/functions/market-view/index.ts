@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { bookOwnerId, refusalBody, resolveActor } from "../_shared/access.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { classifyWinnability, unwrapCitationUrl, runIsModelRead, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
@@ -100,9 +101,18 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
     const { data: u } = await userClient.auth.getUser();
     if (!u?.user) return json({ ok: false, error: "Auth required" }, 401);
-    const userId = u.user.id;
+    let userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user). A salesperson reads the one book's niche
+       verdict — the same market the admin sees. Free: this action never spends. */
+    const who = await resolveActor(req, service);
+    if (!who.ok) return json(refusalBody(who), who.status);
+    if (who.actor.role === "sales") {
+      const owner = await bookOwnerId(service);
+      if (!owner) return json({ ok: false, error: "no_book_owner" }, 503);
+      userId = owner;
+    }
     const body = await req.json().catch(() => ({}));
     /* ⚠️ NO DEFAULT ACTION. It used to default to "view", which is now deleted — so an absent
        action would have been refused with `unknown action "view"`, blaming the caller for a word

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userTeamRole } from "../_shared/access.ts";
 
 // review-reply — the stateless Review Reply Generator (2026-08-19, Paul's spec).
 // Paste in a Google review -> ONE gpt-4o-mini call -> either a suggested reply to copy-paste into
@@ -85,6 +86,9 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: u } = await userClient.auth.getUser();
     if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
+    /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
+       the admin disabled (role removed), is refused even while its token is still valid. */
+    if (!(await userTeamRole(u.user.id))) return json({ ok: false, error: "no_role" }, 403);
 
     const body = await req.json().catch(() => ({}));
     const reviewText = typeof body.review_text === "string" ? body.review_text.trim() : "";

@@ -51,6 +51,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Price',
     className: 'bg-indigo-500/20 text-indigo-400 border-transparent font-semibold',
   },
+  won_pending_onboarding: {
+    label: 'Won · awaiting onboarding',
+    shortLabel: 'Won',
+    className: 'bg-emerald-500/20 text-emerald-400 border-transparent font-semibold',
+  },
   in_delivery: {
     label: 'In Delivery',
     shortLabel: 'Delivery',

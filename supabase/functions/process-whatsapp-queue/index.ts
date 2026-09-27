@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveActor } from "../_shared/access.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
@@ -480,21 +481,21 @@ Deno.serve(async (req) => {
       (!!serviceKey && authHeader === `Bearer ${serviceKey}`);
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    let isAdmin = false;
-    if (!isCron) {
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-      const { data: u } = await userClient.auth.getUser();
-      if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-      const { data: roleRow } = await service
-        .from("user_roles").select("role").eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-      if (!roleRow) return json({ ok: false, error: "forbidden" }, 403);
-      isAdmin = true;
-    }
-
     const body = await req.json().catch(() => ({}));
     const mode: string = typeof body.mode === "string" ? body.mode : "tick";
+
+    /* ⛔ ADMIN, OR SALES FOR contact_check ONLY (2026-09-27, multi-user). contact_check is the
+       read-only "has this phone ever been messaged" pre-check a bulk send runs before queueing; a
+       salesperson's bulk flow needs it. Every other mode — the tick, send_now, pause, the reply
+       rules, the opener template, suppress_lead — is queue configuration and stays admin-only. */
+    let isAdmin = false;
+    if (!isCron) {
+      void anonKey;
+      const who = await resolveActor(req, service);
+      if (!who.ok) return json({ ok: false, error: who.error === "no_role" ? "forbidden" : who.error, detail: who.detail }, who.status);
+      if (who.actor.role === "admin") isAdmin = true;
+      else if (!(who.actor.role === "sales" && mode === "contact_check")) return json({ ok: false, error: "forbidden" }, 403);
+    }
     const forceReq = body.force === true;
     // send_now: admin "Send now" from the Inbox. Skips ONLY the pacing (not_due) wait and
     // works in LIVE (unlike `force`, which is test-mode-only). It deliberately does NOT

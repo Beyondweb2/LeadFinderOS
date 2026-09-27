@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userTeamRole } from "../_shared/access.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,6 +57,9 @@ Deno.serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
+       the admin disabled (role removed), is refused even while its token is still valid. */
+    if (!(await userTeamRole(String(claimsData.claims.sub)))) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { websiteUrl } = await req.json();
 

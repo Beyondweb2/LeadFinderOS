@@ -46,6 +46,7 @@ import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { warmStage } from '@/lib/warmStage';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
+import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
@@ -1836,6 +1837,7 @@ const Inbox = () => {
                   {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME
                       panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
                   {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
+                  {active.leadId && <LeadOwnerControl leadId={active.leadId} />}
                   {/* Google Maps — stored URL preferred, else built from place_id. */}
                   {mapsUrl && (
                     <a href={mapsUrl} target="_blank" rel="noreferrer" title="Open in Google Maps" aria-label="Open in Google Maps" className={HEADER_ICON_BTN}>

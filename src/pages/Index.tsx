@@ -29,6 +29,11 @@ import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Country, Lead, SearchMode } from '@/types/lead';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSubscription } from '@/hooks/useSubscription';
+import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
+import { refusalText } from '@/lib/salesCrm';
+import type { OwnershipInfo } from '@/components/FindLeadsOwnership';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
@@ -39,6 +44,41 @@ const Index = () => {
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
+
+  /* ══ WHO ALREADY HAS EACH RESULT (multi-user, 2026-09-27) ═══════════════════════════════════════
+     ⛔ The server's answer across EVERY user's leads (lead_identity_lookup: place id, then phone, then
+     Maps URL) — not this browser's CRM list, which for a salesperson is empty by design. The admin's
+     own buttons (getCrmState below) are untouched; this adds the owner marker for the admin and, for
+     a salesperson, replaces Add with Claim / "Already added · <name>" wherever the business exists. */
+  const { role: viewerRole } = useSubscription();
+  const teamDir = useTeamDirectory();
+  const salesActions = useSalesActions();
+  const identityQc = useQueryClient();
+  const identityKey = useMemo(() => leads.map((l) => l.id).join('|'), [leads]);
+  const identity = useQuery({
+    queryKey: ['sales', 'identity', identityKey],
+    enabled: !!viewerRole && leads.length > 0,
+    staleTime: 15_000,
+    queryFn: () => lookupIdentities(leads.map((l) => ({ k: l.id, place_id: l.id, phone: l.phone ?? null, maps_url: l.googleMapsUrl ?? null }))),
+  });
+  useEffect(() => {
+    const refresh = () => { void identityQc.invalidateQueries({ queryKey: ['sales', 'identity'] }); };
+    window.addEventListener('crm-lead-added', refresh);
+    window.addEventListener('sales-lead-changed', refresh);
+    return () => { window.removeEventListener('crm-lead-added', refresh); window.removeEventListener('sales-lead-changed', refresh); };
+  }, [identityQc]);
+  const ownership = useCallback((lead: Lead): OwnershipInfo | null => {
+    const hit = identity.data?.get(lead.id);
+    if (!hit) return null;
+    const m = hit.owner_id ? teamDir.byId.get(hit.owner_id) : undefined;
+    return { state: hit.state, leadId: hit.lead_id, ownerName: hit.owner_name, avatarUrl: m?.avatar_url ?? null, addedAt: hit.added_at };
+  }, [identity.data, teamDir.byId]);
+  const handleClaim = useCallback(async (leadId: string) => {
+    const r = await salesActions.claim.mutateAsync({ leadId });
+    if (!r.ok) toast({ title: 'Not claimed', description: refusalText(r.error, r.owner_name as string | undefined), variant: 'destructive' });
+    else toast({ title: 'Claimed', description: 'It is now in My leads.' });
+    void identityQc.invalidateQueries({ queryKey: ['sales', 'identity'] });
+  }, [salesActions.claim, toast, identityQc]);
 
   /* THE URL IS THE MARKET VIEW'S MEMORY.
      A market view used to vanish on navigating away: the lead search survives via sessionStorage,
@@ -620,6 +660,10 @@ const Index = () => {
                 addCampaignTooltip={addCampaignTooltip}
                 getCrmState={getCrmState}
                 onRemoveFromCrm={handleRequestRemove}
+                ownership={ownership}
+                onClaim={(id) => void handleClaim(id)}
+                claiming={salesActions.claim.isPending}
+                viewerRole={viewerRole}
                 isInOutreach={isInOutreach}
                 searchEnrichment={searchEnrichment}
                 onEnrichPatch={patchEnrichment}

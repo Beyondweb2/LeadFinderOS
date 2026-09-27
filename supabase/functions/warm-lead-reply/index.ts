@@ -25,7 +25,8 @@
 // send-whatsapp-message applies, so this can never draft for a conversation the sender would refuse.
 // The table it writes (warm_lead_research) has RLS on and NO policies: service role only.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOperator, isUpstreamOutage } from "../_shared/operator-auth.ts";
+import { isUpstreamOutage } from "../_shared/operator-auth.ts";
+import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import {
   runSiteResearch, callModel, loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, WARM_RESEARCH_TABLE,
@@ -297,14 +298,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   try {
-    const who = await resolveOperator(req);
-    if (!who.ok) return json({ ok: false, error: who.error, detail: who.detail }, who.status);
+    const gateService = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+    const whoActor = await resolveActor(req, gateService);
+    if (!whoActor.ok) return json(refusalBody(whoActor), whoActor.status);
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const action = text(body.action) || "status";
     const leadId = text(body.lead_id);
     if (!leadId) return json({ ok: false, error: "lead_id_required", detail: "This conversation has no linked lead." }, 400);
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
-    const lead = await loadLead(service, leadId, who.user.id);
+    /* ⛔ ROLE + LEAD ACCESS (2026-09-27, multi-user): admin exactly as before; sales only on a lead
+       assigned to them and not a client. `book` is whose conversation rows these are. */
+    const access = await leadAccess(service, whoActor.actor, leadId);
+    if (!access.ok && access.error === "lookup_failed") return json({ ok: false, error: "upstream_timeout", detail: "The database did not answer in time. Try again in a moment." }, 503);
+    const book = access.ok ? access.bookUserId : "";
+    const who = { user: { id: book } };
+    const lead = access.ok ? await loadLead(service, leadId, book) : null;
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
 

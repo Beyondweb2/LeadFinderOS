@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { pickRole } from "../_shared/access.ts";
 import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
@@ -1331,18 +1332,16 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Operator-only: lead search triggers PAID Google API calls, so it requires
-    // an admin (a user_roles role='admin' row). A logged-in non-admin — e.g. a
-    // barber/site-owner account — is rejected. Defence-in-depth behind the
-    // frontend RequireAdmin gate.
-    const { data: adminRole } = await serviceClient
+    // Team-only: lead search triggers PAID Google API calls, so it requires a
+    // team role — admin, or sales (Find Leads is sales work, multi-user 2026-09-27).
+    // Any other signed-in account, or one whose role was removed (disabled), is rejected.
+    // The role is read server-side from user_roles (service role), never from the request.
+    const { data: roleRows } = await serviceClient
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    if (!adminRole) {
-      console.warn(`[search-leads] non-admin user ${userId} blocked from search`);
+      .eq('user_id', userId);
+    if (!pickRole(roleRows)) {
+      console.warn(`[search-leads] user ${userId} with no team role blocked from search`);
       return jsonResponse({ error: 'Not authorised.', _debug: debug }, 403);
     }
 

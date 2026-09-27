@@ -121,6 +121,10 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["cold call playbook logic (operator)", "src/lib/coldCallPlaybook.ts"],
   ["cold call playbook panel (operator)", "src/components/ColdCallPlaybook.tsx"],
   ["prospect preview panel (operator)", "src/components/ProspectPreviewPanel.tsx"],
+  /* Multi-user (2026-09-27): a salesperson reads these while on the phone to a prospect. */
+  ["sales home (operator)", "src/pages/SalesHome.tsx"],
+  ["sales lead page (operator)", "src/pages/SalesLead.tsx"],
+  ["sales CRM wording (operator)", "src/lib/salesCrm.ts"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

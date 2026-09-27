@@ -50,23 +50,32 @@ export function MobileBottomNav() {
   const { t } = useTranslation();
   const location = useLocation();
   const { signOut } = useAuth();
-  const { isAdmin } = useSubscription();
+  const { isAdmin, role } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
   const [searchTooltip, setSearchTooltip] = useState(false);
 
-  const mainNavItems = [
-    { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
-    { title: t('nav.search'), url: '/find-leads', icon: Search },
-    { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
-  ];
+  /* ⛔ Sales gets its own four screens (src/lib/access.ts); the admin's items are unchanged. */
+  const mainNavItems = role === 'sales'
+    ? [
+        { title: 'My leads', url: '/sales', icon: ClipboardList },
+        { title: t('nav.search'), url: '/find-leads', icon: Search },
+        { title: 'Coverage', url: '/coverage', icon: LayoutDashboard },
+      ]
+    : [
+        { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
+        { title: t('nav.search'), url: '/find-leads', icon: Search },
+        { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
+      ];
 
-  const moreNavItems = [
-    { title: 'Inbox', url: '/inbox', icon: MessageSquare },
-    { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
-    { title: t('nav.templates'), url: '/templates', icon: FileText },
-  ];
+  const moreNavItems = role === 'sales'
+    ? [{ title: 'Review replies', url: '/review-replies', icon: FileText }]
+    : [
+        { title: 'Inbox', url: '/inbox', icon: MessageSquare },
+        { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
+        { title: t('nav.templates'), url: '/templates', icon: FileText },
+      ];
 
 
   useEffect(() => {
@@ -81,7 +90,7 @@ export function MobileBottomNav() {
   }, []);
 
   const allMoreItems = isAdmin 
-    ? [...moreNavItems, { title: t('common.admin'), url: '/admin', icon: ShieldCheck }, { title: t('nav.affiliates'), url: '/admin/affiliates', icon: Users }]
+    ? [...moreNavItems, { title: t('common.admin'), url: '/admin', icon: ShieldCheck }, { title: 'Team', url: '/team', icon: Users }]
     : moreNavItems;
   const isMoreActive = allMoreItems.some(item => location.pathname === item.url);
 

@@ -15,6 +15,7 @@
 // as a website (aggregators.ts); name-match is a booster, not a requirement.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userTeamRole } from "../_shared/access.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { classifyOwnWebsite, type WebsiteVerdict } from "../_shared/enrichment/websiteClassify.ts";
@@ -54,6 +55,9 @@ Deno.serve(async (req) => {
       if (error || !data?.user) return json({ error: "Auth required" }, 401);
       userId = data.user.id;
     }
+    /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
+       the admin disabled (role removed), is refused even while its token is still valid. */
+    if (!(await userTeamRole(userId))) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const body = await req.json().catch(() => ({}));
     const placeId: string = body.place_id ?? "";

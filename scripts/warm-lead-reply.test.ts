@@ -228,7 +228,8 @@ const MIG = read('supabase/migrations/20260925120000_warm_lead_research.sql');
 ok(/enable row level security/.test(MIG) && !/create policy/i.test(MIG), 'warm_lead_research: RLS on, no policies (service role only)');
 ok(/revoke all on table public\.warm_lead_research from anon, authenticated/.test(MIG), '…and the table grants are revoked from anon/authenticated');
 ok(/lead_id uuid not null unique/.test(MIG), 'one research row per lead');
-ok(/resolveOperator\(req\)/.test(FN) && /l\.user_id === operatorId/.test(FN), 'the function requires a signed-in operator who owns the lead');
+/* Multi-user (2026-09-27): role required, then leadAccess (admin as before; sales only on their own lead). */
+ok(/resolveActor\(req, /.test(FN) && /leadAccess\(service, whoActor\.actor, leadId\)/.test(FN) && /l\.user_id === operatorId/.test(FN), 'the function requires a signed-in team member who may work the lead');
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? '' : 'S'}`); process.exit(1); }
 console.log('\nALL PASS');

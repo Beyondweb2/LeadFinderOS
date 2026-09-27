@@ -352,7 +352,8 @@ console.log('\n── WIRING: ONE WINDOW RULE, ONE RECIPIENT, THE INBOX ──')
   ok(newFiles.every((s) => !/24\s*\*\s*60\s*\*\s*60|86_?400_?000/.test(s)), 'no second 24-hour calculation anywhere in the voice-note code');
   ok(mod.indexOf('serviceWindowState(') < mod.indexOf('toVoiceNoteOgg(input') || mod.indexOf('serviceWindowState(') < mod.indexOf('toVoiceNoteOgg(audio'), 'the window is checked before the audio is converted');
   ok(mod.indexOf('serviceWindowState(') < mod.indexOf('deps.claimStorage(') && mod.indexOf('deps.claimStorage(') < mod.indexOf('deps.uploadMedia('), 'order: window → claim → Meta upload');
-  ok(/resolveOperator\(req\)/.test(fn) && !/WHATSAPP_ACCESS_TOKEN/.test(read('src/hooks/useInbox.ts')), 'operator auth on the server; no Meta credential in the browser');
+  /* Multi-user (2026-09-27): resolveActor (operator-auth + a team role); sales must name a lead they work. */
+  ok(/resolveActor\(req, /.test(fn) && /leadAccess\(service, actor, salesLeadId\)/.test(fn) && !/WHATSAPP_ACCESS_TOKEN/.test(read('src/hooks/useInbox.ts')), 'operator auth on the server; no Meta credential in the browser');
   ok(/\[functions\.send-whatsapp-voice\]\s*\nverify_jwt = true/.test(read('supabase/config.toml')), 'config.toml lists send-whatsapp-voice (explicit verify_jwt)');
   ok(!/upsert:\s*true/.test(fn) && /upsert: false/.test(fn), 'the storage write is upsert:false — it IS the double-send claim');
   const open = inbox.indexOf('{win.open ? (', inbox.indexOf('{/* Reply box */}'));

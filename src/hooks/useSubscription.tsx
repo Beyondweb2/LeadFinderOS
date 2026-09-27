@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import type { AppRole } from '@/lib/access';
 
 // LeadFinder OS is an internal tool: every logged-in account has full access.
 // This provider keeps the same shape the original billing-aware hook exposed so
@@ -17,6 +18,8 @@ interface SubscriptionState {
   error: string | null;
   status: string | null;
   isAdmin: boolean;
+  /** The caller's team role from the server (public.my_role()): 'admin', 'sales', or null. */
+  role: AppRole | null;
   isPaidSubscriber: boolean;
   isStripeTrialing: boolean;
   paymentFailureCount: number;
@@ -33,7 +36,7 @@ interface SubscriptionContextType extends SubscriptionState {
   openCustomerPortal: () => Promise<void>;
 }
 
-const FULL_ACCESS: Omit<SubscriptionState, 'isAdmin' | 'isLoading'> = {
+const FULL_ACCESS: Omit<SubscriptionState, 'isAdmin' | 'isLoading' | 'role'> = {
   subscribed: true,
   productId: null,
   subscriptionEnd: null,
@@ -54,30 +57,39 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const isAdmin = role === 'admin';
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     if (!user?.id) {
-      setIsAdmin(false);
+      setRole(null);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     (async () => {
+      /* ⛔ THE ROLE IS THE SERVER'S ANSWER (public.my_role(), from user_roles — which no signed-in
+         role can write). Positive match: only 'admin' or 'sales' is a role; anything else is none.
+         If the RPC itself fails, fall back to the original admin-row read, so a transient error can
+         never lock the admin out — and never grants sales anything it could not already read. */
       try {
-        const { data, error } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .eq('role', 'admin')
-          .maybeSingle();
-        if (!cancelled) setIsAdmin(!error && data !== null);
+        const { data, error } = await supabase.rpc('my_role' as never);
+        const r = error ? null : (data as unknown);
+        if (r === 'admin' || r === 'sales') {
+          if (!cancelled) setRole(r);
+        } else if (error) {
+          const { data: adminRow, error: adminErr } = await supabase
+            .from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+          if (!cancelled) setRole(!adminErr && adminRow !== null ? 'admin' : null);
+        } else if (!cancelled) {
+          setRole(null);
+        }
       } catch {
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) setRole(null);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -100,6 +112,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     ...FULL_ACCESS,
     status: isAdmin ? 'admin' : 'active',
     isAdmin,
+    role,
     isLoading,
     checkSubscription,
     createCheckout,

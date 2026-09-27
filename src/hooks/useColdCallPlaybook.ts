@@ -13,6 +13,7 @@
       sources are ordered exactly as useInbox orders them for the site-findings gate.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useQuery } from '@tanstack/react-query';
+import { readLeadRow } from '@/lib/leadRead';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { newestUsableAudit, resolveLeadReportAudit, type ResolvableAudit } from '@/lib/auditReportResolver';
@@ -62,7 +63,8 @@ export function runCrawlSources(audit: PlaybookAuditRow | null): FindingsSource[
 }
 
 async function loadPlaybook(leadId: string): Promise<ColdCallPlaybook | null> {
-  const { data: lead, error: leadErr } = await sb.from('outreach_leads').select(LEAD_COLUMNS).eq('id', leadId).maybeSingle();
+  /* The admin's read is unchanged; a salesperson's comes from sales_leads (src/lib/leadRead.ts). */
+  const { data: lead, error: leadErr } = await readLeadRow<Record<string, unknown>>(leadId, LEAD_COLUMNS);
   if (leadErr) throw leadErr;
   if (!lead) return null;
   const phone = waDigits((lead as { phone?: string }).phone, (lead as { country?: string }).country);
@@ -107,7 +109,7 @@ async function loadPlaybook(leadId: string): Promise<ColdCallPlaybook | null> {
   const auditRunning = audits.some((a) => (a.ai_audit_runs ?? []).some((r) => r.status === 'pending' || r.status === 'running'));
 
   return buildColdCallPlaybook({
-    lead: lead as PlaybookLead,
+    lead: lead as unknown as PlaybookLead,
     reportAudit,
     report,
     auditRunning,

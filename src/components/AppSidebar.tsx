@@ -10,9 +10,11 @@ import { AccentColorPicker } from '@/components/AccentColorPicker';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
+import { canOpenRoute } from '@/lib/access';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
-  MessageSquareQuote, Inbox, Sparkles, Map
+  MessageSquareQuote, Inbox, Sparkles, Map, Users, BriefcaseBusiness
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
@@ -22,8 +24,10 @@ export function AppSidebar() {
   const location = useLocation();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
+  const { role } = useSubscription();
 
-  const navItems = [
+  const allNavItems = [
+    { title: 'My leads', url: '/sales', icon: BriefcaseBusiness, description: 'Your pipeline, follow-ups and available leads' },
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
@@ -35,7 +39,12 @@ export function AppSidebar() {
     { title: 'Page generator', url: '/page-generator', icon: FileCode2, description: 'Client delivery pages, aimed at the measured queries' },
     { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
+    { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
   ];
+  /* ⛔ The matrix decides (src/lib/access.ts). The admin keeps every existing item; 'My leads' is
+     the salesperson's home and is not added to the admin's list. Presentation only — see access.ts. */
+  const navItems = allNavItems.filter((item) =>
+    canOpenRoute(role, item.url) && !(role === 'admin' && item.url === '/sales'));
 
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { readLeadRow } from '@/lib/leadRead';
 import { newestUsableAudit } from '@/lib/auditReportResolver';
 import { selectFindings, type FindingsOutcome } from '@/lib/coldCallPlaybook';
 import { classifyLeadWebsite, type SiteSource } from '@/lib/leadWebsiteKind';
@@ -31,7 +32,8 @@ const ALL_FINDINGS = 20;
 
 async function load(leadId: string): Promise<LeadWebsiteIssues | null> {
   const [leadRes, auditsRes, crawlRes] = await Promise.all([
-    sb.from('outreach_leads').select('id, website').eq('id', leadId).maybeSingle(),
+    /* The admin's read is unchanged; a salesperson's comes from sales_leads (src/lib/leadRead.ts). */
+    readLeadRow<{ id: string; website: string | null }>(leadId, 'id, website'),
     sb.from('ai_audits').select(PLAYBOOK_AUDIT_COLUMNS).eq('lead_id', leadId).order('created_at', { ascending: false }).limit(20),
     sb.from('lead_crawl_checks').select('result, created_at').eq('lead_id', leadId).order('created_at', { ascending: false }).limit(1),
   ]);

@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { isUpstreamOutage, resolveOperator } from "../_shared/operator-auth.ts";
+import { isUpstreamOutage } from "../_shared/operator-auth.ts";
+import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { BASELINE_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 import { mergeClientContext, selectClientCrawlContext, verifiedBuildFacts } from "../../../src/lib/clientContext.ts";
@@ -77,9 +78,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   try {
     /* The auth service not answering is 503 auth_unavailable, never 401 (_shared/operator-auth.ts). */
-    const who = await resolveOperator(req);
-    if (!who.ok) return json({ ok: false, error: who.error, detail: who.detail }, who.status);
-    const user = who.user;
+    /* ⛔ ADMIN ONLY (2026-09-27, multi-user): paid clients, delivery and money. A sales login is refused
+       here whatever the screen shows. requireAdmin resolves the caller with the same operator-auth. */
+    const gate = await requireAdmin(req, createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } }));
+    if (!gate.ok) return json(refusalBody(gate), gate.status);
+    const user = { id: gate.actor.id, email: gate.actor.email };
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "get";
     const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id.trim() : "";

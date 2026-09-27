@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { directPoolCacheKeys, generateCacheKey } from "../_shared/search-cache-key.ts";
+import { bookOwnerId, refusalBody, resolveActor } from "../_shared/access.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WHERE HAVE I BEEN? — the candidate town list, and the raw facts to grade it against.
@@ -58,11 +59,25 @@ Deno.serve(async (req) => {
     const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: u, error: uErr } = await userClient.auth.getUser(token);
     if (uErr || !u?.user) return json({ ok: false, error: "Auth required" }, 401);
-    const userId = u.user.id;
+    let userId = u.user.id;
 
     const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "view";
+    /* ⛔ A ROLE IS REQUIRED; SUPPRESS IS ADMIN ONLY (2026-09-27, multi-user). uk_towns is shared by
+       everyone — a rep hiding a town would hide it from the whole team. */
+    const who = await resolveActor(req, service);
+    if (!who.ok) return json(refusalBody(who), who.status);
+    if ((action === "suppress" || action === "unsuppress") && who.actor.role !== "admin") {
+      return json({ ok: false, error: "admin_only", detail: "Only the admin can hide or restore a town." }, 403);
+    }
+    /* A salesperson reads the ONE book's coverage (counts only — no lead names leave this function),
+       so "worked / untouched" means the same thing for the whole team. */
+    if (who.actor.role === "sales") {
+      const owner = await bookOwnerId(service);
+      if (!owner) return json({ ok: false, error: "no_book_owner" }, 503);
+      userId = owner;
+    }
 
     /* ── SUPPRESS / UNSUPPRESS ────────────────────────────────────────────────────────────────
        ⛔ NEVER A DELETE. Roughly 5% of Built-Up Areas are conurbation fragments rather than towns

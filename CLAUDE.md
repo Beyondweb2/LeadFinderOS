@@ -38,12 +38,18 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
   `main`).** `docs/deep-clean-phase3-plan.md` is the plan for the rest — contact discovery, tour/i18n,
-  barber branches in live functions, the multi-user surface, the 20 orphan function deletes, the
+  barber branches in live functions, the 20 orphan function deletes, the
   SQL and purges that go to Paul one statement at a time — **and Paul's standing decisions, which
   are not to be re-asked.** `INVENTORY_DEEP_CLEAN.md` (untracked) is the Phase 1 evidence. Dead and
   not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
-  Feedback page, the multi-user surface. 22 functions are deployed with no source (2 belong to the
-  findable-directory repo and stay).
+  Feedback page. 22 functions are deployed with no source (2 belong to the
+  findable-directory repo and stay). ⛔ **Step 7 (delete the multi-user surface) is OVERTURNED** —
+  Paul, 2026-09-27: see the next bullet.
+- **Multi-user is built: ADMIN + SALES on ONE book** (2026-09-27, `docs/multi-user.md` — read it before
+  touching auth, RLS, a lead read/write, or any edge function a salesperson can reach). Every row
+  keeps `user_id` = the book owner; who WORKS a lead is `assigned_to_user_id`. A salesperson never
+  reads `outreach_leads` (it holds Stripe/amount/refund/delivery columns) — only the `sales_leads`
+  view and the role-checked SQL functions.
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
@@ -466,8 +472,22 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **`user_id` stays on every table.** `anon` and `authenticated` hold full DML GRANTS on all 56
   public tables and the anon key is in the JS bundle — **RLS is the only barrier to the internet.**
   Ten tables are service-role-only purely by having zero policies. `has_role(admin)` is inside 14
-  tables' policies; `RequireAdmin` is the positive operator gate. Do not touch a policy "because single
-  user".
+  tables' policies. Do not touch a policy "because single user".
+- ⛔ **The role comes from `user_roles` only** (no signed-in role can write it; `admin-users` does,
+  as service role). SQL `my_role()`, edge `_shared/access.ts` (`resolveActor` / `requireAdmin` /
+  `leadAccess`), SPA `useSubscription().role`. Pure rules once: `src/lib/roleRules.ts`. Never a role
+  from a request body, `user_metadata`, or the browser. Disable = remove the role row.
+- ⛔ **A new edge function either calls `requireAdmin` or resolves the role and checks the lead with
+  `leadAccess`/`canWorkLead`.** "Signed in" is not a permission any more. `scripts/role-rules.test.ts`
+  lists them — add yours.
+- ⛔ **A new page is admin-only by default** (`src/lib/access.ts` lists what sales may open, and
+  `RequireAccess` redirects before the page mounts). That is presentation; the boundary is RLS + edge.
+- ⛔ **Writes to `outreach_leads` / `ai_audits` / `ai_audit_runs` / `ai_audit_queue` from the browser
+  are admin-only (RESTRICTIVE policies).** Sales writes go through the SECURITY DEFINER functions
+  (`claim_lead`, `sales_add_lead`, `lead_set_*`, `sales_queue_opener`), which log to `lead_activity`.
+- **"Contacted" = `lead_first_contact_at()`** (real message either direction, by lead OR phone; send
+  row; legacy stamps; a questionnaire) — never found/crawled/audited. A contacted lead is never
+  claimable. **New inserts with a place id already in the book are refused** by a trigger.
 - **`whatsapp_sends.user_id` NULL = the queue sent it; set = the Inbox button.** That column is the
   sender diagnostic. `whatsapp_messages.user_id` NULL = system-sent or unmatched inbound.
 - **Edge auth:** handler-side, always. Internal callers use CRON_SECRET + `x-internal-job`. Every
@@ -629,6 +649,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
+| Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, pages `SalesHome`/`SalesLead`/`Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400`, view `sales_leads`, tables `team_members`/`lead_activity` |
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
@@ -725,6 +746,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |

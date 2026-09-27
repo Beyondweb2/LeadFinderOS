@@ -327,7 +327,9 @@ ok(gen.length > 0 && gen.indexOf('if (!hook.ok) return') > 0 && gen.indexOf('if 
 ok(/runSiteResearch\(service, lead, operatorId, false,/.test(gen), 'the research is the shared path, never forced to refresh');
 ok(/websiteKind\.source === "own_site"\s*\? await runSiteResearch/.test(gen), 'a directory / social profile is never researched as their site');
 ok(!/mode: "full"|crawl-worker|createCrawlJob/.test(FN + SHARED), 'no crawl job is ever started');
-ok(/resolveOperator\(req\)/.test(FN) && /l\.user_id === operatorId/.test(FN), 'a signed-in operator who owns the lead');
+/* Multi-user (2026-09-27): a team role is required (resolveActor), and the lead must be one the caller may
+   work (leadAccess: admin exactly as before; sales only on a lead assigned to them, never a client). */
+ok(/resolveActor\(req, /.test(FN) && /leadAccess\(service, whoActor\.actor, leadId\)/.test(FN) && /l\.user_id === operatorId/.test(FN), 'a signed-in team member who may work the lead');
 ok(/score\.shape === "six" && !score\.complete/.test(FN), 'an incomplete six-result hook is refused, never quoted in part');
 ok(/cleanliness\.suppressNames \? \[\] : names\.filter\(\(n\) => !isProvableJunkName\(n\)\)/.test(FN), 'the report\'s suppression and junk gates are applied to each result\'s own names');
 ok(/audit_purpose/.test(FN) && /is_measurement === true/.test(FN), 'baselines and measurements are never used as hook evidence');

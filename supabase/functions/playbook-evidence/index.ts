@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { isInternalCall, refusalBody, resolveActor } from "../_shared/access.ts";
 
 // playbook-evidence — folds every audit citation into per-trade evidence, which is the ONLY thing
 // that decides which directories a playbook recommends.
@@ -49,6 +50,15 @@ let cache: { at: number; body: Record<string, unknown> } | null = null;
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
+    /* ⛔ SIGNED-IN TEAM MEMBERS OR AN INTERNAL CALL ONLY (2026-09-27). It had no handler check at
+       all, and the platform's JWT check accepts the public anon key from the JS bundle — so every
+       citation count across the whole book was one curl away for anyone. Admin or sales (the Call
+       Playbook reads it); check-directory-listings calls it server-to-server with CRON_SECRET. */
+    if (!isInternalCall(req)) {
+      const gate = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+      const who = await resolveActor(req, gate);
+      if (!who.ok) return json(refusalBody(who), who.status);
+    }
     const url = new URL(req.url);
     const fresh = url.searchParams.get("fresh") === "1";
     if (!fresh && cache && Date.now() - cache.at < TTL_MS) {

@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
      · process-ai-audit-queue   (the automatic send, on run finalisation)
      · submissions              (the operator resend, below) */
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
+import { refusalBody, requireAdmin } from "../_shared/access.ts";
 import { FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -52,14 +53,14 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
 
   try {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) return json({ ok: false, error: "Auth required" }, 401);
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: u, error: uErr } = await userClient.auth.getUser(authHeader.slice(7));
-    if (uErr || !u?.user) return json({ ok: false, error: "Auth required" }, 401);
+    /* ⛔ ADMIN ONLY (2026-09-27). Any signed-in account used to get every questionnaire, every
+       phone and every lead's amount paid. These are paid-client and money records. */
+    const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+    const gate = await requireAdmin(req, service);
+    if (!gate.ok) return json(refusalBody(gate), gate.status);
+    const u = { user: { id: gate.actor.id } };
 
     const body = await req.json().catch(() => ({}));
-    const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
     /* ── PER-LEAD ANSWERS, for the lead card's Questionnaire section (2026-08-17). ──────────────
        The LATEST onboarding row for one lead, with EVERY answer — this is the "record page" read
