@@ -66,7 +66,8 @@ below are what the server enforces.
   closed the same way.
 - **Additive sales SELECT policies**: hook audits (+ runs, queue) on own leads; messages on own leads
   or their phones; crawl checks; page hits; the book's templates; own activity.
-- **Functions** (all role-checked inside, all `revoke … from public, anon`): `my_role`,
+- **Functions** (all role-checked inside, all `revoke … from public, anon`): `my_sales_lead_ids`,
+  `my_sales_audit_ids`, `my_sales_message_phones` (the policies' sets), `my_role`,
   `book_owner_id`, `can_work_lead`, `lead_first_contact_at`, `lead_identity_lookup`, `claim_lead`
   (row lock, `FOR UPDATE`), `assign_lead` (admin), `sales_add_lead`, `lead_set_stage`,
   `lead_set_follow_up`, `lead_set_call_booked`, `lead_add_note`, `lead_record_call`,
@@ -96,6 +97,21 @@ below are what the server enforces.
 Backfill filled the NEW column only (`updated_at` untouched): **2,880 leads → the book owner (Paul)**
 (contacted by the rule above, or a client), **2,431 unassigned**, of 5,311. Message authorship was
 not rewritten.
+
+### The sales policies cost the admin nothing (migration 20260927100500)
+
+The first sales SELECT policies called `can_work_lead(lead_id)` / `sales_can_see_phone(phone)` per row.
+They were replaced within the hour by policies that compare against SETS computed once per statement
+(`my_sales_lead_ids()`, `my_sales_audit_ids()`, `my_sales_message_phones()` — SECURITY DEFINER,
+return nothing at once for a non-sales caller) behind a `(select my_role())` initplan. EXPLAIN on the
+Inbox's audits+runs read as the admin: the sales branch is evaluated once and its subplan is
+`never executed`. ⛔ Never put a per-row function call in a sales policy.
+
+⚠️ **Pre-existing, found while verifying (not caused by this work):** the Inbox's `audit_gemini_signal`
+read and its `ai_audits → ai_audit_runs(results->…)` embed run close to the `authenticated` role's
+8 s statement timeout (measured WITHOUT the sales policies: gemini 3.5–8.7 s, audits 1.5–3.7 s, the
+cost being the detoast of every run's `results` plus the per-row `auth.uid()` in the old policies),
+so under the Inbox's parallel load one of them intermittently answers 500 (57014).
 
 ## 4. Edge functions (all 26 redeployed — see the commit)
 

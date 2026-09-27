@@ -93,7 +93,8 @@ export default function SalesHome() {
     <div className="p-4 md:p-6 space-y-6 max-w-6xl">
       <div>
         <h1 className="text-xl font-semibold">My leads</h1>
-        <p className="text-sm text-muted-foreground">{all.filter((l) => !l.is_archived).length} leads assigned to you.</p>
+        {/* Absent is not zero: while the list loads, say so rather than show "0 leads". */}
+        <p className="text-sm text-muted-foreground">{isLoading ? 'Loading your leads…' : `${all.filter((l) => !l.is_archived).length} leads assigned to you.`}</p>
       </div>
 
       {/* NEEDS ATTENTION */}
