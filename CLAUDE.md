@@ -329,6 +329,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   holds ACCESS EXCLUSIVE for the whole rewrite and queues every read (ai_audit_runs/queue ran past
   100 s, 2026-09-27). Plain column + trigger + batched backfill; DDL with `set local lock_timeout`.
   Never read a small key out of `results` in bulk — use `results_summary` / `results_crawl_check` /
+  `results_seo_grade` (2026-09-27; a backfill must WALK the primary key, never search the JSON) /
   `gemini_answered` (`docs/inbox-outreach-speed.md`). A policy's `auth.uid()` goes in `(select …)`.
 - **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`; for a big
   list use `fetchAllRowsParallel` (same rows, deduped by id; a short page 0 probes once, the first wave
@@ -339,6 +340,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   `DASHBOARD_LEAD_COLUMNS`). A new field read in list code goes in that list —
   `scripts/outreach-list-columns.test.ts` walks every caller with a parser and fails otherwise; a dev
   Proxy logs any undownloaded read. `LeadDetailDialog` reads its own complete row (`useFullLeadRow`).
+- ⛔ **The app's Sign out is GLOBAL** (`useAuth` calls `supabase.auth.signOut()`, scope defaults to
+  global): pressing it ends every session on that account, on every device. To end ONLY a test or QA
+  session, revoke it with `/auth/v1/logout?scope=local` using that session's own token.
 - ⛔ **The API has ~10 database connections for everyone** (Micro instance, default PostgREST pool).
   Request count and query hold-time are shared costs. **Never `invalidateQueries` on an interval
   shorter than the query** — the old fetch keeps running (the queryFn ignores the abort), so copies
