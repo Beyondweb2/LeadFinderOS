@@ -58,9 +58,25 @@ batched backfill.
   is fresh); `process-whatsapp-queue` runs its status reads in one `Promise.all` (also every cron
   tick). Payload unchanged.
 
-## Measured after
+## Measured after (live, the same requests, from a script as the admin — the in-app browser tab was hidden and throttled, so its timings were not used)
 
-See the commit message and the final report (live timings, same requests).
+| Read | Before | After |
+|---|---|---|
+| Inbox audits embed | 500 (statement timeout) after ~9 s | 200, 1.5 s (2 pages) |
+| Inbox Gemini signal | 500, or 3.5–8.8 s | 200, 2–3 s |
+| Inbox messages (6 pages) | 5.9–7.1 s | 2.1–3.0 s |
+| Inbox full load | everything fetched twice | once + a small catch-up; 0 errors |
+| Outreach active leads (6 pages, 16 MB) | 6.2–13.6 s | 3.9–4.9 s |
+| Queue status (warm) | 6–18 s, called 2–3x | 1.5–2.7 s, called once (`x-queue-timing`: auth 0.5–1.3 s, reads 0.8–1.3 s) |
+
+## Still open
+
+- **Outreach downloads 16 MB of lead JSON** (`select('*')`, ~110 columns, ~3 KB/lead; the values are
+  ~4 MB, the rest is repeated keys). Narrowing the select is the next real win, but every Outreach
+  component and the lead dialog read fields off the row — do it as its own change with a field audit.
+- `LeadSearchContext` loads checked_businesses / outreach_history / lead names twice on every page
+  load, and its outreach_history read is unpaginated.
+- A freshly deployed function's first call is a cold start (~5 s once).
 
 ## Found, not changed
 
