@@ -136,3 +136,57 @@ export function groupSkips(skipped: readonly BulkSkip[]): { reason: string; coun
     .map(([reason, labels]) => ({ reason, count: labels.length, labels }))
     .sort((a, b) => b.count - a.count);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   THE PRE-SEND CHECK (Paul, 2026-09-27: "Sent 0, 19 failed — hook_engine_mismatch").
+
+   planBulkSend above can only see what the browser knows. What it cannot see is what the SERVER
+   will decide for each lead: audit_followup's approved words say "I asked chatgpt", and a lead
+   whose best missed search is on Google AI is refused for it (templateEngineConflict,
+   src/lib/rivalHook.ts) — correctly, because Google AI's competitors under "I asked chatgpt" would
+   be a false statement to a stranger. Nineteen such leads were planned, confirmed and "sent", and
+   every one came back refused.
+
+   ⛔ SO THE CONFIRM ASKS THE SERVER FIRST, ONE LEAD AT A TIME, IN DRY-RUN MODE. send-whatsapp-message
+   `mode: "dry_run"` is the same code path — every guard, the same hook pick (resolveAuditReplyVars:
+   the report's hook gap, the Inbox card's best missed search) — and it returns before the Graph POST
+   and before any row is written. There is no second copy of the selection or of the guard here.
+   ⛔ A LEAD IS SENT ONLY WITH A PASSING CHECK. No check (not run yet, or the call failed) means NOT
+   ready — fail closed. The real send still re-runs every guard.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export interface BulkCheck { ok: boolean; error?: string; reason?: string }
+
+export interface BulkCheckedPlan {
+  /** Passed the server's dry run: these, and only these, may be sent. */
+  ready: BulkCandidate[];
+  /** The server would refuse these, each with the reason in plain English. */
+  refused: BulkSkip[];
+  /** Not checked yet. Never sent. */
+  pending: BulkCandidate[];
+}
+
+export function applyBulkChecks(send: readonly BulkCandidate[], checks: Readonly<Record<string, BulkCheck | undefined>>): BulkCheckedPlan {
+  const ready: BulkCandidate[] = [];
+  const refused: BulkSkip[] = [];
+  const pending: BulkCandidate[] = [];
+  for (const c of send) {
+    const k = checks[c.key];
+    if (!k) pending.push(c);
+    else if (k.ok === true) ready.push(c);
+    else refused.push({ key: c.key, label: c.label, reason: explainBulkRefusal(k.error, k.reason) });
+  }
+  return { ready, refused, pending };
+}
+
+/** A server refusal, in the words Paul acts on. Unknown refusals keep the server's own reason. */
+export function explainBulkRefusal(error: string | null | undefined, reason: string | null | undefined): string {
+  const r = String(reason ?? '');
+  const e = String(error ?? '');
+  if (r.startsWith('hook_engine_mismatch')) {
+    return 'this template says "I asked chatgpt", but this lead\'s missed search is on Google AI. Use "Audit follow-up + call" or "Audit follow-up + fault" (they say "i asked AI").';
+  }
+  if (e === 'pitch_already_sent' || e === 'already_sent') return 'already had this template';
+  if (e === 'phone_already_contacted') return 'this number has already been contacted';
+  return r || e || 'the server would refuse this send';
+}

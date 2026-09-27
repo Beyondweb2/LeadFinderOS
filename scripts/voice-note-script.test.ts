@@ -292,7 +292,9 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const r = selectVoiceNoteEvidence(results, CTX, { questionIndex: 1, engine: 'gemini' });
   ok(r.ok && r.evidence.questionIndex === 1 && r.evidence.competitors.join() === 'G1,G2' && r.note === null, 'the card\'s best missed search is the voice note\'s, with its own names');
   const thinCard = selectVoiceNoteEvidence([res(0, 'gemini', 'not_named', ['G1']), res(1, 'gemini', 'not_named', ['H1', 'H2', 'H3'])], CTX, { questionIndex: 0, engine: 'gemini' });
-  ok(thinCard.ok && thinCard.evidence.questionIndex === 1 && /fewer than two usable competitor names/.test(thinCard.note ?? ''), 'a card pick with one name gives way, and the operator is told which search was used');
+  ok(thinCard.ok && thinCard.evidence.questionIndex === 0 && thinCard.evidence.thin && thinCard.evidence.competitors.join() === 'G1' && /Only one usable competitor/.test(thinCard.note ?? ''), 'a card pick with ONE name is still the card\'s search (one source of truth), flagged thin (JB Electrical Maidstone, 2026-09-27)');
+  const emptyCard = selectVoiceNoteEvidence([res(0, 'gemini', 'not_named', []), res(1, 'gemini', 'not_named', ['H1', 'H2', 'H3'])], CTX, { questionIndex: 0, engine: 'gemini' });
+  ok(emptyCard.ok && emptyCard.evidence.questionIndex === 1 && /has no usable competitor names/.test(emptyCard.note ?? ''), 'only a card pick with NO usable names gives way, and the operator is told which search was used');
   const noCard = selectVoiceNoteEvidence(results, CTX);
   ok(noCard.ok && noCard.evidence.questionIndex === 0, 'with no card pick, Paul\'s original order is kept');
 }

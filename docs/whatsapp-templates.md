@@ -636,3 +636,27 @@ the 7-param order across both registries, the selection rules and a scanner-phra
 - **Frozen at queue time:** the queue sends `outreach_leads.whatsapp_template` as stored and never
   re-reads the selection, so retries, delays and later changes cannot switch a queued lead.
 - Tests: `scripts/initial-opener-select.test.ts` (replaces `opener-variant.test.ts`).
+
+## Bulk send "Sent 0, 19 failed — hook_engine_mismatch" (2026-09-27)
+
+**Root cause (proven read-only against live data with the real `resolveAuditReplyVars`):** the Inbox
+batch used `audit_followup`, whose Meta-approved body says "I asked chatgpt". Every one of the 19
+leads' best missed search is on Google AI (the hook pick prefers Google AI), so the server refused
+each one via `templateEngineConflict` (src/lib/rivalHook.ts, since 2026-09-26) — correctly. The
+hook was NOT stale: the bulk send stores no prepared message; the server resolves the lead's newest
+audit at send time. Nothing was sent, nothing was written, no status moved. Across the 115 unarchived
+`replied` leads on 2026-09-27: 38 refuse `audit_followup` this way, 64 allow it (ChatGPT hook),
+13 refuse for other reasons; `audit_followup_call` / `audit_followup_fault` ("i asked AI") carry
+the same tuple for all but one (no competitors).
+
+**What was wrong:** the confirm could not see a server refusal until after Send.
+**Fix:** opening the bulk confirm runs `send-whatsapp-message` in `dry_run` for every planned lead
+(same guards, same hook pick, nothing sent or written), lists refusals in plain English
+(`explainBulkRefusal`), and sends ONLY the leads that passed (`applyBulkChecks`, fail closed). The
+report offers "Select these N again". Tests: `scripts/bulk-send-precheck.test.ts`.
+
+**Also found and fixed:** for an old early-stop (v1) audit, the Inbox card and voice note re-ranked
+the misses while the send / report / Call Script used the gap the audit stored (Locksmiths-
+Manchester: Q3 vs Q1). `scoreHookRun`'s pick for a v1 hook is now its stored gap. The voice note now
+uses the card's result whenever that answer has any usable name (JB Electrical Maidstone had one).
+Live probe after the fix: 0 disagreements between card, send and voice note across 115 leads.
