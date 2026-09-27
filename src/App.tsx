@@ -15,6 +15,7 @@ import { AccentInitializer } from "@/components/AccentInitializer";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
+import { LegacySalesLeadRedirect } from "./components/LegacySalesLeadRedirect";
 
 // Eagerly loaded routes (critical path)
 import Auth from "./pages/Auth";
@@ -36,8 +37,6 @@ const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
-const SalesHome = lazy(() => import("./pages/SalesHome"));
-const SalesLead = lazy(() => import("./pages/SalesLead"));
 const Team = lazy(() => import("./pages/Team"));
 const SetPassword = lazy(() => import("./pages/SetPassword"));
 /* THE MOCKUP PICKER. Operator-only like every other page here: the pool carries a prospect's
@@ -249,9 +248,10 @@ const App = () => {
               <Route path="/page-plan" element={<PagePlanQueue />} />
               <Route path="/ai-audit" element={<AiAudit />} />
               <Route path="/admin/api-usage" element={<AdminApiUsage />} />
-              {/* Multi-user: the salesperson's workspace, and the admin's Team page. */}
-              <Route path="/sales" element={<SalesHome />} />
-              <Route path="/sales/lead/:leadId" element={<SalesLead />} />
+              {/* Multi-user. The retired My Leads pages redirect into the ONE workflow (2026-09-27):
+                  /sales → Outreach; /sales/lead/:id → that lead, opened in Outreach. */}
+              <Route path="/sales" element={<Navigate to="/outreach" replace />} />
+              <Route path="/sales/lead/:leadId" element={<LegacySalesLeadRedirect />} />
               <Route path="/team" element={<Team />} />
             </Route>
             {/* The standalone admin hub is a zone on /dashboard. */}

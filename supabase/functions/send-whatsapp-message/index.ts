@@ -24,7 +24,6 @@ import { pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { openerRefusal } from "../_shared/initial-opener.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -62,7 +61,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
    asserts "dry_run" is listed IF AND ONLY IF this file actually contains the dry-run return, so the
    marker cannot claim a feature these bytes do not have — a constant that can lie is worse than no
    constant. BUMP `BUILD_ID` in the same commit as any change worth proving live. */
-const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "selected_opener"] as const;
+const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approved_opener"] as const;
 /* 2026-09-25a: ai_site_findings_v2 APPROVED — six body params (no report link) + the clean-site {{6}}.
    2026-09-23b: the first build refusing an initial opener other than the SELECTED one
    (whatsapp_outreach_state.initial_opener_template; the 50/50 opener split is gone).
@@ -72,8 +71,10 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "selected_o
    read 2026-09-22a over new bytes — exactly the lie this marker exists to prevent. Bumped in the
    follow-up so the live header proves what is running.
    (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
-/* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id. */
-const BUILD_ID = "2026-09-27b";
+/* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
+   2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
+   gone; the capability reads any_approved_opener). */
+const BUILD_ID = "2026-09-27c";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -357,12 +358,9 @@ Deno.serve(async (req) => {
 
     if (templateName) {
       if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
-      /* ⛔ ONLY THE SELECTED INITIAL OPENER (src/lib/openerVariant.ts). An opener other than the one
-         Paul selected is refused here as in every picker — and if the selection cannot be read, every
-         opener is refused. Nothing is substituted: the other opener is never sent in its place.
-         Non-openers are untouched. Applies to dry_run too, so a preview reports the same refusal. */
-      const notSelected = await openerRefusal(service, templateName);
-      if (notSelected) return json({ ok: false, error: "opener_not_selected", reason: notSelected, template: templateName }, 200);
+      /* Both approved initial openers send exactly as chosen (src/lib/openerVariant.ts, 2026-09-27):
+         there is no selected-opener refusal and nothing is substituted. The approval gate, the
+         cold-outreach phone-history rule and every guard below still apply to both. */
       /* ⛔ THE PHONE-HISTORY SEATBELT, SAME RULE AS THE DRIP. The comment in the opener branch
          below used to say "openers are guarded in the queue, not here" - and that was the hole.
          Measured 2026-09-02: a manual audit_result_hook went to SJA Locksmiths a day after their

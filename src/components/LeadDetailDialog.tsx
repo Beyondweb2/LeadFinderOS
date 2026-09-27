@@ -44,6 +44,11 @@ import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { useSubscription } from '@/hooks/useSubscription';
+import { maySetStatus } from '@/lib/access';
+import { leadSourceFor } from '@/lib/outreachLeadColumns';
+import { LeadCrmPanel } from '@/components/LeadCrmPanel';
 
 /* ───────── constants (ported from PotentialWork) ───────── */
 
@@ -231,6 +236,10 @@ const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
  * A demo lead has no database row; it is already complete.
  */
 export function useFullLeadRow(lead: OutreachLead | null, open: boolean): { row: OutreachLead | null; error: string | null } {
+  /* ⛔ A SALESPERSON'S FULL ROW IS THE SAFE VIEW'S ROW (2026-09-27): every column sales_leads has,
+     named — no payment, delivery or admin-note column exists there, so none can reach the browser.
+     The admin reads the table as before. */
+  const { role } = useSubscription();
   const id = lead?.id ?? null;
   const demo = !!id && isDemoLead(id);
   const [fetched, setFetched] = useState<{ id: string; row: OutreachLead } | null>(null);
@@ -239,13 +248,14 @@ export function useFullLeadRow(lead: OutreachLead | null, open: boolean): { row:
     if (!open || !id || demo) return;
     let cancelled = false;
     setError(null);
-    void supabase.from('outreach_leads').select('*').eq('id', id).maybeSingle().then(({ data, error: e }) => {
+    const src = leadSourceFor(role);
+    void (supabase as unknown as SupabaseClient).from(src.table).select(src.detailSelect).eq('id', id).maybeSingle().then(({ data, error: e }) => {
       if (cancelled) return;
       if (e || !data) { setError({ id, message: e?.message ?? 'lead not found' }); return; }
       setFetched({ id, row: data as unknown as OutreachLead });
     });
     return () => { cancelled = true; };
-  }, [open, id, demo]);
+  }, [open, id, demo, role]);
   const row = useMemo<OutreachLead | null>(() => {
     if (!lead) return null;
     if (demo) return lead;
@@ -380,6 +390,11 @@ function LeadDetailBody({
   const [editingField, setEditingField] = useState<null | 'phone' | 'email' | 'website' | 'address'>(null);
   const [editValue, setEditValue] = useState('');
   const { customActions, addAction } = useCustomNextActions();
+  /* ⛔ THE SAME DIALOG FOR BOTH ROLES (2026-09-27). A salesperson gets everything that works or closes
+     a lead — status (their allowed stages), the CRM panel, contact details, WhatsApp outreach, the
+     call playbook, voice-note script, sign-up link — and not the admin's record editing, client
+     delivery, payment or private-note sections, whose data the safe view never sends them anyway. */
+  const perms = useLeadPermissions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
   const [newCustomAction, setNewCustomAction] = useState('');
@@ -598,9 +613,9 @@ function LeadDetailBody({
             ) : (
               <>
                 <span className="truncate">{lead.business_name}</span>
-                <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
+                {perms.editLeadRecord && <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
                   <Pencil className="h-3.5 w-3.5" />
-                </button>
+                </button>}
               </>
             )}
           </DialogTitle>
@@ -617,7 +632,7 @@ function LeadDetailBody({
               <PipelineStatusBadge status={lead.status as PipelineStatus} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
-              {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
 
@@ -626,6 +641,7 @@ function LeadDetailBody({
               date (the date that actually matters) now lives in the cockpit's Key Dates. */}
 
           {/* Contact method — same component + dropdown as the Outreach table */}
+          {perms.editLeadRecord ? (
           <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
               <ContactMethodBadge method={lead.contact_method as ContactMethod} />
@@ -634,10 +650,12 @@ function LeadDetailBody({
               {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
+          ) : <ContactMethodBadge method={lead.contact_method as ContactMethod} />}
 
           {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this LEAD id. onClose fires alongside
               the navigation: this is a modal, and leaving it mounted over the new route would trap
               the operator behind an overlay. */}
+          {perms.clientDelivery && (
           <Link
             to={`/playbook/${lead.id}`}
             state={{ from: '/outreach', fromLabel: 'Outreach' }}
@@ -648,11 +666,12 @@ function LeadDetailBody({
             <ClipboardList className="h-3 w-3" />
             Playbook
           </Link>
+          )}
 
           {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report
               with the selling sections hidden. Refuses with a toast when the lead has no completed
               audit, because the report IS the pack's last section. */}
-          {!isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
+          {perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
 
           {/* Read-only call guide from this lead's stored evidence — the SAME panel Inbox opens. */}
           {!isDemoLead(lead.id) && <ColdCallPlaybookButton leadId={lead.id} />}
@@ -662,10 +681,10 @@ function LeadDetailBody({
 
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
-          {!isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
+          {perms.clientDelivery && !isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
           {/* Free crawlability check — run on the prospect BEFORE messaging so the outreach can name
               their actual problem. Fetches only (£0), never the Apify SEO scanner. */}
-          {!isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
+          {perms.crawlSite && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
           {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 
@@ -690,9 +709,14 @@ function LeadDetailBody({
 
         {/* ══ THE DELIVERY COCKPIT — key dates, quick launch, checklist, reference (2026-08-18).
             The at-a-glance client control panel; shared by Outreach + Inbox via this one dialog. ══ */}
-        {!isDemoLead(lead.id) && (
+        {perms.clientDelivery && !isDemoLead(lead.id) && (
           <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />
         )}
+
+        {/* ══ THE LEAD'S CRM — owner, next action, call booked / outcome, website control, internal
+            notes, activity, Hook Audit. One panel for both roles (moved here from the retired My Leads
+            lead page, 2026-09-27); every write is an ownership-checked server function. ══ */}
+        {!isDemoLead(lead.id) && <LeadCrmPanel leadId={lead.id} />}
 
         {/* REMOVED 2026-08-18: the Journey stepper (Contacted → Replied → Site sent → Opened →
             Add-on) — vague prospecting funnel, not real delivery. Binned per Paul's spec. */}
@@ -705,7 +729,7 @@ function LeadDetailBody({
                 `submissions` endpoint (onboarding_responses has RLS with no policies — a direct
                 read silently returns nothing, CLAUDE.md §8). Demo leads have no submissions and
                 no edge access, so the section is simply absent for them. */}
-            {!isDemoLead(lead.id) && (
+            {perms.clientDelivery && !isDemoLead(lead.id) && (
               <LeadQuestionnaireSection lead={lead} onUpdateLead={onUpdateLead} />
             )}
             {/* REMOVED 2026-08-18: the free-text Delivery section (overview / status / selling /
@@ -789,13 +813,13 @@ function LeadDetailBody({
                               ) : (
                                 <span className="min-w-0 flex-1 truncate italic text-muted-foreground/40">Not set</span>
                               )}
-                              <button
+                              {perms.editLeadRecord && <button
                                 onClick={() => startEditField(field, value)}
                                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground"
                                 title={`Edit ${label.toLowerCase()}`}
                               >
                                 <Pencil className="h-3 w-3" />
-                              </button>
+                              </button>}
                             </>
                           )}
                         </li>
@@ -823,6 +847,7 @@ function LeadDetailBody({
                 everywhere (CLAUDE.md §6), so a 0 written for an empty box would un-pay a real
                 customer: out of the Paid filter, out of the Inbox's paid exemption, out of every
                 revenue figure, silently. parseAmountPaid owns that rule and is tested. */}
+            {perms.clientDelivery && (
             <section className={CARD}>
               <SectionLabel icon={PoundSterling} color="text-emerald-500">Payment</SectionLabel>
               <div className="grid grid-cols-2 gap-2.5">
@@ -883,7 +908,9 @@ function LeadDetailBody({
                 />
               </div>
             </section>
+            )}
 
+            {perms.privateNote && (
             <section className={CARD}>
               <SectionLabel icon={StickyNote} color="text-amber-400">Notes</SectionLabel>
               {/* Private note */}
@@ -927,8 +954,9 @@ function LeadDetailBody({
               </div>
               {/* REMOVED 2026-08-18: Team notes — confirmed waste. Private note stays. */}
             </section>
+            )}
 
-            {!isDemoLead(lead.id) && (
+            {fetchActivities && !isDemoLead(lead.id) && (
               <section className={CARD}>
                 <SectionLabel icon={Clock} color="text-cyan-400">Activity</SectionLabel>
                 {activities.length === 0 ? (
@@ -956,7 +984,7 @@ function LeadDetailBody({
           amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from
           the detail view (2026-08-18); a lost lead is set via the status control. When paid there
           is nothing to show, so the footer bar is absent rather than empty. */}
-      {!isPaidLead(lead) && (
+      {perms.clientDelivery && !isPaidLead(lead) && (
         <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3">
           <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
             <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid

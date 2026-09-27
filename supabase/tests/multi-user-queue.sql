@@ -16,8 +16,10 @@ create temp table t_fx as select array(
     and public.lead_first_contact_at(l.id) is null
   order by l.created_at limit 3) as mob,
   (select l.id from public.outreach_leads l where l.assigned_to_user_id = l.user_id order by l.created_at limit 1) as pauls;
+-- 2026-09-27: no global selected opener — the batch is queued with the template chosen for it. The
+-- NEWER opener is chosen here on purpose, to prove nothing substitutes the original.
 alter table t_fx add column opener text;
-update t_fx set opener = (select initial_opener_template from public.whatsapp_outreach_state where id = 1);
+update t_fx set opener = 'initial_opener_v2';
 grant select on t_fx to authenticated;
 insert into t_results (name, ok, detail) select 'fixtures', array_length(mob, 1) = 3, array_length(mob, 1)::text from t_fx;
 set local role authenticated;
@@ -25,13 +27,18 @@ select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-4000-8000-0000000
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-00000000000a', true);
 do $$ declare r jsonb; i int; begin
   for i in 1..3 loop perform public.claim_lead((select mob[i] from t_fx)); end loop;
-  r := public.sales_queue_opener((select mob || array[pauls] from t_fx));
+  r := public.sales_queue_opener((select mob from t_fx), '');
+  insert into t_results (name, ok, detail) values ('queue: no template chosen is refused', r ->> 'error' = 'template_required' and (select count(*) from public.lead_activity where kind = 'bulk_queued') = 0, r::text);
+  r := public.sales_queue_opener((select mob from t_fx), 'audit_reply');
+  insert into t_results (name, ok, detail) values ('queue: a non-opener is refused', r ->> 'error' = 'not_an_initial_opener', r::text);
+  r := public.sales_queue_opener((select mob || array[pauls] from t_fx), (select opener from t_fx));
   insert into t_results (name, ok, detail) values ('queue: 2 queued (daily limit 2)', (r ->> 'queued')::int = 2, r::text);
   insert into t_results (name, ok, detail) values ('queue: 1 over the limit', (r -> 'skipped' ->> 'daily_limit')::int = 1, r::text);
   insert into t_results (name, ok, detail) values ('queue: Pauls lead refused', (r -> 'skipped' ->> 'not_yours')::int = 1, r::text);
-  insert into t_results (name, ok, detail) values ('queue: template is the selected opener', r ->> 'template' = (select opener from t_fx), r::text);
+  insert into t_results (name, ok, detail) values ('queue: template is the one chosen for the batch', r ->> 'template' = 'initial_opener_v2', r::text);
+  insert into t_results (name, ok, detail) values ('queue: that exact template is stored on the lead', (select whatsapp_template from public.sales_leads where id = (select mob[1] from t_fx)) = 'initial_opener_v2', null);
   insert into t_results (name, ok, detail) values ('queue: lead shows queued', (select status from public.sales_leads where id = (select mob[1] from t_fx)) = 'queued', null);
-  r := public.sales_queue_opener((select array[mob[1]] from t_fx));
+  r := public.sales_queue_opener((select array[mob[1]] from t_fx), 'initial_contact');
   insert into t_results (name, ok, detail) values ('queue: requeue refused', (r ->> 'queued')::int = 0, r::text);
   insert into t_results (name, ok, detail) values ('queue: activity logged', (select count(*) from public.lead_activity where kind = 'bulk_queued') = 2, null);
 end $$;

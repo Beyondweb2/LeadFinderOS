@@ -1,155 +1,109 @@
 /* ============================================================
-   THE INITIAL OPENER IS ONE SELECTED TEMPLATE — NO 50/50 SPLIT (2026-09-23).
+   CHOOSE A TEMPLATE → SEND. NO SELECTED OPENER, NO SPLIT (Paul, 2026-09-27).
 
-   Replaces opener-variant.test.ts (which tested the lead-id hash split, now deleted). Pins: the
-   original opener is selected; every new lead gets exactly the selected one; nothing alternates; the
-   newer opener is kept but unsendable while unselected; the queue sends what was stored (retries and
-   delays cannot switch it); Outreach, the per-lead picker and the Inbox share one rule; an
-   unavailable selection fails closed instead of falling back; changing or reading the setting sends
-   nothing; sent history is untouched.
+   Replaces the 2026-09-23 "one selected opener" suite. Pins:
+     · both approved openers (initial_contact, initial_opener_v2) are ordinary templates in every
+       picker — neither blocks the other, and nothing reads a global selection;
+     · no hidden deterministic choice (no hash, no alternation, no substitution) anywhere;
+     · the send path refuses nothing for "not selected" (opener_not_selected is gone), and the build
+       marker says so;
+     · the old setter is refused explicitly and writes nothing;
+     · bulk initial outreach stores THE TEMPLATE CHOSEN FOR THE BATCH on each lead — the admin's
+       queue write and the salesperson's sales_queue_opener both — and the queue sends that exact
+       stored value;
+     · the Meta approval gate, the cold-outreach phone-history rule and duplicate protection stay;
+     · audit_followup's Google AI waiver (Paul's approval, 2026-09-27) is unchanged.
 
    Run: npx tsx scripts/initial-opener-select.test.ts
    ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
-import {
-  DEFAULT_INITIAL_OPENER, INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENERS,
-  isInitialOpener, openerSelectable, openerSendability, resolveSelectedOpener,
-} from '../src/lib/openerVariant.ts';
+import * as OV from '../src/lib/openerVariant.ts';
+import { INITIAL_OPENER_A, INITIAL_OPENER_B, INITIAL_OPENERS, isInitialOpener, openerApproved } from '../src/lib/openerVariant.ts';
 import { WHATSAPP_TEMPLATES } from '../src/types/outreach.ts';
-import { WA_TEMPLATE_REQS, getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
-import { READABLE_TEMPLATE_BODIES } from '../src/lib/templateBodies.ts';
+import { getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { isColdOutreachTemplate } from '../src/lib/coldOutreach.ts';
+import { TEMPLATE_ENGINE_CLAIM_WAIVED, templateEngineConflict } from '../src/lib/rivalHook.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
+const exists = (p: string) => fs.existsSync(path.join(ROOT, p));
 let failures = 0;
 function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'} ${msg}`); if (!cond) failures++; }
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-
-const V2_BODY = 'Hey, are you taking on more jobs atm? Cheers';
-/** What the Outreach queue stores for one lead, given the dialog's choice and the stored selection —
- *  the exact two lines of handleQueueForWhatsApp (asserted against the source below). */
-const queueFor = (template: string, selected: string | null | undefined) =>
-  openerSendability(template, selected).ok ? template : null;
-
-console.log('\n── THE TWO OPENERS (names match Meta exactly) ──');
-ok(INITIAL_OPENER_A === 'initial_contact' && INITIAL_OPENER_B === 'initial_opener_v2', 'original = initial_contact, newer = initial_opener_v2');
-ok(isInitialOpener(INITIAL_OPENER_A) && isInitialOpener(INITIAL_OPENER_B) && !isInitialOpener('audit_reply') && !isInitialOpener(null), 'only those two are openers');
-
-console.log('\n── 1. THE ORIGINAL OPENER IS SELECTED ──');
-{
-  ok(DEFAULT_INITIAL_OPENER === INITIAL_OPENER_A, '1. the default is the original');
-  ok(resolveSelectedOpener(null).template === INITIAL_OPENER_A && resolveSelectedOpener('initial_contact').template === INITIAL_OPENER_A, '1. nothing stored or "initial_contact" stored → the original');
-  const mig = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).find((m) => /initial_opener_template/.test(m));
-  ok(!!mig && /add column if not exists initial_opener_template text default 'initial_contact'/i.test(read(`supabase/migrations/${mig}`)), `1. the column defaults to the original (${mig})`);
-}
-
-console.log('\n── 2/3/4. EVERY NEW LEAD GETS THE SELECTED OPENER, NOTHING ALTERNATES ──');
-{
-  const ids = [...Array(100)].map(() => randomUUID());
-  const picked = ids.map(() => queueFor(INITIAL_OPENER_A, 'initial_contact'));
-  ok(picked.every((t) => t === INITIAL_OPENER_A), '2/3. 100 new leads queued with the original → 100 × initial_contact');
-  ok(ids.every(() => queueFor(INITIAL_OPENER_B, 'initial_contact') === null), '4. the newer opener is never queued while the original is selected');
-  const lib = strip(read('src/lib/openerVariant.ts'));
-  ok(!/Math\.random|fnv1a|hash|openerArmFor|openerTemplateFor|% 2|& 1/.test(lib), '3. no coin flip, hash or alternation left in the opener rule');
-  const table = read('src/components/OutreachTable.tsx');
-  ok(/whatsapp_template: template,\n/.test(table) && !/openerTemplateFor/.test(table), '2. the queue dialog stores the chosen template exactly — no substitute');
-  ok(/const openerCheck = openerSendability\(template, opener\.selected\);\n\s+if \(!openerCheck\.ok\) \{ toast\(/.test(table), '2/4. …and refuses an opener that is not the selected one before queueing anything');
-  for (const f of ['src/components/OutreachTable.tsx', 'src/components/WhatsAppLeadControls.tsx', 'src/pages/Inbox.tsx', 'supabase/functions/process-whatsapp-queue/index.ts', 'supabase/functions/send-whatsapp-message/index.ts']) {
-    ok(!/openerArmFor|openerTemplateFor|INITIAL_OPENER_B\b/.test(strip(read(f))), `3. ${f} has no opener split or hard-coded v2 branch`);
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+const walk = (dir: string, out: string[] = []) => {
+  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const p = `${dir}/${e.name}`;
+    if (e.isDirectory()) walk(p, out); else if (/\.(ts|tsx)$/.test(e.name)) out.push(p);
   }
-}
+  return out;
+};
+const code = [...walk('src'), ...walk('supabase/functions')];
 
-console.log('\n── 5. THE NEWER OPENER IS KEPT ──');
-{
-  ok(WHATSAPP_TEMPLATES.some((t) => t.value === INITIAL_OPENER_B) && WA_TEMPLATE_REQS[INITIAL_OPENER_B]?.group === 'opener', '5. still in the template list, grouped as an opener');
-  ok(/initial_opener_v2: \{ lang: "en", vars: \[\] \}/.test(read('supabase/functions/_shared/whatsapp-send.ts')) && /initial_opener_v2: \{ lang: "en", vars: \[\] \}/.test(read('supabase/functions/process-whatsapp-queue/index.ts')), '5. still registered in both sender registries');
-  ok(READABLE_TEMPLATE_BODIES[INITIAL_OPENER_B]?.('Acme', '') === V2_BODY, '5. its Meta body still renders (past threads read correctly)');
-  ok(openerSelectable(INITIAL_OPENER_B), '5. it can be selected later');
-  ok(queueFor(INITIAL_OPENER_B, 'initial_opener_v2') === INITIAL_OPENER_B && queueFor(INITIAL_OPENER_A, 'initial_opener_v2') === null, '5/9. if Paul selects it, it — and only it — is queued');
-  ok(isColdOutreachTemplate(INITIAL_OPENER_B) && isColdOutreachTemplate(INITIAL_OPENER_A), 'both keep the cold-outreach safeguards');
-}
+console.log('\n── both openers are ordinary, approved choices ──');
+ok(INITIAL_OPENER_A === 'initial_contact' && INITIAL_OPENER_B === 'initial_opener_v2', 'names match Meta exactly');
+ok(INITIAL_OPENERS.every((o) => isInitialOpener(o)) && !isInitialOpener('audit_reply'), 'only those two are openers');
+ok(INITIAL_OPENERS.every((o) => openerApproved(o)), 'both are approved at Meta');
+ok(INITIAL_OPENERS.every((o) => WHATSAPP_TEMPLATES.some((t) => t.value === o)), 'both are in the one sendable list');
+ok(INITIAL_OPENERS.every((o) => getTemplateSendability(o, { shareToken: null }, {}).ok), 'both are sendable from every picker, with no selection passed');
+ok(getTemplateSendability.length <= 3, 'getTemplateSendability takes no "selected opener" argument any more');
+ok(INITIAL_OPENERS.every((o) => isColdOutreachTemplate(o)), 'both are still COLD templates (the phone-history rule still applies)');
 
-console.log('\n── 6/7. RETRIES, DELAYS AND THE QUEUE NEVER SWITCH A STORED TEMPLATE ──');
-{
-  const queue = read('supabase/functions/process-whatsapp-queue/index.ts');
-  ok(/const requestedTemplate = \(\(lead\.whatsapp_template as string \| null\) \?\? ""\)\.trim\(\);/.test(queue), '7. the queue sends the template stored on the lead row');
-  ok(/let templateName = requestedTemplate;/.test(queue), '7. …exactly as stored');
-  const send = queue.slice(queue.indexOf('const requestedTemplate'), queue.indexOf('let templateName = requestedTemplate;'));
-  ok(!/openerSendability|readSelectedOpener|initial_opener_template/.test(send), '6/7. the send path never re-reads the selection — changing it cannot switch a queued lead');
-  ok(/error: "unknown_template"/.test(send) && /Nothing else was sent in its place/.test(send), '11. an unregistered stored template is refused, never substituted');
-  const lib = read('src/lib/openerVariant.ts');
-  ok(/AN ASSIGNMENT IS FROZEN AT QUEUE TIME/.test(lib), '6. the rule is written where the next reader will look');
-}
+console.log('\n── no global selection, no split, anywhere ──');
+ok(!('openerSendability' in OV) && !('resolveSelectedOpener' in OV) && !('DEFAULT_INITIAL_OPENER' in OV), 'the selection rule is gone from the leaf');
+ok(!exists('src/hooks/useSelectedOpener.ts') && !exists('supabase/functions/_shared/initial-opener.ts'), 'the selection reader (SPA hook + edge helper) is deleted');
+const readers = code.filter((p) => /\binitial_opener_template\b/.test(strip(read(p))));
+ok(readers.length === 0, `no code reads the stored selection (${readers.join(', ') || 'none'})`);
+const hashers = code.filter((p) => /openerTemplateFor|openerVariantFor|opener_arm/.test(strip(read(p))));
+ok(hashers.length === 0, 'no deterministic opener split survives (no openerTemplateFor / arm)');
+const uiRefs = code.filter((p) => /Initial outreach template/.test(strip(read(p))));
+ok(uiRefs.length === 0, `no "Initial outreach template" control in any screen (${uiRefs.join(', ') || 'none'})`);
 
-console.log('\n── 8. ONE RULE: OUTREACH, THE PER-LEAD PICKER AND THE INBOX ──');
-{
-  ok(/const opener = openerSendability\(template, opts\.selectedOpener\);\n\s+if \(!opener\.ok\) return opener;/.test(read('src/lib/whatsappTemplates.ts')), '8. getTemplateSendability applies openerSendability first');
-  const inbox = read('src/pages/Inbox.tsx');
-  ok(/\{ selectedOpener: selectedOpener\.selected \}\);/.test(inbox) && /const selectedOpener = useSelectedOpener\(\);/.test(inbox), '8. the Inbox composer passes the selected opener into getTemplateSendability');
-  ok(/openerSendability\(t\.value, opener\.selected\)/.test(read('src/components/WhatsAppLeadControls.tsx')), '8. the per-lead picker disables a non-selected opener');
-  ok(/const o = openerSendability\(t\.value, opener\.selected\);/.test(read('src/components/OutreachTable.tsx')), '8. the Outreach queue dialog disables a non-selected opener');
-  const sender = read('supabase/functions/send-whatsapp-message/index.ts');
-  ok(/const notSelected = await openerRefusal\(service, templateName\);\n\s+if \(notSelected\) return json\(\{ ok: false, error: "opener_not_selected"/.test(sender), '8. send-whatsapp-message refuses a non-selected opener on the server');
-  ok(sender.indexOf('openerRefusal(service, templateName)') < sender.lastIndexOf('sendViaGraph(') && sender.indexOf('openerRefusal(service, templateName)') < sender.indexOf('mode: "dry_run",'), '8. …before the prospect send reaches Meta, and before the dry-run return (a preview reports it too)');
-  /* A later build (2026-09-25a, ai_site_findings_v2 approved) supersedes 23b; what matters is that
-     the marker is at or after the build that shipped this refusal, and names the capability. */
-  ok((sender.match(/BUILD_ID = "(\d{4}-\d{2}-\d{2}[a-z])"/)?.[1] ?? '') >= '2026-09-23b' && /"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
-  ok(getTemplateSendability(INITIAL_OPENER_A, { shareToken: null }, {}, { selectedOpener: 'initial_contact' }).ok, '8. selected original → sendable');
-  ok(!getTemplateSendability(INITIAL_OPENER_B, { shareToken: null }, {}, { selectedOpener: 'initial_contact' }).ok, '8. unselected v2 → refused');
-  ok(getTemplateSendability('audit_reply', { shareToken: null }, { reportSlug: 'x' }, {}).ok, '8. a non-opener ignores the rule entirely');
-  ok(getTemplateSendability('contact_followup', { shareToken: null }, {}).ok, '8. follow-ups are unchanged');
-}
+console.log('\n── the send path ──');
+const sender = read('supabase/functions/send-whatsapp-message/index.ts');
+ok(!/opener_not_selected|openerRefusal/.test(strip(sender)), 'send-whatsapp-message has no "not the selected opener" refusal');
+ok((sender.match(/BUILD_ID = "(\d{4}-\d{2}-\d{2}[a-z])"/)?.[1] ?? '') >= '2026-09-27c' && /"any_approved_opener"/.test(sender) && !/"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
+ok(/templateAwaitingApproval/.test(read('supabase/functions/_shared/whatsapp-send.ts')), 'the Meta approval gate is still on the send side');
 
-console.log('\n── 9. CHANGING THE SELECTION CHANGES FUTURE SENDS ONLY ──');
-{
-  ok(queueFor(INITIAL_OPENER_A, 'initial_contact') === 'initial_contact' && queueFor(INITIAL_OPENER_B, 'initial_opener_v2') === 'initial_opener_v2', '9. the next queueing follows the new selection');
-  const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-  const setter = q.slice(q.indexOf('if (mode === "set_initial_opener_template")'), q.indexOf('/* ══ mode \'contact_check\''));
-  ok(/\.update\(\{ initial_opener_template: raw, updated_at: new Date\(\)\.toISOString\(\) \}\)\s*\n\s*\.eq\("id", 1\)/.test(setter), '9. the setter writes only the settings row');
-  ok(!/outreach_leads|whatsapp_messages|whatsapp_sends/.test(setter), '9/10. …and touches no lead, no queued row and no sent message');
-}
+console.log('\n── the old setter is refused and writes nothing ──');
+const q = read('supabase/functions/process-whatsapp-queue/index.ts');
+const setAt = q.indexOf('if (mode === "set_initial_opener_template")');
+const setter = q.slice(setAt, q.indexOf('\n    }\n', setAt));
+ok(setAt > 0 && /error: "mode_removed"/.test(setter) && /410\)/.test(setter), 'set_initial_opener_template answers mode_removed (410)');
+ok(!/\.update\(|sendViaGraph|fetch\(/.test(setter), '…and touches nothing');
+ok(!/initialOpenerTemplate/.test(strip(q)), 'the queue status no longer reports a selected opener');
 
-console.log('\n── 10. PREVIOUSLY SENT MESSAGES ARE UNTOUCHED ──');
-{
-  const changed = ['src/lib/openerVariant.ts', 'supabase/functions/_shared/initial-opener.ts', 'src/hooks/useSelectedOpener.ts'].map(read).join('\n');
-  ok(!/whatsapp_messages|whatsapp_sends/.test(strip(changed)), '10. the new rule reads and writes no message table');
-  ok(!/\.update\(|\.delete\(|\.insert\(/.test(strip(read('supabase/functions/_shared/initial-opener.ts'))), '10. the shared reader only reads');
+console.log('\n── bulk: the template chosen for the batch is the template stored and sent ──');
+const table = strip(read('src/components/OutreachTable.tsx'));
+ok(/whatsapp_template: template,/.test(table), "the admin's queue write stores the dialog's template as chosen");
+ok(/if \(!perms\.queueControls\) \{ await handleSalesQueue\(template\); return; \}/.test(table) && /salesQueueOpener\(ids, template\)/.test(table), "a salesperson's batch goes to sales_queue_opener with the chosen template");
+ok(/disabled=\{!queueTemplate \|\| openerBlocked\(queueTemplate\)\}/.test(table), 'nothing is queued until a template is chosen (no default)');
+const mig = read('supabase/migrations/20260927140000_sales_shared_workflow.sql');
+const two = mig.slice(mig.indexOf('create or replace function public.sales_queue_opener(_lead_ids uuid[], _template text)'), mig.indexOf('revoke all on function public.sales_queue_opener(uuid[], text)'));
+ok(two.length > 0 && /v_template text := btrim\(coalesce\(_template, ''\)\);/.test(two), 'sales_queue_opener takes the template as an argument');
+ok(!/initial_opener_template/.test(two), '…and never reads a stored selection');
+ok(/if v_template not in \('initial_contact', 'initial_opener_v2'\)/.test(two) && /'template_required'/.test(two), '…refuses a blank or non-opener template');
+ok(/whatsapp_template = v_template/.test(two), '…stores exactly that template on each lead');
+for (const guard of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'not_a_uk_mobile'", "'opted_out'", "'daily_limit'"]) {
+  ok(two.includes(guard), `…keeps the ${guard} check`);
 }
+const oneAt = mig.indexOf('create or replace function public.sales_queue_opener(_lead_ids uuid[])\n');
+const one = mig.slice(oneAt, mig.indexOf('$$;', oneAt));
+ok(/'template_required'/.test(one) && !/initial_opener_template/.test(one) && !/update public\.outreach_leads/.test(one), 'the old one-argument form refuses and writes nothing');
+ok(/never swaps it/.test(read('src/lib/openerVariant.ts')), 'the leaf still states the queue sends what was stored');
+const drip = strip(q);
+ok(!/whatsapp_template\s*=\s*INITIAL_OPENER|whatsapp_template:\s*INITIAL_OPENER/.test(drip), 'the queue never rewrites a lead to an opener of its own choosing');
 
-console.log('\n── 11. AN UNAVAILABLE SELECTION FAILS CLOSED — NEVER THE OTHER OPENER ──');
-{
-  for (const bad of ['initial_opener_v3', 'audit_reply', 'garbage']) {
-    const r = resolveSelectedOpener(bad);
-    ok(!r.ok && r.template === null, `11. stored "${bad}" → unavailable, no template substituted`);
-    ok(INITIAL_OPENERS.every((o) => !openerSendability(o, bad).ok), `11. …and NEITHER opener is sendable`);
-  }
-  ok(INITIAL_OPENERS.every((o) => !openerSendability(o, undefined).ok), '11. selection not readable (undefined) → no opener is sendable');
-  ok(!getTemplateSendability(INITIAL_OPENER_A, { shareToken: null }, {}).ok, '11. a caller that never read the selection cannot send an opener');
-  const reader = read('supabase/functions/_shared/initial-opener.ts');
-  ok(/if \(error \|\| !data\) return undefined;/.test(reader) && /catch \{\n\s+return undefined;/.test(reader), '11. a failed read on the server is "unknown" (refuse), never the default');
-  const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-  ok(/if \(!openerSelectable\(raw\) \|\| templateAwaitingApproval\(raw\)\) return json\(\{ ok: false, error: "template_not_approved"/.test(q), '11. an unapproved opener cannot be selected');
-  ok(/if \(!isInitialOpener\(raw\) \|\| !WA_TEMPLATES\[raw\]\) return json\(\{ ok: false, error: "not_an_initial_opener"/.test(q), '11. a non-opener cannot be selected');
-}
+console.log('\n── the per-lead picker and the Inbox ──');
+const controls = strip(read('src/components/WhatsAppLeadControls.tsx'));
+ok(!/useSelectedOpener|openerSendability/.test(controls) && /salesQueueOpener\(\[lead\.id\], template\)/.test(controls), 'the per-lead control offers both openers and queues the chosen one');
+const inbox = strip(read('src/pages/Inbox.tsx'));
+ok(!/useSelectedOpener|selectedOpener/.test(inbox), 'the Inbox composer passes no selection');
 
-console.log('\n── 12. READING OR CHANGING THE SETTING SENDS NOTHING ──');
-{
-  const q = read('supabase/functions/process-whatsapp-queue/index.ts');
-  const setterAt = q.indexOf('if (mode === "set_initial_opener_template")');
-  const statusAt = q.indexOf('if (mode === "status") return json(');
-  const firstSend = q.indexOf('sendViaGraph(', setterAt);
-  ok(statusAt > 0 && setterAt > statusAt && firstSend > setterAt, '12. "status" and the setter both return before any send code');
-  const setter = q.slice(setterAt, q.indexOf('/* ══ mode \'contact_check\''));
-  ok(/return json\(\{ ok: true, \.\.\.statusPayload, initialOpenerTemplate: raw \}\);/.test(setter) && !/sendViaGraph|fetch\(/.test(setter), '12. the setter returns without sending');
-  const hook = read('src/hooks/useSelectedOpener.ts');
-  /* 2026-09-27: the status read goes through the SHARED loader (src/lib/queueStatus.ts), which asks for
-     mode 'status' and nothing else — the hook itself names only the setter. */
-  const statusLib = read('src/lib/queueStatus.ts');
-  ok(/getQueueStatus\(qc\)/.test(hook) && /mode: 'status'/.test(statusLib) && !/mode: '(tick|auto_replies|send)/.test(statusLib) && /mode: 'set_initial_opener_template'/.test(hook) && !/mode: 'tick'|mode: 'auto_replies'/.test(hook), '12. the UI only ever calls "status" and the setter');
-}
+console.log('\n── audit_followup: Google AI hooks still allowed (unchanged) ──');
+ok(templateEngineConflict('audit_followup', 'gemini') === null, 'audit_followup may carry a Google AI hook');
+ok(templateEngineConflict('audit_followup', 'chatgpt') === null, '…and a ChatGPT one');
+ok(TEMPLATE_ENGINE_CLAIM_WAIVED.size === 1 && TEMPLATE_ENGINE_CLAIM_WAIVED.has('audit_followup'), 'the waiver still names audit_followup and nothing else');
 
-console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
-process.exit(failures ? 1 : 0);
+if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
+console.log('\nALL PASS');

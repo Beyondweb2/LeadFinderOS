@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
-import { OUTREACH_LIST_SELECT, guardListRows } from '@/lib/outreachLeadColumns';
+import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
+import { salesPatchLead } from '@/lib/leadRpc';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -158,6 +159,67 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   roleRef.current = role;
   // Stable user ID ref to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
+
+  /* ══ A SALESPERSON ON THE SAME OUTREACH (2026-09-27) ════════════════════════════════════════════
+     One hook, one page, both roles. What differs is WHERE the rows come from and HOW a change is
+     written — never what the screen is:
+       · reads: the admin reads outreach_leads; a salesperson reads the safe sales_leads view
+         (leadSourceFor) — only their assigned prospects, no money/delivery/admin-note columns;
+       · writes: a salesperson has NO direct write on outreach_leads (RLS makes it a silent no-op),
+         so every change goes through salesPatchLead → the ownership-checked lead functions, and the
+         row is then re-read from the view. A change they may not make is refused out loud.
+     The admin's paths below are unchanged: every sales branch returns before them. */
+  const isSales = () => roleRef.current === 'sales';
+  const refuseForSales = useCallback((what: string) => {
+    toast({ title: 'Admin only', description: `${what} is done by the admin.`, variant: 'destructive' });
+  }, []);
+  /** Put one freshly-read row in the right list (active / archived). */
+  const placeRow = useCallback((row: OutreachLead) => {
+    const put = (prev: OutreachLead[]) => (prev.some((l) => l.id === row.id) ? prev.map((l) => (l.id === row.id ? row : l)) : [row, ...prev]);
+    setLeads((prev) => (row.is_archived ? prev.filter((l) => l.id !== row.id) : put(prev)));
+    setArchivedLeads((prev) => (row.is_archived ? put(prev) : prev.filter((l) => l.id !== row.id)));
+  }, []);
+  const salesUpdateLead = useCallback(async (leadId: string, updates: Record<string, unknown>): Promise<OutreachLead | null> => {
+    const r = await salesPatchLead(leadId, updates);
+    if (!r.ok) {
+      toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
+      return null;
+    }
+    if (!r.wrote) return null; // nothing a salesperson stores (e.g. the contact-method tag)
+    const src = leadSourceFor('sales');
+    const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      .from(src.table).select(src.listSelect).eq('id', leadId).maybeSingle();
+    if (error || !data) return null;
+    const row = data as OutreachLead;
+    /* A not-interested lead is protected from further contact exactly as the admin's is. */
+    if (updates.status === 'not_interested') {
+      void supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: leadId, reason: 'not_interested' } })
+        .then(({ data: sd, error: se }) => {
+          if (se || (sd as { ok?: boolean } | null)?.ok !== true) {
+            console.error(`[useOutreach] suppression write FAILED for lead ${leadId} (not_interested)`, se ?? sd);
+            toast({ title: 'Status saved, but contact block failed', description: 'The lead is marked, but nothing is stopping future outreach to this number yet. Try again.', variant: 'destructive' });
+          }
+        });
+    }
+    placeRow(row);
+    return row;
+  }, []);
+  /* A change made OUTSIDE this hook's own writers — the CRM panel's functions, a salesperson's queue
+     — announces itself as 'lead-row-changed'; the row is re-read here (from the caller's own source,
+     so a salesperson reads the view) and replaces the stale copy. Only a row already in the lists. */
+  useEffect(() => {
+    const onChanged = async (e: Event) => {
+      const leadId = (e as CustomEvent<{ leadId?: string }>).detail?.leadId;
+      if (!leadId) return;
+      const src = leadSourceFor(roleRef.current);
+      const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+        .from(src.table).select(src.listSelect).eq('id', leadId).maybeSingle();
+      if (error || !data) return;
+      placeRow(data as OutreachLead);
+    };
+    window.addEventListener('lead-row-changed', onChanged);
+    return () => window.removeEventListener('lead-row-changed', onChanged);
+  }, [placeRow]);
 
   /* ══ KEEP THE COVERAGE COUNTS HONEST ══════════════════════════════════════════════════════════
      ⛔ THE BUG: Coverage's "12 leads" badge and its summary come from the `coverage` edge function,
@@ -327,12 +389,14 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
       /* ⚡ The LIST columns, not '*' (2026-09-27): 41 of 111, 15.7 MB → 6.8 MB of JSON. What is and
          is not downloaded, and the three guards that keep a missing field from going quiet, are in
          src/lib/outreachLeadColumns.ts. The detail dialog reads its own complete row. */
+      /* The admin reads the table; a salesperson reads the safe view (their own prospects only). */
+      const src = leadSourceFor(roleRef.current);
       const [act, arc] = await Promise.allSettled([
-        fetchAllRowsParallel<OutreachLead>('Outreach (active leads)', (from, to) => supabase
-          .from('outreach_leads').select(OUTREACH_LIST_SELECT).eq('is_archived', false)
+        fetchAllRowsParallel<OutreachLead>('Outreach (active leads)', (from, to) => (supabase as unknown as { from: (t: string) => any })
+          .from(src.table).select(src.listSelect).eq('is_archived', false)
           .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
-        fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => supabase
-          .from('outreach_leads').select(OUTREACH_LIST_SELECT).eq('is_archived', true)
+        fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => (supabase as unknown as { from: (t: string) => any })
+          .from(src.table).select(src.listSelect).eq('is_archived', true)
           .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
       ]);
       if (act.status === 'fulfilled') activeData = guardListRows(act.value.rows, 'useOutreach');
@@ -421,6 +485,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
   // Retry phone fetch for a lead that failed — uses forceRefresh to bypass cache
   const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
+    if (isSales()) { refuseForSales('Looking up a phone number'); return; }
     const lead = leads.find(l => l.id === outreachLeadId) || archivedLeads.find(l => l.id === outreachLeadId);
     if (!lead) return;
     
@@ -748,6 +813,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
     leadId: string,
     updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'phone' | 'address' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url' | 'facebook_url' | 'facebook_confidence' | 'facebook_method' | 'facebook_last_checked_at' | 'email_status' | 'email_method' | 'email_last_checked_at' | 'facebook_status' | 'instagram_url' | 'instagram_status' | 'instagram_method' | 'instagram_last_checked_at' | 'enrichment_source' | 'contact_method' | 'whatsapp_status' | 'whatsapp_checked_at' | 'line_type' | 'line_type_checked_at' | 'outreach_attempts' | 'last_outreach_attempt_at' | 'is_potential_work' | 'potential_revenue' | 'contact_name' | 'website' | 'services_included' | 'confirmed_services' | 'whatsapp_template' | 'queued_at' | 'contact_followup_queued_at' | 'whatsapp_attempts' | 'project_overview' | 'project_value' | 'project_status' | 'delivery_notes' | 'remeasure_due_date' | 'delivery_checklist' | 'delivery_ref'>>
   ) => {
+    if (isSales()) return salesUpdateLead(leadId, updates as Record<string, unknown>);
     const { data, error } = await supabase
       .from('outreach_leads')
       .update(updates)
@@ -817,6 +883,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // patches both leads + archivedLeads lists so the move shows instantly (and leads
   // re-bucket under the page's campaign filter without a refetch).
   const assignCampaign = useCallback(async (leadIds: string[], campaignId: string | null): Promise<boolean> => {
+    if (isSales()) { refuseForSales('Moving leads between campaigns'); return false; }
     if (leadIds.length === 0) return false;
     const { error } = await supabase
       .from('outreach_leads')
@@ -834,6 +901,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   }, []);
 
   const deleteLead = useCallback(async (leadId: string, silent = false) => {
+    if (isSales()) { refuseForSales('Removing a lead'); return false; }
     const lead = leads.find((l) => l.id === leadId);
     const archivedLead = archivedLeads.find((l) => l.id === leadId);
     const targetLead = lead || archivedLead;
@@ -867,6 +935,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // it also clears the outreach_history ledger + local cache + the team claim that
   // addLead created, so the business becomes re-addable.
   const removeFreshLead = useCallback(async (leadId: string): Promise<{ ok: boolean; reason?: string }> => {
+    if (isSales()) { refuseForSales('Removing a lead'); return { ok: false, reason: 'admin_only' }; }
     if (!user) return { ok: false, reason: 'no_user' };
 
     // a) LIVE re-fetch of the freshness-relevant columns — never trust a stale flag.
@@ -917,6 +986,8 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   }, [user]);
 
   const updateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
+    /* Sales: the same patch, through the lead functions; not-interested also archives, as below. */
+    if (isSales()) return salesUpdateLead(leadId, { ...statusUpdatePatch(status), ...(status === 'not_interested' ? { is_archived: true } : {}) });
     const lead = leads.find((l) => l.id === leadId);
     const archivedLead = archivedLeads.find((l) => l.id === leadId);
     const targetLead = lead || archivedLead;
@@ -1003,7 +1074,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
     const lead = leads.find((l) => l.id === leadId);
     const result = await updateLead(leadId, updates);
     
-    if (result && lead) {
+    if (result && lead && !isSales()) { // a salesperson's change is logged in lead_activity by the server
       const dateStr = nextActionDate ? ` for ${nextActionDate}` : '';
       await logActivity(leadId, 'action_scheduled', `Next action: ${nextAction.replace('_', ' ')}${dateStr}`);
     }
@@ -1021,6 +1092,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
 
   const deleteAllLeads = useCallback(async () => {
+    if (isSales()) { refuseForSales('Archiving every lead'); return false; }
    if (!user) return false;
 
     const { error } = await supabase
@@ -1094,6 +1166,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
   // Internal archive function (can be silent)
   const archiveLeadInternal = useCallback(async (leadId: string, lead: OutreachLead, silent = false) => {
+    if (isSales()) return !!(await salesUpdateLead(leadId, { is_archived: true }));
     const { error } = await supabase
       .from('outreach_leads')
       .update({ is_archived: true })
@@ -1128,6 +1201,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
   // Unarchive a single lead
   const unarchiveLead = useCallback(async (leadId: string) => {
+    if (isSales()) return !!(await salesUpdateLead(leadId, { is_archived: false }));
     const lead = archivedLeads.find((l) => l.id === leadId);
     if (!lead) return false;
 
@@ -1157,6 +1231,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // Archive multiple leads
   const archiveMultiple = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
+    if (isSales()) { for (const id of leadIds) await salesUpdateLead(id, { is_archived: true }); return true; }
 
     const { error } = await supabase
       .from('outreach_leads')
@@ -1184,6 +1259,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
   // Delete multiple leads
   const deleteMultiple = useCallback(async (leadIds: string[]) => {
+    if (isSales()) { refuseForSales('Removing leads'); return false; }
     if (leadIds.length === 0) return false;
 
     const { error } = await supabase
@@ -1215,6 +1291,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // multi-select. DELIBERATELY different from deleteMultiple (which keeps the ledger
   // to prevent re-contacting).
   const resetMultiple = useCallback(async (leadIds: string[]) => {
+    if (isSales()) { refuseForSales('Resetting leads'); return false; }
     if (leadIds.length === 0) return false;
     // Identity keys for the selected leads, captured from current state BEFORE delete.
     const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
@@ -1253,6 +1330,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // (enrichment_cache + site delete need it) and ownership-guarded server-side. Distinct
   // from deleteMultiple/resetMultiple (which remove the lead) — those stay untouched.
   const resetToFreshMultiple = useCallback(async (leadIds: string[]) => {
+    if (isSales()) { refuseForSales('Resetting leads to fresh'); return false; }
     if (leadIds.length === 0) return false;
     const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
     const businesses = sel.map((l) => ({
@@ -1279,6 +1357,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
+    if (isSales()) { for (const id of leadIds) await salesUpdateLead(id, { is_archived: false }); return true; }
 
     const { error } = await supabase
       .from('outreach_leads')
@@ -1308,10 +1387,11 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   const markAsInterested = useCallback(async (leadId: string) => {
     const lead = leads.find((l) => l.id === leadId) || archivedLeads.find((l) => l.id === leadId);
     if (!lead) return false;
+    if (isSales()) return !!(await salesUpdateLead(leadId, { is_potential_work: true }));
 
     const { error } = await supabase
       .from('outreach_leads')
-      .update({ 
+      .update({
         is_potential_work: true,
       })
       .eq('id', leadId);
@@ -1358,6 +1438,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
   // Mark multiple leads as interested
   const markMultipleAsInterested = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
+    if (isSales()) { for (const id of leadIds) await salesUpdateLead(id, { is_potential_work: true }); return true; }
 
     const { error } = await supabase
       .from('outreach_leads')
@@ -1417,6 +1498,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
      leadIds?: string[],
      onProgress?: (current: number, total: number) => void
    ): Promise<{ updated: number; skipped: number; failed: number; total: number }> => {
+     if (isSales()) { refuseForSales('Looking up phone numbers'); return { updated: 0, skipped: 0, failed: 0, total: 0 }; }
      if (!user) return { updated: 0, skipped: 0, failed: 0, total: 0 };
 
      // Collect target leads
@@ -1508,6 +1590,7 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
     leadsToImport: Array<Partial<OutreachLead>>,
     country: Country = 'UK'
   ) => {
+    if (isSales()) { refuseForSales('Importing leads'); return; }
     if (!user) {
       toast({
         title: 'Not authenticated',

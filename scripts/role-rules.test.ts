@@ -95,7 +95,8 @@ ok(all.every((fn) => !/body\.role\b|body\?\.role\b/.test(read(`supabase/function
 const cc = read("supabase/functions/create-ai-audit/index.ts");
 ok(/salesAuditRefusal\(/.test(cc) && /canWorkLead\(actor, workLead\)/.test(cc), "create-ai-audit: sales → hook only, on a lead they work");
 const q = read("supabase/functions/process-whatsapp-queue/index.ts");
-ok(/who\.actor\.role === "sales" && mode === "contact_check"/.test(q), "the queue lets sales run contact_check and nothing else");
+ok(/who\.actor\.role === "sales" && \(mode === "contact_check" \|\| mode === "suppress_lead"\)/.test(q), "the queue lets sales run contact_check and suppress_lead, nothing else");
+ok(/if \(salesActor\) \{\n\s+const acc = await leadAccess\(service, salesActor, leadId\);/.test(q.replace(/\r\n/g, "\n")), "…and suppress_lead only on a lead the salesperson works");
 const s = read("supabase/functions/send-whatsapp-message/index.ts");
 ok(/sent_by_user_id: operatorId/.test(s) && /user_id: bookUserId/.test(s), "send-whatsapp-message files the message in the book and records who sent it");
 

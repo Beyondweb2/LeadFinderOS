@@ -1,6 +1,8 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { maySetStatus } from '@/lib/access';
 
 /**
  * Editable pipeline-status control — the coloured PipelineStatusBadge as a Select
@@ -29,6 +31,9 @@ export function PipelineStatusSelect({
    *  proper bordered select-trigger with a chevron around the coloured badge. */
   triggerClassName?: string;
 }) {
+  /* The same list for both roles; a salesperson's options outside lead_set_stage's allowlist are
+     shown disabled (the server refuses them anyway) — see src/lib/access.ts. */
+  const perms = useLeadPermissions();
   if (disabled) return <PipelineStatusBadge status={(value as PipelineStatus) ?? undefined} />;
   return (
     <Select value={value ?? undefined} onValueChange={(v) => onValueChange(v as PipelineStatus)}>
@@ -41,7 +46,7 @@ export function PipelineStatusSelect({
       </SelectTrigger>
       <SelectContent>
         {PIPELINE_STATUS_OPTIONS.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          <SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>
         ))}
       </SelectContent>
     </Select>

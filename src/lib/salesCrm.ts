@@ -166,7 +166,10 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'not_found': return 'That lead no longer exists';
     case 'not_your_lead': return 'That lead is not assigned to you';
     case 'no_role': return 'Your account has no access';
-    case 'no_opener_selected': return 'The admin has not chosen an opener template yet';
+    case 'template_required': return 'Choose which approved opener to send first';
+    case 'not_an_initial_opener': return 'Bulk initial outreach sends an approved opener only';
+    case 'stage_not_allowed': return 'Only the admin can set that status';
+    case 'admin_only': return 'Only the admin can change that';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
 }
@@ -222,4 +225,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   website_control_set: 'Website control',
   audit_run: 'AI visibility check run',
   bulk_queued: 'Opener queued',
+  marked_interested: 'Interested ⭐',
+  details_set: 'Details updated',
+  archived_set: 'Archive',
 };

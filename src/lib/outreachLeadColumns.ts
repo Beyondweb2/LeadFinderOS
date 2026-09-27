@@ -40,6 +40,39 @@ export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];
 
 export const OUTREACH_LIST_SELECT = OUTREACH_LIST_COLUMNS.join(', ');
 
+/* ══ A SALESPERSON READS THE SAME LIST FROM THE SAFE VIEW (2026-09-27, shared Outreach + Inbox) ══
+   Sales cannot read outreach_leads at all (a restrictive admin-only policy). They read the
+   `sales_leads` VIEW: only their own assigned prospects, never a client, and no money, delivery or
+   admin-note columns — `amount_paid` is a literal NULL there and `notes` is not in it. The browser
+   therefore never RECEIVES those fields for a salesperson; hiding them in the UI is not the barrier.
+   SALES_VIEW_COLUMNS is the view's column list (pg_get_viewdef, 2026-09-27) —
+   scripts/sales-shared-workflow.test.ts holds it equal to the migration that defines the view. */
+export const SALES_VIEW_COLUMNS = [
+  'id', 'business_name', 'phone', 'email', 'google_maps_url', 'address', 'category', 'status', 'next_action',
+  'next_action_date', 'next_action_note', 'call_booked_at', 'created_at', 'updated_at', 'country', 'list_type',
+  'is_archived', 'is_potential_work', 'image_url', 'facebook_url', 'instagram_url', 'contact_method', 'place_id',
+  'whatsapp_status', 'whatsapp_sent_at', 'whatsapp_delivery_status', 'whatsapp_template', 'queued_at',
+  'contact_name', 'website', 'campaign_id', 'search_keyword', 'search_location', 'derived_town', 'review_count',
+  'rating', 'lat', 'lng', 'line_type', 'product', 'hook_followup_queued_at', 'contact_followup_queued_at',
+  'assigned_to_user_id', 'assigned_at', 'added_by_user_id', 'website_control', 'website_control_note', 'amount_paid',
+] as const;
+const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
+/** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.
+ *  The rest arrive absent — every salesperson write goes through src/lib/leadRpc.ts, which never
+ *  builds a value from a field it was not given. */
+export const SALES_LIST_COLUMNS = OUTREACH_LIST_COLUMNS.filter((c) => SALES_VIEW.has(c));
+export const SALES_LIST_SELECT = SALES_LIST_COLUMNS.join(', ');
+/** One lead's detail for a salesperson: every column of the safe view, named. */
+export const SALES_DETAIL_SELECT = SALES_VIEW_COLUMNS.join(', ');
+
+/** Where a role reads leads from. Admin: the table, as before. Sales: the safe view. Nothing else. */
+export function leadSourceFor(role: 'admin' | 'sales' | null | undefined): { table: 'outreach_leads' | 'sales_leads'; listSelect: string; detailSelect: string } {
+  return role === 'sales'
+    ? { table: 'sales_leads', listSelect: SALES_LIST_SELECT, detailSelect: SALES_DETAIL_SELECT }
+    : { table: 'outreach_leads', listSelect: OUTREACH_LIST_SELECT, detailSelect: '*' };
+}
+
+
 /* ══ THE DASHBOARD'S LEADS (2026-09-27) ═══════════════════════════════════════════════════════
    useDashboardMetrics read `select('*')` one 1,000-row page at a time — seven waits in a row, 16 MB,
    ~8 s before the first card. These are the columns the Dashboard's code reads off `allLeads`

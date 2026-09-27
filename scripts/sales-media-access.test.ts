@@ -47,20 +47,20 @@ const viewer = read("src/components/WhatsAppMedia.tsx");
 ok(/createSignedUrl\(message\.media_path!/.test(viewer), "the viewer asks Storage under the caller's own session");
 ok(!/service_role|SERVICE_ROLE/.test(viewer), "no service key anywhere near it");
 const inbox = read("src/pages/Inbox.tsx");
-const salesLead = read("src/pages/SalesLead.tsx");
+/* 2026-09-27: the salesperson's separate lead page is gone — Sales uses the SAME Inbox, so there is
+   one thread and one viewer for both roles. */
 const useViewer = /import \{ MessageMedia, isPlayableVoice, showsAttachment \} from '@\/components\/WhatsAppMedia';/;
 const renders = /\{showsAttachment\(m\) && <MessageMedia message=\{m\} \/>\}/;
-ok(useViewer.test(inbox), "the Inbox uses the shared viewer");
-ok(useViewer.test(salesLead), "the salesperson's lead page uses the same viewer");
-ok(renders.test(salesLead) && renders.test(inbox), "both threads render attachments through the same rule");
+ok(useViewer.test(inbox), "the Inbox (both roles) uses the shared viewer");
+ok(!readdirSync(new URL("../src/pages", import.meta.url)).includes("SalesLead.tsx"), "no second, salesperson-only thread exists");
+ok(renders.test(inbox), "the thread renders attachments through the one rule");
 ok(/if \(m\.direction === 'inbound'\) return true;/.test(viewer), "every inbound row still shows its attachment (or why it is missing), as before");
-ok(/media_path, media_filename, error/.test(salesLead), "the sales thread reads the media columns");
 const srcFiles: string[] = [];
 const walk = (d: string) => { for (const e of readdirSync(new URL(`../${d}`, import.meta.url), { withFileTypes: true })) { const p = `${d}/${e.name}`; if (e.isDirectory()) walk(p); else if (/\.tsx?$/.test(e.name)) srcFiles.push(p); } };
 walk("src");
 const signers = srcFiles.filter((p) => /from\('whatsapp-media'\)/.test(read(p)));
 ok(signers.length === 1 && signers[0] === "src/components/WhatsAppMedia.tsx", `exactly one place in src opens whatsapp-media (${signers.join(", ")})`);
-ok(!/function (InboundMedia|MessageMedia)/.test(inbox) && !/function (InboundMedia|MessageMedia)/.test(salesLead),"no second copy of the viewer in a page");
+ok(!/function (InboundMedia|MessageMedia)/.test(inbox), "no second copy of the viewer in a page");
 
 console.log("── the live proof exists ──");
 const live = read("supabase/tests/sales-media-rls.sql");

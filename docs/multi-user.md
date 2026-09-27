@@ -22,9 +22,10 @@ pipelines are private by default: a rep sees another rep's lead only as "Already
 
 ## 2. Permission matrix
 
-The SPA copy is `PERMISSION_MATRIX` in `src/lib/access.ts` (shown on /team). Routes a salesperson may
-open: `/sales`, `/sales/lead/:leadId`, `/find-leads`, `/coverage`, `/review-replies` — everything
-else redirects to `/sales` before the page mounts (`RequireAccess`). **Presentation only**; the rows
+⚠️ **Superseded by §9 (same day): Sales now uses the SAME Outreach and Inbox.** The SPA copy is
+`PERMISSION_MATRIX` in `src/lib/access.ts` (shown on /team). Routes a salesperson may open:
+`/outreach`, `/inbox`, `/find-leads`, `/coverage` (+ the redirect-only `/sales`,
+`/sales/lead/:leadId`) — everything else redirects to `/outreach` before the page mounts (`RequireAccess`). **Presentation only**; the rows
 below are what the server enforces.
 
 | Feature | Admin | Sales |
@@ -159,7 +160,7 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
 
 ## 7. Known limitations (2026-09-27)
 
-- **The Inbox list** does not show owner avatars (the header does). The Inbox is admin-only.
+- **The Inbox list** does not show owner avatars (the header does). ~~The Inbox is admin-only~~ — Sales uses it since §9.
 - ~~Sales cannot see inbound media~~ — fixed the same day, see §8.
 - A disabled user's **access token** stays valid until expiry (≤1 h), but every RLS policy and edge
   function refuses them at once (role row removed); the ban stops refreshes.
@@ -193,3 +194,53 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
   `supabase/tests/sales-media-rls.sql` (23 checks on the live schema, always rolled back: own image,
   voice note and document open; Paul's, another rep's, a paid client's, an unreferenced object,
   another private bucket, anon, a reassigned lead and a disabled account refused; admin sees all).
+
+## 9. One workflow: Sales uses the same Outreach and Inbox (2026-09-27, migration 20260927140000)
+
+Paul: *"I do not want two different CRMs/workflows for Admin and Sales."* The dedicated My Leads
+workspace (`/sales` SalesHome, `/sales/lead/:id` SalesLead) is **deleted**; a salesperson opens the
+normal Outreach and Inbox — the same pages, the same components — with fewer admin-only controls.
+
+- **Routes/nav.** Sales: Outreach, Inbox, Find Leads, Coverage (sidebar in that order; home =
+  `/outreach`). `/sales` → `/outreach`; `/sales/lead/:id` → Outreach with that lead's detail open
+  (`LegacySalesLeadRedirect`, the `launch` intent). **Review Replies is admin-only** at the menu, the
+  route and the server (`review-reply` answers 403 `admin_only` before any OpenAI spend).
+- **Reads.** `leadSourceFor(role)` (`src/lib/outreachLeadColumns.ts`): admin → `outreach_leads` with the
+  speed pass's `OUTREACH_LIST_SELECT` (unchanged); sales → the `sales_leads` view with
+  `SALES_LIST_SELECT` (the same list cut to the view) and, for one lead's detail, `SALES_DETAIL_SELECT`
+  (every view column, named — never `*`). The Inbox does the same (`inboxLeadTableFor`). The browser
+  never receives `notes`, payment, delivery or `user_id`: the view does not have them, and
+  `amount_paid` is a literal NULL.
+- **Writes.** Sales has no direct write on `outreach_leads` — and a direct update from a sales session
+  is a **silent 0-row success**, so the UI would lie. Every salesperson edit is translated by
+  `planSalesPatch` (`src/lib/salesPatchPlan.ts`, positive match; any unknown key → nothing written)
+  and run by `salesPatchLead` (`src/lib/leadRpc.ts`) through the ownership-checked functions.
+  `useOutreach` routes every writer for a salesperson (update, status, next action, archive, star)
+  and refuses the admin-only ones (remove, reset, import, campaigns, phone lookups) out loud.
+- **New functions (additive, `_require_work` first, anon revoked, each logs `lead_activity`):**
+  `lead_mark_interested` (the ⭐ flag — "Interested" is a star on both roles' screens, not a status),
+  `lead_set_details` (contact name / trade / town only; NULL = leave alone), `lead_set_archived`
+  (archive/restore; not-interested archives, as the admin's does). `lead_set_follow_up` now accepts
+  every `next_action_type` value (the enum is the allowlist). `lead_activity.kind` gained
+  `marked_interested`, `details_set`, `archived_set`. No RLS policy changed.
+- **`process-whatsapp-queue`**: sales may also call `suppress_lead` — only for a lead they work
+  (`leadAccess`) — so "not interested" stops contact for a salesperson as it does for the admin.
+- **The shared lead detail** (`LeadDetailDialog`, both roles, Outreach and Inbox) carries
+  **`LeadCrmPanel`**: Hook Audit (run + evidence), owner (admin reassigns via `assign_lead`; sales sees
+  it), next action + follow-up note, call booked, record a call, website control, internal notes
+  (never sent), the activity timeline. Everything the old SalesLead page held; nothing moved in the data.
+- **What Sales does not get** (`leadPermissions`, `src/lib/access.ts`): record editing (name,
+  contact fields, contact-method tag), remove/reset, import, enrichment admin (enrich, find emails,
+  phone lookups, fix town, bulk trade), bulk audits, campaigns, product, the crawl check (admin-only
+  server), client delivery (cockpit, questionnaire, playbook, welcome pack, payment, Mark Paid, SEO
+  scan), queue/automation settings (queue panel, Send now, the first-reply rule, the hook/contact
+  follow-up lanes, Remove-from-queue), the AI Audit page, the admin's private note. Statuses: the four
+  lead_set_stage allows plus the star; the rest show disabled.
+- **Available to claim** is a tab inside Outreach (`AvailableToClaim`: `sales_pool` + `claim_lead`).
+- **Tests:** `scripts/sales-shared-workflow.test.ts` (120 checks), `scripts/access-matrix.test.ts`
+  (rewritten), `scripts/initial-opener-select.test.ts` (rewritten, see whatsapp-templates.md);
+  live: `supabase/tests/sales-shared-workflow.sql` — 37/37 on 2026-09-27 (own-lead edits, Paul's
+  lead / a client / another rep refused, direct UPDATE = 0 rows, view scope and columns, anon, admin
+  reassign keeps the record and history); `multi-user-rls.sql` 70/70 (its team-directory count now
+  counts real members — the real Test salesperson made the old fixed 3 stale), `multi-user-queue.sql`
+  11/11 (now with the chosen template), `sales-media-rls.sql` 23/23.

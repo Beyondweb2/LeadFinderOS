@@ -22,6 +22,9 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus } from '@/lib/queueStatus';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { AvailableToClaim } from '@/components/AvailableToClaim';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Outreach = () => {
   const {
@@ -50,6 +53,11 @@ const Outreach = () => {
   } = useOutreach({ history: false });
 
   const { user } = useAuth();
+  /* ⛔ ONE OUTREACH, BOTH ROLES (2026-09-27). A salesperson opens this same page with the same table;
+     `perms` (src/lib/access.ts) withholds only admin/system/enrichment/delivery controls, and adds
+     "Available to claim". Their rows are their own assigned prospects, read from the safe view. */
+  const perms = useLeadPermissions();
+  const [salesTab, setSalesTab] = useState<'mine' | 'claim'>('mine');
   /* ⚡ START THE TABLE'S OWN READS NOW (2026-09-27, site-wide speed pass). The table and the queue
      panel mount only after every lead has arrived, so the audit map and the queue status used to
      start 2–4 s late. Started here they run alongside the leads; the table and panel join the same
@@ -58,8 +66,9 @@ const Outreach = () => {
   useEffect(() => {
     if (!user?.id) return;
     void prefetchOutreachAuditMap(queryClient, user.id);
-    getQueueStatus(queryClient).catch(() => { /* the panel reads it itself and reports failures */ });
-  }, [user?.id, queryClient]);
+    /* The queue status is queue configuration — admin-only on the server; a salesperson has no panel. */
+    if (perms.queueControls) getQueueStatus(queryClient).catch(() => { /* the panel reads it itself and reports failures */ });
+  }, [user?.id, queryClient, perms.queueControls]);
 
   // Server-side bulk jobs (enrich / audit / audit-and-push): survive leaving the page.
   // On a watched job finishing, refetch leads so its results show.
@@ -209,19 +218,39 @@ const Outreach = () => {
         <div className="text-center sm:text-left">
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.
+            {perms.claimPool
+              ? 'Your leads. Contact them via WhatsApp or call, update their status, star the promising ones, and open any row for the full detail — or claim more under Available to claim.'
+              : 'Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.'}
           </p>
         </div>
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
-          {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). */}
-          <CrawlCheckUrlButton />
-          <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
-          <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
+          {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). Admin:
+              crawl-check refuses anyone else. */}
+          {perms.crawlSite && <CrawlCheckUrlButton />}
+          {perms.campaigns && (
+            <>
+              <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
+              <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
+            </>
+          )}
         </div>
       </div>
 
-      {/* WhatsApp outreach queue (admin-only; self-hides otherwise). */}
-      <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} />
+      {/* A salesperson's two views of the same workflow: their own leads, and the pool to claim from. */}
+      {perms.claimPool && (
+        <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'mine' | 'claim')}>
+          <TabsList>
+            <TabsTrigger value="mine">My leads ({leads.length})</TabsTrigger>
+            <TabsTrigger value="claim">Available to claim</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+      {perms.claimPool && salesTab === 'claim' && (
+        <AvailableToClaim onClaimed={() => { fetchLeads(); }} />
+      )}
+
+      {/* WhatsApp outreach queue (admin-only). */}
+      {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} />}
 
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
@@ -272,7 +301,7 @@ const Outreach = () => {
         </div>
       )}
 
-      <OutreachTable
+      {!(perms.claimPool && salesTab === 'claim') && <OutreachTable
         leads={allLeads}
         onLeadClick={() => {}}
         onStatusChange={(leadId, status) => {
@@ -280,27 +309,27 @@ const Outreach = () => {
           if (status === 'interested') return handlePipelineStatusChange(leadId, status);
           return updateStatus(leadId, status);
         }}
-        onContactMethodChange={handleContactMethodChange}
+        onContactMethodChange={perms.editLeadRecord ? handleContactMethodChange : undefined}
         onPipelineStatusChange={handlePipelineStatusChange}
         onNextActionChange={(leadId, action, date) => {
           if (isDemoLead(leadId)) return;
           return updateNextAction(leadId, action, date);
         }}
-        onRemoveAll={deleteAllLeads}
+        onRemoveAll={perms.removeLeads ? deleteAllLeads : () => undefined}
         onArchive={(leadId) => {
           if (isDemoLead(leadId)) return;
           return archiveLead(leadId);
         }}
         onArchiveSelected={archiveMultiple}
-        onDeleteSelected={deleteMultiple}
-        onResetSelected={resetMultiple}
-        onResetToFreshSelected={resetToFreshMultiple}
+        onDeleteSelected={perms.removeLeads ? deleteMultiple : undefined}
+        onResetSelected={perms.removeLeads ? resetMultiple : undefined}
+        onResetToFreshSelected={perms.removeLeads ? resetToFreshMultiple : undefined}
         onMarkAsInterested={markMultipleAsInterested}
         onRefreshLeads={fetchLeads}
-        onImportLeads={async (leadsToImport) => {
+        onImportLeads={perms.importLeads ? async (leadsToImport) => {
           await bulkImportLeads(leadsToImport as any, 'UK');
-        }}
-        onBulkLookupPhones={(ids, onProgress) => bulkLookupPhones(ids, onProgress)}
+        } : undefined}
+        onBulkLookupPhones={perms.enrichLeads ? (ids, onProgress) => bulkLookupPhones(ids, onProgress) : undefined}
         showArchiveButton={false}
         isArchiveView={false}
         readOnly={isReadOnly}
@@ -314,26 +343,26 @@ const Outreach = () => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateNotes(leadId, notes);
         }}
-        onBusinessNameChange={(leadId, name) => {
+        onBusinessNameChange={perms.editLeadRecord ? (leadId, name) => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateBusinessName(leadId, name);
-        }}
-        onImageChange={(leadId, imageUrl) => {
+        } : undefined}
+        onImageChange={perms.editLeadRecord ? (leadId, imageUrl) => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateLead(leadId, { image_url: imageUrl });
-        }}
-        onAssignCampaign={(leadIds, campaignId) =>
+        } : undefined}
+        onAssignCampaign={perms.campaigns ? (leadIds, campaignId) =>
           assignCampaign(leadIds.filter((id) => !isDemoLead(id)), campaignId)
-        }
-        fetchActivities={fetchActivities}
+        : undefined}
+        fetchActivities={perms.editLeadRecord ? fetchActivities : undefined}
         campaignDefaultSaleTypeByLead={campaignDefaultSaleTypeByLead}
         campaignNameByLead={campaignNameByLead}
         showCampaignName={campaignFilter === null}
         launchIntent={launchIntent}
         onLaunchConsumed={() => setLaunchIntent(null)}
-        onBulkJob={createJob}
+        onBulkJob={perms.bulkAudits ? createJob : undefined}
         bulkJobActive={!!activeJob || creatingJob}
-      />
+      />}
 
       {/* First-time outreach tips */}
       <OutreachTipsDialog />

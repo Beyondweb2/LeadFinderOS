@@ -32,6 +32,9 @@ create temp table t_fx as select
 alter table t_fx add column u1_place text, add column c_place text, add column c_phone text;
 update t_fx set u1_place = (select place_id from public.outreach_leads where id = t_fx.u1), c_place = (select place_id from public.outreach_leads where id = t_fx.contacted), c_phone = (select phone from public.outreach_leads where id = t_fx.contacted);
 grant select on t_fx to authenticated, anon;
+-- Every ACTIVE team member with a role — real members plus the fixtures (the real Test salesperson was added after this suite was written).
+create temp table t_team as select count(*)::int as n from public.team_members tm join public.user_roles ur on ur.user_id = tm.user_id where tm.status = 'active';
+grant select on t_team to authenticated, anon;
 
 insert into t_results (name, ok, detail) select 'fixtures present', contacted is not null and u1 is not null and u2 is not null and paid is not null,
   format('total=%s assigned=%s unassigned=%s', total_leads, assigned_after_backfill, unassigned_after_backfill) from t_fx;
@@ -51,7 +54,7 @@ insert into t_results (name, ok, detail) select 'A: no audits visible yet', (sel
 insert into t_results (name, ok, detail) select 'A: lead_claims unreadable', (select count(*) from public.lead_claims) = 0, null;
 insert into t_results (name, ok, detail) select 'A: sees only own role row', (select count(*) from public.user_roles) = 1, null;
 insert into t_results (name, ok, detail) select 'A: sees only own team row', (select count(*) from public.team_members) = 1, null;
-insert into t_results (name, ok, detail) select 'A: team directory lists 3', (select count(*) from public.team_directory()) = 3, null;
+insert into t_results (name, ok, detail) select 'A: team directory lists every active member', (select count(*) from public.team_directory()) = (select n from t_team), (select count(*) from public.team_directory())::text || ' of ' || (select n from t_team);
 insert into t_results (name, ok, detail) select 'A: lookup contacted lead = owned by Paul',
   (x.state = 'owned' and x.owner_name = 'Paul'), x.state || '/' || coalesce(x.owner_name, '∅')
   from public.lead_identity_lookup(jsonb_build_array(jsonb_build_object('k', 'c', 'place_id', (select c_place from t_fx), 'phone', (select c_phone from t_fx)))) x;

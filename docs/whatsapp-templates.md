@@ -667,3 +667,20 @@ Live probe after the fix: 0 disagreements between card, send and voice note acro
 `TEMPLATE_SINGLE_ENGINE_CLAIM` and a new single-engine body is still refused unless added by name.
 Competitors, 6/6, no-competitor, duplicate (`pitchEverSent`) and dry-run pre-check are unchanged.
 Live read-only check: 0 of 115 replied leads refused for engine wording (38 before).
+
+## The initial opener — choose a template, send it (2026-09-27, supersedes the section above)
+
+Paul: *"SELECT A TEMPLATE → SEND. That's it."* The global "Initial outreach template" setting is gone.
+- **Removed:** the control in the Outreach queue dialog, `useSelectedOpener`, `_shared/initial-opener.ts`,
+  `openerSendability` / `resolveSelectedOpener` / `DEFAULT_INITIAL_OPENER` / `INITIAL_OPENER_LABELS`,
+  the `opener_not_selected` refusal in `send-whatsapp-message` (BUILD_ID `2026-09-27c`, capability
+  `any_approved_opener`), the status payload's `initialOpenerTemplate`. `set_initial_opener_template`
+  answers 410 `mode_removed` and writes nothing. The column `whatsapp_outreach_state.initial_opener_template`
+  still exists; nothing reads it.
+- **Now:** both approved openers (`initial_contact`, `initial_opener_v2`) are ordinary choices in every
+  picker; only Meta approval (`openerApproved`) can refuse one. Bulk: the batch's chosen template is
+  stored on each lead (admin: the queue write; sales: `sales_queue_opener(_lead_ids, _template)`), and the
+  queue sends exactly that stored value. The old one-argument `sales_queue_opener` refuses
+  (`template_required`). Cold-outreach phone history, duplicate protection and eligibility are unchanged.
+- **Unchanged on purpose:** `audit_followup`'s engine-mismatch waiver (Google AI hooks allowed).
+- Tests: `scripts/initial-opener-select.test.ts` (rewritten to this rule).
