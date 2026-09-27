@@ -30,7 +30,8 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
   const parts = src.slice(src.indexOf("const loadRunParts = useCallback"), src.indexOf("const assembleAudits"));
   ok((parts.match(/if \(scope\) q = q\.in\('audit_id', scope\);/g) ?? []).length === 2, "a scoped hydrate filters BOTH runs and reports to its own audits");
   ok(/const scope = auditRows\.length <= SCOPED_HYDRATE_MAX \? auditRows\.map\(\(a\) => a\.id\) : null;/.test(src), "small sets are scoped; the whole book is read straight through");
-  ok(/await Promise\.all\(\[\s*\n?\s*fetchAllRows</.test(parts), "runs and reports are read side by side");
+  ok(/await Promise\.all\(\[[\s\S]{0,700}?fetchAllRowsParallel<[\s\S]{0,900}?fetchAllRows<\{ audit_id/.test(parts), "runs and reports are read side by side");
+  ok(/seo_grade:results_seo_grade/.test(parts) && !/select\([^)]*results->seo/.test(src),"the SEO grade comes from the plain column, never by opening results (migration 20260927130000)");
   ok(/const \[fetched, parts\] = await Promise\.all\(\[readAudits\(\), loadRunParts\(null\)\]\);/.test(src), "the book's audits read no longer waits in front of runs/reports");
 
   const results = src.slice(src.indexOf("let sawLive = false;"), src.indexOf("pollRef.current = setInterval(tick, 3000);"));

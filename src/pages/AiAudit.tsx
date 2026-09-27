@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { fetchAllRows } from '@/lib/fetchAllRows';
+import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { cellNamed } from '@/lib/namedSignal';
 import { asPence, SEO_SCAN_USD } from '@/lib/marketView';
 import { supabase } from '@/integrations/supabase/client';
@@ -670,15 +670,20 @@ const AiAudit = () => {
     if (scope && scope.length === 0) return { runsByAudit, reportByAudit: new Map<string, string>() };
     const sb = supabase as unknown as SupabaseClient;
     const [{ rows: runRows }, { rows: reportRowsAll }] = await Promise.all([
-      fetchAllRows<{
+      /* ⚡ seo_grade from the plain results_seo_grade column (2026-09-27, migration
+         20260927130000): `results->seo->>overallGrade` opened every run's whole results blob (64 MB
+         table) for one letter. The parts trigger keeps the column equal to results on every write;
+         the backfill was verified at 0 differences over all 2,042 runs. Cheap now, so paged in
+         parallel like the other lists. */
+      fetchAllRowsParallel<{
         id: string; audit_id: string; run_number: number; status: string; mention_rate: number | null;
         created_at: string; actor_cost_usd: number | null; seo_grade: string | null;
       }>('AiAudit (runs)', (from, to) => {
         let q = sb.from('ai_audit_runs')
-          .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results->seo->>overallGrade');
+          .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results_seo_grade');
         if (scope) q = q.in('audit_id', scope);
         return q.order('id', { ascending: true }).range(from, to);
-      }),
+      }, (r) => r.id),
       // Published report per audit → the "report" pill. Existence only. Same one-pass read.
       fetchAllRows<{ audit_id: string | null; slug: string }>('AiAudit (reports)', (from, to) => {
         let q = sb.from('business_reports').select('audit_id, slug');

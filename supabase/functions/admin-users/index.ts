@@ -402,8 +402,10 @@ serve(async (req) => {
         .select('user_id, display_name, status, is_book_owner, invited_at, disabled_at, daily_send_limit')
         .order('invited_at', { ascending: true });
       if (mErr) return jsonResponse({ error: mErr.message }, 500, corsHeaders, rlHeaders);
-      const out = [];
-      for (const m of members ?? []) {
+      /* ⚡ Every member at once (2026-09-27, site-wide speed pass): each member's three reads already
+         ran together, but the members ran one after another, so the list grew one round trip per
+         person. Same reads, same order (Promise.all keeps it). */
+      const out = await Promise.all((members ?? []).map(async (m) => {
         const [{ data: roles }, { data: authUser }, { count: assigned }] = await Promise.all([
           serviceClient.from('user_roles').select('role').eq('user_id', m.user_id),
           serviceClient.auth.admin.getUserById(m.user_id),
@@ -411,7 +413,7 @@ serve(async (req) => {
         ]);
         const roleSet = new Set((roles ?? []).map((r: { role: string }) => r.role));
         const u = authUser?.user;
-        out.push({
+        return {
           ...m,
           role: roleSet.has('admin') ? 'admin' : roleSet.has('sales') ? 'sales' : null,
           email: u?.email ?? null,
@@ -419,8 +421,8 @@ serve(async (req) => {
           has_signed_in: !!u?.last_sign_in_at,
           banned: !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now(),
           assigned_leads: assigned ?? 0,
-        });
-      }
+        };
+      }));
       return jsonResponse({ ok: true, team: out }, 200, corsHeaders, rlHeaders);
     }
 

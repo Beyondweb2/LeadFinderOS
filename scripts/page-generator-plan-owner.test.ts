@@ -24,7 +24,9 @@ function ok(cond: boolean, msg: string) {
 const src = readFileSync(new URL('../supabase/functions/page-generator/index.ts', import.meta.url), 'utf8');
 const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-ok(/const userId = u\.user\.id;/.test(code), 'the operator id is derived once, from the verified JWT (u.user.id)');
+/* 2026-09-27: the id comes from requireAdmin, which verifies the JWT with the auth service AND the role
+   (the handler's own getUser before it was a duplicate round trip). */
+ok(/const gate = await requireAdmin\(req, service\);[\s\S]{0,120}const userId = gate\.actor\.id;/.test(code), 'the operator id is derived once, from the verified JWT (requireAdmin → gate.actor.id)');
 ok(!/(^|[^.\w])user\.id\b/m.test(code), 'no bare `user.id` anywhere — the name that crashed the plan action');
 ok(!/(^|[^.\w$])user\.(?!id)\w+/m.test(code), 'and no other bare `user.<field>` either');
 
@@ -36,7 +38,7 @@ ok(/\.eq\("baseline_audit_id", audit\.id\)/.test(plan), 'and by the baseline aud
 
 /* The audit the plan reads is itself the operator's (scoped by userId before the branch). */
 const before = code.slice(0, code.indexOf('if (action === "plan")'));
-ok(/const measured = await measuredSetForLead\(service, userId, leadId\)/.test(before), 'the audit feeding the plan comes from measuredSetForLead under the same owner (userId)');
+ok(/const \[measured,[^\]]*\] = await Promise\.all\(\[\s*measuredSetForLead\(service, userId, leadId\)/.test(before), 'the audit feeding the plan comes from measuredSetForLead under the same owner (userId)');
 ok(/\.from\("ai_audits"\)\.select\(MEASURED_COLS\)\.eq\("id", pointer\)\.eq\("user_id", userId\)/.test(code), 'which reads the baseline audit scoped by userId');
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
