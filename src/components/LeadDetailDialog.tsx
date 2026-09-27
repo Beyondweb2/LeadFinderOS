@@ -8,6 +8,7 @@ import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
+import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -599,6 +600,9 @@ function LeadDetailBody({
 
           {/* Read-only call guide from this lead's stored evidence — the SAME panel Inbox opens. */}
           {!isDemoLead(lead.id) && <ColdCallPlaybookButton leadId={lead.id} />}
+
+          {/* Voice-note script from this lead's hook result + site research — text only, never sends. */}
+          {!isDemoLead(lead.id) && <VoiceNoteScriptButton leadId={lead.id} />}
 
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}

@@ -268,3 +268,7 @@ for the data account (admin magic link, revoked by logout straight after — 204
 
 **Not yet done:** nobody has pressed the button in the real signed-in Inbox — this session cannot
 sign in to the browser. The function the button calls is the one tested above.
+
+## Research moved to a shared module (2026-09-26)
+
+The research pass (fetching, the model reading, save) now lives in `supabase/functions/_shared/site-research.ts` (`runSiteResearch`), moved verbatim so `voice-note-script` reuses it. `warm-lead-reply` keeps its stage gate in front of it. Changing that module means redeploying both functions.

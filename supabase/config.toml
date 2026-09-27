@@ -167,6 +167,12 @@ verify_jwt = true
 [functions.send-whatsapp-voice]
 verify_jwt = true
 
+# voice-note-script: the Inbox / lead popup's "Voice-note script". SPA-only caller with the operator's
+# JWT; the handler does its own resolveOperator + lead-ownership check. Spends OpenAI money and may read
+# the prospect's site (the shared warm research path), but NEVER sends a message.
+[functions.voice-note-script]
+verify_jwt = true
+
 # prospect-preview: the AI Audit screen's "Generate prospect preview" (outreach homepage mock-up +
 # evidence card + screenshots). SPA-only caller with the operator's JWT; the handler does its own
 # resolveOperator + lead-ownership check. Spends Cloudflare Browser Rendering only; NEVER sends a message.

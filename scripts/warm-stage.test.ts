@@ -62,7 +62,7 @@ ok(WARM_STAGE_LABELS.hook_not_sent === 'HOOK NOT SENT' && WARM_STAGE_LABELS.wait
 const body = (name: string) => FN.match(new RegExp(`async function ${name}[\\s\\S]*?\\n}\\n`))?.[0] ?? '';
 const research = body('handleResearch');
 const draft = body('handleDraft');
-ok(research.includes('if (conv.stage.stage !== "warm") return notWarm(conv.stage);') && research.indexOf('notWarm(') < research.indexOf('fetchSitePage('), 'research refuses a not-warm conversation BEFORE any site fetch');
+ok(research.includes('if (conv.stage.stage !== "warm") return notWarm(conv.stage);') && research.indexOf('notWarm(') < research.indexOf('runSiteResearch('), 'research refuses a not-warm conversation BEFORE any site fetch (the fetch lives in the shared runSiteResearch)');
 ok(draft.includes('if (conv.stage.stage !== "warm") return notWarm(conv.stage);') && draft.indexOf('notWarm(') < draft.indexOf('callModel('), 'draft refuses a not-warm conversation BEFORE any model call');
 ok(/error: "not_warm_yet"/.test(FN) && /Send the hook first/.test(FN), 'the refusal says to send the hook first');
 ok(/warmStage\(rows\)/.test(FN) && /status"\)\s*\.eq\("user_id", operatorId\)|status"\)\.eq\("user_id"/.test(FN.replace(/\n\s*/g, '')), 'the server reads the stage from the stored rows, with their send status');
@@ -166,9 +166,12 @@ const withFull = assembleResearch({ nowIso: new Date(NOW).toISOString(), website
 ok(withFull.sources.some((s) => s.kind === 'full_crawl'), 'the record names the full crawl as a source');
 ok(withFull.strongestFindings[0]?.id === 'full:noindex', `the full crawl's strongest finding leads (${withFull.strongestFindings.map((x) => x.id).join(', ')})`);
 ok(withFull.strongestFindings.length <= 4, 'still only 2–4 findings reach a reply');
-ok(/const full = usableFullCrawl\(crawl, homeUrl, started\);/.test(research) && /if \(home\.ok && !full\) \{\s*const targets = pickResearchPages/.test(research),
+/* The research pass itself moved to _shared/site-research.ts (2026-09-26, shared with voice-note-script). */
+const SHARED = read('supabase/functions/_shared/site-research.ts');
+const sharedResearch = SHARED.match(/export async function runSiteResearch[\s\S]*?\n}\n/)?.[0] ?? '';
+ok(/const full = usableFullCrawl\(crawl, homeUrl, started\);/.test(sharedResearch) && /if \(home\.ok && !full\) \{\s*const targets = pickResearchPages/.test(sharedResearch),
   'with a usable full crawl the menu-page fetches are skipped (homepage only)');
-ok(/used_full_crawl: !!full/.test(research), 'the research answer says whether the full crawl was used');
+ok(/usedFullCrawl: !!full/.test(sharedResearch) && /used_full_crawl: out\.usedFullCrawl/.test(research), 'the research answer says whether the full crawl was used');
 ok(!/mode: "full"|crawl-worker|createCrawlJob/.test(FN), 'the drafter never starts a crawl job itself');
 
 if (f > 0) { console.log(`\n${f} FAILURE${f === 1 ? '' : 'S'}`); process.exit(1); }

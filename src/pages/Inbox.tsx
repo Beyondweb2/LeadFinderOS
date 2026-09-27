@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
 import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
+import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
 import type { VoiceClip } from '@/lib/voiceRecorderState';
 import { Input } from '@/components/ui/input';
@@ -1996,6 +1997,13 @@ const Inbox = () => {
                         like the composer, so switching thread discards a recording in progress. The
                         text composer is HIDDEN while the recorder has the row — still mounted, so a
                         half-typed reply is exactly where it was when the voice note is sent or deleted. */}
+                    {/* Voice-note script — prominent in the OPEN window, beside the recorder: text for Paul to
+                        read out when he records. Never sends. Closed-window threads do not get one. */}
+                    {active.leadId && (
+                      <div className="flex justify-end">
+                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />
+                      </div>
+                    )}
                     <div className="flex min-w-0 items-end gap-2">
                       <div className={cn('min-w-0 flex-1', voiceActive && active.leadId && 'hidden')}>
                         <InboxComposer

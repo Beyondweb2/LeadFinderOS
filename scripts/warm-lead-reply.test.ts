@@ -38,7 +38,7 @@ const NOW = Date.parse('2026-09-25T12:00:00Z');
 const HOUR = 3_600_000;
 
 /* ─────────── 1. it never sends ─────────── */
-for (const [name, src] of [['warm-lead-reply function', FN], ['WarmReplyAssistant', UI]] as const) {
+for (const [name, src] of [['warm-lead-reply function', FN], ['WarmReplyAssistant', UI], ['shared site research', read('supabase/functions/_shared/site-research.ts')]] as const) {
   ok(!/send-whatsapp-message['"]/.test(src.replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')), `${name}: never invokes send-whatsapp-message`);
   ok(!/graph\.facebook\.com|sendViaGraph|whatsapp-send\.ts/.test(src), `${name}: no Graph call, no import of the sender module`);
   ok(!/from\(["']whatsapp_(?:messages|sends)["']\)\s*\.(?:insert|upsert|update)/.test(src), `${name}: never writes a message row`);
@@ -68,7 +68,7 @@ ok(/error: "window_closed"[\s\S]{0,300}approved template/.test(draftBody), 'the 
 ok(/Research &amp; draft reply needs the 24h window — only an approved Meta template can be sent now\./.test(UI), 'the Inbox says so when the window is closed');
 
 /* ─────────── 3. regenerate never crawls; refresh does ─────────── */
-ok(!/fetchSitePage|pickResearchPages|handleResearch/.test(draftBody), 'the draft action has no site-fetch path at all');
+ok(!/fetchSitePage|pickResearchPages|handleResearch|runSiteResearch/.test(draftBody), 'the draft action has no site-fetch path at all');
 ok(/mode === 'refresh' \|\| \(mode === 'draft' && freshness !== 'fresh'\)/.test(UI), 'the UI asks for research only on Refresh, or a first draft with nothing fresh');
 ok(/refresh: mode === 'refresh'/.test(UI), 'Refresh research sends refresh: true (the only re-read of fresh research)');
 ok(/run\(hasDraft \? 'regenerate' : 'draft'\)/.test(UI), 'after a draft the main button is Regenerate');
