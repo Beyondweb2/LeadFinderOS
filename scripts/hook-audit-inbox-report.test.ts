@@ -97,6 +97,11 @@ const V2 = initialHookStateV2(Q);
   ok(/Run new 3 × 2 audit/.test(t) && html.includes('data-testid="hook-run-new"'), 'A: the "Run new 3 × 2 audit" action is visible');
   ok(/View old details/.test(t), 'A: details button reads "View old details"');
   ok(report.kind === 'ready' && report.isCurrent && /Open report/.test(t), 'A: the old completed audit still has its own report');
+  // Old early-stop audit, expanded (2026-09-27): its own two results as words, never padded to six.
+  const oldOpen = renderToStaticMarkup(createElement(HookVisibilityView, { card, inFlight: false, state: V1_EES, report, onRunNew: () => {}, defaultExpanded: true }));
+  const oldGrid = oldOpen.slice(oldOpen.indexOf('data-testid="hook-results-grid"'));
+  const oldPills = [...oldGrid.matchAll(/data-testid="hook-result-pill" data-status="([a-z_]+)"/g)].map((m) => m[1]);
+  ok(oldPills.join() === 'named,not_named' && /All 2 results in this older check/.test(text(oldOpen)), 'A: expanded, the old check shows its own 2 results (ChatGPT NAMED, Google AI NOT NAMED), not six');
   void v1Rows;
 }
 
@@ -183,8 +188,21 @@ const V2 = initialHookStateV2(Q);
   ok(expanded.includes('hook-visibility-details') && /max-h-\[40vh\]/.test(expanded) && /overflow-y-auto/.test(expanded), 'H: expanded details sit in a height-capped, internally scrolling panel');
   ok(/absolute inset-x-2 top-full z-30/.test(expanded) && /aria-label="Close details"/.test(expanded), 'H: the details float over the conversation (an overlay), and a click outside closes them (2026-09-27)');
   ok(/line-clamp-2[^"]*" data-testid="hook-best-miss"/.test(expanded), 'H: the best missed search stays clamped when details open, so the card does not grow');
-  ok(/Selected outreach search/.test(te) && te.includes('Precision Electrical Services Limited'), 'H: expanded shows the selected search and its competitors');
-  ok(/Other Google AI misses/.test(te) && /Other ChatGPT misses/.test(te) && /Named searches/.test(te), 'H: expanded shows other misses by engine and the named searches');
+  /* 2026-09-27: the details answer ONE question, did the business get named? Six explicit results,
+     NAMED in green and NOT NAMED in red, under the best missed search as one inseparable tuple. */
+  const best = expanded.slice(expanded.indexOf('data-testid="hook-best-missed"'), expanded.indexOf('data-testid="hook-results-grid"'));
+  const tb = text(best);
+  ok(/Best missed search/.test(tb) && tb.includes(card.score.hook!.question) && /Google AI NOT NAMED/.test(tb), 'H: the best missed search shows its question, its engine and NOT NAMED');
+  ok(/Named instead/.test(tb) && ['Precision Electrical Services Limited', 'Addlestone Electricians', 'S G Electrical Surrey'].every((n) => tb.includes(n)), 'H: …and up to three competitors from THAT answer');
+  ok(!tb.includes("Pennington's Electrical Contractors") && !['Volt Electrical', 'Sparks Ltd', 'Commercial Power Ltd', 'EICR Masters'].some((n) => tb.includes(n)), 'H: never a fourth name, and never a name from another question or engine');
+  const grid = expanded.slice(expanded.indexOf('data-testid="hook-results-grid"'));
+  const pills = [...grid.matchAll(/<span class="([^"]*)" data-testid="hook-result-pill" data-status="([a-z_]+)"/g)];
+  ok(pills.length === 6, `H: all six results are shown (${pills.length})`);
+  ok(pills.filter((m) => m[2] === 'named').length === 3 && pills.filter((m) => m[2] === 'not_named').length === 3, 'H: 3 NAMED and 3 NOT NAMED, matching the audit');
+  ok(pills.every((m) => (m[2] === 'named' ? /green/.test(m[1]) && !/red/.test(m[1]) : /red/.test(m[1]) && !/green/.test(m[1]))), 'H: NAMED is green, NOT NAMED is red');
+  ok(/Q1 .*ChatGPT NAMED Google AI NOT NAMED/.test(te) && /Q2 .*ChatGPT NAMED Google AI NAMED/.test(te) && /Q3 .*ChatGPT NOT NAMED Google AI NOT NAMED/.test(te), 'H: each question row reads as explicit words per engine');
+  ok(!/Selected outreach search|Other Google AI misses|Other ChatGPT misses|Named searches/.test(te), 'H: the old grouped headings are gone');
+  ok(/Google AI<\/span> <span class="font-bold text-red-700/.test(collapsed), 'H: the collapsed best-miss line says NOT NAMED in red too');
   const card2 = [collapsed, expanded].join('');
   ok(!/Gemini/.test(text(card2)), 'H: the card never says Gemini');
 }

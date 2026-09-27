@@ -23,11 +23,29 @@
 
    THE CHECKS (checkVoiceNoteScript) guard FACTS, not style: every competitor named and no other engine
    claimed, no causation claim, no price, no link, no technical fault that no finding supports, and the
-   primary finding actually used. Length is a target, not a gate: 86 or 134 words is fine; only a script
-   that is plainly too short or too long is sent back.
+   primary finding actually used. Length is a target, not a gate; only a script that is plainly too
+   short or too long is sent back.
+
+   🔴 THE SHAPE (Paul, 2026-09-27, generator v3). Five beats, 30–45 seconds, nothing padded:
+     1. SEARCH CONTEXT, short: trade + town + engine ("i was looking for an electrician in Shrewsbury,
+        so i asked Google AI who it recommended"). Never the audit query's qualifiers ("who can come
+        today") — they are the tell of a machine-worded search.
+     2. "it came up with X, Y and Z, but you didn't come up."
+     3. "i had a look at what might be holding you back, and …" + ONE genuine finding. Never "this is why".
+     4. "i actually specialise in AI visibility for local businesses."
+     5. THE CTA ESTABLISHES WHO CONTROLS THE WEBSITE (voiceNoteCtaKind) — it decides whether Findable can
+        optimise the site, work with the provider, or rebuild it. Never "i can send you the audit and show
+        you exactly what i'd change": the quick check contains no change plan. A lead whose only page is a
+        TradeHQ / Facebook profile is asked whether they have a site of their own, never "do you own your
+        website?".
+
+   THE PICK FOLLOWS THE CARD (2026-09-27): the Inbox card, the report and the Call Script all quote the
+   hook pick (hookScore.ts pickHookResult). The voice note uses that same result whenever it has two
+   usable names, so the three cannot disagree; only when it does not is Paul's older order used, and the
+   operator is told which search the script used instead.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { HOOK_PICK_ENGINE_ORDER, hookEngineLabel, hookMissScore, type HookResult } from './hookScore.ts';
+import { HOOK_PICK_ENGINE_ORDER, hookEngineLabel, hookMissScore, type HookPick, type HookResult } from './hookScore.ts';
 import { usableRivals, excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
 import { articleTrade } from './templateVars.ts';
@@ -36,15 +54,15 @@ import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows. */
-export const VOICE_NOTE_GENERATOR_VERSION = 2;
+export const VOICE_NOTE_GENERATOR_VERSION = 3;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
-/** The spoken target, ~35–55 seconds. */
-export const VOICE_NOTE_TARGET_WORDS = { min: 100, max: 125 } as const;
+/** The spoken target, ~30–45 seconds at Paul's pace (Paul, 2026-09-27: shorter is better). */
+export const VOICE_NOTE_TARGET_WORDS = { min: 65, max: 100 } as const;
 /** Outside this a length is worth a note to Paul — never a rewrite. */
-export const VOICE_NOTE_NOTE_WORDS = { min: 90, max: 135 } as const;
+export const VOICE_NOTE_NOTE_WORDS = { min: 50, max: 110 } as const;
 /** Outside this the script is plainly wrong-sized and is sent back once. */
-export const VOICE_NOTE_HARD_WORDS = { min: 60, max: 140 } as const;
+export const VOICE_NOTE_HARD_WORDS = { min: 40, max: 125 } as const;
 /** A voice note carries the strongest finding and at most one more. */
 export const VOICE_NOTE_MAX_FINDINGS = 2;
 
@@ -73,7 +91,41 @@ export function usableVoiceNoteRivals(names: readonly string[], business: string
   return usableRivals(excludeSelfRivals(names, business, nameMatches));
 }
 
+const evidenceOf = (m: HookResult, competitors: string[]): VoiceNoteEvidence => ({
+  questionIndex: m.questionIndex, question: m.question, engine: m.engine,
+  engineLabel: hookEngineLabel(m.engine), competitors, answerExcerpt: m.answerExcerpt, thin: competitors.length < 2,
+});
+
+/**
+ * @param preferred the card's hook pick (score.hook). Used as it is whenever that exact result has two
+ *        or more usable names — the Inbox card, the report and the Call Script quote it, so the voice
+ *        note does too. Absent (an older caller) = Paul's original order alone.
+ */
 export function selectVoiceNoteEvidence(
+  results: readonly HookResult[],
+  ctx: { business: string; town: string; trade: string },
+  preferred?: Pick<HookPick, 'questionIndex' | 'engine'> | null,
+): VoiceNoteSelection {
+  const valid0 = results.filter((r) => r.status === 'named' || r.status === 'not_named');
+  const card = preferred
+    ? valid0.find((r) => r.status === 'not_named' && r.questionIndex === preferred.questionIndex && r.engine === preferred.engine) ?? null
+    : null;
+  if (card) {
+    const names = usableVoiceNoteRivals(card.competitors, ctx.business);
+    if (names.length >= 2) return { ok: true, evidence: evidenceOf(card, names), note: null };
+  }
+  const fallback = selectVoiceNoteEvidenceByOrder(results, ctx);
+  if (card && fallback.ok) {
+    const e = fallback.evidence;
+    if (e.questionIndex !== card.questionIndex || e.engine !== card.engine) {
+      const why = `The best missed search on the card (${hookEngineLabel(card.engine)}, question ${card.questionIndex + 1}) has fewer than two usable competitor names, so this script uses ${e.engineLabel}, question ${e.questionIndex + 1} instead.`;
+      return { ...fallback, note: fallback.note ? `${why} ${fallback.note}` : why };
+    }
+  }
+  return fallback;
+}
+
+function selectVoiceNoteEvidenceByOrder(
   results: readonly HookResult[],
   ctx: { business: string; town: string; trade: string },
 ): VoiceNoteSelection {
@@ -206,36 +258,30 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 
 export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Google AI). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
 
-GOAL. It must sound like Paul personally:
-1. searched for this type of business in their area,
-2. noticed the AI engine recommended competitors instead,
-3. had a look at the prospect's website to see what might be contributing,
-4. found the strongest genuine issue(s),
-5. mentions he specialises in AI visibility for local businesses,
-6. offers to explain what he'd change.
-This is NOT a hard sell. It sounds like a genuine voice note from a trades-focused marketer, not a scripted sales pitch.
+THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
+1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI who it recommended" or "i asked Google AI for electricians in Shrewsbury". Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
+2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
+3. THE FINDING: "i had a look at what might be holding you back, and" + the ONE website point you are given, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence.
+4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
+5. THE QUESTION (the CTA line you are given): a simple question about who owns and controls their website. It ends the note. Nothing after it.
 
-FLOW (broadly):
-"hi mate, i was looking for a [trade] in [area]..." → say which AI engine you asked, using the ENGINE NAME you are given, exactly, and PARAPHRASE what you asked it in plain spoken words (e.g. "i was looking for an emergency electrician in Shrewsbury and asked Google AI who it'd recommend") → name the competitors it recommended, exactly as given, all of them and no others, then say directly that they didn't come up ("but you didn't come up", "and you weren't one of the ones it mentioned") → explain naturally, and hedged, that if AI is recommending other firms instead, that can mean potential customers going elsewhere → say you had a look at their site to see what might be contributing → explain the website point(s) you are given, in very plain English, keeping their concrete details → say you specialise in AI visibility for local businesses → offer softly to explain what you'd change. The approved direction for the ending: "i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches." Natural variations are fine; do not end every script identically.
+LENGTH: about 65 to 100 spoken words (30 to 45 seconds). Shorter is better when the evidence is simple. Never pad, never over 125.
 
-STYLE: this is Paul talking into his phone, not copywriting. Relaxed, British, conversational, direct, slightly imperfect. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Keep sentences short; a couple can start with "so" or "and". "mate" once or twice, naturally, never more. Not corporate, not over-polished, not cheesy, not salesy. Natural phrases like "i had a quick look", "a couple of things stood out", "that's probably not ideal", "that's the sort of thing i work on" are good. Lowercase is fine.
-TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up"), never "but not [business]".
-NEVER READ THE SEARCH OUT WORD FOR WORD, never put it in quotation marks, and never say "UK" after the town. Paraphrase it naturally while keeping its meaning (emergency stays emergency, commercial stays commercial).
-AVOID POLISHED ENDINGS: not "just let me know", not "if you'd like, i can explain", not "feel free to reach out". Prefer "if you want mate, i'm happy to explain what i'd change".
-NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee of rankings or recommendations. No em dash or en dash, anywhere. No price, no figures about money, no link, no website address. Do not ask for a call unless it flows naturally.
-
-LENGTH: about 100 to 125 spoken words (40 to 50 seconds). Never over 140. Do not make it an audit.
+STYLE: Paul talking into his phone. Relaxed, British, conversational, direct. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Short sentences. "mate" once or twice, never more. No corporate language, nothing polished, nothing salesy. Lowercase is fine.
+TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up").
+NEVER put the search in quotation marks, never read it word for word, never say "UK" after the town.
+NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee. No em dash or en dash. No price, no figures about money, no link, no website address. Do not offer to send the audit, do not offer to "show you exactly what i'd change" or "explain what i'd change": the quick check does not contain a change plan. Do not ask for a call.
 
 EVIDENCE RULES, which override everything:
-- The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop a competitor. If only one or two are listed, name just those, naturally.
+- The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop one. If only one or two are listed, name just those.
 - Say the engine exactly as given ("Google AI" or "ChatGPT"). Never name the other engine as the one you asked.
 - Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
-- OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "the site says you're fully insured and qualified, but it doesn't really show much detail around those qualifications" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
-- If there are no website points, follow the NO WEBSITE POINTS instruction exactly in spirit, with a natural variation.
-- LOST WORK IS A POSSIBILITY, NEVER A FACT. Never "that's work going straight to someone else", "you're losing jobs", "that's people ringing them instead". Say "that can mean potential customers going elsewhere", "that could be work going to someone else".
+- OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "your service pages don't give much detail about the work you actually do" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
+- If there are no website points, follow the NO WEBSITE POINTS instruction in spirit, with a natural variation.
 - SERVICES: never name a specific service or job type (rewiring, fuse boards, boiler repairs, lock changes...) unless it is listed under SERVICES THEY OFFER or is in the search itself. Otherwise say "the work you do" or "your main services".
-- If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website" or "your site", and never say you looked through their site.
-- CAUSATION: never say a website issue is why the AI engine left them out. Never "this is why", "that's why", "the reason you're not showing". Use "might be contributing", "could be making it harder for AI to properly understand the site", "a couple of things stood out".
+- If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website" or "your site", never say you looked through their site, and never ask whether they own their website.
+- CAUSATION: never say a website issue is why the AI engine left them out, and never say you looked into why the engine recommended the others. Never "this is why", "that's why", "the reason you're not showing", "i looked into why". Say "what might be holding you back".
+- LOST WORK: do not add a sentence about lost customers. If one slips in it must be a possibility ("that can mean"), never a fact.
 
 OUTPUT: only the script text Paul will read. No heading, no bullet points, no notes, no quotation marks around it.`;
 
@@ -267,11 +313,37 @@ export interface VoiceNotePromptInput {
 }
 
 const NO_POINT_LINES: Record<Exclude<VoiceNoteSiteMode, 'findings'>, string> = {
-  clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say something like: "i had a look through the site and there isn\'t anything obviously broken, but there are definitely a few things i\'d strengthen around how clearly it tells Google and AI what you do, where you work and why it should trust the business." Do not claim any specific fault.',
-  unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say something like: "i had a quick look at how the business comes across online and there are a few things i\'d strengthen around how clearly it tells Google and AI what you do, where you work and why it should trust you." Do not claim any specific fault.',
-  profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally, that you couldn\'t find a website of their own, just their {LABEL} profile, and that without their own site there\'s a lot less for AI to go on about what they do and where they work. Never call the profile their website. Do not claim anything else.',
-  no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally, that you couldn\'t find a website for them, and that without one it is much harder for AI to find much about the business. Do not claim anything else.',
+  clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say, briefly, something like: "i had a look at what might be holding you back, and nothing\'s obviously broken on the site, but there\'s a few things i\'d tighten up around how clearly it tells AI what you do and where." Do not claim any specific fault.',
+  unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say, briefly, something like: "i had a look at what might be holding you back, and there\'s a few things i\'d tighten up around how clearly you come across to AI." Do not claim any specific fault.',
+  profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally: "i had a look at what might be holding you back, and i couldn\'t find a website of your own, just your {LABEL} profile." Never call the profile their website. Do not claim anything else.',
+  no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally: "i had a look at what might be holding you back, and i couldn\'t find a website for you." Do not claim anything else.',
 };
+
+/* ─────────────────────────────── the CTA: who controls the website ─────────────────────────────── */
+
+/** Which ownership question ends the note (Paul, 2026-09-27). Derived from the website on record:
+ *    own_site   → "do you own and control the website yourself, or is it managed by an agency?"
+ *    profile    → "have you got a website of your own as well, or is [TradeHQ] basically what you're using?"
+ *    no_website → "have you got a website at the moment, or not yet?"
+ *  ⛔ A profile page is never "your website", so it never gets the own-site question. */
+export type VoiceNoteCtaKind = 'own_site' | 'profile' | 'no_website';
+export function voiceNoteCtaKind(site: Pick<VoiceNoteSite, 'mode' | 'source'>): VoiceNoteCtaKind {
+  if (site.mode === 'profile' || site.source === 'directory_profile' || site.source === 'social_profile') return 'profile';
+  if (site.mode === 'no_website' || site.source === 'none') return 'no_website';
+  return 'own_site';
+}
+
+export function voiceNoteCtaInstruction(site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'>): string {
+  const label = site.sourceLabel ?? 'directory';
+  switch (voiceNoteCtaKind(site)) {
+    case 'own_site':
+      return 'CTA LINE (end with this question, in a natural variation): "quick one mate, do you own and control the website yourself, or is it managed by an agency?" Variations like "do you control the website yourself, mate, or does an agency manage it for you?" or "just so i know what would actually be possible, do you own the site yourself or is it with an agency?" are fine. It must ask whether they own or control the site, or whether an agency manages it.';
+    case 'profile':
+      return `CTA LINE (end with this question, in a natural variation): "have you got a website of your own as well, or is ${label} basically what you're using at the moment?" or "do you have a site of your own that you control, mate, or are you mainly using the ${label} profile?" It must name ${label}. Never ask whether they own "the website" or "your website": the ${label} page is not theirs.`;
+    case 'no_website':
+      return 'CTA LINE (end with this question, in a natural variation): "have you got a website at the moment, mate, or not yet?" Never assume they have one.';
+  }
+}
 
 /** The words to say the trade with ("a plumber"), or the raw trade when it cannot be read. */
 export function spokenTrade(trade: string): string {
@@ -292,14 +364,14 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
       : 'SERVICES THEY OFFER: none confirmed. Do not name any specific service or job type unless it is in the search.',
     '',
     `ENGINE NAME (say exactly this): ${e.engineLabel}`,
-    `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()} (for meaning only; paraphrase it, never read it out or quote it): ${e.question}`,
+    `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()} (for meaning only; say it as just "${spokenTrade(input.trade)} in ${input.area}", never read it out, quote it or narrate its qualifiers): ${e.question}`,
     `${input.business} was NOT named in ${e.engineLabel}'s answer.`,
     `COMPETITORS ${e.engineLabel.toUpperCase()} NAMED FOR THIS EXACT SEARCH (name all ${e.competitors.length}, exactly, no others):`,
     ...e.competitors.map((c, i) => `${i + 1}. ${c}`),
     '',
   ];
   if (input.site.mode === 'findings') {
-    lines.push('WEBSITE POINTS (use the first; the second only if it fits naturally; nothing else about the site):');
+    lines.push('WEBSITE POINTS (use the first; the second only if it is the same kind of problem and fits the same sentence; nothing else about the site):');
     input.site.findings.forEach((f, i) => {
       const details = findingDetailsForScript(f);
       // An interpretive finding goes in as what the page SAYS, with no evaluative title ("Weak Evidence…").
@@ -310,6 +382,7 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   } else {
     lines.push(NO_POINT_LINES[input.site.mode].split('{LABEL}').join(input.site.sourceLabel ?? 'directory'));
   }
+  lines.push('', voiceNoteCtaInstruction(input.site));
   if (input.avoid?.trim()) {
     lines.push('', 'A PREVIOUS VERSION (write a fresh one; same facts, different wording and rhythm):', input.avoid.trim());
   }
@@ -362,6 +435,8 @@ const CAUSATION: RegExp[] = [
   /\bwhy (google|chatgpt|ai|it|they)( ai)? (isnt|didnt|doesnt|wont|is not|did not|does not|never)\b/,
   /\bbecause of (this|that|these|those)\b/,
   /\b(is|are) (stopping|preventing|keeping) (you|google|chatgpt|ai)\b/,
+  /\b(looked|look|looking|dug|digging) into why\b/,
+  /\bwhy (google( ai)?|chatgpt|ai|it|they) (recommended|picked|chose|went with|named)\b/,
 ];
 const PRICE = /£\s?\d|\b\d+\s?(quid|pounds|pence)\b|\bprice|\bpricing\b|\bper month\b|\bmonthly\b|\b(a|per) year\b|\bfee\b|\bdiscount/;
 const LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(co\.uk|com|uk|live|net|org|io)\b|\bfindable\b/i;
@@ -444,7 +519,53 @@ const CALLS_IT_THEIR_SITE = /\b((look|looked|looking) (at|through|over) your (we
 /* ⛔ THE SEARCH IS PARAPHRASED (Paul, 2026-09-27). Any quoted phrase of four words or more, the whole
    question, or a run of SEARCH_RUN_WORDS consecutive words of it counts as reading it out. A bare
    "uk" after the town is the tell of a machine-worded query. */
-const SEARCH_RUN_WORDS = 6;
+const SEARCH_RUN_WORDS = 5;
+
+/* ⛔ THE SEARCH CONTEXT IS TRADE + TOWN (Paul, 2026-09-27). The words AFTER the town in an audit query
+   ("…in Shrewsbury UK who can come today") are its qualifiers; three of them in a row in the script is
+   narrating the query. Words before the town ("emergency electrician") may colour the trade. */
+const QUALIFIER_RUN_WORDS = 3;
+export function narratesSearchQualifiers(script: string, question: string, town: string | null | undefined): boolean {
+  const q = norm(question).split(' ').filter(Boolean);
+  const townWords = norm(town ?? '').split(' ').filter(Boolean);
+  if (!townWords.length) return false;
+  let at = -1;
+  for (let i = 0; i + townWords.length <= q.length; i++) {
+    if (townWords.every((w, j) => q[i + j] === w)) { at = i + townWords.length; break; }
+  }
+  if (at < 0) return false;
+  const tail = q.slice(at).filter((w) => w !== 'uk');
+  const s = ` ${norm(script)} `;
+  for (let i = 0; i + QUALIFIER_RUN_WORDS <= tail.length; i++) {
+    if (s.includes(` ${tail.slice(i, i + QUALIFIER_RUN_WORDS).join(' ')} `)) return true;
+  }
+  return false;
+}
+
+/* ⛔ THE OLD ENDING PROMISED A CHANGE PLAN THE QUICK CHECK DOES NOT HAVE (Paul, 2026-09-27). */
+const CHANGE_PLAN_OFFER = /\b(explain|show you|tell you|walk you through|go through) (exactly )?what (id|i would|i d) (change|do|fix)\b|\bsend (you )?(over )?the (audit|report)\b|\bshow you exactly\b/;
+
+/** Does the close ask the right ownership / control question for this website? Read from the last two
+ *  sentences, which must end in a question. */
+export function asksWebsiteControl(script: string, site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'>): boolean {
+  const sentences = sentencesOf(script.trim());
+  if (!sentences.length || !/\?\s*$/.test(script.trim())) return false;
+  const close = norm(sentences.slice(-2).join(' '));
+  switch (voiceNoteCtaKind(site)) {
+    case 'own_site':
+      return /\b(own|control|manage|managed|manages|look after|looks after)\b/.test(close) && /\b(site|website)\b/.test(close)
+        && /\b(agency|yourself|web designer|someone else|developer)\b/.test(close);
+    case 'profile': {
+      const label = norm(site.sourceLabel ?? '');
+      return /\b(site|website) of your own\b|\bown (site|website)\b/.test(close) && (!label || close.includes(label));
+    }
+    case 'no_website':
+      return /\b(got|have|run) (a|any) (web ?site|site)\b/.test(close);
+  }
+}
+/** The own-site question, asked of a profile page ("do you own the website yourself?"). */
+const ASKS_OWN_THE_WEBSITE = /\b(own|control)( and control)? (the|your) (web ?site|site)\b|\b(the|your) (web ?site|site) (yourself|managed|with an agency)\b/;
+
 export function readsSearchVerbatim(script: string, question: string): boolean {
   if (/["“”][^"“”]*(\b\w+\b[^"“”]*){4,}["“”]/.test(script)) return true;
   const s = ` ${norm(script)} `;
@@ -495,7 +616,7 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   // Website claims must be backed by a supplied finding.
   const supplied = ctx.site.findings;
   // "there isn't anything obviously broken" is the honest fallback, not a claim.
-  const claimText = tb.replace(/\b(isnt|is not|wasnt|was not|nothing|not|no)( [a-z]+){0,2} broken\b/g, ' ');
+  const claimText = tb.replace(/\b(isnt|is not|wasnt|was not|nothings|nothing|not|no)( [a-z]+){0,2} broken\b/g, ' ');
   /* A claim is also backed when the finding's OWN words carry it: a missing-pages finding whose menu
      reads "contact us | legal notice | sitemap" may be quoted without that being a sitemap claim. */
   const ownWords = (f: ResearchFinding) => norm([f.title, f.detail, ...sayableDetails(f)].join(' '));
@@ -516,12 +637,26 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   }
   // The search is paraphrased, never read out (Paul, 2026-09-27: Firebeard's "…Shrewsbury UK who can come today").
   if (readsSearchVerbatim(script, ctx.evidence.question)) problems.push('Reads the search out word for word or in quotes. Paraphrase it naturally.');
+  else if (narratesSearchQualifiers(script, ctx.evidence.question, ctx.town)) problems.push('Narrates the search\'s qualifiers. Say just the trade and the town ("an electrician in Shrewsbury").');
+  // The close: who controls the website (Paul, 2026-09-27), never a change plan.
+  if (CHANGE_PLAN_OFFER.test(tb)) problems.push('Offers to send the audit or explain what Paul would change. The quick check has no change plan; end on the website-ownership question instead.');
+  if (!asksWebsiteControl(script, ctx.site)) {
+    const kind = voiceNoteCtaKind(ctx.site);
+    problems.push(kind === 'profile'
+      ? `Does not end by asking whether they have a site of their own besides the ${ctx.site.sourceLabel ?? 'directory'} profile.`
+      : kind === 'no_website'
+        ? 'Does not end by asking whether they have a website at the moment.'
+        : 'Does not end by asking whether they own and control the website themselves or an agency manages it.');
+  }
+  if (voiceNoteCtaKind(ctx.site) === 'profile' && ASKS_OWN_THE_WEBSITE.test(tb)) {
+    problems.push(`Asks whether they own "the website", but the only page on record is their ${ctx.site.sourceLabel ?? 'directory'} profile.`);
+  }
   // Talk TO them: their own name in the script is a third-person reference ("but not Firebeard Electrical").
   if (ctx.business && competitorNamed(script, ctx.business)) problems.push(`Refers to the business by name ("${ctx.business}"). Talk to them directly: "you didn't come up".`);
   // Observation, not verdict.
   if (VERDICT.test(tb)) problems.push('Uses a judgement ("weak evidence", "no evidence", "poor site"). Say what the site shows or doesn\'t show instead.');
   // Paul's register.
-  if (POLISHED_ENDING.test(tb)) problems.push('Uses a polished ending ("just let me know", "if you\'d like, i can explain"). Use Paul\'s: "if you want mate, i\'m happy to explain what i\'d change".');
+  if (POLISHED_ENDING.test(tb)) problems.push('Uses a polished ending ("just let me know", "if you\'d like"). End on the plain website-ownership question.');
   if ((tb.match(/\bmate\b/g) ?? []).length > 2) warnings.push('Says "mate" more than twice.');
   // A profile page is not their website.
   if (ctx.site.mode === 'profile' && CALLS_IT_THEIR_SITE.test(tb)) {
@@ -543,4 +678,16 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
 /** Of two attempts, the one with fewer factual problems; the later one on a tie. */
 export function betterAttempt(a: VoiceNoteCheck, b: VoiceNoteCheck): VoiceNoteCheck {
   return b.problems.length <= a.problems.length ? b : a;
+}
+
+/* ─────────────────────────────── 5. is a saved script still current? ─────────────────────────────── */
+
+/* ⛔ A SAVED SCRIPT BELONGS TO THE AUDIT IT WAS WRITTEN FROM (Paul, 2026-09-27). Firebeard's two saved
+   scripts quoted the 25 Sep audit after a 27 Sep one existed. A script is CURRENT only when the result it
+   quotes (audit + question + engine) is the one a Regenerate would pick today; anything else is shown as
+   OUT OF DATE. Nothing regenerates on its own: a regenerate costs a model call and is Paul's click. */
+export interface VoiceNoteBasis { auditId: string | null; questionIndex: number | null; engine: string | null }
+export function voiceNoteBasisIsCurrent(saved: VoiceNoteBasis, current: VoiceNoteBasis | null): boolean {
+  if (!current || !current.auditId) return false;
+  return saved.auditId === current.auditId && saved.questionIndex === current.questionIndex && saved.engine === current.engine;
 }

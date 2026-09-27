@@ -22,6 +22,7 @@ interface FindingRecord { id: string; kind: string; title: string; source: strin
 interface ScriptRow {
   id: string;
   audit_id: string | null;
+  hook_question_index: number | null;
   hook_question: string;
   hook_engine: string;
   competitors: string[];
@@ -35,9 +36,14 @@ interface ScriptRow {
   problems: string[];
   warnings: string[];
   operator_note: string | null;
+  generator_version: number | null;
   generated_at: string;
 }
-interface LatestResponse { ok: true; script: ScriptRow | null; versions: number }
+/** What a Regenerate would use today (the function's loadHookEvidence), or why it cannot write one. */
+type CurrentBasis =
+  | { ok: true; auditId: string; questionIndex: number; engine: string; engineLabel: string; question: string; competitors: string[] }
+  | { ok: false; error: string; detail: string };
+interface LatestResponse { ok: true; script: ScriptRow | null; versions: number; current?: CurrentBasis; stale?: boolean; generatorVersion?: number }
 interface GenerateResponse { ok: true; script: ScriptRow }
 
 const ENGINE_LABEL: Record<string, string> = { gemini: 'Google AI', chatgpt: 'ChatGPT' };
@@ -71,13 +77,16 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [current, setCurrent] = useState<CurrentBasis | null>(null);
+  const [stale, setStale] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<number | null>(null);
 
   // The newest saved script: a read of our own table, no fetch, no model.
   useEffect(() => {
     let live = true;
     setLoading(true);
     invokeEdge<LatestResponse>('voice-note-script', { action: 'latest', lead_id: leadId })
-      .then((d) => { if (live) { setRow(d.script); setVersions(d.versions); } })
+      .then((d) => { if (live) { setRow(d.script); setVersions(d.versions); setCurrent(d.current ?? null); setStale(d.stale === true); setLatestVersion(d.generatorVersion ?? null); } })
       .catch((e) => { if (live) setError(edgeErrorMessage(e, 'Could not load the saved script')); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
@@ -87,7 +96,7 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
     setBusy(true); setError(null); setCopied(false);
     try {
       const d = await invokeEdge<GenerateResponse>('voice-note-script', { action: 'generate', lead_id: leadId, regenerate_of: row?.id ?? null });
-      setRow(d.script); setVersions((v) => v + 1);
+      setRow(d.script); setVersions((v) => v + 1); setStale(false);
     } catch (e) {
       setError(edgeErrorMessage(e, 'Could not write the script'));
     } finally {
@@ -102,6 +111,8 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
   }, [row]);
 
   const basis = row?.research_basis;
+  const outOfDate = !!row && (stale || (!!currentAuditId && !!row.audit_id && row.audit_id !== currentAuditId));
+  const oldStyle = !!row && latestVersion !== null && (row.generator_version ?? 0) < latestVersion;
   const words = row?.word_count ?? 0;
   return (
     <div data-testid="voice-note-script-body">
@@ -117,11 +128,35 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
 
             {row ? (
               <>
-                {/* The playbook's AI opportunity reads the lead's current audit; a script saved from an
-                    earlier one would name different firms beside it. Say so; never regenerate silently. */}
-                {currentAuditId && row.audit_id && row.audit_id !== currentAuditId && (
-                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-older-audit">
-                    This script was written from an earlier audit, so its search and competitors differ from the AI opportunity above. Regenerate to use the latest audit.
+                {/* ⛔ AN OUT-OF-DATE SCRIPT IS NEVER PRESENTED AS CURRENT (Paul, 2026-09-27). The function compares
+                    the result this script quotes with the one a Regenerate would pick now. The playbook also
+                    passes the audit its AI opportunity reads. Nothing regenerates on its own (a model call). */}
+                {outOfDate && (
+                  <div className="rounded-md border-2 border-red-500/60 bg-red-500/10 p-2.5 text-xs text-red-800 dark:text-red-200" data-testid="voice-note-out-of-date">
+                    <p className="text-sm font-bold uppercase tracking-wide">Voice note out of date</p>
+                    <p className="mt-0.5">
+                      {current && 'detail' in current
+                        ? current.detail
+                        : current?.ok && current.auditId !== row.audit_id
+                          ? 'A newer audit exists. This script quotes an earlier audit’s search and competitors.'
+                          : 'The best missed search has changed since this script was written.'}
+                    </p>
+                    {current?.ok && (
+                      <p className="mt-1 break-words">
+                        Latest: <span className="font-semibold">{current.engineLabel}</span>, “{current.question}”
+                        {current.competitors.length > 0 && <> · named {current.competitors.join(', ')}</>}
+                      </p>
+                    )}
+                    {(!current || current.ok) && (
+                      <Button size="sm" className="mt-2 h-8 gap-1" onClick={generate} disabled={busy}>
+                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Regenerate using latest audit
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {!outOfDate && oldStyle && (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-old-style">
+                    Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.
                   </p>
                 )}
                 {row.problems.length > 0 && (
@@ -130,7 +165,8 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                     <ul className="ml-4 list-disc">{row.problems.map((p) => <li key={p}>{p}</li>)}</ul>
                   </div>
                 )}
-                <div className="rounded-md border border-border bg-muted/40 p-3">
+                <div className={cn('rounded-md border border-border bg-muted/40 p-3', outOfDate && 'opacity-60')}>
+                  {outOfDate && <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Old script, from the earlier result</p>}
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.script}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

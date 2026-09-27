@@ -24,7 +24,7 @@ import { scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, parseVoiceNoteScript, checkVoiceNoteScript,
-  betterAttempt, findingRecord, classifyLeadWebsite, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
+  betterAttempt, findingRecord, classifyLeadWebsite, voiceNoteBasisIsCurrent, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
   type VoiceNoteCheck, type VoiceNoteEvidence,
 } from "../../../src/lib/voiceNoteScript.ts";
 
@@ -101,7 +101,8 @@ async function loadHookEvidence(service: Service, lead: ResearchLead): Promise<H
   if (score.shape === "six" && !score.complete) {
     return { ok: false, error: "hook_incomplete", detail: "The quick check has no final score (a result failed, or it could not be given three questions). Re-run the audit." };
   }
-  const pick = selectVoiceNoteEvidence(score.results, { business, town: area, trade });
+  // The card's own pick first (score.hook), so the Inbox card, the Call Script and this script quote one result.
+  const pick = selectVoiceNoteEvidence(score.results, { business, town: area, trade }, score.hook);
   if (!pick.ok) {
     const withheld = pick.code === "no_competitors" && cleanliness.suppressNames ? " The competitor names on this audit are withheld as unreliable." : "";
     return { ok: false, error: pick.code, detail: pick.reason + withheld };
@@ -111,11 +112,27 @@ async function loadHookEvidence(service: Service, lead: ResearchLead): Promise<H
 
 /* ───────────────────────── actions ───────────────────────── */
 
+/**
+ * The newest saved script, and whether it is still CURRENT: the result it quotes (audit + question +
+ * engine) against the one a Regenerate would pick now (loadHookEvidence — DB reads only, no fetch, no
+ * model). A mismatch is shown as OUT OF DATE; nothing regenerates here.
+ */
 async function handleLatest(service: Service, lead: ResearchLead) {
   const { data, error } = await service.from(TABLE).select(ROW_COLUMNS).eq("lead_id", lead.id).order("generated_at", { ascending: false }).limit(1);
   if (error) throw error;
   const { count } = await service.from(TABLE).select("id", { count: "exact", head: true }).eq("lead_id", lead.id);
-  return json({ ok: true, script: (data ?? [])[0] ?? null, versions: count ?? 0 });
+  const script = (data ?? [])[0] ?? null;
+  /* A failed check is never read as "current": the panel says it could not tell. */
+  const hook: HookEvidence = await loadHookEvidence(service, lead)
+    .catch((e: unknown) => ({ ok: false as const, error: "current_unknown", detail: "Could not check the latest audit: " + String((e as { message?: unknown })?.message ?? e).slice(0, 120) }));
+  const current = hook.ok
+    ? { ok: true as const, auditId: hook.auditId, questionIndex: hook.evidence.questionIndex, engine: hook.evidence.engine, engineLabel: hook.evidence.engineLabel, question: hook.evidence.question, competitors: hook.evidence.competitors }
+    : { ok: false as const, error: hook.error, detail: hook.detail };
+  const stale = !!script && (!current.ok || !voiceNoteBasisIsCurrent(
+    { auditId: script.audit_id ?? null, questionIndex: script.hook_question_index ?? null, engine: script.hook_engine ?? null },
+    current.ok ? { auditId: current.auditId, questionIndex: current.questionIndex, engine: current.engine } : null,
+  ));
+  return json({ ok: true, script, versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
 }
 
 async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>) {

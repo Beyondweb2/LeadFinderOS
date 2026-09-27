@@ -26,7 +26,7 @@ import type { CrawlStoredResult } from '@/lib/crawlResult';
 // Several of these tables are not in the generated types; RLS still enforces access.
 const sb = supabase as unknown as { from: (t: string) => any };
 
-interface PlaybookAuditRow extends ResolvableAudit {
+export interface PlaybookAuditRow extends ResolvableAudit {
   business_name: string | null;
   business_type: string | null;
   location_text: string | null;
@@ -34,7 +34,7 @@ interface PlaybookAuditRow extends ResolvableAudit {
 }
 
 const LEAD_COLUMNS = 'id, business_name, phone, country, website, category, search_keyword, search_location, derived_town, status, contact_name';
-const AUDIT_COLUMNS = 'id, short_code, lead_id, created_at, business_name, business_type, location_text, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, crawl_check:results->crawl_check)';
+export const PLAYBOOK_AUDIT_COLUMNS = 'id, short_code, lead_id, created_at, business_name, business_type, location_text, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, crawl_check:results->crawl_check)';
 const MESSAGE_COLUMNS = 'id, created_at, direction, body, message_type, template_name, status';
 
 /** The WhatsApp form of a stored phone (digits, country code, no plus) — the same shape
@@ -50,7 +50,7 @@ function waDigits(raw: string | null | undefined, country?: string | null): stri
 }
 
 /** Audit-run crawls, newest run first — the order useInbox hands resolveSiteFindings. */
-function runCrawlSources(audit: PlaybookAuditRow | null): FindingsSource[] {
+export function runCrawlSources(audit: PlaybookAuditRow | null): FindingsSource[] {
   return (audit?.ai_audit_runs ?? [])
     .filter((r) => RUN_USABLE.has(String(r.status)) && !!r.crawl_check)
     .sort((a, b) => (b.run_number ?? 0) - (a.run_number ?? 0))
@@ -69,7 +69,7 @@ async function loadPlaybook(leadId: string): Promise<ColdCallPlaybook | null> {
 
   const [auditsRes, crawlRes, msgRes] = await Promise.all([
     fetchAllRows<PlaybookAuditRow>('Playbook (audits)', (from, to) =>
-      sb.from('ai_audits').select(AUDIT_COLUMNS).eq('lead_id', leadId)
+      sb.from('ai_audits').select(PLAYBOOK_AUDIT_COLUMNS).eq('lead_id', leadId)
         .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
     sb.from('lead_crawl_checks').select('result, created_at').eq('lead_id', leadId)
       .order('created_at', { ascending: false }).limit(1),
