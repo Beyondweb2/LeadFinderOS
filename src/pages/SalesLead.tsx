@@ -19,6 +19,7 @@ import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
+import { InboundMedia, isPlayableVoice } from '@/components/WhatsAppMedia';
 import { OwnerLine, OwnerAvatar } from '@/components/OwnerBadge';
 import { parseTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
@@ -42,6 +43,7 @@ import { cn } from '@/lib/utils';
 interface Msg {
   id: string; created_at: string; direction: 'inbound' | 'outbound'; body: string | null; message_type: string | null;
   template_name: string | null; status: string | null; template_snapshot: unknown; sent_by_user_id: string | null;
+  media_path: string | null; media_filename: string | null; error: string | null;
 }
 
 function fmt(ts: string) {
@@ -66,7 +68,7 @@ export default function SalesLead() {
     queryFn: async () => {
       const filter = phone ? `lead_id.eq.${leadId},phone.eq.${phone}` : `lead_id.eq.${leadId}`;
       const { data, error } = await supabase.from('whatsapp_messages')
-        .select('id, created_at, direction, body, message_type, template_name, status, template_snapshot, sent_by_user_id' as never)
+        .select('id, created_at, direction, body, message_type, template_name, status, template_snapshot, sent_by_user_id, media_path, media_filename, error' as never)
         .or(filter).order('created_at', { ascending: true }).limit(500);
       if (error) throw error;
       return (data ?? []) as unknown as Msg[];
@@ -219,7 +221,10 @@ export default function SalesLead() {
                 const snap = parseTemplateSnapshot(m.template_snapshot);
                 return (
                   <div key={m.id} className={cn('max-w-[85%] rounded-lg px-3 py-2 text-sm', m.direction === 'outbound' ? 'ml-auto bg-primary/15' : 'bg-muted')}>
-                    {snap ? <WhatsAppTemplateMessage snapshot={snap} /> : <div className="whitespace-pre-wrap">{m.body ?? (m.message_type === 'audio' ? '[voice note]' : `[${m.message_type ?? 'message'}]`)}</div>}
+                    {snap ? <WhatsAppTemplateMessage snapshot={snap} />
+                      : isPlayableVoice(m) ? null
+                      : <div className="whitespace-pre-wrap">{m.body ?? (m.message_type === 'audio' ? '[voice note]' : `[${m.message_type ?? 'message'}]`)}</div>}
+                    {(m.direction === 'inbound' || m.message_type === 'audio') && <InboundMedia message={m} />}
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       {fmt(m.created_at)}{m.direction === 'outbound' ? ` · ${m.sent_by_user_id ? actorName(m.sent_by_user_id) : 'queue'} · ${m.status ?? ''}` : ''}
                     </div>

@@ -26,7 +26,7 @@ import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
 import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
-import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
+import { InboundMedia, isPlayableVoice } from '@/components/WhatsAppMedia';
 import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
 import type { VoiceClip } from '@/lib/voiceRecorderState';
@@ -52,7 +52,7 @@ import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibi
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import {
@@ -349,33 +349,6 @@ function AutoReplyToggle() {
       )}
     </div>
   );
-}
-
-/** An audio row with a stored file renders as the player alone — its body is only "[audio]" (inbound)
- *  or "Voice note (0:08)" (ours), which the list preview uses but the bubble does not need. */
-function isPlayableVoice(m: WaMessage): boolean {
-  return m.message_type === 'audio' && !!m.media_path;
-}
-
-function InboundMedia({ message }: { message: WaMessage }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    if (!message.media_path) { setUrl(null); return; }
-    const renew = async () => {
-      const { data } = await supabase.storage.from('whatsapp-media').createSignedUrl(message.media_path!, 60 * 5);
-      if (alive) setUrl(data?.signedUrl ?? null);
-    };
-    void renew();
-    const timer = window.setInterval(() => { void renew(); }, 4 * 60 * 1000);
-    return () => { alive = false; window.clearInterval(timer); };
-  }, [message.media_path]);
-  if (!message.media_path) return message.error ? <p className="mt-1 text-xs text-muted-foreground">{message.error}</p> : null;
-  if (!url) return <p className="mt-1 text-xs text-muted-foreground">Loading attachment…</p>;
-  if (message.message_type === 'image' || message.message_type === 'sticker') return <img src={url} alt={message.media_filename ?? message.message_type} className="mt-1 max-h-72 rounded object-contain" />;
-  if (message.message_type === 'video') return <video src={url} controls className="mt-1 max-h-72 rounded" />;
-  if (message.message_type === 'audio') return <VoiceNotePlayer src={url} tone={message.direction === 'outbound' ? 'outbound' : 'inbound'} className="mt-1 w-56 max-w-full" />;
-  return <a href={url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 underline"><ExternalLink className="h-3 w-3" />{message.media_filename ?? 'Open document'}</a>;
 }
 
 const Inbox = () => {
