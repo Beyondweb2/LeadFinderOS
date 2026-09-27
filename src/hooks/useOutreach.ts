@@ -997,8 +997,8 @@ export function useOutreach({ history = true }: { history?: boolean } = {}) {
 
     // The column changes for this status come from the shared patch (single source
     // of truth — the Inbox status pill writes the identical patch via updateLeadStatus):
-    //   contact_method mapping · replied→same-day Send Draft · site_sent→next-day
-    //   Follow-up · not_interested→untrack (is_potential_work=false).
+    //   interested→star only · not_interested→untrack (is_potential_work=false). It never
+    //   writes a next action — those are human-set only (src/lib/statusPatch.ts).
     const updates: Partial<OutreachLead> = statusUpdatePatch(status);
 
     const result = await updateLead(leadId, updates);
