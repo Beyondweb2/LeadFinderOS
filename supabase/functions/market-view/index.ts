@@ -58,8 +58,13 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+const json = (b: unknown, status = 200, extra: Record<string, string> = {}) =>
+  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json", ...extra } });
+/* Where the time went — one entry per step, for the next person who measures this (2026-09-27). */
+const stepMs: Record<string, number | string> = {};
+let stepAt = 0;
+const step = (name: string) => { const now = Date.now(); stepMs[name] = now - stepAt; stepAt = now; };
+const timingHeader = () => ({ "x-niche-timing": Object.entries(stepMs).map(([k, v]) => `${k}=${v}`).join(";") });
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -91,23 +96,21 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
 
   try {
+    for (const k of Object.keys(stepMs)) delete stepMs[k];
+    stepAt = Date.now();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return json({ ok: false, error: "Auth required" }, 401);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    if (!u?.user) return json({ ok: false, error: "Auth required" }, 401);
-    let userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user). A salesperson reads the one book's niche
-       verdict — the same market the admin sees. Free: this action never spends. */
+       verdict — the same market the admin sees. Free: this action never spends.
+       ⚡ ONE sign-in check (2026-09-27, site-wide speed pass): resolveActor verifies the token with the
+       auth service (getUser) AND reads the role, so the handler's own getUser before it was the same
+       question asked twice — ~1.1–1.6 s. A missing, bad or disabled-account token is refused there. */
     const who = await resolveActor(req, service);
     if (!who.ok) return json(refusalBody(who), who.status);
+    let userId = who.actor.id;
+    step("auth");
     if (who.actor.role === "sales") {
       const owner = await bookOwnerId(service);
       if (!owner) return json({ ok: false, error: "no_book_owner" }, 503);
@@ -146,17 +149,31 @@ Deno.serve(async (req) => {
       const key = nicheTradeKey(tradeIn);
       if (!key) return json({ ok: false, error: "trade required" }, 400);
 
-      const audits = await all<AuditRow & { website?: string | null; baseline_target_runs?: number | null; created_at?: string }>(
-        service, "ai_audits", "id, business_type, location_text, business_name, is_market, website, baseline_target_runs, created_at",
-        (q) => q.eq("user_id", userId));
+      /* ⚡ The audits and the complete runs are independent reads — side by side (2026-09-27). The runs
+         were only ever needed when a business audit exists; reading them together costs one read on
+         the rare trade with none, and saves ~1 s on every other. */
+      const [audits, runs] = await Promise.all([
+        all<AuditRow & { website?: string | null; baseline_target_runs?: number | null; created_at?: string }>(
+          service, "ai_audits", "id, business_type, location_text, business_name, is_market, website, baseline_target_runs, created_at",
+          (q) => q.eq("user_id", userId)),
+        all<{ id: string; audit_id: string; status: string }>(
+          service, "ai_audit_runs", "id, audit_id, status", (q) => q.in("status", ["complete", "capped"])),
+      ]);
+      step("audits+runs"); stepMs.auditRows = audits.length; stepMs.runRows = runs.length;
       const mine = audits.filter((a) => nicheTradeKey(a.business_type) === key && a.is_market !== true);
       const marketAudits = audits.filter((a) => nicheTradeKey(a.business_type) === key && a.is_market === true).length;
       if (mine.length === 0) return json({ ok: true, niche: null, marketAudits, reason: "no business audits for this trade yet" });
 
       const auditIds = new Set(mine.map((a) => a.id));
-      const runs = await all<{ id: string; audit_id: string; status: string }>(
-        service, "ai_audit_runs", "id, audit_id, status", (q) => q.in("status", ["complete", "capped"]));
       const wantedRuns = runs.filter((r) => auditIds.has(r.audit_id)).map((r) => r.id);
+      /* ⛔ ONE BATCH AT A TIME, ON PURPOSE (measured 2026-09-27). This read is the niche call's floor:
+         Plumbers = 14 batches, 1,741 rows, 19 MB of stored results, and the database spends ~8.4 s
+         of server time unpacking them however they are asked for — four batches at a time was no
+         faster (10 s, the instance is CPU-bound) and held four of the API's ~10 shared connections.
+         Selecting only the fields the fold reads saved just 22% (every path still opens the whole
+         value). What DID move it: running the function next to the database (the SPA pins
+         forceFunctionRegion — src/lib/edgeRegion.ts) and one sign-in check. Going lower needs a
+         slim stored copy of each result (docs/site-wide-speed.md, proposed, not built). */
       const qrows: { audit_id: string; run_id: string; question: string; result: unknown }[] = [];
       for (let i = 0; i < wantedRuns.length; i += 40) {
         const batch = wantedRuns.slice(i, i + 40);
@@ -165,6 +182,7 @@ Deno.serve(async (req) => {
           (q) => q.in("run_id", batch).eq("status", "done")));
       }
 
+      step("queue"); stepMs.queueRows = qrows.length; stepMs.queueBatches = Math.ceil(wantedRuns.length / 40);
       const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
       const auditById = new Map(mine.map((a) => [a.id, a]));
       const byAudit = new Map<string, typeof qrows>();
@@ -335,7 +353,8 @@ Deno.serve(async (req) => {
           .sort((x, y) => y.cells - x.cells),
         marketAudits,
       };
-      return json({ ok: true, niche });
+      step("fold");
+      return json({ ok: true, niche }, 200, timingHeader());
     }
 
   } catch (e) {
