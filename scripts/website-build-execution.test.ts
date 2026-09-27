@@ -83,7 +83,10 @@ const OK_RESULT = {
   build: { pages: ['/', '/services/', '/services/lock-changes/', '/services/emergency-lockouts/', '/contact/'], services: ['Lock changes & upgrades', 'Emergency lockouts'], locations: ['Whitby'], assets: [SITE + 'img/van-hero.jpg -> public/images/van-hero.webp'], unsupportedFields: [] },
   redirects: { kept: 3, redirected: 1, retired: 0, unresolved: ['/old-offers/'], issues: [] },
   qa: { buildPassed: true, seedContaminationPassed: true, linksPassed: true, responsivePassed: true, schemaPassed: true },
-  quality: { oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' } },
+  quality: {
+    oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' },
+    standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'none_available', form: 'none', formTest: 'not_run', credentialsProminent: true, photosUsed: 1, repeatedImages: [] },
+  },
   seedHits: [], warnings: ['Link the Pages project to GitHub in the dashboard (operator step).'], errors: [],
 };
 const parse = (o: unknown) => parseBuildResult(typeof o === 'string' ? o : JSON.stringify(o));
@@ -259,6 +262,24 @@ console.log('\n── V. RETRY (DELTA ONLY) ──');
   ok(/Do NOT rebuild it from scratch/.test(rp.text) && rp.text.includes('"name": "Harbour Locks Ltd"') && rp.text.includes('"buildResultVersion": 1'), '…with the current config and the result contract');
   ok(!/## A\. PROJECT MISSION|X5\. PAGES|X10\. OLD URL COVERAGE|## K\. SEO/.test(rp.text) && rp.text.length < full.length / 3, `…and NOTHING of the full build brief (${rp.text.length} vs ${full.length} chars)`);
   ok(retryPrompt(input(importInto(s, { ...OK_RESULT, cloudflare: { ...OK_RESULT.cloudflare, noindexConfirmed: false } }).state)).text.includes('Preview noindex not confirmed'), 'a claimed-ready build that fails the gate can be retried, and says why');
+}
+
+console.log('\n── X5c/X5d. THE BUILD STANDARD IN THE PROMPT, THE RESULT AND THE RETRY (2026-09-27) ──');
+{
+  const s = ready();
+  const p = executionPrompt(input(s)).text;
+  ok(p.includes('X5c. THE FINDABLE BUILD STANDARD') && p.includes('AREAS: THE MAP') && p.includes('MOBILE HERO — ONE COHERENT FIRST SCREEN') && p.includes('GENUINE REVIEWS ARE SHOWN BY DEFAULT'), 'the build prompt prints the build standard: image roles (areas → map), the mobile hero, reviews by default');
+  ok(p.includes('X5d. ENQUIRY FORM') && p.includes('functions/v1/site-enquiry?site=') && p.includes('company_website') && p.includes('fill_ms') && /never a mailto/i.test(p), '…and the site-enquiry form contract (endpoint, honeypot, fill time, never a mailto form)');
+  ok(/WHAT THIS CLIENT HAS[\s\S]*Approved genuine photos: 2[\s\S]*Areas hub: needed — it leads with a genuine map/.test(p), '…with what this client has — the same evidence the gate checks');
+  ok(p.includes('"standard": { "heroImage"') && p.includes('quality.standard (every build)'), '…and the result contract asks for quality.standard');
+  const noStd = { ...OK_RESULT, quality: { oldVsNew: OK_RESULT.quality.oldVsNew } };
+  ok(buildExecutionStatus(importInto(s, noStd).state, true) === 'needs_attention', 'a claimed preview_ready result with NO build-standard report → NEEDS ATTENTION (absent is never a pass)');
+  const bad = importInto(s, { ...OK_RESULT, quality: { ...OK_RESULT.quality, standard: { ...OK_RESULT.quality.standard, areasVisual: 'other', form: 'mailto_form' } } }).state;
+  ok(bad.build_execution.standard.areasVisual === 'other' && bad.build_execution.standard.form === 'mailto_form', 'the imported standard report is stored on the build record');
+  ok(JSON.stringify(normaliseWebsiteBuild(bad).build_execution.standard) === JSON.stringify(bad.build_execution.standard), '…and survives the save rule (paid-client-hub keeps it)');
+  const rp = retryPrompt(input(bad)).text;
+  ok(/Areas hub does not lead with a map/.test(rp) && /mailto/.test(rp) && rp.includes('THE BUILD STANDARD (unchanged'), 'the retry names the build-standard failures and re-prints the standard');
+  ok(!rp.includes('X5c.') && !rp.includes('X5d.'), '…as a delta, never the full brief');
 }
 
 console.log('\n── S/T/U. PREVIEW STAGE PROMPTS ──');

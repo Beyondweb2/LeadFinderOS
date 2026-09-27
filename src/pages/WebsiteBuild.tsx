@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clipboard, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
@@ -28,7 +28,8 @@ import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stageP
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
 import { applyBuildResult, builtCoverage, configVersion, executionBlockers, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
-import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, builtOrPlannedPaths, buildExecutionStatus, previewReadyProblems, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
+import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, builtOrPlannedPaths, buildExecutionStatus, previewReadyProblems, standardEvidence, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
+import { standardProblems } from '@/lib/websiteBuildStandard';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, STRENGTH_CATEGORIES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITIONS, STRENGTH_DISPOSITION_LABELS, UPGRADE_VERDICT_LABELS, intentProblems, proposeIntents, strengthId, strengthProblems, upgradeProblems, type ContentIntent, type ExistingStrength, type IntentDecision, type QualityState, type StrengthCategory } from '@/lib/websiteQuality';
 import type { BuildPackInput } from '@/lib/buildPack';
 import { autoAssign, computeMapping, MAP_STATUS_LABELS, SERVICE_STATUS_LABELS, URL_DECISION_LABELS, urlDecisions, type MappedField, type Mapping, type UrlDecision } from '@/lib/templateMapping';
@@ -1396,6 +1397,14 @@ function QualityPanel({ state, update, hasExistingSite }: { state: WebsiteBuildS
   const problems = [...strengthProblems(q, hasExistingSite), ...intentProblems(q, builtOrPlannedPaths(state))];
   const up = state.build_execution.upgrade;
   const upProblems = state.build_execution.result_imported_at ? upgradeProblems(up, hasExistingSite) : [];
+  const std = state.build_execution.standard;
+  const stdProblems = state.build_execution.result_imported_at ? standardProblems(std, standardEvidence(state)) : [];
+  const stdRows: Array<[string, string]> = [
+    ['Hero image', std.heroImage], ['Mobile hero', std.mobileHero + (std.mobileHeroReason ? ' — ' + std.mobileHeroReason : '')],
+    ['Areas visual', std.areasVisual + (std.mapUnavailableReason ? ' — ' + std.mapUnavailableReason : '')], ['Reviews', std.reviews],
+    ['Form', std.form + (std.formTest ? ' · test ' + std.formTest : '')], ['Credentials prominent', std.credentialsProminent == null ? '' : std.credentialsProminent ? 'yes' : 'no'],
+    ['Genuine photos used', std.photosUsed == null ? '' : String(std.photosUsed)],
+  ];
   return <Section title="Quality standard — perceived quality is half of Preview Ready"
     right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${problems.length ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'}`}>{problems.length ? problems.length + ' to decide' : 'Decided'}</span>}>
     <p className="text-xs text-muted-foreground">{hasExistingSite ? 'Would the owner, seeing old and new side by side with no SEO explanation, feel the new site is an upgrade? A good feature of the old site is kept, modernised or improved; it is removed only with a reason.' : 'No existing site: the completeness standard still applies — never a sparse site because there is nothing to compare with.'}</p>
@@ -1438,6 +1447,13 @@ function QualityPanel({ state, update, hasExistingSite }: { state: WebsiteBuildS
       {up.still_stronger.length > 0 && <ul className="mt-1 list-disc pl-4 text-amber-700 dark:text-amber-300">{up.still_stronger.map((x) => <li key={x}>Old site still stronger: {x}</li>)}</ul>}
       {up.notes && <p className="mt-1 text-muted-foreground">{up.notes}</p>}
       {upProblems.length > 0 && <p className="mt-1 text-amber-700 dark:text-amber-300">{upProblems.join(' · ')}</p>}
+    </div>}
+
+    {state.build_execution.result_imported_at && <div className="rounded border p-2 text-xs">
+      <p className="font-medium">Build standard (reported with the build) — image roles, mobile hero, reviews, map, form</p>
+      <dl className="mt-1 grid gap-x-3 gap-y-0.5 sm:grid-cols-[auto_1fr]">{stdRows.map(([k, v]) => <Fragment key={k}><dt className="text-muted-foreground">{k}</dt><dd className="min-w-0 break-words">{v || 'not reported'}</dd></Fragment>)}</dl>
+      {std.repeatedImages.length > 0 && <p className="mt-1 text-amber-700 dark:text-amber-300">Repeated: {std.repeatedImages.join('; ')}</p>}
+      {stdProblems.length > 0 && <ul className="mt-1 space-y-1 text-amber-700 dark:text-amber-300">{stdProblems.map((x) => <li key={x} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{x}</li>)}</ul>}
     </div>}
 
     {problems.length > 0 && <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-300">{problems.map((p) => <li key={p} className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{p}</li>)}</ul>}

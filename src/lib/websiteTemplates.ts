@@ -204,6 +204,9 @@ export const CORE_ASSET_SLOTS: TemplateAssetSlot[] = [
   { id: 'owner', label: 'Owner / team', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['owner', 'team', 'portrait', 'founder', 'staff', 'about'] } },
   { id: 'gallery', label: 'Gallery', requirement: 'optional', multiple: true, suggest: { types: ['photo'], words: ['gallery', 'job', 'project', 'work', 'before', 'after'] } },
   { id: 'credentials', label: 'Credentials', requirement: 'optional', multiple: true, suggest: { types: ['badge', 'brand_logo'], words: ['badge', 'accredit', 'certif', 'member', 'approved', 'logo of'] } },
+  /* The areas hub's primary visual (websiteBuildStandard.ts) — a core slot so a bespoke or faithful
+     build gets it too (BS4, a bespoke build, had no map slot and its areas page led with a job photo). */
+  { id: 'map', label: 'Map / area', requirement: 'optional', multiple: false, suggest: { types: ['photo', 'other'], words: ['map', 'area', 'coverage', 'satellite'] } },
 ];
 const byId = <T extends { id: string }>(list: T[], over: Partial<Record<string, Partial<T>>>, extra: T[] = []): T[] =>
   [...list.map((x) => ({ ...x, ...(over[x.id] ?? {}) })), ...extra];
@@ -351,7 +354,6 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
      verified business name (templateMapping.ts). A graphical logo is never generated. */
   assetSlots: byId(CORE_ASSET_SLOTS, {}, [
     { id: 'van', label: 'Van', requirement: 'optional', multiple: false, suggest: { types: ['photo'], words: ['van', 'vehicle', 'car'] } },
-    { id: 'map', label: 'Map / area', requirement: 'optional', multiple: false, suggest: { types: ['photo', 'other'], words: ['map', 'area', 'coverage'] } },
   ]),
   locations: { primaryLocationPage: true, locationFamily: 'location' },
   imageRequirements: [

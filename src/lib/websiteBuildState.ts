@@ -27,6 +27,7 @@
 
 import { ALL_ROUTE_CHECK_IDS } from './buildRoutes.ts';
 import { EMPTY_QUALITY, EMPTY_UPGRADE, qualityGateProblems, readQuality, readUpgradeReview, type QualityState, type UpgradeReview } from './websiteQuality.ts';
+import { EMPTY_STANDARD, readStandardReport, standardProblems, type StandardEvidence, type StandardReport } from './websiteBuildStandard.ts';
 
 export const WEBSITE_BUILD_VERSION = 2;
 
@@ -301,6 +302,8 @@ export interface BuildExecution {
   seed_hits: string[];
   /** The old-vs-new comparison Claude reported with the result (websiteQuality.ts). */
   upgrade: UpgradeReview;
+  /** The Findable build standard as the build reported it (websiteBuildStandard.ts). */
+  standard: StandardReport;
   /** The last result before this one — a failed build never erases what was working. */
   previous: BuildSnapshot | null;
 }
@@ -308,7 +311,7 @@ export const EMPTY_BUILD_EXECUTION: BuildExecution = {
   started_at: '', completed_at: '', template_id: '', config_version: '', repository_url: '', repository_name: '', branch: '', local_path: '',
   cloudflare_project: '', preview_url: '', deployment_id: '', deployment_status: '', noindex_confirmed: null, output_dir: '', commit_hash: '',
   result_imported_at: '', result_status: '', warnings: [], errors: [], qa: {}, pages: [], services: [], locations: [], assets: [],
-  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], upgrade: EMPTY_UPGRADE, previous: null,
+  redirects: { kept: null, redirected: null, retired: null, unresolved: [], issues: [] }, seed_hits: [], upgrade: EMPTY_UPGRADE, standard: EMPTY_STANDARD, previous: null,
 };
 const strList = (v: unknown, n: number, cap: number) => arr(v).map((x) => str(x, cap)).filter(Boolean).slice(0, n);
 export function readBuildExecution(v: unknown): BuildExecution {
@@ -328,6 +331,7 @@ export function readBuildExecution(v: unknown): BuildExecution {
     redirects: { kept: count(r.kept), redirected: count(r.redirected), retired: count(r.retired), unresolved: strList(r.unresolved, 600, 500), issues: strList(r.issues, 200, 500) },
     seed_hits: strList(o.seed_hits, 100, 300),
     upgrade: readUpgradeReview(o.upgrade),
+    standard: readStandardReport(o.standard),
     previous: Object.keys(p).length ? { commit_hash: str(p.commit_hash, 64), repository_url: str(p.repository_url, 500), preview_url: str(p.preview_url, 500), result_status: oneOf(BUILD_RESULT_STATUSES, p.result_status, ''), imported_at: str(p.imported_at, 40) } : null,
   };
 }
@@ -860,6 +864,22 @@ export function builtOrPlannedPaths(s: WebsiteBuildState): string[] {
   return b.pages.length ? b.pages : s.pages.filter((p) => p.action === 'keep' || p.action === 'create').map((p) => p.path).filter(Boolean);
 }
 
+/** What LeadFinderOS already knows about the client, for the build standard's gate. DERIVED from the
+ *  stored state, never stored: approved photos, review evidence (a kept review strength or a verified
+ *  review profile), a working old-site form that was not removed, the areas-hub decision, verified
+ *  credentials. */
+export function standardEvidence(s: WebsiteBuildState): StandardEvidence {
+  const verified = (key: string) => s.facts.some((f) => f.key === key && f.status === 'verified' && !!f.value.trim());
+  const kept = (cat: string) => s.quality.strengths.some((x) => x.category === cat && x.disposition !== 'remove');
+  return {
+    approvedPhotos: s.manifest.assets.filter((a) => a.approval === 'approved' && a.type === 'photo').length,
+    hasReviewEvidence: kept('reviews') || verified('review_profiles'),
+    hadWorkingForm: kept('contact_form'),
+    areasHubNeeded: s.quality.intents.areas_hub?.need === 'needed',
+    hasCredentials: verified('accreditations'),
+  };
+}
+
 /**
  * THE Preview Ready gate: the technical gate (previewGateProblems) PLUS the Findable quality standard
  * (websiteQuality.ts) — strengths decided, completeness assessed, and for an existing-site rebuild an
@@ -872,6 +892,7 @@ export function previewReadyProblems(s: WebsiteBuildState, hasExistingSite: bool
   return [
     ...previewGateProblems(b),
     ...qualityGateProblems({ quality: s.quality, upgrade: b.upgrade, hasExistingSite, paths: builtOrPlannedPaths(s) }),
+    ...standardProblems(b.standard, standardEvidence(s)),
   ];
 }
 

@@ -30,6 +30,8 @@ const TECH_OK = {
   result_imported_at: '2026-09-25T12:00:00Z', result_status: 'preview_ready', preview_url: 'https://preview.x.pages.dev', noindex_confirmed: true,
   qa: { buildPassed: true, seedContaminationPassed: true, linksPassed: true, responsivePassed: true, schemaPassed: true },
   pages: ['/', '/services/', '/faqs/', '/areas/', '/contact/'],
+  /* The build standard (websiteBuildStandard.ts, 2026-09-27): a preview_ready result reports it. */
+  standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'shown', form: 'site_enquiry', formTest: 'passed', credentialsProminent: true, photosUsed: 0, repeatedImages: [] },
 };
 const state = (over: Record<string, unknown> = {}): WebsiteBuildState => parseWebsiteBuild({ version: 2, route: 'bespoke', source_site_url: SITE, ...over });
 
