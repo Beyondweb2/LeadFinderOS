@@ -40,6 +40,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
+import { canWorkLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
@@ -322,16 +323,19 @@ Deno.serve(async (req) => {
       (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
       (!!serviceKey && token === serviceKey && !!req.headers.get("x-internal-job"));
 
+    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    /* ⛔ A ROLE IS REQUIRED (2026-09-27, multi-user). admin: every mode, as before. sales: the hook
+       audit on a lead they work, and nothing else — checked below once the body is parsed. */
     let userId = "";
+    let actor: Actor | null = null;
     if (!isInternal) {
       if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-      const { data: u } = await userClient.auth.getUser();
-      if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-      userId = u.user.id;
+      const who = await resolveActor(req, service);
+      if (!who.ok) return json(refusalBody(who), who.status);
+      actor = who.actor;
+      userId = actor.id;
     }
-
-    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const body = await req.json().catch(() => ({}));
     // Internal call: no session — the owner is supplied explicitly (the lead's user_id).
@@ -352,6 +356,19 @@ Deno.serve(async (req) => {
     // Optional: re-run an EXISTING audit (Phase 4 "re-run" hook). Reuses the audit's
     // business + its previous questions so before/after compares like-for-like.
     const reuseAuditId: string | null = typeof body.audit_id === "string" && body.audit_id ? body.audit_id : null;
+    /* ⛔ SALES: HOOK AUDIT ONLY, ON A LEAD THEY WORK, FILED UNDER THE BOOK'S OWNER. The audit row takes
+       the lead's user_id (the data account) so every reader of the one book — the queue, the report,
+       the dashboards — sees it exactly as if the admin had run it. The rep is recorded on the lead's
+       activity log by the browser's RPC, not by rewriting who owns the row. */
+    if (actor && actor.role !== "admin") {
+      const refused = salesAuditRefusal({ purpose: body.purpose, hookAudit: body.hook_audit === true, leadId, reuseAuditId });
+      if (refused) return json({ ok: false, error: refused }, 403);
+      const { data: workLead, error: workErr } = await service.from("outreach_leads")
+        .select("user_id, assigned_to_user_id").eq("id", leadId).maybeSingle();
+      if (workErr) return json({ ok: false, error: "lead_lookup_failed" }, 503);
+      if (!canWorkLead(actor, workLead) || typeof workLead?.user_id !== "string") return json({ ok: false, error: "lead_not_found" }, 403);
+      userId = workLead.user_id;
+    }
     /* ⛔ fresh_audit — INTERNAL CALLERS ONLY (2026-09-20, the first-reply chain). Bypasses the
        per-lead reuse below so a reply-triggered audit is a NEW audit even when the lead already
        carries an ordinary one (the drip's pre-send hook audit). Without it the reply intent was

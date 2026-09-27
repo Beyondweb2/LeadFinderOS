@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "rea
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { RequireAdmin } from "@/components/RequireAdmin";
+import { RequireAccess } from "@/components/RequireAccess";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
@@ -36,6 +36,10 @@ const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
+const SalesHome = lazy(() => import("./pages/SalesHome"));
+const SalesLead = lazy(() => import("./pages/SalesLead"));
+const Team = lazy(() => import("./pages/Team"));
+const SetPassword = lazy(() => import("./pages/SetPassword"));
 /* THE MOCKUP PICKER. Operator-only like every other page here: the pool carries a prospect's
    own photos and the row is a DRAFT that must never be public (Step 1 proved anon reads only
    published rows). Nothing on this screen sends or publishes anything. */
@@ -172,6 +176,9 @@ const App = () => {
               <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            {/* Where an invite link lands (multi-user). Outside the shell: the session is being set up
+                from the link, and there is no role check to pass until it exists. */}
+            <Route path="/set-password" element={<SetPassword />} />
             {/* ══ THE OPERATOR SHELL — ONE layout route, not fifteen wrappers ═══════════════════
                 Every operator page used to carry its own <ProtectedRoute><SubscriptionGate>
                 <AppLayout> stack, so EVERY navigation unmounted and remounted the whole shell —
@@ -188,11 +195,14 @@ const App = () => {
             <Route
               element={
                 <ProtectedRoute>
-                  <RequireAdmin>
+                  {/* ⛔ ROLE GATE (multi-user, 2026-09-27): admin opens every route as before; sales only
+                      the routes in src/lib/access.ts, redirected BEFORE the page mounts. Presentation
+                      only — the database and edge functions enforce the real boundary. */}
+                  <RequireAccess>
                     <AppLayout>
                       <Outlet />
                     </AppLayout>
-                  </RequireAdmin>
+                  </RequireAccess>
                 </ProtectedRoute>
               }
             >
@@ -239,6 +249,10 @@ const App = () => {
               <Route path="/page-plan" element={<PagePlanQueue />} />
               <Route path="/ai-audit" element={<AiAudit />} />
               <Route path="/admin/api-usage" element={<AdminApiUsage />} />
+              {/* Multi-user: the salesperson's workspace, and the admin's Team page. */}
+              <Route path="/sales" element={<SalesHome />} />
+              <Route path="/sales/lead/:leadId" element={<SalesLead />} />
+              <Route path="/team" element={<Team />} />
             </Route>
             {/* The standalone admin hub is a zone on /dashboard. */}
             <Route path="/admin" element={<Navigate to="/dashboard" replace />} />

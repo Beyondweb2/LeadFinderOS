@@ -11,7 +11,7 @@
 // uploads it to Meta and sends it.
 // Auth: the operator's own JWT (resolveOperator), then the lead must be theirs — see the module.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOperator } from "../_shared/operator-auth.ts";
+import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { uploadMediaToGraph } from "../_shared/whatsapp-media-upload.ts";
 import { sendVoiceNote } from "../_shared/voice-note-send.ts";
@@ -41,8 +41,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   try {
-    const who = await resolveOperator(req);
-    if (!who.ok) return json({ ok: false, error: who.error, reason: who.detail }, who.status);
+    const gateService = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+    const who = await resolveActor(req, gateService);
+    if (!who.ok) return json({ ...refusalBody(who), reason: who.detail }, who.status);
+    const actor = who.actor;
 
     /* Refuse an oversized body BEFORE reading it into memory. */
     const declared = Number(req.headers.get("content-length") ?? "0");
@@ -58,7 +60,17 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     const env = resolveWhatsAppEnv();
-    const operatorId = who.user.id;
+    /* ⛔ WHOSE BOOK, WHO PRESSED SEND (2026-09-27, multi-user). admin: unchanged. sales: must name a
+       lead assigned to them; the thread is the lead's book, the person goes in sent_by_user_id and
+       in whatsapp_sends.user_id (the sender diagnostic). */
+    let operatorId = actor.id;
+    if (actor.role !== "admin") {
+      const salesLeadId = str("lead_id");
+      if (!salesLeadId) return json({ ok: false, error: "lead_required", reason: "Open the lead to send a voice note." }, 400);
+      const access = await leadAccess(service, actor, salesLeadId);
+      if (!access.ok) return json({ ok: false, error: access.error === "lookup_failed" ? "upstream_timeout" : "forbidden" }, access.error === "lookup_failed" ? 503 : 403);
+      operatorId = access.bookUserId;
+    }
 
     const result = await sendVoiceNote({
       operatorId,
@@ -103,12 +115,12 @@ Deno.serve(async (req) => {
         return { ok: false, definitive: typeof r.failCode === "number", error: r.error ?? "send failed" };
       },
       async insertMessage(row) {
-        const { data, error } = await service.from("whatsapp_messages").insert(row).select("*").maybeSingle();
+        const { data, error } = await service.from("whatsapp_messages").insert({ ...row, sent_by_user_id: actor.id }).select("*").maybeSingle();
         if (error) console.error("[send-whatsapp-voice] message insert failed:", error.message);
         return (data as Record<string, unknown> | null) ?? null;
       },
       async insertSendLog(row) {
-        const { error } = await service.from("whatsapp_sends").insert(row);
+        const { error } = await service.from("whatsapp_sends").insert({ ...row, user_id: actor.id });
         if (error) console.error("[send-whatsapp-voice] send-audit insert failed (non-blocking):", error.message);
       },
       async markAnswered(leadId) {

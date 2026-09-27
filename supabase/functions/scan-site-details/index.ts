@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userTeamRole } from "../_shared/access.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { isAggregatorUrl, isBookingPlatformUrl, domainOf } from "../_shared/aggregators.ts";
 import { imageVariant, looksLikePlaceholder, resolveImgSizes, GRID_WIDTH, PLACE_WIDTH } from "../_shared/image-variant.ts";
@@ -744,6 +745,9 @@ Deno.serve(async (req) => {
       const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
       if (claimsError || !claimsData?.claims?.sub) return json({ success: false, error: "Unauthorized" }, 401);
       userId = claimsData.claims.sub as string;
+      /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
+       the admin disabled (role removed), is refused even while its token is still valid. */
+      if (!(await userTeamRole(userId))) return json({ success: false, error: "no_role" }, 403);
     }
 
     // --- Parse + validate ---

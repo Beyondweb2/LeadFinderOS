@@ -20,6 +20,10 @@ export type LeadStatus =
   | 'already_visible'   // AI already names them (>=3 of 6 on the first report). Parked: hidden from the
                         // default list, viewable via the status filter, and excluded from all automated pitches.
   | 'price_given'       // quote/price sent (operator-set only — nothing auto-writes it)
+  /* ⛔ 'won_pending_onboarding' (multi-user, 2026-09-27) — a SALESPERSON closed it; the admin onboards.
+     It is NOT a money status: isPaidLead ignores it, it grants no paid-client access and starts no
+     delivery. Set only through lead_set_stage (the rep) or the admin's own status select. */
+  | 'won_pending_onboarding'
   | 'in_delivery'       // paid & being delivered (operator-set only)
   | 'opted_out'         // system-written by the suppression paths (drainer/triage) — NOT operator-pickable
   | 'replied'
@@ -263,6 +267,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
      un-hides these leads (see OutreachTable's default-hide). Unique label → its own filter group. */
   { value: 'already_visible', label: 'Already Visible' },
   { value: 'price_given', label: 'Price Given' },
+  { value: 'won_pending_onboarding', label: 'Won · awaiting onboarding' },
   { value: 'interested', label: 'Interested ⭐ (star only)' },
   { value: 'not_interested', label: 'Not Interested' },
   /* ⚠️ THE FILTER LIST IS A THIRD LABEL SOURCE, and it is the one the operator reads BEFORE
@@ -686,6 +691,7 @@ export type PipelineStatus =
   | 'whatsapp_failed'
   | 'payment_received'
   | 'price_given'
+  | 'won_pending_onboarding'
   | 'in_delivery'
   | 'completed'
   | 'refunded'     // money returned — the one status that removes a lead from revenue (isPaidLead)
@@ -700,6 +706,7 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'report_sent', label: 'Report Sent' },
   { value: 'price_given', label: 'Price Given' },
+  { value: 'won_pending_onboarding', label: 'Won · awaiting onboarding' },
   { value: 'interested', label: 'Interested ⭐ (star only)' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'payment_received', label: 'Paid' },

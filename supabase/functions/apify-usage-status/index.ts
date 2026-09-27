@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { refusalBody, requireAdmin } from "../_shared/access.ts";
 
 /* apify-usage-status — the newest Apify account-usage snapshot, for the operator UI.
  *
@@ -10,8 +11,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * role) or this: one tiny service-role read behind the platform's own JWT check. No SQL, and the
  * table stays closed.
  *
- * NO config.toml ENTRY, ON PURPOSE. Without one the platform verifies the caller's JWT before the
- * handler runs, so only a logged-in operator reaches this. Same arrangement as playbook-evidence.
+ * ⛔ ADMIN ONLY, CHECKED IN THE HANDLER (2026-09-27). The old note here said the platform's JWT check
+ * kept it to a logged-in operator — it does not: the public anon key in the JS bundle passes that
+ * check, so the billing figures were readable by anyone. Billing is admin-only (multi-user plan).
  *
  * WHAT IT IS FOR. On 2026-07-30 the account sat at $89.78 of a $90 monthly cap from lunchtime and
  * every audit failed with an Apify 402. apify-usage.ts had been logging CRITICAL for two days — 170
@@ -38,6 +40,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } },
     );
+    const gate = await requireAdmin(req, service);
+    if (!gate.ok) return json(refusalBody(gate), gate.status);
 
     const { data, error } = await service
       .from("apify_account_usage")

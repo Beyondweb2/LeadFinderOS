@@ -222,6 +222,11 @@ last.** Verified symbol locations 2026-09-16:
 
 ## 7. Step 7 — the multi-user surface (RLS and `user_id` untouched)
 
+> ⛔ **OVERTURNED BY PAUL, 2026-09-27.** LeadFinderOS now has ADMIN + SALES logins on one book
+> (`docs/multi-user.md`). `admin-users` is KEPT and extended (the Team page); `profiles`,
+> `has_role`, `user_roles` and the `isAdmin` gates stay. The rows below are history — do not delete
+> any of them. `MobileBottomNav`'s broken `/admin/affiliates` link was replaced by Team.
+
 | Item | Lines | Action |
 |---|---|---|
 | `src/components/dashboard/AdminZone.tsx` | 705 | delete; remove its mount and `isAdmin &&` gate in `Dashboard.tsx` |

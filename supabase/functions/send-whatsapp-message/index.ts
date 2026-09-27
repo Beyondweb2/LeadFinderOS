@@ -25,6 +25,7 @@ import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { openerRefusal } from "../_shared/initial-opener.ts";
+import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -71,7 +72,8 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "selected_o
    read 2026-09-22a over new bytes — exactly the lie this marker exists to prevent. Bumped in the
    follow-up so the live header proves what is running.
    (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
-const BUILD_ID = "2026-09-27a";
+/* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id. */
+const BUILD_ID = "2026-09-27b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,16 +110,14 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // --- Auth the operator ---
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return json({ ok: false, error: "unauthorized" }, 401);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: u } = await userClient.auth.getUser();
-    const operatorId = u?.user?.id;
-    if (!operatorId) return json({ ok: false, error: "unauthorized" }, 401);
-
+    void anonKey;
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    // --- Auth the operator: a signed-in team member with a role (admin or sales) ---
+    const who = await resolveActor(req, service);
+    if (!who.ok) return json(refusalBody(who), who.status);
+    const actor = who.actor;
+    const operatorId = actor.id;
 
     // --- Parse ---
     const body = await req.json().catch(() => ({}));
@@ -194,9 +194,7 @@ Deno.serve(async (req) => {
        ⚠️ It sends a REAL message and costs a real template send. It is a diagnostic, not a preview:
        there is no dry-run, because a dry-run would prove nothing about Meta. */
     if (body.mode === "test_send") {
-      const { data: roleRow } = await service
-        .from("user_roles").select("role").eq("user_id", operatorId).eq("role", "admin").maybeSingle();
-      if (!roleRow) return json({ ok: false, error: "admin_only" }, 403);
+      if (actor.role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
 
       /* ⛔ THE DESTINATION IS THE SECRET, NOT THE REQUEST (2026-09-12). It first REQUIRED the caller
          to supply a matching phone, which turned out to be unusable for the one job this mode has:
@@ -246,6 +244,26 @@ Deno.serve(async (req) => {
 
     if (!text && !templateName) return json({ ok: false, error: "empty_message" }, 400);
 
+    /* ⛔ WHOSE BOOK, AND WHO PRESSED SEND (2026-09-27, multi-user). Every conversation lives in the
+       book (whatsapp_messages.user_id = the data account), so the queue's opener, the reply and a
+       salesperson's follow-up are ONE thread. admin: the book is their own id — every lookup below is
+       byte-identical to before. sales: must name a lead, it must be assigned to them, not a client,
+       and its phone must be the number being messaged; the book is then that lead's owner. The
+       person is recorded in sent_by_user_id. */
+    let bookUserId = operatorId;
+    if (actor.role !== "admin") {
+      if (!leadId) return json({ ok: false, error: "lead_required", detail: "Open the lead to message it." }, 400);
+      const { data: salesLead, error: salesLeadErr } = await service.from("outreach_leads")
+        .select("id, user_id, assigned_to_user_id, phone, country, amount_paid, status")
+        .eq("id", leadId).maybeSingle();
+      if (salesLeadErr) return json({ ok: false, error: "lead_lookup_failed" }, 503);
+      const sl = salesLead as { id: string; user_id: string; assigned_to_user_id: string | null; phone: string; country: string | null; amount_paid: unknown; status: unknown } | null;
+      if (!sl || !canWorkLead(actor, sl) || isClientLead(sl) || toWhatsAppNumber(sl.phone, sl.country) !== to) {
+        return json({ ok: false, error: "forbidden" }, 403);
+      }
+      bookUserId = sl.user_id;
+    }
+
     // --- Ownership check: the operator must own this conversation ---
     // Either they already have a message thread with this number, OR they own a lead
     // whose number normalises to it (new conversation started from a lead).
@@ -261,10 +279,10 @@ Deno.serve(async (req) => {
     const { data: existing } = await service
       .from("whatsapp_messages")
       .select("id, lead_id")
-      .eq("user_id", operatorId)
+      .eq("user_id", bookUserId)
       .eq("phone", to)
       .limit(1);
-    if (existing && existing.length) {
+    if (existing && existing.length && actor.role === "admin") {
       ownsConversation = true;
       if (!resolvedLeadId) resolvedLeadId = (existing[0] as { lead_id: string | null }).lead_id;
     }
@@ -281,7 +299,7 @@ Deno.serve(async (req) => {
         .eq("id", resolvedLeadId)
         .maybeSingle();
       const l = lead as { user_id: string; business_name: string; phone: string; country: string | null; is_archived: boolean | null; derived_town: string | null; search_location: string | null } | null;
-      if (l && l.user_id === operatorId && toWhatsAppNumber(l.phone, l.country) === to) {
+      if (l && l.user_id === bookUserId && toWhatsAppNumber(l.phone, l.country) === to) {
         ownsConversation = true;
         businessName = l.business_name ?? "";
         leadTown = (l.derived_town ?? l.search_location ?? "").trim();
@@ -298,7 +316,7 @@ Deno.serve(async (req) => {
     const { data: lastIn } = await service
       .from("whatsapp_messages")
       .select("created_at")
-      .eq("user_id", operatorId)
+      .eq("user_id", bookUserId)
       .eq("phone", to)
       .eq("direction", "inbound")
       .order("created_at", { ascending: false })
@@ -659,10 +677,11 @@ Deno.serve(async (req) => {
       console.log(`WOULD SEND (${messageType}) to ${to}${usedTemplate ? ` [${usedTemplate}]` : ""}: ${text || "(template)"}`);
     }
 
-    // --- Log the outbound row (owned by the operator) ---
+    // --- Log the outbound row: in the BOOK, with the person who sent it ---
     const { data: inserted, error: insErr } = await service.from("whatsapp_messages").insert({
       direction: "outbound",
-      user_id: operatorId,
+      user_id: bookUserId,
+      sent_by_user_id: operatorId,
       lead_id: resolvedLeadId,
       phone: to,
       body: storedBody,

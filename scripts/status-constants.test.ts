@@ -171,8 +171,10 @@ console.log("\n── ⛔ THE COMBINED FILTER COVERS EVERY STATUS, EXACTLY ONCE 
      prompt to check the new value really got a unique label and its own filter group (the two
      assertions directly above), rather than silently joining an existing one. Update the numbers
      only after reading those pass. */
-  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 21 && OUTREACH_STATUS_OPTIONS.length === 21,
-    `20 status groups + the Paid sentinel = 21 filter options for 21 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
+  /* 21 → 22 on 2026-09-27: 'won_pending_onboarding' (multi-user). Its label is unique and it has its
+     own filter group — both checked by the two assertions above before this number was changed. */
+  ok(OUTREACH_STATUS_FILTER_OPTIONS.length === 22 && OUTREACH_STATUS_OPTIONS.length === 22,
+    `21 status groups + the Paid sentinel = 22 filter options for 22 statuses (got ${OUTREACH_STATUS_FILTER_OPTIONS.length} for ${OUTREACH_STATUS_OPTIONS.length})`);
 
   const noWa = OUTREACH_STATUS_FILTER_OPTIONS.filter((o) => o.label === "No WhatsApp");
   ok(noWa.length === 1, `"No WhatsApp" appears ONCE in the filter (got ${noWa.length})`);

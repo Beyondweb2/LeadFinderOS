@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
 import { apifyEnrich, type EnrichmentType } from "../_shared/apify-stub.ts";
 
 // enrich-lead — Phase 2 enrichment backbone (Apify STUBBED in this build).
@@ -120,6 +121,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } },
     );
+
+    /* ⛔ WHO MAY WRITE THIS LEAD (2026-09-27, multi-user). It updated outreach_leads by a caller-
+       supplied lead_id with no owner check. Now: a role is required, and a real lead must be one the
+       caller may work (admin: any; sales: assigned to them). A synthetic id (no row) writes nothing. */
+    const who = await resolveActor(req, service);
+    if (!who.ok) return json(refusalBody(who), who.status);
+    const may = await mayWriteLeadId(service, who.actor, leadId);
+    if (may !== "ok") return json({ success: false, error: may }, may === "not_your_lead" ? 403 : 503);
 
     const nowIso = new Date().toISOString();
     const cacheKey = `${placeId || `lead:${leadId}`}:${enrichmentType}`;

@@ -320,6 +320,10 @@ serve(async (req) => {
       if (targetUserId === adminUserId) {
         return jsonResponse({ error: 'Cannot delete your own account' }, 400, corsHeaders, rlHeaders);
       }
+      /* ⛔ A TEAM MEMBER IS DISABLED, NEVER DELETED (2026-09-27): deleting would orphan their
+         authorship on every note, claim and send. The Team screen's Disable is the route. */
+      const { data: member } = await serviceClient.from('team_members').select('user_id').eq('user_id', targetUserId).maybeSingle();
+      if (member) return jsonResponse({ error: 'This is a team member. Disable them on the Team page instead.' }, 409, corsHeaders, rlHeaders);
 
       console.log(JSON.stringify({
         level: 'warn',
@@ -350,8 +354,10 @@ serve(async (req) => {
         return jsonResponse({ error: 'Maximum 50 users per bulk delete' }, 400, corsHeaders, rlHeaders);
       }
 
-      // Filter out admin's own ID
-      const toDelete = userIds.filter(id => id !== adminUserId);
+      // Filter out admin's own ID, and every team member (disabled, never deleted — see delete_user)
+      const { data: members } = await serviceClient.from('team_members').select('user_id').in('user_id', userIds);
+      const memberIds = new Set((members ?? []).map((m: { user_id: string }) => m.user_id));
+      const toDelete = userIds.filter(id => id !== adminUserId && !memberIds.has(id));
 
       console.log(JSON.stringify({
         level: 'warn',
@@ -377,6 +383,132 @@ serve(async (req) => {
       const failCount = results.filter(r => !r.success).length;
 
       return jsonResponse({ success: true, deleted: successCount, failed: failCount, results }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* ═════════════════════ TEAM (multi-user, 2026-09-27) ═════════════════════
+       ⛔ THE ROLE LIVES IN user_roles, WRITTEN ONLY HERE (service role, admin caller). Disabling removes
+       the 'sales' row — every RLS policy and every edge function refuses on the next request, whatever
+       token the browser still holds — AND bans the auth user so the session cannot be refreshed.
+       Nothing is deleted: team_members keeps the person, lead_activity keeps their authorship, and
+       their leads stay assigned until the admin moves them. Passwords are never seen: the invitee sets
+       their own through a one-time link the admin sends them. */
+    const TEAM_APP_URL = (Deno.env.get('TEAM_APP_URL') ?? 'https://leadfinderos-next.pages.dev').replace(/\/+$/, '');
+    const SET_PASSWORD_URL = `${TEAM_APP_URL}/set-password`;
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const uuidOk = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
+
+    if (action === 'team_list') {
+      const { data: members, error: mErr } = await serviceClient.from('team_members')
+        .select('user_id, display_name, status, is_book_owner, invited_at, disabled_at, daily_send_limit')
+        .order('invited_at', { ascending: true });
+      if (mErr) return jsonResponse({ error: mErr.message }, 500, corsHeaders, rlHeaders);
+      const out = [];
+      for (const m of members ?? []) {
+        const [{ data: roles }, { data: authUser }, { count: assigned }] = await Promise.all([
+          serviceClient.from('user_roles').select('role').eq('user_id', m.user_id),
+          serviceClient.auth.admin.getUserById(m.user_id),
+          serviceClient.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('assigned_to_user_id', m.user_id),
+        ]);
+        const roleSet = new Set((roles ?? []).map((r: { role: string }) => r.role));
+        const u = authUser?.user;
+        out.push({
+          ...m,
+          role: roleSet.has('admin') ? 'admin' : roleSet.has('sales') ? 'sales' : null,
+          email: u?.email ?? null,
+          last_sign_in_at: u?.last_sign_in_at ?? null,
+          has_signed_in: !!u?.last_sign_in_at,
+          banned: !!u?.banned_until && new Date(u.banned_until).getTime() > Date.now(),
+          assigned_leads: assigned ?? 0,
+        });
+      }
+      return jsonResponse({ ok: true, team: out }, 200, corsHeaders, rlHeaders);
+    }
+
+    if (action === 'team_invite') {
+      const name = String(body.name ?? '').trim();
+      const email = String(body.email ?? '').trim().toLowerCase();
+      if (!name || name.length > 60) return jsonResponse({ ok: false, error: 'bad_name' }, 400, corsHeaders, rlHeaders);
+      if (!EMAIL_RE.test(email)) return jsonResponse({ ok: false, error: 'bad_email' }, 400, corsHeaders, rlHeaders);
+      const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
+        type: 'invite', email, options: { redirectTo: SET_PASSWORD_URL, data: { display_name: name } },
+      });
+      if (linkErr || !link?.user?.id) {
+        const msg = String(linkErr?.message ?? 'invite failed');
+        const exists = /already|registered|exists/i.test(msg);
+        return jsonResponse({ ok: false, error: exists ? 'already_exists' : 'invite_failed', detail: msg }, exists ? 409 : 500, corsHeaders, rlHeaders);
+      }
+      const uid = link.user.id;
+      const { error: rErr } = await serviceClient.from('user_roles').insert({ user_id: uid, role: 'sales' });
+      const { error: tErr } = await serviceClient.from('team_members').insert({ user_id: uid, display_name: name, invited_by: adminUserId });
+      if (rErr || tErr) {
+        /* The auth user exists but has no role, so it can sign in to nothing. Say so plainly. */
+        return jsonResponse({ ok: false, error: 'role_write_failed', detail: String(rErr?.message ?? tErr?.message) }, 500, corsHeaders, rlHeaders);
+      }
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, invited: uid, timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true, user_id: uid, link: link.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
+    }
+
+    if (action === 'team_new_link') {
+      if (!uuidOk(body.user_id)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('status').eq('user_id', body.user_id).maybeSingle();
+      if (!m || m.status !== 'active') return jsonResponse({ ok: false, error: 'not_active' }, 409, corsHeaders, rlHeaders);
+      const { data: au } = await serviceClient.auth.admin.getUserById(body.user_id);
+      const email = au?.user?.email;
+      if (!email) return jsonResponse({ ok: false, error: 'no_email' }, 409, corsHeaders, rlHeaders);
+      const { data: link, error: linkErr } = await serviceClient.auth.admin.generateLink({
+        type: 'magiclink', email, options: { redirectTo: SET_PASSWORD_URL },
+      });
+      if (linkErr) return jsonResponse({ ok: false, error: 'link_failed', detail: linkErr.message }, 500, corsHeaders, rlHeaders);
+      return jsonResponse({ ok: true, link: link?.properties?.action_link ?? null }, 200, corsHeaders, rlHeaders);
+    }
+
+    if (action === 'team_disable' || action === 'team_reactivate') {
+      const uid = body.user_id;
+      if (!uuidOk(uid)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      if (uid === adminUserId) return jsonResponse({ ok: false, error: 'cannot_change_self' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('user_id, is_book_owner').eq('user_id', uid).maybeSingle();
+      if (!m) return jsonResponse({ ok: false, error: 'not_a_member' }, 404, corsHeaders, rlHeaders);
+      if (m.is_book_owner) return jsonResponse({ ok: false, error: 'cannot_change_book_owner' }, 400, corsHeaders, rlHeaders);
+      const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
+      if (isAdminRow) return jsonResponse({ ok: false, error: 'cannot_change_admin' }, 400, corsHeaders, rlHeaders);
+      if (action === 'team_disable') {
+        const { error: dErr } = await serviceClient.from('user_roles').delete().eq('user_id', uid).eq('role', 'sales');
+        if (dErr) return jsonResponse({ ok: false, error: 'role_remove_failed', detail: dErr.message }, 500, corsHeaders, rlHeaders);
+        await serviceClient.from('team_members').update({ status: 'disabled', disabled_at: new Date().toISOString(), disabled_by: adminUserId }).eq('user_id', uid);
+        const { error: bErr } = await serviceClient.auth.admin.updateUserById(uid, { ban_duration: '876000h' });
+        console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, ban_error: bErr?.message ?? null, timestamp: new Date().toISOString() }));
+        return jsonResponse({ ok: true, banned: !bErr }, 200, corsHeaders, rlHeaders);
+      }
+      const { error: iErr } = await serviceClient.from('user_roles').upsert({ user_id: uid, role: 'sales' }, { onConflict: 'user_id,role' });
+      if (iErr) return jsonResponse({ ok: false, error: 'role_write_failed', detail: iErr.message }, 500, corsHeaders, rlHeaders);
+      await serviceClient.from('team_members').update({ status: 'active', disabled_at: null, disabled_by: null }).eq('user_id', uid);
+      const { error: ubErr } = await serviceClient.auth.admin.updateUserById(uid, { ban_duration: 'none' });
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, unban_error: ubErr?.message ?? null, timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* Move EVERY lead from one member to another (or back to the pool). Same records, nothing sent,
+       each move logged with who it came from. For when a salesperson leaves. */
+    if (action === 'team_reassign_all') {
+      const from = body.from_user_id;
+      const to = body.to_user_id ?? null;
+      if (!uuidOk(from) || (to !== null && !uuidOk(to))) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      if (to) {
+        const [{ data: tm }, { data: tr }] = await Promise.all([
+          serviceClient.from('team_members').select('status').eq('user_id', to).maybeSingle(),
+          serviceClient.from('user_roles').select('role').eq('user_id', to).in('role', ['admin', 'sales']),
+        ]);
+        if (!tm || tm.status !== 'active' || !(tr ?? []).length) return jsonResponse({ ok: false, error: 'not_an_active_member' }, 409, corsHeaders, rlHeaders);
+      }
+      const { data: moved, error: mvErr } = await serviceClient.from('outreach_leads')
+        .update({ assigned_to_user_id: to, assigned_at: to ? new Date().toISOString() : null })
+        .eq('assigned_to_user_id', from).select('id');
+      if (mvErr) return jsonResponse({ ok: false, error: 'reassign_failed', detail: mvErr.message }, 500, corsHeaders, rlHeaders);
+      const rows = (moved ?? []).map((r: { id: string }) => ({
+        lead_id: r.id, actor_user_id: adminUserId, kind: to ? 'lead_assigned' : 'lead_unassigned', data: { from, to, bulk: true },
+      }));
+      for (let i = 0; i < rows.length; i += 500) await serviceClient.from('lead_activity').insert(rows.slice(i, i + 500));
+      return jsonResponse({ ok: true, moved: rows.length }, 200, corsHeaders, rlHeaders);
     }
 
     return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);

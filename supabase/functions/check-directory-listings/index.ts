@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
        a different list from the one the playbook recommends. */
     const evRes = await fetch(`${supabaseUrl}/functions/v1/playbook-evidence`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
       body: JSON.stringify({}),
     });
     if (!evRes.ok) throw new Error(`playbook-evidence HTTP ${evRes.status}: ${(await evRes.text()).slice(0, 300)}`);

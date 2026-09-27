@@ -4,6 +4,8 @@ import { fetchAllRows } from '@/lib/fetchAllRows';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
+import { refusalText } from '@/lib/salesCrm';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
@@ -145,6 +147,10 @@ export function useOutreach() {
   const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
+  /* The role is read through a ref so addLead (deps [user]) always sees the current one. */
+  const { role } = useSubscription();
+  const roleRef = useRef(role);
+  roleRef.current = role;
   // Stable user ID ref to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
 
@@ -486,6 +492,40 @@ export function useOutreach() {
         });
       }
       return null;
+    }
+
+    /* ══ A SALESPERSON ADDS THROUGH THE SERVER, NEVER STRAIGHT INTO THE TABLE (multi-user, 2026-09-27)
+       ⛔ ONE BUSINESS = ONE RECORD, decided by the database across EVERY user's leads — not by this
+       hook's arrays, which for a salesperson hold nothing (they cannot read outreach_leads at all).
+       sales_add_lead matches place id, phone and Maps URL, refuses an existing business and says
+       whose it is, and otherwise inserts it into the one book, assigned to the rep. The admin's path
+       below is unchanged. */
+    if (roleRef.current === 'sales') {
+      const { data: res, error: rpcErr } = await (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('sales_add_lead', {
+        _lead: {
+          business_name: lead.name,
+          phone: lead.phone || null,
+          google_maps_url: lead.googleMapsUrl || null,
+          address: lead.address || null,
+          category: lead.category || null,
+          search_keyword: searchKeyword,
+          search_location: searchLocation || null,
+          website: lead.websiteUrl || null,
+          country,
+          list_type: listType,
+          campaign_id: campaignId,
+          place_id: lead.id || null,
+        },
+      });
+      const r = (res ?? null) as { ok?: boolean; error?: string; lead_id?: string; owner_name?: string | null } | null;
+      if (rpcErr || !r?.ok) {
+        if (!silent) toast({ title: 'Not added', description: lead.name + ': ' + refusalText(rpcErr?.message ?? r?.error, r?.owner_name), variant: 'destructive' });
+        return null;
+      }
+      window.dispatchEvent(new CustomEvent('crm-lead-added'));
+      window.dispatchEvent(new CustomEvent('sales-lead-changed'));
+      if (!silent) toast({ title: 'Added to My leads', description: lead.name });
+      return { id: r.lead_id, business_name: lead.name } as unknown as OutreachLead;
     }
 
     // Fast local-only duplicate check (no DB round-trips)

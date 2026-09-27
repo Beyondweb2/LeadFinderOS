@@ -42,7 +42,10 @@ check('auth: a refused token is 401', classifyAuthFailure({ status: 401, message
 check('auth: a timeout is auth_unavailable', classifyAuthFailure({ status: 0, message: 'auth service timed out after 8000 ms' }) === 'auth_unavailable');
 check('auth: a Cloudflare 522 page is auth_unavailable', classifyAuthFailure({ status: 502, message: '<!DOCTYPE html>… 522: Connection timed out' }) === 'auth_unavailable');
 check('auth: a network failure is auth_unavailable', classifyAuthFailure({ message: 'TypeError: fetch failed' }) === 'auth_unavailable' && classifyAuthFailure(null) === 'auth_unavailable');
-check('auth: both operator functions use the shared resolver and answer its status', hubFn.includes('const who = await resolveOperator(req);') && baselineFn.includes('const who = await resolveOperator(req);') && hubFn.includes('return json({ ok: false, error: who.error, detail: who.detail }, who.status);') && !hubFn.includes('async function operator(') && !baselineFn.includes('async function operator('));
+/* Multi-user (2026-09-27): both are now ADMIN-ONLY through requireAdmin, which resolves the caller with the
+   same shared operator-auth (so a slow auth service is still a 503, never a 401) and then requires the role. */
+const accessMod = read('supabase/functions/_shared/access.ts');
+check('auth: both operator functions use the shared resolver (via requireAdmin) and answer its status', hubFn.includes('const gate = await requireAdmin(req, ') && baselineFn.includes('const gate = await requireAdmin(req, ') && hubFn.includes('if (!gate.ok) return json(refusalBody(gate), gate.status);') && /const who = await resolveOperator\(req\);/.test(accessMod) && !hubFn.includes('async function operator(') && !baselineFn.includes('async function operator('));
 check('auth: the resolver bounds getUser with a timeout and answers 503 on it', authShared.includes('OPERATOR_AUTH_TIMEOUT_MS') && authShared.includes('status: 503, error: "auth_unavailable"'));
 
 // 2. The API not answering is 503 upstream_timeout, never a bare 500.
