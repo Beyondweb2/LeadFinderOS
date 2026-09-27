@@ -26,7 +26,8 @@ import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
 import { Button } from '@/components/ui/button';
 import { InboxComposer } from '@/components/InboxComposer';
 import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
-import { InboundMedia, isPlayableVoice } from '@/components/WhatsAppMedia';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
+import { MessageMedia, isPlayableVoice, showsAttachment } from '@/components/WhatsAppMedia';
 import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
 import type { VoiceClip } from '@/lib/voiceRecorderState';
@@ -40,7 +41,7 @@ import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
@@ -52,7 +53,7 @@ import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibi
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import {
@@ -352,7 +353,7 @@ function AutoReplyToggle() {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
@@ -1372,6 +1373,22 @@ const Inbox = () => {
 
   /* The recorder holds the row while it is recording / previewing / sending. */
   const [voiceActive, setVoiceActive] = useState(false);
+  /* The attachment picker holds the row while a file is staged (the same rule). */
+  const [attachActive, setAttachActive] = useState(false);
+  /* The approved-template sender is secondary INSIDE the window (free text works); it opens on demand
+     there and is always shown outside it, where it is the only way to send. Closed on thread switch. */
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  useEffect(() => { setTemplatesOpen(false); }, [activeKey]);
+  /* Same capture rule as the voice note: the picker is keyed by conversation, the target is read once. */
+  const sendAttachment = async (file: File, caption: string, sendId: string) => {
+    if (!active?.leadId) return { ok: false, error: 'lead_required', retryable: false };
+    const target = { key: active.key, phone: active.phone, leadId: active.leadId };
+    const res = await sendMedia({ phone: target.phone, leadId: target.leadId, file, caption, sendId });
+    if (!res.ok) return res;
+    toast({ title: res.simulated ? 'File sent (simulated — test mode)' : 'File sent ✓' });
+    if (activeKey === target.key) setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+    return { ok: true };
+  };
   /* ⛔ THE TARGET IS CAPTURED WHEN SEND IS PRESSED. The recorder that calls this is keyed by
      conversation, so it can only ever be the open thread's; the phone and lead are read once, here,
      and a thread switch mid-upload cannot redirect it. */
@@ -1455,14 +1472,22 @@ const Inbox = () => {
     return true;
   };
 
+  /* ══ THE INBOX FILLS THE SCREEN (2026-09-27) ═════════════════════════════════════════════════════
+     Both panels used to be a fixed 60vh, so on a tall desktop the thread stopped two-thirds of the way
+     down and left the rest of the window empty. From md up the page is exactly the viewport minus the
+     shell's own vertical padding (AppLayout: py-6 at sm, py-8 at lg — hence 3rem / 4rem), the grid
+     takes whatever the title row and the optional lead picker leave, and each panel scrolls INSIDE
+     itself, so the composer stays pinned at the bottom and the page never scrolls. A floor keeps it
+     usable on a short laptop (below it the page scrolls rather than crushing the thread). Phones keep
+     the old stacked sizes. */
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <div className="space-y-4 md:flex md:h-[calc(100dvh-3rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-4rem)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 md:shrink-0">
+        <div className="flex items-baseline gap-3">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Inbox</h1>
-          <p className="text-sm text-muted-foreground">Manage WhatsApp conversations without leaving LeadFinder.</p>
+          <p className="hidden text-sm text-muted-foreground xl:block">WhatsApp conversations, without leaving LeadFinder.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
           <AutoReplyToggle />
           {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
@@ -1497,7 +1522,7 @@ const Inbox = () => {
 
       {/* New-conversation lead picker */}
       {newOpen && (
-        <Card className="p-3">
+        <Card className="p-3 md:shrink-0">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Start a conversation with one of your leads (must have a phone):</p>
           <div className="max-h-56 space-y-1 overflow-y-auto">
             {leads.length === 0 ? (
@@ -1513,9 +1538,9 @@ const Inbox = () => {
         </Card>
       )}
 
-      <div className="grid gap-3 md:grid-cols-[300px_1fr]">
+      <div className="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[300px_1fr] md:grid-rows-[minmax(0,1fr)]">
         {/* Conversation list */}
-        <Card className="max-h-[60vh] overflow-y-auto p-1.5">
+        <Card className="max-h-[60vh] overflow-y-auto p-1.5 md:h-full md:max-h-none">
           {/* Show-hidden toggle — only when there are hidden (not_interested) convos. */}
           {(hiddenCount > 0 || showHidden) && (
             <button
@@ -1732,7 +1757,7 @@ const Inbox = () => {
         </Card>
 
         {/* Thread + reply */}
-        <Card className="flex h-[60vh] flex-col">
+        <Card className="flex h-[60vh] min-w-0 flex-col overflow-hidden md:h-full">
           {!active ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <MessageSquare className="mb-2 h-7 w-7 opacity-30" />
@@ -1741,19 +1766,33 @@ const Inbox = () => {
           ) : (
             <>
               {/* Thread header */}
-              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1 truncate text-sm font-semibold">
+              {/* ⛔ TWO LINES, NAME FIRST (2026-09-27): the business name and the window state own the
+                  top line and never give way; the status pills and the tools share the second, the
+                  tools wrapping under the pills on a narrow screen rather than squeezing the name. */}
+              <div className="space-y-0.5 border-b border-border px-3 py-1.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="flex min-w-0 items-center gap-1 text-sm font-semibold">
                     <span className="truncate">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</span>
                     {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                   </p>
+                  {win.open ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
+                      <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
+                    </span>
+                  ) : (
+                    <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-3 w-3" /> Window closed · template only
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {/* ⛔ SAME PILL, SAME STATE, SAME HANDLER as the list pill below — deliberately NOT a
                       second copy. `active` IS the list's own conversation object (conversations.find
                       by activeKey), and handleSetStatus → patchLeadStatus patches `leads` by leadId in
                       useInbox, which `conversations` is derived from. So a change in either place
                       re-renders BOTH from one source of truth; two different statuses for one business
                       is structurally impossible. The spinner keys off the same savingStatusKey. */}
-                  <div className="mt-0.5 flex items-center gap-1.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     {active.leadId && (
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -1762,8 +1801,7 @@ const Inbox = () => {
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
                   {/* FULL LEAD DETAILS — opens the SAME rich dialog Outreach uses, as an overlay
                       over Inbox (audit, questionnaire, business info, mark-paid). No navigation:
                       the whole point is to see everything without leaving the thread. */}
@@ -1811,22 +1849,6 @@ const Inbox = () => {
                       panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
                   {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
                   {active.leadId && <LeadOwnerControl leadId={active.leadId} />}
-                  {/* Google Maps — stored URL preferred, else built from place_id. */}
-                  {mapsUrl && (
-                    <a href={mapsUrl} target="_blank" rel="noreferrer" title="Open in Google Maps" aria-label="Open in Google Maps" className={HEADER_ICON_BTN}>
-                      <MapPin className="h-4 w-4" />
-                    </a>
-                  )}
-                  {websiteUrl && (
-                    <a href={websiteUrl} target="_blank" rel="noreferrer" title="Open the business website" aria-label="Open website" className={HEADER_ICON_BTN}>
-                      <Globe className="h-4 w-4" />
-                    </a>
-                  )}
-                  {activeLead?.email && (
-                    <a href={`mailto:${activeLead.email}`} title={`Email ${activeLead.email}`} aria-label="Email the business" className={HEADER_ICON_BTN}>
-                      <Mail className="h-4 w-4" />
-                    </a>
-                  )}
                   {/* Sign-up link. Hidden entirely for a lead who has actually paid - same rule as the
                       card: sending an existing client back to checkout wastes their time, and
                       findable-checkout refuses it as already_client anyway.
@@ -1859,10 +1881,6 @@ const Inbox = () => {
                       )}
                     </button>
                   )}
-                  {/* Secondary fallback: open the chat in the WhatsApp app (wa.me). */}
-                  <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" title="Open this chat in the WhatsApp app" aria-label="Open in WhatsApp app" className={HEADER_ICON_BTN}>
-                    <MessageCircle className="h-4 w-4" />
-                  </a>
                   {/* CLIENT WELCOME PACK — the SAME component the Outreach lead modal renders, so
                       there is exactly one pack code path: it resolves this lead's own audit and calls
                       downloadWelcomePack itself. Only the styling differs (this row is 7x7 icon
@@ -1877,21 +1895,47 @@ const Inbox = () => {
                       iconOnly
                     />
                   )}
-                  {/* Remove from inbox → sets the lead to Closed (hidden here; stays in Outreach). */}
-                  {active.leadId && (
-                    <button type="button" onClick={() => handleRemoveFromInbox(active)} disabled={removingKey === active.key} title="Remove from inbox (mark Closed)" aria-label="Remove from inbox" className={cn(HEADER_ICON_BTN, 'hover:text-destructive')}>
-                      {removingKey === active.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </button>
-                  )}
-                  {win.open ? (
-                    <span className="ml-1 flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
-                      <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
-                    </span>
-                  ) : (
-                    <span className="ml-1 flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                      <AlertTriangle className="h-3 w-3" /> Window closed · template only
-                    </span>
-                  )}
+                  {/* ⛔ THE LESS-USED LINKS LIVE IN ONE "MORE" MENU (2026-09-27, "more conversation, less
+                      chrome"): Google Maps (stored URL, else built from place_id), the website, email,
+                      the chat in the WhatsApp app (wa.me), and Remove from inbox (sets the lead to
+                      Closed — hidden here, stays in Outreach). Same targets and handlers as the icons
+                      they replace; the evidence and send tools stay on the row. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" title="More: Maps, website, email, WhatsApp app, remove" aria-label="More actions" className={HEADER_ICON_BTN}>
+                        {removingKey === active.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {mapsUrl && (
+                        <DropdownMenuItem asChild>
+                          <a href={mapsUrl} target="_blank" rel="noreferrer" aria-label="Open in Google Maps"><MapPin className="mr-2 h-4 w-4" />Open in Google Maps</a>
+                        </DropdownMenuItem>
+                      )}
+                      {websiteUrl && (
+                        <DropdownMenuItem asChild>
+                          <a href={websiteUrl} target="_blank" rel="noreferrer" aria-label="Open website"><Globe className="mr-2 h-4 w-4" />Open the website</a>
+                        </DropdownMenuItem>
+                      )}
+                      {activeLead?.email && (
+                        <DropdownMenuItem asChild>
+                          <a href={`mailto:${activeLead.email}`} aria-label="Email the business"><Mail className="mr-2 h-4 w-4" /><span className="truncate">Email {activeLead.email}</span></a>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem asChild>
+                        <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp app"><MessageCircle className="mr-2 h-4 w-4" />Open in the WhatsApp app</a>
+                      </DropdownMenuItem>
+                      {active.leadId && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleRemoveFromInbox(active)} disabled={removingKey === active.key} aria-label="Remove from inbox" className="text-destructive focus:text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" />Remove from inbox (mark Closed)
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 </div>
               </div>
 
@@ -1937,7 +1981,7 @@ const Inbox = () => {
               {active.leadId && <HookVisibilityCard leadId={active.leadId} onRunNew={startHookRerun} runNewBusy={hookRerunBusy} />}
 
               {/* Messages */}
-              <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">
+              <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
                 {thread.length === 0 ? (
                   <p className="py-8 text-center text-xs text-muted-foreground/60">No messages yet — send the first below.</p>
                 ) : thread.map((m) => {
@@ -1950,7 +1994,7 @@ const Inbox = () => {
                         ? <WhatsAppTemplateMessage snapshot={templateSnapshot} />
                         : isPlayableVoice(m) ? null
                         : <p className="whitespace-pre-wrap break-words">{bubbleReadable(m) || templateLabel(m.template_name)}</p>}
-                      {(m.direction === 'inbound' || m.message_type === 'audio') && <InboundMedia message={m} />}
+                      {showsAttachment(m) && <MessageMedia message={m} />}
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                         <span>{relTime(m.created_at)}</span>
@@ -1968,9 +2012,14 @@ const Inbox = () => {
               <div className="border-t border-border p-2.5">
                 {win.open ? (
                   <div className="space-y-2">
+                    {/* ⛔ ONE TOOLS ROW (2026-09-27): the reply helpers used to stack three rows high
+                        above the composer. They now share one wrapping row — the draft helper, quick
+                        reply, the voice-note script and the template toggle — each still one click. */}
+                    <div className="flex flex-wrap items-center gap-1.5">
                     {/* Research & draft reply — only once they have replied and a lead is linked. It
                         writes a DRAFT into the composer below; it never sends (WarmReplyAssistant). */}
                     {active.leadId && active.lastInboundAt && (
+                      <div className="min-w-0">
                       <WarmReplyAssistant
                         key={active.key}
                         leadId={active.leadId}
@@ -1981,6 +2030,7 @@ const Inbox = () => {
                         getComposerText={() => getDraft(draftsRef.current, active.key)}
                         onDraft={(draft) => insertWarmDraft(active.key, draft)}
                       />
+                      </div>
                     )}
                     {/* Quick-reply: insert a saved TEXT script (editable before send). */}
                     {textTemplates.length > 0 && (
@@ -2013,13 +2063,22 @@ const Inbox = () => {
                         half-typed reply is exactly where it was when the voice note is sent or deleted. */}
                     {/* Voice-note script — prominent in the OPEN window, beside the recorder: text for Paul to
                         read out when he records. Never sends. Closed-window threads do not get one. */}
-                    {active.leadId && (
-                      <div className="flex justify-end">
-                        <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />
-                      </div>
-                    )}
+                    {active.leadId && <VoiceNoteScriptButton key={active.key} leadId={active.leadId} prominent />}
+                    <span className="flex-1" />
+                    {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply". In the
+                        window they are optional, so they open on demand; outside it they always show. */}
+                    <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                      onClick={() => setTemplatesOpen((v) => !v)} aria-expanded={templatesOpen}>
+                      <FileText className="h-3.5 w-3.5" /> {templatesOpen ? 'Hide templates' : 'Send a template'}
+                    </Button>
+                    </div>
+                    {/* ⛔ THE ROW BELONGS TO ONE THING AT A TIME: text, a voice note, or a staged file.
+                        The recorder and the paperclip each HIDE the others while they hold it (still
+                        mounted, so a half-typed reply survives). Both are keyed by conversation: a
+                        thread switch drops a recording or a staged file, so neither can be sent into
+                        the wrong conversation. */}
                     <div className="flex min-w-0 items-end gap-2">
-                      <div className={cn('min-w-0 flex-1', voiceActive && active.leadId && 'hidden')}>
+                      <div className={cn('min-w-0 flex-1', (voiceActive || attachActive) && active.leadId && 'hidden')}>
                         <InboxComposer
                           key={`${active.key}:${composerSeed}`}
                           convKey={active.key}
@@ -2030,19 +2089,27 @@ const Inbox = () => {
                         />
                       </div>
                       {active.leadId && (
-                        <VoiceNoteRecorder
-                          key={active.key}
-                          disabled={sending}
-                          onActiveChange={setVoiceActive}
-                          onSend={sendVoiceNote}
-                        />
+                        <div className={cn('contents', voiceActive && '[&>*]:hidden')}>
+                          <AttachmentPicker key={active.key} disabled={sending} onActiveChange={setAttachActive} onSend={sendAttachment} />
+                        </div>
+                      )}
+                      {active.leadId && (
+                        <div className={cn('contents', attachActive && '[&>*]:hidden')}>
+                          <VoiceNoteRecorder
+                            key={active.key}
+                            disabled={sending}
+                            onActiveChange={setVoiceActive}
+                            onSend={sendVoiceNote}
+                          />
+                        </div>
                       )}
                     </div>
-                    {/* Approved WhatsApp templates — SEPARATE from the free-text "Quick reply" above. */}
-                    <div className="border-t border-border/60 pt-2">
-                      <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
-                      {templatePicker}
-                    </div>
+                    {templatesOpen && (
+                      <div className="border-t border-border/60 pt-2">
+                        <p className="mb-1 text-[11px] text-muted-foreground">Or send an approved WhatsApp template:</p>
+                        {templatePicker}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -2059,7 +2126,7 @@ const Inbox = () => {
                       />
                     )}
                     <p className="text-[11px] text-muted-foreground">
-                      Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
+                      Outside the 24h window — free text, files and voice notes aren’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
                     </p>
                     {templatePicker}
                   </div>

@@ -19,7 +19,9 @@ import { VoiceNoteRecorder } from '@/components/VoiceNoteRecorder';
 import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { WhatsAppTemplateMessage } from '@/components/WhatsAppTemplateMessage';
-import { InboundMedia, isPlayableVoice } from '@/components/WhatsAppMedia';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
+import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
+import { MessageMedia, isPlayableVoice, showsAttachment } from '@/components/WhatsAppMedia';
 import { OwnerLine, OwnerAvatar } from '@/components/OwnerBadge';
 import { parseTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { voiceSendErrorMessage } from '@/lib/voiceNote';
@@ -137,6 +139,14 @@ export default function SalesLead() {
     } finally { setBusy(false); }
   };
 
+  const sendFile = async (file: File, caption: string, sendId: string) => {
+    if (!phone) return { ok: false, error: 'phone_mismatch', retryable: false };
+    const res = await sendMediaAttachmentRequest(supabase as never, { phone, leadId: lead.id, file, caption, sendId });
+    if (res.ok) { toast({ title: res.simulated ? 'Simulated (test mode)' : 'File sent' }); void refreshMessages(); }
+    else void refreshMessages(); // a refused-by-WhatsApp attempt is logged as a failed row
+    return res;
+  };
+
   const sendVoice = async (clip: VoiceClip): Promise<{ ok: boolean; error?: string; retryable?: boolean }> => {
     if (!phone) return { ok: false, error: 'no_phone', retryable: false };
     const form = new FormData();
@@ -224,7 +234,7 @@ export default function SalesLead() {
                     {snap ? <WhatsAppTemplateMessage snapshot={snap} />
                       : isPlayableVoice(m) ? null
                       : <div className="whitespace-pre-wrap">{m.body ?? (m.message_type === 'audio' ? '[voice note]' : `[${m.message_type ?? 'message'}]`)}</div>}
-                    {(m.direction === 'inbound' || m.message_type === 'audio') && <InboundMedia message={m} />}
+                    {showsAttachment(m) && <MessageMedia message={m} />}
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       {fmt(m.created_at)}{m.direction === 'outbound' ? ` · ${m.sent_by_user_id ? actorName(m.sent_by_user_id) : 'queue'} · ${m.status ?? ''}` : ''}
                     </div>
@@ -247,7 +257,10 @@ export default function SalesLead() {
                   <Button size="sm" variant="outline" disabled={!template} onClick={() => void previewTemplate()}>Preview</Button>
                   <Button size="sm" disabled={!template || !preview?.body || busy} onClick={() => void sendTemplate()}>Send template</Button>
                   <VoiceNoteRecorder disabled={!win.open || busy} onActiveChange={() => undefined} onSend={sendVoice} />
+                  {/* Files only inside the 24-hour window (the server re-checks it, and the assignment). */}
+                  {win.open && <AttachmentPicker key={lead.id} disabled={busy} onActiveChange={() => undefined} onSend={sendFile} />}
                 </div>
+                {!win.open && <p className="text-[11px] text-muted-foreground">Files and voice notes need an open 24-hour window — only an approved template can go now.</p>}
                 {preview && (preview.error
                   ? <p className="text-xs text-destructive">Would be refused: {preview.error}</p>
                   : <p className="text-xs whitespace-pre-wrap rounded border bg-muted/40 p-2">{preview.body}</p>)}

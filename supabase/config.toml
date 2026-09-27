@@ -167,6 +167,11 @@ verify_jwt = true
 [functions.send-whatsapp-voice]
 verify_jwt = true
 
+# send-whatsapp-media: the Inbox / sales lead page attachment sender (image, video, document). SPA-only
+# caller with the operator's JWT; the handler does resolveActor + lead access + 24h-window check. No internal caller.
+[functions.send-whatsapp-media]
+verify_jwt = true
+
 # voice-note-script: the Inbox / lead popup's "Voice-note script". SPA-only caller with the operator's
 # JWT; the handler does its own resolveOperator + lead-ownership check. Spends OpenAI money and may read
 # the prospect's site (the shared warm research path), but NEVER sends a message.

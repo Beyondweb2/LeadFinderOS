@@ -4,7 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { VoiceNotePlayer } from '@/components/VoiceNotePlayer';
 
 /* THE ONE WHATSAPP ATTACHMENT VIEWER — the Inbox's and the salesperson's lead page's (2026-09-27).
- * Moved here out of Inbox.tsx unchanged so Sales reuses it instead of growing a second one.
+ * Moved here out of Inbox.tsx unchanged so Sales reuses it instead of growing a second one. It shows
+ * what WE sent (a voice note, an image, a video, a document — send-whatsapp-voice / -media keep the
+ * one copy in the same bucket) exactly as it shows what they sent.
  * ⛔ It asks Storage for a short-lived signed link under the CALLER's session. Whether that link is
  * issued is decided by the storage policies, never here: the admin reads the whole bucket; a
  * salesperson reads only files referenced by messages on leads assigned to them
@@ -25,10 +27,17 @@ export function isPlayableVoice(m: WhatsAppMediaMessage): boolean {
   return m.message_type === 'audio' && !!m.media_path;
 }
 
+/** Does this bubble carry an attachment to show? Every inbound row (its media, or why it is missing),
+ *  and any outbound row of a media type — never an outbound text or template. */
+export function showsAttachment(m: WhatsAppMediaMessage): boolean {
+  if (m.direction === 'inbound') return true;
+  return m.message_type === 'audio' || m.message_type === 'image' || m.message_type === 'video' || m.message_type === 'document' || m.message_type === 'sticker';
+}
+
 /** A signed link lives this long; it is renewed a minute before it lapses while the bubble is open. */
 const SIGNED_URL_SECONDS = 60 * 5;
 
-export function InboundMedia({ message }: { message: WhatsAppMediaMessage }) {
+export function MessageMedia({ message }: { message: WhatsAppMediaMessage }) {
   const [url, setUrl] = useState<string | null>(null);
   const [refused, setRefused] = useState(false);
   useEffect(() => {
