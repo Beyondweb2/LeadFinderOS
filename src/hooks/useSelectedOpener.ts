@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveSelectedOpener } from '@/lib/openerVariant';
+import { getQueueStatus, QUEUE_STATUS_KEY } from '@/lib/queueStatus';
 
 /* THE SELECTED INITIAL OPENER, as the server stores it (whatsapp_outreach_state.initial_opener_template,
    through process-whatsapp-queue's admin-gated 'status' / 'set_initial_opener_template').
@@ -17,8 +18,9 @@ export function useSelectedOpener() {
   const q = useQuery({
     queryKey: SELECTED_OPENER_KEY,
     queryFn: async (): Promise<string | null | undefined> => {
-      const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'status' } });
-      if (error || !data?.ok || !('initialOpenerTemplate' in data)) return undefined;
+      /* The shared status read — the queue panel on the same page asks for the same payload. */
+      const data = await getQueueStatus(qc).catch(() => null);
+      if (!data?.ok || !('initialOpenerTemplate' in data)) return undefined;
       return (data.initialOpenerTemplate as string | null) ?? null;
     },
     staleTime: 60_000,
@@ -29,7 +31,7 @@ export function useSelectedOpener() {
       if (error || !data?.ok) throw new Error(data?.detail ?? data?.error ?? error?.message ?? 'Could not change the initial outreach template');
       return data.initialOpenerTemplate as string;
     },
-    onSuccess: (v) => qc.setQueryData(SELECTED_OPENER_KEY, v),
+    onSuccess: (v) => { qc.setQueryData(SELECTED_OPENER_KEY, v); void qc.invalidateQueries({ queryKey: QUEUE_STATUS_KEY }); },
   });
   const selected = q.data;
   const resolved = selected === undefined ? null : resolveSelectedOpener(selected);

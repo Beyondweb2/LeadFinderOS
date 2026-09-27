@@ -35,7 +35,7 @@ export interface PlaybookAuditRow extends ResolvableAudit {
 }
 
 const LEAD_COLUMNS = 'id, business_name, phone, country, website, category, search_keyword, search_location, derived_town, status, contact_name';
-export const PLAYBOOK_AUDIT_COLUMNS = 'id, short_code, lead_id, created_at, business_name, business_type, location_text, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, crawl_check:results->crawl_check)';
+export const PLAYBOOK_AUDIT_COLUMNS = 'id, short_code, lead_id, created_at, business_name, business_type, location_text, audit_purpose, baseline_target_runs, is_measurement, baseline_contract, ai_audit_runs(id, status, run_number, created_at, crawl_check:results_crawl_check)';
 const MESSAGE_COLUMNS = 'id, created_at, direction, body, message_type, template_name, status';
 
 /** The WhatsApp form of a stored phone (digits, country code, no plus) — the same shape

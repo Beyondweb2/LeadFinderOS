@@ -9,7 +9,8 @@ const ok = (condition: unknown, message: string) => {
 ok(source.includes('const AUDIT_SELECT_FALLBACK'), 'Inbox has a report-ready audit fallback projection');
 ok(source.includes('if (!rich.error) return rich'), 'rich audit projection is preferred when available');
 ok(source.includes('return sb.from(\'ai_audits\').select(AUDIT_SELECT_FALLBACK)'), 'projection errors retry the known-working audit read');
-ok(source.includes("fetchAllRows<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits)"), 'paginated Inbox audit read uses the fallback-aware loader');
+/* 2026-09-27: pages fetched in parallel (fetchAllRowsParallel), still through the fallback-aware loader. */
+ok(source.includes("fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (audits)', fetchInboxAudits, (a) => a.id)"), 'paginated Inbox audit read uses the fallback-aware loader');
 
 type Read<T> = { data: T[]; error: Error | null };
 async function readWithFallback<T>(rich: () => Promise<Read<T>>, fallback: () => Promise<Read<T>>) {

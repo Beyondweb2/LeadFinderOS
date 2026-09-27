@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
+import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { isAggregatorUrl } from '@/lib/aggregators';
 /* MEASURED audit costs, shared with the market panel and the audit page so no screen quotes a
@@ -328,10 +329,15 @@ export function OutreachTable({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase as unknown as SupabaseClient)
-        .from('ai_audits')
-        .select('id, lead_id, ai_audit_runs(id, run_number, status, created_at)')
-        .order('created_at', { ascending: false });
+      /* ⛔ PAGINATED (2026-09-27): one unpaginated select returned 1,000 of the 1,572 audits, so the
+         oldest leads' rows showed "Run audit" for an audit they already had. Newest-first order kept. */
+      let data: unknown[] | null = null;
+      try {
+        data = (await fetchAllRowsParallel<{ id: string }>('Outreach (audit map)', (from, to) => (supabase as unknown as SupabaseClient)
+          .from('ai_audits')
+          .select('id, lead_id, ai_audit_runs(id, run_number, status, created_at)')
+          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (a) => a.id)).rows;
+      } catch { data = null; }
       if (cancelled || !data) return;
       const map: Record<string, { auditId: string; runId: string; status: string }> = {};
       for (const row of data as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ id: string; run_number: number | null; status: string | null; created_at: string | null }> | null }>) {
