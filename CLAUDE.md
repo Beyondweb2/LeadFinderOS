@@ -753,6 +753,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Touching… | Read first |
 |---|---|
 | Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
+| WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
