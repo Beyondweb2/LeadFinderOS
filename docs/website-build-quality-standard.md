@@ -52,6 +52,7 @@ AND perceived website quality.
   stars) because it is drawn by JavaScript — the new preview had no reviews at all. Hence the
   rendered-page instruction in the recon.
 - The old site's enquiry form submits; the new one opened the visitor's email app — a contact
+- **Fixed 2026-09-27: fn `site-enquiry`** (`_shared/site-enquiry.ts`, table `site_enquiries`) — the enquiry backend for every Findable client site. Recipient from `CLIENT_SITES` by site key, never the request; ONLY the production origin delivers, preview / localhost are test mode (Resend test inbox, `[TEST]`), other origins refused; honeypot + fill time + rate limits; stored before the email is sent. Add a client = one `CLIENT_SITES` entry + redeploy. Verified with a test-mode send (row + Resend id); the production path is the same code with the real recipient.
   downgrade and a pre-go-live blocker until a real handler exists.
 - The rest of the BS4 record: `C:/Users/paulj/BS4ElectricalServices` (its README and commits).
 
