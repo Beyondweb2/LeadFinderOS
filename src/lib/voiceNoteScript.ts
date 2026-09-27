@@ -36,15 +36,15 @@ import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { isAggregatorUrl, domainOf } from './aggregators.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows. */
-export const VOICE_NOTE_GENERATOR_VERSION = 1;
+export const VOICE_NOTE_GENERATOR_VERSION = 2;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
 /** The spoken target, ~35–55 seconds. */
-export const VOICE_NOTE_TARGET_WORDS = { min: 90, max: 130 } as const;
+export const VOICE_NOTE_TARGET_WORDS = { min: 100, max: 125 } as const;
 /** Outside this a length is worth a note to Paul — never a rewrite. */
-export const VOICE_NOTE_NOTE_WORDS = { min: 80, max: 145 } as const;
+export const VOICE_NOTE_NOTE_WORDS = { min: 90, max: 135 } as const;
 /** Outside this the script is plainly wrong-sized and is sent back once. */
-export const VOICE_NOTE_HARD_WORDS = { min: 60, max: 175 } as const;
+export const VOICE_NOTE_HARD_WORDS = { min: 60, max: 140 } as const;
 /** A voice note carries the strongest finding and at most one more. */
 export const VOICE_NOTE_MAX_FINDINGS = 2;
 
@@ -200,6 +200,12 @@ export function findingTextForScript(f: ResearchFinding): string {
   return f.detail.replace(/,?\s*such as [^.;]*/gi, '').trim();
 }
 
+const INTERPRETIVE_KINDS: ReadonlySet<string> = new Set(['weak_evidence', 'outdated_content', 'other']);
+/** A judgement read into the page (a model's reading, or a soft kind) rather than something measured. */
+export function isInterpretiveFinding(f: ResearchFinding): boolean {
+  return f.source === 'model' || INTERPRETIVE_KINDS.has(f.kind);
+}
+
 export function selectVoiceNoteFindings(research: WarmLeadResearch | null | undefined, website: string | null | undefined, town?: string | null): VoiceNoteSite {
   const kind = classifyLeadWebsite(website);
   const base = { source: kind.source, sourceLabel: kind.label, services: [] as string[], serviceEvidence: '' };
@@ -208,7 +214,13 @@ export function selectVoiceNoteFindings(research: WarmLeadResearch | null | unde
   const readOk = !!research && research.status !== 'failed';
   const services = readOk ? (research!.services ?? []).map((s) => s.trim()).filter(Boolean) : [];
   const sel = selectReplyFindings(research, [], town ?? null, null);
-  const findings = sel.primary ? [sel.primary, ...sel.secondary].slice(0, VOICE_NOTE_MAX_FINDINGS) : [];
+  /* ⛔ CONCRETE FIRST (Paul, 2026-09-27). A measured / rule-checked finding (crawlers blocked, no
+     service pages, duplicate pages, conflicting details, broken pages) always beats an interpretive one
+     (a model's reading, "weak evidence of qualifications"). The interpretive kind is used only when
+     nothing concrete exists, and is then written as observation, never as a verdict. */
+  const pool = sel.primary ? [sel.primary, ...sel.secondary, ...sel.strongNotUsed] : [];
+  const concrete = pool.filter((f) => !isInterpretiveFinding(f));
+  const findings = (concrete.length ? concrete : pool).slice(0, VOICE_NOTE_MAX_FINDINGS);
   const serviceEvidence = [...services, readOk ? research!.businessSummary ?? '' : '', ...findings.flatMap(findingDetailsForScript)].join(' | ');
   const withEvidence = { ...base, services, serviceEvidence };
   if (findings.length) return { ...withEvidence, mode: 'findings', findings };
@@ -237,17 +249,21 @@ GOAL. It must sound like Paul personally:
 This is NOT a hard sell. It sounds like a genuine voice note from a trades-focused marketer, not a scripted sales pitch.
 
 FLOW (broadly):
-"hi mate, i was looking for a [trade] in [area]..." → say which AI engine you asked, using the ENGINE NAME you are given, exactly → name the competitors it recommended, exactly as given, all of them and no others → explain naturally, and hedged, that if AI is recommending other firms instead, that can mean potential customers going elsewhere → say you had a look at their site to see what might be contributing → explain the website point(s) you are given, in very plain English, keeping their concrete details → say you specialise in AI visibility for local businesses → offer softly to explain what you'd change to give them a better chance of being named in those searches.
+"hi mate, i was looking for a [trade] in [area]..." → say which AI engine you asked, using the ENGINE NAME you are given, exactly, and PARAPHRASE what you asked it in plain spoken words (e.g. "i was looking for an emergency electrician in Shrewsbury and asked Google AI who it'd recommend") → name the competitors it recommended, exactly as given, all of them and no others, then say directly that they didn't come up ("but you didn't come up", "and you weren't one of the ones it mentioned") → explain naturally, and hedged, that if AI is recommending other firms instead, that can mean potential customers going elsewhere → say you had a look at their site to see what might be contributing → explain the website point(s) you are given, in very plain English, keeping their concrete details → say you specialise in AI visibility for local businesses → offer softly to explain what you'd change. The approved direction for the ending: "i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches." Natural variations are fine; do not end every script identically.
 
-STYLE: relaxed, conversational, straightforward, British. "mate" is natural. Short sentences. Spoken, not written: it should sound right read aloud. Not corporate, not over-polished, not aggressive, not cheesy, not salesy. Natural phrases like "i had a quick look", "a couple of things stood out", "that's probably not ideal", "that's the sort of thing i work on" are good. Lowercase is fine.
+STYLE: this is Paul talking into his phone, not copywriting. Relaxed, British, conversational, direct, slightly imperfect. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Keep sentences short; a couple can start with "so" or "and". "mate" once or twice, naturally, never more. Not corporate, not over-polished, not cheesy, not salesy. Natural phrases like "i had a quick look", "a couple of things stood out", "that's probably not ideal", "that's the sort of thing i work on" are good. Lowercase is fine.
+TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up"), never "but not [business]".
+NEVER READ THE SEARCH OUT WORD FOR WORD, never put it in quotation marks, and never say "UK" after the town. Paraphrase it naturally while keeping its meaning (emergency stays emergency, commercial stays commercial).
+AVOID POLISHED ENDINGS: not "just let me know", not "if you'd like, i can explain", not "feel free to reach out". Prefer "if you want mate, i'm happy to explain what i'd change".
 NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee of rankings or recommendations. No em dash or en dash, anywhere. No price, no figures about money, no link, no website address. Do not ask for a call unless it flows naturally.
 
-LENGTH: about 90 to 130 spoken words (35 to 55 seconds). Do not make it an audit.
+LENGTH: about 100 to 125 spoken words (40 to 50 seconds). Never over 140. Do not make it an audit.
 
 EVIDENCE RULES, which override everything:
 - The competitors are exactly the ones listed, from that one search on that one engine. Never add, swap or drop a competitor. If only one or two are listed, name just those, naturally.
 - Say the engine exactly as given ("Google AI" or "ChatGPT"). Never name the other engine as the one you asked.
 - Website points: ONLY the ones in WEBSITE POINTS. Never invent or add a problem. Never claim a technical issue that is not listed.
+- OBSERVATION, NOT JUDGEMENT: say what the site says or shows, and what it doesn't show. "the site says you're fully insured and qualified, but it doesn't really show much detail around those qualifications" is right; "you have weak evidence of qualifications", "there's no evidence" or "your site is poor" are judgements, never say them.
 - If there are no website points, follow the NO WEBSITE POINTS instruction exactly in spirit, with a natural variation.
 - LOST WORK IS A POSSIBILITY, NEVER A FACT. Never "that's work going straight to someone else", "you're losing jobs", "that's people ringing them instead". Say "that can mean potential customers going elsewhere", "that could be work going to someone else".
 - SERVICES: never name a specific service or job type (rewiring, fuse boards, boiler repairs, lock changes...) unless it is listed under SERVICES THEY OFFER or is in the search itself. Otherwise say "the work you do" or "your main services".
@@ -299,7 +315,7 @@ export function spokenTrade(trade: string): string {
 export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   const e = input.evidence;
   const lines: string[] = [
-    `BUSINESS: ${input.business}`,
+    `BUSINESS (you are talking TO them; never say this name in the script): ${input.business}`,
     `TRADE: ${input.trade} (say it like "${spokenTrade(input.trade)}")`,
     `AREA: ${input.area}`,
     `WEBSITE: ${input.website?.trim() || 'none on record'}`,
@@ -309,7 +325,7 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
       : 'SERVICES THEY OFFER: none confirmed. Do not name any specific service or job type unless it is in the search.',
     '',
     `ENGINE NAME (say exactly this): ${e.engineLabel}`,
-    `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()}: "${e.question}"`,
+    `THE SEARCH YOU ASKED ${e.engineLabel.toUpperCase()} (for meaning only; paraphrase it, never read it out or quote it): ${e.question}`,
     `${input.business} was NOT named in ${e.engineLabel}'s answer.`,
     `COMPETITORS ${e.engineLabel.toUpperCase()} NAMED FOR THIS EXACT SEARCH (name all ${e.competitors.length}, exactly, no others):`,
     ...e.competitors.map((c, i) => `${i + 1}. ${c}`),
@@ -319,7 +335,10 @@ export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
     lines.push('WEBSITE POINTS (use the first; the second only if it fits naturally; nothing else about the site):');
     input.site.findings.forEach((f, i) => {
       const details = findingDetailsForScript(f);
-      lines.push(`${i + 1}. ${f.title}: ${findingTextForScript(f)}${details.length ? ` Concrete details to keep: ${details.join(' | ')}` : ''}`);
+      // An interpretive finding goes in as what the page SAYS, with no evaluative title ("Weak Evidence…").
+      lines.push(isInterpretiveFinding(f)
+        ? `${i + 1}. OBSERVATION ONLY (say what the site says and what it doesn't show; no verdict words like weak, poor or no evidence): ${findingTextForScript(f)}${details.length ? ` What the site actually says: ${details.join(' | ')}` : ''}`
+        : `${i + 1}. ${f.title}: ${findingTextForScript(f)}${details.length ? ` Concrete details to keep: ${details.join(' | ')}` : ''}`);
     });
   } else {
     lines.push(NO_POINT_LINES[input.site.mode].split('{LABEL}').join(input.site.sourceLabel ?? 'directory'));
@@ -455,7 +474,25 @@ const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+|\n+/).filter((s)
 /** "had a look at your site", "your website says", "on your site" — said of a page they do not own. */
 const CALLS_IT_THEIR_SITE = /\b((look|looked|looking) (at|through|over) your (web ?site|site)|on your (web ?site|site)|your (web ?site|site) (is|has|says|shows|doesnt|isnt|looks|needs))\b/;
 
-export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null }): VoiceNoteCheck {
+/* ⛔ THE SEARCH IS PARAPHRASED (Paul, 2026-09-27). Any quoted phrase of four words or more, the whole
+   question, or a run of SEARCH_RUN_WORDS consecutive words of it counts as reading it out. A bare
+   "uk" after the town is the tell of a machine-worded query. */
+const SEARCH_RUN_WORDS = 6;
+export function readsSearchVerbatim(script: string, question: string): boolean {
+  if (/["“”][^"“”]*(\b\w+\b[^"“”]*){4,}["“”]/.test(script)) return true;
+  const s = ` ${norm(script)} `;
+  const q = norm(question).split(' ').filter(Boolean);
+  if (q.length && s.includes(` ${q.join(' ')} `)) return true;
+  for (let i = 0; i + SEARCH_RUN_WORDS <= q.length; i++) {
+    if (s.includes(` ${q.slice(i, i + SEARCH_RUN_WORDS).join(' ')} `)) return true;
+  }
+  const ukAt = q.indexOf('uk');
+  return ukAt > 0 && s.includes(` ${q[ukAt - 1]} uk `);
+}
+const VERDICT = /\b(weak|poor|lacking|insufficient) (evidence|proof|credentials|qualifications|content|site|website)\b|\bno (real )?evidence\b|\byour (site|website) is (poor|weak|bad|rubbish)\b/;
+const POLISHED_ENDING = /\bjust let me know\b|\bif youd like\b|\bfeel free to (reach out|get in touch)\b|\bdont hesitate\b|\blook forward to hearing\b/;
+
+export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null; business?: string | null }): VoiceNoteCheck {
   const script = tidyScript(raw);
   const t = norm(script);
   /* The claim, link and phrase checks read the script WITHOUT the competitor names: "Block Paving Co"
@@ -510,6 +547,15 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
       problems.push(`States lost work as a fact ("${sentence.trim().slice(0, 80)}"). Hedge it: "that can mean potential customers going elsewhere".`);
     }
   }
+  // The search is paraphrased, never read out (Paul, 2026-09-27: Firebeard's "…Shrewsbury UK who can come today").
+  if (readsSearchVerbatim(script, ctx.evidence.question)) problems.push('Reads the search out word for word or in quotes. Paraphrase it naturally.');
+  // Talk TO them: their own name in the script is a third-person reference ("but not Firebeard Electrical").
+  if (ctx.business && competitorNamed(script, ctx.business)) problems.push(`Refers to the business by name ("${ctx.business}"). Talk to them directly: "you didn't come up".`);
+  // Observation, not verdict.
+  if (VERDICT.test(tb)) problems.push('Uses a judgement ("weak evidence", "no evidence", "poor site"). Say what the site shows or doesn\'t show instead.');
+  // Paul's register.
+  if (POLISHED_ENDING.test(tb)) problems.push('Uses a polished ending ("just let me know", "if you\'d like, i can explain"). Use Paul\'s: "if you want mate, i\'m happy to explain what i\'d change".');
+  if ((tb.match(/\bmate\b/g) ?? []).length > 2) warnings.push('Says "mate" more than twice.');
   // A profile page is not their website.
   if (ctx.site.mode === 'profile' && CALLS_IT_THEIR_SITE.test(tb)) {
     problems.push(`Calls the ${ctx.site.sourceLabel ?? 'directory'} profile their website.`);

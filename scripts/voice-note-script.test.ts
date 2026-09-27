@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, checkVoiceNoteScript, tidyScript,
   competitorNamed, wordCount, betterAttempt, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_MODEL,
-  classifyLeadWebsite, servicesNamed, serviceSupported, findingRecord,
+  classifyLeadWebsite, servicesNamed, serviceSupported, findingRecord, readsSearchVerbatim, isInterpretiveFinding,
   type VoiceNoteEvidence, type VoiceNoteSite,
 } from '../src/lib/voiceNoteScript.ts';
 import type { HookResult } from '../src/lib/hookScore.ts';
@@ -137,9 +137,10 @@ ok(checkVoiceNoteScript(GOOD.replace('Smith & Sons Plumbing', 'Block Paving Co')
 // Length is a target, not a gate.
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ');
 const lenOnly = (n: number) => checkVoiceNoteScript(`asked Google AI ai visibility Smith & Sons Plumbing Leicester Heating Co PipeFix ${words(n)}`, { evidence: EV, site: SITE_C });
-ok(lenOnly(72).problems.length === 0 && lenOnly(72).warnings.length === 0, '86 words: no problem, no warning');
+ok(lenOnly(72).problems.length === 0 && lenOnly(72).warnings.some((w) => /outside/.test(w)), '86 words: a note only, never a rewrite');
 ok(lenOnly(120).problems.length === 0 && lenOnly(120).warnings.length === 0, '134 words: no problem, no warning');
-ok(lenOnly(140).problems.length === 0 && lenOnly(140).warnings.some((w) => /outside/.test(w)), '~154 words: a warning only, never a rewrite');
+ok(lenOnly(124).problems.length === 0 && lenOnly(124).warnings.some((w) => /outside/.test(w)), '~138 words: a note only, never a rewrite');
+ok(lenOnly(140).problems.some((p) => /Far too long/.test(p)), '~154 words: over 140 is shortened (Paul, 2026-09-27)');
 ok(lenOnly(30).problems.some((p) => /Far too short/.test(p)) && lenOnly(170).problems.some((p) => /Far too long/.test(p)), 'plainly wrong-sized scripts are sent back');
 
 ok(tidyScript('"hi mate — i was looking – for a plumber"') === 'hi mate, i was looking, for a plumber', 'dashes are replaced mechanically and wrapping quotes dropped');
@@ -204,8 +205,51 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
 {
   const rp = "hi mate, i was looking for an electrician in Woking on Google AI, specifically for commercial work, and it suggested Smith & Sons Plumbing, Leicester Heating Co, and PipeFix. if AI's recommending others, that could be potential customers going elsewhere. i had a quick look at your site and noticed some of the AI search crawlers are blocked, like OAI-SearchBot and ChatGPT-User. that might be making it harder for AI to properly understand your site. i specialise in AI visibility for local businesses, so if you'd like, i can explain what i'd change to give you a better chance of being named in those searches. just let me know.";
   const c = checkVoiceNoteScript(rp, { evidence: EV, site: SITE_F });
-  ok(c.problems.length === 0, `naming the ChatGPT-User crawler is not claiming ChatGPT was asked (${c.problems.join(' | ')})`);
+  ok(!c.problems.some((x) => /ChatGPT|Google AI/.test(x)), `naming the ChatGPT-User crawler is not claiming ChatGPT was asked (${c.problems.join(' | ')})`);
   ok(checkVoiceNoteScript(rp.replace('on Google AI', 'on ChatGPT'), { evidence: EV, site: SITE_F }).problems.some((x) => /came from Google AI/.test(x)), '…while actually saying ChatGPT for a Google AI result is still caught');
+}
+
+/* ─────────── 4c. tone and evidence pass (Paul, 2026-09-27) — the three real v1 scripts are the fixtures ─────────── */
+{
+  const FB_EV = { ...EV, question: 'emergency electrician in Shrewsbury UK who can come today', competitors: ['Able Group (Shrewsbury Service)', 'Shrewsbury Emergency Electricians', 'Whitfield Plumbing & Electrical'] };
+  const FB_SITE = selectVoiceNoteFindings(null, 'https://tradehq.co.uk/firebeardelectrical', 'Shrewsbury');
+  const FB_V1 = 'hi mate, i was looking for an electrician in Shrewsbury and asked Google AI about "emergency electrician in Shrewsbury UK who can come today". it suggested Able Group, Shrewsbury Emergency Electricians, and Whitfield Plumbing & Electrical, but not Firebeard Electrical. now, if AI\'s pointing folks to other companies, that could be potential customers going elsewhere. i had a quick look, and i couldn\'t find a website of your own, just your TradeHQ profile. without your own site, there\'s a lot less for AI to go on about what you do and where you work. i specialise in AI visibility for local businesses. if you fancy, i can share what i\'d change to give you a better shot at being named in those searches.';
+  const fb = checkVoiceNoteScript(FB_V1, { evidence: FB_EV, site: FB_SITE, business: 'Firebeard Electrical' });
+  ok(fb.problems.some((x) => /word for word or in quotes/.test(x)), 'Firebeard v1: the quoted, verbatim search is rejected');
+  ok(fb.problems.some((x) => /Refers to the business by name/.test(x)), 'Firebeard v1: "but not Firebeard Electrical" is rejected');
+  const FB_OK = "hi mate, i was looking for an emergency electrician in Shrewsbury and asked Google AI who it'd recommend. it came back with Able Group, Shrewsbury Emergency Electricians and Whitfield Plumbing & Electrical, but you didn't come up. that can mean potential customers going elsewhere. so i had a quick look, and i couldn't find a website of your own, just your TradeHQ profile. without your own site there's a lot less for AI to go on about what you do and where you work. i specialise in AI visibility for local businesses, so if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches.";
+  const fbOk = checkVoiceNoteScript(FB_OK, { evidence: FB_EV, site: FB_SITE, business: 'Firebeard Electrical' });
+  ok(fbOk.problems.length === 0, `a paraphrased, second-person Firebeard script passes (${fbOk.problems.join(' | ')})`);
+  ok(readsSearchVerbatim('i asked google ai who they would recommend for an emergency electrician in shrewsbury uk who can come today', FB_EV.question), 'reading the search unquoted is still caught');
+  ok(readsSearchVerbatim('i asked about an emergency electrician in shrewsbury uk', FB_EV.question), '"<town> uk" copied from the query is caught');
+  ok(!readsSearchVerbatim(FB_OK, FB_EV.question), 'a paraphrase keeping "emergency" and the town is fine');
+
+  // JG v1: an evaluative verdict and 144 words.
+  const JG_V1 = "hi mate, i was looking for an electrician in Woking on Google AI, and it came up with BETEC Electrical Contractors, Big Green Electrical, and EA Electrical Ltd. if AI's recommending them instead, that could mean potential customers going elsewhere. i had a quick look at your site, and a couple of things stood out. none of the pages linked from your homepage are about the services you offer, like re-wires or fuseboard changes, so there's less on the site that clearly says what you do and where. also, i noticed you mention being fully insured and qualified, but there's no evidence or details there. that's probably not ideal for showing up in searches. i specialise in AI visibility for local businesses, so if you want, i can explain what i'd change to give you a better chance of being named in those searches.";
+  const jgEv = { ...EV, competitors: ['BETEC Electrical Contractors', 'Big Green Electrical', 'EA Electrical Ltd'] };
+  const jgSite = { ...SITE_C, services: ['Full and partial re-wires', 'Consumer unit (fuseboard) changes'], serviceEvidence: 'Full and partial re-wires | Consumer unit (fuseboard) changes' };
+  const jg = checkVoiceNoteScript(JG_V1, { evidence: jgEv, site: jgSite, business: 'JG Electrics', trade: 'Electricians' });
+  ok(jg.problems.some((x) => /judgement/.test(x)), 'JG v1: "there\'s no evidence or details there" is a judgement, rejected');
+  ok(!checkVoiceNoteScript(JG_V1.replace("but there's no evidence or details there", "but it doesn't really show much detail around those qualifications"), { evidence: jgEv, site: jgSite, business: 'JG Electrics' }).problems.some((x) => /judgement/.test(x)), '…the observable version is fine');
+  ok(checkVoiceNoteScript(JG_V1.replace('there\'s no evidence', 'you have weak evidence of qualifications'), { evidence: jgEv, site: jgSite }).problems.some((x) => /judgement/.test(x)), '"weak evidence of qualifications" is rejected');
+
+  // RP v1: the polished ending.
+  const RP_END = checkVoiceNoteScript(GOOD.replace("so if you want mate i'm happy to explain", "so if you'd like, i can explain").concat(' just let me know.'), { evidence: EV, site: SITE_F });
+  ok(RP_END.problems.some((x) => /polished ending/.test(x)), 'RP v1: "if you\'d like, i can explain … just let me know" is rejected');
+  ok(!checkVoiceNoteScript(GOOD, { evidence: EV, site: SITE_F }).problems.some((x) => /polished/.test(x)), 'Paul\'s "if you want mate i\'m happy to explain" is fine');
+  ok(checkVoiceNoteScript(GOOD.replace('hi mate', 'hi mate mate mate'), { evidence: EV, site: SITE_F }).warnings.some((w) => /mate/.test(w)), '"mate" more than twice is noted');
+
+  // Concrete first.
+  const weak = F({ id: 'model:1', kind: 'weak_evidence', source: 'model', title: 'Weak Evidence of Qualifications', detail: 'The site says the business is fully insured and qualified but shows no detail.', keyDetails: ['We are fully insured and hold all current qualifications.'] });
+  const missingPages = F({ id: 'rule:missing_core', kind: 'missing_core_service_pages', source: 'rule', title: 'No pages for the core services', keyDetails: ['contact us', 'legal notice'] });
+  const both = selectVoiceNoteFindings(research([missingPages, weak]), 'https://jg-electrics.co.uk', 'Woking');
+  ok(both.findings.length >= 1 && both.findings.every((f) => !isInterpretiveFinding(f)), 'a concrete finding exists → the interpretive one is not used');
+  const onlyWeak = selectVoiceNoteFindings(research([F({ ...weak, source: 'rule', id: 'rule:weak', strength: 5 })]), 'https://jg-electrics.co.uk', 'Woking');
+  const pw = buildVoiceNotePrompt({ business: 'JG Electrics', trade: 'Electricians', area: 'Woking', website: 'x', evidence: EV, site: onlyWeak });
+  ok(onlyWeak.findings.length === 1 && pw.includes('OBSERVATION ONLY') && !pw.includes('Weak Evidence of Qualifications'), 'no concrete finding → the interpretive one goes in as observation, without its verdict title');
+  ok(/OBSERVATION, NOT JUDGEMENT/.test(VOICE_NOTE_SYSTEM_PROMPT) && /NEVER READ THE SEARCH OUT WORD FOR WORD/.test(VOICE_NOTE_SYSTEM_PROMPT) && /Never say the business's own name/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the four tone rules');
+  ok(/if you want mate i'm happy to explain what i'd change to give you a better chance of coming up in those searches/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the approved ending direction is in the prompt');
+  ok(/business: hook\.business/.test(read('supabase/functions/voice-note-script/index.ts')), 'the function passes the business name to the checks');
 }
 
 /* ─────────── 5. structure ─────────── */

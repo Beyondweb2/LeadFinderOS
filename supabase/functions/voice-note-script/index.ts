@@ -155,7 +155,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     calls++; promptTokens += call.promptTokens; completionTokens += call.completionTokens;
     const raw = parseVoiceNoteScript(call.args);
     if (!raw) { modelError = "model_empty_script"; continue; }
-    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade });
+    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade, business: hook.business });
     best = best ? betterAttempt(best, checked) : checked;
     if (!best.problems.length) break;
   }
