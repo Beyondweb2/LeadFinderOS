@@ -877,6 +877,7 @@ export function standardEvidence(s: WebsiteBuildState): StandardEvidence {
     hadWorkingForm: kept('contact_form'),
     areasHubNeeded: s.quality.intents.areas_hub?.need === 'needed',
     hasCredentials: verified('accreditations'),
+    hasPhotoStrength: kept('photography') || kept('gallery') || kept('projects'),
   };
 }
 

@@ -439,8 +439,12 @@ const LIST_KEYS = new Set(['service_areas', 'services', 'accreditations', 'brand
    client website"), NEVER described as independently verified. Paul decides only CONTRADICTIONS,
    AMBIGUITY, INFERENCE or ANOTHER ENTITY's claim (all routed to "detected" in applyRecon: flagged,
    multi-valued, not verbatim / high confidence, or disagreeing with what LeadFinderOS holds).
-   STILL ALWAYS PAUL'S (money, legal exposure, or a number that moves): prices, insurance, reviews and
-   ratings, awards, DBS, licences, compliance, VAT / legal status, company number, availability,
+   GENUINE REVIEWS AND THE AGGREGATE RATING / COUNT (Paul, 2026-09-27) are source information too: they
+   auto-accept on the same terms as any source-site fact (high confidence, visible, one value, no conflict,
+   nothing LeadFinderOS holds disagrees) and the build shows the rating with a snapshot date. A conflict,
+   an uncertain identity or an unsourced figure still lands in "needs approval" — never a routine step.
+   STILL ALWAYS PAUL'S (money, legal exposure): prices, insurance, awards, DBS, licences, compliance,
+   VAT / legal status, company number, availability,
    tracking / ads IDs, and anything unrecognised (⛔ positive allowlist — a key nobody listed needs
    approval). And any value carrying a SUPERLATIVE or an AVAILABILITY claim ("best", "leading",
    "trusted", "24/7"…) whatever its key: "24/7" is the classic cross-field contradiction with the
@@ -449,6 +453,7 @@ export const SOURCE_SITE_FACT_KEYS: ReadonlySet<string> = new Set([
   'business_name', 'trade', 'phone', 'email', 'website', 'social_profiles', 'directory_profiles', 'review_profiles', 'primary_town',
   'whatsapp_number', 'address', 'service_areas', 'qualifications', 'accreditations', 'memberships', 'years_experience',
   'guarantee', 'payment_methods', 'opening_hours', 'standout', 'owner_name', 'response_time', 'brands',
+  'review_rating', 'reviews_on_site',
 ]);
 /** The earlier name, kept for callers — it is now the whole source-site allowlist. */
 export const LOW_RISK_FACT_KEYS: ReadonlySet<string> = SOURCE_SITE_FACT_KEYS;
@@ -549,7 +554,7 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     const status: StoredFactStatus = cleanGroup && !disagrees && !highRisk && !isService ? 'verified' : 'detected';
     const why = [
       isService ? 'Source-derived service candidates — the site names them; confirm what is still offered (Template Mapping).' : '',
-      !isService && highRisk ? 'Price, legal, rating, availability or superlative claim — always needs your approval, even when the site states it.' : '',
+      !isService && highRisk ? 'Price, legal, availability or superlative claim — always needs your approval, even when the site states it.' : '',
       multi ? 'Pages disagree: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       g.flagged && !multi ? 'Claude flagged a conflict: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       !g.allClean ? 'Not stated verbatim (inferred or not high confidence).' : '',

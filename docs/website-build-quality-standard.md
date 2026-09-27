@@ -43,7 +43,7 @@ AND perceived website quality.
    rule): a fact the client's own site states verbatim and consistently — services, areas,
    qualifications, accreditations, memberships, years trading, guarantees, contact details, address,
    payment methods, hours, descriptions — is accepted with basis `source_site`, never "verified".
-   Prices, insurance, ratings / reviews, awards, licences, legal / VAT, availability, and any value
+   Prices, insurance, awards, licences, legal / VAT, availability, and any value
    with a superlative or a 24/7 claim still need Paul (24/7 contradicts stated hours across fields,
    which the same-field conflict check cannot see — BS4).
 
@@ -88,18 +88,29 @@ block in `website-build-execution.test.ts` (prompt, result import, save round tr
 |---|---|---|
 | both | the hero photo sat as a block under the text on phones | mobile hero = the photo behind the copy (one first screen); `stacked` needs a stated reason |
 | both | neither first build showed any genuine reviews | reviews shown by default when there is review evidence; never invented, no review schema |
-| BS4 (`/areas/`, 2026-09-27) | the areas hub led with an EV-charger job photo | Areas hub → the MAP is its primary visual; a map is never a background; phone crop keeps labels legible |
+| BS4 (`/areas/`, 2026-09-27) | the areas hub led with an EV-charger job photo | Areas hub → the MAP is the default primary visual; fallback = a genuine local / geographic image, then a genuine job photo only if it shows the locality — every fallback states why; an unrelated image always fails; a map is never a background; phone crop keeps labels legible |
 | MCL (`/locations/`, 2026-09-27) | the map was scaled down whole on phones (~6px labels) | the same legibility rule; MCL got a phone crop |
 | MCL (9780737) | a ring diagram stood in for a map | never drawn, no pins / radius / polygons |
 | BS4 (cb5e08e) | a mailto / text-plain "form" | `mailto_form` always fails; a working old form cannot become `none`; a real form must pass a test-mode submission (site-enquiry) |
-| BS4 (7e58ee2, c347e59) | photos repeated; the owner portrait twice | a photo once per page; repeats reported and gated; 50% of a large approved set must be used |
+| BS4 (7e58ee2, c347e59) | photos repeated; the owner portrait twice | a photo once per page; repeats reported and gated; photographic strength JUDGED, not counted (`photographyPreserved`: roles covered, old gallery / project strength kept, not sparser than the source; never padded with weak shots) |
 | BS4 (4cbefa8) | NICEIC / SMAS held back from the first build | verified credentials reported as prominent |
 | both | card-grid sections, generic copy | section-rhythm and evidence-first rules in the prompt (judged in the old-vs-new review, not a number) |
 
+**Refined 2026-09-27 (Paul, same day — do not overfit to MCL / BS4):** (1) the Areas image is a
+preference order, not a ban — map, then a genuine local image, then a genuine job photo only where it
+shows the locality, each fallback with a reason (`areasVisual` `job_photo`; `other` = unrelated, always
+fails). (2) The "use half the approved photos" quota is gone — a large library must not force weak or
+redundant images; the gate asks `photographyPreserved`. (3) Genuine source-backed reviews AND the
+confidently sourced current rating / count show by default, the rating with a snapshot date
+(`ratingAsOf`); held only for a conflict, uncertain identity, an unsourced figure or another evidence
+concern (`ratingHeldReason`). `review_rating` / `reviews_on_site` joined the source-site fact allowlist
+(`recon.ts`): they auto-accept on the same terms as any source fact and are no longer a routine Paul
+approval. Still never invented, no automatic Review / AggregateRating schema, no fake stars.
+
 **Deliberately NOT generalised (human / client judgement):** WHICH genuine photo is the hero (BS4 went
 ceiling-light → owner portrait → conservatory on Paul's taste); the brand accent (MCL recoloured its logo
-orange); which towns are listed (MCL waits on Morgan); whether a rating is published (a fact Paul
-approves); a referral-only service (MCL car keys); whether the old site's content is Morgan's words.
+orange); which towns are listed (MCL waits on Morgan); a rating whose sources conflict or whose
+profile identity is uncertain; a referral-only service (MCL car keys); whether the old site's content is Morgan's words.
 The standard names the ROLE and the rule; the choice inside it stays Paul's.
 
 **Regression.** MCL and BS4 are fixtures, not regenerated: each site as first generated fails the gate

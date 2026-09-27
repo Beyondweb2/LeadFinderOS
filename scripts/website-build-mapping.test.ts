@@ -92,8 +92,10 @@ console.log('\n── A. RISK-BASED APPROVAL ──');
   ok(row(s, 'phone').status === 'verified' && row(s, 'phone').basis === 'source_site', 'phone (low-risk, verbatim, consistent) is auto-accepted — basis: the source website');
   ok(row(s, 'social_profiles').status === 'verified' && row(s, 'social_profiles').basis === 'source_site', 'a social profile link is auto-accepted');
   ok(row(s, 'website').status === 'verified' && row(s, 'website').basis === 'source_site', 'the website / domain is auto-accepted');
-  for (const k of ['opening_hours', 'insurance', 'dbs', 'prices', 'review_rating', 'analytics_ids', 'ads_ids'])
+  for (const k of ['opening_hours', 'insurance', 'dbs', 'prices', 'analytics_ids', 'ads_ids'])
     ok(row(s, k)?.status === 'detected' && /always needs your approval/.test(row(s, k).notes), `${k} is a commercial / proof claim → NEEDS APPROVAL even though the site states it`);
+  // Paul 2026-09-27: a rating / count the source shows confidently is source information, not a routine approval.
+  ok(row(s, 'review_rating')?.status === 'verified' && row(s, 'review_rating').basis === 'source_site', 'a rating the site shows (high confidence, visible, consistent) → accepted as SOURCE-SITE information, no routine approval');
   ok(row(s, 'analytics_ids').value.includes('G-ABC1234') && row(s, 'analytics_ids').value.includes('GTM-XYZ9') && row(s, 'ads_ids').value === 'AW-123456', 'tracking IDs are captured as facts to approve');
   ok(row(s, 'email').status === 'verified' && row(s, 'email').value === 'hello@harbourlocks.co.uk', 'a verified client value is never overwritten (the site\u2019s different email)');
   ok(row(s, 'services').status === 'verified' && row(s, 'services').value === 'Lock changes', 'verified onboarding services stay as they are');
@@ -111,7 +113,7 @@ console.log('\n── A. RISK-BASED APPROVAL ──');
   }
   ok(isHighRiskFact('business_name', ['Best Locksmiths Ltd']) && !isHighRiskFact('business_name', ['Harbour Locks Ltd']), 'a strong-claim word ("best") makes even a low-risk field need approval');
   ok(!isHighRiskFact('accreditations', ['NICEIC Approved Contractor']) && !isHighRiskFact('years_experience', ['Over 20 years']), 'source-site rule: a credential or years trading the site states is NOT held back for approval');
-  ok(isHighRiskFact('prices', ['£80 call-out']) && isHighRiskFact('review_rating', ['4.9 from 120']) && isHighRiskFact('insurance', ['Fully insured']), 'prices, ratings and insurance still always need Paul');
+  ok(isHighRiskFact('prices', ['£80 call-out']) && !isHighRiskFact('review_rating', ['4.9 from 120']) && isHighRiskFact('insurance', ['Fully insured']), 'prices and insurance still always need Paul; a confidently sourced rating does not');
   ok(isHighRiskFact('accreditations', ['24/7 emergency call outs']) && isHighRiskFact('availability', ['24/7']) && isHighRiskFact('standout', ['The best electrician in Bristol']), '24/7 and superlatives need Paul whatever the field (the BS4 hours contradiction)');
   ok(isHighRiskFact('custom_anything', ['x']), 'an unrecognised key is high-risk (positive allowlist)');
   const svcOnly = parseWebsiteBuild({ ...BASE, route: 'faithful_rebuild' });
