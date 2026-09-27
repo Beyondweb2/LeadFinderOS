@@ -77,21 +77,24 @@ async function measuredSetForLead(service: any, userId: string, leadId: string):
   const { data: lr } = await service.from("outreach_leads").select("baseline_audit_id").eq("id", leadId).eq("user_id", userId).maybeSingle();
   const pointer = (lr as { baseline_audit_id?: string | null } | null)?.baseline_audit_id ?? null;
   if (!pointer) return { anchor: null, reason: "no_baseline_recorded" };
-  const { data: a } = await service.from("ai_audits").select(MEASURED_COLS).eq("id", pointer).eq("user_id", userId).maybeSingle();
+  /* ⚡ 2026-09-27 (site-wide speed pass): the pointer's audit and the full measures are independent
+     reads (the second needs only the lead), and each audit's runs are independent of the others —
+     they ran one after another. Same rows; runIds keep the audit order below. */
+  const [{ data: a }, { data: ms }] = await Promise.all([
+    service.from("ai_audits").select(MEASURED_COLS).eq("id", pointer).eq("user_id", userId).maybeSingle(),
+    service.from("ai_audits").select(MEASURED_COLS)
+      .eq("lead_id", leadId).eq("user_id", userId).eq("audit_purpose", "measurement")
+      .order("created_at", { ascending: false }),
+  ]);
   if (!a) return { anchor: null, reason: "baseline_audit_missing" };
-  const { data: ms } = await service.from("ai_audits").select(MEASURED_COLS)
-    .eq("lead_id", leadId).eq("user_id", userId).eq("audit_purpose", "measurement")
-    .order("created_at", { ascending: false });
   const audits: MeasuredAudit[] = [a as MeasuredAudit, ...((ms ?? []) as MeasuredAudit[]).filter((m) => m.id !== pointer)];
   /* Per audit, its latest `baseline_target_runs` complete/capped runs — the same rule the plan
      always used for one audit, applied to each. */
+  const perAudit = await Promise.all(audits.map((au) => service.from("ai_audit_runs").select("id")
+    .eq("audit_id", au.id).in("status", ["complete", "capped"])
+    .order("created_at", { ascending: false }).limit(Math.max(1, Number(au.baseline_target_runs ?? 1)))));
   const runIds: string[] = [];
-  for (const au of audits) {
-    const { data: runs } = await service.from("ai_audit_runs").select("id")
-      .eq("audit_id", au.id).in("status", ["complete", "capped"])
-      .order("created_at", { ascending: false }).limit(Math.max(1, Number(au.baseline_target_runs ?? 1)));
-    runIds.push(...((runs ?? []) as Array<{ id: string }>).map((r) => String(r.id)));
-  }
+  for (const { data: runs } of perAudit) runIds.push(...((runs ?? []) as Array<{ id: string }>).map((r) => String(r.id)));
   return { anchor: a as MeasuredAudit, audits, runIds };
 }
 
@@ -266,19 +269,14 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) return json({ ok: false, error: "unauthorized" }, 401);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: u } = await userClient.auth.getUser();
-    if (!u?.user) return json({ ok: false, error: "unauthorized" }, 401);
-    const userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    /* ⛔ ADMIN ONLY (2026-09-27, multi-user): client pages are delivery work. */
+    /* ⛔ ADMIN ONLY (2026-09-27, multi-user): client pages are delivery work.
+       ⚡ ONE sign-in check (2026-09-27, site-wide speed pass): requireAdmin verifies the token with
+       the auth service AND reads the role; the handler used to call getUser itself first. */
     const gate = await requireAdmin(req, service);
     if (!gate.ok) return json(refusalBody(gate), gate.status);
+    const userId = gate.actor.id;
     const body = await req.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "";
 
@@ -286,20 +284,23 @@ Deno.serve(async (req) => {
        self-contained so the service+area path below is untouched. ═════════════════════════════ */
     const AUDIT_ACTIONS = ["qa_clients", "qa_plan", "qa_generate", "plan_build", "plan_get", "plan_update"];
     if (AUDIT_ACTIONS.includes(action)) {
-      const { data: auds } = await service
-        .from("ai_audits")
-        .select("id, lead_id, business_name, business_type, business_scope, location_text, baseline_target_runs, created_at")
-        .gt("baseline_target_runs", 1)
-        .eq("user_id", userId)
-        .neq("is_market", true)
-        .order("created_at", { ascending: false });
+      /* ⚡ The audits and the pointers are independent — read together (2026-09-27). */
+      const [{ data: auds }, { data: pointed }] = await Promise.all([
+        service
+          .from("ai_audits")
+          .select("id, lead_id, business_name, business_type, business_scope, location_text, baseline_target_runs, created_at")
+          .gt("baseline_target_runs", 1)
+          .eq("user_id", userId)
+          .neq("is_market", true)
+          .order("created_at", { ascending: false }),
+        service.from("outreach_leads").select("id, baseline_audit_id")
+          .eq("user_id", userId).not("baseline_audit_id", "is", null),
+      ]);
       const audits = (auds ?? []) as Array<{ id: string; lead_id: string | null; business_name: string; business_type: string | null; business_scope: string | null; location_text: string | null; baseline_target_runs: number; created_at: string }>;
 
       /* Leads with a RECORDED baseline: for those, the pointer's audit is THE client entry and the
          newer full measure is not offered as a separate "client" — it is folded in by
          measuredSetForLead when the pointer is chosen. Lead-less audits (Solene) keep the old rule. */
-      const { data: pointed } = await service.from("outreach_leads").select("id, baseline_audit_id")
-        .eq("user_id", userId).not("baseline_audit_id", "is", null);
       const pointerByLead = new Map<string, string>(((pointed ?? []) as Array<{ id: string; baseline_audit_id: string }>).map((l) => [l.id, l.baseline_audit_id]));
 
       if (action === "qa_clients") {
@@ -823,15 +824,15 @@ Deno.serve(async (req) => {
     /* ── THE CLIENTS: leads with a RECORDED baseline — outreach_leads.baseline_audit_id. ────
        Not "leads with a multi-run audit": since 2026-09-12 a client has a baseline (the judged
        set) AND a full measure (the winnability read), and only the pointer says which is which. */
-    const { data: pointedLeads } = await service
-      .from("outreach_leads")
-      .select("id, business_name, baseline_audit_id")
-      .eq("user_id", userId)
-      .not("baseline_audit_id", "is", null)
-      .eq("is_archived", false);
-    const pointed = (pointedLeads ?? []) as Array<{ id: string; business_name: string | null; baseline_audit_id: string }>;
-
     if (action === "clients") {
+      /* ⚡ Read only here (2026-09-27): every other action below read this list and never used it. */
+      const { data: pointedLeads } = await service
+        .from("outreach_leads")
+        .select("id, business_name, baseline_audit_id")
+        .eq("user_id", userId)
+        .not("baseline_audit_id", "is", null)
+        .eq("is_archived", false);
+      const pointed = (pointedLeads ?? []) as Array<{ id: string; business_name: string | null; baseline_audit_id: string }>;
       const ids = pointed.map((l) => l.baseline_audit_id);
       const { data: pa } = ids.length
         ? await service.from("ai_audits").select("id, business_name, created_at").in("id", ids)
@@ -846,18 +847,26 @@ Deno.serve(async (req) => {
 
     const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
     if (!leadId) return json({ ok: false, error: "lead_id required" }, 400);
-    const measured = await measuredSetForLead(service, userId, leadId);
+    /* ⚡ The measured set, the questionnaire and the lead's contact row are independent — read
+       together (2026-09-27). The refusals below are checked in the same order as before. */
+    const [measured, { data: obRow }, { data: leadRow }] = await Promise.all([
+      measuredSetForLead(service, userId, leadId),
+      /* ── INPUT 1: the newest questionnaire row. ──────────────────────────────────────────── */
+      service
+        .from("onboarding_responses")
+        .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say, business_address, confirmed_phone, contact_name")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      service
+        .from("outreach_leads")
+        .select("phone, website, address")
+        .eq("id", leadId)
+        .maybeSingle(),
+    ]);
     if (!measured.anchor) return json({ ok: false, error: measured.reason }, 404);
     const audit = measured.anchor;
-
-    /* ── INPUT 1: the newest questionnaire row. ────────────────────────────────────────────── */
-    const { data: obRow } = await service
-      .from("onboarding_responses")
-      .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say, business_address, confirmed_phone, contact_name")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
     const ob = obRow as OnboardingRow | null;
     if (!ob) return json({ ok: false, error: "no_questionnaire_for_lead" }, 404);
     const services = Array.isArray(ob.services_list) ? ob.services_list : [];
@@ -871,11 +880,6 @@ Deno.serve(async (req) => {
        confirmed answer first, else the enriched lead phone. Address: the Google-formatted lead
        address first (cleaner), else the questionnaire's. Name for the CTA: contact_name, else the
        business name. NEVER invented — a missing field simply drops from the block. ─────────────── */
-    const { data: leadRow } = await service
-      .from("outreach_leads")
-      .select("phone, website, address")
-      .eq("id", leadId)
-      .maybeSingle();
     const lead = (leadRow ?? {}) as { phone: string | null; website: string | null; address: string | null };
     const phone = (ob.confirmed_phone ?? lead.phone ?? "").trim();
     const address = (lead.address ?? ob.business_address ?? "").trim();

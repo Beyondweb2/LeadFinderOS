@@ -23,6 +23,7 @@ import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
 import { isHookStateV2 } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
+import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
@@ -567,11 +568,20 @@ Deno.serve(async (req) => {
        "the cleaner hasn't run" (Kia Electrical, 2026-09-16; 19 runs / 15 leads found stuck). A fresh
        invoke clears the flaky omission nearly always. Bounded so a genuinely-unsalvageable run can't
        burn OpenAI for ever: attempts < RETRY_CAP, spaced ≥ RETRY_SPACING_MS apart, few per tick. */
+    /* ⚡ ONCE EVERY TWO MINUTES, NOT EVERY TICK (2026-09-27, Paul approved "every 2 minutes").
+       This sweep only touches runs ALREADY released as `complete` (the report is live) whose
+       cleaning stamp is still incomplete — the finaliser's own hold-and-retry above, which gates a
+       run's release, is untouched and still runs every tick. Its query filters every complete run of
+       the last 7 days on results->competitor_cleaning; on 2026-09-27 it matched 1 run of 158. Each
+       run is already retried at most every RETRY_CLEAN_SPACING_MS, so the only effect is that such a
+       retry can start up to two minutes later. See _shared/cleaning-sweep.ts. */
     let cleaningRetries = 0;
-    try {
-      cleaningRetries = await retryStuckCleanings(service);
-    } catch (e) {
-      console.error("[process-ai-audit-queue] cleaning retry sweep failed:", e instanceof Error ? e.message : String(e));
+    if (cleaningSweepDue(Date.now())) {
+      try {
+        cleaningRetries = await retryStuckCleanings(service);
+      } catch (e) {
+        console.error("[process-ai-audit-queue] cleaning retry sweep failed:", e instanceof Error ? e.message : String(e));
+      }
     }
 
     /* SEO STEP LAST. One scan per tick, after every question has been started, polled and
