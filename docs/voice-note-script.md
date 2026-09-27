@@ -73,3 +73,36 @@ doubles it. First script for a lead with no fresh research adds one gpt-4o-mini 
 - Regenerated RP Electrics, JG Electrics, Firebeard Electrical with the real model: all pass the
   checks, 119 / 124 / 126 words, recorded cost $0.0058 (1 call) / $0.0124 (2 calls) / $0.0060 (1 call).
 - Known: all three ended on nearly the same approved line.
+
+## Generator v3 — the short shape and the website-control ending (2026-09-27)
+
+Paul's brief: the notes were too long, read the audit query aloud, and ended on "i can explain what
+i'd change", which the quick check cannot back (it has no change plan). v3 (`VOICE_NOTE_GENERATOR_VERSION = 3`):
+
+- **Five beats, 30–45 s** (`VOICE_NOTE_TARGET_WORDS`): search context as trade + town + engine only →
+  "it came up with X, Y and Z, but you didn't come up" → "i had a look at what might be holding you
+  back, and" + ONE finding → "i actually specialise in AI visibility for local businesses" → the CTA.
+- **The CTA establishes who controls the website** (`voiceNoteCtaKind` / `voiceNoteCtaInstruction` /
+  `asksWebsiteControl`): own site → "do you own and control the website yourself, or is it managed by
+  an agency?"; a directory/social profile → "have you got a website of your own as well, or is TradeHQ
+  basically what you're using?" (asking a profile-only lead "do you own the website?" is a problem);
+  no website → "have you got a website at the moment?". The old change-plan ending is a problem.
+- **Query qualifiers** (`narratesSearchQualifiers`): three consecutive words from after the town in
+  the audit question = narrating it. One colouring word before the town ("emergency") is allowed.
+- **"i looked into why Google AI recommended them"** is a causation claim.
+- Fixed in passing: "nothing's obviously broken" was being read as a broken-pages claim (`nothings`).
+- **The pick follows the card**: `selectVoiceNoteEvidence(…, score.hook)` uses the Inbox card's /
+  report's / Call Script's best missed search whenever it has two usable names; otherwise the old
+  order, with an operator note naming the search used instead.
+- **Out-of-date scripts**: `latest` now also runs `loadHookEvidence` (DB reads only) and returns
+  `current` + `stale` (`voiceNoteBasisIsCurrent`: same audit + question + engine). The panel shows
+  VOICE NOTE OUT OF DATE, greys the old script and offers "Regenerate using latest audit"; nothing
+  regenerates on its own. A v2 script on a current basis gets a softer "older style" note.
+- Firebeard regression (live data, read-only, 2026-09-27): 33% (2/6), ChatGPT 1/3, Google AI 1/3;
+  pick = Google AI, "emergency electrician in Shrewsbury UK who can come today", Whitfield Plumbing,
+  Heating & Air Conditioning / JCE & SONS LTD / 24/7 Electrical Services Shrewsbury — identical to the
+  card; TradeHQ → profile CTA; both saved scripts (audit 1637cfa2) detected as out of date against
+  ebd2fea2. No v3 script was generated in this session (needs Paul's click; costs a model call).
+
+The Inbox AI visibility details were redesigned in the same change: see `docs/cold-call-playbook.md`
+for the shared website-issues selector (`selectFindings(…, max)` now returns a `status`).

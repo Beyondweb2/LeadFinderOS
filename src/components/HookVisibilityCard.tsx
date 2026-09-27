@@ -1,5 +1,6 @@
 import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { HookVisibilityView, type HookRunNewProps } from '@/components/HookVisibilityView';
+import { HookWebsiteIssues } from '@/components/HookWebsiteIssues';
 
 export { HookVisibilityView } from '@/components/HookVisibilityView';
 
@@ -21,6 +22,7 @@ export function HookVisibilityCard({ leadId, onRunNew, runNewBusy }: { leadId: s
       runNewBusy={runNewBusy}
       onRefresh={() => { void q.refetch(); }}
       refreshing={q.isFetching}
+      issues={<HookWebsiteIssues leadId={leadId} />}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { HOOK_ALL_NAMED_REASON, HOOK_SCORE_QUESTIONS, HOOK_ENGINES, isHookStateV2, type HookResult, type HookScore } from '@/lib/hookScore';
 import type { HookCardScore, HookReportLink, HookReportState } from '@/lib/hookVisibility';
@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils';
    🔴 COMPACT BY DEFAULT (Paul, 2026-09-26: "far too large and takes over the conversation"). The
    conversation is the Inbox's primary content. Collapsed, the card is a glance: the percentage and
    count, the engine split, the best missed search, and the report action. Everything else (the
-   hook's competitors, the other misses, the named searches, the six results) sits behind "View
-   details", in a height-capped panel that floats OVER the conversation (2026-09-27) and scrolls on
+   best missed search with its own competitors, all six results as NAMED / NOT NAMED, and the website /
+   online-presence issues) sits behind "View details", in a height-capped panel that floats OVER the conversation (2026-09-27) and scrolls on
    its own, so opening it never pushes the thread down.
 
    ⛔ NO PERCENTAGE UNTIL COMPLETE. A running check shows progress ("Checking AI results 2/6"). A
@@ -121,75 +121,113 @@ function ReportAction({ report, legacy, onRefresh, refreshing }: { report: HookR
 
 /* ── Details (only after "View details") ─────────────────────────────────────────────────────── */
 
-function statusText(r: HookResult): string {
-  return r.status === 'named' ? 'Named' : r.status === 'not_named' ? 'Not named' : r.status === 'failed' ? 'Failed (not counted)' : 'Waiting';
+/* 🔴 THE DETAILS ANSWER ONE QUESTION: DID THE BUSINESS GET NAMED? (Paul, 2026-09-27). The grouped
+   layout ("selected search / other Google AI misses / other ChatGPT misses / named searches") made
+   Paul rebuild the audit in his head. Now every question gets one row with each engine's result as an
+   explicit word: NAMED in green, NOT NAMED in red. Never a tick, a cross or a count standing in for
+   the word. The best missed search sits above as one inseparable tuple (question + engine + answer +
+   that answer's own competitors). */
+
+/** The competitors a voice note or card may quote from one answer. The Call Script's opening count. */
+const NAMED_INSTEAD_MAX = 3;
+
+export function hookStatusWord(status: HookResult['status']): string {
+  return status === 'named' ? 'NAMED' : status === 'not_named' ? 'NOT NAMED' : status === 'failed' ? 'FAILED (not counted)' : 'WAITING';
 }
-function statusClass(r: HookResult): string {
-  return r.status === 'named' ? 'text-green-600 dark:text-green-400' : r.status === 'not_named' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground';
+function statusPillClass(status: HookResult['status']): string {
+  return status === 'named'
+    ? 'border-green-600/50 bg-green-600/15 text-green-700 dark:text-green-400'
+    : status === 'not_named'
+      ? 'border-red-600/50 bg-red-600/15 text-red-700 dark:text-red-400'
+      : 'border-border bg-muted text-muted-foreground';
 }
 
-function Details({ score, rivalsWithheld, legacy }: { score: HookScore; rivalsWithheld: boolean; legacy: boolean }) {
-  const [showAll, setShowAll] = useState(false);
-  const hookKey = score.hook ? `${score.hook.questionIndex}:${score.hook.engine}` : null;
-  const otherMisses = score.misses.filter((m) => `${m.questionIndex}:${m.engine}` !== hookKey);
-  // Google AI misses first, then ChatGPT: the order the hook is picked in.
-  const missGroups = ['gemini', 'chatgpt']
-    .map((engine) => ({ engine, label: score.perEngine.find((t) => t.engine === engine)?.label ?? engine, items: otherMisses.filter((m) => m.engine === engine) }))
-    .filter((g) => score.perEngine.some((t) => t.engine === g.engine));
-  const named = score.results.filter((r) => r.status === 'named');
+function StatusPill({ r, best }: { r: HookResult; best: boolean }) {
+  return (
+    <span
+      className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] leading-none', statusPillClass(r.status), best && 'ring-2 ring-red-600/60 ring-offset-1 ring-offset-popover')}
+      data-testid="hook-result-pill"
+      data-status={r.status}
+      title={best ? 'Best missed search' : undefined}
+    >
+      <span className="font-medium">{r.label}</span>
+      <span className="font-bold tracking-wide">{hookStatusWord(r.status)}</span>
+    </span>
+  );
+}
+
+function NamedInstead({ names, rivalsWithheld }: { names: string[]; rivalsWithheld: boolean }) {
+  if (rivalsWithheld) return <span className="italic text-muted-foreground">names withheld (this run’s competitor list failed cleaning)</span>;
+  if (!names.length) return <span className="italic text-muted-foreground">no competitor names extracted for this answer</span>;
+  return <span className="font-medium">{names.slice(0, NAMED_INSTEAD_MAX).join(', ')}</span>;
+}
+
+function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; rivalsWithheld: boolean; legacy: boolean; issues?: ReactNode }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [openQuestion, setOpenQuestion] = useState<number | null>(null);
+  const hook = score.hook;
+  const isBest = (r: HookResult) => !!hook && r.questionIndex === hook.questionIndex && r.engine === hook.engine;
+  // One row per question, in the order asked; each row carries that question's own cells only.
+  const questions = [...new Set(score.results.map((r) => r.questionIndex))].sort((a, b) => a - b)
+    .map((qi) => ({ qi, cells: score.results.filter((r) => r.questionIndex === qi) }));
   return (
     <div className="absolute inset-x-2 top-full z-30 mt-1 max-h-[40vh] space-y-2.5 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-lg" data-testid="hook-visibility-details">
-      {score.hook && (
-        <div>
-          <div className={EYEBROW}>Selected outreach search</div>
-          <p className="mt-0.5 break-words font-medium">“{score.hook.question}”</p>
-          <p className="mt-0.5"><span className="font-semibold">{score.hook.label}</span><span className="text-amber-700 dark:text-amber-400"> · Not named</span></p>
-          <p className="mt-0.5 break-words">
-            <span className="text-muted-foreground">{score.hook.label} named instead: </span>
-            {rivalsWithheld
-              ? <span className="italic text-muted-foreground">names withheld (this run’s competitor list failed cleaning)</span>
-              : score.hook.competitors.length
-                ? score.hook.competitors.slice(0, 5).join(', ')
-                : <span className="italic text-muted-foreground">no competitor names extracted for this answer</span>}
+      {hook && (
+        <div className="rounded-md border border-red-600/30 bg-red-600/5 p-2" data-testid="hook-best-missed">
+          <div className={EYEBROW}>Best missed search</div>
+          <p className="mt-0.5 break-words font-medium">“{hook.question}”</p>
+          <p className="mt-1 flex flex-wrap items-center gap-1.5">
+            <StatusPill r={{ ...hook, status: 'not_named' }} best={false} />
           </p>
+          <p className="mt-1 break-words">
+            <span className={cn(EYEBROW, 'mr-1')}>Named instead</span>
+            <NamedInstead names={hook.competitors} rivalsWithheld={rivalsWithheld} />
+          </p>
+          {hook.answerExcerpt && (
+            <>
+              <button type="button" onClick={() => setShowAnswer((v) => !v)} className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+                {showAnswer ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />} {hook.label}’s answer
+              </button>
+              {showAnswer && <p className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{hook.answerExcerpt}</p>}
+            </>
+          )}
         </div>
       )}
-      {score.complete && !score.allNamed && missGroups.map((g) => (
-        <div key={g.engine}>
-          <div className={EYEBROW}>Other {g.label} misses</div>
-          {g.items.length === 0
-            ? <p className="text-muted-foreground">None.</p>
-            : <ul className="ml-4 list-disc space-y-0.5">{g.items.map((m) => <li key={m.questionIndex} className="break-words">{m.question}</li>)}</ul>}
-        </div>
-      ))}
-      <div>
-        <div className={EYEBROW}>Named searches</div>
-        {named.length === 0
-          ? <p className="text-muted-foreground">Not named in any valid result.</p>
-          : <ul className="ml-4 list-disc space-y-0.5">{named.map((r) => <li key={`${r.questionIndex}:${r.engine}`} className="break-words">{r.question} <span className="text-muted-foreground">· {r.label}</span></li>)}</ul>}
-      </div>
-      <div>
-        <button type="button" onClick={() => setShowAll((v) => !v)} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
-          {showAll ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          All {score.expected} {legacy ? 'results in this older check' : 'results'}
-        </button>
-        {showAll && (
-          <ul className="mt-1.5 space-y-1.5">
-            {score.results.map((r) => (
-              <li key={`${r.questionIndex}:${r.engine}`} className="rounded border border-border bg-background p-1.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                  <span className="min-w-0 break-words font-medium">{r.question}</span>
-                  <span className={cn('whitespace-nowrap', statusClass(r))}>{r.label} · {statusText(r)}</span>
-                </div>
-                {r.status === 'not_named' && r.competitors.length > 0 && !rivalsWithheld && (
-                  <p className="mt-0.5 break-words text-muted-foreground">Named: {r.competitors.slice(0, 5).join(', ')}</p>
+
+      <div data-testid="hook-results-grid">
+        <div className={EYEBROW}>{legacy ? `All ${score.expected} results in this older check` : `All ${score.expected} results`}</div>
+        <ul className="mt-1 divide-y divide-border rounded border border-border bg-background">
+          {questions.map(({ qi, cells }) => {
+            const open = openQuestion === qi;
+            return (
+              <li key={qi} className="p-1.5" data-testid="hook-question-row">
+                <button type="button" onClick={() => setOpenQuestion(open ? null : qi)} className="flex w-full flex-col gap-1 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-2" aria-expanded={open}>
+                  <span className="min-w-0">
+                    <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Q{qi + 1}</span>
+                    <span className={cn('break-words', !open && 'line-clamp-1')} title={cells[0]?.question}>{cells[0]?.question}</span>
+                  </span>
+                  <span className="flex shrink-0 flex-wrap gap-1">{cells.map((r) => <StatusPill key={r.engine} r={r} best={isBest(r)} />)}</span>
+                </button>
+                {open && (
+                  <div className="mt-1 space-y-1.5 border-t border-border pt-1.5">
+                    {cells.map((r) => (
+                      <div key={r.engine}>
+                        <p className="font-semibold">{r.label} <span className={cn('font-bold', r.status === 'named' ? 'text-green-700 dark:text-green-400' : r.status === 'not_named' ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground')}>{hookStatusWord(r.status)}</span></p>
+                        {r.status === 'not_named' && (
+                          <p className="break-words"><span className="text-muted-foreground">Named instead: </span><NamedInstead names={r.competitors} rivalsWithheld={rivalsWithheld} /></p>
+                        )}
+                        {r.answerExcerpt && <p className="line-clamp-4 break-words text-muted-foreground">{r.answerExcerpt}</p>}
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {r.answerExcerpt && <p className="mt-0.5 line-clamp-3 break-words text-muted-foreground">{r.answerExcerpt}</p>}
               </li>
-            ))}
-          </ul>
-        )}
+            );
+          })}
+        </ul>
       </div>
+
+      {issues}
     </div>
   );
 }
@@ -197,7 +235,7 @@ function Details({ score, rivalsWithheld, legacy }: { score: HookScore; rivalsWi
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
-export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false }: {
+export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues }: {
   card: HookCardScore | null;
   inFlight: boolean;
   state: unknown;
@@ -206,6 +244,9 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   refreshing?: boolean;
   /** Tests and the QA harness only. The Inbox always starts collapsed. */
   defaultExpanded?: boolean;
+  /** The website / online-presence findings block, rendered inside the details (mounted only when they
+   *  are open, so its read runs only then). HookVisibilityCard passes HookWebsiteIssues. */
+  issues?: ReactNode;
 } & HookRunNewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -317,7 +358,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
           <p className="mt-1 line-clamp-2 break-words text-xs" data-testid="hook-best-miss" title={score.hook.question}>
             <span className="text-muted-foreground">Best missed search: </span>
             <span className="font-medium">“{score.hook.question}”</span>{' '}
-            <span className="whitespace-nowrap"><span className="font-semibold">{score.hook.label}</span><span className="text-amber-700 dark:text-amber-400"> · Not named</span></span>
+            <span className="whitespace-nowrap"><span className="font-semibold">{score.hook.label}</span> <span className="font-bold text-red-700 dark:text-red-400">NOT NAMED</span></span>
           </p>
         ) : null
       )}
@@ -342,7 +383,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
       {expanded && (
         <>
           <button type="button" aria-label="Close details" className="fixed inset-0 z-20 cursor-default" onClick={() => setExpanded(false)} />
-          <Details score={score} rivalsWithheld={rivalsWithheld} legacy={legacy} />
+          <Details score={score} rivalsWithheld={rivalsWithheld} legacy={legacy} issues={issues} />
         </>
       )}
     </div>

@@ -365,14 +365,21 @@ function isOnlyHomepage(urls: string[], homeUrl: string): boolean {
   return urls.length > 0 && !!home && urls.every((u) => pageKey(u) === home || !pageKey(u).includes('/'));
 }
 
-interface FindingsOutcome {
+/** Why the findings list is what it is. Lets another surface (the Inbox AI visibility details) word
+ *  the empty cases itself without parsing the playbook's operator note. */
+export type FindingsStatus = 'findings' | 'no_website' | 'profile' | 'not_crawled' | 'crawl_stale' | 'unreadable' | 'clean';
+
+export interface FindingsOutcome {
+  status: FindingsStatus;
   findings: PlaybookFinding[];
   note: string | null;
   crawlAtMs: number | null;
   crawlStale: boolean;
 }
 
-export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs'>): FindingsOutcome {
+/** @param max how many findings to return — the playbook's MAX_SITE_FINDINGS by default; the Inbox
+ *        details ask for all of them and show the first few (2026-09-27). */
+export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' | 'leadCrawl' | 'nowMs'>, max: number = MAX_SITE_FINDINGS): FindingsOutcome {
   const hasWebsite = !!clean(input.lead.website);
   const all = [...input.runCrawls, ...(input.leadCrawl ? [input.leadCrawl] : [])].filter((s) => s.result);
   const newestMs = all.length ? Math.max(...all.map((s) => s.createdAtMs)) : null;
@@ -380,7 +387,7 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
 
   if (!hasWebsite) {
     return {
-      findings: [], crawlAtMs: newestMs, crawlStale,
+      status: 'no_website', findings: [], crawlAtMs: newestMs, crawlStale,
       note: 'No website on file, so there is nothing to crawl. In everything we have measured, Google AI has not named a business without a website of its own — that is the conversation to have.',
     };
   }
@@ -389,13 +396,13 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
   const kind = classifyLeadWebsite(input.lead.website);
   if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
     return {
-      findings: [], crawlAtMs: newestMs, crawlStale,
+      status: 'profile', findings: [], crawlAtMs: newestMs, crawlStale,
       note: 'No standalone business website found, only a ' + kind.label + ' profile. Never call it their website.',
     };
   }
   const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
   if (found) {
-    const findings = found.candidates.slice(0, MAX_SITE_FINDINGS).map((f) => {
+    const findings = found.candidates.slice(0, max).map((f) => {
       /* ⛔ THE THIN PAGE IS SOMETIMES THE HOMEPAGE. siteFindings.ts says "one of the service pages";
          read aloud on a call next to proof that is the homepage URL, that is a false statement to
          the owner (The Royal Locksmiths, 2026-09-23: the only thin page was the homepage). Said as
@@ -417,19 +424,19 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
         proof: proofFor(f, found.signals, found.evidence),
       };
     });
-    return { findings, note: null, crawlAtMs: found.source.createdAtMs, crawlStale: false };
+    return { status: 'findings', findings, note: null, crawlAtMs: found.source.createdAtMs, crawlStale: false };
   }
   if (newestMs === null) {
-    return { findings: [], crawlAtMs: null, crawlStale: false, note: 'This site has not been crawled yet, so there are no website findings. (Opening the playbook never runs a crawl — use Crawl site if you want one.)' };
+    return { status: 'not_crawled', findings: [], crawlAtMs: null, crawlStale: false, note: 'This site has not been crawled yet, so there are no website findings. (Opening the playbook never runs a crawl — use Crawl site if you want one.)' };
   }
   if (crawlStale) {
-    return { findings: [], crawlAtMs: newestMs, crawlStale, note: 'The newest crawl is more than 30 days old, so its findings are not used — the site may have changed.' };
+    return { status: 'crawl_stale', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The newest crawl is more than 30 days old, so its findings are not used — the site may have changed.' };
   }
   const usable = all.map((s) => usableCrawlSignals(s.result, s.createdAtMs)).find((s) => !!s);
   if (usable?.fetchFailed) {
-    return { findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl could not read the site at all, so there is nothing reliable to say about it.' };
+    return { status: 'unreadable', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl could not read the site at all, so there is nothing reliable to say about it.' };
   }
-  return { findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl found no strong website issues. Do not lead with the website on this call.' };
+  return { status: 'clean', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The crawl found no strong website issues. Do not lead with the website on this call.' };
 }
 
 /* ── WhatsApp history ─────────────────────────────────────────────────────────────────────────── */

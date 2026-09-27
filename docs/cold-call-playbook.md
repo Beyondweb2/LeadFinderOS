@@ -53,3 +53,14 @@ Copy report link.
   earlier audit than the AI opportunity above.
 - Inbox AI visibility "View details" floats over the thread (capped at 40vh, closes on outside click)
   instead of pushing the conversation down.
+
+## Shared with the Inbox AI visibility details (2026-09-27)
+
+`selectFindings` now takes an optional `max` and returns a `status` (`findings` / `no_website` /
+`profile` / `not_crawled` / `crawl_stale` / `unreadable` / `clean`). The Inbox details' "Website issues
+found" / "Online presence issues found" block (`src/components/HookWebsiteIssues*.tsx`,
+`src/hooks/useLeadWebsiteIssues.ts`) reads the same three sources through it, read-only and only while
+the details are open, so the Inbox and the Call Script can never name different website issues. Only
+`clean` may say "No strong website issues found in this check."; a never-crawled site says so.
+The details themselves now show each question with each engine as NAMED (green) / NOT NAMED (red),
+under the best missed search (question + engine + that answer's own ≤3 competitors + its answer).
