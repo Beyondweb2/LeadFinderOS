@@ -71,7 +71,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "selected_o
    read 2026-09-22a over new bytes — exactly the lie this marker exists to prevent. Bumped in the
    follow-up so the live header proves what is running.
    (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
-const BUILD_ID = "2026-09-25a";
+const BUILD_ID = "2026-09-27a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

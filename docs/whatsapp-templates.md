@@ -660,3 +660,10 @@ the misses while the send / report / Call Script used the gap the audit stored (
 Manchester: Q3 vs Q1). `scoreHookRun`'s pick for a v1 hook is now its stored gap. The voice note now
 uses the card's result whenever that answer has any usable name (JB Electrical Maidstone had one).
 Live probe after the fix: 0 disagreements between card, send and voice note across 115 leads.
+
+**Same day, Paul's approval:** `audit_followup` may carry a hook from either engine despite its
+"I asked chatgpt" wording. `TEMPLATE_ENGINE_CLAIM_WAIVED` (src/lib/rivalHook.ts) waives the
+`hook_engine_mismatch` refusal for that template only; the claim stays recorded in
+`TEMPLATE_SINGLE_ENGINE_CLAIM` and a new single-engine body is still refused unless added by name.
+Competitors, 6/6, no-competitor, duplicate (`pitchEverSent`) and dry-run pre-check are unchanged.
+Live read-only check: 0 of 115 replied leads refused for engine wording (38 before).

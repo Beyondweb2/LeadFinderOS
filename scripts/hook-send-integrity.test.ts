@@ -9,7 +9,7 @@ import { HOOK_ENGINE_LABELS, HOOK_SCORE_QUESTIONS, initialHookStateV2, scoreHook
 import { buildHookReportSummary, hookReportCopy } from '../src/lib/hookAudit.ts';
 import { buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
-import { TEMPLATE_SINGLE_ENGINE_CLAIM, templateEngineConflict } from '../src/lib/rivalHook.ts';
+import { TEMPLATE_ENGINE_CLAIM_WAIVED, TEMPLATE_SINGLE_ENGINE_CLAIM, templateEngineConflict } from '../src/lib/rivalHook.ts';
 import { HOOK_INCOMPLETE_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
 import { autoMarkSixOfSixNotInterested } from '../supabase/functions/_shared/hook-not-interested.ts';
 import { WA_TEMPLATES, renderTemplateBody, templateBodyParams } from '../supabase/functions/_shared/whatsapp-send.ts';
@@ -96,9 +96,9 @@ await (async () => {
       const body = renderTemplateBody('competitor_hook', v.business, v.link, v.trade, v.competitors);
       ok(body.includes('Switch Electrical, Socket Solutions and Mains Men'), 'A: the rendered transcript names the same three');
     }
-    // A single-engine body cannot carry a Google AI hook's names.
+    // Paul's approval (2026-09-27): audit_followup may carry a Google AI hook; its names are still THIS cell's.
     const f = await resolveAuditReplyVars(fakeService({ hookState: state, qrows: rows(grid) }), 'lead-1', { templateName: 'audit_followup' });
-    ok(!f.ok && f.reason.startsWith('hook_engine_mismatch'), 'A: audit_followup ("I asked chatgpt") is refused for a Google AI hook, never misattributed');
+    ok(f.ok && f.hookEngine === 'gemini' && JSON.stringify(f.rivals) === JSON.stringify(CELL_RIVALS['1:gemini']), 'A: audit_followup is allowed for a Google AI hook (approved), with exactly that cell\'s names');
   }
   /* B. ChatGPT fallback hook → that ChatGPT result's competitors */
   {
@@ -142,6 +142,10 @@ await (async () => {
   }
   ok(templateEngineConflict('competitor_hook', 'gemini') === null, 'competitor_hook ("ChatGPT and Gemini") can carry either engine\'s hook');
   ok(templateEngineConflict('audit_followup_call', 'gemini') === null, 'audit_followup_call ("i asked AI") can carry either engine\'s hook');
+  ok(templateEngineConflict('audit_followup', 'gemini') === null && templateEngineConflict('audit_followup', 'chatgpt') === null, 'audit_followup is waived for either engine (Paul, 2026-09-27)');
+  ok(TEMPLATE_ENGINE_CLAIM_WAIVED.size === 1 && TEMPLATE_ENGINE_CLAIM_WAIVED.has('audit_followup'), 'the waiver names audit_followup and nothing else');
+  ok(TEMPLATE_SINGLE_ENGINE_CLAIM.audit_followup === 'chatgpt', 'its body\'s claim is still recorded (the wording is unchanged)');
+  ok(templateEngineConflict('some_future_template', 'gemini') === null, 'a template that claims no engine never conflicts');
 }
 
 /* C. The planner returned two valid questions → a safe generic third is added. */
