@@ -317,7 +317,7 @@ export function useOutreach() {
     let activeError: { message?: string } | null = null;
     let archivedError: { message?: string } | null = null;
     try {
-      /* ⚡ Pages fetched four at a time, and active + archived together (2026-09-27): the six
+      /* ⚡ Pages fetched six at a time, and active + archived together (2026-09-27): the six
          sequential round trips were ~9 s of the Outreach page's load. Same rows, same order. */
       const [act, arc] = await Promise.allSettled([
         fetchAllRowsParallel<OutreachLead>('Outreach (active leads)', (from, to) => supabase

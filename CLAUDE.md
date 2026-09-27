@@ -332,7 +332,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   Never read a small key out of `results` in bulk — use `results_summary` / `results_crawl_check` /
   `gemini_answered` (`docs/inbox-outreach-speed.md`). A policy's `auth.uid()` goes in `(select …)`.
 - **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`; for a big
-  list use `fetchAllRowsParallel` (waves of 4, same rows, deduped by id). A
+  list use `fetchAllRowsParallel` (waves of 6, same rows, deduped by id). A
   `.in()` over many keys can hit the cap too; read the distinct set once and intersect in memory.
 - **`ai_audits` / `ai_audit_runs` are NOT in the `supabase_realtime` publication** (only `outreach_leads`,
   `whatsapp_messages`): a `postgres_changes` subscription on them never fires. Poll, or read the card's
