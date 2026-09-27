@@ -1,5 +1,5 @@
-/* The initial openers live in ONE leaf (src/lib/openerVariant.ts): both template names, the
-   selected-opener rule (no split since 2026-09-23) and the Meta approval switch. Imported here so the
+/* The initial openers live in ONE leaf (src/lib/openerVariant.ts): both template names and the Meta
+   approval switch (no split, no selected opener — both are ordinary choices since 2026-09-27). Imported here so the
    label states the approval — one constant, no second copy of the rule.
    ⚠️ This file is reached by NO edge function (check-import-graph --reached-by), so the import adds
    nothing to any edge closure. */
@@ -117,6 +117,8 @@ export interface OutreachLead {
    *  ⚠️ Optional: the column post-dates most rows, and leads are read with select('*'), so it is
    *  simply missing until the ALTER runs. Always read it through `productOf()`. */
   product?: string | null;
+  /** Multi-user: who works this lead (team member's user id). NULL = unassigned. */
+  assigned_to_user_id?: string | null;
   id: string;
   user_id: string;
   business_name: string;
@@ -508,9 +510,8 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
      ⚠️ SO THE OPERATOR IS WARNED IN THE ONE PLACE THEY CHOOSE. While pending, the label says so —
      which is the same bet every other template here took (competitor_hook, barber_fresha_booksy),
      except that this one says it out loud rather than leaving it to a comment in the source.
-     ⛔ THERE IS NO SPLIT (removed 2026-09-23). Only the SELECTED opener
-     (whatsapp_outreach_state.initial_opener_template) is sendable — every picker disables the other
-     through getTemplateSendability → openerSendability (src/lib/openerVariant.ts). */
+     ⛔ NO SPLIT AND NO SELECTED OPENER (2026-09-27): both approved openers are ordinary choices in
+     every picker; the operator picks one and that is what is sent (src/lib/openerVariant.ts). */
   {
     value: INITIAL_OPENER_B,
     label: INITIAL_OPENER_V2_APPROVED

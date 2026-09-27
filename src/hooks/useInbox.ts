@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
 import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
@@ -53,14 +54,26 @@ async function fetchOneInboxAudit(auditId: string): Promise<InboxData['audits'][
 
 /** Same columns `fetchInboxData`'s leads read selects, minus the `WHERE` filter — reused by the
  *  targeted single-lead refresh below so the two never drift apart. */
+/* ⛔ WHERE THE INBOX'S LEADS COME FROM (2026-09-27, one Inbox for both roles). The admin reads
+   outreach_leads as before. A salesperson reads the sales_leads VIEW — only leads assigned to them,
+   never a client, and `amount_paid` is a literal NULL there — so the conversation build below (which
+   drops any thread whose lead is not in this read) shows a salesperson exactly their own
+   conversations, and another rep's thread cannot be opened by changing an id in the URL: the lead is
+   not in the read, and the messages themselves are RLS-scoped to the rep's leads/phones. Every column
+   below exists in the view. */
+type InboxLeadTable = 'outreach_leads' | 'sales_leads';
+export function inboxLeadTableFor(role: string | null | undefined): InboxLeadTable {
+  return role === 'sales' ? 'sales_leads' : 'outreach_leads';
+}
+
 const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work';
 
 /** One lead row, freshly read by id — used to close the gap between an inbound reply's message
  *  (visible the instant its realtime INSERT lands) and its status flip to 'replied' (a second,
  *  sequential DB write in whatsapp-inbound.ts). Includes `is_archived` so patchInboxLead's own rule
  *  applies exactly as it does to the `outreach_leads` UPDATE subscription. */
-async function fetchOneInboxLead(leadId: string): Promise<(LeadLite & { is_archived?: boolean }) | null> {
-  const { data, error } = await sb.from('outreach_leads').select(`${LEAD_COLUMNS}, is_archived`).eq('id', leadId).maybeSingle();
+async function fetchOneInboxLead(leadId: string, leadTable: InboxLeadTable): Promise<(LeadLite & { is_archived?: boolean }) | null> {
+  const { data, error } = await sb.from(leadTable).select(`${LEAD_COLUMNS}, is_archived`).eq('id', leadId).maybeSingle();
   return error ? null : (data ?? null);
 }
 
@@ -188,7 +201,7 @@ const NO_PAGE_HITS: InboxData['pageHits'] = [];
 const NO_GEMINI: InboxData['geminiSignals'] = [];
 const NO_CRAWL: InboxData['crawlChecks'] = [];
 
-async function fetchInboxData(previous?: InboxData, essentialOnly = false): Promise<InboxData> {
+async function fetchInboxData(leadTable: InboxLeadTable, previous?: InboxData, essentialOnly = false): Promise<InboxData> {
   const [msgRes, leadRes, reportRes, hitRes, gemRes, crawlRes] = await Promise.all([
     /* Paginated, and with the id tiebreaker it never had: 3 groups of rows share a created_at, and
        on a non-unique sort a tied row can be fetched twice and another missed at a page boundary.
@@ -212,7 +225,7 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
        can be fetched twice and another missed at a page boundary — the same reasoning already
        written above the messages read. */
     fetchAllRowsParallel<LeadLite>('Inbox (leads)', (from, to) =>
-      sb.from('outreach_leads').select(LEAD_COLUMNS)
+      sb.from(leadTable).select(LEAD_COLUMNS)
         .eq('is_archived', false).not('phone', 'is', null)
         .order('id', { ascending: true }).range(from, to), (l) => l.id),
     // Per-lead audits + run statuses → the report-ready pill (/a/<auditId>, served live) + the
@@ -261,6 +274,8 @@ async function fetchInboxData(previous?: InboxData, essentialOnly = false): Prom
 
 export function useInbox() {
   const { user } = useAuth();
+  const { role } = useSubscription();
+  const leadTable = inboxLeadTableFor(role);
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => inboxQueryKey(user?.id), [user?.id]);
 
@@ -279,9 +294,9 @@ export function useInbox() {
     queryKey,
     queryFn: () => {
       loadStartedAtRef.current = Date.now();
-      return fetchInboxData(queryClient.getQueryData<InboxData>(queryKey));
+      return fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey));
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !!role,
   });
 
   /* A local status/flag patch (patchLeadStatus, patchLeadPotentialWork) is optimistic — applied
@@ -295,7 +310,7 @@ export function useInbox() {
   const pendingLeadPatchesRef = useRef(new Map<string, Partial<LeadLite>>());
 
   const reconcile = useCallback(async () => {
-    const fresh = await fetchInboxData(queryClient.getQueryData<InboxData>(queryKey), true);
+    const fresh = await fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey), true);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? {
           ...current,
@@ -304,7 +319,7 @@ export function useInbox() {
           audits: fresh.audits,
         }
       : fresh);
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, leadTable]);
 
   /* One audit id → a small single-row fetch → an idempotent patch of just that row. The targeted
      reaction to every event that can make a report newly usable, instead of invalidating (and
@@ -324,12 +339,12 @@ export function useInbox() {
      to close the gap before whatsapp-inbound.ts's own status-flip UPDATE broadcasts. */
   const patchOneLead = useCallback(async (leadId: string | undefined | null) => {
     if (!leadId) return;
-    const fresh = await fetchOneInboxLead(leadId);
+    const fresh = await fetchOneInboxLead(leadId, leadTable);
     if (!fresh) return;
     pendingLeadPatchesRef.current.delete(leadId);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? { ...current, leads: patchInboxLead(current.leads, fresh) } : current);
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, leadTable]);
 
   /* ⚡ THE FIRST CONNECT DOES NOT RELOAD EVERYTHING AGAIN (2026-09-27). The subscription usually
      comes up while the initial load is still running, and reconcile() then re-read every message,
@@ -342,7 +357,7 @@ export function useInbox() {
      full reconcile(), exactly as before. */
   const catchUpAfterFirstLoad = useCallback(async () => {
     try {
-      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(queryClient.getQueryData<InboxData>(queryKey)) });
+      await queryClient.ensureQueryData({ queryKey, queryFn: () => fetchInboxData(leadTable, queryClient.getQueryData<InboxData>(queryKey)) });
     } catch { return; }
     const since = new Date((loadStartedAtRef.current || Date.now()) - 60_000).toISOString();
     const [msgs, leadRows, audits] = await Promise.all([
@@ -350,7 +365,7 @@ export function useInbox() {
         sb.from('whatsapp_messages').select('*').gte('created_at', since)
           .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null),
       fetchAllRows<LeadLite & { is_archived?: boolean }>('Inbox (catch-up leads)', (from, to) =>
-        sb.from('outreach_leads').select(`${LEAD_COLUMNS}, is_archived`).gte('updated_at', since)
+        sb.from(leadTable).select(`${LEAD_COLUMNS}, is_archived`).gte('updated_at', since)
           .order('id', { ascending: true }).range(from, to)).catch(() => null),
       optionalInboxRows<InboxData['audits'][number]>(fetchAllRowsParallel<InboxData['audits'][number]>('Inbox (catch-up audits)', fetchInboxAudits, (a) => a.id)),
     ]);
@@ -368,7 +383,7 @@ export function useInbox() {
         audits: audits?.rows ?? current.audits,
       };
     });
-  }, [queryClient, queryKey]);
+  }, [queryClient, queryKey, leadTable]);
 
   /* Subscription only patches cache. It never calls the six-read loader on connect. */
   useEffect(() => {

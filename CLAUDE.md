@@ -28,9 +28,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (210 suites). **Honest green is 202/210 (2026-09-27, all eight also fail on untouched
+  (212 suites). **Honest green is 205/212 (2026-09-27, all seven also fail on untouched
   `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
-  Deno), `onboarding-audit-fields`, `initial-opener-select`, `manual-onboarding`, and
+  Deno), `onboarding-audit-fields`, `manual-onboarding`, and
   `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
   count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
@@ -49,6 +49,12 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   keeps `user_id` = the book owner; who WORKS a lead is `assigned_to_user_id`. A salesperson never
   reads `outreach_leads` (it holds Stripe/amount/refund/delivery columns) — only the `sales_leads`
   view and the role-checked SQL functions.
+  ⛔ **ONE workflow (Paul, 2026-09-27): Sales uses the SAME Outreach and Inbox** — never build a
+  SalesOutreach/SalesInbox or a second CRM (My Leads is deleted). Reads go through `leadSourceFor`;
+  a salesperson's writes go through `planSalesPatch` → the lead functions (a direct update from a sales
+  session is a SILENT 0-row success); what Sales cannot do is `leadPermissions` (`src/lib/access.ts`).
+  ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
+  what is stored and sent (`docs/whatsapp-templates.md`, last section).
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
@@ -669,7 +675,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
-| Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, pages `SalesHome`/`SalesLead`/`Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400`, view `sales_leads`, tables `team_members`/`lead_activity` |
+| Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, `LeadCrmPanel`, `AvailableToClaim`, `src/lib/leadRpc.ts` + `salesPatchPlan.ts`, pages `Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400` + `140000`, view `sales_leads`, tables `team_members`/`lead_activity` |
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |

@@ -123,8 +123,14 @@ const EMPTY_AUDIT_MAP: Record<string, LeadAuditState> = {};
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
-import { INITIAL_OPENERS, INITIAL_OPENER_LABELS, isInitialOpener, openerSelectable, openerSendability } from '@/lib/openerVariant';
-import { useSelectedOpener } from '@/hooks/useSelectedOpener';
+import { isInitialOpener } from '@/lib/openerVariant';
+import { getTemplateSendability } from '@/lib/whatsappTemplates';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { maySetStatus } from '@/lib/access';
+import { salesQueueOpener } from '@/lib/leadRpc';
+import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
+import { useTeamDirectory } from '@/hooks/useSalesCrm';
+import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage } from '@/hooks/useApifyUsage';
@@ -295,9 +301,14 @@ export function OutreachTable({
   onAssignCampaign,
 }: OutreachTableProps) {
   const { toast } = useToast();
-  /* The ONE selected initial opener (src/lib/openerVariant.ts). Undefined until read → no opener
-     can be queued (fail closed). */
-  const opener = useSelectedOpener();
+  /* ⛔ ONE TABLE, BOTH ROLES (2026-09-27). `perms` (src/lib/access.ts) hides only the admin, system,
+     enrichment and delivery controls from a salesperson; everything that works or closes a lead
+     stays. Presentation only — a salesperson's rows come from the sales_leads view and every change
+     they make goes through the ownership-checked lead functions (useOutreach → src/lib/leadRpc.ts). */
+  const perms = useLeadPermissions();
+  const team = useTeamDirectory();
+  /* An initial opener is refused only while Meta has not approved it — there is no selected opener. */
+  const openerBlocked = (t: string) => isInitialOpener(t) && !getTemplateSendability(t, { shareToken: null }, {}).ok;
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
@@ -665,8 +676,10 @@ export function OutreachTable({
     // Call has no dialog panel, so mark panel as closed immediately
     window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
     highlightLead(lead.id);
-    executeContact(lead, 'call');
-  }, [executeContact, onContactMethodChange]);
+    /* The attempt log writes the lead row directly — the admin's bookkeeping. A salesperson records
+       the call itself in the lead's CRM panel (Record a call). */
+    if (perms.editLeadRecord) executeContact(lead, 'call');
+  }, [executeContact, onContactMethodChange, perms.editLeadRecord]);
 
   // Launch-pad: when the parent passes a launchIntent (e.g. from Manage), open the
   // matching lead's composer FRESH with the chosen template + that barber's link.
@@ -1202,6 +1215,26 @@ export function OutreachTable({
     });
   };
 
+  const handleSalesQueue = async (template: string) => {
+    if (!isInitialOpener(template)) {
+      toast({ title: 'Not queued', description: 'Bulk initial outreach sends an approved opener. Other templates go from the Inbox conversation.', variant: 'destructive' });
+      return;
+    }
+    const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
+    const r = await salesQueueOpener(ids, template);
+    if (!r.ok) { toast({ title: 'Nothing queued', description: refusalText(r.error), variant: 'destructive' }); return; }
+    const skipped = Object.entries((r.skipped ?? {}) as Record<string, number>).map(([k, n]) => `${n} ${QUEUE_SKIP_LABEL[k] ?? k}`).join(' · ');
+    const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
+    toast({
+      title: `Queued ${r.queued ?? 0} for WhatsApp`,
+      description: `${tmplLabel}. ${skipped ? `Skipped: ${skipped}. ` : ''}Sends within the daily 7am–9:30pm UK window; the queue re-checks each one before it sends.`,
+      variant: r.queued ? undefined : 'destructive',
+    });
+    setSelectedIds(new Set());
+    setQueueDialogOpen(false);
+    onRefreshLeads?.();
+  };
+
   const handleQueueForWhatsApp = async (template: string) => {
     if (selectedIds.size === 0 || !onUpdateLead) return;
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
@@ -1211,11 +1244,13 @@ export function OutreachTable({
        opener path: that path's already_sent guard refuses any lead with prior WhatsApp — which every
        Contacted business has — and forces status→initial_contact on send. Route it separately. */
     if (template === 'contact_followup') { await handleQueueContactFollowup(); return; }
-    /* ⛔ ONLY THE SELECTED OPENER IS QUEUED, EXACTLY AS CHOSEN. No split, no substitute: an opener
-       that is not the selected one — or any opener while the selection is unknown — is refused here,
-       and nothing is queued in its place. */
-    const openerCheck = openerSendability(template, opener.selected);
-    if (!openerCheck.ok) { toast({ title: 'Initial template not queued', description: openerCheck.reason, variant: 'destructive' }); return; }
+    /* ⛔ THE TEMPLATE CHOSEN FOR THIS BATCH IS THE TEMPLATE QUEUED — either approved opener, exactly
+       as picked (no selected opener, no split, no substitute). Only a Meta-pending opener is refused. */
+    if (openerBlocked(template)) { toast({ title: 'Template not queued', description: 'This opener is waiting on Meta approval — a send would fail.', variant: 'destructive' }); return; }
+    /* A salesperson cannot write the lead rows: sales_queue_opener stores this template on each of
+       their never-contacted leads and queues it, with the same contact-history, UK-mobile, opt-out
+       and ownership checks — and reports every skip. */
+    if (!perms.queueControls) { await handleSalesQueue(template); return; }
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
@@ -1772,7 +1807,7 @@ export function OutreachTable({
                     Queue WhatsApp ({selectedIds.size})
                   </Button>
                 )}
-                {!readOnly && onBulkJob && (
+                {!readOnly && onBulkJob && perms.enrichLeads && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1785,7 +1820,7 @@ export function OutreachTable({
                     Enrich selected ({selectedIds.size})
                   </Button>
                 )}
-                {!readOnly && onBulkJob && (
+                {!readOnly && onBulkJob && perms.bulkAudits && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1800,7 +1835,7 @@ export function OutreachTable({
                 )}
                 {/* ── SET PRODUCT ON THE SELECTION ──────────────────────────────────────────
                     ⛔ WRITES A COLUMN, SENDS NOTHING. Deciding what to pitch is not pitching. */}
-                {!readOnly && onUpdateLead && (
+                {!readOnly && onUpdateLead && perms.product && (
                   <Select
                     value=""
                     onValueChange={(v) => {
@@ -1825,7 +1860,7 @@ export function OutreachTable({
                 )}
                 {/* Shown only when the selection actually contains repairable rows, so they do not
                     clutter the bar for the 846 leads that are fine. */}
-                {!readOnly && missingTownIds.length > 0 && (
+                {!readOnly && perms.enrichLeads && missingTownIds.length > 0 && (
                   <Button
                     variant="outline" size="sm" className="bg-background text-xs h-8"
                     title="Ask Google for the real town of the selected leads that have none. One address-only Place Details call each ($0.005) — the cheapest tier there is."
@@ -1835,7 +1870,7 @@ export function OutreachTable({
                     Fix missing town ({missingTownIds.length})
                   </Button>
                 )}
-                {!readOnly && onUpdateLead && missingTradeIds.length > 0 && (
+                {!readOnly && onUpdateLead && perms.enrichLeads && missingTradeIds.length > 0 && (
                   <Button
                     variant="outline" size="sm" className="bg-background text-xs h-8"
                     title="Set the trade on the selected leads that have none — they cannot be audited without one"
@@ -1872,7 +1907,7 @@ export function OutreachTable({
                         </SelectTrigger>
                         <SelectContent>
                           {OUTREACH_STATUS_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
+                            <SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>
                               {opt.label}
                             </SelectItem>
                           ))}
@@ -1903,7 +1938,7 @@ export function OutreachTable({
                       {/* Bulk "Move to campaign" — reuses CampaignPicker (assign mode,
                           which adds a "No campaign" option). Each pick fires one batched
                           write over the selection, skipping demo leads, then clears it. */}
-                      {onAssignCampaign && (
+                      {onAssignCampaign && perms.campaigns && (
                         <CampaignPicker
                           mode="assign"
                           value={null}
@@ -1920,10 +1955,10 @@ export function OutreachTable({
                     </>
                   )}
                   {/* Visual divider before the destructive cluster */}
-                  {!readOnly && (onDeleteSelected || onResetSelected || onResetToFreshSelected) && (
+                  {!readOnly && perms.removeLeads && (onDeleteSelected || onResetSelected || onResetToFreshSelected) && (
                     <div className="w-px h-6 bg-border mx-1 self-center" />
                   )}
-                  {onDeleteSelected && !readOnly && (
+                  {onDeleteSelected && !readOnly && perms.removeLeads && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -1935,7 +1970,7 @@ export function OutreachTable({
                       Remove
                     </Button>
                   )}
-                  {onResetSelected && !readOnly && (
+                  {onResetSelected && !readOnly && perms.removeLeads && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -1947,7 +1982,7 @@ export function OutreachTable({
                       Reset (re-addable)
                     </Button>
                   )}
-                  {onResetToFreshSelected && !readOnly && (
+                  {onResetToFreshSelected && !readOnly && perms.removeLeads && (
                     <AlertDialog open={resetFreshOpen} onOpenChange={setResetFreshOpen}>
                       <Button
                         variant="outline"
@@ -1983,7 +2018,7 @@ export function OutreachTable({
               {/* ⛔ OUTSIDE the selectedIds.size > 0 gate, deliberately: its whole job is to CREATE a
                   selection, so a control that only appears once you already have one is useless.
                   Sits with Export/Import, the other always-visible row-2 items. */}
-              {!readOnly && (
+              {!readOnly && perms.enrichLeads && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -2009,7 +2044,7 @@ export function OutreachTable({
               </Button>
               {/* Find emails — free website crawl (extract-email) over filtered leads
                   with a website and no email yet; writes to outreach_leads.email. */}
-              {!readOnly && onUpdateLead && (
+              {!readOnly && onUpdateLead && perms.enrichLeads && (
                 findingEmails ? (
                   <Button
                     variant="outline"
@@ -2056,7 +2091,7 @@ export function OutreachTable({
                     ⚠️ It is a CONVENIENCE, not the safety net. Every sender checks
                     _shared/suppression.ts at send time. Widening this can waste a crawl; it cannot
                     cause a message. */}
-              {!readOnly && onUpdateLead && !findingEmails && (
+              {!readOnly && onUpdateLead && perms.enrichLeads && !findingEmails && (
                 <details className="relative inline-block align-middle">
                     <summary className="cursor-pointer select-none text-[11px] text-muted-foreground hover:text-foreground">
                       targeting: {crawlStatuses.length} status{crawlStatuses.length === 1 ? '' : 'es'}
@@ -2094,7 +2129,7 @@ export function OutreachTable({
                 </details>
               )}
               {/* Import button */}
-              {!readOnly && onImportLeads && (
+              {!readOnly && onImportLeads && perms.importLeads && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -2401,9 +2436,9 @@ export function OutreachTable({
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
-                  onManageAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped') ? () => navigate(`/ai-audit?runId=${a.runId}`) : undefined; })()}
+                  onManageAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped') ? () => (perms.auditAdmin ? navigate(`/ai-audit?runId=${a.runId}`) : setDetailLead(lead)) : undefined; })()}
                   auditRunning={(() => { const a = auditsByLead[lead.id]; return !!a && (a.status === 'pending' || a.status === 'running'); })()}
-                  onRunAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped' || a.status === 'pending' || a.status === 'running') ? undefined : () => navigate(`/ai-audit?leadId=${lead.id}`); })()}
+                  onRunAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped' || a.status === 'pending' || a.status === 'running') ? undefined : () => (perms.auditAdmin ? navigate(`/ai-audit?leadId=${lead.id}`) : setDetailLead(lead)); })()}
                   
                 />
               ))
@@ -2485,6 +2520,14 @@ export function OutreachTable({
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0"><title>Interested</title></Star>
                           )}
+                          {lead.assigned_to_user_id && lead.assigned_to_user_id !== user?.id && (() => {
+                            const owner = team.byId.get(lead.assigned_to_user_id);
+                            return (
+                              <span className="inline-flex flex-shrink-0" title={`Owner: ${owner?.display_name ?? 'another team member'}`}>
+                                <OwnerAvatar name={owner?.display_name ?? '?'} avatarUrl={owner?.avatar_url} />
+                              </span>
+                            );
+                          })()}
                           {!!lead.notes && lead.notes.trim().length > 0 && (
                             <span title="Has a note" className="inline-flex flex-shrink-0">
                               <StickyNote className="h-3.5 w-3.5 text-muted-foreground/60" />
@@ -2618,10 +2661,10 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
-                          {onUpdateLead && !isDemoLead(lead.id) && (
+                          {onUpdateLead && perms.enrichLeads && !isDemoLead(lead.id) && (
                             <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
                           )}
-                          {!isDemoLead(lead.id) && (
+                          {perms.crawlSite && !isDemoLead(lead.id) && (
                             <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />
                           )}
                           {lead.phone ? (
@@ -2716,8 +2759,8 @@ export function OutreachTable({
                               return (
                                 <button
                                   className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
-                                  title="Manage audit"
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ai-audit?runId=${a.runId}`); }}
+                                  title={perms.auditAdmin ? 'Manage audit' : 'AI visibility check — open the result'}
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (perms.auditAdmin) navigate(`/ai-audit?runId=${a.runId}`); else setDetailLead(lead); }}
                                 >
                                   <ClipboardCheck className="h-4 w-4" />
                                 </button>
@@ -2738,8 +2781,8 @@ export function OutreachTable({
                             return (
                               <button
                                 className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 transition-colors"
-                                title="Run AI audit"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/ai-audit?leadId=${lead.id}`); }}
+                                title={perms.auditAdmin ? 'Run AI audit' : 'Run the AI visibility check (in the lead detail)'}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (perms.auditAdmin) navigate(`/ai-audit?leadId=${lead.id}`); else setDetailLead(lead); }}
                               >
                                 <ClipboardList className="h-4 w-4" />
                               </button>
@@ -3054,41 +3097,21 @@ export function OutreachTable({
           <DialogHeader>
             <DialogTitle className="text-base">Queue {selectedIds.size} for WhatsApp</DialogTitle>
             <DialogDescription className="text-xs">
-              Choose the approved template to send. It’s applied to all selected leads.
+              {perms.queueControls
+                ? 'Choose the approved template to send. It’s applied to all selected leads, and that exact template is sent.'
+                : 'Choose which approved opener this batch gets. Only your never-contacted leads are queued, and that exact template is sent.'}
             </DialogDescription>
           </DialogHeader>
-          {/* THE ONE CONTROL FOR THE INITIAL OPENER. Writes whatsapp_outreach_state.initial_opener_template
-              (sends nothing); only the selected opener can then be queued, in any picker. */}
-          <div className="space-y-1.5 rounded-md border p-2">
-            <label className="text-xs font-medium text-muted-foreground">Initial outreach template</label>
-            <Select value={opener.template ?? ''} disabled={opener.selected === undefined || opener.saving}
-              onValueChange={async (v) => {
-                try {
-                  await opener.setSelected(v);
-                  if (isInitialOpener(queueTemplate)) setQueueTemplate(v);
-                  toast({ title: 'Initial outreach template set', description: `New initial outreach uses ${INITIAL_OPENER_LABELS[v as keyof typeof INITIAL_OPENER_LABELS] ?? v}. Leads already queued keep their template. Nothing was sent.` });
-                } catch (e) { toast({ title: "Couldn't change the initial template", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' }); }
-              }}>
-              <SelectTrigger><SelectValue placeholder={opener.loading ? 'Loading…' : 'Unavailable'} /></SelectTrigger>
-              <SelectContent>
-                {INITIAL_OPENERS.map((o) => (
-                  <SelectItem key={o} value={o} disabled={!openerSelectable(o)}>{INITIAL_OPENER_LABELS[o]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {opener.problem && <p className="text-[11px] text-destructive">{opener.problem} No initial template can be queued until this is fixed.</p>}
-            {!opener.problem && opener.template && <p className="text-[11px] text-muted-foreground">Selected: {INITIAL_OPENER_LABELS[opener.template]}. Every new initial message uses this one — no split.</p>}
-          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
             <Select value={queueTemplate} onValueChange={setQueueTemplate}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
-                {WHATSAPP_TEMPLATES.map((t) => {
-                  const o = openerSendability(t.value, opener.selected);
+                {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value))).map((t) => {
+                  const blocked = openerBlocked(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={!o.ok}>
-                      <span className="flex flex-col"><span>{t.label}</span>{!o.ok && <span className="text-[10px] text-amber-600">{o.reason}</span>}</span>
+                    <SelectItem key={t.value} value={t.value} disabled={blocked}>
+                      <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}</span>
                     </SelectItem>
                   );
                 })}
@@ -3097,7 +3120,7 @@ export function OutreachTable({
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!queueTemplate || !openerSendability(queueTemplate, opener.selected).ok} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+            <Button size="sm" disabled={!queueTemplate || openerBlocked(queueTemplate)} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               Queue {selectedIds.size}
             </Button>

@@ -11,7 +11,7 @@
    bundler refuses outright while tsc and vite both resolve it happily (CLAUDE.md §3). */
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from './siteFindings.ts';
 import { STALE_OFFER_TEMPLATES } from './findableOffer.ts';
-import { openerSendability } from './openerVariant.ts';
+import { isInitialOpener, openerApproved } from './openerVariant.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    🔴 TEMPLATES THAT WERE RE-REGISTERED AT META UNDER A NEW NAME, AND THE HISTORY THAT CARRIES THE
@@ -204,14 +204,12 @@ export function getTemplateSendability(
   template: string,
   lead: SendabilityLead | null | undefined,
   audit?: SendabilityAudit | null,
-  /** The SELECTED initial opener (whatsapp_outreach_state.initial_opener_template, via the queue's
-   *  status). Undefined = not read yet: every opener is refused (fail closed). Non-openers ignore it. */
-  opts: { selectedOpener?: string | null } = {},
 ): Sendability {
-  /* ⛔ ONE OPENER AT A TIME. An initial opener other than the one Paul selected is not sendable from
-     any picker — no split, no fallback to the other (src/lib/openerVariant.ts). */
-  const opener = openerSendability(template, opts.selectedOpener);
-  if (!opener.ok) return opener;
+  /* Both initial openers are ordinary choices (src/lib/openerVariant.ts, 2026-09-27): there is no
+     global "selected opener" any more. An opener is refused only while Meta has not approved it. */
+  if (isInitialOpener(template) && !openerApproved(template)) {
+    return { ok: false, reason: 'Waiting on Meta approval — a send would fail.' };
+  }
   /* ⛔ THE APPROVAL GATE COMES FIRST, BEFORE EVERY OTHER REQUIREMENT. A template Meta has not
      approved cannot be sent to anyone for any reason, so asking "does this lead have an audit"
      first would let a lead who satisfies everything else look sendable one refactor away from

@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchAllRows } from '@/lib/fetchAllRows';
-import { useAuth } from '@/hooks/useAuth';
-import { isIdentityState, type IdentityState, type SalesLeadRow } from '@/lib/salesCrm';
+import { isIdentityState, type IdentityState } from '@/lib/salesCrm';
+import { leadRpc, salesQueueOpener, type RpcResult } from '@/lib/leadRpc';
 
 /* SALES CRM DATA (multi-user, 2026-09-27).
  *
@@ -18,80 +17,16 @@ import { isIdentityState, type IdentityState, type SalesLeadRow } from '@/lib/sa
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-export const SALES_LEAD_COLUMNS =
-  'id, business_name, phone, email, website, google_maps_url, address, category, status, next_action, next_action_date, ' +
-  'next_action_note, call_booked_at, created_at, updated_at, country, is_archived, place_id, whatsapp_sent_at, ' +
-  'whatsapp_delivery_status, whatsapp_template, queued_at, contact_name, search_keyword, search_location, derived_town, ' +
-  'rating, review_count, line_type, assigned_to_user_id, assigned_at, added_by_user_id, website_control, website_control_note';
-
-export interface SalesLead extends SalesLeadRow {
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-  google_maps_url: string | null;
-  address: string | null;
-  category: string | null;
-  country: string | null;
-  place_id: string | null;
-  whatsapp_delivery_status: string | null;
-  whatsapp_template: string | null;
-  queued_at: string | null;
-  contact_name: string | null;
-  search_keyword: string | null;
-  search_location: string | null;
-  derived_town: string | null;
-  rating: number | null;
-  review_count: number | null;
-  line_type: string | null;
-  assigned_to_user_id: string | null;
-  assigned_at: string | null;
-  added_by_user_id: string | null;
-  website_control: string | null;
-  website_control_note: string | null;
-}
-
 export interface TeamMember { user_id: string; display_name: string; role: 'admin' | 'sales' | null; status: string; avatar_url: string | null }
 export interface LeadActivity { id: string; lead_id: string; actor_user_id: string | null; kind: string; body: string | null; data: Record<string, unknown>; created_at: string }
 export interface PoolLead { id: string; business_name: string; trade: string | null; town: string | null; website: string | null; rating: number | null; review_count: number | null; has_phone: boolean; created_at: string }
 export interface IdentityHit { k: string; lead_id: string | null; state: IdentityState; owner_id: string | null; owner_name: string | null; added_at: string | null }
 
 export const salesKeys = {
-  myLeads: (uid: string | undefined) => ['sales', 'my-leads', uid] as const,
-  lead: (id: string | undefined) => ['sales', 'lead', id] as const,
   pool: (q: string, page: number) => ['sales', 'pool', q, page] as const,
   team: ['sales', 'team'] as const,
   activity: (leadId: string | undefined) => ['sales', 'activity', leadId] as const,
-  recent: (uid: string | undefined) => ['sales', 'recent', uid] as const,
 };
-
-/** The caller's leads (sales: assigned to them; admin: every prospect). Paginated past 1,000. */
-export function useMyLeads() {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: salesKeys.myLeads(user?.id),
-    enabled: !!user?.id,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { rows } = await fetchAllRows<SalesLead>('My leads', (from, to) =>
-        sb.from('sales_leads').select(SALES_LEAD_COLUMNS)
-          .eq('assigned_to_user_id', user!.id)
-          .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to));
-      return rows;
-    },
-  });
-}
-
-export function useSalesLead(leadId: string | undefined) {
-  return useQuery({
-    queryKey: salesKeys.lead(leadId),
-    enabled: !!leadId,
-    queryFn: async () => {
-      const { data, error } = await sb.from('sales_leads').select(SALES_LEAD_COLUMNS).eq('id', leadId).maybeSingle();
-      if (error) throw error;
-      return (data as SalesLead | null) ?? null;
-    },
-  });
-}
 
 export function useSalesPool(q: string, page: number, pageSize = 50) {
   return useQuery({
@@ -133,21 +68,6 @@ export function useLeadActivity(leadId: string | undefined) {
   });
 }
 
-/** The caller's own recent actions (RLS already limits the rows to leads they may work). */
-export function useRecentActivity(limit = 20) {
-  const { user } = useAuth();
-  return useQuery({
-    queryKey: salesKeys.recent(user?.id),
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await sb.from('lead_activity').select('id, lead_id, actor_user_id, kind, body, data, created_at')
-        .eq('actor_user_id', user!.id).order('created_at', { ascending: false }).limit(limit);
-      if (error) throw error;
-      return (data ?? []) as LeadActivity[];
-    },
-  });
-}
-
 /** Find Leads: the ownership state of up to 500 search results in one call. */
 export async function lookupIdentities(items: Array<{ k: string; place_id?: string | null; phone?: string | null; maps_url?: string | null }>): Promise<Map<string, IdentityHit>> {
   const out = new Map<string, IdentityHit>();
@@ -161,16 +81,8 @@ export async function lookupIdentities(items: Array<{ k: string; place_id?: stri
   return out;
 }
 
-type RpcResult = { ok: boolean; error?: string; [k: string]: unknown };
-
-async function rpc(name: string, args: Record<string, unknown>): Promise<RpcResult> {
-  const { data, error } = await sb.rpc(name, args);
-  if (error) {
-    /* A raised refusal (no_role, not_your_lead, admin_only) arrives as an error whose message IS the code. */
-    return { ok: false, error: String(error.message ?? error) };
-  }
-  return (data ?? { ok: false, error: 'empty_response' }) as RpcResult;
-}
+/* One RPC caller for every lead function (src/lib/leadRpc.ts). */
+const rpc = leadRpc;
 
 /** Every CRM write. Each invalidates what it changed; none of them sends anything. */
 export function useSalesActions() {
@@ -194,7 +106,8 @@ export function useSalesActions() {
       rpc('lead_record_call', { _lead_id: a.leadId, _outcome: a.outcome, _note: a.note }), (a) => a.leadId),
     websiteControl: m((a: { leadId: string; value: string | null; note: string | null }) =>
       rpc('lead_set_website_control', { _lead_id: a.leadId, _value: a.value, _note: a.note }), (a) => a.leadId),
-    queueOpener: m((a: { leadIds: string[] }) => rpc('sales_queue_opener', { _lead_ids: a.leadIds }), () => undefined),
+    /** Bulk initial outreach with THE TEMPLATE CHOSEN FOR THIS BATCH (no global selected opener). */
+    queueOpener: m((a: { leadIds: string[]; template: string }) => salesQueueOpener(a.leadIds, a.template), () => undefined),
     /** Admin only — the server refuses anyone else. */
     assign: m((a: { leadId: string; to: string | null }) => rpc('assign_lead', { _lead_id: a.leadId, _to_user_id: a.to }), (a) => a.leadId),
   };

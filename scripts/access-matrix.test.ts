@@ -9,7 +9,7 @@
    (scripts/role-rules.test.ts, supabase/tests/multi-user-rls.sql).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
-import { canOpenRoute, homeFor, PERMISSION_MATRIX, SALES_ROUTE_PATTERNS } from "../src/lib/access.ts";
+import { canOpenRoute, homeFor, leadPermissions, maySetStatus, PERMISSION_MATRIX, SALES_ROUTE_PATTERNS } from "../src/lib/access.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -35,24 +35,51 @@ for (const p of SALES_ROUTE_PATTERNS) ok(routes.includes(p), `sales route ${p} e
 
 console.log("\n── the admin-only screens the brief names ──");
 for (const p of ["/", "/dashboard", "/paid-clients", "/paid-clients/x", "/paid-clients/x/website-build", "/baseline/x", "/baseline-setup/x",
-  "/compare/x", "/playbook/x", "/page-generator", "/page-plan", "/mockups", "/templates", "/inbox", "/outreach", "/ai-audit",
-  "/admin/api-usage", "/team"]) {
+  "/compare/x", "/playbook/x", "/page-generator", "/page-plan", "/mockups", "/templates", "/ai-audit",
+  "/admin/api-usage", "/team", "/review-replies"]) {
   ok(!canOpenRoute("sales", p), `sales cannot open ${p}`);
 }
-ok(!canOpenRoute("sales", "/sales/lead"), "a malformed sales path is refused (no id)");
+
+console.log("\n── ONE workflow: Sales uses the same Outreach and Inbox (2026-09-27) ──");
+for (const p of ["/outreach", "/inbox", "/find-leads", "/coverage"]) ok(canOpenRoute("sales", p), `sales opens ${p}`);
+ok(!canOpenRoute("sales", "/review-replies"), "Review Replies is refused for sales at the route");
+ok(canOpenRoute("admin", "/review-replies"), "…and still open to the admin");
+ok(/<Route path="\/sales" element=\{<Navigate to="\/outreach" replace \/>\} \/>/.test(app), "/sales redirects to /outreach");
+ok(/<Route path="\/sales\/lead\/:leadId" element=\{<LegacySalesLeadRedirect \/>\} \/>/.test(app), "/sales/lead/:id goes through the legacy redirect");
+const legacy = readFileSync(new URL("../src/components/LegacySalesLeadRedirect.tsx", import.meta.url), "utf8");
+ok(/<Navigate to="\/outreach" replace state=\{\{ launch: \{ leadId, channel: 'open' \} \}\} \/>/.test(legacy), "…which opens THAT lead in Outreach (the launch intent)");
+ok(!/\bSalesHome\b|\bSalesLead\b|pages\/Sales/.test(app), "the separate My Leads pages are not routed any more");
+ok(!canOpenRoute("sales", "/sales/lead"), "a malformed legacy path is refused (no id)");
 ok(!canOpenRoute("sales", "/sales/lead/x/extra"), "…and an over-long one");
 ok(canOpenRoute("sales", "/sales/lead/abc?x=1#y"), "query and hash do not change the answer");
+const sidebar = readFileSync(new URL("../src/components/AppSidebar.tsx", import.meta.url), "utf8");
+ok(!/'My leads'|url: '\/sales'/.test(sidebar), "My Leads is gone from the sidebar");
+const mobile = readFileSync(new URL("../src/components/MobileBottomNav.tsx", import.meta.url), "utf8");
+ok(!/'My leads'|url: '\/sales'|review-replies/.test(mobile), "…and from the mobile nav (and Review Replies with it)");
+ok(/SALES_ORDER = \['\/outreach', '\/inbox', '\/find-leads', '\/coverage'\]/.test(sidebar), "the sales sidebar reads Outreach, Inbox, Find Leads, Coverage");
+
+console.log("\n── what each role may do on the shared screens ──");
+const A = leadPermissions("admin"), S = leadPermissions("sales"), N = leadPermissions(null);
+const adminOnly = ["editLeadRecord", "removeLeads", "importLeads", "enrichLeads", "bulkAudits", "campaigns", "product", "crawlSite", "clientDelivery", "queueControls", "assignOwner", "auditAdmin", "privateNote"] as const;
+for (const k of adminOnly) ok(A[k] === true && S[k] === false && N[k] === false, `${k}: admin yes, sales no, no role no`);
+ok(S.claimPool && !A.claimPool && !N.claimPool, "Available to claim is the salesperson's (the admin assigns)");
+ok(A.settableStatuses === null && maySetStatus(A, "payment_received"), "the admin sets every status");
+for (const st of ["interested", "price_given", "not_interested", "won_pending_onboarding"]) ok(maySetStatus(S, st), `sales may set ${st}`);
+for (const st of ["payment_received", "in_delivery", "completed", "refunded", "queued", "replied", "closed"]) ok(!maySetStatus(S, st), `sales may not set ${st}`);
+ok(!maySetStatus(N, "interested"), "no role sets nothing");
+const stage = readFileSync(new URL("../supabase/migrations/20260927100100_multi_user_sales.sql", import.meta.url), "utf8");
+ok(/if _status not in \('interested', 'price_given', 'not_interested', 'won_pending_onboarding'\)/.test(stage), "…the same four the server's lead_set_stage allows");
 
 console.log("\n── homes ──");
-ok(homeFor("admin") === "/" && homeFor("sales") === "/sales" && homeFor(null) === "/auth", "admin → /, sales → /sales, none → /auth");
+ok(homeFor("admin") === "/" && homeFor("sales") === "/outreach" && homeFor(null) === "/auth", "admin → /, sales → /outreach, none → /auth");
 ok(canOpenRoute("sales", homeFor("sales")), "sales can open its own home (no redirect loop)");
 
 console.log("\n── the matrix names the brief's rows ──");
 const feats = PERMISSION_MATRIX.map((r) => r.feature.toLowerCase()).join(" | ");
-for (const w of ["paid clients", "full measurement", "coverage", "find leads", "team", "billing", "notes", "assign", "claim"]) {
+for (const w of ["paid clients", "full measurement", "coverage", "find leads", "team", "billing", "notes", "assign", "claim", "review replies", "outreach", "inbox"]) {
   ok(feats.includes(w), `matrix has a row for "${w}"`);
 }
-ok(PERMISSION_MATRIX.filter((r) => /paid clients|billing|team|api usage/i.test(r.feature)).every((r) => r.sales === "no"), "money, delivery, team and system rows say 'no' for sales");
+ok(PERMISSION_MATRIX.filter((r) => /paid clients|billing|team|api usage|review replies/i.test(r.feature)).every((r) => r.sales === "no"), "money, delivery, review replies, team and system rows say 'no' for sales");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nALL PASS");

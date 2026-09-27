@@ -56,12 +56,13 @@ export function MobileBottomNav() {
   const [searchGlow, setSearchGlow] = useState(false);
   const [searchTooltip, setSearchTooltip] = useState(false);
 
-  /* ⛔ Sales gets its own four screens (src/lib/access.ts); the admin's items are unchanged. */
+  /* ⛔ Sales uses the SAME Outreach and Inbox as the admin (src/lib/access.ts, 2026-09-27); the
+     admin's items are unchanged. */
   const mainNavItems = role === 'sales'
     ? [
-        { title: 'My leads', url: '/sales', icon: ClipboardList },
+        { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
+        { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: t('nav.search'), url: '/find-leads', icon: Search },
-        { title: 'Coverage', url: '/coverage', icon: LayoutDashboard },
       ]
     : [
         { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -70,7 +71,7 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: 'Review replies', url: '/review-replies', icon: FileText }]
+    ? [{ title: 'Coverage', url: '/coverage', icon: LayoutDashboard }]
     : [
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },

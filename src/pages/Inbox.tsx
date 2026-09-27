@@ -4,7 +4,6 @@ import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type Bul
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
-import { useSelectedOpener } from '@/hooks/useSelectedOpener';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -48,6 +47,10 @@ import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { warmStage } from '@/lib/warmStage';
 import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { maySetStatus } from '@/lib/access';
+import { leadRpc, salesPatchLead } from '@/lib/leadRpc';
+import { refusalText } from '@/lib/salesCrm';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
@@ -365,6 +368,12 @@ const Inbox = () => {
   const queryClient = useQueryClient();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const { isAdmin } = useSubscription(); // gates the admin-only "Send now" button
+  /* ⛔ ONE INBOX, BOTH ROLES (2026-09-27). A salesperson's conversations are their own leads'
+     (useInbox reads the safe sales_leads view; messages and media are scoped by RLS/storage policy),
+     and every send is re-checked by the send functions. `perms` withholds only queue/automation
+     settings, campaign admin, client delivery and the crawl check. A status change goes through the
+     ownership-checked lead functions (salesPatchLead) — a direct write would silently change nothing. */
+  const perms = useLeadPermissions();
   const navigate = useNavigate();
   const [sendingNow, setSendingNow] = useState(false);
   // Which lead's full-detail overlay is open (null = none). The rich dialog is the SAME component
@@ -477,9 +486,6 @@ const Inbox = () => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
-  /* The ONE selected initial opener — the same rule the Outreach queue uses (src/lib/openerVariant.ts);
-     any other opener is disabled here and refused by send-whatsapp-message. */
-  const selectedOpener = useSelectedOpener();
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
   const sending = !!activeKey && sendingKeys.has(activeKey);
@@ -637,9 +643,12 @@ const Inbox = () => {
     if (!c.leadId || (status === c.leadStatus && (status !== 'interested' || c.isPotentialWork))) return;
     // “Interested” is an operator marker, not a pipeline stage. Preserve the current status and
     // persist the separate tracked/starred flag instead.
+    if (!maySetStatus(perms, status)) { toast({ title: 'Admin only', description: refusalText('stage_not_allowed'), variant: 'destructive' }); return; }
     if (status === 'interested') {
-      const { error } = await (supabase as unknown as { from: (t: string) => any })
-        .from('outreach_leads').update({ is_potential_work: true }).eq('id', c.leadId);
+      const error = perms.editLeadRecord
+        ? (await (supabase as unknown as { from: (t: string) => any })
+            .from('outreach_leads').update({ is_potential_work: true }).eq('id', c.leadId)).error
+        : await salesPatchLead(c.leadId, { is_potential_work: true }).then((r) => (r.ok ? null : { message: refusalText(r.error) }));
       if (error) { toast({ title: 'Could not mark interested', description: error.message, variant: 'destructive' }); return; }
       patchLeadPotentialWork(c.leadId, true);
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: true } : s));
@@ -651,8 +660,13 @@ const Inbox = () => {
     }
     setSavingStatusKey(c.key);
     try {
-      const { error } = await updateLeadStatus(c.leadId, status);
+      const { error } = perms.editLeadRecord
+        ? await updateLeadStatus(c.leadId, status)
+        : await salesPatchLead(c.leadId, { status }).then((r) => ({ error: r.ok ? null : refusalText(r.error) }));
       if (error) { toast({ title: 'Could not update status', description: error, variant: 'destructive' }); return; }
+      if (!perms.editLeadRecord && status === 'not_interested') {
+        void supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: c.leadId, reason: 'not_interested' } });
+      }
       patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
       /* ⛔ AND THE SYNTHETIC COPY, or the header/list pill would show the OLD status until the next
          refetch. `conversations` is derived from `leads`, so patchLeadStatus covers every real
@@ -830,8 +844,12 @@ const Inbox = () => {
     setHookSending(true);
     try {
       if (!hookExistingFirst && hookName.trim()) {
-        await (supabase as unknown as SupabaseClient)
-          .from('outreach_leads').update({ contact_name: hookName.trim() }).eq('id', active.leadId);
+        if (perms.editLeadRecord) {
+          await (supabase as unknown as SupabaseClient)
+            .from('outreach_leads').update({ contact_name: hookName.trim() }).eq('id', active.leadId);
+        } else {
+          await leadRpc('lead_set_details', { _lead_id: active.leadId, _contact_name: hookName.trim(), _search_keyword: null, _search_location: null });
+        }
       }
       const { data, error } = await supabase.functions.invoke('send-whatsapp-message', {
         body: { lead_id: active.leadId, phone: active.phone, country: activeLead.country ?? undefined, template_name: 'hook_followup' },
@@ -1043,7 +1061,7 @@ const Inbox = () => {
 
   /* hasSiteFault gates audit_followup_fault: it names a specific site fault in {{6}} and Meta rejects
      an empty parameter, so it is only offered when this lead's crawl check found one. */
-  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false }, { selectedOpener: selectedOpener.selected });
+  const templateSendability = (name: string) => getTemplateSendability(name, { shareToken: null }, { reportSlug: activeReport?.auditId ?? null, hasSiteFault: active?.leadId ? hasSiteFaultLeadIds.has(active.leadId) : false, hasSiteFindings: active?.leadId ? hasSiteFindingsLeadIds.has(active.leadId) : false });
   /* getTemplateSendability('') returns ok:true, because an unknown name is not its business to
      block — so "nothing selected" has to be refused here or the button would be live with no
      template chosen. */
@@ -1314,10 +1332,14 @@ const Inbox = () => {
     }
     setAuditPromptOpen(false);
     try {
-      await (supabase as unknown as SupabaseClient)
-        .from('outreach_leads')
-        .update({ search_keyword: bizType, search_location: loc })
-        .eq('id', active.leadId);
+      if (perms.editLeadRecord) {
+        await (supabase as unknown as SupabaseClient)
+          .from('outreach_leads')
+          .update({ search_keyword: bizType, search_location: loc })
+          .eq('id', active.leadId);
+      } else {
+        await leadRpc('lead_set_details', { _lead_id: active.leadId, _contact_name: null, _search_keyword: bizType, _search_location: loc });
+      }
     } catch { /* non-fatal — the audit still runs with the typed values */ }
     await startAudit(bizType, loc);
   };
@@ -1494,9 +1516,9 @@ const Inbox = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
-          <AutoReplyToggle />
+          {perms.queueControls && <AutoReplyToggle />}
           {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
-          <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />
+          {perms.campaigns && <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />}
           <Select value={statusFilter ?? '__all__'} onValueChange={(v) => setStatusFilter(v === '__all__' ? null : v)}>
             <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -1505,9 +1527,10 @@ const Inbox = () => {
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
               {/* Opener sent (initial_contact), NEVER replied, no report yet, 3+ days — contact_followup. */}
-              <SelectItem value={CONTACT_DUE_FILTER}>Contact follow-up due</SelectItem>
-              {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue. */}
-              <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>
+              {perms.queueControls && <SelectItem value={CONTACT_DUE_FILTER}>Contact follow-up due</SelectItem>}
+              {/* Report sent (audit_reply), no reply since, 3+ days — the hook_followup work queue
+                  (it stamps the lead rows directly: queue configuration, admin only). */}
+              {perms.queueControls && <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>}
             </SelectContent>
           </Select>
           {isAdmin && (
@@ -1840,7 +1863,7 @@ const Inbox = () => {
                       Not run → runs it; already run → opens the popup; the dot flags an AI-visibility
                       fault (the same signal that gates audit_followup_fault). Same button as the
                       Outreach row. */}
-                  {active.leadId && activeLead && (
+                  {perms.crawlSite && active.leadId && activeLead && (
                     <CrawlCheckButton
                       lead={{ id: activeLead.id, website: activeLead.website }}
                       crawl={crawlByLeadId.get(active.leadId) ?? null}
@@ -1854,7 +1877,7 @@ const Inbox = () => {
                   {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME
                       panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
                   {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
-                  {active.leadId && <LeadOwnerControl leadId={active.leadId} />}
+                  {active.leadId && <LeadOwnerControl leadId={active.leadId} onOpenDetail={() => setDetailLeadId(active.leadId)} />}
                   {/* Sign-up link. Hidden entirely for a lead who has actually paid - same rule as the
                       card: sending an existing client back to checkout wastes their time, and
                       findable-checkout refuses it as already_client anyway.
@@ -1893,7 +1916,7 @@ const Inbox = () => {
                       squares sharing HEADER_ICON_BTN), which is why the class is passed in rather
                       than a second button being written. Label carried by title/aria-label, as every
                       sibling in this row does. */}
-                  {active.leadId && (
+                  {perms.clientDelivery && active.leadId && (
                     <WelcomePackButton
                       leadId={active.leadId}
                       businessName={activeLead?.business_name ?? active.label ?? 'this client'}
@@ -1931,7 +1954,7 @@ const Inbox = () => {
                       <DropdownMenuItem asChild>
                         <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp app"><MessageCircle className="mr-2 h-4 w-4" />Open in the WhatsApp app</a>
                       </DropdownMenuItem>
-                      {active.leadId && (
+                      {active.leadId && maySetStatus(perms, 'closed') && (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleRemoveFromInbox(active)} disabled={removingKey === active.key} aria-label="Remove from inbox" className="text-destructive focus:text-destructive">

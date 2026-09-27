@@ -5,6 +5,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { ReviewQueueTab } from '@/components/ReviewQueueTab';
 import { useAuth } from '@/hooks/useAuth';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
 
@@ -14,6 +15,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user } = useAuth();
+  const perms = useLeadPermissions();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -66,8 +68,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* ⛔ THE REVIEW QUEUE, HERE BECAUSE THIS SHELL MOUNTS ONCE. It renders nothing at all when
             nobody is waiting, so it costs every other screen a single cheap RLS-scoped read and no
-            pixels. It is OUTSIDE <main>, so it never scrolls away and never covers the page. */}
-        <ReviewQueueTab />
+            pixels. It is OUTSIDE <main>, so it never scrolls away and never covers the page.
+            Client delivery: the admin's only (a salesperson never reads paid clients). */}
+        {perms.clientDelivery && <ReviewQueueTab />}
 
       </div>
     </SidebarProvider>

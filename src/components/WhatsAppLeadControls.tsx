@@ -4,8 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 import { classifyLineType } from '@/lib/lineType';
-import { openerSendability } from '@/lib/openerVariant';
-import { useSelectedOpener } from '@/hooks/useSelectedOpener';
+import { isInitialOpener } from '@/lib/openerVariant';
+import { getTemplateSendability } from '@/lib/whatsappTemplates';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { salesQueueOpener } from '@/lib/leadRpc';
+import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -21,17 +25,41 @@ export function WhatsAppLeadControls({
   onUpdate: (leadId: string, data: Partial<OutreachLead>) => Promise<unknown> | void;
 }) {
   const [busy, setBusy] = useState(false);
-  const template = lead.whatsapp_template ?? '';
+  const { toast } = useToast();
+  /* ⛔ SAME CONTROL, BOTH ROLES (2026-09-27). The admin stores the template on the lead and queues it
+     directly, as before. A salesperson cannot write the lead row: they choose the opener here and
+     sales_queue_opener stores THAT template and queues it, with the same never-contacted, UK-mobile,
+     opt-out and ownership checks — or says why it did not. */
+  const perms = useLeadPermissions();
+  const salesPath = !perms.queueControls;
+  const [salesTemplate, setSalesTemplate] = useState('');
+  const template = salesPath ? salesTemplate : (lead.whatsapp_template ?? '');
   const queued = lead.status === 'queued';
+  /* A salesperson's single-lead queue is the bulk opener path, so it offers the approved openers. */
+  const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value)) : WHATSAPP_TEMPLATES;
   /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
      allowlist counts: a lead can be carrying a value from a removed or renamed template, and
      inheriting that silently is the same problem as substituting one. Removing from the queue is
      always allowed — being unable to cancel because of a bad template would be worse. */
-  /* ⛔ An initial opener counts only if it is the SELECTED one (src/lib/openerVariant.ts) — the
-     same rule as the Outreach queue dialog and the Inbox; unknown selection = not queueable. */
-  const opener = useSelectedOpener();
-  const openerOk = openerSendability(template, opener.selected);
-  const templateChosen = !!template && WHATSAPP_TEMPLATES.some((t) => t.value === template) && openerOk.ok;
+  /* Both openers are ordinary choices (src/lib/openerVariant.ts): only Meta approval can refuse one. */
+  const approval = template ? getTemplateSendability(template, { shareToken: null }, {}) : { ok: true as const };
+  const templateChosen = !!template && options.some((t) => t.value === template) && approval.ok;
+
+  const salesQueue = async () => {
+    if (!templateChosen) return;
+    setBusy(true);
+    try {
+      const r = await salesQueueOpener([lead.id], template);
+      if (!r.ok) { toast({ title: 'Not queued', description: refusalText(r.error), variant: 'destructive' }); return; }
+      const skipped = Object.keys((r.skipped ?? {}) as Record<string, number>);
+      if (!r.queued) {
+        toast({ title: 'Not queued', description: skipped.map((k) => QUEUE_SKIP_LABEL[k] ?? k).join(', ') || 'Refused', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Queued for WhatsApp', description: `${template} — sends in the daily 7am–9:30pm UK window. The queue re-checks it before it sends.` });
+      window.dispatchEvent(new CustomEvent('lead-row-changed', { detail: { leadId: lead.id } }));
+    } finally { setBusy(false); }
+  };
 
   const toggleQueue = async () => {
     // Guard as well as the disabled button: the button can be bypassed by a stale render, and this
@@ -112,33 +140,33 @@ export function WhatsAppLeadControls({
             </p>
           )}
           <label className="mb-1 block text-[11px] text-muted-foreground">Template</label>
-          <Select value={template} onValueChange={(v) => onUpdate(lead.id, { whatsapp_template: v })}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose a template" /></SelectTrigger>
+          <Select value={template} disabled={salesPath && queued} onValueChange={(v) => (salesPath ? setSalesTemplate(v) : onUpdate(lead.id, { whatsapp_template: v }))}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={salesPath && queued ? (lead.whatsapp_template ?? 'Queued') : 'Choose a template'} /></SelectTrigger>
             <SelectContent>
-              {WHATSAPP_TEMPLATES.map((t) => {
-                const o = openerSendability(t.value, opener.selected);
-                return <SelectItem key={t.value} value={t.value} disabled={!o.ok}>{t.label}{!o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
+              {options.map((t) => {
+                const o = getTemplateSendability(t.value, { shareToken: null }, {});
+                return <SelectItem key={t.value} value={t.value} disabled={isInitialOpener(t.value) && !o.ok}>{t.label}{isInitialOpener(t.value) && !o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
               })}
             </SelectContent>
           </Select>
           <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">
             Sends the chosen template with the business name + this lead's claim link.
           </p>
-          <Button
+          {!(salesPath && queued) && <Button
             size="sm"
             variant={queued ? 'outline' : 'default'}
             className="mt-2.5 h-7 w-full gap-1.5 text-xs"
-            onClick={toggleQueue}
+            onClick={salesPath ? salesQueue : toggleQueue}
             disabled={busy || (!queued && !templateChosen)}
             title={!queued && !templateChosen ? 'Choose a template first' : undefined}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : queued ? <X className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
             {queued ? 'Remove from queue' : 'Add to WhatsApp queue'}
-          </Button>
+          </Button>}
           {/* Says why the button is dead. A disabled control with no explanation reads as a bug,
               and the picker's own placeholder is easy to miss. */}
-          {!queued && template && !openerOk.ok && (
-            <p className="mt-1.5 text-center text-[10px] text-orange-400">{openerOk.reason}</p>
+          {!queued && template && !approval.ok && (
+            <p className="mt-1.5 text-center text-[10px] text-orange-400">{approval.reason}</p>
           )}
           {!queued && !templateChosen && (
             <p className="mt-1.5 text-center text-[10px] text-orange-400">
@@ -146,7 +174,7 @@ export function WhatsAppLeadControls({
             </p>
           )}
           {queued && (
-            <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue — sends within the daily 7am–9:30pm UK window (max 40/day).</p>
+            <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue{lead.whatsapp_template ? ` (${lead.whatsapp_template})` : ''} — sends within the daily 7am–9:30pm UK window (max 40/day).{salesPath ? ' Ask the admin to take it out of the queue.' : ''}</p>
           )}
         </>
       )}

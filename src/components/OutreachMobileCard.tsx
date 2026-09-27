@@ -25,6 +25,8 @@ import { NextActionBadge } from './NextActionBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
+import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { maySetStatus } from '@/lib/access';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
@@ -94,6 +96,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   auditRunning = false,
   onUpdateLead,
 }: OutreachMobileCardProps) {
+  const perms = useLeadPermissions();
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
   const hasPhone = !!lead.phone;
@@ -214,7 +217,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     </SelectTrigger>
                     <SelectContent>
                       {PIPELINE_STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
+                        <SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>
                           {opt.label}
                         </SelectItem>
                       ))}

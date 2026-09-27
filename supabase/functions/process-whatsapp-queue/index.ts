@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveActor } from "../_shared/access.ts";
+import { leadAccess, resolveActor } from "../_shared/access.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
@@ -21,8 +21,6 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
-import { readSelectedOpener } from "../_shared/initial-opener.ts";
-import { isInitialOpener, openerSelectable } from "../../../src/lib/openerVariant.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -487,17 +485,21 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const mode: string = typeof body.mode === "string" ? body.mode : "tick";
 
-    /* ⛔ ADMIN, OR SALES FOR contact_check ONLY (2026-09-27, multi-user). contact_check is the
-       read-only "has this phone ever been messaged" pre-check a bulk send runs before queueing; a
-       salesperson's bulk flow needs it. Every other mode — the tick, send_now, pause, the reply
-       rules, the opener template, suppress_lead — is queue configuration and stays admin-only. */
+    /* ⛔ ADMIN, OR SALES FOR TWO MODES ONLY (2026-09-27, multi-user). contact_check is the read-only
+       "has this phone ever been messaged" pre-check a bulk send runs before queueing. suppress_lead
+       is what makes "not interested" actually stop contact — for a salesperson ONLY on a lead they
+       work (leadAccess: assigned to them, not a client), checked below before anything is written.
+       Every other mode — the tick, send_now, pause, the reply rules — is queue configuration and
+       stays admin-only. */
     let isAdmin = false;
+    let salesActor: { id: string; email?: string; role: "sales" } | null = null;
     if (!isCron) {
       void anonKey;
       const who = await resolveActor(req, service);
       if (!who.ok) return json({ ok: false, error: who.error === "no_role" ? "forbidden" : who.error, detail: who.detail }, who.status);
       if (who.actor.role === "admin") isAdmin = true;
-      else if (!(who.actor.role === "sales" && mode === "contact_check")) return json({ ok: false, error: "forbidden" }, 403);
+      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead")) salesActor = { ...who.actor, role: "sales" };
+      else return json({ ok: false, error: "forbidden" }, 403);
     }
     const forceReq = body.force === true;
     // send_now: admin "Send now" from the Inbox. Skips ONLY the pacing (not_due) wait and
@@ -524,7 +526,7 @@ Deno.serve(async (req) => {
        another, so they run in parallel; the payload is built from the same values, unchanged. */
     const [
       { count: sentToday }, { count: queuedCount }, { count: archivedQueuedCount }, { count: unverifiedQueuedCount }, { count: phoneHistorySkippedCount }, { count: hookQueuedCount }, { count: contactQueuedCount }, { data: stateRow },
-      autoReplyEnabledV, auditCompleteTemplateV, firstReplyTemplateV, selectedOpenerV, firstReplyModeV, auditOnlyReadyCountV,
+      autoReplyEnabledV, auditCompleteTemplateV, firstReplyTemplateV, firstReplyModeV, auditOnlyReadyCountV,
     ] = await Promise.all([
       service
         .from("whatsapp_sends").select("id", { count: "exact", head: true }).gte("created_at", dayStart),
@@ -573,7 +575,6 @@ Deno.serve(async (req) => {
         } catch { return null; }
       })(),
       firstReplyTemplate(service),
-      readSelectedOpener(service),
       firstReplyMode(service),
       (async () => {
         try {
@@ -630,9 +631,6 @@ Deno.serve(async (req) => {
       auditCompleteTemplate: auditCompleteTemplateV,
       // The reply-trigger template (null = the shared default). Defensive like the others.
       firstReplyTemplate: firstReplyTemplateV,
-      /* THE SELECTED INITIAL OPENER (src/lib/openerVariant.ts). null = nothing stored (the default);
-         ABSENT from the payload when it could not be read, so every picker fails closed on openers. */
-      ...(selectedOpenerV === undefined ? {} : { initialOpenerTemplate: selectedOpenerV }),
       /* The three-way reply MODE. Absent column / failed read → 'audit_only' (never 'send'), so
          the panel can render before the SQL has been run and never shows a sending state that
          is not real. */
@@ -741,18 +739,11 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...statusPayload, firstReplyTemplate: next });
     }
 
-    /* THE SELECTED INITIAL OPENER (admin-gated). Only an opener Meta has approved may be chosen; the
-       choice changes FUTURE queueing only — a lead already queued keeps the template stored on it.
-       Writing this sends nothing. */
+    /* ⛔ THERE IS NO GLOBAL "SELECTED OPENER" ANY MORE (Paul, 2026-09-27). Both approved openers are
+       ordinary templates chosen per send or per batch (src/lib/openerVariant.ts). The old setter is
+       refused explicitly rather than deleted, so a stale client cannot fall through to the tick. */
     if (mode === "set_initial_opener_template") {
-      const raw = typeof body.template === "string" ? body.template.trim() : "";
-      if (!isInitialOpener(raw) || !WA_TEMPLATES[raw]) return json({ ok: false, error: "not_an_initial_opener", detail: `${raw || "(blank)"} is not an initial outreach template` }, 400);
-      if (!openerSelectable(raw) || templateAwaitingApproval(raw)) return json({ ok: false, error: "template_not_approved", detail: `${raw} is not approved at Meta` }, 400);
-      const { data: upd, error: sErr } = await service.from("whatsapp_outreach_state")
-        .update({ initial_opener_template: raw, updated_at: new Date().toISOString() })
-        .eq("id", 1).select("initial_opener_template").maybeSingle();
-      if (sErr || !upd) return json({ ok: false, error: "setting_failed", detail: sErr?.message ?? "no settings row" }, 500);
-      return json({ ok: true, ...statusPayload, initialOpenerTemplate: raw });
+      return json({ ok: false, error: "mode_removed", detail: "There is no selected opener any more: choose the template when you send or queue." }, 410);
     }
 
     /* ══ mode 'contact_check' — WHICH OF THESE NUMBERS HAVE WE ALREADY CONTACTED? ═══════════════
@@ -888,6 +879,11 @@ Deno.serve(async (req) => {
       if (!leadId) return json({ ok: false, error: "lead_id_required" }, 400);
       if (reason !== "not_interested" && reason !== "closed") {
         return json({ ok: false, error: "unsupported_reason", reason }, 400);
+      }
+      /* A salesperson may only suppress a lead they work — the same rule every sales send checks. */
+      if (salesActor) {
+        const acc = await leadAccess(service, salesActor, leadId);
+        if (!acc.ok) return json({ ok: false, error: acc.error === "lookup_failed" ? "lead_read_failed" : "not_your_lead" }, acc.error === "lookup_failed" ? 200 : 403);
       }
       const { data: l, error: lErr } = await service
         .from("outreach_leads").select("id, phone, email, country, business_name").eq("id", leadId).maybeSingle();

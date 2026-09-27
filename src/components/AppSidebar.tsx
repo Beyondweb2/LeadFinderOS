@@ -14,7 +14,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { canOpenRoute } from '@/lib/access';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
-  MessageSquareQuote, Inbox, Sparkles, Map, Users, BriefcaseBusiness
+  MessageSquareQuote, Inbox, Sparkles, Map, Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
@@ -27,7 +27,6 @@ export function AppSidebar() {
   const { role } = useSubscription();
 
   const allNavItems = [
-    { title: 'My leads', url: '/sales', icon: BriefcaseBusiness, description: 'Your pipeline, follow-ups and available leads' },
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
@@ -41,10 +40,12 @@ export function AppSidebar() {
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
   ];
-  /* ⛔ The matrix decides (src/lib/access.ts). The admin keeps every existing item; 'My leads' is
-     the salesperson's home and is not added to the admin's list. Presentation only — see access.ts. */
-  const navItems = allNavItems.filter((item) =>
-    canOpenRoute(role, item.url) && !(role === 'admin' && item.url === '/sales'));
+  /* ⛔ The matrix decides (src/lib/access.ts). The admin keeps every item; a salesperson sees the
+     same Outreach, Inbox, Find Leads and Coverage — there is no separate My Leads workspace any more
+     (2026-09-27). Presentation only — see access.ts. */
+  const SALES_ORDER = ['/outreach', '/inbox', '/find-leads', '/coverage'];
+  const navItems = allNavItems.filter((item) => canOpenRoute(role, item.url))
+    .sort((a, b) => (role === 'sales' ? SALES_ORDER.indexOf(a.url) - SALES_ORDER.indexOf(b.url) : 0));
 
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);
