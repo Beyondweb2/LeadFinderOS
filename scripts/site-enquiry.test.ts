@@ -13,7 +13,7 @@ function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'}
 
 const bs4 = CLIENT_SITES.bs4;
 const NOW = 1_800_000_000_000;
-const good = { name: 'Jo Bloggs', phone: '07700 900123', email: 'jo@example.com', service: 'EICRs', location: 'BS3', message: 'Landlord EICR please', started_at: String(NOW - 60_000) };
+const good = { name: 'Jo Bloggs', phone: '07700 900123', email: 'jo@example.com', service: 'EICRs', location: 'BS3', message: 'Landlord EICR please', fill_ms: '45000' };
 
 /* A */
 ok(originMode(bs4, 'https://www.bs4electricalservices.co.uk') === 'production' && originMode(bs4, 'https://bs4electricalservices.co.uk/') === 'production', 'A: the live domain (with or without www) delivers');
@@ -38,14 +38,15 @@ if (v.ok) {
 
 /* C */
 ok(!validateEnquiry({ ...good, company_website: 'http://spam' }, NOW).ok && (validateEnquiry({ ...good, company_website: 'x' }, NOW) as { reason: string }).reason === 'honeypot', 'C: a filled honeypot is dropped');
-ok((validateEnquiry({ ...good, started_at: String(NOW - MIN_FILL_MS + 500) }, NOW) as { reason: string }).reason === 'too_fast', 'C: a form filled faster than a human is dropped');
+ok((validateEnquiry({ ...good, fill_ms: String(MIN_FILL_MS - 500) }, NOW) as { reason: string }).reason === 'too_fast', 'C: a form filled faster than a human is dropped');
+ok(validateEnquiry({ ...good, fill_ms: '20000', started_at: String(NOW + 60_000) }, NOW).ok, 'C: a visitor whose clock runs ahead is NOT dropped (a duration, never a timestamp compared across clocks)');
 const bad = validateEnquiry({ name: '', phone: 'call me', email: 'nope', location: '', message: '' }, NOW);
 ok(!bad.ok && (bad as { problems: string[] }).problems.join() === 'name,phone,email,location,message', 'C: missing / malformed fields are named');
 const noContact = validateEnquiry({ ...good, phone: '', email: '' }, NOW);
 ok(!noContact.ok && (noContact as { problems: string[] }).problems.includes('phone or email'), 'C: a phone OR an email is required');
 const inj = validateEnquiry({ ...good, name: 'Jo\r\nBcc: x@y.z', phone: '', email: 'jo@example.com' }, NOW);
 ok(inj.ok && !/[\r\n]/.test(inj.fields.name), 'C: header-style line breaks are flattened out of single-line fields');
-ok(validateEnquiry({ ...good, started_at: '' }, NOW).ok, 'C: no start time (JavaScript off) is not treated as a bot');
+ok(validateEnquiry({ ...good, fill_ms: '' }, NOW).ok && validateEnquiry({ name: 'Jo', phone: '07700 900123', location: 'BS3', message: 'x' }, NOW).ok, 'C: no fill time (JavaScript off) is not treated as a bot');
 
 /* E */
 const cfg = readFileSync('supabase/config.toml', 'utf8').replace(/\r\n/g, '\n');

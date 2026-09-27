@@ -65,8 +65,13 @@ const oneLine = (s: string) => s.replace(/[\r\n]+/g, ' ');
  *  silent drops — the caller answers them as if they succeeded, so a bot learns nothing. */
 export function validateEnquiry(raw: Record<string, unknown>, nowMs: number): Validated {
   if (clean(raw.company_website, 200)) return { ok: false, reason: 'honeypot', problems: [] };
-  const started = Number(raw.started_at);
-  if (Number.isFinite(started) && started > 0 && nowMs - started < MIN_FILL_MS) return { ok: false, reason: 'too_fast', problems: [] };
+  /* ⛔ A DURATION measured in the browser (fill_ms), never a browser timestamp compared with the
+     server clock: visitors clocks are routinely tens of seconds out, and the first build silently
+     dropped a real 20-second fill from a PC whose clock ran ahead (2026-09-27). No JavaScript = no
+     fill_ms = not treated as a bot. */
+  const fill = Number(raw.fill_ms);
+  if (raw.fill_ms != null && raw.fill_ms !== '' && Number.isFinite(fill) && fill >= 0 && fill < MIN_FILL_MS) return { ok: false, reason: 'too_fast', problems: [] };
+  void nowMs;
   const f: EnquiryFields = {
     name: oneLine(clean(raw.name, 100)),
     phone: oneLine(clean(raw.phone, 40)),
