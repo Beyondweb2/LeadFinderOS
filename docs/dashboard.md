@@ -247,3 +247,23 @@ v111, `process-ai-audit-queue` v158, `process-whatsapp-queue` v125, `whatsapp-st
 
 ---
 
+## Next Action is human-set only (2026-09-28)
+
+Paul: *"I want Next Action to be human-set only."*
+- **Audit of every writer** (code, edge functions, database functions, triggers, defaults, cron):
+  the ONLY automatic path still live was `statusUpdatePatch` (`src/lib/statusPatch.ts`): marking a
+  lead **Site Sent** wrote `next_action = 'follow_up'` due tomorrow, overwriting whatever the person
+  had set — used by the Outreach status control and the Inbox status pill. **Removed.** Already gone
+  before this: "Replied" → `send_draft` (2026-09-13, in both statusPatch and whatsapp-inbound).
+  Not automatic, kept: the manual editors (Outreach `NextActionEditor` → `updateNextAction`, the CRM
+  panel → `lead_set_follow_up`, a salesperson's edit → `planSalesPatch` → `lead_set_follow_up`), and
+  CLEARS to 'none' (add lead / CSV import / `sales_add_lead` insert 'none'; marking paid or lost; the
+  Dashboard's Clear / Clear all). Database: default 'none', no trigger touches it, no cron job
+  mentions it, and `lead_set_follow_up` (role + ownership checked) is the only function that sets a
+  chosen value. No edge function writes it.
+- **Data reset:** 1 lead of 5,486 carried a next action and a date (Cardiff Bay Dental,
+  `send_follow_up` 2026-09-27, set by hand at 16:45 UTC 2026-09-27); cleared to 'none' / NULL. No lead
+  had a follow-up note. History (`outreach_activities`, `lead_activity`) untouched.
+- Tests: `scripts/next-action-human-only.test.ts` (writer sweep), `scripts/lead-status-patch.test.ts`
+  (site_sent now writes only the status); live `supabase/tests/next-action-human-only.sql` 18/18
+  (claim / status / star set nothing; admin and sales set-change-clear; another rep refused; note kept).

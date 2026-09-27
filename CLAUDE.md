@@ -28,7 +28,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (212 suites). **Honest green is 205/212 (2026-09-27, all seven also fail on untouched
+  (215 suites). **Honest green is 208/215 (2026-09-27, all seven also fail on untouched
   `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
   Deno), `onboarding-audit-fields`, `manual-onboarding`, and
   `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
@@ -53,6 +53,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   SalesOutreach/SalesInbox or a second CRM (My Leads is deleted). Reads go through `leadSourceFor`;
   a salesperson's writes go through `planSalesPatch` → the lead functions (a direct update from a sales
   session is a SILENT 0-row success); what Sales cannot do is `leadPermissions` (`src/lib/access.ts`).
+  ⛔ **Next Action is human-set only** (Paul, 2026-09-28) — no add/claim/send/reply/audit/status/queue/
+  cron path may write `next_action`/`next_action_date` (clearing to 'none' is fine).
+  `scripts/next-action-human-only.test.ts` sweeps every writer; `supabase/tests/next-action-human-only.sql`.
   ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
   what is stored and sent (`docs/whatsapp-templates.md`, last section).
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
