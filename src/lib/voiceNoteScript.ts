@@ -33,7 +33,7 @@ import { nameMatches } from './nameMatch.ts';
 import { articleTrade } from './templateVars.ts';
 import { findingMentioned, sayableDetails, findingSourceLabel, selectReplyFindings } from './warmReply.ts';
 import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
-import { isAggregatorUrl, domainOf } from './aggregators.ts';
+import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows. */
 export const VOICE_NOTE_GENERATOR_VERSION = 2;
@@ -121,42 +121,9 @@ export function selectVoiceNoteEvidence(
 
 /* ─────────────────────────────── 2. the website findings ─────────────────────────────── */
 
-/* ⛔ A PROFILE PAGE IS NOT "YOUR WEBSITE" (Paul, 2026-09-26). Firebeard Electrical's website on record
-   is tradehq.co.uk/firebeardelectrical — a directory profile. Researching it as their site produced
-   "nothing obviously broken" about a page they do not own. So the lead's website is CLASSIFIED first:
-   a directory / social profile is never researched, and the script says what it really is. The host
-   lists are aggregators.ts (the shared "not an own website" sets) plus the trade-profile platforms it
-   does not carry; the additions live here so this does not change what other features call a directory. */
-const EXTRA_PROFILE_HOSTS = ['tradehq.co.uk', 'houzz.co.uk', 'houzz.com', 'linktr.ee', 'myhammer.co.uk', 'localheroes.com', 'yably.co.uk'];
-const SOCIAL_HOSTS = ['facebook.com', 'fb.com', 'fb.me', 'm.me', 'instagram.com', 'instagr.am', 'tiktok.com', 'x.com', 'twitter.com', 'linkedin.com', 'youtube.com', 'pinterest.com', 'linktr.ee'];
-const PROFILE_LABELS: Record<string, string> = {
-  'tradehq.co.uk': 'TradeHQ', 'checkatrade.com': 'Checkatrade', 'mybuilder.com': 'MyBuilder', 'ratedpeople.com': 'Rated People',
-  'trustatrader.com': 'TrustATrader', 'bark.com': 'Bark', 'yell.com': 'Yell', 'yell.co.uk': 'Yell', 'houzz.co.uk': 'Houzz', 'houzz.com': 'Houzz',
-  'freeindex.co.uk': 'FreeIndex', 'thomsonlocal.com': 'Thomson Local', 'yelp.com': 'Yelp', 'yelp.co.uk': 'Yelp', 'nextdoor.co.uk': 'Nextdoor',
-  'nextdoor.com': 'Nextdoor', 'facebook.com': 'Facebook', 'fb.com': 'Facebook', 'fb.me': 'Facebook', 'instagram.com': 'Instagram',
-  'linkedin.com': 'LinkedIn', 'tiktok.com': 'TikTok', 'x.com': 'X', 'twitter.com': 'X', 'youtube.com': 'YouTube', 'linktr.ee': 'Linktree',
-  'google.com': 'Google', 'business.google.com': 'Google', 'myhammer.co.uk': 'MyHammer', 'localheroes.com': 'Local Heroes', 'yably.co.uk': 'Yably',
-};
-
-export type SiteSource = 'own_site' | 'directory_profile' | 'social_profile' | 'none';
-export interface LeadWebsiteKind { source: SiteSource; host: string; label: string | null }
-
-const onHost = (host: string, list: readonly string[]) => list.find((d) => host === d || host.endsWith(`.${d}`)) ?? null;
-
-export function classifyLeadWebsite(url: string | null | undefined): LeadWebsiteKind {
-  const raw = (url ?? '').trim();
-  if (!raw) return { source: 'none', host: '', label: null };
-  const host = domainOf(raw);
-  if (!host) return { source: 'none', host: '', label: null };
-  const social = onHost(host, SOCIAL_HOSTS);
-  if (social) return { source: 'social_profile', host, label: PROFILE_LABELS[social] ?? social };
-  const extra = onHost(host, EXTRA_PROFILE_HOSTS);
-  if (extra || isAggregatorUrl(raw)) {
-    const key = extra ?? Object.keys(PROFILE_LABELS).find((d) => host === d || host.endsWith(`.${d}`)) ?? host;
-    return { source: 'directory_profile', host, label: PROFILE_LABELS[key] ?? host };
-  }
-  return { source: 'own_site', host, label: null };
-}
+/* The website classification (own site vs directory / social profile) lives in leadWebsiteKind.ts,
+   shared with the Cold Call Playbook. Re-exported here for existing callers. */
+export { classifyLeadWebsite, type SiteSource, type LeadWebsiteKind } from './leadWebsiteKind.ts';
 
 /** What the script may say about the site. */
 export type VoiceNoteSiteMode =

@@ -234,7 +234,7 @@ console.log('── 10. OFFER AND CLAIMS ──');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
   const objections = p.objections.map((o) => o.objection);
-  for (const o of ['I already have a website guy', 'My website is fine', 'I already come up on Google', 'Nobody uses AI for this', "I'm too busy", 'How much is it?', "Can you guarantee I'll show up?", 'Just send me the information']) {
+  for (const o of ['I already have a website guy', 'My website is fine', 'I already rank on Google', 'Nobody uses AI for this', "I'm too busy", 'How much is it?', "Can you guarantee I'll appear?", 'Just send me the information']) {
     ok(objections.includes(o), 'objection covered: ' + o);
   }
 }
@@ -260,6 +260,58 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
   ok(/Send WhatsApp message[\s\S]{0,900}setPlaybookLeadId\(lead\.id\)/.test(read('src/components/OutreachTable.tsx')),
     'Outreach: an icon beside the contact buttons');
   ok(/ColdCallPlaybookSheet/.test(outreach) && /ColdCallPlaybookButton/.test(outreach), 'Outreach opens the same shared panel');
+}
+
+console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
+{
+  // ONE call script, built from the pieces, nothing invented.
+  const p = buildColdCallPlaybook(base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }));
+  const script = p.callScript.join(' ');
+  ok(p.callScript.length >= 4 && /^Hi, is that /.test(p.callScript[0]), 'the call script is one read that opens by checking who picked up');
+  ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
+    'it names the first three competitors from THAT result, no more');
+  ok(/asked Gemini who it would recommend/.test(script), 'it names the engine that was actually asked');
+  ok(/The main thing I noticed is your sitemap/.test(script) && /could be contributing/.test(script), 'it carries the strongest finding, hedged');
+  ok(script.includes(p.transition), 'the Findable line is inside the script, not a separate block');
+  ok(/Can I send you the report on WhatsApp/.test(script), 'it ends on a natural next step');
+  ok((script.match(/didn't come up/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
+
+  // Follow-up: picks up where it left off.
+  const msgs: PlaybookMessage[] = [
+    { id: 'm1', created_at: new Date(NOW - 3 * DAY).toISOString(), direction: 'outbound', body: 'Hi', message_type: 'text', template_name: null, status: 'read' },
+    { id: 'm2', created_at: new Date(NOW - 2 * DAY).toISOString(), direction: 'inbound', body: 'Yeah go on then', message_type: 'text', template_name: null, status: 'received' },
+  ];
+  const fu = buildColdCallPlaybook(base({ messages: msgs }));
+  ok(fu.mode === 'follow_up' && /I messaged you on WhatsApp/.test(fu.callScript[0]) && /Thanks for getting back to me/.test(fu.callScript[0]), 'follow-up: the script refers to the WhatsApp and their reply');
+
+  // A directory profile is not their website.
+  const prof = buildColdCallPlaybook(base({
+    lead: { id: 'lead-fb', business_name: 'Firebeard Electrical', phone: '07700 900456', website: 'https://tradehq.co.uk/firebeardelectrical', category: 'Electrician', derived_town: 'Shrewsbury', status: 'replied' },
+    reportAudit: { id: 'aud-fb', short_code: 'abcdef', created_at: new Date(NOW - DAY).toISOString(), business_name: 'Firebeard Electrical', business_type: 'Electricians', location_text: 'Shrewsbury' },
+    report: { hook: { questionsTested: 1, gap: { question: 'emergency electrician in Shrewsbury UK who can come today', engineLabel: 'Google AI', namedInstead: ['Able Group (Shrewsbury Service)', 'Shrewsbury Emergency Electricians', 'Whitfield Plumbing & Electrical'], answerExcerpt: REAL_EXCERPT }, tested: [] } },
+    leadCrawl: crawl(THIN),
+  }));
+  ok(prof.site.source === 'directory_profile' && prof.site.label === 'TradeHQ', 'a TradeHQ website is classified as a directory profile');
+  ok(prof.findings.length === 0 && /only a TradeHQ profile/.test(prof.findingsNote ?? ''), 'its crawl is never offered as website findings');
+  const ps = prof.callScript.join(' ');
+  ok(/just your TradeHQ profile/.test(ps) && !/your site|your website is/i.test(ps.replace(/website of your own|one of your own/g, '')), 'the script says "just your TradeHQ profile", never "your site"');
+  ok(/belongs to TradeHQ/.test(prof.objections.find((o) => o.objection === 'My website is fine')?.answer ?? ''), '"My website is fine" answers truthfully for a profile');
+  ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Google AI/.test(ps), 'the profile lead keeps its exact engine and competitors');
+
+  // "How much" carries the build terms, so the default screen needs no offer block.
+  ok((p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '').includes(p.offer.monthly), '"How much is it?" carries the full commercial terms');
+
+  // The panel: the new hierarchy, the old A–H headings gone.
+  const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');
+  for (const t of ['AI opportunity', "What I'd talk about", 'Call script', 'Voice note', 'Questions they may ask', 'Audit evidence', 'Open report', 'Copy report link']) ok(ui.includes(t), 'panel shows: ' + t);
+  for (const t of ['How to explain it', 'Transition to Findable', 'Offer / next step', 'letter="A"']) ok(!ui.includes(t), 'old block gone: ' + t);
+  ok(/No strong owned-site technical issue found from the available evidence\./.test(ui), 'no strong site issue → one plain line, no padding');
+  ok(/tab === 'call'[\s\S]{0,400}: <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>/.test(ui) && /data-testid="voice-note-older-audit"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened)');
+  ok(/useHookVisibility\(leadId\)/.test(ui) && /score\.shape !== 'six'/.test(ui) && /Older early-stop check/.test(ui), 'audit evidence reads the Inbox card\'s scored results and labels an old early-stop check');
+  ok(/<details key=\{o\.objection\}/.test(ui), 'each question is collapsed until opened');
+  ok(!/onSend|doSend|send-whatsapp/.test(ui), 'the panel has no send action');
+  const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
+  ok(/export function VoiceNoteScriptBody/.test(vn) && /<VoiceNoteScriptBody leadId=\{leadId\} \/>/.test(vn), 'the voice-note dialog and the playbook share one body');
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }

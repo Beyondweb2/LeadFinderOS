@@ -35,3 +35,21 @@ hook, panel or builder gains an invoke, rpc, write or raw fetch.
 - Deep-crawl evidence (`evidence` on crawl rows) exists on ~1 of 241 stored crawls, so most leads
   show signal findings (thin pages etc.) or none.
 - Stage 2 (not built): call outcome tracking, follow-up scheduling.
+
+## Simplified for use mid-call (2026-09-27)
+
+The A-H panel became: prospect/context (compact) -> AI OPPORTUNITY (engine, search, named/not, up to 3
+competitors from THAT result) -> WHAT I'D TALK ABOUT (max 3 findings, or one plain line) -> [Call script |
+Voice note] tabs -> QUESTIONS THEY MAY ASK (collapsed) -> AUDIT EVIDENCE (collapsed; every hook result
+per question and engine, from the Inbox card's own scored rows, old early-stop checks labelled) -> Open /
+Copy report link.
+- `callScript` (coldCallPlaybook.ts) is ONE read assembled from opening / explain / transition / next
+  step; those pieces are still built (tests and other callers use them) but no longer shown as blocks.
+- A directory / social profile is never crawled as their site (`leadWebsiteKind.ts`, shared with the
+  voice-note script): findings note + script say "just your <label> profile".
+- "How much is it?" carries the full terms, so the default screen has no offer block. Objections renamed
+  to Paul's words: "I already rank on Google", "Can you guarantee I'll appear?".
+- The Voice note tab is the shared `VoiceNoteScriptBody`; it warns when its saved script came from an
+  earlier audit than the AI opportunity above.
+- Inbox AI visibility "View details" floats over the thread (capped at 40vh, closes on outside click)
+  instead of pushing the conversation down.

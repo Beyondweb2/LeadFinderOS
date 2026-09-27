@@ -44,6 +44,7 @@ import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
 import { FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, reportPublicUrl } from './findableOffer.ts';
 import { shortReportUrl } from './reportSlug.ts';
+import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 
 /* ── Tunables, named ──────────────────────────────────────────────────────────────────────────── */
 
@@ -180,6 +181,12 @@ export interface ColdCallPlaybook {
     leadStatus: string | null;
   };
   warnings: string[];
+  /** Their own site, a directory / social profile, or none (leadWebsiteKind.ts, the voice note's rule). */
+  site: { source: SiteSource; label: string | null };
+  /** THE script Paul follows on the call (2026-09-27): opening, where it left off, the AI miss, the
+   *  strongest finding, the Findable line and the next step as ONE read, one paragraph per beat. The
+   *  structured pieces below (opening, explain, transition, offer) are what it is assembled from. */
+  callScript: string[];
   opening: string[];
   evidence: PlaybookEvidence;
   findings: PlaybookFinding[];
@@ -191,6 +198,8 @@ export interface ColdCallPlaybook {
   followUp: PlaybookFollowUp | null;
   reportUrl: string | null;
   reportNote: string | null;
+  /** The audit the AI opportunity and the report come from (resolveLeadReportAudit). */
+  auditId: string | null;
 }
 
 /* ── Small, pure helpers ──────────────────────────────────────────────────────────────────────── */
@@ -375,6 +384,15 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
       note: 'No website on file, so there is nothing to crawl. In everything we have measured, Google AI has not named a business without a website of its own — that is the conversation to have.',
     };
   }
+  /* ⛔ A PROFILE IS NOT THEIR WEBSITE (the voice note's rule, leadWebsiteKind.ts). A crawl of a TradeHQ
+     page describes TradeHQ, so its findings are never offered as "your site". */
+  const kind = classifyLeadWebsite(input.lead.website);
+  if (kind.source === 'directory_profile' || kind.source === 'social_profile') {
+    return {
+      findings: [], crawlAtMs: newestMs, crawlStale,
+      note: 'No standalone business website found, only a ' + kind.label + ' profile. Never call it their website.',
+    };
+  }
   const found = resolveFindingsSource(true, input.runCrawls, input.leadCrawl);
   if (found) {
     const findings = found.candidates.slice(0, MAX_SITE_FINDINGS).map((f) => {
@@ -490,6 +508,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
 
   const evidence = selectEvidence(report, business);
   const f = selectFindings(input);
+  const siteKind = classifyLeadWebsite(lead.website);
   const convo = summariseConversation(input.messages, business);
 
   const auditMs = reportAudit?.created_at ? new Date(reportAudit.created_at).getTime() : null;
@@ -586,12 +605,14 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
     {
       objection: 'My website is fine',
-      answer: findingShort
+      answer: siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
+        ? 'The only page I could find for you is your ' + siteKind.label + ' profile, not a website of your own. That page belongs to ' + siteKind.label + ', not you, so there\'s a lot less for AI to go on about what you do and where you work.'
+        : findingShort
         ? 'It may well look fine to customers. This is about how clearly it reads to AI and search tools — for example, ' + findingShort + ". I can show you exactly where, and you can check it yourself."
         : 'It may well be. What I\'m talking about is what AI answered when I asked — that\'s separate from how the site looks.',
     },
     {
-      objection: 'I already come up on Google',
+      objection: 'I already rank on Google',
       answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Google AI instead of scrolling Google, they get a short list of names' + (evidence.kind === 'gap' ? ' — and on the question I asked, you weren\'t on it.' : '.'),
     },
     {
@@ -604,10 +625,10 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
     {
       objection: 'How much is it?',
-      answer: FINDABLE_OFFER_SUMMARY + ' The £' + FINDABLE_SETUP_PRICE_GBP + ' covers measuring where you are now, doing the work, and re-measuring at four weeks.',
+      answer: FINDABLE_OFFER_SUMMARY + ' The £' + FINDABLE_SETUP_PRICE_GBP + ' covers measuring where you are now, doing the work, and re-measuring at four weeks. ' + offer.monthly,
     },
     {
-      objection: 'Can you guarantee I\'ll show up?',
+      objection: 'Can you guarantee I\'ll appear?',
       /* ⛔ NO "I can't promise" HERE: a hedge beside the conditional refund reads as walking it back
          (CLAUDE.md §1). What is promised is the measurement and the refund — never a placement. */
       answer: "What I guarantee is the measurement, not a spot in the answer. We measure how often AI names you before we start and re-measure after four weeks on the same questions. If that number hasn't gone up, you email within 14 days of your results and get your £" + FINDABLE_SETUP_PRICE_GBP + ' back.',
@@ -620,7 +641,43 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
   ];
 
+  /* ── THE CALL SCRIPT: one read, built from the pieces above, nothing repeated ── */
+  const callScript: string[] = [];
+  const engine = evidence.engine ?? 'AI';
+  const namesLine = top.length ? 'It came back with ' + joinNames(top) + ', but you didn\'t come up.' : 'And you didn\'t come up in the answer it gave.';
+  if (convo.mode === 'cold') {
+    callScript.push('Hi, is that ' + callName + '? It\'s Paul from Findable.');
+    if (evidence.kind === 'gap') callScript.push('I was looking for ' + lookingAt + ' ' + when + ' and asked ' + engine + ' who it would recommend. ' + namesLine);
+    else if (evidence.kind === 'named') callScript.push('I asked AI who it would recommend for ' + lookingAt + ' and it did mention you, which is good. I wanted to run something by you about keeping it that way.');
+    else callScript.push('I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
+    callScript.push('Have you got a minute? I\'ll explain why I\'m ringing.');
+  } else {
+    const fu = convo.followUp!;
+    const repliedLast = !!fu.lastInbound && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '');
+    callScript.push('Hi, is that ' + callName + '? It\'s Paul from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.'
+      + (repliedLast ? ' Thanks for getting back to me, I thought it\'d be easier to explain on a quick call.'
+        : fu.reportSentAt ? ' I sent over a short report on what AI says when someone asks for ' + lookingAt + ', so I thought I\'d talk you through it.'
+          : ' I thought it\'d be easier to explain on a quick call.'));
+    if (evidence.kind === 'gap') callScript.push('When I asked ' + engine + ' who it would recommend for ' + lookingAt + ', ' + (top.length ? 'it came back with ' + joinNames(top) + ', but you didn\'t come up.' : 'you didn\'t come up in the answer.'));
+    callScript.push('Have you got a minute?');
+  }
+  if (evidence.kind === 'gap') callScript.push('When someone asks AI for ' + lookingAt + ', it gives them a short list of names rather than ten links, so that can mean customers going to someone else.');
+  if (siteKind.source === 'directory_profile' || siteKind.source === 'social_profile') {
+    callScript.push('I also had a look for your website and couldn\'t find one of your own, just your ' + siteKind.label + ' profile. Without your own site there\'s a lot less for AI to go on about what you do and where you work.');
+  } else if (siteKind.source === 'none') {
+    callScript.push('I also couldn\'t find a website for you, and without one it\'s much harder for AI to know what you do and where.');
+  } else if (f.findings.length) {
+    const lead0 = f.findings[0];
+    callScript.push('I had a look at your site too. The main thing I noticed is ' + lead0.explanation.charAt(0).toLowerCase() + lead0.explanation.slice(1).replace(/\.$/, '') + '. ' + lead0.whyItMayMatter + ' It could be contributing, it\'s not the only thing AI looks at.');
+  }
+  callScript.push(transition);
+  callScript.push(reportUrl
+    ? 'Can I send you the report on WhatsApp? It shows the exact question, what AI answered and who it named. Then I\'ll give you a quick ring once you\'ve had a look.'
+    : 'Can I run the check properly and send it over, then give you a quick ring once you\'ve had a look?');
+
   return {
+    site: { source: siteKind.source, label: siteKind.label },
+    callScript,
     mode: convo.mode,
     context: {
       business,
@@ -646,6 +703,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     objections,
     followUp: convo.followUp,
     reportUrl,
+    auditId: reportAudit?.id ?? null,
     reportNote: reportUrl ? null : (input.auditRunning ? 'The audit is still running — no report link yet.' : 'No usable public report for this lead.'),
   };
 }
