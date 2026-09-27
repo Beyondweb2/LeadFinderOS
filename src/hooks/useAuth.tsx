@@ -166,7 +166,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try { localStorage.removeItem('leadfinder_guest_cap_reached'); } catch {}
-    await supabase.auth.signOut();
+    /* ⛔ THIS BROWSER ONLY (Paul, 2026-09-27). supabase.auth.signOut() with no scope is GLOBAL: pressing
+       Sign out on one device ended every session on the account — every device, every tab. The
+       account-wide action is the Team page's Disable (role removed + auth ban, server-side), not this
+       button. scripts/sign-out-scope.test.ts keeps it local. */
+    await supabase.auth.signOut({ scope: 'local' });
     window.location.href = '/auth';
   };
 

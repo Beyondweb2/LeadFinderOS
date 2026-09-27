@@ -173,6 +173,48 @@ Coverage, Page Generator (RG's plan), Page Plan, Team — no console errors, no 
 sent or changed. ⚠️ The app's **Sign out is GLOBAL** (`supabase.auth.signOut()` defaults to
 scope global): signing the QA browser out ended EVERY session on the data account, Paul's included.
 
+## 7c. Part 3 (2026-09-27/28)
+
+**Edge functions ran in Singapore.** Supabase runs a function in the region nearest the CALLER; from
+Paul's browser (Cloudflare BKK) every call ran in ap-southeast-1 (`x-sb-edge-region`) while the
+database is eu-west-1, so every read inside every function crossed the world. The SPA now pins
+`?forceFunctionRegion=eu-west-1` on /functions/v1/ URLs (`src/lib/edgeRegion.ts`, wired into the
+Supabase client's fetch). ⛔ The query parameter, NOT supabase-js's `region` option: that also sends an
+`x-region` header, which every function's CORS preflight would refuse. Default vs pinned, one call
+each: coverage pairs 3.8 → 1.8 s, towns 1.1 → 0.6 s, page-generator clients 1.6 → 0.5 s, plan 1.8 → 1.5 s,
+queue status 1.9 → 0.6 s, team 0.9–1.7 → 0.5–0.7 s, paid-client list 1.7 → 1.3 s.
+
+**Coverage niche lookup** (`market-view` niche; `x-niche-timing` header). Before (Singapore, 2 calls
+each): Plumbers 28.6–34.2 s, Electricians 16.1–21.1 s, Locksmiths 23.8–40.2 s. Profile (Plumbers): the
+queue results 21.5 s (14 batches of 40 runs, 1,741 rows, 19 MB of results), sign-in 2.7 s (getUser, then
+resolveActor's own getUser), audits 1.4 s, runs 0.9 s, fold 0.6 s; no external API. Fixes: one sign-in
+check, audits+runs side by side, the region pin. After (pinned, identical output all three): Plumbers
+8.9 s, Electricians 8.0 s, Locksmiths 10.2 s. The remaining 6.3–8.5 s is the database unpacking the
+stored results: a sequential replay of the 14 batches summed 8.4 s of server time (slim field
+projection 6.5 s — each path still opens the whole value); four batches at a time was no faster and
+held four pool connections, so it stays one at a time. Going lower needs a slim stored copy per queue
+row (answer text is ~65% of each result and the fold needs only whether it exists) — proposed, not built.
+
+**Sign out is local now** (`useAuth`: `signOut({ scope: 'local' })`; `scripts/sign-out-scope.test.ts`).
+
+**Duplicate sign-in checks.** Removed where the helper repeats the SAME network check (auth getUser +
+role): coverage, page-generator (part 2), market-view (now). Left: enrich-business and enrich-lead
+verify the JWT signature LOCALLY (getClaims, ES256 — no auth-server round trip) before resolveActor's
+real check; removing it saves ~nothing and changes which refusal comes first.
+
+**Apify (read-only, 2026-09-27 16:58 snapshot): $25.94 of $30, cycle 17 Sep–16 Oct.** By audit type
+this cycle: outreach hook audits 316 × $0.042 = $13.35; paid-baseline Discovery 5 × $1.20 = $6.02; full
+measurement 2 × $0.38; baseline 1 × $0.65. Ledger: AI search $17.35 + billing corrections $5.80 (the real
+per-question cost is ~$0.0139, not the $0.0104 estimate); SEO scans $0.08 each; ~$2.8 of the Apify total
+is not itemised in enrichment_usage (enrichment/directory/social scrapes). Burn: $7.72 on 17 Sep, $1–3.6
+a day to 23 Sep, $0.03–0.31 a day since. Waste found: 2 repeat hook audits ($0.05); no spend on failed
+runs. At 100% Apify refuses (402): every AI-search question fails (hook, baseline, discovery, full
+measure, REMEASURE, free check) and runs are marked failed, never complete; SEO scans, enrich
+(Maps/social/email), directory checks, website check and mockup photo pools fail. Unaffected: Find
+Leads (Google Places), WhatsApp, OpenAI work, crawl checks. Our own caps: per-user rolling 24 h $12
+(queue) and $2 (enrichment runner); the 75%/90% thresholds only log. RG's remeasure (6 Oct) and
+Ronnie's (13 Oct) fall inside this cycle.
+
 ## 8. Still slow / open
 
 - The Outreach leads are primary data: the table still waits for all ~5,300. Showing page 0 (the
