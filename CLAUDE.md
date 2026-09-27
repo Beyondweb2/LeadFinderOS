@@ -28,12 +28,11 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (160 suites). **Honest green is 152/160 (2026-09-22)** — the EIGHT known-stale suites are
-  `coverage-lead-counts`, `explain-offer`, `new-site-tier`, `onboarding-audit-fields`,
-  `remeasure-results`, `report-attribution`, `verdict`, `site-origin` (needs Deno). Read the FAILED
-  names, never the count. **Typecheck reads 12 against a baseline of 9**: three pre-existing
-  `lucide-react` `title`-prop errors in `OutreachTable.tsx` and `Inbox.tsx` are on `origin/main` and
-  are not in the baseline file, so the gate reports a regression that is not yours. Check WHICH files.
+  (210 suites). **Honest green is 202/210 (2026-09-27, all eight also fail on untouched
+  `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
+  Deno), `onboarding-audit-fields`, `initial-opener-select`, `manual-onboarding`, and
+  `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
+  count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
@@ -332,8 +331,19 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   Never read a small key out of `results` in bulk — use `results_summary` / `results_crawl_check` /
   `gemini_answered` (`docs/inbox-outreach-speed.md`). A policy's `auth.uid()` goes in `(select …)`.
 - **PostgREST truncates at 1,000 rows silently** — `src/lib/fetchAllRows.ts`, `.order('id')`; for a big
-  list use `fetchAllRowsParallel` (waves of 6, same rows, deduped by id). A
+  list use `fetchAllRowsParallel` (same rows, deduped by id; a short page 0 probes once, the first wave
+  is sized from last time's count). A
   `.in()` over many keys can hit the cap too; read the distinct set once and intersect in memory.
+- ⛔ **Lead LIST code never reads `select('*')` of `outreach_leads`** — it downloads
+  `OUTREACH_LIST_COLUMNS` (41 of 111, `src/lib/outreachLeadColumns.ts`; the Dashboard has its own
+  `DASHBOARD_LEAD_COLUMNS`). A new field read in list code goes in that list —
+  `scripts/outreach-list-columns.test.ts` walks every caller with a parser and fails otherwise; a dev
+  Proxy logs any undownloaded read. `LeadDetailDialog` reads its own complete row (`useFullLeadRow`).
+- ⛔ **The API has ~10 database connections for everyone** (Micro instance, default PostgREST pool).
+  Request count and query hold-time are shared costs. **Never `invalidateQueries` on an interval
+  shorter than the query** — the old fetch keeps running (the queryFn ignores the abort), so copies
+  pile up (the AI Audit 5 s whole-book poll, 2026-09-27). Poll the moving part and patch it in.
+  Firing every page at once is slower, not faster (`docs/site-wide-speed.md`).
 - **`ai_audits` / `ai_audit_runs` are NOT in the `supabase_realtime` publication** (only `outreach_leads`,
   `whatsapp_messages`): a `postgres_changes` subscription on them never fires. Poll, or read the card's
   state (`hookReportState`, `docs/hook-audit.md`).
@@ -753,6 +763,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Touching… | Read first |
 |---|---|
 | Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
+| Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |

@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
+import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
 
@@ -53,6 +54,9 @@ interface LeadSearchContextType {
    *  per-town searches (useTownLeadSearch), and it must drop the same businesses this page drops
    *  or a lead added from a row would be one the page had hidden. Exported so there is one rule. */
   isLeadExcluded: (lead: Lead) => boolean;
+  /** Load the viewed / in-list businesses isLeadExcluded matches against. They are no longer read
+   *  on every page load — a screen that filters with isLeadExcluded outside a search calls this. */
+  loadExclusions: () => Promise<void>;
   /** ⛔ HAND THIS PAGE A RESULT SET THAT WAS ALREADY FETCHED ELSEWHERE, so "View" on a town row
    *  opens Find Leads showing results instead of paying for the same search again. Sets `leads` +
    *  `lastSearch` together and persists them exactly as a real search does — they are stored in
@@ -265,33 +269,48 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     })();
   }, [user?.id, toast]);
 
-  // Fetch all businesses to exclude (checked + outreach history + current leads)
-  const fetchExcludedBusinesses = useCallback(async () => {
-    if (!user) {
+  /* ══ THE VIEWED / IN-LIST BUSINESSES (2026-09-27, site-wide speed pass) ══════════════════════
+     ⛔ THEY WERE CUT AT 1,000 ROWS. Three unpaginated reads, and outreach_leads (5,355) and
+     outreach_history (5,377) are far past PostgREST's cap — so a business you had viewed AND already
+     hold, outside the first 1,000, was HIDDEN from a search instead of shown and marked "in list".
+     Now paged in full.
+     ⛔ AND THEY WERE READ ON EVERY PAGE LOAD, TWICE: this provider wraps the whole app, and the
+     effect keyed on the `user` OBJECT, which changes identity twice on a load (and on every tab
+     refocus). Only two readers exist: search(), which re-reads them itself before filtering, and the
+     Coverage niche panel (isLeadExcluded), which now asks for them when it opens (loadExclusions).
+     ⚠️ search() USES WHAT IT FETCHED. It used to await this and then filter with `isExcluded` — the
+     closure from BEFORE the await, i.e. whatever the page-load read had left in state. It now filters
+     with the lists this call returns, so a search always matches against the current book. */
+  const exclusionsRef = useRef<{ checked: ExcludedBusiness[]; inList: ExcludedBusiness[] }>({ checked: [], inList: [] });
+  const fetchExcludedBusinesses = useCallback(async (): Promise<{ checked: ExcludedBusiness[]; inList: ExcludedBusiness[] }> => {
+    if (!user?.id) {
       setExcludedBusinesses([]);
-      return;
+      exclusionsRef.current = { checked: [], inList: [] };
+      return exclusionsRef.current;
     }
-
-    // Fetch checked businesses, outreach history, and current leads in parallel
-    const [checkedResult, historyResult, leadsResult] = await Promise.all([
-      supabase.from('checked_businesses').select('business_name, google_maps_url'),
-      supabase.from('outreach_history').select('business_name, google_maps_url'),
-      supabase.from('outreach_leads').select('business_name, google_maps_url'),
+    /* A failed read degrades to "nothing to match" for that list — exactly what the old
+       `.data || []` did — rather than failing the search. */
+    const all = (label: string, table: string) =>
+      fetchAllRowsParallel<ExcludedBusiness & { id: string }>(label, (from, to) =>
+        supabase.from(table as 'checked_businesses').select('id, business_name, google_maps_url')
+          .order('id', { ascending: true }).range(from, to), (r) => r.id)
+        .then((r) => r.rows as ExcludedBusiness[])
+        .catch((e) => { console.warn(`${label} unavailable:`, e); return [] as ExcludedBusiness[]; });
+    const [checked, history, current] = await Promise.all([
+      all('Exclusions (checked)', 'checked_businesses'),
+      all('Exclusions (history)', 'outreach_history'),
+      all('Exclusions (leads)', 'outreach_leads'),
     ]);
-
     // Viewed-only (checked) businesses are decluttered from results.
-    setExcludedBusinesses(checkedResult.data || []);
-
     // In-list businesses (ever added) stay visible but get marked.
-    const inList: ExcludedBusiness[] = [];
-    if (historyResult.data) inList.push(...historyResult.data);
-    if (leadsResult.data) inList.push(...leadsResult.data);
+    const inList: ExcludedBusiness[] = [...history, ...current];
+    exclusionsRef.current = { checked, inList };
+    setExcludedBusinesses(checked);
     setInListBusinesses(inList);
-  }, [user]);
+    return exclusionsRef.current;
+  }, [user?.id]);
 
-  useEffect(() => {
-    fetchExcludedBusinesses();
-  }, [fetchExcludedBusinesses]);
+  const loadExclusions = useCallback(async () => { await fetchExcludedBusinesses(); }, [fetchExcludedBusinesses]);
 
   const matchesBusiness = (list: ExcludedBusiness[], lead: Lead): boolean =>
     list.some(
@@ -350,8 +369,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     // Only clear gated flag if user has pro access; free users stay gated until checkout
     if (hasProAccess) setGated(false);
 
-    // Refresh excluded businesses before searching (skip for demo)
-    if (!isDemo) await fetchExcludedBusinesses();
+    /* Refresh the excluded businesses (skip for demo) — ALONGSIDE the search, not before it: the
+       search takes seconds, the lists well under that, and nothing needs them until the results
+       are filtered below. It used to be a full wait in front of every search. */
+    const exclusionsP = isDemo ? Promise.resolve(exclusionsRef.current) : fetchExcludedBusinesses();
 
     // Helper to determine if an error is retryable (network / 5xx / 429)
     const isRetryable = (err: any): boolean => {
@@ -511,8 +532,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             return;
           }
 
-          // Filter out excluded businesses
-          const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
+          // Filter out excluded businesses — against the lists THIS search fetched.
+          const ex = await exclusionsP;
+          if (controller.signal.aborted) {
+            setIsLoading(false);
+            return;
+          }
+          const filteredLeads = data.leads.filter(lead => !(matchesBusiness(ex.checked, lead) && !matchesBusiness(ex.inList, lead)));
 
           // Sort: NO_WEBSITE/DIRECTORY_ONLY first, then others
           const statusOrder: Record<string, number> = {
@@ -705,9 +731,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     resolvedLocation,
     lastSearch,
     isLeadExcluded: isExcluded,
+    loadExclusions,
     adoptResults,
     locationCandidates,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch, isExcluded, adoptResults]);
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded, townFilterFallback, resolvedLocation, locationCandidates, lastSearch, isExcluded, loadExclusions, adoptResults]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

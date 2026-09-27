@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
@@ -200,8 +200,9 @@ const PROJECT_STATUS_OPTIONS = [
 /** The popup's Crawl site button, seeded with THIS lead's stored crawl (the one row every screen
  *  reads) so an existing crawl opens instead of silently re-running. */
 function LeadDetailCrawlButton({ lead }: { lead: { id: string; website?: string | null } }) {
-  const { crawl, refetch } = useLeadCrawl(lead.id);
-  return <CrawlCheckButton lead={lead} crawl={crawl} onDone={() => void refetch()} from="lead_detail" />;
+  // No onDone refetch: a stored crawl invalidates every ['lead-crawls'] read (this one included).
+  const { crawl } = useLeadCrawl(lead.id);
+  return <CrawlCheckButton lead={lead} crawl={crawl} from="lead_detail" />;
 }
 
 function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentType<{ className?: string }>; color: string; children: React.ReactNode }) {
@@ -218,6 +219,41 @@ const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
 // Status options come from the shared PIPELINE_STATUS_OPTIONS (same list the
 // Outreach row uses) — one source of truth so a lead offers identical options
 // everywhere. Outcomes (Won/Lost) remain the footer Mark Paid/Lost actions.
+
+/**
+ * The COMPLETE lead row for the dialog, read by id when it opens (2026-09-27, site-wide speed pass).
+ *
+ * The lead handed in is a LIST row — the columns in src/lib/outreachLeadColumns.ts, not all 111. The
+ * dialog reads (and writes back, read-modify-write) columns the list never downloads: payment,
+ * project, delivery checklist/ref, remeasure dates, contact name. So it reads `*` for this one lead
+ * and lays the list row ON TOP: the list row is the live one (every edit patches it, and updateLead
+ * swaps in the full row it returns), so its fields win and the full row supplies everything else.
+ * A demo lead has no database row; it is already complete.
+ */
+export function useFullLeadRow(lead: OutreachLead | null, open: boolean): { row: OutreachLead | null; error: string | null } {
+  const id = lead?.id ?? null;
+  const demo = !!id && isDemoLead(id);
+  const [fetched, setFetched] = useState<{ id: string; row: OutreachLead } | null>(null);
+  const [error, setError] = useState<{ id: string; message: string } | null>(null);
+  useEffect(() => {
+    if (!open || !id || demo) return;
+    let cancelled = false;
+    setError(null);
+    void supabase.from('outreach_leads').select('*').eq('id', id).maybeSingle().then(({ data, error: e }) => {
+      if (cancelled) return;
+      if (e || !data) { setError({ id, message: e?.message ?? 'lead not found' }); return; }
+      setFetched({ id, row: data as unknown as OutreachLead });
+    });
+    return () => { cancelled = true; };
+  }, [open, id, demo]);
+  const row = useMemo<OutreachLead | null>(() => {
+    if (!lead) return null;
+    if (demo) return lead;
+    if (!fetched || fetched.id !== lead.id) return null;
+    return { ...fetched.row, ...lead };
+  }, [lead, demo, fetched]);
+  return { row, error: error && error.id === id ? error.message : null };
+}
 
 interface LeadDetailDialogProps {
   open: boolean;
@@ -256,13 +292,33 @@ export function LeadDetailDialog({
   onAddCustomStatus,
   context = 'outreach',
 }: LeadDetailDialogProps) {
+  const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
   if (!lead) return null;
+  /* ⛔ NEVER THE BODY FROM A LIST ROW. The list downloads 41 columns (src/lib/outreachLeadColumns.ts);
+     the body's editors seed their state ONCE, on mount, from fields the list does not carry (payment,
+     project, delivery checklist, contact name…). Mounted on a list row they would open blank and
+     save blanks. So it waits for the complete row. */
+  if (!fullLead) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle className="sr-only">{lead.business_name}</DialogTitle>
+          <DialogDescription className="sr-only">Loading the full lead</DialogDescription>
+          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+            {fullLeadError
+              ? `Could not load this lead (${fullLeadError}). Close and open it again.`
+              : <><Loader2 className="h-4 w-4 animate-spin" /> Loading the full lead…</>}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0">
         <LeadDetailBody
-          key={lead.id}
-          lead={lead}
+          key={fullLead.id}
+          lead={fullLead}
           onStatusChange={onStatusChange}
           onNextActionChange={onNextActionChange}
           onUpdateLead={onUpdateLead}

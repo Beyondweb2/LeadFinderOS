@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel } from '@/lib/fetchAllRows';
+import { OUTREACH_LIST_SELECT, guardListRows } from '@/lib/outreachLeadColumns';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -137,7 +138,11 @@ async function applyPlaceDetailsToLead(
   return retry.data as OutreachLead;
 }
 
-export function useOutreach() {
+/* ⚡ `history: false` (2026-09-27, site-wide speed pass): the Outreach page and the Inbox's lead
+   dialog never call addLead or isInOutreach — the only two readers of outreach_history — yet every
+   mount downloaded all ~5,400 rows of it (7 requests, 1.2 MB). They opt out. A mount that opts out
+   must not call either (scripts/outreach-list-columns.test.ts checks the two that do). */
+export function useOutreach({ history = true }: { history?: boolean } = {}) {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
@@ -319,17 +324,20 @@ export function useOutreach() {
     try {
       /* ⚡ Pages fetched six at a time, and active + archived together (2026-09-27): the six
          sequential round trips were ~9 s of the Outreach page's load. Same rows, same order. */
+      /* ⚡ The LIST columns, not '*' (2026-09-27): 41 of 111, 15.7 MB → 6.8 MB of JSON. What is and
+         is not downloaded, and the three guards that keep a missing field from going quiet, are in
+         src/lib/outreachLeadColumns.ts. The detail dialog reads its own complete row. */
       const [act, arc] = await Promise.allSettled([
         fetchAllRowsParallel<OutreachLead>('Outreach (active leads)', (from, to) => supabase
-          .from('outreach_leads').select('*').eq('is_archived', false)
+          .from('outreach_leads').select(OUTREACH_LIST_SELECT).eq('is_archived', false)
           .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
         fetchAllRowsParallel<OutreachLead>('Outreach (archived leads)', (from, to) => supabase
-          .from('outreach_leads').select('*').eq('is_archived', true)
+          .from('outreach_leads').select(OUTREACH_LIST_SELECT).eq('is_archived', true)
           .order('updated_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (l) => l.id),
       ]);
-      if (act.status === 'fulfilled') activeData = act.value.rows;
+      if (act.status === 'fulfilled') activeData = guardListRows(act.value.rows, 'useOutreach');
       else activeError = { message: act.reason instanceof Error ? act.reason.message : String(act.reason) };
-      if (arc.status === 'fulfilled') archivedData = arc.value.rows;
+      if (arc.status === 'fulfilled') archivedData = guardListRows(arc.value.rows, 'useOutreach');
       else archivedError = { message: arc.reason instanceof Error ? arc.reason.message : String(arc.reason) };
     } catch (e) { activeError = { message: e instanceof Error ? e.message : String(e) }; }
 
@@ -354,9 +362,9 @@ export function useOutreach() {
     setArchivedLeads((archivedData || []) as OutreachLead[]);
   }, []);
 
-  const fetchOutreachHistory = useCallback(async () => {
+  const fetchOutreachHistory = useCallback(async (): Promise<OutreachHistoryEntry[] | null> => {
     const uid = userIdRef.current;
-    if (!uid) return;
+    if (!uid) return null;
 
     /* ⛔ PAGINATED (2026-09-27). It was one unordered select, so PostgREST silently returned 1,000 of
        the 5,333 rows and the add-lead pre-filter could not see the rest. The database dedupe stays the
@@ -368,10 +376,11 @@ export function useOutreach() {
         .order('id', { ascending: true }).range(from, to), (h) => h.id)).rows;
     } catch (error) {
       console.error('Error fetching outreach history:', error);
-      return;
+      return null;
     }
 
     setOutreachHistory(data as OutreachHistoryEntry[]);
+    return data;
   }, []);
 
   const fetchActivities = useCallback(async (leadId: string) => {
@@ -396,9 +405,9 @@ export function useOutreach() {
     userIdRef.current = currentUserId;
     if (currentUserId) {
       fetchLeads();
-      fetchOutreachHistory();
+      if (history) fetchOutreachHistory();
     }
-  }, [user?.id, fetchLeads, fetchOutreachHistory]);
+  }, [user?.id, fetchLeads, fetchOutreachHistory, history]);
 
   // Resolve loading immediately for unauthenticated (ad-entry) users
   useEffect(() => {

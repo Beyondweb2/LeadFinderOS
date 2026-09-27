@@ -115,6 +115,11 @@ import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
+import { bulkWriteLanded } from '@/lib/bulkWriteResult';
+import { useQuery } from '@tanstack/react-query';
+import { fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
+/** Module-level so an empty map keeps one identity across renders. */
+const EMPTY_AUDIT_MAP: Record<string, LeadAuditState> = {};
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
@@ -299,7 +304,7 @@ export function OutreachTable({
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
-  const { crawlByLeadId, refetch: refetchCrawls } = useLeadCrawls();
+  const { crawlByLeadId } = useLeadCrawls();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
@@ -317,43 +322,18 @@ export function OutreachTable({
   // Per-lead LATEST audit state (mirrors sitesByLead) — drives the upcoming "Run audit" /
   // "Manage" row control. Keyed by lead_id, newest audit first; each entry carries that
   // audit's latest run + its status (pending|running|complete|capped|failed).
-  const [auditsByLead, setAuditsByLead] = useState<Record<string, { auditId: string; runId: string; status: string }>>({});
+  /* The SAME cached read the Outreach page starts on open (src/lib/outreachAuditMap.ts) — it used to
+     be an effect here, which only began once every lead had arrived. */
+  const { data: auditsByLead = EMPTY_AUDIT_MAP } = useQuery({
+    queryKey: outreachAuditMapKey(user?.id),
+    queryFn: fetchOutreachAuditMap,
+    staleTime: OUTREACH_AUDIT_MAP_STALE_MS,
+    enabled: !!user?.id,
+  });
   const navigate = useNavigate();
 
 
 
-  // Map lead_id -> its LATEST audit run + status, so each row can show "Run audit" (none) /
-  // "Running…" / "Manage" (complete). Mirrors sitesByLead: RLS-scoped (no explicit user filter),
-  // newest audit first, keep the FIRST audit seen per lead_id. For that audit, pick its latest
-  // run (max run_number, else newest created_at); audits with no runs are skipped.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      /* ⛔ PAGINATED (2026-09-27): one unpaginated select returned 1,000 of the 1,572 audits, so the
-         oldest leads' rows showed "Run audit" for an audit they already had. Newest-first order kept. */
-      let data: unknown[] | null = null;
-      try {
-        data = (await fetchAllRowsParallel<{ id: string }>('Outreach (audit map)', (from, to) => (supabase as unknown as SupabaseClient)
-          .from('ai_audits')
-          .select('id, lead_id, ai_audit_runs(id, run_number, status, created_at)')
-          .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), (a) => a.id)).rows;
-      } catch { data = null; }
-      if (cancelled || !data) return;
-      const map: Record<string, { auditId: string; runId: string; status: string }> = {};
-      for (const row of data as Array<{ id: string; lead_id: string | null; ai_audit_runs: Array<{ id: string; run_number: number | null; status: string | null; created_at: string | null }> | null }>) {
-        if (!row.lead_id || map[row.lead_id]) continue; // no lead, or a newer audit already won
-        const runs = Array.isArray(row.ai_audit_runs) ? row.ai_audit_runs : [];
-        if (runs.length === 0) continue;               // no run yet → nothing to show
-        const latestRun = [...runs].sort((a, b) =>
-          (b.run_number ?? 0) - (a.run_number ?? 0) ||
-          (new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
-        )[0];
-        map[row.lead_id] = { auditId: row.id, runId: latestRun.id, status: latestRun.status ?? 'pending' };
-      }
-      setAuditsByLead(map);
-    })();
-    return () => { cancelled = true; };
-  }, [isAdmin]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   /* StatusFilterValue, not LeadStatus: the list also carries the Paid sentinel, which is not a
@@ -885,7 +865,8 @@ export function OutreachTable({
      ⛔ THE ELIGIBILITY RULE IS UNTOUCHED. auditEligibleLeads still excludes every lead that holds
      ANY audit, exactly as before; the split is shown so the operator can SEE which of the excluded
      are genuinely done and which merely failed, without changing who gets audited. */
-  const { usage: apifyUsage } = useApifyUsage();
+  // Read when the bulk-audit dialog opens (the only place it is shown), not on every visit.
+  const { usage: apifyUsage, loaded: apifyUsageLoaded } = useApifyUsage({ enabled: auditDialogOpen });
   const auditAlreadySplit = useMemo(
     () => splitAlreadyAudited(selectedIds, auditsByLead),
     [selectedIds, auditsByLead],
@@ -1060,7 +1041,7 @@ export function OutreachTable({
       /* ⚠️ null, not the string "undecided" — clearing a decision must restore ABSENCE, the same
          rule as clearing amount_paid writing null rather than 0. */
       const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { product: value } as Partial<OutreachLead>)));
-      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      const okCount = results.filter((r, i) => bulkWriteLanded(r, isDemoLead(ids[i]))).length;
       const label = value ? (PRODUCT_OPTIONS.find((o) => o.value === value)?.label ?? value) : 'Undecided';
       toast({
         title: `${label} set on ${okCount} of ${ids.length} lead${ids.length === 1 ? '' : 's'}`,
@@ -1069,7 +1050,9 @@ export function OutreachTable({
         variant: okCount === 0 ? 'destructive' : undefined,
       });
       setSelectedIds(new Set());
-      onRefreshLeads?.();
+      // No full reload (2026-09-27): updateLead already swapped each written row in from the
+      // database's reply, and a failed write left its row untouched — the reload re-downloaded every
+      // lead to show the same thing.
     } finally {
       setProductBusy(false);
     }
@@ -1085,7 +1068,7 @@ export function OutreachTable({
     try {
       const ids = missingTradeIds.length ? missingTradeIds : Array.from(selectedIds);
       const results = await Promise.allSettled(ids.map((id) => onUpdateLead(id, { search_keyword: tradeChoice })));
-      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      const okCount = results.filter((r, i) => bulkWriteLanded(r, isDemoLead(ids[i]))).length;
       toast({
         title: `Set trade on ${okCount} of ${ids.length} lead${ids.length === 1 ? '' : 's'}`,
         description: okCount < ids.length ? `${ids.length - okCount} failed — try again` : `They can be audited as “${tradeChoice}” now.`,
@@ -1093,7 +1076,7 @@ export function OutreachTable({
       });
       setTradeDialogOpen(false);
       setSelectedIds(new Set());
-      onRefreshLeads?.();
+      // No full reload — see setProductOn.
     } finally {
       setTradeBusy(false);
     }
@@ -2639,7 +2622,7 @@ export function OutreachTable({
                             <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
                           )}
                           {!isDemoLead(lead.id) && (
-                            <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} onDone={() => void refetchCrawls()} iconOnly from="outreach" />
+                            <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />
                           )}
                           {lead.phone ? (
                             <>
@@ -2954,7 +2937,10 @@ export function OutreachTable({
           )}
           {/* ⚠️ AN UNREADABLE BUDGET SAYS SO. Rendering nothing would imply headroom nobody checked —
               the absent-value fault on a spend guard. Nothing is blocked by it. */}
-          {auditMonthlyVerdict.unknown && (
+          {auditMonthlyVerdict.unknown && !apifyUsageLoaded && (
+            <p className="text-[11px] text-muted-foreground">Checking the Apify monthly budget…</p>
+          )}
+          {auditMonthlyVerdict.unknown && apifyUsageLoaded && (
             <p className="text-[11px] text-muted-foreground">
               Couldn&rsquo;t read the Apify monthly usage, so the monthly budget isn&rsquo;t checked here.
               The daily cap check above still applies.

@@ -51,7 +51,45 @@ export async function fetchAllRows<T>(
  * offsets, and the row at a boundary can then arrive twice. `keyOf` (the unique id) drops the copy.
  * The sequential loop has the same snapshot gap; this does not widen it.
  * Order is preserved: pages are concatenated in offset order. Six at a time: 5-6k-row lists (leads, messages) arrive in two round trips after the first.
+ *
+ * ⚡ A SHORT FIRST PAGE SENDS ONE PROBE, NOT A WAVE OF SIX (2026-09-27, site-wide speed pass). Every
+ * list under 1,000 rows used to cost 7 requests, 6 of them empty. The probe is still needed: a short
+ * page means "the end" OR "the server's cap is below 1,000", and only a read at offset `size` can
+ * tell them apart. If the probe finds rows, the waves carry on exactly as before.
+ * ⚡ AND THE FIRST WAVE IS SIZED FROM LAST TIME'S COUNT (same day). A full page 0 used to fire six more
+ * pages whatever the list's size: 1,554 rows cost 7 requests, 5 of them past the end — and an empty
+ * page is not free, the database still sorts the whole filtered set to skip to its offset, holding
+ * one of the API's ~10 shared connections while it does. The count this label returned last time
+ * (this tab, else this browser) now sizes that first wave: 1,554 → one more page. Still fetched
+ * AFTER page 0, as before; a list that grew past its guess just carries on in waves of six.
+ * ⛔ TRIED AND REJECTED the same day: using that count to fire every page TOGETHER with page 0.
+ * Measured live on the Outreach leads read it was SLOWER (8.4–8.6 s vs 3.2–6.0 s): the database and
+ * the API's small connection pool, not the round trip, are the bottleneck, and six wide pages at
+ * once just queue.
  */
+const rowCountHint = new Map<string, number>();
+const HINT_KEY = 'fetchAllRows.rowCounts.v1';
+function readHint(label: string): number | undefined {
+  if (rowCountHint.has(label)) return rowCountHint.get(label);
+  try {
+    const n = (JSON.parse(globalThis.localStorage?.getItem(HINT_KEY) ?? '{}') as Record<string, unknown>)[label];
+    return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : undefined;
+  } catch { return undefined; }
+}
+function writeHint(label: string, n: number) {
+  rowCountHint.set(label, n);
+  try {
+    const all = JSON.parse(globalThis.localStorage?.getItem(HINT_KEY) ?? '{}') as Record<string, number>;
+    all[label] = n;
+    globalThis.localStorage?.setItem(HINT_KEY, JSON.stringify(all));
+  } catch { /* storage unavailable: the in-memory count still serves this tab */ }
+}
+/** Test-only: forget every remembered count. */
+export function resetRowCountHints() {
+  rowCountHint.clear();
+  try { globalThis.localStorage?.removeItem(HINT_KEY); } catch { /* ignore */ }
+}
+
 export async function fetchAllRowsParallel<T>(
   label: string,
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
@@ -66,9 +104,18 @@ export async function fetchAllRowsParallel<T>(
   let truncated = false;
   if (size > 0) {
     let next = 1;
+    let waveLen = size < PAGE ? 1 : concurrency;
+    const hint = readHint(label);
+    if (size === PAGE && hint !== undefined) {
+      // The pages after page 0 that last time's count fills, plus one if it ended exactly on a page
+      // boundary (only a page past it can show the end). Never fewer than one.
+      const more = Math.ceil(Math.max(0, hint - size) / size) + (hint % size === 0 ? 1 : 0);
+      waveLen = Math.min(concurrency, Math.max(1, more));
+    }
     outer: for (;;) {
       if (next >= MAX_PAGES) { truncated = true; break; }
-      const wave = Array.from({ length: Math.min(concurrency, MAX_PAGES - next) }, (_, i) => next + i);
+      const wave = Array.from({ length: Math.min(waveLen, MAX_PAGES - next) }, (_, i) => next + i);
+      waveLen = concurrency;
       const results = await Promise.all(wave.map((p) => build(p * size, p * size + size - 1)));
       for (const r of results) {
         if (r.error) throw r.error;
@@ -88,5 +135,6 @@ export async function fetchAllRowsParallel<T>(
     rows.push(row);
   }
   if (truncated) console.warn(`${label}: stopped paging at ${MAX_PAGES} pages (${rows.length} rows) — numbers may be incomplete.`);
+  else writeHint(label, rows.length);
   return { rows, truncated };
 }

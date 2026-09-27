@@ -5,7 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { isSentStatus, type OutreachLead } from '@/types/outreach';
 import type { AuditFunnel } from '@/components/dashboard/AuditFunnelCard';
 import { buildDashTasks, foldMessageTimes, type DashTask, type LeadMessageTimes, type LeadOnboarding } from '@/lib/dashboardTasks';
-import { fetchAllRows } from '@/lib/fetchAllRows';
+import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
+import { DASHBOARD_LEAD_SELECT } from '@/lib/outreachLeadColumns';
 import { looksAutomated } from '@/lib/inboundClassify';
 import { isRealSend } from '@/lib/realSend';
 import { isPaidLead } from '@/lib/leadPayment';
@@ -61,22 +62,6 @@ interface FunnelMsg {
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
 
-interface ActivityMetrics {
-  phonesCopiedToday: number;
-  phonesCopiedYesterday: number;
-  phonesCopiedThisWeek: number;
-  phonesCopiedLastWeek: number;
-  leadsContactedToday: number;
-  leadsContactedYesterday: number;
-  leadsContactedThisWeek: number;
-  leadsContactedLastWeek: number;
-  activitiesToday: number;
-  activitiesYesterday: number;
-  activitiesThisWeek: number;
-  totalPhonesCopied: number;
-  totalLeadsContacted: number;
-}
-
 interface DashboardMetrics {
   /* Only what the dashboard renders. 22 further fields were returned and read by nobody -- the
      revenue/outreach half, all of it derived from lead status, plus the two components that would
@@ -128,48 +113,16 @@ const PAYING_FLOOR_GBP = Math.min(FOUNDER_PRICE_GBP, ...FOUNDER_PRICES_HISTORICA
 const DEAD_SUBSCRIPTION_STATUSES = new Set(["canceled", "incomplete_expired"]);
 const FOUNDER_PLACES = 10;
 
-const getDateRanges = () => {
-  const now = new Date();
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  const startOfLastWeek = new Date(startOfWeek);
-  startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
-
-  return {
-    todayStr: today.toISOString(),
-    yesterdayStr: yesterday.toISOString(),
-    yesterdayEndStr: today.toISOString(),
-    weekStartStr: startOfWeek.toISOString(),
-    lastWeekStartStr: startOfLastWeek.toISOString(),
-    lastWeekEndStr: startOfWeek.toISOString(),
-  };
-};
-
 /** Stable empties. A new array or Map per render would give every memo below a fresh identity
  *  and defeat the caching (the EMPTY_AUDITS lesson, one hook over). */
 const EMPTY_LEADS: OutreachLead[] = [];
-const EMPTY_EVENTS: { lead_id: string; created_at: string }[] = [];
 const EMPTY_IDS: Set<string> = new Set();
 const EMPTY_MSG_TIMES: Map<string, LeadMessageTimes> = new Map();
 const EMPTY_ONBOARDING: Map<string, LeadOnboarding> = new Map();
 const EMPTY_MSGS: Map<string, FunnelMsg[]> = new Map();
-const EMPTY_ACTIVITY: ActivityMetrics = {
-  phonesCopiedToday: 0, phonesCopiedYesterday: 0, phonesCopiedThisWeek: 0, phonesCopiedLastWeek: 0,
-  leadsContactedToday: 0, leadsContactedYesterday: 0, leadsContactedThisWeek: 0, leadsContactedLastWeek: 0,
-  activitiesToday: 0, activitiesYesterday: 0, activitiesThisWeek: 0,
-  totalPhonesCopied: 0, totalLeadsContacted: 0,
-};
-
 /** Everything one dashboard load produces. Was eleven useState slots. */
 interface DashboardData {
   allLeads: OutreachLead[];
-  totalNoWebsiteFound: number;
-  activityData: ActivityMetrics;
-  outreachEvents7d: { lead_id: string; created_at: string }[];
   msgTimes: Map<string, LeadMessageTimes>;
   onboardingByLead: Map<string, LeadOnboarding>;
   baselineLeadIds: Set<string>;
@@ -205,17 +158,10 @@ export function useDashboardMetrics(isAdmin = false) {
        where those calls were, so the control flow — including the two try/catch fallbacks that
        degrade rather than throw — is untouched. */
     let allLeads: OutreachLead[] = EMPTY_LEADS;
-    let totalNoWebsiteFound = 0;
-    let activityData: ActivityMetrics = EMPTY_ACTIVITY;
-    let outreachEvents7d: { lead_id: string; created_at: string }[] = EMPTY_EVENTS;
     let msgTimes: Map<string, LeadMessageTimes> = EMPTY_MSG_TIMES;
     let onboardingByLead: Map<string, LeadOnboarding> = EMPTY_ONBOARDING;
     let baselineLeadIds: Set<string> = EMPTY_IDS;
     let msgsByLeadId: Map<string, FunnelMsg[]> = EMPTY_MSGS;
-    const dates = getDateRanges();
-
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     /* The three extra reads for the derived task list ride along in this SAME Promise.all, so they
        cost one round-trip of wall-clock rather than three sequential ones. All are narrow column
@@ -231,25 +177,22 @@ export function useDashboardMetrics(isAdmin = false) {
        this dashboard was one growth spurt away from quietly showing smaller numbers than the truth.
        Each carries `.order('id')` as a unique tiebreaker, without which page boundaries are unstable
        on a non-unique sort key. */
+    /* ⚡ 2026-09-27 (site-wide speed pass). Three changes, the same numbers:
+       · FIVE READS REMOVED — copied_phones, outreach_activities, lead_contacts, search_history and
+         outreach_events fed activity tiles and a "no website found" total that this hook computed
+         and then never returned (the memo below hands the page dashTasks/allLeads/auditFunnel/
+         channelPerf only). ~20 requests on every Dashboard load for nothing on screen.
+       · PAGED IN PARALLEL (fetchAllRowsParallel) — each list used to come one 1,000-row page at a
+         time, so the leads alone were seven waits in a row.
+       · THE LEADS READ ONLY THE COLUMNS THE DASHBOARD READS (DASHBOARD_LEAD_SELECT), not '*'. */
     const all = await Promise.all([
-      fetchAllRows<OutreachLead>('Dashboard (leads)', (f, t) =>
-        sbAny.from('outreach_leads').select('*').order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
-      fetchAllRows<{ copied_at: string }>('Dashboard (copied phones)', (f, t) =>
-        sbAny.from('copied_phones').select('copied_at').eq('user_id', uid).order('copied_at', { ascending: true }).range(f, t)),
-      fetchAllRows<{ created_at: string }>('Dashboard (activities)', (f, t) =>
-        sbAny.from('outreach_activities').select('created_at').eq('user_id', uid).order('created_at', { ascending: true }).range(f, t)),
-      fetchAllRows<{ contacted_at: string }>('Dashboard (contacts)', (f, t) =>
-        sbAny.from('lead_contacts').select('contacted_at').eq('user_id', uid).order('contacted_at', { ascending: true }).range(f, t)),
-      fetchAllRows<{ no_website_count: number | null }>('Dashboard (search history)', (f, t) =>
-        sbAny.from('search_history').select('no_website_count').eq('user_id', uid).order('id', { ascending: true }).range(f, t)),
-      fetchAllRows<{ lead_id: string | null; created_at: string }>('Dashboard (events)', (f, t) =>
-        sbAny.from('outreach_events').select('lead_id, created_at').eq('user_id', uid)
-          .gte('created_at', sevenDaysAgo.toISOString()).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
+      fetchAllRowsParallel<OutreachLead>('Dashboard (leads)', (f, t) =>
+        sbAny.from('outreach_leads').select(DASHBOARD_LEAD_SELECT).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t), (l) => l.id),
       // body → foldMessageTimes drops auto-responder inbound (a booking bot's auto-ack is not a
       // person waiting on a reply). template_name → the audit funnel's pitch stage, no extra query.
-      fetchAllRows<{ lead_id: string; direction: string; created_at: string; body: string | null; template_name: string | null; status: string | null }>('Dashboard (messages)', (f, t) =>
-        sbAny.from('whatsapp_messages').select('lead_id, direction, created_at, body, template_name, status')
-          .not('lead_id', 'is', null).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t)),
+      fetchAllRowsParallel<{ id: string; lead_id: string; direction: string; created_at: string; body: string | null; template_name: string | null; status: string | null }>('Dashboard (messages)', (f, t) =>
+        sbAny.from('whatsapp_messages').select('id, lead_id, direction, created_at, body, template_name, status')
+          .not('lead_id', 'is', null).order('created_at', { ascending: true }).order('id', { ascending: true }).range(f, t), (m) => m.id),
       /* ⛔ THROUGH THE submissions ENDPOINT, NOT A DIRECT READ. onboarding_responses has RLS enabled
          with NO policies, so the old direct read returned 200 [] forever — the Chase task ("filled
          the questionnaire and hasn't paid") NEVER fired, exactly as CLAUDE.md §8 recorded. Proven
@@ -266,12 +209,12 @@ export function useDashboardMetrics(isAdmin = false) {
           return { rows: [] };
         }
       })(),
-      fetchAllRows<{ lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
-        sbAny.from('ai_audits').select('lead_id, baseline_target_runs').not('lead_id', 'is', null)
-          .order('id', { ascending: true }).range(f, t)),
+      fetchAllRowsParallel<{ id: string; lead_id: string; baseline_target_runs: number | null }>('Dashboard (audits)', (f, t) =>
+        sbAny.from('ai_audits').select('id, lead_id, baseline_target_runs').not('lead_id', 'is', null)
+          .order('id', { ascending: true }).range(f, t), (a) => a.id),
     ]).catch((e: unknown) => {
-      /* fetchAllRows throws rather than returning an error, so the failure surfaces HERE. The old
-         code only guarded the leads query and returned; this covers all nine the same way, and
+      /* fetchAllRowsParallel throws rather than returning an error, so the failure surfaces HERE. The old
+         code only guarded the leads query and returned; this covers all four the same way, and
          still clears isLoading so the dashboard renders empty rather than spinning forever. */
       console.error('Error fetching dashboard metrics:', e);
       return null;
@@ -279,10 +222,9 @@ export function useDashboardMetrics(isAdmin = false) {
     if (!all) {
       return;
     }
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult, msgResult, obResult, baselineResult] = all;
+    const [leadsResult, msgResult, obResult, baselineResult] = all;
 
     allLeads = (leadsResult.rows);
-    outreachEvents7d = (eventsResult.rows);
 
     /* Fold the evidence into per-lead maps. Each is wrapped so a missing table or column degrades
        that ONE rule to silence rather than emptying the card - the same defensive posture the
@@ -326,30 +268,7 @@ export function useDashboardMetrics(isAdmin = false) {
       console.warn('Baseline fold skipped (deliver tasks may over-report):', e instanceof Error ? e.message : e);
     }
 
-    const searchHistory = searchHistoryResult.rows;
-    totalNoWebsiteFound = (searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0));
-
-    const copiedPhones = copiedPhonesResult.rows;
-    const activities = activitiesResult.rows;
-    const contacts = contactsResult.rows;
-
-    activityData = ({
-      phonesCopiedToday: copiedPhones.filter(p => p.copied_at >= dates.todayStr).length,
-      phonesCopiedYesterday: copiedPhones.filter(p => p.copied_at >= dates.yesterdayStr && p.copied_at < dates.yesterdayEndStr).length,
-      phonesCopiedThisWeek: copiedPhones.filter(p => p.copied_at >= dates.weekStartStr).length,
-      phonesCopiedLastWeek: copiedPhones.filter(p => p.copied_at >= dates.lastWeekStartStr && p.copied_at < dates.lastWeekEndStr).length,
-      leadsContactedToday: contacts.filter(c => c.contacted_at >= dates.todayStr).length,
-      leadsContactedYesterday: contacts.filter(c => c.contacted_at >= dates.yesterdayStr && c.contacted_at < dates.yesterdayEndStr).length,
-      leadsContactedThisWeek: contacts.filter(c => c.contacted_at >= dates.weekStartStr).length,
-      leadsContactedLastWeek: contacts.filter(c => c.contacted_at >= dates.lastWeekStartStr && c.contacted_at < dates.lastWeekEndStr).length,
-      activitiesToday: activities.filter(a => a.created_at >= dates.todayStr).length,
-      activitiesYesterday: activities.filter(a => a.created_at >= dates.yesterdayStr && a.created_at < dates.yesterdayEndStr).length,
-      activitiesThisWeek: activities.filter(a => a.created_at >= dates.weekStartStr).length,
-      totalPhonesCopied: copiedPhones.length,
-      totalLeadsContacted: contacts.length,
-    });
-
-    return { allLeads, totalNoWebsiteFound, activityData, outreachEvents7d, msgTimes, onboardingByLead, baselineLeadIds, msgsByLeadId };
+    return { allLeads, msgTimes, onboardingByLead, baselineLeadIds, msgsByLeadId };
   }, [isAdmin, user?.id]);
 
   /* The two mount effects are gone. One re-ran the whole fetch whenever the user id changed and
@@ -367,9 +286,6 @@ export function useDashboardMetrics(isAdmin = false) {
      every memo below a new identity and undoes the caching this change exists for — the same
      trap EMPTY_AUDITS documents on the audit book. */
   const allLeads = data?.allLeads ?? EMPTY_LEADS;
-  const totalNoWebsiteFound = data?.totalNoWebsiteFound ?? 0;
-  const activityData = data?.activityData ?? EMPTY_ACTIVITY;
-  const outreachEvents7d = data?.outreachEvents7d ?? EMPTY_EVENTS;
   const msgTimes = data?.msgTimes ?? EMPTY_MSG_TIMES;
   const onboardingByLead = data?.onboardingByLead ?? EMPTY_ONBOARDING;
   const baselineLeadIds = data?.baselineLeadIds ?? EMPTY_IDS;
@@ -478,38 +394,6 @@ export function useDashboardMetrics(isAdmin = false) {
     });
 
 
-    // Daily activity pulse — DISTINCT businesses per day from the send log
-    // (outreach_events deduped by lead_id). Pressing WhatsApp then SMS for one
-    // business = 1, not 2. Bounded by the lead count; never per-press.
-    const todayISO = today.toISOString();
-    const yesterdayISO = yesterday.toISOString();
-    const dayKey = (iso: string) => iso.split('T')[0];
-    const leadsByDay = new Map<string, Set<string>>();
-    for (const e of outreachEvents7d) {
-      if (!e.lead_id) continue;
-      const d = dayKey(e.created_at);
-      if (!leadsByDay.has(d)) leadsByDay.set(d, new Set());
-      leadsByDay.get(d)!.add(e.lead_id);
-    }
-    // Avg businesses contacted per day = total distinct (business, day) pairs / 7.
-    const distinctBusinessDayPairs = [...leadsByDay.values()].reduce((sum, set) => sum + set.size, 0);
-
-    // Legacy activity metrics
-    const dailyCounts: Record<string, number> = {};
-    allLeads.forEach(lead => {
-      const date = lead.created_at.split('T')[0];
-      dailyCounts[date] = (dailyCounts[date] || 0) + 1;
-    });
-    const dailyCountsArray = Object.entries(dailyCounts).map(([date, count]) => ({ date, count })).sort((a, b) => b.count - a.count);
-    const uniqueDays = Object.keys(dailyCounts).length;
-
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-
-
-
-
     /* ── Per-channel performance, derived from the record of each SEND.
        It used to read the contact_method pill and the lead's status, which was wrong twice over.
        The WhatsApp row showed Sent 240 / Replied 73 / 30% where the truth is 157 / 59 / 38%: "Sent"
@@ -554,7 +438,7 @@ export function useDashboardMetrics(isAdmin = false) {
     return {
       dashTasks, allLeads, auditFunnel, channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, msgTimes, msgsByLeadId, onboardingByLead, baselineLeadIds]);
+  }, [allLeads, msgTimes, msgsByLeadId, onboardingByLead, baselineLeadIds]);
 
   /* `refetch` keeps its name and contract — the Dashboard's refresh button calls it. It
      invalidates rather than re-running the fetch by hand, so a refresh triggered from more than
