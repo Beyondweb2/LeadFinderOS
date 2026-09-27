@@ -323,19 +323,30 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
   }).filter((t) => t.expected > 0);
 
   const misses = results.filter((r) => r.status === 'not_named');
+  /* ⛔ AN EARLY-STOP (v1) HOOK ALREADY NAMED ITS GAP (2026-09-27). The report, the Call Script and the
+     send path (resolveAuditReplyVars → the report's hook gap) quote the gap the audit STORED when it
+     stopped. Re-ranking that audit's misses here picked a different question for the Inbox card and the
+     voice note (Locksmiths-Manchester: stored Q3, re-ranked Q1). So a v1 hook's pick IS its stored gap,
+     whenever that exact question + engine is a valid miss; only a gap that cannot be found falls back. */
+  const storedGap = v1?.gap && typeof v1.gap === 'object'
+    ? misses.find((m) => m.questionIndex === Number(v1.gap!.question_index) && m.engine === v1.gap!.engine) ?? null
+    : null;
+  const pick: HookPick | null = storedGap
+    ? { questionIndex: storedGap.questionIndex, question: storedGap.question, engine: storedGap.engine, label: storedGap.label, competitors: [...storedGap.competitors], answerExcerpt: storedGap.answerExcerpt }
+    : pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '' });
   return {
     shape, expected, valid, named,
     failed: count('failed'), pending: count('pending'),
     complete,
     percent: complete ? Math.round((named / expected) * 100) : null,
     perEngine, results, misses,
-    hook: complete ? pickHookResult(misses, { town: ctx.town ?? '', trade: ctx.trade ?? '' }) : null,
+    hook: complete ? pick : null,
     allNamed: complete && named === expected,
     questionShortfall,
   };
 }
 
-interface V1Like { version: 1; planned: string[]; executed: number; stop_reason: string | null }
+interface V1Like { version: 1; planned: string[]; executed: number; stop_reason: string | null; gap?: { question_index?: unknown; engine?: string } | null }
 function isV1(v: unknown): boolean {
   return !!v && typeof v === 'object' && (v as { version?: unknown }).version === 1 &&
     Array.isArray((v as { planned?: unknown }).planned);

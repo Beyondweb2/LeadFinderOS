@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDraft, setDraft, type DraftMap } from '@/lib/inboxDrafts';
-import { planBulkSend, groupSkips, type BulkCandidate } from '@/lib/inboxBulkSend';
+import { planBulkSend, groupSkips, applyBulkChecks, type BulkCandidate, type BulkCheck } from '@/lib/inboxBulkSend';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, type WaConversation, type LeadLite, type WaMessage } from '@/hooks/useInbox';
 import { getTemplateSendability, WA_TEMPLATE_REQS, canonicalTemplate } from '@/lib/whatsappTemplates';
@@ -834,7 +834,11 @@ const Inbox = () => {
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
-  const [bulkReport, setBulkReport] = useState<null | { sent: number; failed: { label: string; reason: string }[] }>(null);
+  const [bulkReport, setBulkReport] = useState<null | { sent: number; failed: { key: string; label: string; reason: string }[] }>(null);
+  /* The server's dry-run answer per conversation key, for the CURRENT template (inboxBulkSend.ts
+     applyBulkChecks). Cleared whenever the template or the selection changes. Never persisted. */
+  const [bulkChecks, setBulkChecks] = useState<Record<string, BulkCheck>>({});
+  const [bulkChecking, setBulkChecking] = useState(false);
   const [hookQueueConfirm, setHookQueueConfirm] = useState(false);
   const [hookQueuing, setHookQueuing] = useState(false);
   const hookExistingFirst = firstNameFrom(activeLead?.contact_name);
@@ -940,6 +944,33 @@ const Inbox = () => {
     () => planBulkSend(bulkCandidates, bulkTemplate, { auditByLeadId }),
     [bulkCandidates, bulkTemplate, auditByLeadId],
   );
+  // A check answers for one template and one lead; a new template or selection starts again.
+  useEffect(() => { setBulkChecks({}); }, [bulkTemplate, bulkSelected]);
+  const bulkChecked = useMemo(() => applyBulkChecks(bulkPlan.send, bulkChecks), [bulkPlan.send, bulkChecks]);
+
+  /**
+   * ASK THE SERVER BEFORE SENDING (2026-09-27). Each planned lead goes through send-whatsapp-message
+   * in dry-run mode — the same guards and the same hook pick as the real send, nothing sent, nothing
+   * written — so a refusal such as hook_engine_mismatch is listed in the confirm, not discovered
+   * after "Send". Sequential, like the send. A failed call is a refusal, never a pass.
+   */
+  const runBulkChecks = async () => {
+    if (bulkChecking || !bulkTemplate) return;
+    setBulkChecking(true);
+    const template = bulkTemplate;
+    for (const target of bulkPlan.send) {
+      let r: BulkCheck;
+      try {
+        const res = await preview({ phone: target.phone, leadId: target.leadId, templateName: template });
+        r = { ok: res.ok === true, error: res.error, reason: res.reason };
+      } catch (e) {
+        r = { ok: false, error: 'check_failed', reason: e instanceof Error ? e.message : 'The check could not be run.' };
+      }
+      setBulkChecks((c) => ({ ...c, [target.key]: r }));
+    }
+    setBulkChecking(false);
+  };
+  const openBulkConfirm = () => { setBulkConfirm(true); void runBulkChecks(); };
 
   /**
    * Send the planned template to each conversation, one at a time.
@@ -955,13 +986,15 @@ const Inbox = () => {
    * and the operator needs the list at the end more than they need a toast per lead.
    */
   const runBulkSend = async () => {
-    if (bulkBusy || !bulkPlan.send.length) return;
+    // ⛔ ONLY LEADS THAT PASSED THE SERVER'S DRY RUN, and never while a check is still running.
+    if (bulkBusy || bulkChecking || bulkChecked.pending.length || !bulkChecked.ready.length) return;
+    const targets = bulkChecked.ready;
     setBulkBusy(true);
     setBulkReport(null);
-    setBulkProgress({ done: 0, total: bulkPlan.send.length });
-    const failed: { label: string; reason: string }[] = [];
+    setBulkProgress({ done: 0, total: targets.length });
+    const failed: { key: string; label: string; reason: string }[] = [];
     let sent = 0;
-    for (const target of bulkPlan.send) {
+    for (const target of targets) {
       try {
         const res = await send({
           phone: target.phone,
@@ -969,9 +1002,9 @@ const Inbox = () => {
           templateName: bulkTemplate,
         });
         if (res.ok) sent++;
-        else failed.push({ label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
+        else failed.push({ key: target.key, label: target.label, reason: res.reason ?? res.error ?? 'send failed' });
       } catch (e) {
-        failed.push({ label: target.label, reason: e instanceof Error ? e.message : 'send failed' });
+        failed.push({ key: target.key, label: target.label, reason: e instanceof Error ? e.message : 'send failed' });
       }
       setBulkProgress((p) => ({ ...p, done: p.done + 1 }));
     }
@@ -1573,7 +1606,7 @@ const Inbox = () => {
                   </Select>
                   <Button size="sm" className="h-7 px-2 text-[11px]"
                     disabled={bulkBusy || !bulkTemplate || bulkPlan.send.length === 0}
-                    onClick={() => setBulkConfirm(true)}>
+                    onClick={openBulkConfirm}>
                     {bulkBusy
                       ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
                       : `Send to ${bulkPlan.send.length}`}
@@ -1608,6 +1641,12 @@ const Inbox = () => {
               <div className="flex items-center gap-2">
                 <span className="font-medium">Sent {bulkReport.sent}{bulkReport.failed.length ? `, ${bulkReport.failed.length} failed` : ''}</span>
                 <span className="flex-1" />
+                {bulkReport.failed.length > 0 && (
+                  <button type="button" className="font-medium text-primary hover:underline" data-testid="bulk-reselect-failed"
+                    onClick={() => { setBulkMode(true); setBulkSelected(new Set(bulkReport.failed.map((x) => x.key))); }}>
+                    Select these {bulkReport.failed.length} again
+                  </button>
+                )}
                 <button type="button" className="text-muted-foreground hover:underline" onClick={() => setBulkReport(null)}>Dismiss</button>
               </div>
               {bulkReport.failed.length > 0 && (
@@ -2155,7 +2194,7 @@ const Inbox = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">
-              Send “{WHATSAPP_TEMPLATES.find((t) => t.value === bulkTemplate)?.label ?? bulkTemplate}” to {bulkPlan.send.length} business{bulkPlan.send.length === 1 ? '' : 'es'}?
+              Send “{WHATSAPP_TEMPLATES.find((t) => t.value === bulkTemplate)?.label ?? bulkTemplate}” to {bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length} business{(bulkChecking ? bulkPlan.send.length : bulkChecked.ready.length) === 1 ? '' : 'es'}?
             </DialogTitle>
             <DialogDescription className="text-xs">
               They go out <strong>now</strong>, one after another — not through the daily queue.
@@ -2165,13 +2204,29 @@ const Inbox = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-56 space-y-2 overflow-y-auto text-xs">
+            {/* Checked by the server in dry-run mode before anything is sent (runBulkChecks). */}
+            {bulkChecked.pending.length > 0 && (
+              <p className="flex items-center gap-1.5 text-muted-foreground" data-testid="bulk-checking">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking each one with the server first (nothing is sent)… {bulkPlan.send.length - bulkChecked.pending.length}/{bulkPlan.send.length}
+              </p>
+            )}
             <div>
-              <p className="mb-1 font-medium">Will be sent ({bulkPlan.send.length})</p>
+              <p className="mb-1 font-medium">Checked, will be sent ({bulkChecked.ready.length})</p>
               <ul className="space-y-0.5 text-muted-foreground">
-                {bulkPlan.send.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}</li>)}
-                {bulkPlan.send.length > 12 && <li>· and {bulkPlan.send.length - 12} more</li>}
+                {bulkChecked.ready.slice(0, 12).map((t) => <li key={t.key} className="truncate">· {t.label}</li>)}
+                {bulkChecked.ready.length > 12 && <li>· and {bulkChecked.ready.length - 12} more</li>}
               </ul>
             </div>
+            {bulkChecked.refused.length > 0 && (
+              <div data-testid="bulk-refused">
+                <p className="mb-1 font-medium text-destructive">Would be refused, not sent ({bulkChecked.refused.length})</p>
+                <ul className="space-y-0.5 text-muted-foreground">
+                  {groupSkips(bulkChecked.refused).map((g) => (
+                    <li key={g.reason}>· {g.count} — {g.reason} ({g.labels.slice(0, 3).join(', ')}{g.labels.length > 3 ? '…' : ''})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {bulkPlan.skipped.length > 0 && (
               <div>
                 <p className="mb-1 font-medium text-amber-600 dark:text-amber-500">Skipped ({bulkPlan.skipped.length})</p>
@@ -2185,10 +2240,10 @@ const Inbox = () => {
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" disabled={bulkBusy} onClick={() => setBulkConfirm(false)}>Cancel</Button>
-            <Button size="sm" disabled={bulkBusy || bulkPlan.send.length === 0} onClick={() => void runBulkSend()}>
+            <Button size="sm" disabled={bulkBusy || bulkChecking || bulkChecked.pending.length > 0 || bulkChecked.ready.length === 0} onClick={() => void runBulkSend()}>
               {bulkBusy
                 ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Sending {bulkProgress.done}/{bulkProgress.total}</>
-                : `Send ${bulkPlan.send.length} now`}
+                : bulkChecked.pending.length > 0 ? 'Checking…' : `Send ${bulkChecked.ready.length} now`}
             </Button>
           </DialogFooter>
         </DialogContent>

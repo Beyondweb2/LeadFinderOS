@@ -40,9 +40,9 @@
         website?".
 
    THE PICK FOLLOWS THE CARD (2026-09-27): the Inbox card, the report and the Call Script all quote the
-   hook pick (hookScore.ts pickHookResult). The voice note uses that same result whenever it has two
-   usable names, so the three cannot disagree; only when it does not is Paul's older order used, and the
-   operator is told which search the script used instead.
+   hook pick (hookScore.ts), as does the send path. The voice note uses that same result whenever its
+   answer has any usable name (one name is flagged thin); only a card result with NO usable names falls
+   back to Paul's older order, and the operator is told which search the script used instead.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { HOOK_PICK_ENGINE_ORDER, hookEngineLabel, hookMissScore, type HookPick, type HookResult } from './hookScore.ts';
@@ -112,13 +112,17 @@ export function selectVoiceNoteEvidence(
     : null;
   if (card) {
     const names = usableVoiceNoteRivals(card.competitors, ctx.business);
-    if (names.length >= 2) return { ok: true, evidence: evidenceOf(card, names), note: null };
+    /* ⛔ ONE SOURCE OF TRUTH (Paul, 2026-09-27): the card's result is used whenever its own answer has
+       ANY usable name. One name is a thinner note, flagged, never a different search. */
+    if (names.length >= 1) {
+      return { ok: true, evidence: evidenceOf(card, names), note: names.length < 2 ? `Only one usable competitor name in this search's answer (${hookEngineLabel(card.engine)}). The note names just that one.` : null };
+    }
   }
   const fallback = selectVoiceNoteEvidenceByOrder(results, ctx);
   if (card && fallback.ok) {
     const e = fallback.evidence;
     if (e.questionIndex !== card.questionIndex || e.engine !== card.engine) {
-      const why = `The best missed search on the card (${hookEngineLabel(card.engine)}, question ${card.questionIndex + 1}) has fewer than two usable competitor names, so this script uses ${e.engineLabel}, question ${e.questionIndex + 1} instead.`;
+      const why = `The best missed search on the card (${hookEngineLabel(card.engine)}, question ${card.questionIndex + 1}) has no usable competitor names, so this script uses ${e.engineLabel}, question ${e.questionIndex + 1} instead.`;
       return { ...fallback, note: fallback.note ? `${why} ${fallback.note}` : why };
     }
   }
