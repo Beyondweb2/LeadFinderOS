@@ -1304,7 +1304,11 @@ Deno.serve(async (req) => {
         /* SET EXPLICITLY ON BOTH PATHS. The column is NOT NULL with a default, but PostgREST lists
            it as required, so relying on the default would leave the ordinary insert path depending
            on behaviour that is not guaranteed at this layer. Cheap certainty. */
-        is_market: false,
+        /* ⛔ THE ONE EXCEPTION: A NICHE CHECK'S TOWN SAMPLE (2026-09-28, fn niche-sample). A trade +
+           town with no business — internal only, discovery purpose, no lead. is_market is what keeps
+           it out of every business path structurally: no public report (auto-report refuses it), no
+           website crawl, excluded from the old stored-audit niche fold and the per-business rates. */
+        is_market: isInternal && isDiscovery && !leadId && body.niche_sample === true,
         business_type: businessType || null,
         location_text: locationText || null,
         country,

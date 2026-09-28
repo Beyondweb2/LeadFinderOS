@@ -21,14 +21,18 @@
    (it comes from National Records of Scotland separately). Paul's call — he would never work London
    as one town and has no Scottish leads. Recorded so nobody later reads the absence as a bug.
 
-   Usage:  SRK=<service-role-key> node scripts/seed-uk-towns.mjs [--csv <path>] [--min 12000] [--max 250000]
+   Usage:  SRK=<service-role-key> node scripts/seed-uk-towns.mjs [--csv <path>] [--min 12000] [--max 5000000]
+   2026-09-28: run once with --min 250001 to add the 17 England+Wales cities above the old ceiling.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 import fs from "fs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const CSV = arg("--csv", "C:/Users/paulj/Downloads/uk-bua-population.csv");
 const MIN = Number(arg("--min", 12000));
-const MAX = Number(arg("--max", 250000));
+/* ⚠️ 2026-09-28: the default ceiling was 250,000, which left every major city out (Birmingham, Leeds,
+   Manchester …) — the niche check needs a real major-city band. Raised so a re-seed reproduces the table;
+   London is still absent because ONS excludes it from this dataset (see above). */
+const MAX = Number(arg("--max", 5000000));
 const KEY = process.env.SRK;
 if (!KEY) { console.error("SRK (service-role key) is required"); process.exit(1); }
 
@@ -62,11 +66,14 @@ console.log(`CSV ${rows.length} rows -> ${band.length} in ${MIN}–${MAX}`);
    118 towns and looked like a code-format problem. */
 const QUERY = "https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/BUA_2022_GB/FeatureServer/0/query";
 const geo = new Map();
-for (let off = 0; ; off += 1000) {
-  const r = await fetch(`${QUERY}?where=1%3D1&outFields=BUA22CD,LAT,LONG&resultOffset=${off}&resultRecordCount=1000&f=json`);
+/* 2026-09-28: ask for the BAND'S codes only (50 per request, no geometry). The whole-table page walk
+   began timing out (HTTP 504 from ArcGIS); the join test below is unchanged, so a short answer still refuses. */
+const codes = band.map((r) => r.code);
+for (let i = 0; i < codes.length; i += 50) {
+  const where = encodeURIComponent(`BUA22CD IN (${codes.slice(i, i + 50).map((c) => `'${c}'`).join(",")})`);
+  const r = await fetch(`${QUERY}?where=${where}&outFields=BUA22CD,LAT,LONG&returnGeometry=false&f=json`);
   const j = await r.json();
   for (const f of (j.features || [])) geo.set(f.attributes.BUA22CD, f.attributes);
-  if (!j.exceededTransferLimit || !(j.features || []).length) break;
 }
 console.log(`portal rows: ${geo.size}`);
 

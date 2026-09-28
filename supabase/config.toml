@@ -239,6 +239,11 @@ verify_jwt = true
 [functions.market-view]
 verify_jwt = true
 
+# The niche check (2026-09-28): an operator's own JWT, verified at the gateway and again in the handler
+# (resolveActor). plan/start are admin-only in the handler; list/status both roles.
+[functions.niche-sample]
+verify_jwt = true
+
 [functions.playbook-evidence]
 verify_jwt = true
 
