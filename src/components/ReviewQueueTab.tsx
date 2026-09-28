@@ -103,7 +103,7 @@ export function ReviewQueueTab() {
      otherwise, and this surface exists precisely to be the thing that tells him. */
   if (error) {
     return (
-      <div className="fixed bottom-4 right-4 z-50 max-w-xs rounded-lg border border-destructive/40 bg-background p-3 shadow-lg">
+      <div className="fixed bottom-20 right-4 z-50 max-w-xs rounded-lg border border-destructive/40 bg-background p-3 shadow-lg">
         <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
           <AlertTriangle className="h-3.5 w-3.5" /> Review queue unavailable
         </p>
@@ -119,7 +119,7 @@ export function ReviewQueueTab() {
   if (items.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-amber-500/40 bg-background shadow-xl">
+    <div className="fixed bottom-20 right-4 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-amber-500/40 bg-background shadow-xl">
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}

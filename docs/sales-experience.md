@@ -113,3 +113,32 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
   6/6 live: duplicate blocked, authenticated + anon denied, payout duplicate / non-first-of-month /
   negative amount blocked). Live: Test (sales) gets only their own (empty) earnings and a 403 on
   `backfill`; the webhook still answers 400 to a missing / bad signature after the deploy.
+
+## 5. Release 3 — the notification centre
+
+- **Table** `notifications` (migration `20260929140000_notifications.sql`): one recipient per row; own-row
+  SELECT only; the browser cannot insert/update/delete (`mark_notifications_read`, `clear_notifications`
+  act on the caller's own rows); `notify_person` is server-only. `unique (user_id, dedupe_key)` makes
+  every event idempotent. In the `supabase_realtime` publication (RLS applies to realtime too).
+- **Producers** — every trigger is AFTER, swallows its own failure (a warning) and returns the row, so a
+  notification can never block the write it reports:
+  - `trg_notify_whatsapp` (whatsapp_messages): a reply → the lead's person (assignee, else the book
+    owner), COALESCED while unread ("3 new WhatsApp messages"), titled "Replied after their audit" when an
+    `audit%` template went first; a failed outbound → its sender (else the lead's person).
+  - `trg_notify_signup_opened` (lead_page_hits `onboarding`, only after a recorded send): once per lead per day.
+  - `trg_notify_audit_finished` (ai_audit_runs → `complete`, hook audits only).
+  - `trg_notify_lead_assigned` — never for claiming your own lead or the automatic book-owner assignment.
+  - `notify_due_follow_ups()` — pg_cron `notify-follow-ups-due` `0 6 * * *` (DB-only, like every cron):
+    a person's due / overdue Next Action, ONCE per scheduled date.
+  - `set_template_request_status(id, status, note)` (admin) → the requester ("approved" / "not approved");
+    `template_requests` gained `status`, `decided_at`, `decision_note`.
+  - Money (`_shared/payment-ledger.ts` `notifyMoney`, on a NEW live ledger row only — never a backfill):
+    the seller "+£X commission earned" / "−£X reversed" (amount from `commission.ts`), the book owner
+    "Client paid".
+- **UI** (`NotificationCenter`, in `AppLayout`): desktop bell bottom-right (the Inbox leaves a 3.5rem strip
+  so it never covers the composer; the admin's review card moved above it), phone bell in a new top bar;
+  newest first, unread dot, mark read / all read, clear / clear read, deep links; opt-in desktop alerts
+  (priority items, tab hidden) from ONE instance; unread count in the tab title.
+- **Tests:** `scripts/sales-notifications.test.ts`; `supabase/tests/notifications.sql` — 16/16 live, rolled
+  back (two replies → one row count 2; failed send; own-row reads, other rep 0, anon 0, forged insert
+  denied; mark read; assignment rules; follow-up once per date; clear).

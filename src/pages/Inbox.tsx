@@ -1641,7 +1641,7 @@ const Inbox = () => {
      usable on a short laptop (below it the page scrolls rather than crushing the thread). Phones keep
      the old stacked sizes. */
   return (
-    <div className="space-y-4 md:flex md:h-[calc(100dvh-3rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-4rem)]">
+    <div className="space-y-4 md:flex md:h-[calc(100dvh-6.5rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-7.5rem)]">
       <div className={cn('flex flex-wrap items-center justify-between gap-2 md:shrink-0', active && 'hidden md:flex')}>
         <div className="flex items-baseline gap-3">
           {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
@@ -1950,7 +1950,7 @@ const Inbox = () => {
         </Card>
 
         {/* Thread + reply */}
-        <Card className={cn('min-w-0 flex-col overflow-hidden md:flex md:h-full', active ? 'flex h-[calc(100dvh-7.5rem)]' : 'hidden')}>
+        <Card className={cn('min-w-0 flex-col overflow-hidden md:flex md:h-full', active ? 'flex h-[calc(100dvh-10.5rem)]' : 'hidden')}>
           {!active ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <MessageSquare className="mb-2 h-7 w-7 opacity-30" />

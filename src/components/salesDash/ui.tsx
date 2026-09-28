@@ -46,7 +46,7 @@ export function KpiCard({ label, value, sub, icon: I, tone, hero = false, onClic
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp type={onClick ? 'button' : undefined} onClick={onClick}
-      className={cn('group relative flex min-w-0 flex-col overflow-hidden rounded-2xl p-3 text-left shadow-sm transition sm:p-5',
+      className={cn('group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl p-3 text-left shadow-sm transition sm:p-5',
         hero ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white ring-1 ring-emerald-400/30 dark:from-emerald-600 dark:to-emerald-800'
              : cn('border border-border/60 bg-card'),
         onClick && 'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none')}>

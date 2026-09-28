@@ -8,6 +8,8 @@
 // a refund row carries the charge's CUMULATIVE refunded amount and only ever grows; a chargeback row
 // takes the dispute's latest status.
 
+import { commissionLines, type LedgerRow } from "../../../src/lib/commission.ts";
+
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
@@ -58,7 +60,11 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
     if (readErr) { await report(service, { step: "read", kind: w.kind, object: w.stripe_object_id, error: readErr.message }); return "failed"; }
     if (!existing) {
       const { error } = await service.from("payment_ledger").insert(row);
-      if (!error) return "inserted";
+      if (!error) {
+        // A backfill records HISTORY: it never announces an old payment as news.
+        if (row.source !== "backfill") await notifyMoney(service, row.lead_id, w.kind, w.stripe_object_id);
+        return "inserted";
+      }
       // A concurrent delivery won the insert: that is the idempotency working, not a failure.
       if (String(error.code) === "23505") return "exists";
       await report(service, { step: "insert", kind: w.kind, object: w.stripe_object_id, error: error.message });
@@ -76,6 +82,45 @@ export async function recordLedger(service: Service, w: LedgerWrite): Promise<Le
   } catch (err) {
     await report(service, { step: "exception", kind: w.kind, object: w.stripe_object_id, error: err instanceof Error ? err.message : String(err) });
     return "failed";
+  }
+}
+
+/* ══ MONEY NOTIFICATIONS (Sales Experience release 3) ══════════════════════════════════════════════
+   Written here, beside the ledger, because the amount is the COMMISSION RULE's (src/lib/commission.ts)
+   and that rule must never be re-implemented in SQL. Only on a NEW ledger row — a retried webhook
+   inserts nothing and so notifies nothing; the unique dedupe key is the second lock. Never throws.
+   - the seller (a salesperson): "+£29.70 commission earned" (or reversed), deep-linked to /earnings;
+   - the book owner (admin): "Client paid", deep-linked to the client hub. */
+async function notifyMoney(service: Service, leadId: string | null, kind: string, objectId: string) {
+  try {
+    if (!leadId) return;
+    const [{ data: rows }, { data: lead }, { data: owner }] = await Promise.all([
+      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id").eq("lead_id", leadId),
+      service.from("outreach_leads").select("business_name, sold_by_user_id").eq("id", leadId).maybeSingle(),
+      service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle(),
+    ]);
+    const ledger = ((rows ?? []) as LedgerRow[]).map((r) => ({ ...r, amount_gbp: Number(r.amount_gbp) }));
+    const seller = ledger.find((r) => r.sold_by_user_id)?.sold_by_user_id ?? (lead as { sold_by_user_id?: string | null } | null)?.sold_by_user_id ?? null;
+    let sellerIsSales = false;
+    if (seller) { const { data: r } = await service.from("user_roles").select("role").eq("user_id", seller).eq("role", "sales").maybeSingle(); sellerIsSales = !!r; }
+    const { lines } = commissionLines({ ledger, payouts: [], isCommissionable: (u) => !!u && u === seller && sellerIsSales });
+    const me = ledger.find((r) => r.kind === kind && r.stripe_object_id === objectId);
+    if (!me) return;
+    const line = lines.find((l) => l.id === (kind === "refund" || kind === "chargeback" ? `rev:${me.id}` : `pay:${me.id}`));
+    const biz = String((lead as { business_name?: string | null } | null)?.business_name ?? "A client").trim() || "A client";
+    const out: Record<string, unknown>[] = [];
+    if (sellerIsSales && seller && line && line.commission !== 0) {
+      out.push(line.commission > 0
+        ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${line.label.toLowerCase()}).`, link: "/earnings", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }
+        : { user_id: seller, kind: "commission_reversed", title: `−£${(-line.commission).toFixed(2)} commission reversed`, body: `${biz}: ${line.label.toLowerCase()}.`, link: "/earnings", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
+    }
+    const ownerId = (owner as { user_id?: string } | null)?.user_id;
+    if (ownerId && (kind === "initial" || kind === "recurring")) {
+      out.push({ user_id: ownerId, kind: "client_paid", title: "Client paid", body: `${biz} paid £${me.amount_gbp.toFixed(2)} (${kind === "initial" ? "sign-up" : "monthly"}).`, link: `/paid-clients/${leadId}`, lead_id: leadId, priority: 2, dedupe_key: `paid:${me.id}` });
+    }
+    if (out.length) await service.from("notifications").upsert(out, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+  } catch (err) {
+    console.error("[payment-ledger] notify failed", err instanceof Error ? err.message : String(err));
   }
 }
 
