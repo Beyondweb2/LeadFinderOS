@@ -8,6 +8,7 @@ import { firstNameFrom, questionnaireFollowupBody } from '@/lib/questionnaireFol
 import { isPaidLead } from '@/lib/leadPayment';
 import { questionnaireComplete } from '@/lib/questionnaireComplete';
 import type { OutreachLead } from '@/types/outreach';
+import { ClientOnboardingStrip } from '@/components/ClientOnboardingStrip';
 
 /* ============================================================
    THE QUESTIONNAIRE, ON THE LEAD CARD — read-only answers + the one manual nudge (2026-08-17).
@@ -47,6 +48,8 @@ interface QRow {
   willing_to_migrate?: string | null;
   gbp_exists?: string | null;
   gbp_status?: string | null;
+  gbp_status_at?: string | null;
+  gbp_access_requested_at?: string | null;
   gbp_verified?: string | null;
   photos_status?: string | null;
   must_not_say?: string | null;
@@ -168,6 +171,7 @@ export function LeadQuestionnaireSection({ lead, onUpdateLead }: {
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Questionnaire</span>
       </div>
 
+      {!loading && !error && <ClientOnboardingStrip lead={lead} row={row} onUpdateLead={onUpdateLead} />}
       {loading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> reading answers…</div>}
       {!loading && error && <p className="text-xs text-destructive">Couldn't read the questionnaire: {error}</p>}
       {!loading && !error && !row && (

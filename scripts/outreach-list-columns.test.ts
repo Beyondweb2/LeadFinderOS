@@ -54,6 +54,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   updated_at: { files: ["src/hooks/useOutreach.ts", "src/components/TemplatePicker.tsx", "src/hooks/useBulkJobs.ts"], why: "`.order('updated_at')` strings and other tables' rows" },
   website_build: { files: ["src/lib/fullCrawl.ts"], why: "the crawl request-source constant 'website_build'" },
   call_booked_at: { files: ["src/lib/salesCrm.ts"], why: "read off SALES rows (sales_leads view); Find Leads imports salesCrm only for refusalText" },
+  lead_source: { files: ["src/lib/salesPerformance.ts"], why: "the Sales Dashboard fold's own rows, read on the server by sales-performance; Outreach imports it only for LEAD_SOURCE_LABELS (2026-09-28)" },
 };
 
 // 1–2. Every column the list-side code reads is downloaded, or is a pinned, hand-checked exception.

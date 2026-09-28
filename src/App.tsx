@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { installLeadSync } from "@/lib/leadSync";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
@@ -35,6 +36,7 @@ const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
 const Team = lazy(() => import("./pages/Team"));
@@ -65,6 +67,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+/* One "this lead changed" listener for the whole app: per-lead queries go stale, other tabs hear it
+   (src/lib/leadSync.ts). Installed once, at module load, beside the client it invalidates. */
+installLeadSync(queryClient);
 
 /**
  * React Error Boundary — catches render crashes and shows a fallback
@@ -209,6 +214,7 @@ const App = () => {
               <Route path="/find-leads" element={<Index />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/outreach" element={<Outreach />} />
+              <Route path="/sales-dashboard" element={<SalesDashboard />} />
               {/* Archive route removed - merged into Outreach */}
               {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
               {/* OPERATOR baseline view. Inside ProtectedRoute + RequireAdmin like every other

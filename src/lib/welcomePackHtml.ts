@@ -246,7 +246,7 @@ function planPage1(name: string): string {
           <li>A full check of whether AI names you right now, and exactly where it doesn&rsquo;t</li>
           <li>Clean, purpose-built pages on your website that AI can actually read and quote</li>
           <li>Your listings on the directories AI checks, made consistent and correct</li>
-          <li>We reply to your Google reviews for you, to keep your profile active</li>
+          <li>Your Google Business Profile improved and kept consistent with your pages</li>
           <li>A re-check at four weeks that shows your before and after in plain numbers</li>
         </ul>
       </div>
@@ -257,7 +257,7 @@ function planPage1(name: string): string {
         ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term (${FINDABLE_TOTAL_PAYMENTS} payments in total, counting your first) — that is the work that keeps you there: more pages every month, your reviews replied to, and an eye on the technical side of your site. We will email you before it starts.`)}
+        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term (${FINDABLE_TOTAL_PAYMENTS} payments in total, counting your first) — that is the work that keeps you there: more pages every month and an eye on the technical side of your site. We will email you before it starts.`)}
       </div>`;
 }
 
@@ -288,14 +288,13 @@ function planPage2(name: string): string {
 
       <h3 class="wp-h3">Your reviews</h3>
       <p>Reviews are one of the strongest signals AI and search engines use to decide who to recommend,
-      and AI even reads the replies you leave on them. We&rsquo;ll reply to your Google reviews for you,
-      so your profile stays active and looks after itself. Getting more reviews in is the single thing
-      that helps most, and it&rsquo;s the one part only you can do. There&rsquo;s a simple five-minute
-      setup for that on the next page.</p>
+      and AI even reads the replies you leave on them. Getting more reviews in, and replying to the
+      ones you get, is the part only you can do. There&rsquo;s a simple five-minute setup for that on
+      the next page.</p>
 
       <div class="wp-box-navy">
         <p><b>In short.</b> We make ${n} the clean, clear answer AI can actually read and quote, and we
-        keep your website, listings and reviews all saying the same thing. That&rsquo;s what turns being
+        keep your website and listings saying the same thing. That&rsquo;s what turns being
         named occasionally into being named regularly.</p>
       </div>`;
 }
@@ -405,7 +404,7 @@ Thanks,
               </div>
             </div>
             <div class="wp-box-navy">
-              <p><b>That&rsquo;s it.</b> We handle the pages, the directories and your review replies.
+              <p><b>That&rsquo;s it.</b> We handle the pages and the directories.
               You do the review link once, and ask customers as jobs wrap up. Any questions at all,
               just reply to the email this came with.</p>
             </div>

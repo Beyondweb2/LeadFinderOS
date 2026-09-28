@@ -1,7 +1,13 @@
 import { useState } from 'react';
-import { Copy, Check, Link2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Copy, Check, Link2, AlertTriangle, CheckCircle2, Eye, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
 import { onboardingUrl, onboardingUrlLabel } from '@/config/findableSite';
+import { useOnboardingLink, recordOnboardingLinkEvent } from '@/hooks/useOnboardingLink';
+import { MANUAL_SEND_CHANNELS, LINK_CHANNEL_LABEL, previewUrl, type OnboardingLinkStatus } from '@/lib/onboardingLinkStatus';
+import { refusalText } from '@/lib/salesCrm';
+import { isDemoLead } from '@/lib/demoLeads';
 
 /**
  * Exactly the fields this card reads — nothing more. Declared structurally rather than as
@@ -62,10 +68,32 @@ export function assessOnboardingLink(lead: OnboardingLinkLead) {
   return { paid, warnings, blocking: !trade };
 }
 
+const shortDay = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+
+/** Sent? Opened? — one line, from the one rule (src/lib/onboardingLinkStatus.ts). */
+export function OnboardingLinkStatusLine({ status }: { status: OnboardingLinkStatus | null | undefined }) {
+  if (!status) return null;
+  if (status.sentCount === 0) {
+    return <p className="text-[11px] text-muted-foreground" data-testid="onboarding-status">Not sent yet{status.generatedAt ? ` · copied ${shortDay(status.generatedAt)}` : ''}. A WhatsApp message carrying this link is recorded automatically.</p>;
+  }
+  return (
+    <p className="text-[11px] leading-relaxed" data-testid="onboarding-status">
+      <span className="font-medium text-foreground">Sent</span> <span className="text-muted-foreground">{shortDay(status.firstSentAt!)} ({status.channels.map((c) => LINK_CHANNEL_LABEL[c] ?? c).join(', ')}{status.sentCount > 1 ? `, ${status.sentCount} times` : ''})</span>
+      {' · '}
+      {status.opened
+        ? <><span className="font-medium text-emerald-500">Opened</span> <span className="text-muted-foreground">{shortDay(status.firstOpenedAt!)}{status.openCount > 1 ? ` · ${status.openCount} page loads` : ''}</span></>
+        : <span className="font-medium text-amber-500">Not opened yet</span>}
+    </p>
+  );
+}
+
 export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
   const { paid, warnings, blocking } = assessOnboardingLink(lead);
   const url = onboardingUrl(lead.id, lead.business_name);
+  const demo = isDemoLead(lead.id);
+  const link = useOnboardingLink(demo ? null : lead.id);
 
   const copy = async () => {
     try {
@@ -76,6 +104,13 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
       /* Clipboard denied (insecure context, or permission refused). The link is on screen and
          selectable, so there is still a way to get it — better than an error toast. */
     }
+    // A copy is 'generated', never 'sent' — the WhatsApp message that carries it records the send.
+    if (!demo) void recordOnboardingLinkEvent(lead.id, 'generated', null);
+  };
+  const markSent = async (channel: string, label: string) => {
+    const r = await recordOnboardingLinkEvent(lead.id, 'sent', channel);
+    if (r.ok) toast({ title: 'Recorded', description: `Sign-up link sent by ${label.toLowerCase()}.` });
+    else toast({ title: 'Not recorded', description: refusalText(r.error), variant: 'destructive' });
   };
 
   return (
@@ -100,15 +135,33 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
             {onboardingUrlLabel(lead.id, lead.business_name)}
           </p>
 
-          <Button
-            size="sm"
-            variant={copied ? 'outline' : 'default'}
-            className="h-7 w-full gap-1.5 text-xs"
-            onClick={copy}
-          >
-            {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? 'Copied' : 'Copy sign-up link'}
-          </Button>
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              variant={copied ? 'outline' : 'default'}
+              className="h-8 flex-1 gap-1.5 text-xs"
+              onClick={copy}
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied' : 'Copy sign-up link'}
+            </Button>
+            {/* ⛔ PREVIEW = preview=1, so our own look is recorded as a preview and never as their open. */}
+            <Button asChild size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs" title="Open it yourself. Your visit is not counted as their open.">
+              <a href={previewUrl(url)} target="_blank" rel="noopener noreferrer"><Eye className="h-3.5 w-3.5" />Preview</a>
+            </Button>
+            {!demo && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs" title="Sent it by email, LinkedIn or in person? Record it here. WhatsApp is recorded automatically."><Send className="h-3.5 w-3.5" />Sent another way</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel className="text-xs">I sent the link by…</DropdownMenuLabel>
+                  {MANUAL_SEND_CHANNELS.map((c) => <DropdownMenuItem key={c.value} className="text-xs" onClick={() => void markSent(c.value, c.label)}>{c.label}</DropdownMenuItem>)}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          <div className="mt-2"><OnboardingLinkStatusLine status={link.data?.status} /></div>
 
           {warnings.length > 0 && (
             /* Told BEFORE sending, not after. Amber rather than red when nothing is blocking:

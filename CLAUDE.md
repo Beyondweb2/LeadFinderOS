@@ -28,7 +28,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (218 suites). **Honest green is 211/218 (2026-09-28, all seven also fail on untouched
+  (219 suites). **Honest green is 212/219 (2026-09-28, all seven also fail on untouched
   `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
   Deno), `onboarding-audit-fields`, `manual-onboarding`, and
   `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
@@ -58,6 +58,16 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `scripts/next-action-human-only.test.ts` sweeps every writer; `supabase/tests/next-action-human-only.sql`.
   ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
   what is stored and sent (`docs/whatsapp-templates.md`, last section).
+  ⛔ **Sales readiness (2026-09-28, `docs/sales-readiness.md`)**: the Sales Dashboard's numbers come from
+  fn `sales-performance` (a salesperson is ALWAYS themselves; counts only, never an amount), folded ONCE in
+  `src/lib/salesPerformance.ts`; reply credit is `creditRepliesToSends` (the campaign card's walk).
+  **Every lead write calls `notifyLeadChanged` and every lead reader listens** (`src/lib/leadSync.ts`) —
+  Sales never receives outreach_leads realtime, so this notice IS the Inbox↔Outreach sync. A sign-up link
+  SENT is `onboarding_link_events` (a whatsapp_messages trigger + "sent another way"); OPENED is a
+  prefill page load after the first send — the app's own opens carry `preview=1` and never count
+  (`src/lib/onboardingLinkStatus.ts`, one rule). GBP access has THREE states, never merged: asked,
+  client says (`gbp_status`), confirmed by Findable (checklist `gbp_access`). The paid screen says
+  paid only when `payment_status` does.
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
@@ -92,8 +102,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   on drift for the pairs it lists. Change one repo, change the other. `scripts/findable-offer-terms.test.ts`
   pins the offer. ⛔ **A Meta-registered body quoting a retired offer goes in `STALE_OFFER_TEMPLATES`**
   (blocked on every path) until it is re-registered — explain_offer / explain_offer_v2 today.
-- ⛔ **No surface may name one figure without the other.** ⛔ **Never claim an SEO score.** "Reply to
-  your reviews" is a real promise (needs the client's GBP access).
+- ⛔ **No surface may name one figure without the other.** ⛔ **Never claim an SEO score.** ⛔ **Review
+  replies are NOT a Findable deliverable** (Paul, 2026-09-28) — never promise them on any client-facing
+  surface; the explain_offer Meta bodies still say it and stay blocked (`docs/sales-readiness.md` §5).
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
@@ -693,6 +704,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
 | Warm reply drafter (Inbox) | `src/lib/warmLeadResearch.ts`, `src/lib/warmReply.ts`, `src/lib/serviceWindow.ts`, `src/components/WarmReplyAssistant.tsx`, fn `warm-lead-reply`, table `warm_lead_research` (`docs/warm-lead-reply.md`). ⛔ It drafts into the composer and NEVER sends; a model finding survives only if its quote is on the page |
+| Sales dashboard / prospect workspace / sync | `src/pages/SalesDashboard.tsx`, fn `sales-performance`, `src/lib/salesPerformance.ts`, `LeadDetailDialog` tabs + `LeadCrmPanel` (`LeadWorkPanel`/`LeadHookPanel`/`LeadHistoryPanel`), `ProspectFacts`, `AddLeadDialog`, `ClientOnboardingStrip`, `src/lib/leadSync.ts`, `src/lib/onboardingLinkStatus.ts` + `useOnboardingLink`, table `onboarding_link_events`, SQL `lead_log_contact` / `lead_onboarding_link_event` (`docs/sales-readiness.md`) |
 | Voice-note script (Inbox, lead popup) | `src/lib/voiceNoteScript.ts`, `src/components/VoiceNoteScriptButton.tsx`, fn `voice-note-script`, table `voice_note_scripts` (`docs/voice-note-script.md`). ⛔ Never sends. The site research is `_shared/site-research.ts`, shared with `warm-lead-reply` — change it, redeploy BOTH |
 | Hook audit score (3 q × 2 engines) | `src/lib/hookScore.ts` (`scoreHookRun`, one ruler for card/report/6-of-6/send guard), `hookVisibility.ts`, `src/components/HookVisibilityCard.tsx` (`docs/hook-audit.md`) |
 | Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
@@ -785,6 +797,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
 | Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
+| The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |

@@ -1234,6 +1234,7 @@ export type Database = {
           is_archived: boolean
           is_potential_work: boolean
           last_outreach_attempt_at: string | null
+          lead_source: string | null
           line_type: string | null
           line_type_checked_at: string | null
           list_type: string
@@ -1313,6 +1314,7 @@ export type Database = {
           is_archived?: boolean
           is_potential_work?: boolean
           last_outreach_attempt_at?: string | null
+          lead_source?: string | null
           line_type?: string | null
           line_type_checked_at?: string | null
           list_type?: string
@@ -1392,6 +1394,7 @@ export type Database = {
           is_archived?: boolean
           is_potential_work?: boolean
           last_outreach_attempt_at?: string | null
+          lead_source?: string | null
           line_type?: string | null
           line_type_checked_at?: string | null
           list_type?: string

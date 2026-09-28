@@ -13,6 +13,8 @@
       sources are ordered exactly as useInbox orders them for the site-findings gate.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { readLeadRow } from '@/lib/leadRead';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -62,7 +64,7 @@ export function runCrawlSources(audit: PlaybookAuditRow | null): FindingsSource[
     }));
 }
 
-async function loadPlaybook(leadId: string): Promise<ColdCallPlaybook | null> {
+async function loadPlaybook(leadId: string, callerName: string | null): Promise<ColdCallPlaybook | null> {
   /* The admin's read is unchanged; a salesperson's comes from sales_leads (src/lib/leadRead.ts). */
   const { data: lead, error: leadErr } = await readLeadRow<Record<string, unknown>>(leadId, LEAD_COLUMNS);
   if (leadErr) throw leadErr;
@@ -119,15 +121,21 @@ async function loadPlaybook(leadId: string): Promise<ColdCallPlaybook | null> {
     leadCrawl: newestCrawl ? { result: newestCrawl.result, createdAtMs: new Date(newestCrawl.created_at).getTime() } : null,
     messages: msgRes.rows,
     nowMs: Date.now(),
+    callerName,
   });
 }
 
 /** Loads only while `enabled` (the playbook is open). Re-read on every open: it is cheap, and a
  *  call guide built from a stale cache would be the wrong call guide. */
 export function useColdCallPlaybook(leadId: string | null, enabled: boolean) {
+  /* The script is said by whoever is signed in (2026-09-28): a salesperson's own name, not Paul's.
+     Names come from the team directory (names only, any role may read it). */
+  const { user } = useAuth();
+  const team = useTeamDirectory();
+  const callerName = user ? team.byId.get(user.id)?.display_name ?? null : null;
   return useQuery({
-    queryKey: ['cold-call-playbook', leadId],
-    queryFn: () => loadPlaybook(leadId as string),
+    queryKey: ['cold-call-playbook', leadId, callerName],
+    queryFn: () => loadPlaybook(leadId as string, callerName),
     enabled: enabled && !!leadId,
     staleTime: 0,
     gcTime: 60_000,

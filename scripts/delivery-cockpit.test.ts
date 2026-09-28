@@ -47,10 +47,10 @@ ok(checklistDone({ directories: true, bogus: true } as Record<string, boolean>) 
 ok(checklistDone({ baseline_checked: true, baseline_sent: true, results_sent: true }) === 2, 'baseline checked + baseline sent count; results_sent is a SYSTEM STAMP, never a tick, so a stored true is ignored');
 ok(DELIVERY_CHECKLIST_ITEMS.find((i) => i.key === 'results_sent')?.kind === 'stamp', 'results_sent is kind stamp (outreach_leads.remeasure_results_sent_at, written by the sender)');
 console.log('── The shared list (cockpit AND dashboard card render THIS) ──');
-ok(DELIVERY_CHECKLIST_ITEMS.map((i) => i.key).join(',') === 'baseline_checked,baseline_sent,directories,gbp,pages,website,remeasure,results_sent',
-  "Paul's delivery order: baseline checked → sent → directories → GBP → pages → website → week-four → results sent");
+ok(DELIVERY_CHECKLIST_ITEMS.map((i) => i.key).join(',') === 'baseline_checked,baseline_sent,directories,gbp_access,gbp,pages,website,remeasure,results_sent',
+  "Paul's delivery order: baseline checked → sent → directories → GBP access confirmed → GBP → pages → website → week-four → results sent");
 ok(DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'pages').length === 1 && DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'remeasure').length === 1, 'exactly one derived pages line and one re-measure clock line');
-ok(TICKABLE_ITEMS.length === 6 && !TICKABLE_ITEMS.some((i) => i.key === 'pages' || i.key === 'results_sent'), 'six tickable items; pages (derived) and results_sent (stamp) are not among them');
+ok(TICKABLE_ITEMS.length === 7 && !TICKABLE_ITEMS.some((i) => i.key === 'pages' || i.key === 'results_sent'), 'seven tickable items (gbp_access added 2026-09-28); pages (derived) and results_sent (stamp) are not among them');
 ok(DELIVERY_CHECKLIST_ITEMS.every((i) => i.label && i.hint), 'every item has a label and a hint (the hint is the tooltip)');
 console.log('── Pages derived from client_pages ──');
 ok(pagesProgress([{ status: 'planned' }, { status: 'live' }, { status: 'held' }, { status: 'merged' }, { status: 'removed' }, { status: 'archived' }]).total === 3, 'planned/live/held are lines; merged/removed/archived are not');

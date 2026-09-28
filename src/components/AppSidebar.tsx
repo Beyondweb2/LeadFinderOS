@@ -14,7 +14,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { canOpenRoute } from '@/lib/access';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
-  MessageSquareQuote, Inbox, Sparkles, Map, Users
+  MessageSquareQuote, Inbox, Sparkles, Map, Users,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
@@ -31,6 +32,7 @@ export function AppSidebar() {
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
+    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'What is working: campaigns, templates, calls, sign-ups' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
@@ -43,7 +45,7 @@ export function AppSidebar() {
   /* ⛔ The matrix decides (src/lib/access.ts). The admin keeps every item; a salesperson sees the
      same Outreach, Inbox, Find Leads and Coverage — there is no separate My Leads workspace any more
      (2026-09-27). Presentation only — see access.ts. */
-  const SALES_ORDER = ['/outreach', '/inbox', '/find-leads', '/coverage'];
+  const SALES_ORDER = ['/outreach', '/inbox', '/sales-dashboard', '/find-leads', '/coverage'];
   const navItems = allNavItems.filter((item) => canOpenRoute(role, item.url))
     .sort((a, b) => (role === 'sales' ? SALES_ORDER.indexOf(a.url) - SALES_ORDER.indexOf(b.url) : 0));
 

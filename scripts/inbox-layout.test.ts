@@ -32,7 +32,7 @@ console.log('── less chrome ──');
 const header = inbox.slice(inbox.indexOf('{/* Thread header */}'), inbox.indexOf('THE REPORT STATE MOVED INTO THE AI VISIBILITY CARD'));
 const nameAt = header.indexOf('active.label');
 const windowAt = header.indexOf('Window open · ~');
-const toolsAt = header.indexOf('Open full lead details');
+const toolsAt = header.indexOf('Open prospect workspace');
 ok(nameAt > 0 && windowAt > nameAt && toolsAt > windowAt, 'header: the name, then the window state, then the tools');
 ok(/<span className="truncate">\{active\.unassigned/.test(header) && /ml-auto flex shrink-0 items-center gap-1 rounded-full bg-green-500\/15/.test(header), 'the name truncates only against the window pill, which never shrinks');
 ok(/ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1/.test(header), 'the tools wrap on a narrow screen instead of being clipped');
@@ -42,7 +42,7 @@ for (const label of ['Open in Google Maps', 'Open website', 'Email the business'
   ok((header.match(new RegExp(`aria-label="${label}"`, 'g')) ?? []).length === 1, `   …and only there`);
 }
 ok(/onClick=\{\(\) => handleRemoveFromInbox\(active\)\}/.test(more), '   Remove from inbox keeps its handler');
-for (const kept of ['Open full lead details', 'Run AI audit']) ok(header.includes(`aria-label="${kept}"`), `"${kept}" stays on the row`);
+for (const kept of ['Open prospect workspace', 'Run AI audit']) ok(header.includes(`aria-label="${kept}"`), `"${kept}" stays on the row`);
 ok(/<CrawlCheckButton/.test(header) && /<ColdCallPlaybookButton/.test(header) && /<LeadOwnerControl/.test(header) && /<WelcomePackButton/.test(header), 'crawl, playbook, owner and welcome pack stay on the row');
 ok(/copySignupLink/.test(header), 'the sign-up link (and its warning dot) stays on the row');
 

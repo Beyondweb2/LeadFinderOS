@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
-  MessageSquare, Users, ShieldCheck
+  MessageSquare, Users, ShieldCheck,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -62,7 +63,7 @@ export function MobileBottomNav() {
     ? [
         { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
-        { title: t('nav.search'), url: '/find-leads', icon: Search },
+        { title: 'Results', url: '/sales-dashboard', icon: BarChart3 },
       ]
     : [
         { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -71,7 +72,7 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: 'Coverage', url: '/coverage', icon: LayoutDashboard }]
+    ? [{ title: t('nav.search'), url: '/find-leads', icon: Search }, { title: 'Coverage', url: '/coverage', icon: LayoutDashboard }]
     : [
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },

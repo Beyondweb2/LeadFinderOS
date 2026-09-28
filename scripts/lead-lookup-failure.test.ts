@@ -33,7 +33,8 @@ ok(!/const \{ data: lead \} = await service\s*\n\s*\.from\("outreach_leads"\)\s*
    'the SUBMIT lookup no longer discards the query error');
 ok((fn.match(/const \{ data: lead, error: leadErr \}/g) ?? []).length >= 2,
    'both gating lookups capture the error');
-ok((fn.match(/error: "lookup_failed" \}, 503\)/g) ?? []).length === 2,
+/* ≥ 2 since 2026-09-28: payment_status and gbp_access answer a failed read the same way. */
+ok((fn.match(/error: "lookup_failed" \}, 503\)/g) ?? []).length >= 2,
    'and each returns lookup_failed as a 503, not a 404');
 ok(/if \(leadErr\) \{[\s\S]{0,200}?lookup_failed/.test(fn), 'the failure is tested BEFORE the absence');
 /* Order matters: testing !lead first would swallow the error case back into unknown_lead. */
