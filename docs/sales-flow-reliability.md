@@ -106,3 +106,55 @@ Branch `feat/sales-flow-reliability`. Migration `20260928200000_sales_flow_relia
 - **Restored:** the QA lead and its 3 activity rows deleted by id; 0 left (the business is "new" again).
 - **Not seen by a person:** production screens were proven by bundle markers and server responses, the
   layout by the local render. Paul should glance at Coverage, Find Leads and a lead's Campaign card once.
+
+## 5. Follow-up: campaigns admin-only, the claim rule, one contact-method set (2026-09-28, later)
+
+Migration `20260928210000_campaign_claim_contact.sql`; branch `fix/campaign-claim-contact`.
+
+- **Campaigns — the gap:** `campaigns` had permissive policies only: INSERT `with check (auth.uid() =
+  created_by)` (any signed-in user could create one), UPDATE/DELETE `auth.uid() = created_by` (a creator
+  could edit or delete their own). The Test salesperson had created one ("test"). **Fix:** RESTRICTIVE
+  insert/update/delete policies requiring `my_role() = 'admin'` (ANDed with every permissive policy),
+  plus permissive admin update/delete on ANY campaign (so the admin can manage the rep-created one).
+  SELECT unchanged. Sales still sets a campaign on its own lead through `lead_set_campaign` (writes
+  `outreach_leads`, not `campaigns`).
+- **The claim rule — before:** `claim_lead`, `sales_pool` and `lead_identity_lookup` used
+  `lead_first_contact_at`: an outbound WhatsApp sent/delivered/read or any inbound (by lead or phone), a
+  successful `whatsapp_sends` row, a questionnaire, or the legacy send stamps. It never read
+  `lead_activity`, so a logged call / email / LinkedIn / in-person contact did NOT protect a lead —
+  proven live (rolled back): a phoned lead, unassigned, went back into the pool and could be claimed.
+  **After:** `lead_contact_attempt_at` = `lead_first_contact_at` (unchanged) + `lead_logged_contact_at`
+  (every `call_outcome` / `contact_logged` activity — all methods and outcomes, "No answer" included —
+  and a sign-up or report link recorded as SENT on any channel). Not counted: added, viewed, Hook Audit,
+  crawl, report/link generated or copied, internal note, a message that never sent. The WhatsApp opener
+  queue (`sales_queue_opener`) keeps `lead_first_contact_at` on purpose — a phone call must not block the
+  cold opener. Claimable leads: 2,485 before and after (no logged contacts existed yet).
+  ⚡ The first version (one SECURITY DEFINER SQL function calling another) took the pool from 0.65 s to
+  3.2–4 s; split into a definer function for the new reads and a plain inlinable one for the rule:
+  0.92 s.
+- **One contact-method set:** `src/lib/contactMethods.ts`. Before, four lists: the workspace pills /
+  `lead_log_contact` (call, linkedin, email, in_person, other), sign-up link "sent another way" and report
+  link "sent another way" (email, linkedin, sms, in_person, other each), the dashboard (whatsapp, call,
+  linkedin, email, in_person, other). After: one set — Phone call, WhatsApp, Email, LinkedIn message, In
+  person / networking (pills), LinkedIn voice note, Facebook / social message, Text message, Referral,
+  Video outreach, Other (under More). WhatsApp is recorded by the send itself (selecting it says so;
+  `lead_log_contact` still refuses it, so a send cannot count twice). Voicemail is the call's "Left
+  voicemail" outcome. New outcome `message_sent` "Sent, no reply yet" (not a reply on the dashboard);
+  outcomes shown per method (`outcomesFor`). The link pickers are the set's `LINK_SEND_METHODS` subset
+  (the link events' CHECK is unchanged). History labels come from the set; stored values untouched.
+  Left alone as different concepts: the lead's admin-only `contact_method` tag and a campaign's planned
+  channel.
+- **Region:** every app call to an edge function already carries `forceFunctionRegion=eu-west-1`
+  (`src/lib/edgeRegion.ts`, in the Supabase client), Coverage included. Measured: without the pin a call
+  from here runs in ap-southeast-1, with it eu-west-1. No change made.
+- **Tests:** `scripts/contact-claim.test.ts`; `supabase/tests/campaign-claim-contact.sql` 66/66 live
+  (rolled back) — campaigns create/edit/delete refused for Sales (even its own campaign), allowed for the
+  admin, Sales assigns an existing campaign to its own lead and not to another rep's; per method: call /
+  no answer, voicemail, email, LinkedIn, LinkedIn voice note, social, in person, referral, video, text,
+  other, a successful WhatsApp send, a link sent by email → out of the pool, claim refused, Find Leads
+  "protected"; audit only, crawl only, note only, report generated, failed WhatsApp → still claimable
+  (and the audit-only one is claimed, same record); one activity row per log, with its method; WhatsApp
+  and unknown methods refused by hand. All older suites re-run green.
+- ⚠️ Found, not ours, left alone: a lead "QA Domain Test Plumbing" (fictional 447700900741, added
+  07:24 today by another session) is still in production; the sales-flow-reliability suite's test phone
+  moved to 07700 900851 because of it.

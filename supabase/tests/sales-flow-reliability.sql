@@ -97,20 +97,20 @@ do $$ declare r jsonb; begin
 
   -- THE SALES ADD KEEPS WHAT GOOGLE RETURNED
   r := public.sales_add_lead(jsonb_build_object(
-    'business_name', 'SFR Test Plumbing Cleethorpes', 'phone', '07700 900741', 'google_maps_url', 'https://maps.google.com/?cid=sfr-test-1',
+    'business_name', 'SFR Test Plumbing Cleethorpes', 'phone', '07700 900851', 'google_maps_url', 'https://maps.google.com/?cid=sfr-test-1',
     'address', '1 Test Street, Cleethorpes DN35 0AA', 'category', 'Plumber', 'search_keyword', 'Mobile mechanics', 'search_location', 'Cleethorpes',
     'place_id', 'sfr-test-place-1', 'country', 'UK', 'list_type', 'no_website', 'campaign_id', (select camp from t_fx),
     'rating', 4.7, 'review_count', 23, 'derived_town', 'Cleethorpes', 'town_checked', true, 'town_fetch_note', null));
   insert into t_results (name, ok, detail) values ('add: A adds a search result', (r ->> 'ok')::boolean, r::text);
   insert into t_results (name, ok, detail) select 'add: phone, address, trade, town, place id, campaign all carried',
-    phone = '07700 900741' and address like '1 Test Street%' and search_keyword = 'Mobile mechanics' and search_location = 'Cleethorpes'
+    phone = '07700 900851' and address like '1 Test Street%' and search_keyword = 'Mobile mechanics' and search_location = 'Cleethorpes'
     and place_id = 'sfr-test-place-1' and campaign_id = (select camp from t_fx) and assigned_to_user_id = 'cccccccc-0000-4000-8000-00000000000a',
     row_to_json(s)::text from public.sales_leads s where s.id = (r ->> 'lead_id')::uuid;
   insert into t_results (name, ok, detail) select 'add: rating, reviews and the looked-up town carried',
     rating = 4.7 and review_count = 23 and derived_town = 'Cleethorpes', null from public.sales_leads where id = (r ->> 'lead_id')::uuid;
-  r := public.sales_add_lead(jsonb_build_object('business_name', 'SFR Other Name', 'phone', '+44 7700 900741', 'search_keyword', 'plumbers', 'place_id', 'sfr-test-place-2'));
+  r := public.sales_add_lead(jsonb_build_object('business_name', 'SFR Other Name', 'phone', '+44 7700 900851', 'search_keyword', 'plumbers', 'place_id', 'sfr-test-place-2'));
   insert into t_results (name, ok, detail) values ('add: the same phone again is refused (one business, one record)', r ->> 'error' = 'exists', r::text);
-  r := public.sales_add_lead(jsonb_build_object('business_name', 'SFR No Lookup', 'phone', '07700 900742', 'search_keyword', 'plumbers', 'place_id', 'sfr-test-place-3',
+  r := public.sales_add_lead(jsonb_build_object('business_name', 'SFR No Lookup', 'phone', '07700 900852', 'search_keyword', 'plumbers', 'place_id', 'sfr-test-place-3',
     'rating', 'five stars', 'review_count', -4, 'derived_town', 'Nowhere'));
   insert into t_results (name, ok, detail) values ('add: a bad rating / count is dropped, never a failed add', (r ->> 'ok')::boolean
     and (select rating is null and review_count is null from public.sales_leads where id = (r ->> 'lead_id')::uuid), r::text);
