@@ -26,12 +26,12 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status";
 
 /* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
    Paul can start. The list reads the same readiness, so these columns ride on the list too. */
 const HUB_LIST_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id,service_terminated_at";
 /* The prospect audits a paid client arrives with: the hook / quick check / free check. Never a baseline,
    a measurement, Discovery or a replay (those are delivery, shown elsewhere on the hub). */
 const PROSPECT_AUDIT_PURPOSES = ["audit", "free_check"];
@@ -41,7 +41,7 @@ const HANDOFF_ACTIVITY_KINDS = ["note", "call_outcome", "contact_logged", "repor
 /* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
    CLIENT stated; nothing is derived and nothing is operator workflow. */
 const HUB_ONBOARDING_COLUMNS =
-  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at";
+  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at";
 
 /* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
    than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */
@@ -286,10 +286,65 @@ Deno.serve(async (req) => {
         owner_now: nameOf(L.assigned_to_user_id),
         added_by: nameOf(L.added_by_user_id),
         lead_source: L.lead_source ?? null,
+        /* What Sales heard about the domain (A/B/C/D) — shown beside the client's own answers, never counted. */
+        domain_control: L.domain_control ?? null,
+        domain_escalated_at: (ev.onboardingByLead.get(leadId) as Record<string, unknown> | undefined)?.domain_escalated_at ?? null,
+        terminated: L.service_terminated_at ? { at: L.service_terminated_at, reason: L.service_termination_reason, note: L.service_termination_note } : null,
         prospect_audit: ev.auditByLead.get(leadId) ?? null,
         activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
       };
       return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff } });
+    }
+
+    /* ══ END THE SERVICE: a client-side domain / authority / IP dispute (Paul, 2026-09-28) ══════════
+       The terms let Findable pause, refuse the cutover, suspend, take the site offline or end the
+       service where a third party credibly disputes the client's authority. This records the END and
+       its reason. ⛔ THE APP NEVER MOVES MONEY: it does not cancel the subscription or refund anything.
+       It excludes the case from the guarantee (the results sender and the re-measure skip it) and
+       emails Paul to cancel the subscription in Stripe so no further payment is taken. Explicit
+       confirm + a written note, admin only (this whole function is requireAdmin). Once only. */
+    if (action === "terminate_service") {
+      const leadId = text(body.lead_id);
+      const note = text(body.note).slice(0, 1000);
+      if (body.reason !== "domain_authority_dispute") return json({ ok: false, error: "bad_reason" }, 400);
+      if (note.length < 10) return json({ ok: false, error: "note_required", detail: "Say what the dispute is (at least 10 characters)." }, 400);
+      if (body.confirm !== true) return json({ ok: false, error: "confirm_required" }, 400);
+      const { data: lead, error } = await service.from("outreach_leads")
+        .select("id,business_name,stripe_subscription_id,subscription_status,service_terminated_at")
+        .eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (error) throw error;
+      if (!lead) return json({ ok: false, error: "client_not_found" }, 404);
+      if (lead.service_terminated_at) return json({ ok: true, already: true, at: lead.service_terminated_at });
+      const at = new Date().toISOString();
+      const { data: upd, error: upErr } = await service.from("outreach_leads")
+        .update({ service_terminated_at: at, service_termination_reason: "domain_authority_dispute", service_termination_note: note, service_terminated_by: user.id })
+        .eq("id", leadId).is("service_terminated_at", null).select("id");
+      if (upErr) throw upErr;
+      if (!upd?.length) return json({ ok: true, already: true });
+      const live = !!lead.stripe_subscription_id && !["canceled", "incomplete_expired"].includes(String(lead.subscription_status ?? ""));
+      const key = Deno.env.get("RESEND_API_KEY");
+      let alerted = false;
+      if (key) {
+        const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const lines = [
+          `You ended the Findable service for <b>${esc(String(lead.business_name ?? "a client"))}</b> (domain / authority dispute).`,
+          `Note: ${esc(note)}`,
+          live
+            ? `<b>Cancel their subscription in Stripe now</b> so no further monthly payment is taken: ${esc(String(lead.stripe_subscription_id))} (status ${esc(String(lead.subscription_status ?? "unknown"))}). The app has not moved any money.`
+            : "No live subscription is recorded for this client. Check Stripe anyway before closing it.",
+          "Under the terms: the £99 is not refunded for this reason, the money-back guarantee does not cover this interruption, and payments already properly taken are not refunded automatically.",
+        ];
+        try {
+          const r = await fetch("https://api.resend.com/emails", {
+            method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ from: "Findable alerts <alerts@findable.live>", to: ["paul@move37.fun"],
+              subject: `SERVICE ENDED — ${live ? "cancel the monthly in Stripe" : "check Stripe"} — ${String(lead.business_name ?? "")}`,
+              html: lines.map((l) => `<p>${l}</p>`).join("") }),
+          });
+          alerted = r.ok;
+        } catch (e) { console.error("[paid-client-hub] termination alert failed:", (e as Error).message); }
+      }
+      return json({ ok: true, at, subscription_live: live, alerted });
     }
 
     /* ══ SECTION 5 — WEBSITE BUILD WORKFLOW STATE ════════════════════════════════════════════════

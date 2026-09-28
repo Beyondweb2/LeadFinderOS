@@ -8,6 +8,7 @@ import { offerPrice } from "../_shared/offer-price.ts";
    decision here is exactly the drift that put 27 of 47 onboarding links on the wrong host. */
 import { resolveSiteOrigin } from "../_shared/onboarding-followup.ts";
 import { serveDecision, serveInputFromRow, type ServeGateRow } from "../../../src/lib/serveGate.ts";
+import { DOMAIN_ROW_COLUMNS, domainAuthority, domainInputFromRow, type DomainRow } from "../../../src/lib/domainAuthority.ts";
 
 // findable-checkout — Stripe Checkout for the Findable onboarding plan (verify_jwt = false;
 // called by the public findable-site with the anon apikey — the visitor has no app account).
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // The three website answers come back too: they decide whether we can serve this customer at
       // all, and that has to be settled BEFORE a Stripe session exists. See the gate below.
-      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, website_addon, plan_tier")
+      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, " + DOMAIN_ROW_COLUMNS)
       .eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
 
@@ -188,6 +189,19 @@ Deno.serve(async (req) => {
       });
       console.log(`[findable-checkout] refused ${onboardingId}: ${gate.reason}`);
       return json({ ok: false, error: "cannot_serve", reason: gate.code }, 403);
+    }
+
+    /* ══ THE DOMAIN RULE (Paul, 2026-09-28, src/lib/domainAuthority.ts) ══════════════════════════
+       We only build / connect the standard NEW site where the client confirms they own or control
+       the domain and may authorise the change. Re-derived from the ROW (never the request), after the
+       already-paid checks, so an existing client is never re-gated. Optimising their own site is not
+       affected (the rule does not apply). The onboarding page shows the same verdict and a route to
+       Paul; this refusal is the thing that actually stops a Stripe session. */
+    const domain = domainAuthority(domainInputFromRow(ob as DomainRow));
+    if (domain.applies && !domain.ready) {
+      await recordRefusal("checkout_refused_domain_authority", { lead_id: effectiveLeadId, reasons: domain.reasons });
+      console.log(`[findable-checkout] refused ${onboardingId}: domain ${domain.reasons.join(",")}`);
+      return json({ ok: false, error: "domain_unresolved", reasons: domain.reasons }, 403);
     }
 
     /* Hoisted so the back-URL below can read it. `lead` itself is block-scoped to the check that

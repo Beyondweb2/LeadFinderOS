@@ -36,7 +36,7 @@ import { fileURLToPath } from 'url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LFOS = path.join(HERE, '..', 'src', 'lib');
-const SITE = path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
+const SITE = process.env.FINDABLE_SITE_DIR ? path.join(process.env.FINDABLE_SITE_DIR, 'src', 'lib') : path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
 
 /* Each pair: what it is, and where each repo keeps it. `kind` decides how the value is parsed —
    a string built from concatenated literals, or a bare number. */
@@ -332,8 +332,31 @@ function checkRefundAmount() {
   return true;
 }
 
+/* ⛔ WHOLE FILES THAT MUST BE BYTE-IDENTICAL IN BOTH REPOS (line endings normalised). The domain rule
+   (2026-09-28) decides what the onboarding page SHOWS (findable-site) and what findable-checkout
+   REFUSES (LeadFinderOS); one copy drifting would let the page promise a path the server blocks, or
+   the reverse. */
+const SAME_FILES = [
+  { what: "the domain ownership / authority rule", mine: path.join(LFOS, "domainAuthority.ts"), theirs: path.join(SITE, "domainAuthority.ts") },
+];
+function checkSameFiles() {
+  let bad = 0;
+  for (const f of SAME_FILES) {
+    const norm = (p) => fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+    let a, b;
+    try { a = norm(f.mine); b = norm(f.theirs); } catch (e) { console.error(`ERROR reading ${f.what}: ${e.message}`); bad++; continue; }
+    if (a === b) { console.log(`PASS  ${f.what}: the file is identical in both repos (${a.length} chars)`); continue; }
+    bad++;
+    let i = 0; while (i < a.length && a[i] === b[i]) i++;
+    console.error(`\nFAIL  ${f.what} has drifted: ${path.relative(LFOS_ROOT, f.mine)} vs findable-site. First difference at character ${i}.`);
+    console.error("  Copy the file across so both repos carry the same rule.");
+  }
+  return bad;
+}
+
 let failed = 0;
 if (!checkRefundAmount()) failed++;
+failed += checkSameFiles();
 for (const pair of PAIRS) {
   let mine, theirs;
   try {
@@ -370,7 +393,7 @@ failed += checkGroups();
 
 // pairs + the guarantee prefix + the refund-amount check + the same-repo groups
 /* +1 is the refund-amount check. (It was +2 while the guarantee prefix assertion existed.) */
-const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length;
+const TOTAL = PAIRS.length + 1 + SAME_REPO_GROUPS.length + SAME_FILES.length;
 if (failed) {
   console.error(`\n${failed} of ${TOTAL} checks failed.`);
   process.exit(1);

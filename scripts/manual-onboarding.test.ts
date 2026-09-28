@@ -106,7 +106,9 @@ const full: OnboardingAnswers = {
 };
 const patch = buildOnboardingPatch(full, OP, NOW);
 {
-  const answerCols = ['contact_name', 'contact_email', 'confirmed_phone', 'business_website', 'business_name', 'confirmed_location', 'domain_status', 'website_manager', 'website_manager_email', 'gbp_consent', 'services', 'services_list', 'areas_list'];
+  /* 2026-09-28: + the domain rule's answers (src/lib/domainAuthority.ts), the same columns the customer path writes. */
+  const answerCols = ['contact_name', 'contact_email', 'confirmed_phone', 'business_website', 'business_name', 'confirmed_location', 'domain_status', 'website_manager', 'website_manager_email', 'gbp_consent', 'services', 'services_list', 'areas_list',
+    'domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed'];
   ok(answerCols.every((k) => k in patch), '9. the patch sets every answer column');
   const notCustomer = answerCols.filter((k) => !new RegExp(`\\b${k}\\s*:`).test(onboardingFn));
   ok(notCustomer.length === 0, `9. every one of them is a column the customer path (findable-onboarding) also writes${notCustomer.length ? ' — not found: ' + notCustomer.join(', ') : ''}`);

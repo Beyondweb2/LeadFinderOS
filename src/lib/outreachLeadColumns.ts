@@ -59,6 +59,8 @@ export const SALES_VIEW_COLUMNS = [
   'lead_source',
   // 2026-09-28 (migration 20260928160000): what the business does and where; appended at the view's end.
   'services_included', 'service_areas',
+  // 2026-09-28 (migration 20260928180000): what Sales heard about the domain (A/B/C/D).
+  'domain_control',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.

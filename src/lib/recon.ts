@@ -71,7 +71,7 @@ export function reconPrompt(i: BuildPackInput): { text: string; blockedBy: strin
 
   if (isFaithfulRoute(s) && site) {
     L.push('', '## PURPOSE — FAITHFUL REBUILD',
-      'The client has authorised a rebuild of THIS site in new code, looking and behaving as it does now' + (s.rebuild_style ? ' (' + REBUILD_STYLE_LABELS[s.rebuild_style] + ')' : '') + '.',
+      'A rebuild of THIS site in new code, looking and behaving as it does now' + (s.rebuild_style ? ' (' + REBUILD_STYLE_LABELS[s.rebuild_style] + ')' : '') + '. It goes ahead only where the client has confirmed their business owns, or may reuse, this site’s design, text and images; Paul records that before the build. Record for every asset whether it looks client-owned, third-party or unknown — never assume a visible asset is theirs.',
       'Crawl the ENTIRE site before anything is built. Capture enough evidence to rebuild it extremely closely.',
       'Do NOT redesign during recon — describe what IS there, not what should be.',
       '', '## CAPTURE',

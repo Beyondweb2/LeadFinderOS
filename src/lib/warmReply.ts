@@ -467,6 +467,7 @@ NEVER:
 - claim to know how an AI model decides ("ai ignores", "ai reads it as"). Say what is on the site and that it "can make it harder" / means ai "can't properly access" when access is actually blocked;
 - repeat or re-word the competitor message Paul already sent;
 - say Findable can take over, take down or own their existing site;
+- promise a new website or a switch-over before they have said their business owns or controls the domain (an agency MANAGING the site is fine; an agency OWNING the domain is not), or suggest they break or leave an agency agreement — their agreement is theirs to check, never advise on it;
 - call Paul a founder, CEO or agency; no sign-off.
 
 SALES FACTS: if their messages EXPLICITLY state one of these, return it in sales_facts with their exact words as the quote: owns_website, has_existing_provider (an agency, developer or someone else manages the site or their marketing), interested_in_rebuild, requested_price, prefers_call, not_interested. Values are "yes" or "no". Never guess.`;

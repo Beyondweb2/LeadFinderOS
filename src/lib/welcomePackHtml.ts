@@ -539,6 +539,14 @@ function baselinePage(name: string, b: BaselineSummary): string {
         your website on a particular day. We don&rsquo;t promise it, and we&rsquo;d be careful of
         anyone who does.</p>
       </div>
+      <div class="wp-box">
+        <p class="wp-boxtitle">Your domain and your current website</p>
+        <p>If we&rsquo;re building you a new website, your business needs to own or control its domain and
+        be free to point it at the new site. If an agency or developer looks after your current website,
+        your agreement with them is yours to manage, and we only reuse material your business owns or is
+        allowed to use. If anything about your domain or your current provider changes, tell us straight
+        away. Our terms at findable.live/terms set this out in full.</p>
+      </div>
       <p class="wp-guar">${esc(FINDABLE_GUARANTEE)}</p>`;
 }
 

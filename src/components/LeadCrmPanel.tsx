@@ -25,6 +25,7 @@ import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
 import { ACTIVITY_LABEL, CALL_OUTCOMES, CONTACT_CHANNEL_OPTIONS, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, activityDetail, refusalText } from '@/lib/salesCrm';
 import { cn } from '@/lib/utils';
+import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE LEAD'S CRM — THREE PANELS, BOTH ROLES, BOTH PAGES (2026-09-27; split into the prospect
@@ -52,7 +53,7 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -61,6 +62,7 @@ interface CrmRow {
   call_booked_at: string | null; website_control: string | null; website_control_note: string | null;
   assigned_to_user_id: string | null;
   services_included: string[] | null; service_areas: string[] | null; address: string | null;
+  domain_control: string | null;
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
@@ -248,6 +250,19 @@ export function LeadWorkPanel({ leadId }: { leadId: string }) {
                 if (v === (lead.website_control_note ?? null)) return;
                 await save('lead_set_website_control', { _value: lead.website_control, _note: v }, 'Saved');
               }} />
+          </div>
+          {/* ⛔ THE DOMAIN RULE (Paul, 2026-09-28): managed by an agency is usually fine; OWNED or controlled
+              by someone else blocks a new site until the client gets control. Never legal advice, never
+              "break your contract", never promise to take over a domain we do not control. What Sales
+              records here is information for Paul; only the client's own confirmation at sign-up counts. */}
+          <div className="space-y-1.5 sm:col-span-2" data-testid="domain-control">
+            <label className="block text-[11px] font-medium text-muted-foreground">Who owns / controls the domain?</label>
+            <Select value={lead.domain_control ?? ''} onValueChange={(v) => void save('lead_set_domain_control', { _value: v }, 'Saved', { domain_control: v })}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Not asked yet" /></SelectTrigger>
+              <SelectContent>{DOMAIN_CONTROL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+            {(() => { const o = DOMAIN_CONTROL_OPTIONS.find((x) => x.value === lead.domain_control); return o ? <p className={cn('text-[11px]', o.value === 'third_party_owns' || o.value === 'unknown' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{o.guidance}</p> : null; })()}
+            <p className="text-[11px] text-muted-foreground">Say: “{SALES_DOMAIN_LINE}”</p>
           </div>
         </div>
       </details>

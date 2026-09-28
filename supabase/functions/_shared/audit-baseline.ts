@@ -636,6 +636,8 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
     .select("id, user_id, business_name, baseline_audit_id, remeasure_audit_id, remeasure_due_date, status, is_archived, amount_paid, delivery_checklist")
     .not("baseline_audit_id", "is", null)
     .is("remeasure_audit_id", null)
+    /* A service Findable ended over a domain / authority dispute is not re-measured (no guarantee applies). */
+    .is("service_terminated_at", null)
     .lte("remeasure_due_date", today)
     .eq("is_archived", false)
     .neq("status", "refunded")

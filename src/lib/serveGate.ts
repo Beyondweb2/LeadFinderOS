@@ -9,7 +9,9 @@
    Delivery works exactly two ways, and there is no third:
 
      1. Their site is WordPress and we can have access — pages publish to it automatically.
-     2. They let us move their site to our hosting, copied exactly as it is — automated from then on.
+     2. They let us move their site to our hosting — automated from then on. ⛔ (2026-09-28) Only where
+        the business owns, or may reuse, the site's design, text and images (onboarding site_rights,
+        src/lib/domainAuthority.ts mayReuseExistingSite); otherwise we build a genuinely new site.
 
    Hand-editing a Wix or Squarespace site is about fifteen minutes a page, forever, and does not work
    at a £99 one-off. So somebody who will NOT move and is NOT WordPress-with-access cannot be served,

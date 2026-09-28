@@ -34,6 +34,7 @@
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
 import { resolveFindingsSource, MAX_SITE_FINDINGS, type FindingKind, type FindingsSource, type SiteFinding } from './siteFindings.ts';
 import type { SiteEvidenceFinding } from './siteEvidence.ts';
+import { SALES_DOMAIN_LINE } from './domainAuthority.ts';
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
 import { excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
@@ -602,8 +603,11 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   nextSteps.push(reportUrl ? 'Offer to send the report (link below) — send it yourself from the Inbox.' : 'No shareable report yet — offer to run the check and send it over.');
   if (f.findings.length) nextSteps.push('Walk them through the website finding — they can check it on their own phone.');
   nextSteps.push('Book a follow-up call once they have looked at it.');
-  if (clean(lead.website)) nextSteps.push('If they can\'t get into their site to change it, talk about moving it to our hosting or a rebuild.');
-  else nextSteps.push('They have no website on file — talk about getting one built.');
+  /* ⛔ THE DOMAIN RULE (Paul, 2026-09-28): an agency MANAGING the site is usually fine; one OWNING or
+     controlling the domain blocks a new site until the client gets control. Never promise a rebuild or
+     a switch-over before that, and never give legal advice about their agency agreement. */
+  if (clean(lead.website)) nextSteps.push('If they can\'t get into their site, ask who owns and controls the domain before offering a new site. ' + SALES_DOMAIN_LINE + ' If an agency owns it, or they don\'t know, flag it to Paul and promise nothing.');
+  else nextSteps.push('They have no website on file — talk about getting one built (they register the domain in their own business name).');
   const offer = {
     lines: [
       FINDABLE_OFFER_SUMMARY,
@@ -620,6 +624,11 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     {
       objection: 'I already have a website guy',
       answer: 'That\'s fine — I\'m not trying to replace them. This is one specific thing: what AI says when someone asks for ' + lookingAt + '. I can send your web person exactly what I found so they can look at it.',
+    },
+    {
+      /* ⛔ Never legal advice, never "break your contract", never a promise to take over a domain. */
+      objection: 'My agency controls the website / domain',
+      answer: SALES_DOMAIN_LINE + ' Your agreement with them is yours to check (notice periods, fees, who owns the site) — I can\'t advise on that, and we would never ask you to break it.',
     },
     {
       objection: 'My website is fine',

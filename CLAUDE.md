@@ -28,10 +28,10 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (221 suites). **Honest green is 215/221 (2026-09-28, with `FINDABLE_SITE_DIR` at a current
-  findable-site; all six also fail on untouched `origin/main`)** — `coverage-lead-counts`,
-  `report-attribution`, `verdict`, `site-origin` (needs Deno), `onboarding-audit-fields`, and
-  `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
+  (222 suites). **Honest green is 217/222 (2026-09-28, with `FINDABLE_SITE_DIR` at a current
+  findable-site)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs Deno),
+  `onboarding-audit-fields`; without `FINDABLE_SITE_DIR`, also `check-cross-repo-sync` and
+  `manual-onboarding` (both need a current findable-site). Read the FAILED names, never the
   count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
@@ -124,8 +124,15 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   refund. Paul's reading; do not soften to "unchanged".
 - ⛔ **RG Locksmiths is pinned at 8 weeks** (legacy outcome guarantee, `remeasure_due_date`
   2026-10-06, stored by hand). The 28-day default (`REMEASURE_OFFSET_DAYS`) only fills a NULL date.
+- ⛔ **THE DOMAIN RULE (Paul, 2026-09-28, `docs/domain-authority.md`): we only build / connect the standard
+  new site where the client confirms they own or control the domain and may authorise the change** —
+  agency-MANAGED is fine, agency-OWNED is not. One rule, byte-identical in both repos
+  (`src/lib/domainAuthority.ts`, sync-checked); `findable-checkout` refuses `domain_unresolved`; Paid Clients
+  is never READY without it. Reuse of the old site (faithful rebuild, or a move) only with confirmed rights;
+  only client-owned assets download. Ending a service for a dispute is `terminate_service` (records +
+  emails Paul to cancel in Stripe; the app never moves money).
 - **Delivery works exactly two ways:** their site is WordPress and we get access, or they let us move
-  it to our hosting. `src/lib/serveGate.ts` decides serve/flag/block — **derived, never stored**;
+  it to our hosting (only where they own it — the domain rule). `src/lib/serveGate.ts` decides serve/flag/block — **derived, never stored**;
   blocks only on an explicit `migrate='no'` AND a known hand-edit platform; `no_website` serves
   outright. `findable-checkout` refuses a blocked row before Stripe. findable-site keeps a hand-kept
   mirror — change both.
@@ -811,6 +818,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
 | The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
+| Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
 | Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
