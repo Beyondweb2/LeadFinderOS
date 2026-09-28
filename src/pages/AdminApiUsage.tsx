@@ -11,6 +11,7 @@ import {
 import {
   ArrowLeft, Loader2, DollarSign, AlertTriangle, Activity, Database, RefreshCw,
 } from 'lucide-react';
+import { SecurityPanel } from '@/components/SecurityPanel';
 
 interface ApiUsageData {
   spendToday: number;
@@ -87,12 +88,17 @@ export default function AdminApiUsage() {
           <Button variant="ghost" size="icon" onClick={() => navigate('/admin')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">Google API Usage</h1>
+          <h1 className="text-2xl font-bold text-foreground">API Usage &amp; Security</h1>
         </div>
         <Button variant="outline" size="sm" onClick={fetchData}>
           <RefreshCw className="h-4 w-4 mr-2" /> Refresh
         </Button>
       </div>
+
+      {/* Security & usage (2026-09-29): who spent what, warnings, restrictions, the paid-action control. */}
+      <SecurityPanel />
+
+      <h2 className="text-xl font-semibold text-foreground pt-2">Google API detail</h2>
 
       {/* Alerts */}
       {data.alerts.length > 0 && (

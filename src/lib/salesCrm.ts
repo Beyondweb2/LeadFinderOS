@@ -146,11 +146,12 @@ export function initialsOf(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Find Leads state for one result, as lead_identity_lookup returns it. */
-export type IdentityState = 'new' | 'yours' | 'claimable' | 'owned' | 'protected';
+/** Find Leads state for one result, as lead_identity_lookup returns it. 'paused' (2026-09-29): the usage
+ *  guard refused the lookup (suspended, or over the lookup limit) — nothing is known, nothing is offered. */
+export type IdentityState = 'new' | 'yours' | 'claimable' | 'owned' | 'protected' | 'paused';
 
 export function isIdentityState(v: unknown): v is IdentityState {
-  return v === 'new' || v === 'yours' || v === 'claimable' || v === 'owned' || v === 'protected';
+  return v === 'new' || v === 'yours' || v === 'claimable' || v === 'owned' || v === 'protected' || v === 'paused';
 }
 
 /** Plain-English refusal for a claim/add/queue result the server returned. Unknown codes are shown
@@ -178,6 +179,8 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'not_yours': return 'Not assigned to you, or a client';
     case 'no_leads': return 'Select at least one lead';
     case 'too_many': return 'Too many at once — select 500 or fewer';
+    // The usage guard (2026-09-29). The same words everywhere, never a cost or a limit's number.
+    case 'usage_paused': return 'Usage temporarily paused — contact Paul';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
 }

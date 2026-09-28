@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { allStopRefusal } from "../_shared/protection.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 // Same shape test the report uses to decide it can render an SEO block, so "we already have
@@ -44,6 +45,9 @@ Deno.serve(async (req) => {
     const userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    /* ⛔ EMERGENCY STOP (2026-09-29, docs/abuse-cost-protection.md): a paid admin tool refuses while it is on. */
+    const stopped = await allStopRefusal(service, corsHeaders);
+    if (stopped) return stopped;
 
     const body = await req.json().catch(() => ({}));
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";

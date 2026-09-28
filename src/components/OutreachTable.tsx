@@ -131,6 +131,7 @@ import { leadStatusLabel, awaitingReplyTooltip } from '@/types/outreach';
 import { isInitialOpener } from '@/lib/openerVariant';
 import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
 import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
@@ -835,10 +836,18 @@ export function OutreachTable({
       return;
     }
     
+    /* ⛔ ASK THE SERVER FIRST (2026-09-29, docs/abuse-cost-protection.md): Copy Numbers is logged, and for
+       a salesperson checked against their own leads and the per-copy / per-hour / per-day limits. A
+       refusal copies nothing. */
+    const leadIds = leadsWithPhones.map(l => l.id);
+    const logged = await logDataAccess(supabase, 'copy_numbers', leadIds.length, leadIds, { view: 'outreach', status: statusFilter, search: searchQuery ? 'yes' : 'no' });
+    if (!logged.ok) {
+      toast({ title: 'Nothing was copied', description: logged.message, variant: 'destructive' });
+      return;
+    }
     navigator.clipboard.writeText(phones.join(', '));
     
     // Mark all as copied in backend
-    const leadIds = leadsWithPhones.map(l => l.id);
     await markMultipleAsCopied(leadIds);
     
     // Copied — no toast
@@ -1463,8 +1472,10 @@ export function OutreachTable({
     setResetFreshOpen(false);
   };
 
-  const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
+  const exportToCsv = async (mode: 'crm' | 'import' = 'crm') => {
     if (needsFullList()) return;
+    // ⛔ Admin only (perms.exportData) — the button is not rendered for Sales and the server refuses one.
+    if (!perms.exportData) return;
     const leadsToExport = selectedIds.size > 0 
       ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
       : filteredAndSortedLeads;
@@ -1541,6 +1552,13 @@ export function OutreachTable({
     ]);
 
     const csvContent = mode === 'import' ? buildCsv(importHeaders, importRows) : buildCsv(crmHeaders, crmRows);
+
+    /* Every export is recorded (who, when, rows, filter) before the file is made; a failed record downloads nothing. */
+    const logged = await logDataAccess(supabase, 'export_csv', leadsToExport.length, null, { view: 'outreach', mode, selected: selectedIds.size, status: statusFilter });
+    if (!logged.ok) {
+      toast({ title: 'Export not downloaded', description: logged.message, variant: 'destructive' });
+      return;
+    }
 
     try {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2152,15 +2170,17 @@ export function OutreachTable({
                   Select {leadsWithEmail.length} with email
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => exportToCsv('crm')}
-                className="bg-background text-xs h-8"
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                <span className="hidden sm:inline">Export </span>CSV
-              </Button>
+              {perms.exportData && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void exportToCsv('crm')}
+                  className="bg-background text-xs h-8"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="hidden sm:inline">Export </span>CSV
+                </Button>
+              )}
               {/* Find emails — free website crawl (extract-email) over filtered leads
                   with a website and no email yet; writes to outreach_leads.email. */}
               {!readOnly && onUpdateLead && perms.enrichLeads && (

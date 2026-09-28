@@ -27,6 +27,7 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { Flame, Zap, Search, MapPin, Info, Globe2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { logDataAccess } from '@/lib/dataAccessLog';
 import type { Country, Lead, SearchMode } from '@/types/lead';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -409,6 +410,19 @@ const Index = () => {
   const { findEmails, cancel: cancelFindEmails, finding, progress: emailProgress, result: emailResult, withWebsiteCount } =
     useFindEmails(leads, patchEnrichment);
 
+  /* ⛔ CSV EXPORT IS ADMIN ONLY (Paul, 2026-09-29, docs/abuse-cost-protection.md) and every export is
+     recorded first (who, when, rows, the search); a refused or failed record downloads nothing. Sales
+     gets no Export menu, and the server refuses a Sales export anyway. */
+  const canExport = viewerRole === 'admin';
+  const loggedExport = useCallback(async (download: () => void, rows: number, what: string) => {
+    const logged = await logDataAccess(supabase, 'export_csv', rows, null, { view: 'find_leads', what, search: lastSearch ? { keyword: lastSearch.keyword, location: lastSearch.location } : null });
+    if (!logged.ok) {
+      toast({ title: 'Export not downloaded', description: logged.message, variant: 'destructive' });
+      return;
+    }
+    download();
+  }, [lastSearch, toast]);
+
   // CSV export including any emails found this session (from searchEnrichment).
   const handleExportWithEmails = useCallback(() => {
     const cell = (v: string) => {
@@ -617,7 +631,7 @@ const Index = () => {
                   cost (find-emails free) and gating are unchanged. */}
               <LeadsTable
                 leads={leads}
-                onExport={exportToCsv}
+                onExport={canExport ? () => void loggedExport(exportToCsv, leads.length, 'results') : undefined}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
                 getCrmState={getCrmState}
@@ -646,7 +660,7 @@ const Index = () => {
                 onAddAllWithEmails={handleAddAllWithEmails}
                 addingEmails={addingEmails}
                 addAllWithEmailsCount={leadsWithEmail.length}
-                onExportWithEmails={handleExportWithEmails}
+                onExportWithEmails={canExport ? () => void loggedExport(handleExportWithEmails, leads.length, 'results_with_emails') : undefined}
               />
             </div>
           )}

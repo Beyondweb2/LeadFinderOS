@@ -45,7 +45,8 @@ EyeIcon.displayName = 'EyeIcon';
 
 interface LeadsTableProps {
   leads: Lead[];
-  onExport: () => void;
+  /** Absent = no Export menu (Sales, 2026-09-29: CSV export is admin-only). */
+  onExport?: () => void;
   onAddToOutreach?: (lead: Lead) => Promise<any>;
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
@@ -567,7 +568,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             {renderFilterMenu('start')}
             {renderPrimaryAdd()}
             {renderBulkMenu()}
-            {renderExportMenu()}
+            {onExport && renderExportMenu()}
           </div>
         </div>
 
@@ -588,7 +589,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             {renderFilterMenu('end')}
             {renderPrimaryAdd()}
             {renderBulkMenu()}
-            {renderExportMenu()}
+            {onExport && renderExportMenu()}
           </div>
         </div>
       </CardHeader>

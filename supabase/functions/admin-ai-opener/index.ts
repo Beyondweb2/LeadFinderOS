@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { allStopRefusal } from "../_shared/protection.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -32,6 +33,9 @@ serve(async (req) => {
     if (!roles || roles.length === 0) {
       return new Response(JSON.stringify({ error: "Admin only" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    /* ⛔ EMERGENCY STOP (2026-09-29, docs/abuse-cost-protection.md): a paid admin tool refuses while it is on. */
+    const stopped = await allStopRefusal(createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } }), corsHeaders);
+    if (stopped) return stopped;
 
     const body = await req.json();
     const { business_name, category, website, address, notes } = body;

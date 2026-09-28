@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
+import { recordDenial } from '../_shared/protection.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,6 +83,8 @@ serve(async (req) => {
     console.log('[ADMIN-USERS] Admin role check:', roleData ? 'PASSED' : 'FAILED', roleError?.message || '');
 
     if (!roleData) {
+      // A signed-in non-admin calling the Team function directly — counted (2026-09-29).
+      await recordDenial(serviceClient, adminUserId, 'admin-users');
       return jsonResponse({ error: 'Not authorized - no admin role' }, 403, corsHeaders, rlHeaders);
     }
 
@@ -399,7 +402,7 @@ serve(async (req) => {
 
     if (action === 'team_list') {
       const { data: members, error: mErr } = await serviceClient.from('team_members')
-        .select('user_id, display_name, status, is_book_owner, invited_at, disabled_at, daily_send_limit')
+        .select('user_id, display_name, status, is_book_owner, invited_at, disabled_at, daily_send_limit, suspended_at')
         .order('invited_at', { ascending: true });
       if (mErr) return jsonResponse({ error: mErr.message }, 500, corsHeaders, rlHeaders);
       /* ⚡ Every member at once (2026-09-27, site-wide speed pass): each member's three reads already
@@ -487,6 +490,39 @@ serve(async (req) => {
       const { error: ubErr } = await serviceClient.auth.admin.updateUserById(uid, { ban_duration: 'none' });
       console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, unban_error: ubErr?.message ?? null, timestamp: new Date().toISOString() }));
       return jsonResponse({ ok: true }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* ⛔ SUSPEND SALES ACCESS (2026-09-29, docs/abuse-cost-protection.md) — the middle state between
+       active and disabled. The ROLE ROW STAYS, so the salesperson still signs in and reads their own
+       leads, notes, statuses and history; every protected action (paid API, searches, lookups, claims,
+       adds, audits, AI drafts, Copy Numbers, WhatsApp sends and queueing) refuses on the server on the
+       very next request — public.guard_action reads team_members.suspended_at every time, so a session
+       that is already open stops working for them at once. Nothing is deleted or moved: the account,
+       the leads, the attribution and the history all stay. Leads they had QUEUED are held by the drip
+       (process-whatsapp-queue) and listed on the Admin screen for Paul to decide. */
+    if (action === 'team_suspend' || action === 'team_unsuspend') {
+      const uid = body.user_id;
+      if (!uuidOk(uid)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      if (uid === adminUserId) return jsonResponse({ ok: false, error: 'cannot_change_self' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('user_id, is_book_owner, status').eq('user_id', uid).maybeSingle();
+      if (!m) return jsonResponse({ ok: false, error: 'not_a_member' }, 404, corsHeaders, rlHeaders);
+      if (m.is_book_owner) return jsonResponse({ ok: false, error: 'cannot_change_book_owner' }, 400, corsHeaders, rlHeaders);
+      const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
+      if (isAdminRow) return jsonResponse({ ok: false, error: 'cannot_change_admin' }, 400, corsHeaders, rlHeaders);
+      const suspend = action === 'team_suspend';
+      const { error: sErr } = await serviceClient.from('team_members')
+        .update(suspend ? { suspended_at: new Date().toISOString(), suspended_by: adminUserId } : { suspended_at: null, suspended_by: null })
+        .eq('user_id', uid);
+      if (sErr) return jsonResponse({ ok: false, error: 'write_failed', detail: sErr.message }, 500, corsHeaders, rlHeaders);
+      const { count: queued } = await serviceClient.from('outreach_leads').select('id', { count: 'exact', head: true })
+        .eq('assigned_to_user_id', uid).eq('status', 'queued');
+      const { error: eErr } = await serviceClient.from('security_events').insert({
+        actor_user_id: adminUserId, actor_role: 'admin', kind: suspend ? 'suspended_by_admin' : 'reactivated_by_admin',
+        severity: 'info', detail: { target_user_id: uid, queued_leads: queued ?? 0 },
+      });
+      if (eErr) console.error(JSON.stringify({ level: 'error', action, target: uid, event_error: eErr.message }));
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, queued_leads: queued ?? 0, timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true, suspended: suspend, queued_leads: queued ?? 0 }, 200, corsHeaders, rlHeaders);
     }
 
     /* Move EVERY lead from one member to another (or back to the pool). Same records, nothing sent,

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { paidMode } from "../_shared/protection.ts";
 import { SOURCES } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource, recordCostCorrection } from "../_shared/enrichment/runner.ts";
 import { startAiSearch, pollAiSearchRun, fetchAiSearchItems, normalizeAiSearch, captureGoogleSerp, toCountryCode } from "../_shared/enrichment/ai-search.ts";
@@ -158,6 +159,14 @@ Deno.serve(async (req) => {
 
     const apifyToken = Deno.env.get("APIFY_TOKEN") ?? "";
     if (!apifyToken) return json({ ok: true, skipped: "no_apify_token", processed: 0 });
+    /* ⛔ THE PAID-ACTION CONTROL (2026-09-29, docs/abuse-cost-protection.md), read once per tick.
+       all_stop           — NO new Apify run starts (PHASE B claims nothing) and no SEO scan runs. Runs
+                            already started are still POLLED (a poll is free) so they finish and nothing
+                            is stranded past MAX_RUN_AGE_MS.
+       prospecting_paused — only MEASUREMENT work starts (the baseline-priority set: baselines,
+                            re-measures, discovery, measurement — the audits with baseline_target_runs);
+                            ordinary prospecting audits stay pending until the pause lifts. */
+    const tickMode = await paidMode(service);
 
     const estCost = SOURCES.ai_search.estCostUsd;
 
@@ -405,7 +414,7 @@ Deno.serve(async (req) => {
         .limit(START_BATCH);
       for (const r of (prio ?? []) as Row[]) candidateIds.push(r.id);
     }
-    if (candidateIds.length < START_BATCH) {
+    if (candidateIds.length < START_BATCH && tickMode === "running") {
       const { data: rest } = await service
         .from("ai_audit_queue")
         .select("id")
@@ -417,6 +426,7 @@ Deno.serve(async (req) => {
         if (!candidateIds.includes(r.id)) candidateIds.push(r.id);
       }
     }
+    if (tickMode === "all_stop") candidateIds.length = 0;
     if (candidateIds.length > 0) {
       const { data: claimedRows } = await service
         .from("ai_audit_queue")
@@ -590,7 +600,9 @@ Deno.serve(async (req) => {
        results.seo being the done-marker makes the deferral free. */
     let seoRan = false;
     const elapsedMs = Date.now() - tickStartedAt;
-    if (elapsedMs < SEO_TICK_BUDGET_MS) {
+    if (tickMode === "all_stop") {
+      console.log("[process-ai-audit-queue] emergency stop is on - no SEO scan this tick");
+    } else if (elapsedMs < SEO_TICK_BUDGET_MS) {
       try {
         seoRan = await maybeRunSeoStep(service, apifyToken);
       } catch (e) {

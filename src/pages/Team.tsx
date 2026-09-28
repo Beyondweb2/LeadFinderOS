@@ -18,6 +18,8 @@ import { PERMISSION_MATRIX } from '@/lib/access';
 interface Member {
   user_id: string; display_name: string; status: 'active' | 'disabled'; is_book_owner: boolean; role: 'admin' | 'sales' | null;
   email: string | null; last_sign_in_at: string | null; has_signed_in: boolean; banned: boolean; assigned_leads: number;
+  /** 2026-09-29: set = suspended (reads work, every protected action refuses). Null = not suspended. */
+  suspended_at?: string | null;
 }
 
 async function call(action: string, body: Record<string, unknown> = {}) {
@@ -119,11 +121,29 @@ export default function Team() {
                   </div>
                 </div>
                 <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : 'disabled'}</Badge>
+                {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex flex-wrap items-center gap-2">
                     {m.status === 'active' && !m.has_signed_in && (
                       <Button size="sm" variant="outline" onClick={async () => { const r = await call('team_new_link', { user_id: m.user_id }); if (!r.ok) fail(r); else setLink(String(r.link ?? '')); }}>New link</Button>
                     )}
+                    {/* ⛔ SUSPEND SALES ACCESS (2026-09-29): the middle state. They keep their login and can READ
+                        their leads; every paid action, search, lookup, claim, export, copy and send is refused on
+                        the server at once. Nothing deleted; reversible. Disable (below) is the full lock-out. */}
+                    {m.status === 'active' && (m.suspended_at ? (
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        const r = await call('team_unsuspend', { user_id: m.user_id }); if (!r.ok) fail(r); else { toast({ title: `${m.display_name} reactivated` }); void refresh(); }
+                      }}>Reactivate</Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="border-destructive/50 text-destructive" onClick={async () => {
+                        if (!window.confirm(`Suspend Sales access for ${m.display_name}? They stay signed in and can read their leads, but every paid action, search, claim, export, copy and WhatsApp send is refused immediately. Nothing is deleted, and you can reactivate them at any time.`)) return;
+                        const r = await call('team_suspend', { user_id: m.user_id });
+                        if (!r.ok) { fail(r); return; }
+                        const queued = Number(r.queued_leads ?? 0);
+                        toast({ title: `${m.display_name} suspended`, description: queued > 0 ? `${queued} of their leads were queued for an opener — they are held, not sent. Decide on the API Usage page.` : undefined });
+                        void refresh();
+                      }}>Suspend Sales access</Button>
+                    ))}
                     {m.status === 'active' ? (
                       <Button size="sm" variant="destructive" onClick={async () => {
                         if (!window.confirm(`Disable ${m.display_name}? They are signed out of everything at once. Their notes and history stay; their ${m.assigned_leads} leads stay assigned until you move them.`)) return;

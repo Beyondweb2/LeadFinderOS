@@ -15,7 +15,8 @@
 // as a website (aggregators.ts); name-match is a booster, not a requirement.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { userTeamRole } from "../_shared/access.ts";
+import { mayLookUpBusiness, userTeamRole } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { classifyOwnWebsite, type WebsiteVerdict } from "../_shared/enrichment/websiteClassify.ts";
@@ -57,7 +58,8 @@ Deno.serve(async (req) => {
     }
     /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
        the admin disabled (role removed), is refused even while its token is still valid. */
-    if (!(await userTeamRole(userId))) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const role = await userTeamRole(userId);
+    if (!role) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const body = await req.json().catch(() => ({}));
     const placeId: string = body.place_id ?? "";
@@ -74,6 +76,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } },
     );
+
+    /* ⛔ ABUSE / COST PROTECTION (2026-09-29): a salesperson may not check a business already in the book
+       under someone else; then the usage guard (suspension, pause modes, per-hour, spend caps). */
+    const own = await mayLookUpBusiness(service, { id: userId, role }, { placeId, mapsUrl: googleMapsUrl });
+    if (own !== "ok") return json({ success: false, error: own }, own === "not_your_lead" ? 403 : 503);
+    const guard = await guardAction(service, userId, "enrich", { fn: "check-website", role });
+    if (!guard.ok) return json(guard.body, guard.status);
 
     const cacheKey = `${placeId || googleMapsUrl}:website_check`;
 

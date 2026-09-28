@@ -27,6 +27,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
+
+/* The usage guard's estimate for one research/draft press (2026-09-29). Its OpenAI rows are logged
+   under the BOOK owner, so a salesperson's own spend is this estimate. Rounded UP from the billed
+   rows: 16 openai_warm_reply rows = $0.007, 3 openai_warm_research rows = $0.003 (api_usage_log,
+   30 days to 2026-09-29). */
+const WARM_REPLY_EST_USD = 0.001;
 import { logOpenAiUsage } from "../_shared/openai-usage.ts";
 import {
   runSiteResearch, callModel, loadAuditContext, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, WARM_RESEARCH_TABLE,
@@ -318,6 +325,11 @@ Deno.serve(async (req) => {
 
     const phone = text(body.phone);
     if (action === "status") return await handleStatus(service, lead, who.user.id, phone);
+    if (action === "research" || action === "draft") {
+      /* ⛔ USAGE GUARD (2026-09-29): suspension, the pause modes, drafts per hour, spend. */
+      const guard = await guardAction(service, whoActor.actor.id, "ai_draft", { fn: "warm-lead-reply", leadId, role: whoActor.actor.role, estCostUsd: whoActor.actor.role === "admin" ? 0 : WARM_REPLY_EST_USD });
+      if (!guard.ok) return json(guard.body, guard.status);
+    }
     if (action === "research") return await handleResearch(service, lead, who.user.id, body.refresh === true, phone);
     if (action === "draft") return await handleDraft(service, lead, who.user.id, body);
     return json({ ok: false, error: "unknown_action" }, 400);

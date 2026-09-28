@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
 import { INDIA_SEND_WINDOW, windowOpen as sendWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
+import { paidMode } from "../_shared/protection.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
 import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
@@ -1261,7 +1262,11 @@ Deno.serve(async (req) => {
     let auditAhead: Awaited<ReturnType<typeof runOutreachAuditAhead>> | null = null;
     /* Only in the London window, exactly as before: the India-only hours (05:30–07:00 London in BST)
        must not start UK leads' paid audits early. */
-    if (windowOpen || force) try {
+    /* ⛔ PAID-ACTION PAUSE (2026-09-29, docs/abuse-cost-protection.md): the drip's pre-send hook audits are
+       prospecting spend, so they stop under "prospecting paused" and the emergency stop. The SENDS
+       below are not paid API and keep to the WhatsApp queue's own pause. */
+    const auditAheadMode = await paidMode(service);
+    if ((windowOpen || force) && auditAheadMode === "running") try {
       auditAhead = await runOutreachAuditAhead(service, (name) => TEMPLATES[name ?? ""]?.vars);
       if (auditAhead.started || auditAhead.waiting) {
         console.log(`[outreach-audit] started=${auditAhead.started} waiting=${auditAhead.waiting} inFlight=${auditAhead.inFlight} skipped=${auditAhead.skipped} considered=${auditAhead.considered}`);
@@ -1286,15 +1291,23 @@ Deno.serve(async (req) => {
        has never been checked (null note), OR its note is transient. Only settled-unverifiable is
        held. It stays status='queued' (like archived), visible via the count above and the row
        badge, and re-enters the drip the moment its town verifies. */
-    const { data: leadRows } = await service
+    const { data: queuedRows } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at")
+      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id")
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
       .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
       .order("queued_at", { ascending: true })
       .limit(QUEUE_SCAN);
+    /* ⛔ HELD FOR THE ADMIN (2026-09-29, docs/abuse-cost-protection.md): a lead assigned to a SUSPENDED
+       salesperson is not sent — Paul decides (reassign, remove, or reactivate). Nothing is written:
+       it stays 'queued' and is listed on the API Usage page's Security section. ⛔ FAIL CLOSED: if who
+       is suspended cannot be read, this tick sends nothing and the next tick asks again. */
+    const { data: suspendedRows, error: suspendedErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
+    if (suspendedErr) return json({ ok: true, skipped: "team_read_failed", ...statusPayload });
+    const suspendedIds = new Set(((suspendedRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
+    const leadRows = (queuedRows ?? []).filter((l: { assigned_to_user_id?: string | null }) => !l.assigned_to_user_id || !suspendedIds.has(l.assigned_to_user_id));
 
     /* ══ WHICH OF THEM SENDS THIS TICK ═══════════════════════════════════════════════════════════
        🔴 THE BLOCK THIS REPLACES. A lead whose audit was not ready returned the entire tick, so a
