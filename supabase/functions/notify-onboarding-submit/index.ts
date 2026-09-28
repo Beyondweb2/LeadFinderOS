@@ -328,9 +328,12 @@ Deno.serve(async (req) => {
         : gate?.verdict === "flag"
           ? "WORTH A CONVERSATION"
           : null;
-      const siteLine = gate ? platformLabel(
-        serveInputFromRow(row as ServeGateRow).platform, row.website_platform_other,
-      ) : null;
+      /* "Website platform:", never "Site: a platform they didn't say" (2026-09-28). The platform is asked
+         after payment, so a pre-pay row normally has none — say so plainly rather than as an omission. */
+      const platformIn = serveInputFromRow(row as ServeGateRow).platform;
+      const siteLine = gate
+        ? (platformIn ? platformLabel(platformIn, row.website_platform_other) : "not provided yet (asked after payment)")
+        : null;
       /* PLAIN ENGLISH, and NEVER a raw enum in an email Paul reads at a glance. An unrecognised
          value falls through to the raw string rather than to blank — a new option added to the flow
          must never render an empty line that looks like "not answered". */
@@ -379,6 +382,11 @@ Deno.serve(async (req) => {
          who owns and controls the domain; the client sorts out their own agency agreement. */
       const domain = domainAuthority(domainInputFromRow(row as unknown as DomainRow));
       if ((row as { domain_escalated_at?: string | null }).domain_escalated_at) needsYou.push("They stopped at the domain question and asked us to check their setup with them. Find out who owns and controls the domain before any new site goes ahead.");
+      /* One summary line for the domain answers (they are asked BEFORE payment). Omitted for a row that
+         never reached the website questions, so nothing is claimed about answers that do not exist. */
+      const domainLine = domain.applies
+        ? (domain.ready ? "Answered — DOMAIN READY" : "Answered — DOMAIN / AGENCY ISSUE (see NEEDS YOU)")
+        : (row as { domain_status?: string | null }).domain_status ? "Not needed — we would work on their own site" : null;
       if (domain.applies && !domain.ready) needsYou.push(`DOMAIN / AGENCY ISSUE: ${domain.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(", ")}. Do not promise a new site or a switch-over until they own or control the domain.`);
 
       /* ⛔ THE FREE-CHECK TAIL IS A DIFFERENT SENTENCE BECAUSE IT IS A DIFFERENT EVENT. They asked
@@ -522,7 +530,8 @@ Deno.serve(async (req) => {
         (verdictLabel ? `  ${verdictLabel}\n  ${gate!.reason}\n\n` : "") +
         line("Trade:", trade) + line("Town:", town) + line("Phone:", submittedPhone) + line("Email:", row.contact_email) +
         (storedPhone && storedPhone !== submittedPhone ? line("On file:", `${storedPhone} (from prospecting, not typed)`) : "") +
-        (gate ? line("Site:", siteLine) : "") +
+        (gate ? line("Website platform:", siteLine) : "") +
+        line("Domain:", domainLine) +
         line("Profile:", gbpExistsLine) + line("Verified:", gbpVerifiedLine) + line("Added us:", gbpStatusLine) + line("Photos:", photosLine) +
         (mustNotSay ? line("Must not say:", mustNotSay) : "") +
         (needsYou.length ? `\n  NEEDS YOU:\n${needsYou.map((x) => `  - ${x}`).join("\n")}\n` : "") +
@@ -552,7 +561,8 @@ Deno.serve(async (req) => {
           ? `<p style="margin:0 0 2px;color:#64748b"><strong>On file:</strong> ${escapeHtml(storedPhone)} <span style="font-size:12px">(from prospecting, not typed)</span></p>`
           : "") +
         (row.contact_email ? `<p style="margin:0 0 2px"><strong>Email:</strong> ${escapeHtml(row.contact_email)}</p>` : "") +
-        (siteLine ? `<p style="margin:0 0 2px"><strong>Site:</strong> ${escapeHtml(siteLine)}</p>` : "") +
+        (siteLine ? `<p style="margin:0 0 2px"><strong>Website platform:</strong> ${escapeHtml(siteLine)}</p>` : "") +
+        (domainLine ? `<p style="margin:0 0 2px"><strong>Domain:</strong> ${escapeHtml(domainLine)}</p>` : "") +
         (gbpExistsLine ? `<p style="margin:0 0 2px"><strong>Profile:</strong> ${escapeHtml(gbpExistsLine)}</p>` : "") +
         (gbpVerifiedLine ? `<p style="margin:0 0 2px"><strong>Verified:</strong> ${escapeHtml(gbpVerifiedLine)}</p>` : "") +
         (gbpStatusLine ? `<p style="margin:0 0 2px"><strong>Added us:</strong> ${escapeHtml(gbpStatusLine)}</p>` : "") +

@@ -118,6 +118,16 @@ const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], busines
   ok(!/service_terminat|stripe|sold_by/.test(view), "the sales view gains the domain situation only — no termination, Stripe or sale data");
 }
 
+/* ── THE QUESTIONNAIRE ALERT (2026-09-28): the domain questions are pre-payment; only the platform is later ── */
+{
+  const notify = read("supabase/functions/notify-onboarding-submit/index.ts");
+  const gate = read("src/lib/serveGate.ts");
+  ok(!/Website questions not asked yet/.test(gate + notify) && /Website platform not known yet — that question comes after payment/.test(gate), "no alert says the website questions come after payment");
+  ok(/line("Website platform:", siteLine)/.test(notify) && /<strong>Website platform:</strong>/.test(notify) && !/"Site:"/.test(notify), "the alert says \"Website platform:\", never \"Site: a platform they didn't say\"");
+  ok(/"not provided yet (asked after payment)"/.test(notify), "an unknown platform reads \"not provided yet (asked after payment)\"");
+  ok(/line("Domain:", domainLine)/.test(notify) && /"Answered — DOMAIN READY"/.test(notify) && /"Answered — DOMAIN / AGENCY ISSUE (see NEEDS YOU)"/.test(notify), "the alert summarises the domain answers");
+}
+
 /* ── ONE RULE, BOTH REPOS ── */
 ok(/SAME_FILES = \[\s*\{ what: "the domain ownership \/ authority rule"/.test(read("scripts/check-cross-repo-sync.mjs")), "check-cross-repo-sync holds domainAuthority.ts byte-identical across both repos");
 
