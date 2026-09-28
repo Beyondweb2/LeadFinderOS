@@ -82,10 +82,10 @@ export interface WorkspaceInput {
   activity: PerfActivity[];
   nowMs: number;
   targets?: TargetInput | null;
-  /** Lifetime commission earned (GBP) — for the £100 milestone and the commission target. Null until
-   *  the earnings ledger feeds it; a milestone that needs it says so rather than guessing. */
-  earnedGbp?: number | null;
-  earnedInPeriodGbp?: number | null;
+  /** Commission lines (src/lib/commission.ts: payments +, reversals −), from the payment ledger — for the
+   *  £100 milestone, the commission target, the feed and "earned today". Null when the person earns no
+   *  commission; a milestone that needs it then says so rather than guessing. */
+  commission?: { at: string; amount: number; leadId: string; label: string; business: string }[] | null;
 }
 
 export const STAGES: { key: StageKey; label: string }[] = [
@@ -267,10 +267,14 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     followUps,
     warmth,
     waiting: waiting.sort((a, b) => a.ms - b.ms).slice(0, 10).map(({ ms: _m, ...w }) => w),
-    activity: feed.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 25),
+    activity: [...feed, ...(input.commission ?? []).filter((c) => Date.parse(c.at) >= feedFloor && c.amount !== 0).map((c): FeedItem => ({
+      kind: 'commission', leadId: c.leadId, name: c.business,
+      text: c.amount > 0 ? `+£${c.amount.toFixed(2)} commission earned — ${c.business} (${c.label.toLowerCase()})` : `−£${(-c.amount).toFixed(2)} commission reversed — ${c.business} (${c.label.toLowerCase()})`,
+      at: c.at, tone: c.amount > 0 ? 'green' : 'red', link: 'lead',
+    }))].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 25),
     health: healthOf(input.facts, followUps, now),
     trends: trendsOf(input.facts, input.leads, now),
-    milestones: milestonesOf(input.facts, input.leads, input.earnedGbp ?? null),
+    milestones: milestonesOf(input.facts, input.leads, input.commission ? Math.round(input.commission.reduce((s, c) => s + c.amount, 0) * 100) / 100 : null),
     targets: targetsOf(input, now),
   };
 }
@@ -371,7 +375,7 @@ function targetsOf(input: WorkspaceInput, now: number): SalesWorkspace['targets'
   add('replies', 'Replies', actual.replies);
   add('interested', 'Interested', actual.interested);
   add('wins', 'Clients won', actual.wins);
-  add('commission', 'Commission (£)', input.earnedInPeriodGbp ?? null);
+  add('commission', 'Commission (£)', input.commission ? Math.round(input.commission.filter((c) => Date.parse(c.at) >= startMs).reduce((s, c) => s + c.amount, 0) * 100) / 100 : null);
   return { period, since: new Date(startMs).toISOString().slice(0, 10), rows };
 }
 

@@ -5,6 +5,8 @@ import {
   type PerfActivity, type PerfHit, type PerfLead, type PerfLinkEvent, type PerfMessage,
 } from "../../../src/lib/salesPerformance.ts";
 import { foldSalesWorkspace, parseTargets, AUDIT_READY_DAYS, FEED_DAYS, type WorkspaceLead } from "../../../src/lib/salesWorkspace.ts";
+import { loadEarnings } from "../_shared/earnings.ts";
+import { londonDayOf } from "../../../src/lib/commission.ts";
 
 // sales-performance — the Sales Dashboard's numbers (2026-09-28, docs/sales-readiness.md).
 //
@@ -135,12 +137,20 @@ Deno.serve(async (req) => {
       messages, activity, linkEvents, hits,
       campaignNames: new Map(campaigns.map((c) => [c.id, c.name])),
     });
+    /* Commission from the payment ledger (the ONE path, _shared/earnings.ts). A failure leaves the
+       commission parts blank, never zero: the rest of the dashboard still loads. */
+    let commission: { at: string; amount: number; leadId: string; label: string; business: string }[] | null = null;
+    try {
+      const e = await loadEarnings(service, personId, londonDayOf(new Date().toISOString()));
+      const names = new Map(e.clients.map((c) => [c.leadId, c.business]));
+      if (e.commissionable) commission = e.lines.filter((l) => l.status !== "not_commissionable").map((l) => ({ at: l.occurredAt, amount: l.commission, leadId: l.leadId, label: l.label, business: names.get(l.leadId) ?? "Client" }));
+    } catch (err) { console.error("[sales-performance] earnings", err instanceof Error ? err.message : err); }
     const workspace = foldSalesWorkspace({
       personId, facts, activity, nowMs: Date.now(),
       leads: new Map((leads as unknown as WorkspaceLead[]).map((l) => [l.id, l])),
       audits: runs.map((r) => ({ lead_id: auditLead.get(r.audit_id)!, completed_at: r.created_at })),
       targets: personId === actor.id ? parseTargets(body.targets) : null,
-      earnedGbp: null, earnedInPeriodGbp: null,
+      commission,
     });
 
     // A salesperson learns only that a lead of theirs was won — never a figure. The fold already

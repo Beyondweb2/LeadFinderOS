@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3, Map as MapIcon,
+  BarChart3, Map as MapIcon, Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -78,10 +78,11 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: 'Coverage', url: '/coverage', icon: MapIcon }]
+    ? [{ title: 'Earnings', url: '/earnings', icon: Wallet }, { title: 'Coverage', url: '/coverage', icon: MapIcon }]
     : [
         { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
+        { title: 'Earnings', url: '/earnings', icon: Wallet },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
         { title: t('nav.templates'), url: '/templates', icon: FileText },
       ];
