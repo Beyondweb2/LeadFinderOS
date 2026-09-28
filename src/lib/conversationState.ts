@@ -7,7 +7,8 @@
      (whatsapp_conversation_reads). Never opened → counted from UNREAD_TRACKING_START, so history
      before the feature is never "unread".
    - WAITING ON US: a human reply (looksAutomated excluded) that nothing has answered — no real send
-     after it. The timer runs from the FIRST unanswered human reply, not the latest.
+     after it. The timer runs from the FIRST unanswered human reply, not the latest. A clear "no"
+     (isDecline, the rule the reply automation uses) is not waiting on anyone.
    - WAITING ON THEM: our real send is the newest message.
    - TEMPLATE REQUIRED: the 24-hour window is closed (serviceWindow.ts — the one window rule).
    - FAILED: our newest send failed and nothing we sent after it succeeded.
@@ -15,7 +16,7 @@
    - FOLLOW-UP DUE: a person set a Next Action dated today or earlier. Never set automatically.
    ⛔ The tone is chosen by a fixed order (failed → waiting on us → follow-up due → template → rest),
    so a row shows ONE colour and the most urgent one. */
-import { looksAutomated } from './inboundClassify.ts';
+import { isDecline, looksAutomated } from './inboundClassify.ts';
 import { isRealSend } from './realSend.ts';
 import { serviceWindowState } from './serviceWindow.ts';
 
@@ -87,14 +88,17 @@ export function conversationState(input: ConvStateInput): ConversationState {
   }
   // The first HUMAN reply after our last real send.
   let waitingSinceMs: number | null = null;
+  let lastUnansweredBody: string | null = null;
   for (const m of msgs) {
     if (m.direction !== 'inbound') continue;
     const t = ms(m.created_at);
     if (Number.isFinite(lastRealSendMs) && t <= lastRealSendMs) continue;
     if (looksAutomated(m.body ?? '')) continue;
-    waitingSinceMs = t;
-    break;
+    if (waitingSinceMs === null) waitingSinceMs = t;
+    lastUnansweredBody = m.body ?? '';
   }
+  // Their latest word is a clear no: nothing is owed.
+  if (waitingSinceMs !== null && lastUnansweredBody !== null && isDecline(lastUnansweredBody)) waitingSinceMs = null;
   const readFloor = Math.max(ms(UNREAD_TRACKING_START), Number.isFinite(ms(input.lastReadAt)) ? ms(input.lastReadAt) : -Infinity);
   const unread = Number.isFinite(lastInboundMs) && lastInboundMs > readFloor;
   const win = serviceWindowState(Number.isFinite(lastInboundMs) ? new Date(lastInboundMs).toISOString() : null, now);

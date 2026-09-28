@@ -166,7 +166,7 @@ export function WaitingPanel({ waiting, go }: { waiting: SalesWorkspace['waiting
   const [, tick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => tick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
   return (
-    <Panel title="Waiting on you" icon={Clock} tone="blue" hint="Replies nothing has answered yet, longest wait first.">
+    <Panel title="Waiting on you" icon={Clock} tone="blue" hint="Replies in the last 14 days that nothing has answered yet, longest wait first.">
       {waiting.length === 0 ? <Empty icon={CheckCircle2}>Every reply has an answer.</Empty> : (
         <ul className="space-y-1">
           {waiting.map((w) => {
@@ -380,12 +380,17 @@ export function TrendsPanel({ trends, earningsWeeks }: { trends: SalesWorkspace[
           {series.map((s) => {
             const vals = trends.weeks.map((w) => w[s.key]);
             const max = Math.max(1, ...vals);
+            const none = vals.every((v) => v === 0);
             return (
               <figure key={s.key} className="rounded-xl border border-border/60 p-3">
                 <figcaption className="mb-2 flex items-baseline justify-between text-xs"><span className="font-semibold">{s.label}</span><span className="tabular-nums text-muted-foreground">this week {vals[vals.length - 1]}</span></figcaption>
-                <div className="flex h-16 items-end gap-1" role="img" aria-label={`${s.label} per week: ${vals.join(', ')}`}>
-                  {vals.map((v, i) => <span key={i} className={cn('flex-1 rounded-t', TONE[s.tone].bar, i === vals.length - 1 ? 'opacity-100' : 'opacity-60')} style={{ height: `${v ? Math.max(6, (v / max) * 100) : 2}%` }} title={`${trends.weeks[i].weekStart}: ${v}`} />)}
-                </div>
+                {none ? (
+                  <p className="flex h-16 items-center text-[11px] text-muted-foreground">{s.key === 'interested' ? 'Nothing recorded in these weeks. The moment a lead becomes interested is recorded from 27 Sept.' : 'Nothing in these weeks.'}</p>
+                ) : (
+                  <div className="flex h-16 items-end gap-1" role="img" aria-label={`${s.label} per week: ${vals.join(', ')}`}>
+                    {vals.map((v, i) => <span key={i} className={cn('flex-1 rounded-t', TONE[s.tone].bar, i === vals.length - 1 ? 'opacity-100' : 'opacity-60')} style={{ height: `${v ? Math.max(6, (v / max) * 100) : 2}%` }} title={`${trends.weeks[i].weekStart}: ${v}`} />)}
+                  </div>
+                )}
               </figure>
             );
           })}

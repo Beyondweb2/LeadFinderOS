@@ -1716,7 +1716,7 @@ const Inbox = () => {
               const on = quickFilter === f.value;
               return (
                 <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 flex-1 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium transition-colors',
+                  className={cn('flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
                     on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
                   {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
                 </button>

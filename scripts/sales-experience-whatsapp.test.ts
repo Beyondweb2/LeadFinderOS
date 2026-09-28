@@ -43,6 +43,8 @@ console.log("\n── conversation states ──");
   ok(two.waitingSinceMs === NOW - 6 * H, "the timer runs from the FIRST unanswered reply");
   const auto = conversationState({ messages: [msg("outbound", NOW - 5 * H), msg("inbound", NOW - H, "received", "Thank you for your message. We will get back to you as soon as possible.")], lastReadAt: null, nowMs: NOW });
   ok(auto.waitingSinceMs === null && auto.unread, "an auto-responder is unread but never 'waiting on us'");
+  const no = conversationState({ messages: [msg("outbound", NOW - 5 * H), msg("inbound", NOW - 2 * H, "received", "No thanks mate. Cheers anyway")], lastReadAt: null, nowMs: NOW });
+  ok(no.unread && no.waitingSinceMs === null, "a clear no is unread, but never 'waiting on us'");
   const failedAfterReply = conversationState({ messages: [msg("inbound", NOW - 3 * H), msg("outbound", NOW - H, "failed")], lastReadAt: at(NOW), nowMs: NOW });
   ok(failedAfterReply.failed && failedAfterReply.tone === "red" && failedAfterReply.label === "Send failed", "our newest send failed: red, 'Send failed' outranks waiting");
   ok(failedAfterReply.waitingSinceMs !== null, "…and a failed send never counts as an answer");
@@ -129,6 +131,18 @@ ok(ms.first_reply.achieved && ms.first_client.achieved && ms.first_interested.ac
 ok(ms.earned_100.progress === null && !ms.earned_100.achieved, "£100 earned is never guessed without the earnings figure");
 ok(ws.targets?.rows.find((r) => r.key === "contacts")?.target === 10 && ws.targets?.rows.find((r) => r.key === "commission")?.actual === null, "targets: progress where counted, commission blank until earnings exist");
 ok(parseTargets({ contacts: "12", replies: -3, wins: "x", period: "month" })?.contacts === 12 && parseTargets({ replies: -3 }) === null && parseTargets(null) === null && parseTargets({ period: "month", wins: 2 })?.period === "month", "stored targets: only positive numbers survive; nothing set is null");
+
+{
+  // A reply older than REPLY_ACTION_DAYS: still in "Replied, unanswered", no longer a timer or an action.
+  const inp2: FoldInput = { ...input, leads: [base("stale")], messages: [wm("stale", "outbound", NOW - 30 * D), wm("stale", "inbound", NOW - 20 * D), wm("stale", "inbound", NOW - 20 * D + H)], activity: [], linkEvents: [] };
+  const r2 = foldSalesPerformanceWithFacts(inp2);
+  const lm = new Map<string, WorkspaceLead>([["stale", { id: "stale", business_name: "Stale", status: "replied", next_action: null, next_action_date: null, next_action_note: null }]]);
+  const w2 = foldSalesWorkspace({ personId: ME, facts: r2.facts, leads: lm, audits: [], activity: [], nowMs: NOW });
+  ok(w2.followUps.repliedUnanswered.length === 1 && w2.waiting.length === 0 && !w2.nextActions.some((a) => a.kind === "reply_waiting"), "a 20-day-old unanswered reply stays in the queue but is not a timer or a 'new reply' action");
+  ok(w2.nextActions.some((a) => a.kind === "going_cold"), "…it reads as going cold instead");
+  const w3 = foldSalesWorkspace({ personId: ME, facts: foldSalesPerformanceWithFacts({ ...inp2, messages: [wm("stale", "outbound", NOW - 3 * D), wm("stale", "inbound", NOW - 2 * D), wm("stale", "inbound", NOW - 2 * D + 60_000)] }).facts, leads: lm, audits: [], activity: [], nowMs: NOW });
+  ok(w3.activity.filter((a) => a.kind === "reply").length === 1, "two messages in a row are one 'replied' line in the feed");
+}
 
 console.log("\n── source: navigation, privacy, security ──");
 {

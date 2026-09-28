@@ -23,7 +23,7 @@ export function Panel({ title, icon: I, tone = 'grey', hint, action, children, c
   title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string;
 }) {
   return (
-    <section id={id} className={cn('rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', className)}>
+    <section id={id} className={cn('min-w-0 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', className)}>
       <header className="mb-3 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {I && <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE[tone].icon)}><I className="h-4 w-4" /></span>}
@@ -46,16 +46,16 @@ export function KpiCard({ label, value, sub, icon: I, tone, hero = false, onClic
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp type={onClick ? 'button' : undefined} onClick={onClick}
-      className={cn('group relative flex min-w-0 flex-col overflow-hidden rounded-2xl p-4 text-left shadow-sm transition sm:p-5',
+      className={cn('group relative flex min-w-0 flex-col overflow-hidden rounded-2xl p-3 text-left shadow-sm transition sm:p-5',
         hero ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white ring-1 ring-emerald-400/30 dark:from-emerald-600 dark:to-emerald-800'
              : cn('border border-border/60 bg-card'),
         onClick && 'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none')}>
       <div className="flex items-center justify-between gap-2">
-        <span className={cn('text-xs font-semibold uppercase tracking-wide', hero ? 'text-emerald-50/90' : 'text-muted-foreground')}>{label}</span>
-        <span className={cn('flex h-8 w-8 items-center justify-center rounded-lg', hero ? 'bg-white/15 text-white' : TONE[tone].icon)}><I className="h-4 w-4" /></span>
+        <span className={cn('min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide sm:text-xs', hero ? 'text-emerald-50/90' : 'text-muted-foreground')}>{label}</span>
+        <span className={cn('hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:flex', hero && '!flex', hero ? 'bg-white/15 text-white' : TONE[tone].icon)}><I className="h-4 w-4" /></span>
       </div>
-      <div className={cn('mt-2 font-bold tabular-nums tracking-tight', hero ? 'text-3xl sm:text-4xl' : 'text-3xl', !hero && TONE[tone].text)}>{value}</div>
-      {sub && <div className={cn('mt-1 text-xs', hero ? 'text-emerald-50/85' : 'text-muted-foreground')}>{sub}</div>}
+      <div className={cn('mt-2 font-bold tabular-nums tracking-tight', hero ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl', !hero && TONE[tone].text)}>{value}</div>
+      {sub && <div className={cn('mt-1 text-[11px] leading-snug sm:text-xs', hero ? 'text-emerald-50/85' : 'text-muted-foreground')}>{sub}</div>}
       {children}
     </Comp>
   );

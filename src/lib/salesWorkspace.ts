@@ -25,6 +25,9 @@ export const AUDIT_READY_DAYS = 3;
 export const STUCK_INTERESTED_DAYS = 7;
 export const SIGNUP_UNPAID_DAYS = 7;
 export const FEED_DAYS = 14;
+/** A reply older than this is no longer "waiting on you" in the timers or the action list — it is a
+ *  lead going cold (it still sits in the "Replied, unanswered" group, newest first). */
+export const REPLY_ACTION_DAYS = 14;
 export const TREND_WEEKS = 8;
 /** A trend is drawn only with at least this many contacted leads across the weeks, in this many weeks. */
 export const TREND_MIN_CONTACTED = 20;
@@ -195,9 +198,9 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     const dueAtDawn = before && before.data?.next_action && before.data.next_action !== 'none' && typeof before.data.date === 'string' && before.data.date <= today;
     if (dueAtDawn && (f.contactTimesMs.some(onToday) || acts.some((a) => a.kind === 'follow_up_set' && onToday(Date.parse(a.created_at))))) followUpsCompleted += 1;
 
-    if (!out && st.waitingSinceMs !== null) {
+    if (!out && st.waitingSinceMs !== null) followUps.repliedUnanswered.push({ ...pl, at: iso(st.waitingSinceMs) });
+    if (!out && st.waitingSinceMs !== null && now - st.waitingSinceMs <= REPLY_ACTION_DAYS * DAY) {
       waiting.push({ leadId: f.lead.id, name, since: iso(st.waitingSinceMs)!, ms: st.waitingSinceMs });
-      followUps.repliedUnanswered.push({ ...pl, at: iso(st.waitingSinceMs) });
       actions.push({ kind: 'reply_waiting', leadId: f.lead.id, name, title: 'New WhatsApp reply', detail: st.label ?? 'Waiting on you', at: iso(st.waitingSinceMs), tone: 'blue', link: 'whatsapp', rank: 0 });
     }
     if (!f.won && f.onboardingOpened && !f.notInterested) {
@@ -229,7 +232,9 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     }
 
     // ── Activity feed (meaningful events only) ──
-    for (const r of f.humanReplyTimesMs) if (r >= feedFloor) feed.push({ kind: 'reply', leadId: f.lead.id, name, text: `${name} replied on WhatsApp`, at: iso(r)!, tone: 'blue', link: 'whatsapp' });
+    /* One "replied" line per lead per day — three messages in a row are one reply, not three events. */
+    const replyDays = new Set<string>();
+    for (const r of [...f.humanReplyTimesMs].reverse()) if (r >= feedFloor && !replyDays.has(londonDay(r)) && replyDays.add(londonDay(r))) feed.push({ kind: 'reply', leadId: f.lead.id, name, text: `${name} replied on WhatsApp`, at: iso(r)!, tone: 'blue', link: 'whatsapp' });
     if (f.interestedAtMs !== null && f.interestedAtMs >= feedFloor) feed.push({ kind: 'interested', leadId: f.lead.id, name, text: `${name} is interested`, at: iso(f.interestedAtMs)!, tone: 'green', link: 'lead' });
     if (f.linkFirstSentAt && Date.parse(f.linkFirstSentAt) >= feedFloor) feed.push({ kind: 'signup_sent', leadId: f.lead.id, name, text: `Sign-up link sent to ${name}`, at: f.linkFirstSentAt, tone: 'grey', link: 'lead' });
     if (f.linkFirstOpenedAt && Date.parse(f.linkFirstOpenedAt) >= feedFloor) feed.push({ kind: 'signup_opened', leadId: f.lead.id, name, text: `${name} opened the sign-up page`, at: f.linkFirstOpenedAt, tone: 'green', link: 'whatsapp' });
@@ -251,6 +256,7 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
 
   for (const row of pipeline) row.leads.sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''));
   for (const g of Object.values(followUps)) g.sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''));
+  followUps.repliedUnanswered.reverse(); // newest unanswered reply first — the one most worth answering
 
   return {
     today: { day: today, ...todayC },

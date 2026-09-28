@@ -183,12 +183,12 @@ export default function SalesDashboard() {
       {d && w && (
         <>
           {/* ── The four headline numbers. Money is the strongest surface. ── */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="col-span-2 lg:col-span-1">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
+            <div className="col-span-3 lg:col-span-1">
               <KpiCard hero label="Commission earned" icon={Wallet} tone="green" value="—"
                 sub="Your earnings appear here once the payments ledger is live." />
             </div>
-            <KpiCard label="Replies" icon={MessageCircleReply} tone="blue" value={d.funnel.responded} sub={`${pct(d.funnel.responded, d.funnel.contacted)} of ${d.funnel.contacted} contacted · ${w.today.replies} today`} onClick={() => navigate('/inbox')} />
+            <KpiCard label="Replies" icon={MessageCircleReply} tone="blue" value={d.funnel.responded} sub={d.funnel.contacted ? `${pct(d.funnel.responded, d.funnel.contacted)} of ${d.funnel.contacted} contacted · ${w.today.replies} today` : "Nobody contacted yet"} onClick={() => navigate('/inbox')} />
             <KpiCard label="Interested" icon={Star} tone="green" value={d.funnel.interested} sub={`${w.today.interested} today · ${d.funnel.notInterested} not interested`} onClick={() => openStage('interested')} />
             <KpiCard label="Clients won" icon={Trophy} tone="green" value={d.funnel.won} sub={d.funnel.won ? `${pct(d.funnel.won, d.funnel.contacted)} of contacted` : 'Your first win shows here'} onClick={() => openStage('paid')} />
           </div>
@@ -196,22 +196,22 @@ export default function SalesDashboard() {
           <TodayStrip t={w.today} unread={viewingSelf ? unread.count : null} earnedToday={null}
             onUnread={() => (firstUnread ? go('whatsapp', firstUnread) : navigate('/inbox'))} onFollowUps={() => showGroup(w.followUps.overdue.length ? 'overdue' : 'dueToday')} />
 
-          <div className="grid gap-5 lg:grid-cols-5">
-            <div className="lg:col-span-3"><NextActions items={w.nextActions} go={go} /></div>
-            <div className="lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuTouched ? fuGroup : fuDefault} setGroup={(g) => { setFuTouched(true); setFuGroup(g); }} /></div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+            <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} /></div>
+            <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuTouched ? fuGroup : fuDefault} setGroup={(g) => { setFuTouched(true); setFuGroup(g); }} /></div>
           </div>
 
           <PipelineStrip pipeline={w.pipeline} notInterested={w.notInterested} onOpen={openStage} />
 
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             <WaitingPanel waiting={w.waiting} go={go} />
             <WarmthPanel warmth={w.warmth} onOpen={openWarmth} />
-            <div className="md:col-span-2 xl:col-span-1"><HealthPanel health={w.health} onGroup={(g) => { setFuTouched(true); showGroup(g); }} /></div>
+            <div className="min-w-0 md:col-span-2 xl:col-span-1"><HealthPanel health={w.health} onGroup={(g) => { setFuTouched(true); showGroup(g); }} /></div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2"><ActivityFeed items={w.activity} go={go} /></div>
-            <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="min-w-0 lg:col-span-2"><ActivityFeed items={w.activity} go={go} /></div>
+            <div className="min-w-0 space-y-5">
               <RecapPanel r={w.recap} earnedToday={null} />
               {viewingSelf && <TargetsPanel targets={w.targets} canEdit={viewingSelf} onEdit={() => setTargetsOpen(true)} />}
             </div>
@@ -231,7 +231,7 @@ export default function SalesDashboard() {
           <Panel title="Templates" icon={MessageCircleReply} tone="blue" hint="Which message gets replies. A reply counts for the last template sent before it; “Unclear” means two different templates went out before they replied. Interested, link and won count the people whose reply that template earned." action={<ManageRows kind="templates" all={d.templates.map((r) => ({ key: templateKey(r), label: templateLabel(r.template), lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.templates} onChange={(next) => prefs.setHidden({ ...prefs.hidden, templates: next })} />}>
             <TemplateTable rows={templates} />
           </Panel>
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <Panel title="Channels" icon={Radio} tone="blue" hint="A lead counts once per channel. Calls, LinkedIn, email and in person come from what you logged on the lead.">
               <ChannelBars rows={d.channels} />
             </Panel>
@@ -240,7 +240,7 @@ export default function SalesDashboard() {
                 rows={d.sources.map((s) => [leadSourceLabel(s.source), s.leads, s.contacted, s.responded, s.interested, s.won])} empty="No leads yet." />
             </Panel>
           </div>
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <Panel title="Calls" icon={PhoneCall} tone="grey" hint={`Logged call outcomes${period === 'all' ? '' : ' in this period'}.`}>
               <p className="mb-2 text-3xl font-bold tabular-nums">{d.calls.total}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -341,7 +341,7 @@ function CampaignCards({ rows, onOpen }: { rows: CampaignRow[]; onOpen: (campaig
                   tag === 'best' ? 'border-emerald-500/40 bg-emerald-500/[0.05]' : 'border-border/60',
                   r.campaignId && 'hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary')}>
                 <span className="flex items-start justify-between gap-2">
-                  <span className="min-w-0"><span className="block truncate text-sm font-semibold" title={r.name}>{r.name}</span><span className="text-[11px] text-muted-foreground">{r.leads} leads · {r.contacted} contacted</span></span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-semibold" title={r.name}>{r.name}</span><span className="text-[11px] text-muted-foreground">{r.leads} {r.leads === 1 ? "lead" : "leads"} · {r.contacted} contacted</span></span>
                   {tag && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold', tag === 'best' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/10 text-red-700 dark:text-red-300')}>{tag === 'best' ? 'Best reply rate' : 'Lowest reply rate'}</span>}
                 </span>
                 <span>
