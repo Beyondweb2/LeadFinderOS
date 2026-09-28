@@ -127,7 +127,8 @@ ok(!/review/i.test(read("src/lib/nicheSample.ts").split("\n").filter((l) => !/^\
 
 console.log("\n── the runner is the one audit engine, admin-only to spend ──");
 const fn = read("supabase/functions/niche-sample/index.ts");
-ok(/if \(!isAdmin\) return json\(\{ ok: false, error: "admin_only" \}, 403\);/.test(fn) && fn.indexOf('"admin_only"') < fn.indexOf('action === "plan"'), "plan and start are admin-only; list and status read");
+// 2026-09-29: the refusal is also recorded (record_denial) before it answers.
+ok(/if \(!isAdmin\) \{\s*await recordDenial\([\s\S]{0,120}?\);\s*return json\(\{ ok: false, error: "admin_only" \}, 403\);/.test(fn) && fn.indexOf('"admin_only"') < fn.indexOf('action === "plan"'), "plan and start are admin-only; list and status read");
 ok(/purpose: "discovery", niche_sample: true/.test(fn) && /run_count: NICHE_SAMPLE_RUNS/.test(fn) && /skip_seo: true/.test(fn) && /functions\/v1\/create-ai-audit/.test(fn), "each town is ONE create-ai-audit discovery audit: the four questions, three runs, no SEO scan");
 ok(!/ai_audit_queue"\)\.insert|ai_audits"\)\.insert/.test(fn), "the runner writes no audit rows itself");
 ok(/JSON\.stringify\(q\.questions\) !== JSON\.stringify\(t\.questions\)/.test(fn) && /bandOf\(row\.population\) !== t\.band/.test(fn), "start re-validates the plan: real towns, their bands, distinct regions, exactly the four questions");

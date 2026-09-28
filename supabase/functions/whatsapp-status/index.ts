@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { handleInboundMessages } from "../_shared/whatsapp-inbound.ts";
+import { validMetaSignature } from "../../../src/lib/metaSignature.ts";
 
 // whatsapp-status — Meta WhatsApp delivery STATUS webhook.
 //
@@ -22,23 +23,8 @@ import { handleInboundMessages } from "../_shared/whatsapp-inbound.ts";
 const VERIFY_TOKEN_SECRET = "WHATSAPP_WEBHOOK_VERIFY_TOKEN";
 const APP_SECRET_SECRET = "WHATSAPP_APP_SECRET";
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-async function validSignature(rawBody: string, header: string | null, appSecret: string): Promise<boolean> {
-  if (!header || !header.startsWith("sha256=")) return false;
-  const provided = header.slice("sha256=".length);
-  const key = await crypto.subtle.importKey(
-    "raw", new TextEncoder().encode(appSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
-  );
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  return constantTimeEqual(hex, provided);
-}
+/* The signature check itself is src/lib/metaSignature.ts (one place, unit-tested): HMAC-SHA256 over the
+   RAW BYTES received, "sha256=<hex>", constant-time compare. */
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -58,19 +44,25 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
 
   try {
-    const rawBody = await req.text();
+    const rawBytes = new Uint8Array(await req.arrayBuffer());
+    const rawBody = new TextDecoder().decode(rawBytes);
 
-    // Signature check (when the app secret is configured). If it's NOT set we accept
-    // but warn — set WHATSAPP_APP_SECRET to authenticate Meta's callbacks.
+    /* ⛔ SIGNATURE (2026-09-29, docs/abuse-cost-protection.md). With WHATSAPP_APP_SECRET set, EVERY POST
+       must carry a valid X-Hub-Signature-256 over the exact bytes received, or it is refused 401 before
+       anything is read or written — a forged "inbound reply" can no longer arm the paid first-reply
+       audit or plant a conversation.
+       ⚠️ Without the secret the webhook still accepts (refusing would drop every genuine delivery
+       receipt and reply until Paul adds it), and that is NOT hidden: the Admin screen's Security
+       section shows "signatures NOT checked" and the alert sweep emails it once (security-admin). */
     const appSecret = Deno.env.get(APP_SECRET_SECRET) ?? "";
     if (appSecret) {
-      const ok = await validSignature(rawBody, req.headers.get("x-hub-signature-256"), appSecret);
+      const ok = await validMetaSignature(rawBytes, req.headers.get("x-hub-signature-256"), appSecret);
       if (!ok) {
-        console.error("[whatsapp-status] bad signature — rejecting");
+        console.error("[whatsapp-status] bad or missing signature — rejecting");
         return new Response("invalid signature", { status: 401 });
       }
     } else {
-      console.warn("[whatsapp-status] WHATSAPP_APP_SECRET not set — skipping signature check");
+      console.warn("[whatsapp-status] WHATSAPP_APP_SECRET not set — signature NOT checked (shown on the Admin screen)");
     }
 
     const body = JSON.parse(rawBody || "{}");

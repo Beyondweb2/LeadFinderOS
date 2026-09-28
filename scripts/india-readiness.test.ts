@@ -161,7 +161,8 @@ ok(anyWindowOpen(at('2026-09-28T04:30:00Z')) && !anyWindowOpen(at('2026-09-28T22
   ok(/if \(!anyWindowOpen && !force\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate opens for either window');
   ok(/const scanned = scannedAll\.filter\(leadWindowOpen\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
   ok(/const hookLead = \(\(hookRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q) && /const contactLead = \(\(contactRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q), 'hook and contact lanes take the oldest lead whose own window is open');
-  ok(/if \(windowOpen \|\| force\) try \{/.test(q), 'audit-ahead still runs only in the London window (UK spend unchanged)');
+  // 2026-09-29: the same London-window condition, now also held by the paid-action pause (docs/abuse-cost-protection.md).
+  ok(/if \(\(windowOpen \|\| force\) && auditAheadMode === "running"\) try \{/.test(q), 'audit-ahead still runs only in the London window (UK spend unchanged)');
   ok(/windowOpenForDigits\(toWhatsAppNumber\(/.test(q) && !/leadWindowOpen[^\n]*\.country\b(?![^\n]*toWhatsAppNumber)/.test(q), 'the window is chosen from the send digits, not from the country column');
   ok(/indiaWindowOpen: sendWindowOpen\(INDIA_SEND_WINDOW\)/.test(q), 'queue_state reports the India window');
 }

@@ -54,12 +54,16 @@ serve(async (req) => {
     const { data: todayData } = await adminClient
       .from('api_usage_log')
       .select('estimated_cost_usd, api_type, user_id, trigger_source, cache_hit, calls_made, created_at')
+      // A 'guard' row is the usage guard's estimate/record, never a provider charge (2026-09-29).
+      .or('api_type.is.null,api_type.neq.guard')
       .gte('created_at', todayStart);
 
     // 2. Spend this month  
     const { data: monthData } = await adminClient
       .from('api_usage_log')
       .select('estimated_cost_usd, api_type, user_id, trigger_source, cache_hit, calls_made, created_at')
+      // A 'guard' row is the usage guard's estimate/record, never a provider charge (2026-09-29).
+      .or('api_type.is.null,api_type.neq.guard')
       .gte('created_at', monthStart);
 
     const rows = monthData || [];

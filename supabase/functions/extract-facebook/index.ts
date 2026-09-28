@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { userTeamRole } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +60,12 @@ Deno.serve(async (req) => {
     }
     /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
        the admin disabled (role removed), is refused even while its token is still valid. */
-    if (!(await userTeamRole(String(claimsData.claims.sub)))) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const role = await userTeamRole(String(claimsData.claims.sub));
+    if (!role) return new Response(JSON.stringify({ ok: false, success: false, error: "no_role" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    /* ⛔ USAGE GUARD (2026-09-29): not paid API, but a scraper of any website — suspension + per-hour. */
+    const guardService = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+    const guard = await guardAction(guardService, String(claimsData.claims.sub), "site_scrape", { fn: "extract-facebook", role });
+    if (!guard.ok) return new Response(JSON.stringify(guard.body), { status: guard.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { websiteUrl } = await req.json();
 

@@ -58,6 +58,19 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `scripts/next-action-human-only.test.ts` sweeps every writer; `supabase/tests/next-action-human-only.sql`.
   ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
   what is stored and sent (`docs/whatsapp-templates.md`, last section).
+  ⛔ **Abuse / API-cost protection (2026-09-29, `docs/abuse-cost-protection.md`)**: every paid or data-heavy
+  action a PERSON starts asks ONE server guard (`public.guard_action` via `_shared/protection.ts`
+  `guardAction`) — suspension, the global mode, burst windows, person + team spend. A new edge function
+  that spends for a signed-in caller must call `guardAction` (or `allStopRefusal`) —
+  `scripts/abuse-cost-protection.test.ts` sweeps for it. Thresholds live ONLY in the
+  `protection_settings` row (seeded from `DEFAULT_PROTECTION_LIMITS`); never a number in code or prose.
+  The ledger is `api_usage_log`; an `api_type = 'guard'` row is an estimate/record, NEVER a provider
+  charge — every spend total must exclude it (`.or('api_type.is.null,api_type.neq.guard')`). Two pause
+  levels, one control: "prospecting paused" keeps client measurement running; "all_stop" stops everything
+  paid. Suspension = `team_members.suspended_at` (role kept, reads work). ⛔ Sales never sees a cost:
+  refusals say `USAGE_PAUSED_DETAIL`. ⛔ Sales has no CSV export (Paul); Copy Numbers goes through
+  `log_data_access` first. `lead_identity_lookup` is MASKED for Sales — internal code that needs the
+  real lead id reads `_lead_identity_rows`.
   ⛔ **Sales readiness (2026-09-28, `docs/sales-readiness.md`)**: the Sales Dashboard's numbers come from
   fn `sales-performance` (a salesperson is ALWAYS themselves; counts only, never an amount), folded ONCE in
   `src/lib/salesPerformance.ts`; reply credit is `creditRepliesToSends` (the campaign card's walk).
@@ -867,6 +880,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
 | Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule, the BUILD standard (image roles, Areas → map, mobile hero, reviews, forms) | `docs/website-build-quality-standard.md` |
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
+| Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,

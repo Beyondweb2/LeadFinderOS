@@ -241,6 +241,12 @@ verify_jwt = true
 
 # The niche check (2026-09-28): an operator's own JWT, verified at the gateway and again in the handler
 # (resolveActor). plan/start are admin-only in the handler; list/status both roles.
+# Abuse / API-cost protection (2026-09-29): the Admin screen's Security section (overview, the paid-action
+# control, thresholds, unlock) — requireAdmin in the handler — and the 5-minute alert sweep, which the
+# cron calls with CRON_SECRET and no user token. So verify_jwt is false and the handler decides.
+[functions.security-admin]
+verify_jwt = false
+
 [functions.niche-sample]
 verify_jwt = true
 

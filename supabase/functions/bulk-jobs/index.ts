@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { guardAction, paidMode } from "../_shared/protection.ts";
 import { townGated, TOWN_GATE_REASON } from "../../../src/lib/townVerdict.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
@@ -588,6 +589,11 @@ Deno.serve(async (req) => {
     // ── Internal actions (cron / self-chain only) ──
     if (action === "sweep") {
       if (!isInternal) return json({ error: "forbidden" }, 403);
+      /* ⛔ PAID-ACTION CONTROL (2026-09-29): bulk jobs are manual paid prospecting work, so they wait under
+         "prospecting paused" and the emergency stop. Nothing is cancelled — every job stays queued /
+         running and the first sweep after the release carries on. */
+      const sweepMode = await paidMode(service);
+      if (sweepMode !== "running") return json({ ok: true, skipped: sweepMode });
       const sweepStart = Date.now();
       const staleCutoff = new Date(Date.now() - STALE_MS).toISOString();
       // Jobs that need a runner: ANY 'queued' job (oldest first — its create wasn't
@@ -690,6 +696,10 @@ Deno.serve(async (req) => {
       const ownedIds = new Set(owned.map((r) => r.id));
       const finalIds = leadIds.filter((id) => ownedIds.has(id));
       if (!finalIds.length) return json({ error: "No owned leads in the selection." }, 400);
+      /* The usage guard (2026-09-29): refused while paid actions are paused, and one ledger row naming
+         who started the batch and its size. No estimate — the real rows land under the same account. */
+      const guard = await guardAction(service, user.id, jobType === "audit" ? "audit_manual" : "enrich", { fn: "bulk-jobs", units: finalIds.length, role: "admin" });
+      if (!guard.ok) return json({ ...guard.body, error: guard.body.detail }, guard.status);
 
       const items: JobItem[] = finalIds.map((lead_id) => ({ lead_id, status: "pending" }));
       const { data: jobRow, error: insErr } = await service

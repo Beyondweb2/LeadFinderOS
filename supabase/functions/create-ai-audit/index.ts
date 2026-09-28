@@ -41,6 +41,8 @@ import {
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
+import { guardAction, paidMode } from "../_shared/protection.ts";
+import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
 import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
@@ -132,6 +134,9 @@ function clampCount(
 
 /** How far back a still-in-flight run counts as "this lead's hook is running" (the one-hook-in-flight
  *  check). Past the processor's MAX_RUN_AGE_MS plus a retry, so it only ever releases an abandoned run. */
+/** A salesperson's hook audits on ONE lead in 24 h (2026-09-29, abuse protection). A re-run with edited
+ *  questions fits; a loop on one lead does not. */
+const SALES_HOOKS_PER_LEAD_PER_DAY = 3;
 const HOOK_IN_FLIGHT_WINDOW_MS = 30 * 60 * 1000;
 
 function json(body: unknown, status = 200): Response {
@@ -711,6 +716,37 @@ Deno.serve(async (req) => {
         console.log(`[create-ai-audit] lead ${leadId}: a hook is already in flight (audit ${running.audit_id}) — not starting another`);
         return json({ ok: true, already_running: true, audit_id: running.audit_id });
       }
+    }
+    /* ⛔ ABUSE / COST PROTECTION (2026-09-29, docs/abuse-cost-protection.md). AFTER the in-flight dedupe
+       above (a double-click that answers "already running" spends nothing and is not counted), BEFORE
+       any question is generated or row created.
+       · A person: the usage guard — suspension, the pause modes, hook audits per 10 minutes / per day,
+         the person's and the team's spend. A salesperson's hook carries its ESTIMATE because the real
+         Apify rows are billed to the book owner by the queue; their preview (question generation) is
+         its own, cheaper action. The admin's manual audits only meet the pause modes.
+       · A salesperson: at most SALES_HOOKS_PER_LEAD_PER_DAY hooks on one lead in 24 h — room for a
+         re-run with edited questions, never a loop on one lead.
+       · An internal caller (baselines, re-measures, free checks, the reply chain, the niche check):
+         never limited — client work continues under every pause — EXCEPT the emergency all-stop. */
+    if (actor) {
+      const isSales = actor.role !== "admin";
+      if (isSales && isHookAudit && leadId) {
+        const since = new Date(Date.now() - 86_400_000).toISOString();
+        const { count, error: cErr } = await service.from("ai_audits").select("id", { count: "exact", head: true })
+          .eq("lead_id", leadId).eq("audit_purpose", ORDINARY_AUDIT_PURPOSE).gte("created_at", since);
+        if (cErr) return json({ ok: false, error: "hook_count_failed" }, 503);
+        if ((count ?? 0) >= SALES_HOOKS_PER_LEAD_PER_DAY) {
+          return json({ ok: false, error: "hook_limit_for_lead", detail: "This lead already has several hook audits today — open the latest one from the lead." }, 429);
+        }
+      }
+      const action = !isSales ? "audit_manual" : preview ? "hook_preview" : "hook_audit";
+      const guard = await guardAction(service, actor.id, action, {
+        fn: "create-ai-audit", leadId, role: actor.role,
+        estCostUsd: isSales && !preview ? OUTREACH_AUDIT_EST_USD : 0,
+      });
+      if (!guard.ok) return json(guard.body, guard.status);
+    } else if ((await paidMode(service)) === "all_stop") {
+      return json({ ok: false, error: "all_stop", detail: "The emergency stop is on — no new paid work starts until it is released." }, 423);
     }
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid

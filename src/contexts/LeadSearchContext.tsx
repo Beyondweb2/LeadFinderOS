@@ -506,7 +506,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
           // Non-retryable error — prefer the function's own friendly message
           // (body.notice / body.error) over the generic "non-2xx status code".
-          const errMsg = body?.notice || body?.error
+          // body.detail first: the usage guard answers { error: 'usage_paused', detail: <sentence> } (2026-09-29).
+          const errMsg = body?.notice || body?.detail || body?.error
             || (error.message && !/non-2xx/i.test(error.message) ? error.message : null)
             || 'Search failed. Tap retry to try again.';
           const errorId = await reportClientError({

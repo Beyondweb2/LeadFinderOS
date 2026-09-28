@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { pickRole } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
@@ -1199,7 +1200,9 @@ async function todaysSpendUsd(serviceClient?: any): Promise<number> {
     const { data } = await serviceClient
       .from('api_usage_log')
       .select('estimated_cost_usd')
-      .gte('created_at', since.toISOString());
+      .gte('created_at', since.toISOString())
+      // A 'guard' row is an estimate the usage guard records, never a provider charge (2026-09-29).
+      .or('api_type.is.null,api_type.neq.guard');
     return (data ?? []).reduce((sum: number, r: { estimated_cost_usd: number | null }) => sum + (Number(r.estimated_cost_usd) || 0), 0);
   } catch {
     return 0;
@@ -1341,10 +1344,20 @@ Deno.serve(async (req) => {
       .from('user_roles')
       .select('role')
       .eq('user_id', userId);
-    if (!pickRole(roleRows)) {
+    const role = pickRole(roleRows);
+    if (!role) {
       console.warn(`[search-leads] user ${userId} with no team role blocked from search`);
       return jsonResponse({ error: 'Not authorised.', _debug: debug }, 403);
     }
+
+    /* ⛔ THE USAGE GUARD (2026-09-29, docs/abuse-cost-protection.md): suspension, the pause modes,
+       searches per minute / per hour, the person's and the team's spend. Server-side, counted in the
+       database — the in-memory limiter below resets on every cold start and is only a courtesy.
+       A cached search counts too: the guard is about how fast someone pulls results, not only money.
+       The real Google cost is logged by this function under the caller (api_usage_log), so the guard
+       carries no estimate. */
+    const guard = await guardAction(serviceClient, userId, 'lead_search', { fn: 'search-leads', role });
+    if (!guard.ok) return jsonResponse({ ...guard.body, _debug: debug }, guard.status);
 
     // Internal tool: every authenticated (admin) account has full, ungated access.
     const isGated = false;

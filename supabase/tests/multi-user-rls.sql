@@ -3,6 +3,9 @@
 -- commit: every fixture (fake auth users on example.invalid, roles, claims, notes) disappears.
 -- How to run: see docs/multi-user.md ("Re-running the security tests").
 begin;
+-- sales_pool lost its authenticated grant on 2026-09-29 (no caller; it paged the whole pool). This suite still
+-- uses it as the oracle for "is this lead in the claimable pool" -- a TEST-ONLY grant, rolled back with the rest.
+grant execute on function public.sales_pool(text, integer, integer) to authenticated;
 
 -- ═══ TEST SUITE (runs after the migration, inside the same transaction, which is then aborted) ═══
 create temp table t_results (n serial, name text, ok boolean, detail text);
