@@ -72,8 +72,11 @@ export interface LeadPermissions {
   bulkAudits: boolean;
   campaigns: boolean;
   product: boolean;
-  /** The free crawl check (crawl-check is admin-only server-side). The stored result is still shown. */
+  /** The paste-any-URL crawl check and the crawl buttons on the list rows / Inbox header (admin). */
   crawlSite: boolean;
+  /** The FULL crawl of a lead's own website from its workspace (2026-09-28): both roles. crawl-check
+   *  lets a salesperson crawl only a lead they work, and only that lead's own website. */
+  crawlOwnLead: boolean;
   /** Paid-client and delivery data: payment, questionnaire, delivery cockpit, playbook, welcome pack,
    *  onboarding link, SEO scan, Mark Paid. Sales never RECEIVES those fields either (sales_leads). */
   clientDelivery: boolean;
@@ -107,6 +110,7 @@ export function leadPermissions(role: AppRole | null): LeadPermissions {
     campaigns: admin,
     product: admin,
     crawlSite: admin,
+    crawlOwnLead: admin || role === 'sales',
     clientDelivery: admin,
     queueControls: admin,
     assignOwner: admin,
@@ -129,6 +133,9 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Approved templates / replies / voice notes / attachments', admin: 'yes', sales: 'own leads only' },
   { feature: 'Bulk initial outreach (the opener chosen for the batch)', admin: 'yes', sales: 'own never-contacted leads' },
   { feature: 'Hook audit ("AI visibility check")', admin: 'yes', sales: 'own leads only' },
+  { feature: 'Full website crawl (lead workspace)', admin: 'any lead or any URL', sales: "own leads only, the lead's own website" },
+  { feature: 'Services, service areas, address, website on a prospect', admin: 'all leads', sales: 'own leads' },
+  { feature: 'Share the prospect report (copy, mark sent, see opened)', admin: 'all leads', sales: 'own leads' },
   { feature: 'Full measurement / Discovery / Baseline / Remeasure', admin: 'yes', sales: 'no' },
   { feature: 'Sales dashboard (campaigns, templates, calls, sign-up links, won)', admin: 'anyone or everyone', sales: 'own leads only, no money figures' },
   { feature: 'Coverage', admin: 'yes', sales: 'yes (counts)' },

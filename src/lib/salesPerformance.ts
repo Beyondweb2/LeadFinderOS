@@ -42,6 +42,8 @@ export interface PerfLead {
   amount_paid: number | null;
   is_potential_work: boolean | null;
   lead_source: string | null;
+  /** Stamped once at payment (trg_outreach_leads_sold_by); survives reassignment. Absent on older reads. */
+  sold_by_user_id?: string | null;
 }
 export interface PerfMessage {
   lead_id: string;
@@ -202,7 +204,10 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     // The sign-up link's sent/opened rule is onboardingLinkStatus — the prospect panel reads the same.
     const link = onboardingLinkStatus(linkBy.get(lead.id) ?? [], hitsBy.get(lead.id) ?? [], (who) => isMine(personId, who));
 
-    const won = isPaidLead(lead);
+    /* ⛔ A WIN BELONGS TO WHOEVER MADE THE SALE (sold_by_user_id, stamped at payment), not to whoever
+       holds the lead now: a client reassigned after payment stays won for the seller and is never
+       counted for the new holder. Older clients with no stamp fall back to the holder, as before. */
+    const won = isPaidLead(lead) && (personId === null || !lead.sold_by_user_id || lead.sold_by_user_id === personId);
     const status = String(lead.status ?? '');
     const f: LeadFacts = {
       lead,
@@ -336,10 +341,13 @@ export function periodSinceMs(p: string, now = Date.now()): number | null {
   return d === null ? null : now - d * 86_400_000;
 }
 
+/** Where a person found a business. The keys are the DB CHECK list (outreach_leads_lead_source_check,
+ *  sales_add_lead) — scripts/self-sourced-handoff.test.ts holds them equal. Order = the picker's order. */
 export const LEAD_SOURCE_LABELS: Record<string, string> = {
-  linkedin: 'LinkedIn', referral: 'Referral', networking: 'Networking', google_maps: 'Google / Maps',
-  social: 'Social media', ai_research: 'AI research', cold_research: 'Cold research',
-  existing_relationship: 'Existing relationship', other: 'Other',
+  facebook: 'Facebook', linkedin: 'LinkedIn', google_maps: 'Google / Maps', referral: 'Referral',
+  networking: 'Networking', email_research: 'Email research', ai_research: 'AI-assisted research',
+  existing_relationship: 'Existing relationship', social: 'Other social media', cold_research: 'Cold research',
+  other: 'Other',
 };
 export const leadSourceLabel = (s: string | null | undefined) => (s ? LEAD_SOURCE_LABELS[s] ?? s : 'App search');
 export const CHANNEL_LABELS: Record<ContactChannel, string> = {

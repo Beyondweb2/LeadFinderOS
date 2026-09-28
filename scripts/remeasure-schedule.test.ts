@@ -109,7 +109,7 @@ const queue = stripComments(read("supabase/functions/process-ai-audit-queue/inde
 ok(/await ensureBaselinesForPaidOnboardings\(service\);[\s\S]{0,600}await fireDueRemeasures\(service\);/.test(queue), "the tick runs fireDueRemeasures beside ensureBaselinesForPaidOnboardings");
 const server = stripComments(read("supabase/functions/create-ai-audit/index.ts"));
 ok(/const isRemeasure: boolean = isInternal && body\.purpose === "remeasure";/.test(server), "'remeasure' is an internal-only purpose");
-ok(/!isBaseline && !isRemeasure && !townConfirmed && townGated\(lead\)/.test(server), "the replay is exempt from the town gate");
+ok(/!isBaseline && !isRemeasure && !townConfirmed && (?:!handTypedTown && )?townGated\(lead\)/.test(server), "the replay is exempt from the town gate");
 /* Written as the named constant since 2026-09-13 (REMEASURE_AUDIT_PURPOSE in src/lib/auditKind.ts);
    the literal is accepted too so this cannot fail on a spelling the trigger still reads. */
 ok(/isRemeasure \? (?:"remeasure"|REMEASURE_AUDIT_PURPOSE)/.test(server), "audit_purpose = 'remeasure' is written — what the claim trigger and the unique index key on");

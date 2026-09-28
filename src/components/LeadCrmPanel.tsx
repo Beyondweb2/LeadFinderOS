@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, Clock, Link2, Lock, Loader2, PhoneCall, Sparkles, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,9 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useLeadActivity, useTeamDirectory } from '@/hooks/useSalesCrm';
 import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibility';
 import { useOnboardingLink } from '@/hooks/useOnboardingLink';
+import { reportShareKey, useReportShare } from '@/hooks/useReportShare';
+import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
+import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { OwnerAvatar } from '@/components/OwnerBadge';
@@ -20,7 +23,7 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, CALL_OUTCOMES, CONTACT_CHANNEL_OPTIONS, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, refusalText } from '@/lib/salesCrm';
+import { ACTIVITY_LABEL, CALL_OUTCOMES, CONTACT_CHANNEL_OPTIONS, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, activityDetail, refusalText } from '@/lib/salesCrm';
 import { cn } from '@/lib/utils';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -49,7 +52,7 @@ import { cn } from '@/lib/utils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -57,6 +60,7 @@ interface CrmRow {
   next_action: string | null; next_action_date: string | null; next_action_note: string | null;
   call_booked_at: string | null; website_control: string | null; website_control_note: string | null;
   assigned_to_user_id: string | null;
+  services_included: string[] | null; service_areas: string[] | null; address: string | null;
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
@@ -122,6 +126,74 @@ function useSave(leadId: string): SaveFn {
     }
     return r;
   };
+}
+
+/* ── PROFILE: what the business genuinely does and where (2026-09-28) ──────────────────────────────
+   Services and service areas the salesperson has actually learned (the call, their website, the
+   referral), plus the address and website. Progressive — any field can be filled later. Saved through
+   lead_set_profile (both roles, own leads only) into services_included / service_areas: the SAME
+   columns the paid-client handoff, the baseline context and clientFacts read as "the client record",
+   ranked under the client's own onboarding answers. Never copied anywhere else. */
+const splitLabels = (v: string) => v.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+
+export function ProspectProfilePanel({ leadId }: { leadId: string }) {
+  const crm = useLeadCrmRow(leadId);
+  const save = useSave(leadId);
+  const lead = crm.data;
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState({ services: '', areas: '', address: '', website: '' });
+  if (!lead) return null;
+  const services = lead.services_included ?? [];
+  const areas = lead.service_areas ?? [];
+  const start = () => {
+    setF({ services: services.join(', '), areas: areas.join(', '), address: lead.address ?? '', website: lead.website ?? '' });
+    setEditing(true);
+  };
+  const submit = async () => {
+    const next = { services: splitLabels(f.services), areas: splitLabels(f.areas), address: f.address.trim(), website: f.website.trim() };
+    const r = await save('lead_set_profile', { _services: next.services, _areas: next.areas, _address: next.address, _website: next.website }, 'Profile saved', {
+      services_included: next.services.length ? next.services : null, service_areas: next.areas.length ? next.areas : null,
+      address: next.address || null, website: next.website || null,
+    });
+    if (r.ok) setEditing(false);
+  };
+  const none = <span className="italic text-muted-foreground/60">Not recorded yet</span>;
+  return (
+    <section className={cn(CARD, 'space-y-2')} data-testid="prospect-profile">
+      <div className="flex items-center justify-between gap-2">
+        <span className={LABEL}>Services and areas</span>
+        {!editing && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={start}>{services.length || areas.length ? 'Edit' : 'Add'}</Button>}
+      </div>
+      {!editing ? (
+        <ul className="grid gap-1 text-xs">
+          <li><span className="inline-block w-24 text-muted-foreground">Services</span>{services.length ? services.join(', ') : none}</li>
+          <li><span className="inline-block w-24 text-muted-foreground">Service areas</span>{areas.length ? areas.join(', ') : none}</li>
+        </ul>
+      ) : (
+        <div className="grid gap-2">
+          <label className="text-[11px] text-muted-foreground">Main services they genuinely offer (comma separated)
+            <Textarea rows={2} className="mt-1 resize-none text-sm" value={f.services} onChange={(e) => setF((p) => ({ ...p, services: e.target.value }))} placeholder="e.g. boiler repair, bathroom fitting" />
+          </label>
+          <label className="text-[11px] text-muted-foreground">Towns / areas they genuinely serve (comma separated)
+            <Input className="mt-1 h-9 text-sm" value={f.areas} onChange={(e) => setF((p) => ({ ...p, areas: e.target.value }))} placeholder="e.g. Wakefield, Ossett, Horbury" />
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-[11px] text-muted-foreground">Address
+              <Input className="mt-1 h-9 text-sm" value={f.address} onChange={(e) => setF((p) => ({ ...p, address: e.target.value }))} />
+            </label>
+            <label className="text-[11px] text-muted-foreground">Website
+              <Input className="mt-1 h-9 text-sm" value={f.website} onChange={(e) => setF((p) => ({ ...p, website: e.target.value }))} placeholder="example.co.uk" />
+            </label>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Only what you actually know. The AI check builds its questions from these, and they go to Paul if the client signs up.</p>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={() => void submit()}>Save</Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
@@ -281,6 +353,30 @@ function FollowUp({ lead, onSave }: {
 }
 
 /* ── HOOK AUDIT: the one-lead AI visibility check and its evidence (rivals named, sources) ─────── */
+/* ⛔ PROPOSE → REVIEW → RUN (2026-09-28). The system proposes the three questions from what is genuinely
+   on the lead — trade, town, and the services / service areas Sales recorded — through create-ai-audit's
+   own preview, which plans them exactly as the run will (finalHookPlan). The salesperson reads them and
+   either runs THOSE three (sent back verbatim) or asks for a fresh proposal. No free-text editing: the
+   questions must come from the lead's real services and places, never from a typed invention.
+   3 questions × 2 engines × 1 run = 6 results, scored by hookScore (unchanged). */
+function hookInputs(lead: CrmRow, hook: ReturnType<typeof useHookVisibility>['data']) {
+  const bizType = (hook?.audit?.business_type || lead.search_keyword || lead.category || '').trim();
+  const loc = (lead.derived_town || lead.search_location || hook?.audit?.location_text || '').trim();
+  const website = lead.website && !isAggregatorUrl(lead.website) ? lead.website : undefined;
+  const services = (lead.services_included ?? []).filter(Boolean);
+  const areas = (lead.service_areas ?? []).filter(Boolean);
+  return {
+    bizType, loc,
+    body: {
+      lead_id: lead.id, business_name: lead.business_name, business_type: bizType, location_text: loc,
+      country: lead.country ?? null, website, has_website: !!website, question_count: OUTREACH_HOOK_QUESTIONS,
+      hook_audit: true, fresh_audit: true,
+      ...(services.length ? { specialisms: services.join(', ') } : {}),
+      ...(areas.length ? { service_areas: areas } : {}),
+    },
+  };
+}
+
 export function LeadHookPanel({ leadId }: { leadId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -288,44 +384,115 @@ export function LeadHookPanel({ leadId }: { leadId: string }) {
   const hookQ = useHookVisibility(leadId);
   const hook = hookQ.data;
   const [hookBusy, setHookBusy] = useState(false);
+  const [proposed, setProposed] = useState<string[] | null>(null);
   const lead = crm.data;
   if (!lead) return null;
 
-  const runHook = async () => {
-    const bizType = (hook?.audit?.business_type || lead.search_keyword || lead.category || '').trim();
-    const loc = (hook?.audit?.location_text || lead.derived_town || lead.search_location || '').trim();
-    if (!bizType || !loc) { toast({ title: 'Need a trade and a town', description: 'This lead has no trade or town to check.', variant: 'destructive' }); return; }
-    if (!window.confirm(`Run an AI visibility check for ${lead.business_name}? Nothing is sent to the lead.`)) return;
+  const propose = async () => {
+    const { bizType, loc, body } = hookInputs(lead, hook);
+    if (!bizType || !loc) { toast({ title: 'Need a trade and a town', description: 'Add the trade and town on the Prospect tab first.', variant: 'destructive' }); return; }
     setHookBusy(true);
     try {
-      const website = lead.website && !isAggregatorUrl(lead.website) ? lead.website : undefined;
-      const { data, error } = await supabase.functions.invoke('create-ai-audit', {
-        body: {
-          lead_id: lead.id, business_name: lead.business_name, business_type: bizType, location_text: loc,
-          country: lead.country ?? null, website, has_website: !!website, question_count: OUTREACH_HOOK_QUESTIONS,
-          hook_audit: true, fresh_audit: true,
-        },
-      });
-      if (error || !data?.ok) { toast({ title: "Couldn't start the check", description: data?.error ?? error?.message ?? 'Try again', variant: 'destructive' }); return; }
-      await qc.invalidateQueries({ queryKey: hookVisibilityQueryKey(lead.id) });
-      toast({ title: 'AI visibility check started', description: 'The result appears here in a few minutes.' });
+      const data = await invokeEdge<{ ok: boolean; questions?: string[]; error?: string }>('create-ai-audit', { ...body, preview: true });
+      const qs = (data.questions ?? []).filter((q) => typeof q === 'string' && q.trim());
+      if (!qs.length) { toast({ title: "Couldn't propose questions", description: data.error ?? 'Try again', variant: 'destructive' }); return; }
+      setProposed(qs);
+    } catch (e) {
+      toast({ title: "Couldn't propose questions", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setHookBusy(false); }
+  };
+
+  const run = async () => {
+    if (!proposed?.length) return;
+    const { body } = hookInputs(lead, hook);
+    setHookBusy(true);
+    try {
+      const data = await invokeEdge<{ ok: boolean; error?: string; message?: string }>('create-ai-audit', { ...body, questions: proposed });
+      if (!data?.ok) { toast({ title: "Couldn't start the check", description: data?.message ?? data?.error ?? 'Try again', variant: 'destructive' }); return; }
+      setProposed(null);
+      await qc.invalidateQueries({ queryKey: hookVisibilityQueryKey(lead.id) });
+      notifyLeadChanged(lead.id);
+      toast({ title: 'AI visibility check started', description: 'The result appears here in a few minutes. Nothing is sent to the lead.' });
+    } catch (e) {
+      toast({ title: "Couldn't start the check", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+    } finally { setHookBusy(false); }
+  };
+
+  const reportAuditId = hook?.report?.kind === 'ready' ? hook.report.link.auditId : null;
+  const onReportCopied = (link: { auditId: string }) => {
+    void leadRpc('lead_report_link_event', { _lead_id: lead.id, _audit_id: link.auditId, _kind: 'generated', _channel: null })
+      .then(() => qc.invalidateQueries({ queryKey: reportShareKey(lead.id, link.auditId) }));
   };
 
   return (
     <div className="space-y-3">
-      <HookVisibilityCard leadId={lead.id} onRunNew={() => void runHook()} runNewBusy={hookBusy} />
-      {!hookQ.isLoading && !hookQ.isError && !hook?.audit && (
+      <HookVisibilityCard leadId={lead.id} onRunNew={() => void propose()} runNewBusy={hookBusy} onReportCopied={onReportCopied} />
+      {reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
+      {proposed && (
+        <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
+          <div className={LABEL}>The {proposed.length} questions we would ask ChatGPT and Google AI</div>
+          <ol className="list-decimal space-y-1 pl-5 text-sm">{proposed.map((q) => <li key={q}>{q}</li>)}</ol>
+          <p className="text-[11px] text-muted-foreground">
+            Built from this lead&rsquo;s trade, town{lead.services_included?.length ? ', services' : ''}{lead.service_areas?.length ? ' and service areas' : ''}. Each is asked once on both engines: {proposed.length * 2} results. Nothing is sent to the lead.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={hookBusy} onClick={() => setProposed(null)}>Cancel</Button>
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void propose()}>
+              <RefreshCw className="h-3.5 w-3.5" />Propose again
+            </Button>
+            <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void run()} data-testid="hook-run-reviewed">
+              {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Run these questions
+            </Button>
+          </div>
+        </section>
+      )}
+      {!proposed && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
         <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')}>
           <div className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">AI visibility check</span> — not run for this lead yet. It asks ChatGPT and Google AI the questions a customer would, and shows who they name instead.
           </div>
-          <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void runHook()}>
-            {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Run AI visibility check
+          <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void propose()} data-testid="hook-propose">
+            {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Propose questions
           </Button>
         </section>
       )}
     </div>
+  );
+}
+
+/* ── THE REPORT, SHARED: sent / opened, and "sent another way" (2026-09-28, src/lib/reportShare.ts) ── */
+function ReportSharePanel({ leadId, auditId }: { leadId: string; auditId: string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const share = useReportShare(leadId, auditId);
+  const [channel, setChannel] = useState<string>('');
+  const s = share.data;
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+  const markSent = async (ch: string) => {
+    const r = await leadRpc('lead_report_link_event', { _lead_id: leadId, _audit_id: auditId, _kind: 'sent', _channel: ch });
+    if (!r.ok) { toast({ title: "Couldn't record that", description: refusalText(r.error), variant: 'destructive' }); return; }
+    toast({ title: 'Recorded: report sent' });
+    setChannel('');
+    void qc.invalidateQueries({ queryKey: reportShareKey(leadId, auditId) });
+    notifyLeadChanged(leadId);
+  };
+  return (
+    <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="report-share">
+      <div className="text-xs">
+        <span className="font-medium">Report</span>{' '}
+        {!s ? <span className="text-muted-foreground">…</span> : (
+          <span className="text-muted-foreground">
+            {s.sent ? `Sent ${day(s.firstSentAt!)} (${s.sentChannels.map((c) => REPORT_CHANNEL_LABEL[c] ?? c).join(', ')})` : s.generated ? 'Link copied, not recorded as sent' : 'Not sent yet'}
+            {' · '}
+            {s.opened ? `Opened ${day(s.firstOpenedAt!)}${s.openCount > 1 ? ` · ${s.openCount} views` : ''}${s.openedBeforeSend ? ' (before any recorded send)' : ''}` : 'Not opened'}
+          </span>
+        )}
+      </div>
+      <Select value={channel} onValueChange={(v) => { setChannel(v); void markSent(v); }}>
+        <SelectTrigger className="h-7 w-auto gap-1 text-[11px]"><SelectValue placeholder="Sent another way…" /></SelectTrigger>
+        <SelectContent>{REPORT_SEND_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}</SelectContent>
+      </Select>
+    </section>
   );
 }
 
@@ -338,19 +505,7 @@ export function LeadHistoryPanel({ leadId }: { leadId: string }) {
   type Item = { key: string; at: string; actor: string | null; title: string; detail?: string | null; link?: boolean };
   const items: Item[] = [];
   for (const a of activity.data ?? []) {
-    const outcome = CALL_OUTCOMES.find((o) => o.value === a.data?.outcome)?.label ?? String(a.data?.outcome ?? '');
-    const channel = CONTACT_CHANNEL_OPTIONS.find((c) => c.value === a.data?.channel)?.label;
-    let detail: string | null = null;
-    if (a.kind === 'note') detail = a.body;
-    else if (a.kind === 'call_outcome' || a.kind === 'contact_logged') detail = `${a.kind === 'contact_logged' && channel ? channel + ': ' : ''}${outcome}${a.body ? ` — ${a.body}` : ''}`;
-    else if (a.kind === 'stage_changed') detail = `${String(a.data?.from ?? '—')} → ${String(a.data?.to ?? '—')}`;
-    else if (a.kind === 'follow_up_set') detail = `${String(a.data?.next_action ?? '').replace(/_/g, ' ')}${a.data?.date ? ` on ${String(a.data.date)}` : ''}${a.data?.note ? ` — ${String(a.data.note)}` : ''}`;
-    else if (a.kind === 'bulk_queued' && a.data?.template) detail = String(a.data.template);
-    else if (a.kind === 'archived_set') detail = a.data?.archived ? 'Archived' : 'Restored';
-    else if (a.kind === 'marked_interested') detail = a.data?.on === false ? 'Unstarred' : 'Starred';
-    else if (a.kind === 'lead_added' && a.data?.source) detail = `Source: ${String(a.data.source).replace(/_/g, ' ')}`;
-    else if (a.kind === 'lead_assigned' || a.kind === 'lead_unassigned') detail = `${actorName((a.data?.from as string) ?? null)} → ${a.data?.to ? actorName(a.data.to as string) : 'Unassigned'}`;
-    items.push({ key: a.id, at: a.created_at, actor: a.actor_user_id, title: ACTIVITY_LABEL[a.kind] ?? a.kind, detail });
+    items.push({ key: a.id, at: a.created_at, actor: a.actor_user_id, title: ACTIVITY_LABEL[a.kind] ?? a.kind, detail: activityDetail(a, actorName) });
   }
   (link.data?.events ?? []).forEach((e, i) => {
     items.push({ key: `link-${i}`, at: e.created_at, actor: e.actor_user_id, link: true, title: e.kind === 'sent' ? 'Sign-up link sent' : 'Sign-up link copied', detail: e.kind === 'sent' ? `${LINK_CHANNEL_LABEL[e.channel] ?? e.channel}${e.template_name ? ` (${e.template_name})` : ''}` : null });

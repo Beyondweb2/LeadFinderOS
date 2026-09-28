@@ -111,7 +111,7 @@ export function mergeClientContext(input: {
   onboarding?: { business_name?: unknown; business_category?: unknown; confirmed_location?: unknown; services?: unknown; services_list?: unknown; areas_list?: unknown; areas_wanted?: unknown; specialisms?: unknown; website?: unknown; country?: unknown } | null;
   /** Verified Client Build Facts (verifiedBuildFacts). */
   buildFacts?: { services?: unknown; service_areas?: unknown; primary_town?: unknown } | null;
-  lead?: { business_name?: unknown; search_location?: unknown; derived_town?: unknown; website?: unknown; category?: unknown; search_keyword?: unknown; services_included?: unknown; specialisms?: unknown; country?: unknown } | null;
+  lead?: { business_name?: unknown; search_location?: unknown; derived_town?: unknown; website?: unknown; category?: unknown; search_keyword?: unknown; services_included?: unknown; service_areas?: unknown; specialisms?: unknown; country?: unknown } | null;
   /** The newest Discovery scan's stored business facts (ai_audits: business_type, location_text,
    *  website, specialism). Never its questions — Discovery is separate research. */
   discovery?: { business_type?: unknown; location_text?: unknown; website?: unknown; specialism?: unknown } | null;
@@ -140,6 +140,9 @@ export function mergeClientContext(input: {
   add(service_areas, area_sources, onboarding.areas_list, 'onboarding');
   add(service_areas, area_sources, onboarding.areas_wanted, 'onboarding');
   add(service_areas, area_sources, facts.service_areas, 'build_facts');
+  /* The towns Sales recorded on the prospect (2026-09-28) — the twin of lead.services_included above,
+     below the client's own answers and verified build facts, so the client never re-enters them. */
+  add(service_areas, area_sources, lead.service_areas, 'lead');
   add(specialisms, {}, onboarding.specialisms, 'onboarding');
   add(specialisms, {}, lead.specialisms, 'lead');
 

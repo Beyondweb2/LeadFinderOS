@@ -49,7 +49,7 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
-import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel } from '@/components/LeadCrmPanel';
+import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 
 /* ───────── constants (ported from PotentialWork) ───────── */
 
@@ -714,8 +714,9 @@ function LeadDetailBody({
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
           {perms.clientDelivery && !isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
           {/* Free crawlability check — run on the prospect BEFORE messaging so the outreach can name
-              their actual problem. Fetches only (£0), never the Apify SEO scanner. */}
-          {perms.crawlSite && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
+              their actual problem. Fetches only (£0), never the Apify SEO scanner. Both roles: a
+              salesperson crawls a lead they work (crawl-check checks it server-side). */}
+          {perms.crawlOwnLead && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
           {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 
@@ -765,6 +766,7 @@ function LeadDetailBody({
 
           <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">
             <ProspectFacts lead={lead} />
+            {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
             {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {(() => {
               const socials = [

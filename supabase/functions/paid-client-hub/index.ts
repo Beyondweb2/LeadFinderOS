@@ -10,6 +10,7 @@ import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../
 import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
+import { handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -25,7 +26,17 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at";
+
+/* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
+   Paul can start. The list reads the same readiness, so these columns ride on the list too. */
+const HUB_LIST_COLUMNS =
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id";
+/* The prospect audits a paid client arrives with: the hook / quick check / free check. Never a baseline,
+   a measurement, Discovery or a replay (those are delivery, shown elsewhere on the hub). */
+const PROSPECT_AUDIT_PURPOSES = ["audit", "free_check"];
+/* What a salesperson recorded about the conversation: the context Paul needs to pick it up. */
+const HANDOFF_ACTIVITY_KINDS = ["note", "call_outcome", "contact_logged", "report_link", "stage_changed", "call_booked", "website_control_set", "lead_added"];
 
 /* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
    CLIENT stated; nothing is derived and nothing is operator workflow. */
@@ -116,6 +127,38 @@ async function onboardingRowFor(service: any, leadId: string): Promise<Record<st
   return latest ?? null;
 }
 
+/** Everything the handoff needs beyond the lead + onboarding rows, for MANY leads in three reads. */
+// deno-lint-ignore no-explicit-any
+async function handoffEvidenceFor(service: any, leadIds: string[]) {
+  const ids = leadIds.length ? leadIds : ["00000000-0000-0000-0000-000000000000"];
+  const [ob, crawls, audits] = await Promise.all([
+    service.from("onboarding_responses").select("lead_id,updated_at," + HUB_ONBOARDING_COLUMNS).in("lead_id", ids).order("updated_at", { ascending: false }),
+    service.from("lead_crawl_checks").select("lead_id").in("lead_id", ids),
+    service.from("ai_audits").select("id,lead_id,short_code,created_at,audit_purpose").in("lead_id", ids)
+      .or("audit_purpose.is.null," + PROSPECT_AUDIT_PURPOSES.map((p) => "audit_purpose.eq." + p).join(","))
+      .order("created_at", { ascending: false }),
+  ]);
+  if (ob.error) throw ob.error;
+  if (crawls.error) throw crawls.error;
+  if (audits.error) throw audits.error;
+  /* The onboarding row per lead: the newest PAID one, else the newest of any status (as onboardingRowFor). */
+  const onboardingByLead = new Map<string, Record<string, unknown>>();
+  for (const r of (ob.data ?? []) as Array<Record<string, unknown>>) {
+    const k = String(r.lead_id); const cur = onboardingByLead.get(k);
+    if (!cur || (cur.status !== "paid" && r.status === "paid")) onboardingByLead.set(k, r);
+  }
+  const crawled = new Set(((crawls.data ?? []) as Array<{ lead_id: string }>).map((r) => r.lead_id));
+  const auditByLead = new Map<string, Record<string, unknown>>();
+  for (const a of (audits.data ?? []) as Array<Record<string, unknown>>) if (!auditByLead.has(String(a.lead_id))) auditByLead.set(String(a.lead_id), a);
+  return { onboardingByLead, crawled, auditByLead };
+}
+
+// deno-lint-ignore no-explicit-any
+async function teamNames(service: any): Promise<Map<string, string>> {
+  const { data } = await service.from("team_members").select("user_id,display_name");
+  return new Map(((data ?? []) as Array<{ user_id: string; display_name: string | null }>).map((t) => [t.user_id, t.display_name ?? "A teammate"]));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -132,12 +175,24 @@ Deno.serve(async (req) => {
 
     if (action === "list") {
       const { data: leads, error } = await service.from("outreach_leads")
-        .select("id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist")
+        .select(HUB_LIST_COLUMNS)
         .eq("user_id", user.id).or(PAID_CLIENT_OR_FILTER).order("payment_date", { ascending: false });
       if (error) throw error;
       /* Membership is isPaidClient (src/lib/paidClient.ts): a recorded amount OR a status Paul set by
          hand. payment_source says which, so a hand-marked client is never shown as Stripe-paid. */
-      const clients = (leads ?? []).filter(isPaidClient).map((l) => ({ ...l, payment_source: paidClientSource(l) }));
+      const members = (leads ?? []).filter(isPaidClient) as Array<Record<string, unknown>>;
+      const [ev, names] = await Promise.all([handoffEvidenceFor(service, members.map((l) => String(l.id))), teamNames(service)]);
+      const clients = members.map((l) => {
+        const id = String(l.id);
+        const readiness = handoffReadiness(l as HandoffLead, (ev.onboardingByLead.get(id) ?? null) as HandoffOnboarding | null,
+          { crawl: ev.crawled.has(id), hookAudit: ev.auditByLead.has(id) });
+        const soldBy = (l.sold_by_user_id ?? l.assigned_to_user_id) as string | null;
+        return {
+          ...l, payment_source: paidClientSource(l),
+          handoff: { ready: readiness.ready, label: readiness.label, missing: readiness.missing },
+          sold_by_name: soldBy ? names.get(soldBy) ?? "A teammate" : null,
+        };
+      });
       return json({ ok: true, clients });
     }
 
@@ -203,7 +258,38 @@ Deno.serve(async (req) => {
         .select(LEAD_CRAWL_SUMMARY_COLUMNS).eq("lead_id", leadId).maybeSingle();
       const crawlJob = await latestCrawlJob(service, leadId);
       const crawl = summariseLeadCrawl(crawlRow as LeadCrawlRowLike | null, crawlJob);
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob } });
+      /* ══ THE HANDOFF: who sold it, what Sales collected, READY TO START / MISSING INFORMATION ══════
+         Read only. The readiness is DERIVED on every read (never stored) from the same rows the rest
+         of the hub shows. The salesperson is sold_by_user_id, stamped once at payment by a trigger so
+         a later reassignment never erases it; a client older than the stamp falls back to its owner. */
+      /* The hub's baseline poller asks with handoff:false: the handoff does not move while a run
+         drains, and every poll shares the ~10-connection API pool (CLAUDE.md §4). */
+      if (body.handoff === false) {
+        return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob } });
+      }
+      const L = lead as Record<string, unknown>;
+      const [ev, names, act] = await Promise.all([
+        handoffEvidenceFor(service, [leadId]),
+        teamNames(service),
+        service.from("lead_activity").select("id,kind,body,data,actor_user_id,created_at").eq("lead_id", leadId)
+          .in("kind", HANDOFF_ACTIVITY_KINDS).order("created_at", { ascending: false }).limit(25),
+      ]);
+      if (act.error) throw act.error;
+      const readiness = handoffReadiness(L as HandoffLead, (ev.onboardingByLead.get(leadId) ?? null) as HandoffOnboarding | null,
+        { crawl: !!crawlRow, hookAudit: ev.auditByLead.has(leadId) });
+      const nameOf = (id: unknown) => (typeof id === "string" && id ? names.get(id) ?? "A teammate" : null);
+      const handoff = {
+        readiness,
+        sold_by: nameOf(L.sold_by_user_id ?? L.assigned_to_user_id),
+        sold_by_recorded: !!L.sold_by_user_id,
+        sold_at: L.sold_at ?? null,
+        owner_now: nameOf(L.assigned_to_user_id),
+        added_by: nameOf(L.added_by_user_id),
+        lead_source: L.lead_source ?? null,
+        prospect_audit: ev.auditByLead.get(leadId) ?? null,
+        activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
+      };
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff } });
     }
 
     /* ══ SECTION 5 — WEBSITE BUILD WORKFLOW STATE ════════════════════════════════════════════════

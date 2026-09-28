@@ -310,7 +310,8 @@ ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, st
 /* 2026-09-25: a NEW hook is version 2 (3 questions × 2 engines, all queued). The v1 rules above stay
    tested because a v1 run in flight at deploy is still advanced by them. scripts/hook-score.test.ts
    covers version 2. */
-ok(createAudit.includes('questions = planHookQuestions(questions, { town: locationText });') && createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit plans and orders the hook questions (version 2)');
+/* 2026-09-28: the plan lives in ONE function (finalHookPlan), shared by the run and the hook preview. */
+ok(createAudit.includes('let qs = planHookQuestions(dedupeQuestions(questions).questions, { town: ctx.town });') && createAudit.includes('questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });') && createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit plans and orders the hook questions (version 2)');
 ok(createAudit.includes('const queueRows = questions.map((q) => ({') && !createAudit.includes('questions.slice(0, 1)'), 'create-ai-audit queues EVERY hook question; nothing stops early');
 ok(createAudit.includes('if (hookState) runResults.hook = hookState;'), 'the plan lives on the run (results.hook) — no migration');
 ok(/&& !freshAudit && !isHookAudit\) \{/.test(createAudit), 'H: a hook request never reuses the lead\'s existing audit — an Inbox re-run is a NEW hook that starts at Q1');
