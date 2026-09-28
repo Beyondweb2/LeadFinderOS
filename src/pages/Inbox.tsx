@@ -58,8 +58,12 @@ import { hookVisibilityQueryKey, useHookVisibility } from '@/hooks/useHookVisibi
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
-import { getQueueStatus, QUEUE_STATUS_KEY } from '@/lib/queueStatus';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, CalendarClock } from 'lucide-react';
+import { getQueueStatus, QUEUE_STATUS_KEY, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
+import { useQueueState } from '@/hooks/useQueueState';
+import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
+import { conversationState, INBOX_QUICK_FILTERS, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
+import { ConvStateChip } from '@/components/ConvStateChip';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, CalendarClock, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import { notifyLeadChanged } from '@/lib/leadSync';
@@ -448,6 +452,9 @@ const Inbox = () => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (key) next.set('c', key); else next.delete('c');
+      /* ?lead=<id> is a one-shot deep link (notifications, the dashboard, a lead's WhatsApp button):
+         once a conversation is chosen it has done its job. */
+      next.delete('lead');
       return next;
     });
   }, [setSearchParams]);
@@ -469,6 +476,14 @@ const Inbox = () => {
   // the campaign/status/hidden filters, never replaces them. Persisted per-user like those
   // filters sit right beside it, and the box shows the term, so it is not a hidden filter.
   const [search, setSearch] = usePersistedState<string>('inbox-search', '', { tier: 'session', scope: user?.id });
+  /* All / Unread / Waiting on us (both roles, 2026-09-28). A view control over the loaded list. */
+  const [quickFilter, setQuickFilter] = usePersistedState<InboxQuickFilter>('inbox-quick-filter', 'all', { tier: 'session', scope: user?.id });
+  const { reads, loaded: readsLoaded } = useWhatsAppReads();
+  const markRead = useMarkWhatsAppRead();
+  /* The waiting timers tick once a minute; nothing is re-read. */
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => { const id = window.setInterval(() => setClockTick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
+  const queueState = useQueueState();
   const [savingStatusKey, setSavingStatusKey] = useState<string | null>(null);
   // Remove-from-inbox (status → 'closed'): in-flight spinner + optimistic hide keys.
   const [removingKey, setRemovingKey] = useState<string | null>(null);
@@ -648,11 +663,39 @@ const Inbox = () => {
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
      plus the raw phone so typing digits finds a number too. Empty term → the full filtered list
      back, unchanged. Separate memo so the campaign/status/hidden logic above is untouched. */
+  /* ⛔ ONE STATE RULE (src/lib/conversationState.ts) for every row, the thread header and the dashboard.
+     Unread is withheld until this person's read times have loaded, so a slow read never flashes the
+     whole day's replies as unread. */
+  const leadByIdForState = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
+  const stateByKey = useMemo(() => {
+    const out = new Map<string, ConversationState>();
+    const nowMs = Date.now();
+    for (const c of list) {
+      const lead = c.leadId ? leadByIdForState.get(c.leadId) : undefined;
+      const st = conversationState({
+        messages: messagesForKey(c.key), lastReadAt: reads?.get(c.phone), leadStatus: c.leadStatus,
+        isPotentialWork: c.isPotentialWork, nextAction: lead?.next_action, nextActionDate: lead?.next_action_date, nowMs,
+      });
+      out.set(c.key, readsLoaded ? st : { ...st, unread: false });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, messagesForKey, reads, readsLoaded, leadByIdForState, clockTick]);
+  const quickCounts = useMemo(() => {
+    let unread = 0; let waiting = 0;
+    for (const st of stateByKey.values()) { if (st.unread) unread++; if (st.waitingSinceMs !== null) waiting++; }
+    return { unread, waiting };
+  }, [stateByKey]);
+
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
-    if (!searchTerm) return list;
-    return list.filter((c) => c.label.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
-  }, [list, searchTerm]);
+    const searched = !searchTerm ? list : list.filter((c) => c.label.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
+    if (quickFilter === 'all') return searched;
+    const kept = searched.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, st); });
+    /* Waiting on us: the longest wait first — the reply that has waited most is the next one to answer. */
+    if (quickFilter === 'waiting') kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
+    return kept;
+  }, [list, searchTerm, quickFilter, stateByKey]);
 
   /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
      with the whole book (2,201 conversations) ANY change to one lead — a status, a star, a next
@@ -660,7 +703,7 @@ const Inbox = () => {
      cover every conversation; "Show more" draws the next 150; the open conversation is always drawn. */
   const LIST_PAGE = 150;
   const [listLimit, setListLimit] = useState(LIST_PAGE);
-  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter]);
+  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter]);
   const shownList = useMemo(() => {
     const head = filteredList.slice(0, listLimit);
     if (!activeKey || head.some((c) => c.key === activeKey)) return head;
@@ -768,6 +811,17 @@ const Inbox = () => {
     [active, messagesForKey],
   );
   const win = active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
+  const activeState = active ? stateByKey.get(active.key) : undefined;
+  /* ⛔ OPENING A THREAD READS IT — and a reply that lands while it is open and on screen is read too.
+     A just-started (synthetic) thread has nothing to read. A hidden tab marks nothing. */
+  useEffect(() => {
+    if (!active || active === synthetic || !active.lastInboundAt) return;
+    const mark = () => { if (document.visibilityState === 'visible') void markRead(active.phone); };
+    mark();
+    document.addEventListener('visibilitychange', mark);
+    return () => document.removeEventListener('visibilitychange', mark);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.key, active?.lastInboundAt]);
 
   // Quick-reply scripts = the saved TEXT templates (not voice). Placeholders are filled
   // from the conversation's lead where possible, then inserted (editable, not auto-sent).
@@ -1453,6 +1507,19 @@ const Inbox = () => {
   // Launch from the Outreach WhatsApp button / dashboard jump: open that lead's thread.
   const location = useLocation();
   const launchConsumed = useRef(false);
+  /* ⛔ THE EXACT-CONVERSATION DEEP LINK: /inbox?lead=<leadId> (whatsAppLinkForLead). Notifications,
+     the dashboard's next actions and the lead's WhatsApp button all use it; it opens that lead's real
+     thread (by number, whoever sent the messages) or starts one. */
+  const leadParam = searchParams.get('lead');
+  const leadParamDone = useRef<string | null>(null);
+  useEffect(() => {
+    if (!leadParam || isLoading || leadParamDone.current === leadParam) return;
+    leadParamDone.current = leadParam;
+    const lead = leads.find((l) => l.id === leadParam);
+    if (lead) startFromLead(lead);
+    else toast({ title: 'Conversation not found', description: 'That lead is not in your WhatsApp list — it may be archived, reassigned, or have no phone.', variant: 'destructive' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadParam, leads, isLoading]);
   useEffect(() => {
     const launch = (location.state as { launch?: { leadId?: string } } | null)?.launch;
     if (!launch?.leadId || launchConsumed.current || isLoading) return;
@@ -1575,10 +1642,11 @@ const Inbox = () => {
      the old stacked sizes. */
   return (
     <div className="space-y-4 md:flex md:h-[calc(100dvh-3rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-4rem)]">
-      <div className="flex flex-wrap items-center justify-between gap-2 md:shrink-0">
+      <div className={cn('flex flex-wrap items-center justify-between gap-2 md:shrink-0', active && 'hidden md:flex')}>
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Inbox</h1>
-          <p className="hidden text-sm text-muted-foreground xl:block">WhatsApp conversations, without leaving LeadFinder.</p>
+          {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
+          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight"><MessageCircle className="h-6 w-6 text-blue-500" />WhatsApp Inbox</h1>
+          <p className="hidden text-sm text-muted-foreground xl:block">Every WhatsApp conversation with your leads.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
@@ -1614,6 +1682,13 @@ const Inbox = () => {
         </div>
       </div>
 
+      {/* ⛔ BOTH ROLES SEE A PAUSED QUEUE (2026-09-28). Replies typed here still send; only the drip waits. */}
+      {queueState?.paused && (
+        <div className={cn('flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300 md:shrink-0', active && 'hidden md:flex')} role="status">
+          <PauseCircle className="h-4 w-4 shrink-0" />{QUEUE_PAUSED_LINE} Replies you send by hand still go out.
+        </div>
+      )}
+
       {/* New-conversation lead picker */}
       {newOpen && (
         <Card className="p-3 md:shrink-0">
@@ -1634,7 +1709,20 @@ const Inbox = () => {
 
       <div className="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[300px_1fr] md:grid-rows-[minmax(0,1fr)]">
         {/* Conversation list */}
-        <Card className="max-h-[60vh] overflow-y-auto p-1.5 md:h-full md:max-h-none">
+        <Card className={cn('overflow-y-auto p-1.5 md:h-full md:max-h-none', active ? 'hidden md:block' : 'min-h-[50vh]')}>
+          <div className="mb-1.5 flex gap-1 px-0.5" role="tablist" aria-label="Show conversations">
+            {INBOX_QUICK_FILTERS.map((f) => {
+              const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : null;
+              const on = quickFilter === f.value;
+              return (
+                <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
+                  className={cn('flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
+                    on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
+                  {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
+                </button>
+              );
+            })}
+          </div>
           {/* Show-hidden toggle — only when there are hidden (not_interested) convos. */}
           {(hiddenCount > 0 || showHidden) && (
             <button
@@ -1800,8 +1888,11 @@ const Inbox = () => {
               tabIndex={0}
               onClick={() => setActiveKey(c.key)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKey(c.key); } }}
-              className={cn('flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors',
-                activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50')}>
+              data-unread={stateByKey.get(c.key)?.unread ? 'true' : undefined}
+              className={cn('relative flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2.5 text-left transition-colors md:py-2',
+                activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50',
+                stateByKey.get(c.key)?.unread && activeKey !== c.key && 'bg-blue-500/[0.06]')}>
+              {stateByKey.get(c.key)?.unread && <span className="absolute left-0.5 top-3.5 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />}
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 truncate text-sm font-medium">
                   {hookDueMode && c.leadId && (
@@ -1823,10 +1914,13 @@ const Inbox = () => {
                     />
                   )}
                   {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
-                  <span className="truncate">{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
+                  <span className={cn('truncate', stateByKey.get(c.key)?.unread && 'font-bold')}>{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
                   {!c.unassigned && c.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                 </span>
-                {c.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relTime(c.lastMessageAt)}</span>}
+                <span className="flex shrink-0 items-center gap-1">
+                  <ConvStateChip state={stateByKey.get(c.key)} compact />
+                  {c.lastMessage && <span className={cn('text-[10px]', stateByKey.get(c.key)?.unread ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground')}>{relTime(c.lastMessageAt)}</span>}
+                </span>
               </div>
               {c.lastMessage && (
                 <span className="truncate text-xs text-muted-foreground">
@@ -1856,7 +1950,7 @@ const Inbox = () => {
         </Card>
 
         {/* Thread + reply */}
-        <Card className="flex h-[60vh] min-w-0 flex-col overflow-hidden md:h-full">
+        <Card className={cn('min-w-0 flex-col overflow-hidden md:flex md:h-full', active ? 'flex h-[calc(100dvh-7.5rem)]' : 'hidden')}>
           {!active ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <MessageSquare className="mb-2 h-7 w-7 opacity-30" />
@@ -1870,6 +1964,9 @@ const Inbox = () => {
                   tools wrapping under the pills on a narrow screen rather than squeezing the name. */}
               <div className="space-y-0.5 border-b border-border px-3 py-1.5">
                 <div className="flex min-w-0 items-center gap-2">
+                  <button type="button" onClick={() => setActiveKey(null)} className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-muted md:hidden" aria-label="Back to all conversations">
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
                   <p className="flex min-w-0 items-center gap-1 text-sm font-semibold">
                     <span className="truncate">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</span>
                     {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
@@ -1903,6 +2000,12 @@ const Inbox = () => {
                       </button>
                     )}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
+                    <ConvStateChip state={activeState} />
+                    {active.leadStatus === 'queued' && (
+                      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', queueState?.paused ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground')}>
+                        <Timer className="h-3 w-3" />{queueState?.paused ? 'Queued · queue paused' : 'Queued'}
+                      </span>
+                    )}
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                   </div>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">

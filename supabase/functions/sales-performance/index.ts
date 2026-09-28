@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor } from "../_shared/access.ts";
 import {
-  foldSalesPerformance, periodSinceMs,
+  foldSalesPerformanceWithFacts, periodSinceMs,
   type PerfActivity, type PerfHit, type PerfLead, type PerfLinkEvent, type PerfMessage,
 } from "../../../src/lib/salesPerformance.ts";
+import { foldSalesWorkspace, parseTargets, AUDIT_READY_DAYS, FEED_DAYS, type WorkspaceLead } from "../../../src/lib/salesWorkspace.ts";
 
 // sales-performance — the Sales Dashboard's numbers (2026-09-28, docs/sales-readiness.md).
 //
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
 
     const leads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
-        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id", (c ? { count: "exact" } : undefined));
+        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, next_action, next_action_date, next_action_note", (c ? { count: "exact" } : undefined));
       /* The person's leads, plus any client they SOLD that has since been reassigned (the win stays theirs). */
       if (personId) q = q.or(`assigned_to_user_id.eq.${personId},sold_by_user_id.eq.${personId}`);
       return q.order("id").range(a, b);
@@ -110,16 +111,41 @@ Deno.serve(async (req) => {
       allRows<{ id: string; name: string }>((a, b, c) => service.from("campaigns").select("id, name", (c ? { count: "exact" } : undefined)).order("id").range(a, b)),
     ]);
 
-    const result = foldSalesPerformance({
+    /* The workspace's extra read, small: hook audits finished in the feed window (for "audit ready"
+       and the feed). ⛔ Targets are PRIVATE to their owner: the browser sends its own, and they are
+       used only when the person is looking at their own numbers — never read here for anyone else. */
+    const idSet = new Set(ids);
+    const auditFloor = new Date(Date.now() - Math.max(FEED_DAYS, AUDIT_READY_DAYS) * 86_400_000).toISOString();
+    const recentAudits = await allRows<{ id: string; lead_id: string | null; audit_purpose: string | null; is_measurement: boolean | null }>((a, b, c) =>
+      service.from("ai_audits").select("id, lead_id, audit_purpose, is_measurement", (c ? { count: "exact" } : undefined))
+        .gte("created_at", auditFloor).not("lead_id", "is", null).order("id").range(a, b));
+    const hookAudits = recentAudits.filter((a) => a.lead_id && idSet.has(a.lead_id) && (a.audit_purpose ?? "audit") === "audit" && a.is_measurement !== true);
+    const auditLead = new Map(hookAudits.map((a) => [a.id, a.lead_id as string]));
+    const runs: { id: string; audit_id: string; status: string; created_at: string }[] = [];
+    const auditIds = [...auditLead.keys()];
+    for (let i = 0; i < auditIds.length; i += CHUNK) {
+      runs.push(...await allRows<{ id: string; audit_id: string; status: string; created_at: string }>((a, b, c) =>
+        service.from("ai_audit_runs").select("id, audit_id, status, created_at", (c ? { count: "exact" } : undefined))
+          .in("audit_id", auditIds.slice(i, i + CHUNK)).eq("status", "complete").order("id").range(a, b)));
+    }
+
+    const { result, facts } = foldSalesPerformanceWithFacts({
       personId, sinceMs,
       leads: leads.map((l) => ({ ...l, amount_paid: l.amount_paid == null ? null : Number(l.amount_paid) })),
       messages, activity, linkEvents, hits,
       campaignNames: new Map(campaigns.map((c) => [c.id, c.name])),
     });
+    const workspace = foldSalesWorkspace({
+      personId, facts, activity, nowMs: Date.now(),
+      leads: new Map((leads as unknown as WorkspaceLead[]).map((l) => [l.id, l])),
+      audits: runs.map((r) => ({ lead_id: auditLead.get(r.audit_id)!, completed_at: r.created_at })),
+      targets: personId === actor.id ? parseTargets(body.targets) : null,
+      earnedGbp: null, earnedInPeriodGbp: null,
+    });
 
     // A salesperson learns only that a lead of theirs was won — never a figure. The fold already
     // returns no amount; this is the belt to that brace.
-    return json({ ok: true, scope: { person: personId, self: personId === actor.id, role: actor.role }, ...result, ms: Date.now() - started });
+    return json({ ok: true, scope: { person: personId, self: personId === actor.id, role: actor.role }, ...result, workspace, ms: Date.now() - started });
   } catch (e) {
     console.error("[sales-performance]", e instanceof Error ? e.message : e);
     return json({ ok: false, error: "server_error", detail: "Could not load the numbers. Try again in a moment." }, 500);

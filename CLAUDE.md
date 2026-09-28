@@ -540,6 +540,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   removes a lead from revenue and keeps the amount. The dashboard's paying-customer count adds a
   floor (`PAYING_FLOOR_GBP`, derived) and churn (positive match on `canceled`/`incomplete_expired`).
   A cleared amount writes `null`, never `0`.
+- **A WhatsApp conversation's state has ONE rule** (`src/lib/conversationState.ts`: unread per person
+  from `UNREAD_TRACKING_START`, waiting-on-us, failed, queued, follow-up due, template required); the ONE
+  deep link is `whatsAppLinkForLead` (`/inbox?lead=`). Sales' nav item says **WhatsApp** — same `/inbox`.
 - **Counts and rates come from `whatsapp_messages`, never `outreach_leads.status`**; a send is
   `isRealSend` (`sent`/`delivered`/`read`, positive). `onboarding_responses` is read only through the
   `submissions` endpoint.
@@ -881,6 +884,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule, the BUILD standard (image roles, Areas → map, mobile hero, reviews, forms) | `docs/website-build-quality-standard.md` |
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
+| Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
