@@ -149,7 +149,7 @@ console.log('── 4. NO STRONG WEBSITE EVIDENCE ──');
 }
 {
   const p = buildColdCallPlaybook(base({ leadCrawl: null }));
-  ok(p.findings.length === 0 && /not been crawled/.test(p.findingsNote ?? ''), 'no crawl → says so, and that opening never runs one');
+  ok(p.findings.length === 0 && /Nobody has checked this website yet/.test(p.findingsNote ?? '') && !/Crawl site/.test(p.findingsNote ?? ''), 'no crawl → says so plainly, with no pointer at an admin-only button');
 }
 {
   const p = buildColdCallPlaybook(base({ lead: { ...base().lead, website: null } }));

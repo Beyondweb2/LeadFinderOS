@@ -26,6 +26,9 @@ export interface LeadChangedDetail {
   origin?: string;
   /** True when relayed from another tab. */
   remote?: boolean;
+  /** Column values the SERVER has just accepted (sent only after a yes). A reader may show them at
+   *  once and then re-reads the row as usual, so the screen is instant and the database still wins. */
+  patch?: Record<string, unknown>;
 }
 
 let channel: BroadcastChannel | null = null;
@@ -36,10 +39,10 @@ function bc(): BroadcastChannel | null {
 }
 
 /** A lead row, its CRM fields or its activity changed. Call after the server said yes. */
-export function notifyLeadChanged(leadId: string, origin?: string): void {
+export function notifyLeadChanged(leadId: string, origin?: string, patch?: Record<string, unknown>): void {
   if (!leadId || typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId, origin } }));
-  try { bc()?.postMessage({ leadId }); } catch { /* another tab is a bonus, never a requirement */ }
+  window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId, origin, patch } }));
+  try { bc()?.postMessage({ leadId, patch }); } catch { /* another tab is a bonus, never a requirement */ }
 }
 
 /** Subscribe; returns the unsubscribe. */
@@ -72,8 +75,8 @@ export function installLeadSync(qc: QueryClient): () => void {
   });
   const ch = bc();
   const onMsg = (m: MessageEvent) => {
-    const leadId = (m.data as { leadId?: string } | null)?.leadId;
-    if (leadId) window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId, remote: true } }));
+    const d = m.data as { leadId?: string; patch?: Record<string, unknown> } | null;
+    if (d?.leadId) window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId: d.leadId, patch: d.patch, remote: true } }));
   };
   ch?.addEventListener('message', onMsg);
   return () => { off(); ch?.removeEventListener('message', onMsg); installed = false; };

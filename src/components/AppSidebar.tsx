@@ -32,7 +32,7 @@ export function AppSidebar() {
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
-    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'What is working: campaigns, templates, calls, sign-ups' },
+    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'Results by campaign and template' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },

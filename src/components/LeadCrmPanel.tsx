@@ -98,14 +98,25 @@ export function useLeadCrmRow(leadId: string) {
   });
 }
 
-type SaveFn = (name: string, args: Record<string, unknown>, okText: string) => Promise<RpcResult>;
+type SaveFn = (name: string, args: Record<string, unknown>, okText: string, patch?: Record<string, unknown>) => Promise<RpcResult>;
 
+/* ⛔ INSTANT, AND THE DATABASE STILL WINS (2026-09-28). With a `patch` (the columns this save sets),
+   the open panel shows the new values the moment Save is pressed; a refusal puts the old values back
+   and says why. After the server's yes, the same values ride on the notice so Outreach, the Inbox and
+   other tabs show them at once too, and every reader then re-reads the row as before. */
 function useSave(leadId: string): SaveFn {
   const { toast } = useToast();
-  return async (name, args, okText) => {
+  const qc = useQueryClient();
+  return async (name, args, okText, patch) => {
+    const key = leadCrmKey(leadId);
+    const before = patch ? qc.getQueryData<CrmRow | null>(key) : undefined;
+    if (patch) qc.setQueryData<CrmRow | null>(key, (row) => (row ? { ...row, ...patch } as CrmRow : row));
     const r = await leadRpc(name, { _lead_id: leadId, ...args });
-    if (r.ok) { toast({ title: okText }); notifyLeadChanged(leadId); }
-    else toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
+    if (r.ok) { toast({ title: okText }); notifyLeadChanged(leadId, undefined, patch); }
+    else {
+      if (patch) qc.setQueryData(key, before ?? null);
+      toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
+    }
     return r;
   };
 }
@@ -129,7 +140,8 @@ export function LeadWorkPanel({ leadId }: { leadId: string }) {
           <LeadOwnerControl leadId={lead.id} />
         </div>
         <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}`} lead={lead}
-          onSave={(a) => save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved')} />
+          onSave={(a) => save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
+            { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note })} />
       </section>
 
       <InternalNote save={save} />

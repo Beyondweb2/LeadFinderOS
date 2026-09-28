@@ -159,12 +159,17 @@ console.log("── one CRM truth: every writer notifies, every reader re-reads 
   ok(/installLeadSync\(queryClient\)/.test(app), "one app-level listener invalidates the per-lead queries");
   ok(/\['lead-crm', leadId\]/.test(sync) && /\['sales', 'activity', leadId\]/.test(sync) && /\['onboarding-link', leadId\]/.test(sync), "…the CRM panel, the activity and the sign-up link status");
   ok(/BroadcastChannel/.test(sync), "…and other tabs hear it");
-  ok(/onLeadChanged\(\(\{ leadId \}\) => \{ void patchOneLead\(leadId\); \}\)/.test(useInbox), "the Inbox re-reads the ONE changed lead from its own source");
+  ok(/onLeadChanged\(\(\{ leadId, patch \}\) => \{/.test(useInbox) && /void patchOneLead\(leadId\);\n  \}\), \[patchOneLead/.test(useInbox), "the Inbox shows the accepted values at once, then re-reads the ONE changed lead from its own source");
   ok(/next_action, next_action_date'/.test(useInbox), "the Inbox reads the next action, so the thread header shows it");
   ok((useOut.match(/notifyLeadChanged\(leadId, syncOriginRef\.current\)/g) ?? []).length === 2, "Outreach announces both write paths (admin table, sales functions)");
   ok(/detail\?\.origin === syncOriginRef\.current\) return/.test(useOut), "…and skips only its OWN notice");
   ok((inbox.match(/notifyLeadChanged\(c\.leadId\)/g) ?? []).length === 2, "the Inbox status pill and star announce too");
-  ok(/notifyLeadChanged\(leadId\)/.test(crm) && !/setQueryData/.test(crm), "the CRM panel announces and never patches a local copy");
+  const saveFn = crm.slice(crm.indexOf("function useSave("), crm.indexOf("/* ── WORK"));
+  ok(/if \(r\.ok\) \{ toast\(\{ title: okText \}\); notifyLeadChanged\(leadId, undefined, patch\); \}/.test(saveFn), "the CRM panel announces only after the server's yes, carrying the accepted values");
+  ok(/if \(patch\) qc\.setQueryData\(key, before \?\? null\);/.test(saveFn) && /variant: 'destructive'/.test(saveFn), "a refused save puts the old values back and says why");
+  ok(/next_action: a\.nextAction, next_action_date:/.test(crm), "the next action shows in the open panel the moment Save is pressed");
+  ok(/postMessage\(\{ leadId, patch \}\)/.test(sync), "other tabs get the accepted values too");
+  ok(/if \(detail\?\.patch\)/.test(useOut), "Outreach shows the accepted values at once, then re-reads");
 }
 
 console.log("── security ──");
@@ -252,6 +257,7 @@ console.log("── Google review replies are not a Findable deliverable ──"
 {
   const promise = /reply to your (google )?reviews|reviews replied|your review replies|we(’|')?ll reply to your|replies to your reviews/i;
   ok(!promise.test(read("src/lib/welcomePackHtml.ts")), "the welcome pack promises no review replies");
+  ok(!/strongest signal|signals? AI|AI (even )?reads (the )?(owner )?replies|one thing that helps most/i.test(read("src/lib/welcomePackHtml.ts")), "reviews are credibility, never claimed as a proven AI signal (Paul, 2026-09-28)");
   const flow = siteRead("src/components/OnboardingFlow.tsx");
   if (flow) {
     const items = flow.slice(flow.indexOf("const MONTHLY_WORK_ITEMS"), flow.indexOf("];", flow.indexOf("const MONTHLY_WORK_ITEMS")));

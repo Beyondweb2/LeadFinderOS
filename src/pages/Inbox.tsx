@@ -1904,7 +1904,8 @@ const Inbox = () => {
                   {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME
                       panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
                   {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
-                  {active.leadId && <LeadOwnerControl leadId={active.leadId} onOpenDetail={() => setDetailLeadId(active.leadId)} />}
+                  {/* No "CRM" link here: the Prospect button opens the same workspace (2026-09-28 polish). */}
+                  {active.leadId && <LeadOwnerControl leadId={active.leadId} />}
                   {/* Sign-up link. Hidden entirely for a lead who has actually paid - same rule as the
                       card: sending an existing client back to checkout wastes their time, and
                       findable-checkout refuses it as already_client anyway.

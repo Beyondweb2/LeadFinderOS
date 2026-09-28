@@ -437,7 +437,7 @@ export function selectFindings(input: Pick<PlaybookInput, 'lead' | 'runCrawls' |
     return { status: 'findings', findings, note: null, crawlAtMs: found.source.createdAtMs, crawlStale: false };
   }
   if (newestMs === null) {
-    return { status: 'not_crawled', findings: [], crawlAtMs: null, crawlStale: false, note: 'This site has not been crawled yet, so there are no website findings. (Opening the playbook never runs a crawl — use Crawl site if you want one.)' };
+    return { status: 'not_crawled', findings: [], crawlAtMs: null, crawlStale: false, note: 'Nobody has checked this website yet, so there are no website points to mention. Keep the call to the AI result.' };
   }
   if (crawlStale) {
     return { status: 'crawl_stale', findings: [], crawlAtMs: newestMs, crawlStale, note: 'The newest crawl is more than 30 days old, so its findings are not used — the site may have changed.' };
