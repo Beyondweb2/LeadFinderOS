@@ -19,26 +19,12 @@ const sb = supabase as any;
 
 export interface TeamMember { user_id: string; display_name: string; role: 'admin' | 'sales' | null; status: string; avatar_url: string | null }
 export interface LeadActivity { id: string; lead_id: string; actor_user_id: string | null; kind: string; body: string | null; data: Record<string, unknown>; created_at: string }
-export interface PoolLead { id: string; business_name: string; trade: string | null; town: string | null; website: string | null; rating: number | null; review_count: number | null; has_phone: boolean; created_at: string }
 export interface IdentityHit { k: string; lead_id: string | null; state: IdentityState; owner_id: string | null; owner_name: string | null; added_at: string | null }
 
 export const salesKeys = {
-  pool: (q: string, page: number) => ['sales', 'pool', q, page] as const,
   team: ['sales', 'team'] as const,
   activity: (leadId: string | undefined) => ['sales', 'activity', leadId] as const,
 };
-
-export function useSalesPool(q: string, page: number, pageSize = 50) {
-  return useQuery({
-    queryKey: salesKeys.pool(q, page),
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await sb.rpc('sales_pool', { _q: q, _limit: pageSize, _offset: page * pageSize });
-      if (error) throw error;
-      return (data ?? []) as PoolLead[];
-    },
-  });
-}
 
 /** Team names + avatars for owner markers. Any role may read it (names only). */
 export function useTeamDirectory() {

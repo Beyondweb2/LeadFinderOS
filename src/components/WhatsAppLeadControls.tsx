@@ -12,6 +12,8 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
 import { useToast } from '@/hooks/use-toast';
+import { useQueueState } from '@/hooks/useQueueState';
+import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -38,6 +40,9 @@ export function WhatsAppLeadControls({
   const template = salesPath ? salesTemplate : (lead.whatsapp_template ?? '');
   const hover = useTemplateHover();
   const queued = lead.status === 'queued';
+  /* ⛔ THE QUEUED LINE SAYS WHETHER THE QUEUE IS ACTUALLY SENDING (2026-09-28): paused by the admin
+     outranks the sending window, and an unreadable state never claims it will send. */
+  const queueLine = queuedLeadLine(useQueueState(queued));
   /* A salesperson's single-lead queue is the bulk opener path, so it offers the approved openers. */
   const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value)) : WHATSAPP_TEMPLATES;
   /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
@@ -59,7 +64,8 @@ export function WhatsAppLeadControls({
         toast({ title: 'Not queued', description: skipped.map((k) => QUEUE_SKIP_LABEL[k] ?? k).join(', ') || 'Refused', variant: 'destructive' });
         return;
       }
-      toast({ title: 'Queued for WhatsApp', description: `${template} — sends in the daily 7am–9:30pm UK window. The queue re-checks it before it sends.` });
+      const st = await fetchQueueState().catch(() => null);
+      toast({ title: 'Queued for WhatsApp', description: `${template} — ${queuedLeadLine(st).text} The queue re-checks it before it sends.` });
       window.dispatchEvent(new CustomEvent('lead-row-changed', { detail: { leadId: lead.id } }));
     } finally { setBusy(false); }
   };
@@ -181,7 +187,9 @@ export function WhatsAppLeadControls({
             </p>
           )}
           {queued && (
-            <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue{lead.whatsapp_template ? ` (${lead.whatsapp_template})` : ''} — sends within the daily 7am–9:30pm UK window (max 40/day).{salesPath ? ' Ask the admin to take it out of the queue.' : ''}</p>
+            <p className={`mt-1.5 text-center text-[10px] ${queueLine.tone === 'paused' ? 'font-medium text-amber-500' : 'text-sky-400'}`} data-testid="queued-line">
+              {lead.whatsapp_template ? `${lead.whatsapp_template} · ` : ''}{queueLine.text}{salesPath ? ' Ask the admin to take it out of the queue.' : ''}
+            </p>
           )}
         </>
       )}

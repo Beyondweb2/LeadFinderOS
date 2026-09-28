@@ -18,9 +18,13 @@ import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
    could also fire it twice; a query key cannot.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export type LeadAuditState = { auditId: string; runId: string; status: string };
+export type { LeadAuditState } from './auditRowState.ts';
+import type { LeadAuditState } from './auditRowState.ts';
 export const OUTREACH_AUDIT_MAP_STALE_MS = 30_000;
-export const outreachAuditMapKey = (userId: string | null | undefined) => ['outreach-audit-map', userId ?? null] as const;
+export const OUTREACH_AUDIT_MAP_ROOT = ['outreach-audit-map'] as const;
+export const outreachAuditMapKey = (userId: string | null | undefined) => [...OUTREACH_AUDIT_MAP_ROOT, userId ?? null] as const;
+
+export { auditRowState, auditMapHasRunning, OUTREACH_AUDIT_MAP_POLL_MS, type AuditRowState } from './auditRowState.ts';
 
 /** Map lead_id → its LATEST audit's latest run + status. RLS-scoped (no explicit user filter),
  *  newest audit first, keep the FIRST audit seen per lead_id; for that audit, its latest run (max

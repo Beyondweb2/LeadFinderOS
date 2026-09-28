@@ -29,6 +29,7 @@ export {
   type FirstReplyMode,
 } from "../../../src/lib/firstReplyMode.ts";
 import { parseFirstReplyMode, type FirstReplyMode } from "../../../src/lib/firstReplyMode.ts";
+import { effectiveFirstReplyMode } from "../../../src/lib/firstReplyAutomation.ts";
 
 /** A real, human-typed text worth reacting to: non-empty, not a media/reaction placeholder
  *  ("[image]", "[reaction]", …) and at least a couple of characters. */
@@ -113,6 +114,20 @@ export async function firstReplyMode(service: any): Promise<FirstReplyMode> {
     return parseFirstReplyMode(data?.first_reply_mode);
   } catch {
     return parseFirstReplyMode(null);
+  }
+}
+
+/** The mode the Inbox control SHOWS, and so the one arming obeys (2026-09-28): "Do nothing" is the
+ *  boolean off, whatever working mode is remembered. A failed read is 'off' — arm nothing. */
+// deno-lint-ignore no-explicit-any
+export async function effectiveReplyMode(service: any): Promise<FirstReplyMode> {
+  try {
+    const { data, error } = await service
+      .from("whatsapp_outreach_state").select("auto_reply_enabled, first_reply_mode").eq("id", 1).maybeSingle();
+    if (error) return "off";
+    return effectiveFirstReplyMode(data?.auto_reply_enabled, data?.first_reply_mode);
+  } catch {
+    return "off";
   }
 }
 

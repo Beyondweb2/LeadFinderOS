@@ -1087,7 +1087,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
   }, []);
 
   /* "REMOVE FROM MY LEADS" — a salesperson only (2026-09-28). The server decides per lead
-     (sales_remove_leads): never contacted → released to Available to claim; contacted → archived and
+     (sales_remove_leads): never contacted → released (unassigned); contacted → archived and
      still theirs; clients, won/onboarding and queued leads refused. Nothing is deleted. Released rows
      leave both lists; archived ones are re-read and move to the archive. */
   const removeFromMyLeads = useCallback(async (leadIds: string[]): Promise<boolean> => {

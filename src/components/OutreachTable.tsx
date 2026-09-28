@@ -110,6 +110,7 @@ import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
 import { townGated } from '@/lib/townVerdict';
 import { Badge } from '@/components/ui/badge';
+import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { CrawlCheckButton } from './CrawlCheckButton';
@@ -119,7 +120,8 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
 import { datasetComplete, leadCountLabel, partialResultsSuffix, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
-import { fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
+import { auditMapHasRunning, auditRowState, fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_POLL_MS, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
+import { HookAuditDialog } from './HookAuditDialog';
 /** Module-level so an empty map keeps one identity across renders. */
 const EMPTY_AUDIT_MAP: Record<string, LeadAuditState> = {};
 import { cn } from '@/lib/utils';
@@ -360,7 +362,11 @@ export function OutreachTable({
     queryFn: fetchOutreachAuditMap,
     staleTime: OUTREACH_AUDIT_MAP_STALE_MS,
     enabled: !!user?.id,
+    // Only while a row is mid-audit: "Audit running" becomes "Audit complete" without a reload.
+    refetchInterval: (q) => (auditMapHasRunning(q.state.data) ? OUTREACH_AUDIT_MAP_POLL_MS : false),
   });
+  /* The row's audit popup (HookAuditDialog) — the same Hook Audit panel as the workspace, both roles. */
+  const [auditLead, setAuditLead] = useState<OutreachLead | null>(null);
   const navigate = useNavigate();
 
 
@@ -1263,7 +1269,7 @@ export function OutreachTable({
     const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     toast({
       title: `Queued ${r.queued ?? 0} for WhatsApp`,
-      description: `${tmplLabel}. ${skipped ? `Skipped: ${skipped}. ` : ''}Sends within the daily 7am–9:30pm UK window; the queue re-checks each one before it sends.`,
+      description: `${tmplLabel}. ${skipped ? `Skipped: ${skipped}. ` : ''}${queuedLeadLine(await fetchQueueState().catch(() => null)).text} The queue re-checks each one before it sends.`,
       variant: r.queued ? undefined : 'destructive',
     });
     setSelectedIds(new Set());
@@ -2013,7 +2019,7 @@ export function OutreachTable({
                       )}
 
                       {/* "Remove from my leads" — a salesperson only. Never a delete: the server
-                          releases a never-contacted lead to Available to claim and archives a
+                          releases (unassigns) a never-contacted lead and archives a
                           contacted one (still theirs). The dialog says exactly that first. */}
                       {onRemoveFromMyLeads && perms.removeFromMyLeads && (
                         <AlertDialog open={removeMineOpen} onOpenChange={(o) => { if (!removeMineBusy) setRemoveMineOpen(o); }}>
@@ -2547,10 +2553,9 @@ export function OutreachTable({
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
-                  onManageAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped') ? () => (perms.auditAdmin ? navigate(`/ai-audit?runId=${a.runId}`) : setDetailLead(lead)) : undefined; })()}
-                  auditRunning={(() => { const a = auditsByLead[lead.id]; return !!a && (a.status === 'pending' || a.status === 'running'); })()}
-                  onRunAudit={(() => { const a = auditsByLead[lead.id]; return a && (a.status === 'complete' || a.status === 'capped' || a.status === 'pending' || a.status === 'running') ? undefined : () => (perms.auditAdmin ? navigate(`/ai-audit?leadId=${lead.id}`) : setDetailLead(lead)); })()}
-                  
+                  auditState={auditRowState(auditsByLead[lead.id])}
+                  onOpenAudit={isDemoLead(lead.id) ? undefined : () => setAuditLead(lead)}
+
                 />
               ))
             )}
@@ -2862,40 +2867,31 @@ export function OutreachTable({
                               Retry
                             </Button>
                           ) : null}
-                          {/* AI audit control — mirrors the site button. Reads auditsByLead[lead.id]:
-                              complete/capped → Manage audit; pending/running → Running…; else (incl.
-                              failed → re-runnable) → Run audit. Deep-links to the audit page. */}
+                          {/* AI audit control — both roles open the SAME popup (HookAuditDialog): no audit →
+                              propose 3 editable questions and run; running → its progress; done → the result.
+                              State from auditRowState (one reading, incl. `processing`). */}
                           {(() => {
-                            const a = auditsByLead[lead.id];
-                            if (a && (a.status === 'complete' || a.status === 'capped')) {
+                            const st = auditRowState(auditsByLead[lead.id]);
+                            const open = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (!isDemoLead(lead.id)) setAuditLead(lead); };
+                            if (st === 'done') {
                               return (
-                                <button
-                                  className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
-                                  title={perms.auditAdmin ? 'Manage audit' : 'AI visibility check — open the result'}
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (perms.auditAdmin) navigate(`/ai-audit?runId=${a.runId}`); else setDetailLead(lead); }}
-                                >
+                                <button className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
+                                  title="Audit complete — open the result" aria-label="Audit complete" onClick={open}>
                                   <ClipboardCheck className="h-4 w-4" />
                                 </button>
                               );
                             }
-                            if (a && (a.status === 'pending' || a.status === 'running')) {
+                            if (st === 'running') {
                               return (
-                                <button
-                                  className="p-1.5 rounded-md text-muted-foreground/70 cursor-default disabled:opacity-100"
-                                  title="Audit running"
-                                  disabled
-                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                >
+                                <button className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 transition-colors"
+                                  title="Audit running — open to see progress" aria-label="Audit running" onClick={open}>
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 </button>
                               );
                             }
                             return (
-                              <button
-                                className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 transition-colors"
-                                title={perms.auditAdmin ? 'Run AI audit' : 'Run the AI visibility check (in the lead detail)'}
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (perms.auditAdmin) navigate(`/ai-audit?leadId=${lead.id}`); else setDetailLead(lead); }}
-                              >
+                              <button className="p-1.5 rounded-md text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 transition-colors"
+                                title="Run the AI visibility check (3 questions, ChatGPT + Google AI)" aria-label="Run audit" onClick={open}>
                                 <ClipboardList className="h-4 w-4" />
                               </button>
                             );
@@ -3267,6 +3263,8 @@ export function OutreachTable({
           setAiOpenerLead(whatsappDialogLead);
         } : undefined}
       />
+
+      <HookAuditDialog lead={auditLead} onOpenChange={(open) => { if (!open) setAuditLead(null); }} />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog

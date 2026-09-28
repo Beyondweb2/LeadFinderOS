@@ -20,14 +20,13 @@ import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { datasetComplete, leadLoadNotice, leadCountLabel } from '@/lib/outreachLoad';
+import { datasetComplete, leadLoadNotice } from '@/lib/outreachLoad';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
-import { getQueueStatus } from '@/lib/queueStatus';
+import { getQueueStatus, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
+import { useQueueState } from '@/hooks/useQueueState';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
-import { AvailableToClaim, CLAIM_POOL_HELP } from '@/components/AvailableToClaim';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
-import { UserPlus } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PauseCircle, UserPlus } from 'lucide-react';
 
 const Outreach = () => {
   const {
@@ -64,10 +63,12 @@ const Outreach = () => {
 
   const { user } = useAuth();
   /* ⛔ ONE OUTREACH, BOTH ROLES (2026-09-27). A salesperson opens this same page with the same table;
-     `perms` (src/lib/access.ts) withholds only admin/system/enrichment/delivery controls, and adds
-     "Available to claim". Their rows are their own assigned prospects, read from the safe view. */
+     `perms` (src/lib/access.ts) withholds only admin/system/enrichment/delivery controls. Their rows
+     are their own assigned prospects, read from the safe view.
+     ⛔ NO "AVAILABLE TO CLAIM" TAB (Paul, 2026-09-28): the claim-from-the-pool workflow is gone from
+     Sales. The database pieces stay (claim_lead serves Find Leads' "Claim lead"; the contact rule
+     serves Remove from my leads); sales_pool is kept, unused. */
   const perms = useLeadPermissions();
-  const [salesTab, setSalesTab] = useState<'mine' | 'claim'>('mine');
   const [addLeadOpen, setAddLeadOpen] = useState(false);
   /* ⚡ START THE TABLE'S OWN READS NOW (2026-09-27, site-wide speed pass). The table and the queue
      panel mount only after every lead has arrived, so the audit map and the queue status used to
@@ -122,12 +123,16 @@ const Outreach = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Combine active and archived leads into one unified list, filtered by campaign
+  // Combine active and archived leads into one unified list, filtered by campaign. Which of them the
+  // table SHOWS (active by default, Filters → Archived) is OutreachTable's rowsForArchiveView.
   const allLeads = useMemo(() => {
     const combined = [...leads, ...archivedLeads];
     if (!campaignFilter) return combined;
     return combined.filter((l) => l.campaign_id === campaignFilter);
   }, [leads, archivedLeads, campaignFilter]);
+  /* Sales cannot see the queue panel; when the admin has paused the queue, their queued leads say so. */
+  const queuedMine = !perms.queueControls ? leads.filter((l) => l.status === 'queued').length : 0;
+  const queueState = useQueueState(queuedMine > 0);
 
   const isReadOnly = false;
 
@@ -229,12 +234,12 @@ const Outreach = () => {
         <div className="text-center sm:text-left">
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            {perms.claimPool
-              ? 'Your leads. Contact them via WhatsApp or call, update their status, star the promising ones, and open any row for the full detail — or claim more under Available to claim.'
-              : 'Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.'}
+            {perms.queueControls
+              ? 'Contact businesses via WhatsApp or call. Update their status, star the promising ones to track them, and open any row for the full detail.'
+              : 'Your leads. Contact them via WhatsApp or call, update their status, star the promising ones, and open any row for the full detail.'}
           </p>
         </div>
-        <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:shrink-0">
           {/* A lead found outside the app (LinkedIn, referral…) — both roles, server-deduped. */}
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setAddLeadOpen(true)}><UserPlus className="h-3.5 w-3.5" />Add a lead</Button>
           {/* Added → its workspace opens at once (the launch waits until the new row is in the list),
@@ -243,30 +248,22 @@ const Outreach = () => {
           {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). Admin:
               crawl-check refuses anyone else. */}
           {perms.crawlSite && <CrawlCheckUrlButton />}
-          {perms.campaigns && (
-            <>
-              <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
-              <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
-            </>
-          )}
+          {/* ⛔ THE PAGE-LEVEL CAMPAIGN FILTER, BOTH ROLES (2026-09-28). A VIEW control only — it never
+              moves a lead (that is "Move to campaign" on a selection). Sales picks from the existing
+              campaigns (hideCreate); their rows are still only their own. */}
+          <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
+          <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} hideCreate={!perms.campaigns} />
         </div>
       </div>
 
-      {/* A salesperson's two views of the same workflow: their own leads, and the pool to claim from. */}
-      {perms.claimPool && (
-        <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'mine' | 'claim')}>
-          <TabsList>
-            <TabsTrigger value="mine">My leads ({leadCountLabel(leadLoad, leads.length)})</TabsTrigger>
-            <TabsTrigger value="claim" title={CLAIM_POOL_HELP}>Available to claim</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      )}
-      {perms.claimPool && salesTab === 'claim' && (
-        <AvailableToClaim onClaimed={() => { fetchLeads(); }} />
-      )}
-
       {/* WhatsApp outreach queue (admin-only). */}
       {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} listComplete={listComplete} />}
+      {!perms.queueControls && queuedMine > 0 && queueState?.paused && (
+        <div role="status" data-testid="queue-paused-banner" className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+          <PauseCircle className="h-4 w-4 shrink-0" />
+          <span><span className="font-medium">{QUEUE_PAUSED_LINE}</span> {queuedMine === 1 ? '1 of your leads is' : `${queuedMine} of your leads are`} waiting in the queue.</span>
+        </div>
+      )}
 
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
@@ -318,7 +315,7 @@ const Outreach = () => {
       )}
 
       {/* ⛔ NEVER A SILENT PARTIAL LIST: while the rest load (or after they failed) the page says so. */}
-      {!(perms.claimPool && salesTab === 'claim') && loadNotice && (
+      {loadNotice && (
         <div role="status" aria-live="polite" data-testid="lead-load-notice"
           className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${loadNotice.tone === 'error' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-primary/30 bg-primary/5 text-muted-foreground'}`}>
           {loadNotice.tone === 'info' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
@@ -329,7 +326,7 @@ const Outreach = () => {
         </div>
       )}
 
-      {!(perms.claimPool && salesTab === 'claim') && <OutreachTable
+      {<OutreachTable
         leadLoad={leadLoad}
         leads={allLeads}
         onLeadClick={() => {}}

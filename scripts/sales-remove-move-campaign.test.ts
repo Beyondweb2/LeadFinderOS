@@ -81,10 +81,10 @@ console.log("── the words ──");
 {
   ok(REMOVE_FROM_MY_LEADS_LABEL === "Remove from my leads", "the label is Paul's wording");
   const all = REMOVE_FROM_MY_LEADS_EXPLAINER.join(" ");
-  ok(/Available to claim/.test(all) && /archived/.test(all) && /Nothing is deleted/.test(all), "the confirmation says released, archived and nothing deleted");
-  ok(/never goes back to Available to claim/.test(all), "…and that a contacted lead is never claimable again");
+  ok(/unassigned/.test(all) && /archived/.test(all) && /Nothing is deleted/.test(all), "the confirmation says released, archived and nothing deleted");
+  ok(/never be picked up as untouched/.test(all) && !/Available to claim/.test(all), "…that a contacted lead is never claimable again, and no claim tab is named");
   ok(removeOutcomeText({ released: 1, archived: 2, skipped: { queued: 1 } }) ===
-    "1 lead back in Available to claim · 2 contacted leads archived (still yours) · 1 not removed — " + refusalText("queued"), "the outcome sentence");
+    "1 lead unassigned (back to the unowned book) · 2 contacted leads archived (still yours) · 1 not removed — " + refusalText("queued"), "the outcome sentence");
   ok(removeOutcomeText({}) === "Nothing changed", "…nothing done says so");
   ok(campaignMoveText({ moved: 3, skipped: { not_yours: 1 } }, "Spring roofers") === "3 moved to Spring roofers · 1 not moved — " + refusalText("not_yours"), "the move sentence");
   ok(campaignMoveText({ moved: 1 }, null) === "1 moved out of their campaign", "…and for No campaign");

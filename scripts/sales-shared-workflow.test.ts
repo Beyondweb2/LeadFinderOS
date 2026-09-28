@@ -28,8 +28,9 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\
 console.log("── the safe view is the salesperson's only lead source ──");
 {
   /* The NEWEST definition of the view (20260928120000 appended lead_source after amount_paid;
-     20260928160000 appended services_included + service_areas; 20260928180000 domain_control). */
-  const mig = read("supabase/migrations/20260928180000_domain_authority.sql");
+     20260928160000 appended services_included + service_areas; 20260928180000 domain_control;
+     20260929000000 town_fetch_note). */
+  const mig = read("supabase/migrations/20260929000000_sales_view_town_note.sql");
   const view = mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("from public.outreach_leads l", mig.indexOf("create or replace view public.sales_leads")));
   const cols = [...view.matchAll(/(null::numeric as amount_paid)|l\.([a-z_]+)/g)].map((m) => (m[1] ? "amount_paid" : m[2]));
   ok(cols.length === SALES_VIEW_COLUMNS.length && cols.every((c, i) => c === SALES_VIEW_COLUMNS[i]), `SALES_VIEW_COLUMNS equals the view's ${cols.length} columns, in order`);
@@ -116,14 +117,12 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(!pages.some((p) => /^(Sales|Admin)(Outreach|Inbox)/.test(p)), "no SalesOutreach / AdminOutreach / SalesInbox fork");
   const out = read("src/pages/Outreach.tsx");
   ok(/<OutreachTable/.test(out) && /useLeadPermissions\(\)/.test(out), "Outreach renders the one OutreachTable with role-aware permissions");
-  ok(/<AvailableToClaim onClaimed=/.test(out) && /perms\.claimPool && salesTab === 'claim'/.test(out), "Available to claim lives inside Outreach");
-  const claim = read("src/components/AvailableToClaim.tsx");
-  ok(/useSalesPool\(/.test(claim) && /actions\.claim\.mutateAsync/.test(claim), "…listing sales_pool and claiming through claim_lead");
+  ok(!/AvailableToClaim|claimPool/.test(out), "no Available to claim inside Outreach (removed 2026-09-28)");
   const table = strip(read("src/components/OutreachTable.tsx"));
   for (const [gate, what] of [["perms.removeLeads", "remove/reset"], ["perms.importLeads", "import"], ["perms.enrichLeads", "enrichment"], ["perms.bulkAudits", "bulk audits"], ["perms.campaigns", "campaigns"], ["perms.product", "product"], ["perms.crawlSite", "crawl"]]) {
     ok(table.includes(gate), `the table withholds ${what} by permission (${gate})`);
   }
-  ok(/perms\.auditAdmin \? 'Manage audit'/.test(table) && /else setDetailLead\(lead\)/.test(table), "a salesperson's audit button opens the Hook Audit in the lead detail (the AI Audit page is admin)");
+  ok(/<HookAuditDialog lead=\{auditLead\}/.test(table) && /setAuditLead\(lead\)/.test(table), "every role's audit button opens the Hook Audit popup (2026-09-28; the AI Audit page is the admin's advanced link inside it)");
   ok(/lead\.assigned_to_user_id && lead\.assigned_to_user_id !== user\?\.id/.test(table), "the row shows who owns a lead that is not yours");
   const dialog = read("src/components/LeadDetailDialog.tsx");
   ok(/<LeadWorkPanel leadId=\{lead\.id\}( onRemoved=\{onClose\})? \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");

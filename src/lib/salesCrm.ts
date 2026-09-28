@@ -186,8 +186,8 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
    What happens is decided by sales_remove_leads, per lead; this only says it. ⛔ Never "delete". */
 export const REMOVE_FROM_MY_LEADS_LABEL = 'Remove from my leads';
 export const REMOVE_FROM_MY_LEADS_EXPLAINER: readonly string[] = [
-  'Never contacted: it goes back to Available to claim, so someone else can pick it up. Its notes and history stay with it.',
-  'Already contacted (a call, message, email or any logged contact): it is archived and stays yours, with its history. It never goes back to Available to claim.',
+  'Never contacted: it is unassigned and goes back to the unowned book, where the admin can assign it. Its notes and history stay with it.',
+  'Already contacted (a call, message, email or any logged contact): it is archived and stays yours, with its history and status — it leaves your working list (Show archived brings it back) and can never be picked up as untouched.',
   'Nothing is deleted. Clients, won / onboarding leads and leads with an opener waiting to send are left as they are.',
 ];
 
@@ -195,7 +195,7 @@ export const REMOVE_FROM_MY_LEADS_EXPLAINER: readonly string[] = [
 export function removeOutcomeText(r: { released?: number; archived?: number; skipped?: Record<string, number> }): string {
   const parts: string[] = [];
   const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
-  if (r.released) parts.push(`${n(r.released, 'lead', 'leads')} back in Available to claim`);
+  if (r.released) parts.push(`${n(r.released, 'lead', 'leads')} unassigned (back to the unowned book)`);
   if (r.archived) parts.push(`${n(r.archived, 'contacted lead', 'contacted leads')} archived (still yours)`);
   for (const [reason, count] of Object.entries(r.skipped ?? {})) {
     if (count > 0) parts.push(`${count} not removed — ${refusalText(reason)}`);

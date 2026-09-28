@@ -211,13 +211,12 @@ console.log("\n── campaign on a lead ──");
   ok(refusalText("unknown_campaign") === "That campaign no longer exists", "a plain refusal for a deleted campaign");
 }
 
-/* ── 10–11. AVAILABLE TO CLAIM + OWNERSHIP LABELS ──────────────────────────────────────────────── */
-console.log("\n── available to claim, ownership labels ──");
+/* ── 10–11. THE CLAIM WORKFLOW IS GONE FROM OUTREACH (2026-09-28) + OWNERSHIP LABELS ────────────── */
+console.log("\n── no Available to claim tab, ownership labels ──");
 {
-  const claim = read("src/components/AvailableToClaim.tsx");
-  ok(/export const CLAIM_POOL_HELP = 'Leads nobody owns and nobody has contacted yet\. Claim one to add it to your pipeline/.test(claim), "the pool explains itself in one line");
-  ok(/\{CLAIM_POOL_HELP\}/.test(claim) && /title=\{CLAIM_POOL_HELP\}/.test(read("src/pages/Outreach.tsx")), "…in the panel and on the tab's hover");
-  ok(/sales_pool/.test(read("src/hooks/useSalesCrm.ts")) && /rpc\('claim_lead'/.test(read("src/hooks/useSalesCrm.ts")), "the list and the claim are still the server's (sales_pool, claim_lead)");
+  ok(!existsSync(new URL("../src/components/AvailableToClaim.tsx", import.meta.url)), "the Available to claim panel is deleted");
+  ok(!/Available to claim|AvailableToClaim|salesTab/.test(read("src/pages/Outreach.tsx")), "Outreach has no claim tab");
+  ok(!/sales_pool/.test(read("src/hooks/useSalesCrm.ts")) && /rpc\('claim_lead'/.test(read("src/hooks/useSalesCrm.ts")), "the pool read is gone; claim_lead stays (Find Leads' Claim lead)");
   const own = read("src/components/FindLeadsOwnership.tsx");
   ok(/<Check className="h-3\.5 w-3\.5" \/> Yours/.test(own) && /Already in your pipeline/.test(own), "Yours = already in your pipeline");
   ok(/if \(own\.state === 'claimable' && own\.leadId && onClaim\)/.test(own) && /Claim lead/.test(own), "Claim only for an unassigned, never-contacted business");
