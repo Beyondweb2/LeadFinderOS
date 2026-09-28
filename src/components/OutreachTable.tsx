@@ -116,7 +116,7 @@ import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
-import { datasetComplete, leadCountLabel, partialResultsSuffix, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
+import { datasetComplete, leadCountLabel, partialResultsSuffix, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
 import { fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
 /** Module-level so an empty map keeps one identity across renders. */
@@ -1549,7 +1549,10 @@ export function OutreachTable({
   const sharedPhoneIds = useMemo(() => sharedPhoneLeadIds(leadsWithOptimistic), [leadsWithOptimistic]);
 
   const filteredAndSortedLeads = useMemo(() => {
-    let result = [...leadsWithOptimistic];
+    // While the active leads are still loading, archived rows stay out, so every visible count is
+    // active-loaded against active-total (src/lib/outreachLoad.ts). Complete → unchanged.
+    // (loadState only matters through listComplete, which is in the deps; the fallback object is new each render.)
+    let result = visibleWhileLoading(loadState, [...leadsWithOptimistic], isArchiveView);
 
     // Filter by search
     if (searchQuery) {
@@ -1701,7 +1704,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
