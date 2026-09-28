@@ -187,7 +187,7 @@ Deno.serve(async (req) => {
       });
       const leadsP = allInWaves((from, to) => service
         .from("outreach_leads")
-        .select("id, search_keyword, category, search_location, derived_town, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at")
+        .select("id, search_keyword, category, search_location, derived_town, status, whatsapp_sent_at, instantly_pushed_at, last_outreach_attempt_at, assigned_to_user_id")
         .eq("user_id", userId).eq("is_archived", false).order("id", { ascending: true }).range(from, to));
       const historyP = all((from, to) => service
         .from("search_history").select("keyword, location, radius")
@@ -207,6 +207,15 @@ Deno.serve(async (req) => {
          business actually is. */
       const leadPairs: Pair[] = [];
       const workedPairs: Pair[] = [];
+      /* ── WHO WORKED IT (2026-09-28) ─────────────────────────────────────────────────────────────
+         ⛔ THE OWNER OF A CONTACTED LEAD, and nothing weaker. assigned_to_user_id is who works the lead
+         (the Sales dashboard scopes by the same column); every contacted lead was assigned when the
+         multi-user book was set up, and a send on an unassigned lead assigns it to the sender. A
+         contacted lead with no owner names NOBODY — never guessed from who added or searched it.
+         Aggregated per raw pair here (coverageKey folds case/plural on the client, as for every pair).
+         ⚠️ The per-person COUNT goes to the admin only: a salesperson sees which teammates worked a
+         town (names they already see as "Already added · <name>"), never how much. */
+      const workedBy = new Map<string, { trade: string; town: string; users: Map<string, number> }>();
       for (const l of leads) {
         const trade = String(l.search_keyword || l.category || "").trim();
         const town = String(l.derived_town || l.search_location || "").trim();
@@ -219,8 +228,23 @@ Deno.serve(async (req) => {
            `report_sent` is included because a report going out IS the outreach on the email path. */
         const contacted = !!l.whatsapp_sent_at || !!l.instantly_pushed_at || !!l.last_outreach_attempt_at
           || String(l.status ?? "") === "report_sent";
-        if (contacted) workedPairs.push(pair);
+        if (contacted) {
+          workedPairs.push(pair);
+          const owner = typeof l.assigned_to_user_id === "string" ? l.assigned_to_user_id : "";
+          if (owner) {
+            const k = `${trade}\u0000${town}`;
+            const e = workedBy.get(k) ?? { trade, town, users: new Map<string, number>() };
+            e.users.set(owner, (e.users.get(owner) ?? 0) + 1);
+            workedBy.set(k, e);
+          }
+        }
       }
+      const isAdmin = who.actor.role === "admin";
+      const workedByOut = [...workedBy.values()].map((e) => ({
+        trade: e.trade,
+        town: e.town,
+        users: [...e.users.entries()].map(([id, n]) => (isAdmin ? { id, n } : { id })),
+      }));
 
       /* ── POOLED: which pairs have a lead pool the market panel can actually SHOW ───────────────
          ⛔ WHY THIS BELONGS HERE. Coverage graded a town "Measured" off audits alone, so the row
@@ -270,7 +294,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      return { measured, leads: leadPairs, worked: workedPairs, pooled };
+      return { measured, leads: leadPairs, worked: workedPairs, pooled, workedBy: workedByOut };
     };
 
     /* Where the time went, for the next person who measures this (auth = the sign-in + role check). */

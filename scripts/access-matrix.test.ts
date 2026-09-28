@@ -57,7 +57,7 @@ const sidebar = readFileSync(new URL("../src/components/AppSidebar.tsx", import.
 ok(!/'My leads'|url: '\/sales'/.test(sidebar), "My Leads is gone from the sidebar");
 const mobile = readFileSync(new URL("../src/components/MobileBottomNav.tsx", import.meta.url), "utf8");
 ok(!/'My leads'|url: '\/sales'|review-replies/.test(mobile), "…and from the mobile nav (and Review Replies with it)");
-ok(/SALES_ORDER = \['\/outreach', '\/inbox', '\/sales-dashboard', '\/find-leads', '\/coverage'\]/.test(sidebar), "the sales sidebar reads Outreach, Inbox, Sales dashboard, Find Leads, Coverage");
+ok(/orderNavForRole\(/.test(sidebar), "the sidebar orders its items through orderNavForRole (the order is pinned in sales-flow-reliability.test.ts)");
 
 console.log("\n── what each role may do on the shared screens ──");
 const A = leadPermissions("admin"), S = leadPermissions("sales"), N = leadPermissions(null);

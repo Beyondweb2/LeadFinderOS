@@ -24,7 +24,7 @@ import { datasetComplete, leadLoadNotice, leadCountLabel } from '@/lib/outreachL
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus } from '@/lib/queueStatus';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
-import { AvailableToClaim } from '@/components/AvailableToClaim';
+import { AvailableToClaim, CLAIM_POOL_HELP } from '@/components/AvailableToClaim';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
 import { UserPlus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -256,7 +256,7 @@ const Outreach = () => {
         <Tabs value={salesTab} onValueChange={(v) => setSalesTab(v as 'mine' | 'claim')}>
           <TabsList>
             <TabsTrigger value="mine">My leads ({leadCountLabel(leadLoad, leads.length)})</TabsTrigger>
-            <TabsTrigger value="claim">Available to claim</TabsTrigger>
+            <TabsTrigger value="claim" title={CLAIM_POOL_HELP}>Available to claim</TabsTrigger>
           </TabsList>
         </Tabs>
       )}

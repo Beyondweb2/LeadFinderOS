@@ -51,6 +51,19 @@ function matches(pattern: string, path: string): boolean {
   return p.every((seg, i) => seg.startsWith(':') ? a[i].length > 0 : seg === a[i]);
 }
 
+/** A salesperson's navigation, in the order of the working day (Paul, 2026-09-28): results → find
+ *  leads → work the pipeline → market coverage → messages. Order only — canOpenRoute decides what is
+ *  shown. The sidebar reads it; the mobile bar follows it (Inbox stays on the bar, see there). */
+export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/find-leads', '/outreach', '/coverage', '/inbox'];
+
+/** Sort nav items for a role. Admin: unchanged (the list's own order). Sales: SALES_NAV_ORDER, and any
+ *  sales-visible item not named there goes AFTER them, in list order — never jumps to the top. */
+export function orderNavForRole<T extends { url: string }>(items: readonly T[], role: AppRole | null): T[] {
+  if (role !== 'sales') return [...items];
+  const rank = (u: string) => { const i = SALES_NAV_ORDER.indexOf(u); return i === -1 ? SALES_NAV_ORDER.length : i; };
+  return items.map((it, i) => ({ it, i })).sort((a, b) => rank(a.it.url) - rank(b.it.url) || a.i - b.i).map((x) => x.it);
+}
+
 /** May this role open this path? admin: everything. sales: only the listed patterns. none: nothing. */
 export function canOpenRoute(role: AppRole | null, path: string): boolean {
   if (role === 'admin') return true;

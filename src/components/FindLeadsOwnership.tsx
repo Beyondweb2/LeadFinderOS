@@ -25,14 +25,14 @@ export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClai
   if (!own || own.state === 'new') return null;
   if (own.state === 'yours' && own.leadId) {
     return (
-      <Link to={`/sales/lead/${own.leadId}`} className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">
+      <Link to={`/sales/lead/${own.leadId}`} title="Already in your pipeline — open it" className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">
         <Check className="h-3.5 w-3.5" /> Yours
       </Link>
     );
   }
   if (own.state === 'claimable' && own.leadId && onClaim) {
     return (
-      <Button variant="outline" size="sm" className="h-8 px-3 text-xs" disabled={claiming} onClick={() => onClaim(own.leadId!)}>
+      <Button variant="outline" size="sm" className="h-8 px-3 text-xs" disabled={claiming} onClick={() => onClaim(own.leadId!)} title="Already in LeadFinderOS, unassigned and never contacted — claim it to add it to your pipeline">
         Claim lead
       </Button>
     );
