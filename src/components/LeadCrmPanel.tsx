@@ -16,6 +16,7 @@ import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
+import { CampaignPicker } from '@/components/CampaignPicker';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
@@ -53,7 +54,7 @@ import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, campaign_id, domain_control';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -62,6 +63,7 @@ interface CrmRow {
   call_booked_at: string | null; website_control: string | null; website_control_note: string | null;
   assigned_to_user_id: string | null;
   services_included: string[] | null; service_areas: string[] | null; address: string | null;
+  campaign_id: string | null;
   domain_control: string | null;
 }
 
@@ -221,6 +223,8 @@ export function LeadWorkPanel({ leadId }: { leadId: string }) {
             { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note })} />
       </section>
 
+      <LeadCampaign lead={lead} save={save} />
+
       <InternalNote save={save} />
 
       <details className={CARD}>
@@ -267,6 +271,21 @@ export function LeadWorkPanel({ leadId }: { leadId: string }) {
         </div>
       </details>
     </div>
+  );
+}
+
+/* ── CAMPAIGN: which existing campaign this lead is worked under (2026-09-28) ──────────────────────
+   ⛔ THE ONE CAMPAIGN FIELD (outreach_leads.campaign_id) — the column the admin's bulk "Move to
+   campaign" writes and the Sales dashboard groups by. lead_set_campaign checks the lead is the
+   caller's to work (a salesperson: assigned to them, not a client) and that the campaign exists. Picking
+   only: creating, renaming or deleting a campaign stays on the admin's campaign screens (hideCreate). */
+function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
+  return (
+    <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')} data-testid="lead-campaign">
+      <span className={LABEL}>Campaign</span>
+      <CampaignPicker mode="assign" hideCreate value={lead.campaign_id} className="h-8 w-[220px] text-xs"
+        onChange={(id) => { if (id !== lead.campaign_id) void save('lead_set_campaign', { _campaign_id: id }, id ? 'Campaign saved' : 'Removed from its campaign', { campaign_id: id }); }} />
+    </section>
   );
 }
 

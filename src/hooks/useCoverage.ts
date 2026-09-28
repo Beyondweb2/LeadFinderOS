@@ -4,9 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   coverageKey, coverageStateFor,
-  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair,
+  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair, workersByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
-  type SuppressionPatch,
+  type SuppressionPatch, type CoverageWorker, type WorkedByEntry,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
 
@@ -26,7 +26,8 @@ export interface CoverageTownRow extends CoverageTown {
    purpose. The ladder is exclusive (a town shows at its furthest rung only), so a `measured` or
    `worked` town said nothing about whether leads had been pulled there. That was the gap: the rung
    answers "how far has this gone", the count answers "have I pulled leads from here". */
-export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean };
+/* `workers` = who owns a contacted lead in this trade+town (2026-09-28); empty when nobody can be named. */
+export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[] };
 
 interface Pair { trade: string; town: string }
 
@@ -38,7 +39,7 @@ interface Pair { trade: string; town: string }
 interface TownsData { towns: CoverageTownRow[] }
 /* `pooled` is OPTIONAL: an older `coverage` deploy does not send it, and the client must be able
    to tell "not sent" from "none" — see hasLeadPool. */
-interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; pooled?: Pair[] } }
+interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; pooled?: Pair[]; workedBy?: WorkedByEntry[] } }
 
 /* ⛔ THE KEY IS DEFINED IN src/lib/coverageFreshness.ts, not here, because the WRITER needs it too.
    useOutreach marks this query stale when the lead list changes — and it has to be the writer's job,
@@ -118,6 +119,8 @@ export function useCoverage() {
     () => countLeadsByPair(pairs?.leads ?? []),
     [pairs],
   );
+  /* Who worked each pair, folded on the same key as the rung. An older deploy sends no workedBy: no names. */
+  const workers = useMemo(() => workersByPair(pairs?.workedBy), [pairs]);
 
   const gradeFor = useCallback((trade: string, includeSuppressed: boolean): GradedTown[] => {
     return towns
@@ -131,8 +134,9 @@ export function useCoverage() {
            Computed here with state and leadCount because facts lives in this hook and coverageKey
            canonicalisation must not run 733 times in a render loop. */
         hasPool: hasLeadPool(trade, t, facts),
+        workers: workers.get(coverageKey(trade, t.name)) ?? [],
       }));
-  }, [towns, facts, leadCounts]);
+  }, [towns, facts, leadCounts, workers]);
 
   const setSuppressed = useCallback(async (townId: string, suppress: boolean, reason?: string) => {
     const { data: res, error: e } = await supabase.functions.invoke('coverage', {

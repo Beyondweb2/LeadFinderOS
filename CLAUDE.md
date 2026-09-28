@@ -334,6 +334,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   Cloudflare 522 page thrown by supabase-js) is **503 `upstream_timeout`** — `_shared/operator-auth.ts`
   (`resolveOperator`, `isUpstreamOutage`), used by every operator function. A bare token
   (`server_error`) is never rendered: `edgeErrorMessage` maps or quotes it inside a sentence.
+- **Remembered state must belong to the data it was set on** — a per-person results filter applied to a
+  later search showed "10 found" over an empty table, and a second leads-only copy of the Find Leads
+  results restored them without their search ("Run a search first"). One store per fact, keyed to what
+  it describes (`searchResultsCache.ts`, the view's `sig`) — `docs/sales-flow-reliability.md`.
 - **A conditionally-shown question owns its answer's LIFETIME** — hiding a field is not clearing it,
   and clearing state is not the same as not SENDING it (derive the payload from the show condition).
 - **Cutting question count saves money, not time** — questions run in parallel; the wall clock is one

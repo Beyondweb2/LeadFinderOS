@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
+import { legacySearchResultKeys, packSearchResults, searchResultsKey, unpackSearchResults } from '@/lib/searchResultsCache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
 
@@ -127,8 +128,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
      above is the retry payload and is deliberately separate — it holds the whole filter object
      including flags that must NOT be restored across a reload. */
   const [lastSearch, setLastSearch] = useState<LastSearch | null>(null);
+  /** The stored set is restored once per signed-in person (see the restore effect). */
+  const restoredRef = useRef(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  useEffect(() => { restoredRef.current = false; }, [user?.id]);
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
@@ -147,12 +151,16 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
   }, [hasProAccess, user?.id]);
 
+  /* ⛔ ONE STORE FOR THE RESULTS AND THEIR SEARCH (src/lib/searchResultsCache.ts, 2026-09-28). There
+     used to be two: sessionStorage {leads, lastSearch} and a localStorage {leads} copy that was read
+     FIRST — so a new tab or a reload brought the results back with no search behind them, and Add
+     refused every one ("Run a search first"). The legacy keys are read once, then removed. */
   const storageKeys = useMemo(() => {
     if (!user?.id) return null;
     return {
-      leads: `leadfinder_cached_leads:${user.id}`,
+      results: searchResultsKey(user.id),
+      ...legacySearchResultKeys(user.id),
       filters: `leadfinder_cached_filters:${user.id}`,
-      demoLeads: `leadfinder_demo_leads:${user.id}`,
     };
   }, [user?.id]);
 
@@ -161,6 +169,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!storageKeys) {
       setLeads([]);
+      setLastSearch(null);
       return;
     }
 
@@ -183,45 +192,44 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       // For non-subscribers: clear cached leads entirely so they can't access old results
       if (!hasProAccess) {
         try {
-          localStorage.removeItem(storageKeys.demoLeads);
-          sessionStorage.removeItem(storageKeys.leads);
+          localStorage.removeItem(storageKeys.results);
+          localStorage.removeItem(storageKeys.noSearch);
+          sessionStorage.removeItem(storageKeys.session);
         } catch {}
         setLeads([]);
         return;
       }
 
-      // Subscribers: restore cached leads normally
-      // Try demo leads from localStorage first
-      const demoRaw = localStorage.getItem(storageKeys.demoLeads);
-      if (demoRaw) {
-        const cached = JSON.parse(demoRaw) as { leads?: Lead[] };
-        if (Array.isArray(cached?.leads) && cached.leads.length > 0) {
-          setLeads(cached.leads);
-          return;
-        }
-      }
-      // Fall back to sessionStorage
-      const cachedLeadsRaw = sessionStorage.getItem(storageKeys.leads);
-      if (cachedLeadsRaw) {
-        const cached = JSON.parse(cachedLeadsRaw) as { leads?: Lead[]; lastSearch?: LastSearch | null };
-        if (Array.isArray(cached?.leads)) setLeads(cached.leads);
-        /* Restored in the SAME read as the leads. An entry written before this change has no
-           lastSearch and restores null — identical to today's behaviour, so nothing regresses; the
-           next search writes both. */
-        if (cached?.lastSearch?.country) setLastSearch(cached.lastSearch);
+      /* ⛔ RESTORED WITH THEIR SEARCH, OR NOT AT ALL. unpackSearchResults returns null for an entry with
+         no usable search, so a restored list can always be added from. The legacy leads-only copy is
+         dropped unread — it is the copy that caused the fault. */
+      let stored = unpackSearchResults<Lead>(localStorage.getItem(storageKeys.results));
+      if (!stored) stored = unpackSearchResults<Lead>(sessionStorage.getItem(storageKeys.session));
+      try { localStorage.removeItem(storageKeys.noSearch); sessionStorage.removeItem(storageKeys.session); } catch {}
+      /* Once per person, and only onto an EMPTY page: this effect re-runs when the role or the
+         subscription settles, and must never swap a live result set for an older stored one. */
+      if (stored && !restoredRef.current) {
+        restoredRef.current = true;
+        const s = stored;
+        setLeads((cur) => (cur.length ? cur : s.leads));
+        setLastSearch((cur) => cur ?? { keyword: s.lastSearch.keyword, location: s.lastSearch.location, country: s.lastSearch.country as Country });
       }
     } catch {
       // ignore cache parse errors
     }
   }, [storageKeys, isSubLoading, hasProAccess]);
 
-  /* Persist the results AND the search that produced them, in ONE write. Separating these is the
-     whole bug: two writes can be restored independently, and the half that came back without the
-     other is what put 168 tradeless, townless leads in the CRM. */
+  /* Persist the results AND the search that produced them, in ONE write (the 168-row rule). A set
+     with no usable search is never written, and clears what was stored, so it cannot come back. */
   useEffect(() => {
     if (!storageKeys) return;
     try {
-      sessionStorage.setItem(storageKeys.leads, JSON.stringify({ leads, lastSearch }));
+      /* Nothing on screen and no search yet = the page has not loaded anything; leave the store alone
+         (the restore reads it). A search that found nothing clears it. */
+      if (!leads.length && !lastSearch) return;
+      const packed = leads.length ? packSearchResults(leads, lastSearch) : null;
+      if (packed) localStorage.setItem(storageKeys.results, packed);
+      else localStorage.removeItem(storageKeys.results);
     } catch {
       // ignore quota/unavailable errors
     }
@@ -348,13 +356,15 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
     // Store for retry
     lastSearchRef.current = { filters, skipTrialCount, isDemo };
-    /* ⛔ SET HERE, at the single point every search passes through, so no call site can forget it.
-       Index.tsx used to do this itself; a second caller would have silently reintroduced the fault. */
-    setLastSearch({
+    /* ⛔ SET INSIDE search(), the single point every search passes through, so no call site can forget
+       it — and set IN THE SAME UPDATE AS THE RESULTS it describes (2026-09-28). It used to be set here,
+       before the request: a search that then failed or timed out left the PREVIOUS results on screen
+       under the NEW search, and Add would have saved them with the wrong trade and town. */
+    const thisSearch: LastSearch = {
       keyword: filters.keyword?.trim() || null,
       location: filters.location?.trim() || null,
       country: (filters.country || 'UK') as Country,
-    });
+    };
 
     setIsLoading(true);
     setTrialLimitError(null);
@@ -487,6 +497,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           // treat it as a soft notice, not a scary error card.
           if (body?.notFound) {
             setLeads([]);
+            setLastSearch(thisSearch);
             setSearchError(null);
             setSearchNotice(body.notice ?? body.error ?? "Couldn't find that location — try adding a country or county.");
             setIsLoading(false);
@@ -522,6 +533,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           // empty-state — NOT the generic "non-2xx" error card.
           if (data.notFound || data.serviceIssue) {
             setLeads([]);
+            setLastSearch(thisSearch);
             setSearchError(null);
             setSearchNotice(data.notice ?? "Couldn't find that location — try adding a country or county.");
             setExpanded(false);
@@ -550,6 +562,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
 
           setLeads(filteredLeads);
+          setLastSearch(thisSearch);
           setSearchError(null);
           setExpanded(!!data.expanded);
           setRegionMeta(data.region ?? null);
@@ -575,12 +588,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             } catch {}
           }
 
-          // Persist demo leads to localStorage so they survive navigation
+          /* The results themselves are persisted WITH this search by the effect above — never here on
+             their own (a separate leads-only copy is what lost the search, 2026-09-28). */
           if (storageKeys) {
-            try {
-              localStorage.setItem(storageKeys.demoLeads, JSON.stringify({ leads: filteredLeads }));
-              sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters }));
-            } catch {}
+            try { sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters })); } catch {}
           }
 
           const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;

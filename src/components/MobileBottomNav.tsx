@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3,
+  BarChart3, Map as MapIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -59,11 +59,15 @@ export function MobileBottomNav() {
 
   /* ⛔ Sales uses the SAME Outreach and Inbox as the admin (src/lib/access.ts, 2026-09-27); the
      admin's items are unchanged. */
+  /* Sales, 2026-09-28: the sidebar's order (SALES_NAV_ORDER) — Results, Find Leads, Outreach — with
+     the Inbox kept on the bar (it is the daily tool; four items + More fit a 320 px phone) and
+     Coverage under More. Admin: unchanged bar; Coverage joins More, next to the Inbox. */
   const mainNavItems = role === 'sales'
     ? [
+        { title: 'Results', url: '/sales-dashboard', icon: BarChart3 },
+        { title: t('nav.search'), url: '/find-leads', icon: Search },
         { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
-        { title: 'Results', url: '/sales-dashboard', icon: BarChart3 },
       ]
     : [
         { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -72,8 +76,9 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: t('nav.search'), url: '/find-leads', icon: Search }, { title: 'Coverage', url: '/coverage', icon: LayoutDashboard }]
+    ? [{ title: 'Coverage', url: '/coverage', icon: MapIcon }]
     : [
+        { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
         { title: t('nav.templates'), url: '/templates', icon: FileText },

@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { refusalText } from '@/lib/salesCrm';
+import { salesAddPayload } from '@/lib/salesAddPayload';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
@@ -58,6 +59,23 @@ interface PlaceDetailsResponse {
   derivedTown?: string | null;
   /** null = a town was found. Absent entirely = the edge function predates this change. */
   townNote?: string | null;
+}
+
+/** One Place Details lookup for a salesperson's add (see addLead). null on any failure — the add goes
+ *  ahead with what the search returned. */
+async function lookupPlaceDetails(placeId: string): Promise<(PlaceDetailsResponse & { email?: string | null }) | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('google-place-details', {
+      body: { placeId, triggerSource: 'add_to_crm' },
+    });
+    if (error || !data || typeof data !== 'object') return null;
+    const d = data as PlaceDetailsResponse & { error?: string; email?: string | null };
+    // The function answers a failed Google call with 200 + { error, phone: null }: that is not an answer.
+    if (d.error) return null;
+    return d;
+  } catch {
+    return null;
+  }
 }
 
 /** Columns added by SQL Paul applies BY HAND. PostgREST rejects the WHOLE update for one unknown
@@ -720,21 +738,26 @@ export function useOutreach({ history = true, progressive = false }: { history?:
        whose it is, and otherwise inserts it into the one book, assigned to the rep. The admin's path
        below is unchanged. */
     if (roleRef.current === 'sales') {
+      /* ⛔ THE PHONE COMES FROM PLACE DETAILS, LOOKED UP BEFORE THE ADD (2026-09-28). Google's text
+         search returns no phone number (search-leads' field mask has none), so `lead.phone` is empty
+         on every search result. The admin's add gets it from the lookup queued AFTER its insert,
+         which writes the row directly — a salesperson cannot write outreach_leads, so for them that
+         step never ran and every lead they added arrived with no phone. The same role-checked lookup
+         now runs first and its values ride in the one add (salesAddPayload), which also lets the
+         server's phone dedupe see the real number. The admin's rule for a business with neither a
+         phone nor an email is kept: not added. A FAILED lookup never blocks the add. */
+      const details = lead.id && (!lead.phone || !lead.address)
+        ? await lookupPlaceDetails(lead.id)
+        : null;
+      const email = String(enrichment?.email ?? '').trim() || null;
+      if (details && !details.phone && !lead.phone && !String(details.email ?? '').trim() && !email) {
+        if (!silent) toast({ title: lead.name, description: 'No phone or email found — not added.', variant: 'destructive' });
+        return null;
+      }
       const { data: res, error: rpcErr } = await (supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>)('sales_add_lead', {
-        _lead: {
-          business_name: lead.name,
-          phone: lead.phone || null,
-          google_maps_url: lead.googleMapsUrl || null,
-          address: lead.address || null,
-          category: lead.category || null,
-          search_keyword: searchKeyword,
-          search_location: searchLocation || null,
-          website: lead.websiteUrl || null,
-          country,
-          list_type: listType,
-          campaign_id: campaignId,
-          place_id: lead.id || null,
-        },
+        _lead: salesAddPayload({
+          lead, details, email, searchKeyword, searchLocation, country, listType, campaignId,
+        }),
       });
       const r = (res ?? null) as { ok?: boolean; error?: string; lead_id?: string; owner_name?: string | null } | null;
       if (rpcErr || !r?.ok) {

@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, EyeOff, Eye, MapPin, Telescope } from 'lucide-react';
+import { Loader2, MapPin, Telescope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import NichePanel from '@/components/NichePanel';
@@ -16,21 +15,20 @@ import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trad
 import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, type CoverageState,
 } from '@/lib/coverageState';
-import { asPence, MARKET_SEARCH_USD } from '@/lib/marketView';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CoverageWorkers } from '@/components/CoverageWorkers';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
    ones already measured or worked marked, so "locksmiths in the East of England: 6 of 87 done"
    reads in one look.
 
-   ⚠️ THE TRADE AND THE REGION ARE IN THE URL; the size band and the show-suppressed toggle are in
+   ⚠️ THE TRADE AND THE REGION ARE IN THE URL; the size band and the niche panel are in
    usePersistedState. That is §6c's line, and BOTH halves of it now hold: the URL is for WHAT I AM
    LOOKING AT — a trade's coverage is a view you would link to or come back to — and
-   usePersistedState is for HOW THE PAGE IS CONFIGURED. A band and a toggle are configuration; you
-   would not send someone a link to them, and losing them on every navigation is the complaint.
-   ⛔ NOTHING ELSE MOVES. `busyId` is which row is mid-request — happening, not configuration — and
-   nothing here persists an open dialog. The sort is fixed, so there is no sort to keep. */
+   usePersistedState is for HOW THE PAGE IS CONFIGURED. A band is configuration; you would not send
+   someone a link to it, and losing it on every navigation is the complaint.
+   ⛔ NOTHING ELSE MOVES. Nothing here persists an open dialog. The sort is fixed, so there is no
+   sort to keep. (The Suppress button and its show-suppressed toggle went on 2026-09-28.) */
 
 const STATE_STYLE: Record<CoverageState, string> = {
   worked: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
@@ -39,9 +37,8 @@ const STATE_STYLE: Record<CoverageState, string> = {
 };
 
 export default function Coverage() {
-  const { toast } = useToast();
   const { user } = useAuth();
-  const { isLoading, error, gradeFor, setSuppressed, regions, applyFilters, summarise, refetch } = useCoverage();
+  const { isLoading, error, gradeFor, regions, applyFilters, summarise, refetch } = useCoverage();
 
   const [params, setParams] = useSearchParams();
   /* ⛔ THE URL STILL WINS; THE MEMORY ONLY FILLS A BARE ONE — fixed 2026-08-17 after Paul's report.
@@ -115,10 +112,6 @@ export default function Coverage() {
   const minPop = band.min;
   const maxPop = band.max;
 
-  const [showSuppressed, setShowSuppressed] = usePersistedState<boolean>(
-    'coverage-show-suppressed', false, { tier: 'session', scope: user?.id },
-  );
-
   /* ⛔ WHETHER THE NICHE VERDICT IS OPEN IS CONFIGURATION, NOT AN INTERRUPTION, so it persists —
      §6c's line: a panel you chose to have open is part of how the page is set up, and losing it on
      every navigation is exactly the complaint. It is NOT a dialog (nothing springs over the page
@@ -129,14 +122,10 @@ export default function Coverage() {
     'coverage-niche-open', false, { tier: 'session', scope: user?.id },
   );
 
-  /* ⛔ STAYS useState, DELIBERATELY. This is which row is mid-request, not how the page is
-     configured — persisting it would restore a permanently disabled button for a request that
-     finished on another visit. §6c: persist what you were LOOKING AT, never what was happening. */
-  const [busyId, setBusyId] = useState<string | null>(null);
-
+  /* Suppressed towns (none today) stay off the list; the page no longer offers a way to show them. */
   const rows = useMemo(
-    () => applyFilters(gradeFor(trade, showSuppressed), { region, minPopulation: minPop, maxPopulation: maxPop }),
-    [gradeFor, trade, showSuppressed, region, minPop, maxPop, applyFilters],
+    () => applyFilters(gradeFor(trade, false), { region, minPopulation: minPop, maxPopulation: maxPop }),
+    [gradeFor, trade, region, minPop, maxPop, applyFilters],
   );
   const summary = useMemo(() => summarise(rows), [rows, summarise]);
 
@@ -144,19 +133,6 @@ export default function Coverage() {
     () => [...rows].sort((a, b) => (b.population ?? 0) - (a.population ?? 0)),
     [rows],
   );
-
-  const toggle = async (id: string, name: string, currentlySuppressed: boolean) => {
-    setBusyId(id);
-    try {
-      const reason = currentlySuppressed ? undefined
-        : (window.prompt(`Why is ${name} coming off the list? (optional, but "why is Salford missing" gets asked later)`) ?? undefined);
-      await setSuppressed(id, !currentlySuppressed, reason);
-    } catch (e) {
-      toast({ title: 'Could not update', description: (e as Error).message, variant: 'destructive' });
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -216,10 +192,6 @@ export default function Coverage() {
             <Input type="number" value={maxPop} onChange={(e) => setBand((b) => ({ ...b, max: Number(e.target.value) || 0 }))} className="h-9 w-[100px]" />
           </div>
         </div>
-        <Button variant="outline" size="sm" className="h-9" onClick={() => setShowSuppressed((v) => !v)}>
-          {showSuppressed ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
-          {showSuppressed ? 'Hiding none' : 'Show suppressed'}
-        </Button>
       </div>
 
       {/* ⛔ ABOVE THE TOWN TABLE, BECAUSE IT IS THE QUESTION THAT COMES FIRST. "Is this trade worth
@@ -281,14 +253,9 @@ export default function Coverage() {
             </thead>
             <tbody>
               {sorted.map((t) => (
-                <tr key={t.id} className={`border-t border-border ${t.suppressed_at ? 'opacity-50' : ''}`}>
+                <tr key={t.id} className="border-t border-border">
                   <td className="px-3 py-1.5">
                     <span className="font-medium">{t.name}</span>
-                    {t.suppressed_at && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        suppressed{t.suppressed_reason ? ` — ${t.suppressed_reason}` : ''}
-                      </span>
-                    )}
                   </td>
                   <td className="px-3 py-1.5 text-muted-foreground">{t.region ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
@@ -299,6 +266,9 @@ export default function Coverage() {
                       <Badge variant="outline" className={`text-xs ${STATE_STYLE[t.state]}`}>
                         {COVERAGE_LABEL[t.state]}
                       </Badge>
+                      {t.state === 'worked' && t.workers.length > 0 && (
+                        <CoverageWorkers workers={t.workers} trade={trade} town={t.name} />
+                      )}
                       {/* ⛔ THE COUNT IS A SECOND MARKER, NOT A FIFTH RUNG. The ladder is exclusive —
                           a town shows at its furthest rung only — so "Measured" or "Worked" said
                           nothing about whether leads had ever been pulled there, which is exactly
@@ -331,18 +301,16 @@ export default function Coverage() {
                         offered its own Find leads there and two identical labels going to different
                         places is a dead end of its own — with that button gone, this is the only way
                         to search a town and must always be offered. */}
+                    {/* ⛔ NO PRICE ON THE BUTTON AND NO SUPPRESS (Paul, 2026-09-28, every role). The
+                        "~9p" estimate is still what search-leads costs and is still accounted for
+                        server-side; it is just not printed here. Suppress (hide a town for the whole
+                        team, admin-only on the server) is no longer a button: 0 of 733 towns were
+                        suppressed when it went, the server action and uk_towns.suppressed_at stay, and a
+                        suppressed town would still be left off this list. */}
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them. Free instead if this trade and town were searched in the last 72 hours.`}>
-                        Find leads · ~{asPence(MARKET_SEARCH_USD)}
+                      <Link to={findLeadsHref(trade, t.name)} title={`Search Google for ${trade} in ${t.name} and list them.`}>
+                        Find leads
                       </Link>
-                    </Button>
-                    <Button
-                      variant="ghost" size="sm" className="h-7 text-xs"
-                      disabled={busyId === t.id}
-                      onClick={() => toggle(t.id, t.name, !!t.suppressed_at)}
-                    >
-                      {busyId === t.id ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : t.suppressed_at ? 'Restore' : 'Suppress'}
                     </Button>
                   </td>
                 </tr>

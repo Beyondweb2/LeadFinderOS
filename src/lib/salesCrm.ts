@@ -170,6 +170,7 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'not_an_initial_opener': return 'Bulk initial outreach sends an approved opener only';
     case 'stage_not_allowed': return 'Only the admin can set that status';
     case 'admin_only': return 'Only the admin can change that';
+    case 'unknown_campaign': return 'That campaign no longer exists';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
 }
