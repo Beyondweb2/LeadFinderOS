@@ -27,6 +27,7 @@ import { LeadEnrichButtons } from './LeadEnrichButtons';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
+import type { AuditRowState } from '@/lib/outreachAuditMap';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS, awaitingReplyTooltip } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
@@ -57,11 +58,10 @@ interface OutreachMobileCardProps {
   onGenerateSite?: (template: 'barber' | 'salon' | 'plumber', mode?: 'booking_only') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
-  // AI audit control (parity with the desktop row). onManageAudit → complete/capped;
-  // auditRunning → pending/running; onRunAudit → none/failed (re-runnable).
-  onRunAudit?: () => void;
-  onManageAudit?: () => void;
-  auditRunning?: boolean;
+  // AI audit control (parity with the desktop row): auditRowState picks the icon, onOpenAudit opens the
+  // same popup (HookAuditDialog) in every state — run, progress or result.
+  auditState?: AuditRowState;
+  onOpenAudit?: () => void;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
@@ -91,9 +91,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onGenerateSite,
   isGeneratingSite = false,
   onManageSite,
-  onRunAudit,
-  onManageAudit,
-  auditRunning = false,
+  auditState = 'none',
+  onOpenAudit,
   onUpdateLead,
 }: OutreachMobileCardProps) {
   const perms = useLeadPermissions();
@@ -192,6 +191,10 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+                {/* Read-only for a role that cannot set the tag (the desktop row does the same). */}
+                {!onContactMethodChange && lead.contact_method && (
+                  <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
                 )}
 
                 {/* Pipeline Status */}
@@ -398,35 +401,16 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   </DropdownMenu>
                 )}
                 {/* AI audit control — parity with the desktop row (auditsByLead state). */}
-                {onManageAudit ? (
+                {onOpenAudit ? (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                    onClick={onManageAudit}
-                    title="Manage audit"
+                    className={auditState === 'done' ? 'h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10' : 'h-7 w-7 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10'}
+                    onClick={onOpenAudit}
+                    title={auditState === 'done' ? 'Audit complete — open the result' : auditState === 'running' ? 'Audit running — open to see progress' : 'Run the AI visibility check'}
+                    aria-label={auditState === 'done' ? 'Audit complete' : auditState === 'running' ? 'Audit running' : 'Run audit'}
                   >
-                    <ClipboardCheck className="h-3.5 w-3.5" />
-                  </Button>
-                ) : auditRunning ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground/70 cursor-default"
-                    disabled
-                    title="Audit running"
-                  >
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  </Button>
-                ) : onRunAudit ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
-                    onClick={onRunAudit}
-                    title="Run AI audit"
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" />
+                    {auditState === 'done' ? <ClipboardCheck className="h-3.5 w-3.5" /> : auditState === 'running' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
                   </Button>
                 ) : null}
               </div>

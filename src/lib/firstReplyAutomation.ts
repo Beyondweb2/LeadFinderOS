@@ -1,14 +1,81 @@
-import { modeRunsAudit, type FirstReplyMode } from './firstReplyMode.ts';
+import { modeRunsAudit, modeSends, parseFirstReplyMode, type FirstReplyMode } from './firstReplyMode.ts';
+import { isDecline, looksAutomated } from './inboundClassify.ts';
+import { isClientLead } from './roleRules.ts';
+import { isInitialOpener } from './openerVariant.ts';
+
+/* ══ THE REPLY RULE'S ONE SET OF GUARDS (2026-09-28, Paul: "restore the intended protections in the
+   canonical current path rather than leaving dead legacy logic") ═══════════════════════════════════
+   The live webhook path (handleInboundMessages → armFirstReplyAuditIntent) had kept only the mode,
+   the kill-switch, first-inbound and archived. The paying-customer, auto-responder, suppression,
+   decline and opener rules lived in the legacy chain nobody calls. They are here now, once, pure,
+   for every lead whoever owns it (admin or a salesperson's — nothing reads the rep):
+     · a CLIENT (paid, in delivery, completed, refunded) never enters prospect automation — no row
+     · a reply that is not human text (a "[image]" placeholder, a one-character reaction) or that
+       matches an auto-responder ("out of office", "we'll get back to you") arms nothing — no row, so
+       the business's real reply later still counts as their first human one
+     · a SUPPRESSED contact arms nothing (the drain would refuse the send anyway; the audit is spend)
+     · a clear NO ("not interested", "no thanks", "stop") is suppressed and flagged for a human, and
+       gets NO audit and NO pitch — ever
+     · everything else arms the audit; an automatic SEND additionally needs the reply to be to one of
+       the approved initial openers (isInitialOpener — initial_contact and initial_opener_v2), never
+       a reply to a follow-up, a report or a hand-typed message.
+   ⛔ POSITIVE MATCHES: `sendAllowed` is true only on a named opener; an unknown last template is not
+   an opener. */
+export type FirstReplyGuardOutcome =
+  | { kind: 'arm'; sendAllowed: boolean }
+  | { kind: 'skip'; reason: 'client' | 'not_human_text' | 'auto_responder' | 'suppressed' }
+  | { kind: 'decline' };
+
+export function firstReplyGuard(input: {
+  body: string;
+  lead: { amount_paid?: unknown; status?: unknown } | null;
+  suppressed: boolean;
+  lastOutboundTemplate: string | null;
+}): FirstReplyGuardOutcome {
+  if (!input.lead || isClientLead(input.lead)) return { kind: 'skip', reason: 'client' };
+  if (!isHumanReplyText(input.body)) return { kind: 'skip', reason: 'not_human_text' };
+  if (looksAutomated(input.body)) return { kind: 'skip', reason: 'auto_responder' };
+  if (isDecline(input.body)) return { kind: 'decline' };
+  if (input.suppressed) return { kind: 'skip', reason: 'suppressed' };
+  return { kind: 'arm', sendAllowed: isInitialOpener(input.lastOutboundTemplate) };
+}
+
+/** Human text — not bodyFor()'s "[type]" placeholder and not a lone character. */
+export function isHumanReplyText(body: string | null | undefined): boolean {
+  const t = (body ?? '').trim();
+  if (t.length < 2) return false;
+  if (t.startsWith('[') && t.endsWith(']')) return false;
+  return true;
+}
+
+/** Does this inbound count toward "their first reply"? Human text that is not an auto-responder. */
+export function countsAsFirstReply(body: string | null | undefined): boolean {
+  return isHumanReplyText(body) && !looksAutomated(body ?? '');
+}
+
+/* ⛔ "DO NOTHING" MEANS NOTHING (Paul, 2026-09-28). The Inbox's three-way control stores Off as
+   auto_reply_enabled = false and keeps first_reply_mode as the remembered working behaviour (the
+   database cannot store 'off'). Arming read the mode alone, so with the control on "Do nothing" every
+   first reply still started an audit. The effective mode is the control's reading: not explicitly
+   enabled → 'off'. An unreadable toggle is therefore off too — the direction that spends and sends
+   nothing. */
+export function effectiveFirstReplyMode(autoReplyEnabled: unknown, storedMode: unknown): FirstReplyMode {
+  return autoReplyEnabled === true ? parseFirstReplyMode(storedMode) : 'off';
+}
+
+/** Send mode only sends on a reply to an opener; anything else runs the audit and sends nothing. */
+export function modeForReply(mode: FirstReplyMode, sendAllowed: boolean): FirstReplyMode {
+  return modeSends(mode) && !sendAllowed ? 'audit_only' : mode;
+}
 
 /**
- * Pure first-reply policy shared by the webhook and tests.  It deliberately receives no message
- * body or message type: once Meta has supplied and we have persisted a valid inbound message, its
- * content must not change whether the selected mode asks for an audit.
+ * Pure first-reply policy shared by the webhook and tests. The CONTENT rules (client, decline,
+ * auto-responder, suppression, opener) are firstReplyGuard above, applied before this.
  *
- * `masterEnabled` is the ENV kill-switch only (AUTO_AUDIT_REPLY_ENABLED). ⛔ The Inbox auto-reply
- * toggle is NOT an input here (Paul, 2026-09-20): it governs whether a reply is SENT and is read by
- * the drain at send time. Feeding it in as well meant "Run audit only" silently produced no audit
- * whenever the reply toggle happened to be off — the mode is the behavioural source of truth.
+ * `masterEnabled` is the ENV kill-switch only (AUTO_AUDIT_REPLY_ENABLED). `mode` is the EFFECTIVE
+ * mode (effectiveFirstReplyMode): the Inbox control's "Do nothing" is 'off' here (2026-09-28 — the
+ * 2026-09-20 note that the toggle was not an input predates the three-way control, whose Off IS the
+ * toggle; both working modes set it on, so "Run audit only" still audits).
  */
 export function shouldArmFirstReplyAutomation(input: {
   mode: FirstReplyMode;

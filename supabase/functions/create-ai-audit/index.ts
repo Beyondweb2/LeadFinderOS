@@ -40,7 +40,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
-import { canWorkLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
+import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
@@ -129,6 +129,10 @@ function clampCount(
   const v = typeof n === "number" && Number.isFinite(n) ? Math.round(n) : def;
   return Math.min(max, Math.max(min, v));
 }
+
+/** How far back a still-in-flight run counts as "this lead's hook is running" (the one-hook-in-flight
+ *  check). Past the processor's MAX_RUN_AGE_MS plus a retry, so it only ever releases an abandoned run. */
+const HOOK_IN_FLIGHT_WINDOW_MS = 30 * 60 * 1000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -388,9 +392,13 @@ Deno.serve(async (req) => {
       const refused = salesAuditRefusal({ purpose: body.purpose, hookAudit: body.hook_audit === true, leadId, reuseAuditId });
       if (refused) return json({ ok: false, error: refused }, 403);
       const { data: workLead, error: workErr } = await service.from("outreach_leads")
-        .select("user_id, assigned_to_user_id").eq("id", leadId).maybeSingle();
+        .select("user_id, assigned_to_user_id, amount_paid, status").eq("id", leadId).maybeSingle();
       if (workErr) return json({ ok: false, error: "lead_lookup_failed" }, 503);
       if (!canWorkLead(actor, workLead) || typeof workLead?.user_id !== "string") return json({ ok: false, error: "lead_not_found" }, 403);
+      /* ⛔ A CLIENT IS NOT A PROSPECT (2026-09-28). The sales_leads view hides clients, so the UI never
+         offered this — but a rep still assigned to a lead that has since paid could call it directly.
+         The same predicate leadAccess and the RLS mirror use. */
+      if (isClientLead(workLead)) return json({ ok: false, error: "lead_is_client" }, 403);
       userId = workLead.user_id;
     }
     /* ⛔ fresh_audit — INTERNAL CALLERS ONLY (2026-09-20, the first-reply chain). Bypasses the
@@ -667,6 +675,28 @@ Deno.serve(async (req) => {
        or not), a re-run by audit_id, a preview and every non-ordinary purpose (baseline, measurement,
        remeasure, free_check) keep their full fan-out exactly as before. */
     const isHookAudit: boolean = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE && !reuseAuditId && !preview;
+    /* ⛔ ONE HOOK IN FLIGHT PER LEAD, FROM A PERSON (2026-09-28). A hook skips reuse by design (a new
+       hook starts again at Q1), so nothing stopped a second press — a reopened popup, a second tab, a
+       rep and the admin on the same lead — from minting a second paid audit while the first was still
+       draining. The database is the dedupe: any ordinary audit on this lead with a run still in
+       flight and started recently answers "already running" with THAT audit's id, and nothing is
+       created. Internal callers (the first-reply chain) are untouched: their intent tracks its own
+       audit, and a reply is a new event by product rule. */
+    if (isHookAudit && leadId && !isInternal) {
+      const since = new Date(Date.now() - HOOK_IN_FLIGHT_WINDOW_MS).toISOString();
+      const { data: live, error: liveErr } = await service.from("ai_audit_runs")
+        .select("audit_id, status, created_at, ai_audits!inner(lead_id)")
+        .eq("ai_audits.lead_id", leadId)
+        .in("status", ["pending", "queued", "running", "processing"])
+        .gte("created_at", since)
+        .order("created_at", { ascending: false }).limit(1);
+      if (liveErr) return json({ ok: false, error: "in_flight_check_failed" }, 503);
+      const running = (live ?? [])[0] as { audit_id?: string } | undefined;
+      if (running?.audit_id) {
+        console.log(`[create-ai-audit] lead ${leadId}: a hook is already in flight (audit ${running.audit_id}) — not starting another`);
+        return json({ ok: true, already_running: true, audit_id: running.audit_id });
+      }
+    }
     /* ⛔ ONE PREDICATE GOVERNS BOTH ENDS — the preview the operator reviews and the run that
        actually happens. Money questions are for the ordinary per-business audit only: a paid
        baseline is the guarantee's day-0 and must not change character under a client
@@ -1274,7 +1304,11 @@ Deno.serve(async (req) => {
         /* SET EXPLICITLY ON BOTH PATHS. The column is NOT NULL with a default, but PostgREST lists
            it as required, so relying on the default would leave the ordinary insert path depending
            on behaviour that is not guaranteed at this layer. Cheap certainty. */
-        is_market: false,
+        /* ⛔ THE ONE EXCEPTION: A NICHE CHECK'S TOWN SAMPLE (2026-09-28, fn niche-sample). A trade +
+           town with no business — internal only, discovery purpose, no lead. is_market is what keeps
+           it out of every business path structurally: no public report (auto-report refuses it), no
+           website crawl, excluded from the old stored-audit niche fold and the per-business rates. */
+        is_market: isInternal && isDiscovery && !leadId && body.niche_sample === true,
         business_type: businessType || null,
         location_text: locationText || null,
         country,

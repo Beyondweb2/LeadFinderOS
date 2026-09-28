@@ -82,11 +82,11 @@ console.log("── a removed (archived) lead leaves the salesperson's ACTIVE li
 {
   const rows = [{ id: "a", is_archived: false }, { id: "b", is_archived: true }, { id: "c", is_archived: null }];
   ok(archiveViewFor(true, false) === "active" && archiveViewFor(true, true) === "archived" && archiveViewFor(false, false) === "all" && archiveViewFor(false, true) === "all",
-    "sales: active by default, archived on request; the admin keeps the unified list");
+    "split: active by default, archived on request; unsplit (the archive view itself) shows everything");
   ok(rowsForArchiveView(rows, "active").map((r) => r.id).join() === "a,c", "active view hides archived rows (absent = not archived)");
   ok(rowsForArchiveView(rows, "archived").map((r) => r.id).join() === "b", "archived view shows only archived rows — still viewable");
-  ok(rowsForArchiveView(rows, "all").length === 3, "the admin still sees every row");
-  ok(/const archiveView = archiveViewFor\(perms\.removeFromMyLeads && !isArchiveView, showArchived\)/.test(TABLE), "the table decides the view from the role, not a stored flag");
+  ok(rowsForArchiveView(rows, "all").length === 3, "the unsplit view sees every row");
+  ok(/const archiveView = archiveViewFor\(!isArchiveView, showArchived\)/.test(TABLE), "both roles work the active list (2026-09-28), never a stored flag");
   ok(/result = rowsForArchiveView\(result, archiveView\)/.test(TABLE), "…and filters the list with the one rule");
   ok(/data-testid="filter-archived"/.test(TABLE) && /archiveView !== 'all' &&/.test(TABLE), "Filters → Archived exists for sales only");
   ok(/setShowArchived\(false\)/.test(TABLE), "Clear filters returns to the active list");
@@ -96,10 +96,10 @@ console.log("── the words ──");
 {
   ok(REMOVE_FROM_MY_LEADS_LABEL === "Remove from my leads", "the label is Paul's wording");
   const all = REMOVE_FROM_MY_LEADS_EXPLAINER.join(" ");
-  ok(/Available to claim/.test(all) && /archived/.test(all) && /Nothing is deleted/.test(all), "the confirmation says released, archived and nothing deleted");
-  ok(/never goes back to Available to claim/.test(all), "…and that a contacted lead is never claimable again");
+  ok(/unassigned/.test(all) && /archived/.test(all) && /Nothing is deleted/.test(all), "the confirmation says released, archived and nothing deleted");
+  ok(/never be picked up as untouched/.test(all) && !/Available to claim/.test(all), "…that a contacted lead is never claimable again, and no claim tab is named");
   ok(removeOutcomeText({ released: 1, archived: 2, skipped: { queued: 1 } }) ===
-    "1 lead back in Available to claim · 2 contacted leads archived (still yours) · 1 not removed — " + refusalText("queued"), "the outcome sentence");
+    "1 lead unassigned (back to the unowned book) · 2 contacted leads archived (still yours) · 1 not removed — " + refusalText("queued"), "the outcome sentence");
   ok(removeOutcomeText({}) === "Nothing changed", "…nothing done says so");
   ok(campaignMoveText({ moved: 3, skipped: { not_yours: 1 } }, "Spring roofers") === "3 moved to Spring roofers · 1 not moved — " + refusalText("not_yours"), "the move sentence");
   ok(campaignMoveText({ moved: 1 }, null) === "1 moved out of their campaign", "…and for No campaign");

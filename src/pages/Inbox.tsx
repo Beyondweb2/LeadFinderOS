@@ -235,8 +235,10 @@ function listPreview(m: { body: string | null; template_name: string | null; cre
  *
  *  Reads and writes whatsapp_outreach_state via process-whatsapp-queue (admin-gated modes
  *  'status' / 'set_first_reply_mode'), so it renders ONLY for admins — a 403 on status hides it.
- *  The AUTO_AUDIT_REPLY_ENABLED env kill-switch must ALSO be on before anything SENDS; it does
- *  not gate the audit, so "Run audit only" works whatever the secret says.
+ *  The AUTO_AUDIT_REPLY_ENABLED env kill-switch is the emergency stop for the whole automation —
+ *  audit and send. "Do nothing" here is honoured by arming too (effectiveFirstReplyMode, 2026-09-28):
+ *  a first reply then starts no audit. The guards (client, decline, auto-responder, suppression,
+ *  opener) are firstReplyGuard in src/lib/firstReplyAutomation.ts, one set for every lead.
  *
  *  ⛔ WHY A SEGMENTED CONTROL AND NOT A SWITCH PLUS A MODIFIER. The dangerous state is "sending
  *  when I thought it was only measuring", and a switch beside a modifier lets the two be read
@@ -740,6 +742,18 @@ const Inbox = () => {
       setRemovingKey(null);
     }
   };
+
+  /* A just-started thread becomes the REAL one as soon as its first message lands. For a salesperson
+     the real thread's key carries the book owner's id (message rows), never theirs, so waiting for the
+     keys to match would leave the placeholder — "No messages yet", window closed — on screen after a
+     successful send. Same number (and lead) = same conversation. */
+  useEffect(() => {
+    if (!synthetic || activeKey !== synthetic.key) return;
+    if (conversations.some((c) => c.key === synthetic.key)) return;
+    const real = conversations.find((c) => c.phone === synthetic.phone && c.leadId === synthetic.leadId)
+      ?? conversations.find((c) => c.phone === synthetic.phone);
+    if (real) { setActiveKey(real.key); setSynthetic(null); }
+  }, [conversations, synthetic, activeKey]);
 
   const active: WaConversation | null =
     (activeKey && conversations.find((c) => c.key === activeKey)) ||
@@ -1399,7 +1413,14 @@ const Inbox = () => {
     const norm = normalizeWaNumber(lead.phone, lead.country);
     if (!norm || !user) { toast({ title: 'No usable number', variant: 'destructive' }); return; }
     const key = `${user.id}::${norm}`;
-    const existing = conversations.find((c) => c.key === key);
+    /* ⛔ FIND THE REAL THREAD BY THE NUMBER, NOT BY WHO IS LOOKING (2026-09-28). Conversations are keyed
+       by the message rows' user_id — the BOOK OWNER, whoever pressed send — so `${user.id}::` only ever
+       matched for the admin. A salesperson opening WhatsApp from a lead got an empty placeholder that
+       said "Window closed · template only" beside a live conversation. The viewer's own key first
+       (the admin's old behaviour, unchanged), then this lead's thread, then any thread on the number. */
+    const existing = conversations.find((c) => c.key === key)
+      ?? conversations.find((c) => c.phone === norm && c.leadId === lead.id)
+      ?? conversations.find((c) => c.phone === norm);
     if (existing) { setActiveKey(existing.key); setSynthetic(null); }
     else {
       const synth: WaConversation = {

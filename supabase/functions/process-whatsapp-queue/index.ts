@@ -498,8 +498,25 @@ Deno.serve(async (req) => {
       const who = await resolveActor(req, service);
       if (!who.ok) return json({ ok: false, error: who.error === "no_role" ? "forbidden" : who.error, detail: who.detail }, who.status);
       if (who.actor.role === "admin") isAdmin = true;
-      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead")) salesActor = { ...who.actor, role: "sales" };
+      else if (who.actor.role === "sales" && (mode === "contact_check" || mode === "suppress_lead" || mode === "queue_state")) salesActor = { ...who.actor, role: "sales" };
       else return json({ ok: false, error: "forbidden" }, 403);
+    }
+    /* ⛔ queue_state — READ-ONLY, BOTH ROLES (2026-09-28). Is the queue sending right now? A salesperson
+       who queued an opener was told "sends within the daily window" while the admin had the queue
+       PAUSED — the one fact that decides whether anything goes out. Three values, no counts, no
+       settings, nothing written; returns before any send path. The admin's full status is still 'status'. */
+    if (mode === "queue_state") {
+      const { data: st, error: stErr } = await service
+        .from("whatsapp_outreach_state").select("paused").eq("id", 1).maybeSingle();
+      if (stErr) return json({ ok: false, error: "state_read_failed" }, 503);
+      const n = londonNow();
+      const m = n.hour * 60 + n.minute;
+      return json({
+        ok: true,
+        paused: st?.paused === true,
+        windowOpen: m >= WINDOW_START * 60 && m < WINDOW_END_MIN,
+        windowStartHour: WINDOW_START,
+      });
     }
     const forceReq = body.force === true;
     // send_now: admin "Send now" from the Inbox. Skips ONLY the pacing (not_due) wait and
@@ -930,7 +947,7 @@ Deno.serve(async (req) => {
         .from("whatsapp_auto_replies")
         // fire_after rides along for the staleness guard below - selecting it is load-bearing:
         // without it every row reads as undated, i.e. stale, and nothing would ever send.
-        .select("id, lead_id, phone, created_at, trigger, template_name, fire_after")
+        .select("id, lead_id, phone, created_at, trigger, template_name, fire_after, trigger_wa_message_id")
         .eq("status", "pending")
         .lt("fire_after", nowIso)
         .order("fire_after", { ascending: true })
@@ -939,7 +956,7 @@ Deno.serve(async (req) => {
 
       let processed = 0;
       const results: Record<string, string> = {};
-      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null; fire_after?: string | null }>) {
+      for (const row of (due ?? []) as Array<{ id: string; lead_id: string; phone: string; created_at: string; trigger?: string | null; template_name?: string | null; fire_after?: string | null; trigger_wa_message_id?: string | null }>) {
         // Per-trigger switch (see above). Default trigger (pre-SQL rows / null) = first_reply.
         const trigger = row.trigger || "first_reply";
         if (trigger === "first_reply" && !replyToggleOn) continue;
@@ -980,7 +997,13 @@ Deno.serve(async (req) => {
           const { data: newer } = await service.from("whatsapp_messages")
             .select("body").eq("lead_id", row.lead_id).eq("direction", "inbound")
             .gt("created_at", row.created_at);
-          if (((newer ?? []) as Array<{ body?: string }>).some((m) => isDecline(m.body ?? ""))) {
+          /* ⛔ AND THE REPLY THAT ARMED IT (2026-09-28). Only messages NEWER than the row were read, so
+             a first reply that was itself a "no thanks" was never checked here. Arming now refuses a
+             decline, and this is the send-time belt and braces for any row armed before that. */
+          const { data: trig } = row.trigger_wa_message_id
+            ? await service.from("whatsapp_messages").select("body").eq("wa_message_id", row.trigger_wa_message_id).limit(1)
+            : { data: [] };
+          if ([...((newer ?? []) as Array<{ body?: string }>), ...((trig ?? []) as Array<{ body?: string }>)].some((m) => isDecline(m.body ?? ""))) {
             /* ⛔ A DECLINE NOW WRITES A SUPPRESSION ROW, not just a cancelled send. Before this the
                only automatic writer was twilio-inbound on an SMS "STOP"; a WhatsApp "not interested"
                cancelled the pending pitch and NOTHING else — no status change, no suppression — so

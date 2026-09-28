@@ -67,15 +67,20 @@ const createAudit = readFileSync(resolve(root, 'supabase/functions/create-ai-aud
 const drain = readFileSync(resolve(root, 'supabase/functions/process-whatsapp-queue/index.ts'), 'utf8');
 const migration = readFileSync(resolve(root, 'supabase/migrations/20260919110000_first_reply_audit_intent.sql'), 'utf8');
 
-const active = inbound.slice(inbound.indexOf('export async function handleInboundMessages'), inbound.indexOf('async function legacyHandleInboundMessages'));
+const active = inbound.slice(inbound.indexOf('export async function handleInboundMessages'));
+ok(!inbound.includes('legacyHandleInboundMessages('), 'the dead legacy chain is deleted — one path, one set of guards (2026-09-28)');
 ok(active.includes('firstInboundForLead') && active.includes('armFirstReplyAuditIntent'), 'webhook persists then determines first inbound before recording intent');
-ok(!/isSubstantiveText|isDecline\(|looksAutomated\(/.test(active), 'active first-reply path does not inspect reply content');
+/* 2026-09-28 (Paul): the content guards are RESTORED on the live path — once, in firstReplyGuard —
+   not re-inlined in the webhook. */
+ok(!/isSubstantiveText|isDecline\(|looksAutomated\(/.test(active), 'the webhook itself inlines no content rule (they live in firstReplyGuard)');
+ok(/firstReplyGuard\(\{/.test(helper) && /checkSuppressed\(/.test(helper) && /modeForReply\(mode, guard\.sendAllowed\)/.test(helper), 'arming runs the one guard set: client, human text, auto-responder, decline, suppression, opener');
+ok(/body,\s*\n\s*\}\);/.test(active), 'the stored body is handed to the guard');
 ok(!active.includes('create-ai-audit') && !active.includes('fetch('), 'webhook records intent only; audit/reply execution cannot race each other');
 ok(active.includes('code === "23505"') && active.includes('duplicate ${wamid}'), 'duplicate Meta webhook is ignored before automation');
 
-// Toggle independence: the helper may import the env kill-switch but never the reply toggle.
-ok(!helper.includes('autoReplyToggleOn'), 'Audit only works with the auto-reply toggle disabled: the helper never reads the toggle');
-ok(/const masterEnabled = autoReplyEnvOn\(\);/.test(helper), 'the env kill-switch is the only master gate');
+// "Do nothing" means nothing (2026-09-28): arming reads the control's EFFECTIVE mode, never the bare stored one.
+ok(/const mode = await effectiveReplyMode\(input\.service\);/.test(helper) && !/firstReplyMode\(input\.service\)/.test(helper), 'arming obeys the Inbox control: Off (auto_reply_enabled false) arms nothing');
+ok(/const masterEnabled = autoReplyEnvOn\(\);/.test(helper), 'the env kill-switch is still the emergency master gate');
 
 // Fresh audit association.
 ok(helper.includes('fresh_audit: true'), 'a new intent asks create-ai-audit for a FRESH audit');

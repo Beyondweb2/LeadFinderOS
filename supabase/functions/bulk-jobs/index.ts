@@ -4,6 +4,7 @@ import { checkSuppressed } from "../_shared/suppression.ts";
 import { selectInChunks } from "../_shared/chunked-in.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { userTeamRole } from "../_shared/access.ts";
 
 // bulk-jobs — server-side bulk runner for enrich + audit, so an operator
 // can fire a batch, close the browser, and come back to progress / finished results.
@@ -643,6 +644,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === "create") {
+      /* ⛔ BULK ENRICH / BULK AUDIT ARE ADMIN WORK (2026-09-28). A salesperson was refused only by
+         accident — the ownership read below filters on outreach_leads.user_id, which a rep never
+         matches — so the day that read changed, the refusal would silently go. Positive match on the
+         admin role, answered before any read. (perms.bulkAudits / enrichLeads are admin-only in the UI.) */
+      if ((await userTeamRole(user.id)) !== "admin") return json({ error: "admin_only" }, 403);
       const jobType: string = body.job_type ?? "";
       if (jobType !== "enrich" && jobType !== "audit") return json({ error: "invalid job_type" }, 400);
       const cap = JOB_CAPS[jobType];

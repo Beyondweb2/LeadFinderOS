@@ -2,12 +2,15 @@ import {
   FIRST_REPLY_AUDIT_OPEN_STATUSES,
   auditIntentRetryStatus,
   decideQueuedAuditIntent,
+  firstReplyGuard,
+  modeForReply,
   shouldArmFirstReplyAutomation,
   type FirstReplyAuditStatus,
 } from "../../../src/lib/firstReplyAutomation.ts";
+import { checkSuppressed, suppress } from "./suppression.ts";
 import { OUTREACH_HOOK_QUESTIONS } from "../../../src/lib/auditQuestionCounts.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
-import { armStatusFor, firstReplyMode, firstReplyTemplate, autoReplyEnvOn, type FirstReplyMode } from "./auto-reply-rules.ts";
+import { armStatusFor, effectiveReplyMode, firstReplyTemplate, autoReplyEnvOn, type FirstReplyMode } from "./auto-reply-rules.ts";
 
 type Service = any; // Supabase edge functions intentionally use a service-role client here.
 
@@ -38,8 +41,11 @@ export async function armFirstReplyAuditIntent(input: {
   firstInbound: boolean;
   firstInboundReliable: boolean;
   archived: boolean;
+  /** The stored inbound body (bodyFor) — the guard reads it for a decline / auto-responder. */
+  body: string;
 }): Promise<{ armed: boolean; reason: string }> {
-  const mode = await firstReplyMode(input.service);
+  /* The control's reading: "Do nothing" is 'off' (effectiveFirstReplyMode), not the remembered mode. */
+  const mode = await effectiveReplyMode(input.service);
   try {
     return await armIntent(input, mode);
   } catch (e) {
@@ -51,9 +57,10 @@ export async function armFirstReplyAuditIntent(input: {
 }
 
 async function armIntent(
-  input: { service: Service; leadId: string; phone: string; wamid: string | null; firstInbound: boolean; firstInboundReliable: boolean; archived: boolean },
-  mode: FirstReplyMode,
+  input: { service: Service; leadId: string; phone: string; wamid: string | null; firstInbound: boolean; firstInboundReliable: boolean; archived: boolean; body: string },
+  modeIn: FirstReplyMode,
 ): Promise<{ armed: boolean; reason: string }> {
+  let mode = modeIn;
   /* ⛔ THE MODE IS THE ONLY BEHAVIOURAL SWITCH (Paul, 2026-09-20). This used to also require the
      Inbox auto-reply toggle, so "Run audit only" produced no audit whenever the toggle was off.
      The toggle governs SENDING and the drain reads it at send time; AUTO_AUDIT_REPLY_ENABLED
@@ -66,8 +73,43 @@ async function armIntent(
     firstInboundReliable: input.firstInboundReliable,
     archived: input.archived,
   })) {
-    return { armed: false, reason: !masterEnabled ? "automation_disabled" : "not_qualifying_first_inbound" };
+    return { armed: false, reason: !masterEnabled ? "automation_disabled" : mode === "off" ? "mode_off" : "not_qualifying_first_inbound" };
   }
+
+  /* ⛔ THE CONTENT GUARDS — one rule set, firstReplyGuard (src/lib/firstReplyAutomation.ts). Each read
+     fails CLOSED: a lead we cannot read is not armed, a suppression lookup that fails reads as
+     suppressed (checkSuppressed), a last outbound we cannot read is "not an opener" (no auto-send). */
+  const { data: guardLead, error: guardLeadErr } = await input.service.from("outreach_leads")
+    .select("amount_paid, status").eq("id", input.leadId).maybeSingle();
+  if (guardLeadErr) throw new Error(`first_reply_guard_lead_read_failed:${guardLeadErr.message}`);
+  const supp = await checkSuppressed(input.service, { phone: input.phone, leadId: input.leadId });
+  const { data: lastOut } = await input.service.from("whatsapp_messages")
+    .select("template_name").eq("lead_id", input.leadId).eq("direction", "outbound").neq("status", "failed")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const guard = firstReplyGuard({
+    body: input.body,
+    lead: guardLead ?? null,
+    suppressed: supp.suppressed,
+    lastOutboundTemplate: (lastOut as { template_name?: string | null } | null)?.template_name ?? null,
+  });
+  if (guard.kind === "skip") return { armed: false, reason: `guard_${guard.reason}` };
+  if (guard.kind === "decline") {
+    /* A clear no: suppressed on every channel at once, and the once-ever slot is spent as a flag for
+       a human — so no later message can arm an audit or a pitch for this business. */
+    await suppress(input.service, { phone: input.phone, leadId: input.leadId, email: null },
+      { reason: "replied_no", source: "whatsapp_decline_inbound" });
+    const { error: flagErr } = await input.service.from("whatsapp_auto_replies").insert({
+      lead_id: input.leadId, phone: input.phone, trigger_wa_message_id: input.wamid,
+      trigger: "first_reply", status: "flagged_decline", reason: input.body.slice(0, 300),
+      fire_after: new Date().toISOString(),
+    });
+    if (flagErr && (flagErr as { code?: string }).code !== "23505") {
+      throw new Error(`first_reply_decline_flag_failed:${(flagErr as { message?: string }).message ?? "unknown"}`);
+    }
+    return { armed: false, reason: "decline_flagged" };
+  }
+  /* Send mode sends only on a reply to an approved opener; otherwise this reply runs the audit alone. */
+  mode = modeForReply(mode, guard.sendAllowed);
 
   /* The unique lead_id row is the durable exactly-once claim.  This is intentionally before any
      audit creation: a webhook timeout, function cold start, or create-ai-audit failure cannot erase

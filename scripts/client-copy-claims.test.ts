@@ -123,7 +123,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["prospect preview panel (operator)", "src/components/ProspectPreviewPanel.tsx"],
   /* Multi-user (2026-09-27): a salesperson reads these while on the phone to a prospect. */
   ["lead CRM panel (operator, both roles)", "src/components/LeadCrmPanel.tsx"],
-  ["available to claim (operator)", "src/components/AvailableToClaim.tsx"],
+  ["hook audit popup (operator, both roles)", "src/components/HookAuditDialog.tsx"],
   ["sales CRM wording (operator)", "src/lib/salesCrm.ts"],
 ];
 const OPERATOR_ALLOWED: string[] = [

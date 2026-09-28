@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BriefcaseBusiness, CalendarClock, ChevronDown, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -25,6 +25,8 @@ import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
+import { reviewedHookQuestions } from '@/lib/hookQuestionEdit';
+import { OUTREACH_AUDIT_MAP_ROOT } from '@/lib/outreachAuditMap';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
 import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
@@ -283,7 +285,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
 /* ── REMOVE FROM MY LEADS (sales, 2026-09-28) ─────────────────────────────────────────────────────
    ⛔ Never a delete, and the server decides what it means (sales_remove_leads): never contacted →
-   back to Available to claim; contacted on any channel → archived and still theirs, never claimable.
+   unassigned; contacted on any channel → archived and still theirs, never claimable.
    The confirmation says both before anything happens. */
 function RemoveFromMyLeads({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
   const { toast } = useToast();
@@ -470,11 +472,13 @@ function FollowUp({ lead, onSave }: {
 }
 
 /* ── HOOK AUDIT: the one-lead AI visibility check and its evidence (rivals named, sources) ─────── */
-/* ⛔ PROPOSE → REVIEW → RUN (2026-09-28). The system proposes the three questions from what is genuinely
-   on the lead — trade, town, and the services / service areas Sales recorded — through create-ai-audit's
-   own preview, which plans them exactly as the run will (finalHookPlan). The salesperson reads them and
-   either runs THOSE three (sent back verbatim) or asks for a fresh proposal. No free-text editing: the
-   questions must come from the lead's real services and places, never from a typed invention.
+/* ⛔ PROPOSE → REVIEW/EDIT → RUN (2026-09-28). The system proposes the three questions from what is
+   genuinely on the lead — trade, town, and the services / service areas recorded — through
+   create-ai-audit's own preview, which plans them exactly as the run will (finalHookPlan).
+   ⛔ EDITABLE, BOTH ROLES (Paul, 2026-09-28 — overturns the earlier "no free-text editing"): the
+   operator may reword any of the three before Run. The WORDS change, the method does not: exactly
+   three (reviewedHookQuestions refuses a blank or a repeat rather than letting the server top it up),
+   both engines, one run, the same create-ai-audit hook path.
    3 questions × 2 engines × 1 run = 6 results, scored by hookScore (unchanged). */
 function hookInputs(lead: CrmRow, hook: ReturnType<typeof useHookVisibility>['data']) {
   const bizType = (hook?.audit?.business_type || lead.search_keyword || lead.category || '').trim();
@@ -494,7 +498,9 @@ function hookInputs(lead: CrmRow, hook: ReturnType<typeof useHookVisibility>['da
   };
 }
 
-export function LeadHookPanel({ leadId }: { leadId: string }) {
+/** autoPropose: the Outreach row's audit popup — when the lead has no audit yet, propose the three
+ *  questions straight away instead of showing the "Propose questions" button first. */
+export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string; autoPropose?: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const crm = useLeadCrmRow(leadId);
@@ -502,7 +508,15 @@ export function LeadHookPanel({ leadId }: { leadId: string }) {
   const hook = hookQ.data;
   const [hookBusy, setHookBusy] = useState(false);
   const [proposed, setProposed] = useState<string[] | null>(null);
+  const autoProposed = useRef(false);
   const lead = crm.data;
+  const needsProposal = autoPropose && !!lead && !hookQ.isLoading && !hookQ.isError && !hook?.audit && !proposed;
+  useEffect(() => {
+    if (!needsProposal || autoProposed.current) return;
+    autoProposed.current = true;
+    void propose();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsProposal]);
   if (!lead) return null;
 
   const propose = async () => {
@@ -519,17 +533,23 @@ export function LeadHookPanel({ leadId }: { leadId: string }) {
     } finally { setHookBusy(false); }
   };
 
+  const reviewed = proposed ? reviewedHookQuestions(proposed) : null;
   const run = async () => {
-    if (!proposed?.length) return;
+    if (!reviewed?.ok) return;
     const { body } = hookInputs(lead, hook);
     setHookBusy(true);
     try {
-      const data = await invokeEdge<{ ok: boolean; error?: string; message?: string }>('create-ai-audit', { ...body, questions: proposed });
+      const data = await invokeEdge<{ ok: boolean; error?: string; message?: string; already_running?: boolean }>('create-ai-audit', { ...body, questions: reviewed.questions });
       if (!data?.ok) { toast({ title: "Couldn't start the check", description: data?.message ?? data?.error ?? 'Try again', variant: 'destructive' }); return; }
       setProposed(null);
-      await qc.invalidateQueries({ queryKey: hookVisibilityQueryKey(lead.id) });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: hookVisibilityQueryKey(lead.id) }),
+        qc.invalidateQueries({ queryKey: OUTREACH_AUDIT_MAP_ROOT }),
+      ]);
       notifyLeadChanged(lead.id);
-      toast({ title: 'AI visibility check started', description: 'The result appears here in a few minutes. Nothing is sent to the lead.' });
+      toast(data.already_running
+        ? { title: 'Already running', description: 'This business already has a check in progress, so nothing new was started. Its progress shows here.' }
+        : { title: 'AI visibility check started', description: 'It runs on the server, so you can close this and carry on. The result appears on the lead in a few minutes. Nothing is sent to the lead.' });
     } catch (e) {
       toast({ title: "Couldn't start the check", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setHookBusy(false); }
@@ -547,18 +567,27 @@ export function LeadHookPanel({ leadId }: { leadId: string }) {
       {reportAuditId && hook?.report?.kind === 'ready' && hook.report.isCurrent && <ReportSharePanel leadId={lead.id} auditId={reportAuditId} />}
       {proposed && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
-          <div className={LABEL}>The {proposed.length} questions we would ask ChatGPT and Google AI</div>
-          <ol className="list-decimal space-y-1 pl-5 text-sm">{proposed.map((q) => <li key={q}>{q}</li>)}</ol>
+          <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Google AI — edit any of them</div>
+          <div className="space-y-1.5">
+            {proposed.map((q, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="w-4 shrink-0 text-right text-xs text-muted-foreground">{i + 1}</span>
+                <Input value={q} maxLength={240} className="h-9 text-sm" aria-label={`Question ${i + 1}`} data-testid={`hook-question-${i + 1}`}
+                  onChange={(e) => { const v = e.target.value; setProposed((prev) => (prev ? prev.map((p, j) => (j === i ? v : p)) : prev)); }} />
+              </div>
+            ))}
+          </div>
+          {reviewed && reviewed.ok === false && "reason" in reviewed && <p className="text-[11px] text-orange-400">{reviewed.reason}</p>}
           <p className="text-[11px] text-muted-foreground">
-            Built from this lead&rsquo;s trade, town{lead.services_included?.length ? ', services' : ''}{lead.service_areas?.length ? ' and service areas' : ''}. Each is asked once on both engines: {proposed.length * 2} results. Nothing is sent to the lead.
+            Proposed from this lead&rsquo;s trade, town{lead.services_included?.length ? ', services' : ''}{lead.service_areas?.length ? ' and service areas' : ''}. Word them the way a customer would ask. Each is asked once on both engines: {proposed.length * 2} results. Nothing is sent to the lead.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={hookBusy} onClick={() => setProposed(null)}>Cancel</Button>
             <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void propose()}>
               <RefreshCw className="h-3.5 w-3.5" />Propose again
             </Button>
-            <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void run()} data-testid="hook-run-reviewed">
-              {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Run these questions
+            <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy || !reviewed?.ok} onClick={() => void run()} data-testid="hook-run-reviewed">
+              {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Run audit
             </Button>
           </div>
         </section>

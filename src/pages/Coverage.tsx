@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2, MapPin, Telescope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import NichePanel from '@/components/NichePanel';
+import { NicheCheckCard } from '@/components/NicheCheckCard';
 import { useCoverage } from '@/hooks/useCoverage';
 import { TRADES, TOWN_BAND_DEFAULT_MIN, TOWN_BAND_DEFAULT_MAX } from '@/lib/trades';
 import {
@@ -121,6 +122,8 @@ export default function Coverage() {
   const [nicheOpen, setNicheOpen] = usePersistedState<boolean>(
     'coverage-niche-open', false, { tier: 'session', scope: user?.id },
   );
+  /* The older stored-audit fold — background, opened on purpose (never persisted). */
+  const [storedOpen, setStoredOpen] = useState(false);
 
   /* Suppressed towns (none today) stay off the list; the page no longer offers a way to show them. */
   const rows = useMemo(
@@ -168,10 +171,10 @@ export default function Coverage() {
             size="sm"
             className="h-9"
             onClick={() => setNicheOpen((v) => !v)}
-            title={`Is ${trade} worth mass outreach? Reads every stored ${trade} audit across all towns — free, no searches`}
+            title={`Is ${trade} worth selling Findable into? Opening shows the latest niche check — free; running a new one is priced on its own button`}
           >
             <Telescope className="mr-1.5 h-3.5 w-3.5" />
-            {nicheOpen ? 'Hide niche verdict' : 'Niche verdict · free'}
+            {nicheOpen ? 'Hide niche verdict' : 'Niche verdict'}
           </Button>
         </div>
         <div className="space-y-1">
@@ -201,7 +204,19 @@ export default function Coverage() {
           preference: without it, switching Plumbers → Locksmiths would leave the plumber fold on
           screen under a Locksmiths heading until the refetch landed — a stale read presented as a
           decision, which is the harm §6c weighs above losing your place. */}
-      {nicheOpen && <NichePanel key={trade} trade={trade} autoLoad />}
+      {/* ⛔ THE NICHE CHECK IS THE VERDICT (2026-09-28): a deliberate 3-town, Gemini-first sample
+          (src/lib/nicheSample.ts). The older fold over whatever audits happen to be stored is a
+          different method — mixed purposes, single runs, no chosen towns — so it is background only,
+          behind its own button and never shown as the verdict. */}
+      {nicheOpen && (
+        <div className="space-y-2">
+          <NicheCheckCard key={trade} trade={trade} />
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setStoredOpen((v) => !v)} aria-expanded={storedOpen}>
+            {storedOpen ? 'Hide the older stored-audit reading' : 'Show the older stored-audit reading (a different method — background only)'}
+          </Button>
+          {storedOpen && <NichePanel key={`stored-${trade}`} trade={trade} autoLoad />}
+        </div>
+      )}
 
       {/* ⛔ THE HEADLINE IS THE POINT OF THE PAGE. "6 of 87 done" in one look, with the breakdown
           beside it. The counts sum to the total because a town shows at its furthest rung only. */}

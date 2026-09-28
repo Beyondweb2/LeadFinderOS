@@ -74,7 +74,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener). */
-const BUILD_ID = "2026-09-27c";
+const BUILD_ID = "2026-09-28a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -731,6 +731,18 @@ Deno.serve(async (req) => {
        to report_sent — two templates delivering the same report, disagreeing about whether it had
        been delivered. The class is "was this built from the lead's audit", and the variable names
        are how a template says so. */
+    /* ⛔ THE CONTACT-METHOD TAG, SERVER-SIDE (2026-09-28). The admin's Outreach WhatsApp click set the
+       pill in the browser; a salesperson cannot write the lead row, and a send from the Inbox set it for
+       nobody — so a lead a rep had actually messaged never showed WhatsApp. A real live send is the fact;
+       it fills ONLY an empty tag (.is null), never overwrites a method somebody chose. Both roles. */
+    if (env.live && status === "sent" && resolvedLeadId) {
+      try {
+        await service.from("outreach_leads").update({ contact_method: "whatsapp" })
+          .eq("id", resolvedLeadId).is("contact_method", null);
+      } catch (e) {
+        console.error(`[send-whatsapp-message] contact_method tag write failed for lead ${resolvedLeadId}:`, (e as Error).message);
+      }
+    }
     if (env.live && status === "sent" && resolvedLeadId) {
       const tvars = usedTemplate ? (WA_TEMPLATES[usedTemplate]?.vars ?? []) : [];
       const isReportSend = tvars.includes("trade") || tvars.includes("trade_plural") || tvars.includes("competitors");

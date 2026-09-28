@@ -1,6 +1,9 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    WHAT HAPPENS WHEN A BUSINESS REPLIES TO THE OPENER — three modes, one definition.
 
+   ⚠️ 2026-09-28: the guards below now live ONCE in src/lib/firstReplyAutomation.ts (firstReplyGuard),
+   run by the live webhook path; the legacy chain that held them is deleted. "Off" is the Inbox
+   control's boolean (effectiveFirstReplyMode). The history that follows is why they exist.
    ⛔ WHY THIS IS A MODE ON THE EXISTING RULE AND NOT A SECOND MECHANISM (Paul, 2026-09-08). The
    reply chain in _shared/whatsapp-inbound.ts already carries SEVEN guards that took incidents to
    learn: the opener gate (only a reply to initial_contact counts), the once-per-lead slot, decline

@@ -61,6 +61,8 @@ export const SALES_VIEW_COLUMNS = [
   'services_included', 'service_areas',
   // 2026-09-28 (migration 20260928180000): what Sales heard about the domain (A/B/C/D).
   'domain_control',
+  // 2026-09-28 (migration 20260929000000): why the town is unconfirmed — the row's town-gate badge.
+  'town_fetch_note',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.

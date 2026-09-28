@@ -25,6 +25,19 @@ export function getQueueStatus(qc: QueryClient, fresh = false): Promise<QueueSta
   return qc.fetchQuery({ queryKey: QUEUE_STATUS_KEY, queryFn: fetchQueueStatus, staleTime: fresh ? 0 : STATUS_STALE_MS });
 }
 
+/* Is the queue sending? The pure words and type live in src/lib/queueLine.ts. */
+import type { QueueState } from './queueLine.ts';
+export { QUEUE_PAUSED_LINE, queuedLeadLine, type QueueState } from './queueLine.ts';
+export const QUEUE_STATE_KEY = ['whatsapp-queue-state'] as const;
+
+export async function fetchQueueState(): Promise<QueueState> {
+  const { data, error } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'queue_state' } });
+  if (error) throw error;
+  const d = (data ?? {}) as Partial<QueueState> & { ok?: boolean };
+  if (d.ok !== true || typeof d.paused !== 'boolean' || typeof d.windowOpen !== 'boolean') throw new Error('queue state unreadable');
+  return { paused: d.paused, windowOpen: d.windowOpen, windowStartHour: typeof d.windowStartHour === 'number' ? d.windowStartHour : 7 };
+}
+
 /** After a write that returns the status payload (pause/resume), keep the shared copy current. */
 export function rememberQueueStatus(qc: QueryClient, payload: QueueStatusPayload | null | undefined) {
   if (payload?.ok) qc.setQueryData(QUEUE_STATUS_KEY, payload);

@@ -149,7 +149,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(/create or replace function public\.lead_set_profile[\s\S]*?perform public\._require_work\(_lead_id\);/.test(MIG), "lead_set_profile checks role + ownership first");
   ok(!/phone\s*=/.test((MIG.match(/update public\.outreach_leads set\s*services_included[\s\S]*?where id = _lead_id;/) ?? [""])[0]), "…and never writes the phone (an identity key)");
   ok(/revoke all on function public\.lead_set_profile\(uuid, text\[\], text\[\], text, text\) from public, anon;/.test(MIG), "anon cannot call lead_set_profile");
-  const tail = SALES_VIEW_COLUMNS.slice(-4, -1).join(",");
+  const tail = SALES_VIEW_COLUMNS.slice(-5, -2).join(","); // then domain_control (20260928180000), town_fetch_note (20260929000000)
   ok(tail === "lead_source,services_included,service_areas", "the sales view gains services + areas at its END (and the SPA's column list matches)");
   const viewSql = (MIG.match(/create or replace view public\.sales_leads[\s\S]*?from public\.outreach_leads l/) ?? [""])[0];
   ok(!/sold_by|stripe|amount_paid,|refund|delivery_(checklist|ref|notes)/.test(viewSql.replace("null::numeric as amount_paid", "")), "the sales view carries no sale stamp, money or delivery column");
@@ -171,7 +171,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(/kind: "audit_run"/.test(fn), "a person's hook audit is written to the lead's history");
   ok(/salesAuditRefusal\(\{ purpose: body\.purpose, hookAudit: body\.hook_audit === true, leadId, reuseAuditId \}\)/.test(fn) && /canWorkLead\(actor, workLead\)/.test(fn), "sales: hook only, on a lead they work (unchanged gate)");
   const panel = read("src/components/LeadCrmPanel.tsx");
-  ok(/invokeEdge<[^>]*>\('create-ai-audit', \{ \.\.\.body, preview: true \}\)/.test(panel) && /\{ \.\.\.body, questions: proposed \}/.test(panel), "the workspace proposes, the salesperson reviews, the reviewed three run verbatim");
+  ok(/invokeEdge<[^>]*>\('create-ai-audit', \{ \.\.\.body, preview: true \}\)/.test(panel) && /\{ \.\.\.body, questions: reviewed\.questions \}/.test(panel), "the workspace proposes, the operator reviews/edits (exactly three, reviewedHookQuestions), the reviewed three run verbatim");
   ok(/question_count: OUTREACH_HOOK_QUESTIONS/.test(panel) && /hook_audit: true/.test(panel), "…as a 3-question hook audit");
   ok(!/<Textarea[^>]*proposed/.test(panel), "reviewed questions are not free-text editable (no invented service)");
 }

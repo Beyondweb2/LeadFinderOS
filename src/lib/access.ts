@@ -108,8 +108,6 @@ export interface LeadPermissions {
   assignOwner: boolean;
   /** The AI Audit page (full measurement, discovery, baselines). */
   auditAdmin: boolean;
-  /** The unassigned, never-contacted pool with Claim (the admin assigns instead). */
-  claimPool: boolean;
   /** The admin's free-text "Private" note on the row (outreach_leads.notes, not in the sales view). */
   privateNote: boolean;
   /** Statuses this role may SET. null = every status. */
@@ -138,7 +136,6 @@ export function leadPermissions(role: AppRole | null): LeadPermissions {
     queueControls: admin,
     assignOwner: admin,
     auditAdmin: admin,
-    claimPool: role === 'sales',
     privateNote: admin,
     settableStatuses: admin ? null : role === 'sales' ? SALES_SETTABLE_PIPELINE : [],
   };
@@ -164,11 +161,11 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Coverage', admin: 'yes', sales: 'yes (counts)' },
   { feature: 'Find Leads', admin: 'yes', sales: 'yes' },
   { feature: 'Add a new business', admin: 'yes', sales: 'yes (never a duplicate)' },
-  { feature: 'Claim an unassigned, never-contacted lead (Available to claim)', admin: 'assigns instead', sales: 'yes' },
+  { feature: 'Claim an unassigned, never-contacted lead met again in Find Leads ("Claim lead")', admin: 'assigns instead', sales: 'yes' },
   { feature: 'Claim / add a contacted or owned lead', admin: 'reassigns', sales: 'no' },
   { feature: 'Assign / reassign / unassign', admin: 'yes', sales: 'no' },
   { feature: 'Move leads to an existing campaign (one or a selection)', admin: 'any lead', sales: 'own leads only' },
-  { feature: 'Remove from my leads (never contacted → back to Available to claim; contacted → archived, still yours)', admin: 'reassigns instead', sales: 'own leads, never a client or a won/onboarding lead' },
+  { feature: 'Remove from my leads (never contacted → unassigned; contacted → archived, still yours, out of the working list)', admin: 'reassigns instead', sales: 'own leads, never a client or a won/onboarding lead' },
   { feature: 'Internal notes, follow-ups, call outcomes, website control, archive', admin: 'all leads', sales: 'own leads' },
   { feature: 'Stages', admin: 'all', sales: 'interested, price given, not interested, won (awaiting admin)' },
   { feature: 'Review replies', admin: 'yes', sales: 'no' },

@@ -70,7 +70,7 @@ export async function salesPatchLead(leadId: string, patch: Record<string, unkno
 }
 
 /** "Remove from my leads" (sales only; migration 20260928230000). The SERVER decides per lead, under
- *  the row lock: never contacted → released (unassigned, back to Available to claim if otherwise
+ *  the row lock: never contacted → released (unassigned; claimable again from Find Leads if otherwise
  *  eligible); contacted on any channel → archived with the owner kept (never claimable); anything else
  *  refused (not theirs / a client, an opener waiting in the queue, won / onboarding). Never a delete. */
 export interface RemoveFromMyLeadsResult extends RpcResult {

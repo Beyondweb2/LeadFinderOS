@@ -442,9 +442,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Never add `trade` to `DirectoryFact`.** Facts are per-host; evidence is per-trade; the join can
   only SUBTRACT. Unknown hosts route to WHO'S WINNING, never to tasks. **No winnability scoring**;
   counts only. Known nationals/directories (`knownEntities.ts`) CLASSIFY, never add.
-- **The niche verdict is the ONLY market verdict** (top of Coverage; `market-view` `niche`, free).
-  Coverage rows are `worked` / `leads` / `untouched`. **Opening a view never spends**; only buttons
-  that price themselves on their face may.
+- **The niche verdict is the ONLY market verdict** — since 2026-09-28 it is the **Niche Check**
+  (`src/lib/nicheSample.ts`, fn `niche-sample`, `NicheCheckCard` on Coverage): 3 towns (one per size
+  band, distinct regions, random), 4 fixed intents, 3 runs, **Gemini decides, ChatGPT is context**, one
+  Places search per town reads the real market; each town is one create-ai-audit discovery audit with
+  `is_market`. Verdict derived on read (`niche_samples` stores evidence only). The old `market-view`
+  fold is background only. Coverage rows are `worked` / `leads` / `untouched`. **Opening a view never
+  spends**; only buttons that price themselves on their face may (the check's Run is admin-only).
 - **`named` reads `cellNamed(cell, ctx)` everywhere** — with the business + trade/town the ANSWER
   TEXT is the ruler (a verdict may not contradict it; a citation alone is never a naming; joined or
   split spelling of one name is one name, never fuzzy), then the model verdict, then the stored
@@ -601,7 +605,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Greeting names:** `displayName.ts` — `greet` (full peel) vs `identify` (legal suffix, then trailing
   town from the lead row, then "Services"); `IDENTIFY_NAME_TEMPLATES` is the one place that decides.
 - **First-reply rule is three-way** (`whatsapp_outreach_state.first_reply_mode`): off / audit only /
-  audit + send; `audit_only` rows are terminal by status. **Never merge the three audit entry points**
+  audit + send; `audit_only` rows are terminal by status. **Off is `auto_reply_enabled = false` and arms
+  nothing** (`effectiveFirstReplyMode`). The guards are ONE set, `firstReplyGuard`
+  (`src/lib/firstReplyAutomation.ts`): client → nothing, auto-responder/placeholder → nothing, a clear no →
+  suppressed + flagged, no audit, no pitch; an auto-send needs a reply to an approved opener. The legacy
+  inbound chain is deleted — never re-inline a guard in the webhook. **Never merge the three audit entry points**
   (row pill, Inbox button with auto-pitch, bulk) — share input resolution only.
 
 **Reports and documents**
