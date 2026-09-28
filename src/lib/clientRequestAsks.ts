@@ -13,7 +13,8 @@
      · their name, address, phone and services consistent everywhere an engine reads them
      · a review link
      · the four-week re-measurement
-   And if their site cannot take pages, we move it to our hosting or send the spec to whoever runs it.
+   And if their site cannot take pages, we build them a new one (only where their business owns or
+   controls the domain), or send the spec to whoever runs it.
 
    THE RULE FOR THIS LIST, unchanged from the document it replaces: an ask belongs here ONLY if we
    genuinely cannot do it ourselves — it needs their access, their identity, their property, or their
@@ -110,18 +111,18 @@ export function deliveryAsks(ctx: AskContext): DeliveryAsk[] {
        than asserting a migration that has not been agreed. Wiring the real signal in is the
        questionnaire-adaptive pass; when it lands, `blocking` becomes true only for a client who said
        yes to moving. */
-    label: 'Tell us who controls your domain name — if it turns out we need it',
+    label: 'Tell us who owns and controls your domain name',
     why:
-      'This only matters if we end up moving your site to our hosting, which we will not do without '
-      + 'agreeing it with you first. If we do, one setting has to change at whoever your domain is '
-      + 'registered with — the step that most often holds a move up, and nearly always somewhere '
-      + 'nobody has logged in to for years. Worth knowing the answer before we need it.',
+      'If we build you a new website, your business needs to own or control its domain and be free to '
+      + 'point it at the new site. An agency or developer managing it for you is normally fine; an '
+      + 'agency or anyone else OWNING it is something you would need to sort out first. Your agreement '
+      + 'with your current provider (notice periods, fees, who owns the site) is yours to check, and we '
+      + 'cannot advise on it.',
     how:
-      'For now, just tell us who it is: wherever the domain was bought (GoDaddy, 123-Reg, Namecheap, '
-      + 'or whoever). If you have no idea, say so and we will work it out from the domain itself. '
-      + 'If a move does turn out to be the right call, send us the login and we will make the change '
-      + 'ourselves — or tell us who has it and we will send them the exact record to change, with '
-      + 'screenshots.',
+      'Just tell us where the domain was bought (GoDaddy, 123-Reg, Namecheap, or whoever) and whose '
+      + 'name it is registered in. If you have no idea, say so and we will check the setup with you. '
+      + 'Never send us a password: when a change is needed we send you, or whoever looks after it, the '
+      + 'exact setting to change, with screenshots.',
     cost: 'free',
   },
   {

@@ -16,6 +16,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isPaidLead } from './leadPayment.ts';
 import { effectiveQuestionnaireServices } from './questionnaireComplete.ts';
+import { DOMAIN_REASON_TEXT, domainAuthority, domainInputFromRow, type DomainAuthorityVerdict, type DomainRow } from './domainAuthority.ts';
 
 export interface HandoffLead {
   business_name?: string | null;
@@ -28,9 +29,11 @@ export interface HandoffLead {
   service_areas?: string[] | null;
   website_control?: string | null;
   delivery_checklist?: Record<string, unknown> | null;
+  /** Findable ended the service (domain / authority dispute). A terminated client is never ready. */
+  service_terminated_at?: string | null;
 }
 
-export interface HandoffOnboarding {
+export interface HandoffOnboarding extends DomainRow {
   services?: string | null;
   services_list?: string[] | null;
   areas_list?: string[] | null;
@@ -54,7 +57,7 @@ export interface HandoffEvidence {
 export type HandoffSource = 'onboarding' | 'sales' | 'findable' | 'payment' | null;
 export type HandoffKey =
   | 'paid' | 'business' | 'contact' | 'services' | 'service_areas' | 'website' | 'website_access'
-  | 'gbp_access' | 'crawl' | 'hook_audit';
+  | 'gbp_access' | 'crawl' | 'hook_audit' | 'domain' | 'service';
 
 export interface HandoffItem {
   key: HandoffKey;
@@ -73,6 +76,8 @@ export interface HandoffReadiness {
   items: HandoffItem[];
   /** The labels of the required items that are not ok, in order. Empty when ready. */
   missing: string[];
+  /** DOMAIN READY / DOMAIN / AGENCY ISSUE / NOT NEEDED, with the reasons (src/lib/domainAuthority.ts). */
+  domain: DomainAuthorityVerdict;
 }
 
 /** Delivery checklist key Findable ticks by hand once the GBP invite has actually arrived. Same key
@@ -188,8 +193,27 @@ export function handoffReadiness(
     source: evidence.hookAudit ? 'findable' : null, detail: evidence.hookAudit ? 'On file' : 'None run',
   });
 
+  /* ⛔ THE DOMAIN RULE (Paul, 2026-09-28): a NEW-SITE client is never READY TO START while the domain
+     or their authority to connect it is unresolved. Only the client's own onboarding answers can
+     satisfy it — what Sales heard (lead.domain_control) is shown, never counted. Optimising their own
+     site does not need it (NOT NEEDED). */
+  /* ⚠️ NO ONBOARDING ROW = NOT ANSWERED, never "not needed": without the client's answers we cannot
+     know whether this is a new-site build, and absence is never an answer (CLAUDE.md §4). */
+  const domain = domainAuthority(domainInputFromRow(O));
+  add({
+    key: 'domain', label: 'Domain / authority', ok: !!O && domain.ready, required: !O || domain.applies,
+    source: domain.applies && O ? 'onboarding' : null,
+    detail: !O ? "The client hasn't answered the domain questions yet"
+      : !domain.applies ? 'Not needed — we work on their own site'
+      : domain.ready ? (domain.mayReuseExistingSite ? 'DOMAIN READY · may reuse their current site' : 'DOMAIN READY · fresh build (no rights to reuse the current site)')
+      : `DOMAIN / AGENCY ISSUE: ${domain.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}`,
+  });
+  if (L.service_terminated_at) {
+    add({ key: 'service', label: 'Service active', ok: false, required: true, source: 'findable', detail: 'Findable ended the service (domain / authority dispute)' });
+  }
+
   const missing = items.filter((i) => i.required && !i.ok).map((i) => i.label);
-  return { ready: missing.length === 0, label: missing.length === 0 ? 'READY TO START' : 'MISSING INFORMATION', items, missing };
+  return { ready: missing.length === 0, label: missing.length === 0 ? 'READY TO START' : 'MISSING INFORMATION', items, missing, domain };
 }
 
 /** One line for an email or a list cell: "READY TO START" or "MISSING INFORMATION: services, GBP access". */

@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
    resolve the Vite "@/" alias. */
 import { respellTrade } from "../../../src/lib/freeCheckTrade.ts";
 import { serveDecision, serveInputFromRow, platformLabel, type ServeGateRow } from "../../../src/lib/serveGate.ts";
+import { DOMAIN_REASON_TEXT, DOMAIN_ROW_COLUMNS, domainAuthority, domainInputFromRow, type DomainRow } from "../../../src/lib/domainAuthority.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // ONE STRING LITERAL, not a concatenation. supabase-js types the select on the literal, so
       // splitting it across two lines makes `data` GenericStringError[] and the cast below a TS2352.
-      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services, confirmed_phone")
+      .select("id, lead_id, business_name, status, contact_email, confirmed_location, created_at, website_platform, website_platform_other, website_manager, willing_to_migrate, gbp_exists, gbp_status, gbp_verified, must_not_say, photos_status, incomplete, notify_attempts, source, services, confirmed_phone, domain_escalated_at, " + DOMAIN_ROW_COLUMNS)
       /* ⛔ THE GATE IS notify_sent_at, NOT notified_at. notified_at is the CLAIM stamp, written
          before the attempt — gating on it is what made a failed send permanent and invisible.
          Gating on delivery, bounded by attempts, is what lets a failure come back. */
@@ -373,6 +374,12 @@ Deno.serve(async (req) => {
       if (row.gbp_verified === "no") needsYou.push("Their Google Business Profile is NOT verified, so nothing on it shows on Maps or Search. Profile work would publish to nobody. Verification needs them (postcard or video call) and takes days — start it before anything else.");
       if (row.gbp_status === "no_access") needsYou.push("They cannot get into their Google Business Profile. They cannot add us, so nothing on the profile can start until this is sorted.");
       if (mustNotSay) needsYou.push(`They told us something we must not say: "${mustNotSay}"`);
+      /* ⛔ THE DOMAIN RULE (2026-09-28): a new-site customer whose domain / authority is unresolved cannot
+         pay, and one who asked us to check their setup is waiting on you. Never legal advice: find out
+         who owns and controls the domain; the client sorts out their own agency agreement. */
+      const domain = domainAuthority(domainInputFromRow(row as unknown as DomainRow));
+      if ((row as { domain_escalated_at?: string | null }).domain_escalated_at) needsYou.push("They stopped at the domain question and asked us to check their setup with them. Find out who owns and controls the domain before any new site goes ahead.");
+      if (domain.applies && !domain.ready) needsYou.push(`DOMAIN / AGENCY ISSUE: ${domain.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(", ")}. Do not promise a new site or a switch-over until they own or control the domain.`);
 
       /* ⛔ THE FREE-CHECK TAIL IS A DIFFERENT SENTENCE BECAUSE IT IS A DIFFERENT EVENT. They asked
          for a check and are waiting on it; they have not gone cold, and there is no payment screen

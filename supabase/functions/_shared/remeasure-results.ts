@@ -45,7 +45,7 @@ export const resultsPublicUrl = (remeasureAuditId: string) => `${REPORT_PUBLIC_O
 
 export interface RemeasureBundle {
   audit: { id: string; lead_id: string | null; business_name: string | null; business_type: string | null; website: string | null; location_text: string | null; audit_purpose: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null; created_at: string };
-  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null; subscription_status: string | null; subscription_renews_at: string | null };
+  lead: { id: string; business_name: string | null; email: string | null; website: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null; remeasure_results_sent_at: string | null; search_location: string | null; derived_town: string | null; amount_paid: number | string | null; remeasure_due_date: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null; subscription_status: string | null; subscription_renews_at: string | null; service_terminated_at?: string | null };
   baselineRuns: Array<{ id: string; status: string | null; created_at: string }>;
   replayRuns: Array<{ id: string; status: string | null; created_at: string }>;
   comparison: MeasurementComparison;
@@ -67,7 +67,7 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   if (String(audit.audit_purpose ?? "").toLowerCase() !== "remeasure") return { bundle: null, reason: `audit_purpose is '${audit.audit_purpose ?? "null"}', not remeasure` };
   if (!audit.lead_id) return { bundle: null, reason: "replay has no lead" };
   const { data: l } = await service.from("outreach_leads")
-    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_renews_at")
+    .select("id, business_name, email, website, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at, search_location, derived_town, amount_paid, remeasure_due_date, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_renews_at, service_terminated_at")
     .eq("id", audit.lead_id).maybeSingle();
   const lead = l as RemeasureBundle["lead"] | null;
   if (!lead) return { bundle: null, reason: "lead not found" };
@@ -140,6 +140,9 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
   if (!bundle) return { kind: "skipped", reason: reason ?? "not a pointed-at replay" };
   const { audit, lead, replayRuns, comparison, town } = bundle;
   if (lead.remeasure_results_sent_at) return { kind: "skipped", reason: `already sent ${lead.remeasure_results_sent_at}` };
+  /* ⛔ FINDABLE ENDED THIS SERVICE over a client-side domain / authority / IP dispute (Paul, 2026-09-28):
+     the money-back guarantee does not cover that interruption, so no "the guarantee applies" email goes. */
+  if (lead.service_terminated_at) return { kind: "skipped", reason: `service terminated ${lead.service_terminated_at} (domain / authority dispute)` };
   /* All runs settled? A run still pending/running means the next tick will look again. */
   const unsettled = replayRuns.filter((r) => r.status === "pending" || r.status === "running").length;
   if (unsettled > 0) return { kind: "skipped", reason: `${unsettled} replay run(s) still in flight` };

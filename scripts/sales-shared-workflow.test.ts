@@ -28,8 +28,8 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\
 console.log("── the safe view is the salesperson's only lead source ──");
 {
   /* The NEWEST definition of the view (20260928120000 appended lead_source after amount_paid;
-     20260928160000 appended services_included + service_areas). */
-  const mig = read("supabase/migrations/20260928160000_self_sourced_handoff.sql");
+     20260928160000 appended services_included + service_areas; 20260928180000 domain_control). */
+  const mig = read("supabase/migrations/20260928180000_domain_authority.sql");
   const view = mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("from public.outreach_leads l", mig.indexOf("create or replace view public.sales_leads")));
   const cols = [...view.matchAll(/(null::numeric as amount_paid)|l\.([a-z_]+)/g)].map((m) => (m[1] ? "amount_paid" : m[2]));
   ok(cols.length === SALES_VIEW_COLUMNS.length && cols.every((c, i) => c === SALES_VIEW_COLUMNS[i]), `SALES_VIEW_COLUMNS equals the view's ${cols.length} columns, in order`);

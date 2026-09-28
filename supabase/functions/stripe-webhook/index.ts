@@ -4,6 +4,7 @@ import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audi
 import { createDelayedSubscription, subscriptionEndedByTerm } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { handoffLine, handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
+import { DOMAIN_ROW_COLUMNS } from "../../../src/lib/domainAuthority.ts";
 import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
@@ -150,7 +151,7 @@ async function paymentHandoff(service: any, leadId: string | null, onboardingId:
     const [l, ob, crawl, audit] = await Promise.all([
       service.from("outreach_leads").select("business_name,phone,email,website,amount_paid,status,services_included,service_areas,website_control,delivery_checklist,sold_by_user_id,assigned_to_user_id").eq("id", leadId).maybeSingle(),
       onboardingId
-        ? service.from("onboarding_responses").select("services,services_list,areas_list,areas_wanted,business_website,confirmed_phone,contact_email,website_route,website_manager,domain_status,gbp_status,confirmed_location").eq("id", onboardingId).maybeSingle()
+        ? service.from("onboarding_responses").select("services,services_list,areas_list,areas_wanted,confirmed_phone,contact_email,website_manager,gbp_status,confirmed_location," + DOMAIN_ROW_COLUMNS).eq("id", onboardingId).maybeSingle()
         : Promise.resolve({ data: null }),
       service.from("lead_crawl_checks").select("lead_id").eq("lead_id", leadId).maybeSingle(),
       service.from("ai_audits").select("id").eq("lead_id", leadId).or("audit_purpose.is.null,audit_purpose.eq.audit,audit_purpose.eq.free_check").limit(1).maybeSingle(),

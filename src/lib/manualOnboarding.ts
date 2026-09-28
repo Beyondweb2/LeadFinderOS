@@ -25,7 +25,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './questionnaireComplete.ts';
-import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_TOTAL_PAYMENTS } from './findableOffer.ts';
+import { FINDABLE_TOTAL_PAYMENTS } from './findableOffer.ts';
+import type { DomainAccessAnswer, YesNoNotSure } from './domainAuthority.ts';
 
 /* ── the questions, verbatim ──────────────────────────────────────────────────────────────────── */
 
@@ -43,8 +44,8 @@ export const ONBOARDING_COPY = {
   websiteStep: { headline: 'Your website', sub: 'Where the work gets published, and who can let us in.' },
   domain: { question: 'Are we using an existing domain?', newNote: 'If we build your site on a brand-new domain, we re-measure after eight weeks instead of four, because a new domain needs longer to be discovered. Same questions, same engines, and the guarantee applies to those results.' },
   agency: { question: 'Does an agency or web company look after your website?' },
-  access: { question: 'Will you be able to get us access to edit it?', helper: 'Your pages have to go on your own site, so we need a login from whoever holds it.' },
-  managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can arrange access without going through you.' },
+  access: { question: 'Will you be able to get us access to edit it?', helper: 'Your pages have to go on your own site, so we need editing access to it. Never send us a password here.' },
+  managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can send them exactly what we need. Your agreement with them stays yours to manage.' },
   selfSite: { question: 'Can you give us access to edit it?' },
   permission: { headline: 'Permission to do the work', sub: "One thing to agree, then we're moving.", discuss: "I'd rather talk it through first" },
   q2: { headline: 'What you do, and where', sub: "Each service becomes its own page on your site, written the way people search — one per town you want work from. That's the last thing we need." },
@@ -89,7 +90,7 @@ export function websiteManagerFromBranch(agency: AgencyManages | null): 'web_com
 /** findable-site siteAccess.ts accessConsequenceText — positive match on the one answer that keeps the site. */
 export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
   return answer !== 'yes_access'
-    ? `No problem, we can build you a new website as part of the same Findable service. We build, host and manage it during the ${FINDABLE_MINIMUM_TERM_MONTHS}-month term, and the website build transfers to you once all ${FINDABLE_TOTAL_PAYMENTS} payments are complete.`
+    ? `No problem, we'll build you a new website as part of the same service. It transfers to you once all ${FINDABLE_TOTAL_PAYMENTS} payments are complete.`
     : "We'll optimise your existing website as part of the same Findable service, at no extra cost. Your website stays yours.";
 }
 /** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
@@ -152,6 +153,14 @@ export interface OnboardingAnswers {
   gbp_consent: 'yes_all' | 'discuss' | null;
   services: string[];
   areas: string[];
+  /* The domain rule (2026-09-28, src/lib/domainAuthority.ts) — the customer flow's questions verbatim. */
+  domain_owned: YesNoNotSure | null;
+  domain_access: DomainAccessAnswer | null;
+  domain_third_party: YesNoNotSure | null;
+  site_rights: YesNoNotSure | null;
+  authority_confirmed: boolean;
+  dns_permission: boolean;
+  materials_confirmed: boolean;
 }
 
 type Row = Record<string, unknown> | null | undefined;
@@ -200,8 +209,13 @@ export function answersFromRecords(row: Row, lead: Row): OnboardingAnswers {
     gbp_consent: consent === 'yes_all' || consent === 'discuss' ? consent : null,
     services: effectiveQuestionnaireServices(r as never),
     areas: list(r.areas_list).length ? list(r.areas_list) : list(r.areas_wanted),
+    domain_owned: yns(r.domain_owned), domain_access: dacc(r.domain_access), domain_third_party: yns(r.domain_third_party),
+    site_rights: yns(r.site_rights),
+    authority_confirmed: r.authority_confirmed === true, dns_permission: r.dns_permission === true, materials_confirmed: r.materials_confirmed === true,
   };
 }
+function yns(v: unknown): YesNoNotSure | null { return v === 'yes' || v === 'no' || v === 'not_sure' ? v : null; }
+function dacc(v: unknown): DomainAccessAnswer | null { return v === 'yes' || v === 'no' || v === 'agency' ? v : null; }
 
 export interface AnswerProblem { field: keyof OnboardingAnswers; message: string }
 
@@ -233,6 +247,9 @@ export function cleanAnswers(raw: unknown): OnboardingAnswers {
     website_manager_email: text(r.website_manager_email, 200),
     gbp_consent: pick(r.gbp_consent, ['yes_all', 'discuss'] as const),
     services: list(r.services).slice(0, 40), areas: list(r.areas).slice(0, 30),
+    domain_owned: yns(r.domain_owned), domain_access: dacc(r.domain_access), domain_third_party: yns(r.domain_third_party),
+    site_rights: yns(r.site_rights),
+    authority_confirmed: r.authority_confirmed === true, dns_permission: r.dns_permission === true, materials_confirmed: r.materials_confirmed === true,
   };
 }
 
@@ -262,10 +279,29 @@ export function buildOnboardingPatch(a: OnboardingAnswers, operatorId: string, n
     services_list: services.length ? services : null,
     areas_list: a.areas.length ? a.areas : null,
     ...(route ? { website_route: route } : {}),
+    /* ⛔ THE DOMAIN ANSWERS OWN THEIR LIFETIME: asked only on the new-site path (the same condition the
+       customer form uses), so on the optimise path they are written null rather than left behind. The
+       operator records what the CLIENT said; ticking a confirmation here asserts the client gave it. */
+    ...domainPatch(a, siteAccess),
     incomplete: !complete,
     operator_edited_at: nowIso,
     operator_edited_by: operatorId,
     updated_at: nowIso,
+  };
+}
+
+function domainPatch(a: OnboardingAnswers, siteAccess: string | null): Record<string, unknown> {
+  const newSite = !!siteAccess && siteAccess !== 'yes_access';   // findable-site needsNewWebsite, for an answered branch
+  const existing = newSite && a.domain_status === 'existing';
+  const hasSite = newSite && siteAccess !== 'no_website';
+  return {
+    domain_owned: existing ? a.domain_owned : null,
+    domain_access: existing ? a.domain_access : null,
+    domain_third_party: existing ? a.domain_third_party : null,
+    site_rights: hasSite ? a.site_rights : null,
+    authority_confirmed: hasSite ? a.authority_confirmed : null,
+    dns_permission: newSite ? a.dns_permission : null,
+    materials_confirmed: newSite ? a.materials_confirmed : null,
   };
 }
 

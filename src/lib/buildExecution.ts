@@ -27,7 +27,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, WebsiteBuildState } from './websiteBuildState.ts';
-import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, previewReadyProblems, standardEvidence } from './websiteBuildState.ts';
+import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, mayPreserveCopy, previewReadyProblems, standardEvidence } from './websiteBuildState.ts';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, readUpgradeReview, strengthProblems, type UpgradeReview } from './websiteQuality.ts';
 import type { BuildPackInput } from './buildPack.ts';
 import { BUILD_STANDARD_LINES, EMPTY_STANDARD, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
@@ -56,10 +56,17 @@ export interface AssetPlan {
   /** assigned, then approvedAdditional — the whole download list. */
   list: Array<{ asset: ManifestAsset; slot: string }>;
   held: number; ignored: number; unassignedBrand: ManifestAsset[];
+  /** Approved, but not recorded as client-owned — never downloaded. */
+  notClientOwned: number;
 }
 export function assetsToDownload(i: BuildPackInput, m?: Mapping): AssetPlan {
   const s = i.state;
-  const use = s.manifest.assets.filter((a) => a.approval === 'approved');
+  /* ⛔ APPROVED AND CLIENT-OWNED (Paul, 2026-09-28): an asset being visible on the old site does not
+     make it the client's. Only an asset recorded as client-owned is downloaded; an approved one whose
+     ownership is third-party or unknown is held (counted in `notClientOwned`) until that is settled. */
+  const approved = s.manifest.assets.filter((a) => a.approval === 'approved');
+  const use = approved.filter((a) => a.ownership === 'client_owned');
+  const notClientOwned = approved.length - use.length;
   const held = s.manifest.assets.filter((a) => a.approval === 'pending').length;
   const ignored = s.manifest.assets.filter((a) => a.approval === 'rejected').length;
   const map = m ?? computeMapping(s, i.template, i.facts, i.businessName);
@@ -70,7 +77,7 @@ export function assetsToDownload(i: BuildPackInput, m?: Mapping): AssetPlan {
   const rest = use.filter((a) => !slotOf.has(a.source_url));
   const approvedAdditional = rest.filter((a) => !isBrand(a));
   const unassignedBrand = rest.filter(isBrand);
-  return { assigned, approvedAdditional, list: [...assigned, ...approvedAdditional.map((asset) => ({ asset, slot: '' }))], held, ignored, unassignedBrand };
+  return { assigned, approvedAdditional, list: [...assigned, ...approvedAdditional.map((asset) => ({ asset, slot: '' }))], held, ignored, unassignedBrand, notClientOwned };
 }
 
 /** The X3 / Asset Download lines: assigned by slot, then the additional approved assets. */
@@ -153,6 +160,13 @@ export function executionBlockers(i: BuildPackInput, m: Mapping): string[] {
     ...(cloudflareModeProblem(s) ? [cloudflareModeProblem(s)] : []),
     ...(isFaithfulRoute(s) && !s.rebuild_style ? ['Rebuild fidelity not chosen'] : []),
     ...(isFaithfulRoute(s) && !s.copy_ownership ? ['Copy ownership not recorded'] : []),
+    /* ⛔ A FAITHFUL OR MODERNISED REBUILD REPRODUCES THE CURRENT SITE (Paul, 2026-09-28): only where the
+       client has confirmed their business owns it or may reuse it (copy_ownership client_wrote /
+       client_permission — the onboarding answer site_rights is shown beside it on the client page).
+       Agency-owned or unclear: a genuinely new Findable-template build using business facts and
+       client-owned material only. The new-design style reproduces nothing and is not blocked. */
+    ...(isFaithfulRoute(s) && s.copy_ownership && s.rebuild_style !== 'new_design' && !mayPreserveCopy(s.copy_ownership)
+      ? ['Reuse of the current site’s design, text and images is not confirmed by the client — choose the template route (a fresh Findable build) or record their confirmation'] : []),
     ...(!isTemplateRoute(s) && !s.pages.length ? ['Page architecture (no pages planned)'] : []),
     ...(s.pages.some((p) => p.action === 'undecided') ? ['Undecided pages in the page plan'] : []),
     ...(isFaithfulRoute(s) && !i.existingSiteUrl ? ['Source website URL'] : []),

@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { tradeWord } from '@/lib/trade';
 import { chipsForTrade, serviceExamplesFor } from '@/lib/onboardingChips';
+import { AGENCY_CONTRACT_NOTE, DOMAIN_ACCESS_OPTIONS, DOMAIN_OWNED_OPTIONS, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, DOMAIN_THIRD_PARTY_OPTIONS, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
 import {
   ACCESS_OPTIONS, AGENCY_OPTIONS, DOMAIN_OPTIONS, ONBOARDING_COPY as C, SELF_SITE_OPTIONS,
   accessConsequenceText, answerProblems, answersFromRecords, onboardingStatus, permissionAckText, siteAccessFromBranch,
@@ -160,6 +161,28 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
           </div>}
           {a.agency_manages === 'no' && <div><p className="mb-1 font-medium">{C.selfSite.question}</p><Radio name="self" value={a.self_site} options={SELF_SITE_OPTIONS} onChange={(v) => set('self_site', v)} /></div>}
           {siteAccess && <p className="text-xs text-muted-foreground">{accessConsequenceText(siteAccess)}</p>}
+          {/* ⛔ THE DOMAIN RULE (2026-09-28): the same questions the customer is asked on the new-site
+              path. Record only what the CLIENT confirmed — never tick a confirmation on their behalf. */}
+          {siteAccess && siteAccess !== 'yes_access' && (() => {
+            const hasSite = siteAccess !== 'no_website';
+            const v = domainAuthority({ newSite: true, hasCurrentSite: hasSite, domain_status: a.domain_status, domain_owned: a.domain_owned, domain_access: a.domain_access, domain_third_party: a.domain_third_party, authority_confirmed: a.authority_confirmed, dns_permission: a.dns_permission, materials_confirmed: a.materials_confirmed, site_rights: a.site_rights });
+            return <div className="space-y-3 rounded-md border p-3" data-testid="manual-domain-section">
+              <p className="font-medium">Your domain</p>
+              <p className="text-xs text-muted-foreground">{AGENCY_CONTRACT_NOTE}</p>
+              {a.domain_status === 'new' && <p className="text-xs text-muted-foreground">{NEW_DOMAIN_REGISTRATION_NOTE}</p>}
+              {a.domain_status === 'existing' && <>
+                <div><p className="mb-1">{DOMAIN_QUESTIONS.owned}</p><Radio name="domain-owned" value={a.domain_owned} options={DOMAIN_OWNED_OPTIONS} onChange={(x) => set('domain_owned', x)} /></div>
+                <div><p className="mb-1">{DOMAIN_QUESTIONS.access}</p><Radio name="domain-access" value={a.domain_access} options={DOMAIN_ACCESS_OPTIONS} onChange={(x) => set('domain_access', x)} /></div>
+                <div><p className="mb-1">{DOMAIN_QUESTIONS.thirdParty}</p><Radio name="domain-third" value={a.domain_third_party} options={DOMAIN_THIRD_PARTY_OPTIONS} onChange={(x) => set('domain_third_party', x)} /></div>
+              </>}
+              {hasSite && <div><p className="mb-1">{DOMAIN_QUESTIONS.siteRights}</p><Radio name="site-rights" value={a.site_rights} options={SITE_RIGHTS_OPTIONS} onChange={(x) => set('site_rights', x)} /></div>}
+              {hasSite && <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.authority_confirmed} onChange={(e) => set('authority_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.authority}</span></label>}
+              <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.dns_permission} onChange={(e) => set('dns_permission', e.target.checked)} /><span>{DOMAIN_QUESTIONS.dns}</span></label>
+              <label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={a.materials_confirmed} onChange={(e) => set('materials_confirmed', e.target.checked)} /><span>{DOMAIN_QUESTIONS.materials}</span></label>
+              <p className={`text-xs font-semibold ${v.ready ? 'text-emerald-600' : 'text-amber-600'}`}>{v.label}{v.reasons.length ? `: ${v.reasons.map((r) => DOMAIN_REASON_TEXT[r]).join(', ')}` : ''}</p>
+              <p className="text-xs text-muted-foreground">Tick only what the client has actually confirmed.</p>
+            </div>;
+          })()}
         </Panel>
 
         <Panel headline={C.permission.headline} sub={C.permission.sub}>

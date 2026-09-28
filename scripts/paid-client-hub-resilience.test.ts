@@ -59,10 +59,13 @@ const selects = [...hubFn.matchAll(/\.select\("([^"]+)"\)/g)].map((m) => m[1]);
 const live: Record<string, string[]> = {
   outreach_leads: ['id','business_name','address','search_location','derived_town','website','email','phone','contact_name','amount_paid','payment_date','status','next_action','next_action_date','baseline_audit_id','remeasure_audit_id','remeasure_due_date','delivery_checklist','category','search_keyword','services_included','delivery_ref','notes','delivery_notes','project_overview','project_status','paid_for','place_id','website_build',
     /* 2026-09-28, the handoff (read back from information_schema that day). */
-    'service_areas','website_control','website_control_note','lead_source','assigned_to_user_id','added_by_user_id','sold_by_user_id','sold_at','user_id'],
+    'service_areas','website_control','website_control_note','lead_source','assigned_to_user_id','added_by_user_id','sold_by_user_id','sold_at','user_id',
+    /* 2026-09-28, the domain rule + ending the service (read back from information_schema that day). */
+    'domain_control','service_terminated_at','service_termination_reason','service_termination_note','stripe_subscription_id','subscription_status'],
   lead_activity: ['id','lead_id','actor_user_id','kind','body','data','created_at'],
   team_members: ['user_id','display_name'],
-  onboarding_responses: ['id','business_name','business_website','confirmed_location','business_address','services','services_list','areas_list','areas_wanted','contact_name','contact_email','confirmed_phone','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','must_not_say','website_platform','website_platform_other','willing_to_migrate','competitor_name','gbp_consent','gbp_exists','gbp_status','gbp_verified','gbp_manager_email','incomplete'],
+  onboarding_responses: ['id','business_name','business_website','confirmed_location','business_address','services','services_list','areas_list','areas_wanted','contact_name','contact_email','confirmed_phone','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','must_not_say','website_platform','website_platform_other','willing_to_migrate','competitor_name','gbp_consent','gbp_exists','gbp_status','gbp_verified','gbp_manager_email','incomplete',
+    'domain_owned','domain_access','domain_third_party','site_rights','authority_confirmed','dns_permission','materials_confirmed','domain_escalated_at'],
   ai_audits: ['id','baseline_completed_at','short_code','created_at','audit_purpose','business_name','business_type','location_text','specialism','website','has_website','baseline_target_runs','is_measurement'],
   ai_audit_runs: ['id','audit_id','run_number','status','mention_rate','results','created_at'],
   ai_audit_queue: ['run_id','status','id','question','result'],

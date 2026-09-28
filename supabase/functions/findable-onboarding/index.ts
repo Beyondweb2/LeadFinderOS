@@ -95,6 +95,12 @@ const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
    only to a site Findable builds, and optimise-only is to get its own structure (not yet defined).
    Anything not in this set stores null. */
 const PLAN_TIER = new Set(["keep", "new_site"]);
+/* DOMAIN OWNERSHIP + AUTHORITY (2026-09-28, src/lib/domainAuthority.ts): the new-website service only
+   goes ahead where the client owns / controls the domain and may authorise the change. Validated to
+   the known sets; anything else stores null, which the rule reads as NOT a yes. */
+const YES_NO_NOT_SURE = new Set(["yes", "no", "not_sure"]);
+const DOMAIN_ACCESS = new Set(["yes", "no", "agency"]);
+const strictBool = (v: unknown): boolean | null => (v === true ? true : v === false ? false : null);
 const SUBMIT_COOLDOWN_MS = 10 * 60_000;   // one submission per lead per 10 min
 
 const clip = (v: unknown, max: number): string | null => {
@@ -792,6 +798,18 @@ Deno.serve(async (req) => {
            else stores null, which reads downstream as the keep default — the safe direction. */
         plan_tier: typeof a.plan_tier === "string" && PLAN_TIER.has(a.plan_tier) ? a.plan_tier : null,
         domain_status: a.domain_status === "existing" || a.domain_status === "new" ? a.domain_status : null,
+        /* ⛔ THE DOMAIN ANSWERS, IN ALL THREE LISTS (answers / NEWER_COLS / optional) or they vanish.
+           The client's own words are the ONLY thing that can make a new site domain-ready; findable-
+           checkout re-derives the verdict from these columns and refuses a new-site payment that is not. */
+        domain_owned: typeof a.domain_owned === "string" && YES_NO_NOT_SURE.has(a.domain_owned) ? a.domain_owned : null,
+        domain_access: typeof a.domain_access === "string" && DOMAIN_ACCESS.has(a.domain_access) ? a.domain_access : null,
+        domain_third_party: typeof a.domain_third_party === "string" && YES_NO_NOT_SURE.has(a.domain_third_party) ? a.domain_third_party : null,
+        site_rights: typeof a.site_rights === "string" && YES_NO_NOT_SURE.has(a.site_rights) ? a.site_rights : null,
+        authority_confirmed: strictBool(a.authority_confirmed),
+        dns_permission: strictBool(a.dns_permission),
+        materials_confirmed: strictBool(a.materials_confirmed),
+        /* The customer stopped at the domain question and asked Findable to look at their setup. */
+        domain_escalated_at: a.domain_escalated === true ? new Date().toISOString() : null,
         incomplete,
       };
 
@@ -805,7 +823,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -821,7 +839,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status"];
+        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;

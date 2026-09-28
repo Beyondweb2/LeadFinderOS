@@ -47,7 +47,9 @@ const fullOnboarding: HandoffOnboarding = {
   const salesLead: HandoffLead = { ...paidLead, services_included: ["Boiler repair"], service_areas: ["Wakefield", "Ossett"], website_control: "client_controls",
     delivery_checklist: { [HANDOFF_GBP_CHECKLIST_KEY]: true } };
   const r = handoffReadiness(salesLead, null, { crawl: true, hookAudit: true });
-  ok(r.ready, "Sales-entered services, areas, website control + Findable's GBP tick → READY TO START without onboarding");
+  /* 2026-09-28 (the domain rule): with no onboarding the client has not confirmed the domain / authority
+     themselves, so the ONLY thing missing is that — everything Sales collected still counts. */
+  ok(!r.ready && r.missing.join() === "Domain / authority", "Sales-entered services, areas, website control + Findable's GBP tick satisfy everything except the client's own domain confirmation");
   ok(["services", "service_areas", "website_access"].every((k) => r.items.find((i) => i.key === k)?.source === "sales"), "…and each item says it came from Sales");
 }
 {
@@ -71,7 +73,7 @@ const fullOnboarding: HandoffOnboarding = {
     const r = handoffReadiness(paidLead, { ...fullOnboarding, gbp_status: g }, { crawl: true, hookAudit: true });
     ok(r.missing.includes("Google Business Profile access"), `GBP '${g}' is missing`);
   }
-  const noSite = handoffReadiness({ ...paidLead, website: null }, { ...fullOnboarding, business_website: null, website_route: "new_site" }, { crawl: false, hookAudit: false });
+  const noSite = handoffReadiness({ ...paidLead, website: null }, { ...fullOnboarding, business_website: null, website_route: "new_site", domain_status: "new", dns_permission: true, materials_confirmed: true }, { crawl: false, hookAudit: false });
   ok(noSite.ready, "a new-site client needs no crawl and no website access");
   const unpaid = handoffReadiness({ ...paidLead, amount_paid: null }, fullOnboarding, { crawl: true, hookAudit: true });
   ok(!unpaid.ready && unpaid.missing[0] === "Payment confirmed", "no recorded amount → not ready (paid means amount_paid > 0)");
@@ -147,7 +149,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(/create or replace function public\.lead_set_profile[\s\S]*?perform public\._require_work\(_lead_id\);/.test(MIG), "lead_set_profile checks role + ownership first");
   ok(!/phone\s*=/.test((MIG.match(/update public\.outreach_leads set\s*services_included[\s\S]*?where id = _lead_id;/) ?? [""])[0]), "…and never writes the phone (an identity key)");
   ok(/revoke all on function public\.lead_set_profile\(uuid, text\[\], text\[\], text, text\) from public, anon;/.test(MIG), "anon cannot call lead_set_profile");
-  const tail = SALES_VIEW_COLUMNS.slice(-3).join(",");
+  const tail = SALES_VIEW_COLUMNS.slice(-4, -1).join(",");
   ok(tail === "lead_source,services_included,service_areas", "the sales view gains services + areas at its END (and the SPA's column list matches)");
   const viewSql = (MIG.match(/create or replace view public\.sales_leads[\s\S]*?from public\.outreach_leads l/) ?? [""])[0];
   ok(!/sold_by|stripe|amount_paid,|refund|delivery_(checklist|ref|notes)/.test(viewSql.replace("null::numeric as amount_paid", "")), "the sales view carries no sale stamp, money or delivery column");
