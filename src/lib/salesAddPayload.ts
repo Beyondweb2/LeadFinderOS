@@ -7,6 +7,8 @@
    an address today); the search result wins for the website and the listing category, which the
    admin's add also takes from the result. */
 
+import { leadCountryFor } from './leadCountry';
+
 export interface SearchResultForAdd {
   id?: string | null;
   name: string;
@@ -60,7 +62,9 @@ export function salesAddPayload(a: {
     search_location: str(a.searchLocation),
     website: str(a.lead.websiteUrl) ?? str(d.website),
     email: str(a.email),
-    country: a.country,
+    /* The country Google's address names (leadCountry.ts), else the search's — never the form's hidden
+       choice alone (349 UK leads were stored as USA that way). */
+    country: leadCountryFor(str(a.lead.address) ?? str(d.address), a.country),
     list_type: a.listType,
     campaign_id: a.campaignId,
     place_id: str(a.lead.id),

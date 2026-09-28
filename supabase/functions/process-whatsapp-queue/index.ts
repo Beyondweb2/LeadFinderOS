@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+import { INDIA_SEND_WINDOW, windowOpen as sendWindowOpen, windowOpenForDigits } from "../../../src/lib/sendWindow.ts";
 import { leadAccess, resolveActor } from "../_shared/access.ts";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { checkSuppressed, suppress } from "../_shared/suppression.ts";
@@ -445,19 +447,9 @@ function nextEligibleSendAt(sentToday: number, storedNextSendAt: string | null):
   return (openToday ? base : new Date(base.getTime() + 24 * 60 * 60 * 1000)).toISOString();
 }
 
-/** UK phone → E.164 digits (no '+', as Meta wants). Mirrors send-reminders. */
+/** Phone → E.164 digits (no '+', as Meta wants). ONE rule: src/lib/waNumber.ts (was a hand-kept mirror). */
 function toWhatsAppNumber(raw: string, country?: string | null): string | null {
-  let s = (raw || "").replace(/[^\d+]/g, "");
-  if (!s) return null;
-  if (s.startsWith("00")) s = "+" + s.slice(2);
-  if (s.startsWith("+")) return s.slice(1).replace(/\D/g, "") || null;
-  // National formats → assume UK unless clearly another country code already present.
-  const cc = (country || "UK").toUpperCase();
-  if (s.startsWith("0")) {
-    if (cc === "UK" || cc === "GB") return "44" + s.slice(1);
-    return s.replace(/\D/g, ""); // unknown national format → best effort
-  }
-  return s.replace(/\D/g, "") || null;
+  return toWhatsAppDigits(raw, country);
 }
 
 // Body params come from the shared, vars-aware builder (templateBodyParams), filled in
@@ -516,6 +508,7 @@ Deno.serve(async (req) => {
         paused: st?.paused === true,
         windowOpen: m >= WINDOW_START * 60 && m < WINDOW_END_MIN,
         windowStartHour: WINDOW_START,
+        indiaWindowOpen: sendWindowOpen(INDIA_SEND_WINDOW),
       });
     }
     const forceReq = body.force === true;
@@ -622,6 +615,15 @@ Deno.serve(async (req) => {
     // Minute-granular so the 21:30 end is honoured (a whole-hour compare would run to 21:59).
     const nowMin = uk.hour * 60 + uk.minute;
     const windowOpen = nowMin >= WINDOW_START * 60 && nowMin < WINDOW_END_MIN;
+    /* ⛔ THE RECIPIENT'S OWN HOURS (2026-09-28, src/lib/sendWindow.ts). `windowOpen` above is still the
+       London window and still what the dashboard shows. An Indian number (+91) has its own window
+       (10:00–19:00 IST); the tick runs while EITHER is open, and each lane only picks a lead whose own
+       window is open. Chosen from the destination digits, never from outreach_leads.country (measured
+       wrong on ~370 rows). With no +91 lead queued, every tick behaves exactly as before. */
+    const indiaWindowOpen = sendWindowOpen(INDIA_SEND_WINDOW);
+    const anyWindowOpen = windowOpen || indiaWindowOpen;
+    const leadWindowOpen = (r: { phone?: unknown; country?: unknown }) =>
+      force || windowOpenForDigits(toWhatsAppNumber(String(r.phone ?? ""), (r.country as string | null) ?? null));
 
     const statusPayload = {
       testMode, live, sentToday: sentToday ?? 0, cap: DAILY_CAP,
@@ -634,7 +636,7 @@ Deno.serve(async (req) => {
       hookQueuedCount: hookQueuedCount ?? 0,
       // Leads queued for the contact_followup (opener follow-up) lane, awaiting their paced turn.
       contactQueuedCount: contactQueuedCount ?? 0,
-      nextSendAt, windowOpen, paused,
+      nextSendAt, windowOpen, indiaWindowOpen, paused,
       /* The real next eligible send, Europe/London, computed live — what the dashboard shows.
          `nextSendAt` (the raw stored pacing stamp) stays in the payload for back-compat, but the
          panel reads THIS. Display only; changes no gate. */
@@ -1242,7 +1244,7 @@ Deno.serve(async (req) => {
     // --- Tick: decide whether to send one ---
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
-    if (!windowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
+    if (!anyWindowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     /* == AUDIT AHEAD OF THE SEND =============================================================
        video_template's {{4}} is the lead's report link, so the audit must exist before the
        message can be built. This starts the audits the drip is about to need, capped at
@@ -1257,7 +1259,9 @@ Deno.serve(async (req) => {
        spend with no recipient.
        ⚠️ Never fatal: a failure here must not stop a tick sending something it already could. */
     let auditAhead: Awaited<ReturnType<typeof runOutreachAuditAhead>> | null = null;
-    try {
+    /* Only in the London window, exactly as before: the India-only hours (05:30–07:00 London in BST)
+       must not start UK leads' paid audits early. */
+    if (windowOpen || force) try {
       auditAhead = await runOutreachAuditAhead(service, (name) => TEMPLATES[name ?? ""]?.vars);
       if (auditAhead.started || auditAhead.waiting) {
         console.log(`[outreach-audit] started=${auditAhead.started} waiting=${auditAhead.waiting} inFlight=${auditAhead.inFlight} skipped=${auditAhead.skipped} considered=${auditAhead.considered}`);
@@ -1320,7 +1324,13 @@ Deno.serve(async (req) => {
        per round whatever its size, so a small test campaign clears the same day.
        ⚠️ THE PACING, THE CAP, THE WINDOW AND EVERY GUARD ARE UNTOUCHED. This changes WHICH lead is
        chosen, never how many or how fast. Still one send per tick. */
-    const scanned = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null }>;
+    const scannedAll = (leadRows ?? []) as Array<Record<string, unknown> & { id: string; campaign_id?: string | null; queued_at?: string | null }>;
+    /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
+       written) and is filtered out BEFORE the look-ahead slice, so sixty Indian leads at the head at
+       22:00 IST can never hide the UK leads behind them. */
+    const scanned = scannedAll.filter(leadWindowOpen);
+    const heldForLocalWindow = scannedAll.length - scanned.length;
+    if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
     const candidates = interleaveByCampaign(scanned).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
     if (scanned.length > candidates.length || campaignsRepresented(scanned) > 1) {
       console.log(`[queue] scanned ${scanned.length} queued lead(s) across ${campaignsRepresented(scanned)} campaign(s); examining the fairest ${candidates.length}`);
@@ -1361,7 +1371,7 @@ Deno.serve(async (req) => {
          would corrupt a report-sent lead. This lane re-messages deliberately and leaves the pipeline
          status untouched. Every per-lead guard is re-checked HERE (authoritative), not trusted from
          the client that queued it. */
-      const { data: hookLead } = await service
+      const { data: hookRows } = await service
         .from("outreach_leads")
         .select("id, business_name, phone, email, country, contact_name, amount_paid, user_id")
         .not("hook_followup_queued_at", "is", null)
@@ -1369,8 +1379,9 @@ Deno.serve(async (req) => {
         .not("phone", "is", null)
         .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
         .order("hook_followup_queued_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .limit(QUEUE_LOOKAHEAD);
+      // The oldest whose own window is open (with only UK numbers queued: exactly the old limit(1) row).
+      const hookLead = ((hookRows ?? []) as Array<Record<string, any>>).find(leadWindowOpen) ?? null;
 
       if (hookLead) {
         const clearMarker = () => service.from("outreach_leads")
@@ -1464,7 +1475,7 @@ Deno.serve(async (req) => {
          is SEPARATE from the opener path on purpose — the opener's already_sent guard would refuse
          every one of these (they all got the opener) and its status→initial_contact write would
          corrupt the pipeline. Leaves the pipeline status untouched; re-checks eligibility HERE. */
-      const { data: contactLead } = await service
+      const { data: contactRows } = await service
         .from("outreach_leads")
         .select("id, business_name, phone, email, country, amount_paid, user_id")
         .not("contact_followup_queued_at", "is", null)
@@ -1472,8 +1483,8 @@ Deno.serve(async (req) => {
         .not("phone", "is", null)
         .or(`derived_town.not.is.null,town_fetch_note.is.null,town_fetch_note.not.in.(${[...SETTLED_TOWN_NOTES].join(",")})`)
         .order("contact_followup_queued_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .limit(QUEUE_LOOKAHEAD);
+      const contactLead = ((contactRows ?? []) as Array<Record<string, any>>).find(leadWindowOpen) ?? null;
 
       if (contactLead) {
         const clearMarker = () => service.from("outreach_leads")
@@ -1560,7 +1571,9 @@ Deno.serve(async (req) => {
 
       return json({
         ok: true,
-        skipped: (archivedQueuedCount ?? 0) > 0
+        skipped: heldForLocalWindow > 0
+          ? "outside_lead_window"
+          : (archivedQueuedCount ?? 0) > 0
           ? "empty_queue_archived_skipped"
           : (unverifiedQueuedCount ?? 0) > 0
             ? "empty_queue_unverified_town_skipped"

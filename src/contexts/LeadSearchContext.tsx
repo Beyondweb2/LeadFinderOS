@@ -561,6 +561,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           };
           filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
 
+          /* ⛔ THE COUNTRY GOOGLE RESOLVED, NOT THE FORM'S REMEMBERED ONE (2026-09-28). The form's choice
+             persisted silently from the last Quick Locations click, so a typed "Grimsby" after a US click
+             stored 349 UK businesses as USA. search-leads names the country the place actually is in
+             (resolvedCountry, from Google's formatted address); null — a cached search, an old deploy —
+             keeps the form's value. Each lead is corrected again from its own address on add. Set on
+             thisSearch BEFORE the one update below, so results and search still land together. */
+          if (typeof data.resolvedCountry === 'string' && data.resolvedCountry) thisSearch.country = data.resolvedCountry as Country;
           setLeads(filteredLeads);
           setLastSearch(thisSearch);
           setSearchError(null);

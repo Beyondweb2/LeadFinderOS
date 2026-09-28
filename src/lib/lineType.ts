@@ -70,3 +70,26 @@ export function isWhatsAppEligible(
 ): boolean {
   return classifyLineType(phone, country).whatsappEligible;
 }
+
+/**
+ * A hand-typed number in the international form Google Places stores ("+91 98765 43210"), for a lead
+ * in `country` — or null when it is not a valid number there.
+ *
+ * ⛔ WHY (2026-09-28). Every WhatsApp path turns a leading 0 into 44 for UK leads and leaves any other
+ * national form as bare digits: "98765 43210" would be sent to +98 (Iran), "098765 43210" is refused by
+ * Meta, and one client helper rewrites it to a UK 44… number. Find Leads never has this problem (Google
+ * returns "+91 …"); a salesperson TYPING a number does. So a non-UK typed number is stored the way
+ * Google would have stored it, and every downstream path then sees an explicit country code.
+ * ⚠️ UK callers do not use this: a UK number stays exactly as typed (07…), as it always has.
+ */
+export function internationalPhone(
+  phone: string | null | undefined,
+  country: Country | string | null | undefined,
+): string | null {
+  const raw = (phone ?? '').trim();
+  const iso = country ? (COUNTRY_TO_ISO[country] as CountryCode | undefined) : undefined;
+  if (!raw || !iso) return null;
+  const parsed = parsePhoneNumberFromString(raw, iso);
+  if (!parsed || !parsed.isValid() || parsed.country !== iso) return null;
+  return parsed.formatInternational();
+}

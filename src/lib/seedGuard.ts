@@ -759,6 +759,29 @@ function escapeForRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/* ══ WHICH COUNTRY WORD PINS A LEAD'S TOWN (2026-09-28) ══════════════════════════════════════════════
+   🔴 qualifyPlace defaulted to "UK" and create-ai-audit called it for EVERY lead, so an Indian lead's
+   hook asked "chartered accountant in Pune UK" — and the engines, asked from India, were told Britain.
+   ⛔ UK IS UNCHANGED, BYTE FOR BYTE: an explicit UK/GB, a blank country and anything unrecognised all
+   answer "UK", exactly the default this replaced (a day-28 replay compares against day-0 wording).
+   Only a country in the lead `Country` list answers its own name. */
+const PLACE_SUFFIX_BY_COUNTRY: Record<string, string> = {
+  india: 'India', usa: 'USA', australia: 'Australia', canada: 'Canada', germany: 'Germany',
+  france: 'France', spain: 'Spain', italy: 'Italy', netherlands: 'Netherlands', belgium: 'Belgium',
+  ireland: 'Ireland', newzealand: 'New Zealand', southafrica: 'South Africa', singapore: 'Singapore',
+  uae: 'UAE', brazil: 'Brazil', mexico: 'Mexico', japan: 'Japan', sweden: 'Sweden', thailand: 'Thailand',
+};
+export function placeSuffixForCountry(country: string | null | undefined): string {
+  const k = String(country ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  return PLACE_SUFFIX_BY_COUNTRY[k] ?? 'UK';
+}
+
+/** True when `question` already names `word` as a whole word/phrase ("Pune India", "… in India"). */
+function mentionsWord(question: string, word: string): boolean {
+  const w = normalise(word);
+  return !!w && ` ${normalise(question)} `.includes(` ${w} `);
+}
+
 export function hasCountryMarker(question: string): boolean {
   const q = ` ${normalise(question)} `;
   return COUNTRY_MARKERS.some((c) => q.includes(` ${c} `));
@@ -788,6 +811,7 @@ export function qualifyPlace(
     const q = (raw ?? '').trim();
     if (!q) return q;
     if (hasCountryMarker(q)) return q;          // already pinned — never double-append
+    if (mentionsWord(q, suffix)) return q;      // already carries THIS suffix ("Pune India") — same rule
     if (!mentionsTown(q, town)) return q;       // dropMissingTown owns this case, not us
 
     /* Replace the LAST occurrence of the town, which is where the place sits in

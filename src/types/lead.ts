@@ -83,6 +83,8 @@ export interface SearchResponse {
      because nothing on screen ever named the county, and a field that appears only when something
      is wrong is a field nobody learns to read. */
   resolvedLocation?: string | null;
+  /** The lead-enum country Google resolved the search to ('India'), or null — src/lib/leadCountry.ts. */
+  resolvedCountry?: string | null;
   /** Every candidate Google returned, ONLY when it returned more than one. An empty array means the
    *  name was unambiguous; it never means the check was skipped. */
   locationCandidates?: string[];

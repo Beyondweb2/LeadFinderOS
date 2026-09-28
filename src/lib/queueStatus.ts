@@ -35,7 +35,10 @@ export async function fetchQueueState(): Promise<QueueState> {
   if (error) throw error;
   const d = (data ?? {}) as Partial<QueueState> & { ok?: boolean };
   if (d.ok !== true || typeof d.paused !== 'boolean' || typeof d.windowOpen !== 'boolean') throw new Error('queue state unreadable');
-  return { paused: d.paused, windowOpen: d.windowOpen, windowStartHour: typeof d.windowStartHour === 'number' ? d.windowStartHour : 7 };
+  return {
+    paused: d.paused, windowOpen: d.windowOpen, windowStartHour: typeof d.windowStartHour === 'number' ? d.windowStartHour : 7,
+    ...(typeof d.indiaWindowOpen === 'boolean' ? { indiaWindowOpen: d.indiaWindowOpen } : {}),
+  };
 }
 
 /** After a write that returns the status payload (pause/resume), keep the shared copy current. */

@@ -531,6 +531,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `submissions` endpoint.
 - **The browser never decides money**: `findable-checkout` reads the add-on tick from the ROW; the
   AI line stays inline `price_data` because it is the guarantee's only carrier.
+- ⛔ **A lead's country comes from Google's address, never from a form's remembered choice**
+  (`src/lib/leadCountry.ts`, 2026-09-28): the hidden Find Leads country stored 349 UK businesses as USA.
+  A stored phone → WhatsApp digits is ONE rule, `src/lib/waNumber.ts` (UK byte-identical, India's
+  national forms get 91); a non-UK typed number is stored the way Google stores one ("+91 …").
+  Hook questions pin the town with the LEAD'S country (`placeSuffixForCountry` — "Pune India", never
+  "Pune UK"). Money is still GBP-only (checkout, webhook, report offer panel): India can PROSPECT, not
+  CLOSE — `docs/india-readiness.md` §6.
 - **Owner-scoped rows are owned by the DATA account** `pauljsales455@outlook.com` (`9d5a7629…`),
   resolved from the data (newest lead's `user_id`), never from `ADMIN_EMAIL` (`paul@move37.fun`, owns
   nothing) and never hardcoded. A row under the wrong owner is invisible, not wrong.
@@ -596,7 +603,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   who knows more than we do spots one instantly. Write "can make it harder", "may mean", "gives AI
   less information to work with". `site-findings.test.ts` blocks both scanner phrasing and absolute
   claims; every finding is WHAT I SAW → WHAT IT MEANS → WHY IT MAY MAKE AI VISIBILITY HARDER.
-- **The send window binds the QUEUE only** (07:00–21:30 London); the reply path answers Meta's 24-hour
+- ⛔ **The send window is the RECIPIENT'S, chosen from the digits we send to** (`src/lib/sendWindow.ts`,
+  2026-09-28): a +91 number sends 10:00–19:00 IST, every other number the London window unchanged; the
+  queue filters held leads BEFORE the look-ahead slice, in every lane. Never choose it from
+  `outreach_leads.country` — that column was measured wrong on 374 rows (`docs/india-readiness.md`).
+- **The send window binds the QUEUE only** (07:00–21:30 London for UK numbers); the reply path answers Meta's 24-hour
   window and still counts against `DAILY_CAP`. Name the constants; never write the numbers.
 - **The Inbox bulk confirm dry-runs every lead first** and sends only those that passed (`inboxBulkSend.ts` `applyBulkChecks`). A single-engine body is refused for a hook from the other engine UNLESS waived by name: `audit_followup` ("I asked chatgpt") is waived for either engine by Paul (`TEMPLATE_ENGINE_CLAIM_WAIVED`). See `docs/whatsapp-templates.md` (2026-09-27).
 - **`mode: "dry_run"`** on `send-whatsapp-message` builds the real payload and stops before the Graph
@@ -854,6 +865,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The original §2 / §3 / §7 / §10 text | `docs/how-paul-works.md`, `docs/discipline-checklist.md`, `docs/parked-branches.md`, `docs/other-docs.md` |
 | Website Build: fact edits / saves, service-area candidates, asset plan, Cloudflare modes, template fit, readiness | `docs/website-build-pilot-hardening.md` (+ the website-build-*.md phase records) |
 | Website Build: the QUALITY standard — strengths, no-downgrade, completeness, old-vs-new upgrade, the source-site fact rule, the BUILD standard (image roles, Areas → map, mobile hero, reviews, forms) | `docs/website-build-quality-standard.md` |
+| India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,

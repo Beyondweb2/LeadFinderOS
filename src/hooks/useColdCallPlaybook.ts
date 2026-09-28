@@ -12,6 +12,7 @@
       buildReportData turns its rows into the same evidence the public report prints; the crawl
       sources are ordered exactly as useInbox orders them for the site-findings gate.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { toWhatsAppDigits } from '@/lib/waNumber';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
@@ -43,13 +44,7 @@ const MESSAGE_COLUMNS = 'id, created_at, direction, body, message_type, template
 /** The WhatsApp form of a stored phone (digits, country code, no plus) — the same shape
  *  whatsapp_messages.phone is stored in. Mirrors useInbox's normalizeWaNumber for UK numbers. */
 function waDigits(raw: string | null | undefined, country?: string | null): string | null {
-  let s = (raw ?? '').replace(/[^\d+]/g, '');
-  if (!s) return null;
-  if (s.startsWith('00')) s = '+' + s.slice(2);
-  if (s.startsWith('+')) return s.slice(1).replace(/\D/g, '') || null;
-  const cc = (country || 'UK').toUpperCase();
-  if (s.startsWith('0') && (cc === 'UK' || cc === 'GB')) return '44' + s.slice(1);
-  return s.replace(/\D/g, '') || null;
+  return toWhatsAppDigits(raw, country); // ONE rule, src/lib/waNumber.ts
 }
 
 /** Audit-run crawls, newest run first — the order useInbox hands resolveSiteFindings. */

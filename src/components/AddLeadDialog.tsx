@@ -11,6 +11,16 @@ import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { LEAD_SOURCE_LABELS } from '@/lib/salesPerformance';
 import { refusalText } from '@/lib/salesCrm';
+import { internationalPhone } from '@/lib/lineType';
+
+/* ⛔ THE COUNTRY IS ASKED, NOT ASSUMED (2026-09-28). It was hard-coded UK, so a hand-added Pune lead was
+   stored as UK: its audit questions read "Pune UK", the engines were asked from Great Britain, and its
+   typed "98765 43210" had no country code. UK stays the default and a UK lead is saved exactly as before.
+   Only countries a salesperson is actually working are offered. */
+const ADD_COUNTRIES = [
+  { value: 'UK', label: 'United Kingdom', phoneHint: '07… (or give a Maps link)' },
+  { value: 'India', label: 'India', phoneHint: '+91 98765 43210 (or give a Maps link)' },
+] as const;
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    ADD A LEAD YOU FOUND YOURSELF (2026-09-28) — LinkedIn, a referral, networking, Google / Maps, social,
@@ -29,7 +39,7 @@ import { refusalText } from '@/lib/salesCrm';
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 /* camelCase form keys: this is a form, not a lead row (the list-columns walker reads .snake_case as a lead field). */
-const EMPTY = { businessName: '', trade: '', town: '', phone: '', website: '', email: '', contactName: '', mapsUrl: '', source: '', campaignId: '', note: '', address: '', services: '', areas: '' };
+const EMPTY = { country: 'UK', businessName: '', trade: '', town: '', phone: '', website: '', email: '', contactName: '', mapsUrl: '', source: '', campaignId: '', note: '', address: '', services: '', areas: '' };
 const labels = (v: string) => v.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
 
 export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; onOpenChange: (o: boolean) => void; onAdded?: (leadId: string) => void }) {
@@ -44,14 +54,26 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
   const ready = f.businessName.trim() && f.trade.trim() && f.source && (f.phone.trim() || f.mapsUrl.trim());
 
   const submit = async (confirmSiteMatch = false) => {
-    setBusy(true); setRefusal(null); setSiteMatch(null);
+    setRefusal(null); setSiteMatch(null);
+    /* A non-UK typed number is stored the way Google stores one ("+91 98765 43210"); one that is not a
+       valid number there is refused here rather than saved in a form the WhatsApp paths cannot place. */
+    let phone = f.phone;
+    if (f.country !== 'UK' && f.phone.trim()) {
+      const intl = internationalPhone(f.phone, f.country);
+      if (!intl) {
+        setRefusal(`That phone number is not a valid ${f.country} number. Check it, or type it with its country code (e.g. +91 98765 43210).`);
+        return;
+      }
+      phone = intl;
+    }
+    setBusy(true);
     try {
       const r = await leadRpc('sales_add_lead', {
         _lead: {
           business_name: f.businessName, search_keyword: f.trade, search_location: f.town,
-          phone: f.phone, website: f.website, email: f.email, contact_name: f.contactName,
+          phone, website: f.website, email: f.email, contact_name: f.contactName,
           google_maps_url: f.mapsUrl, lead_source: f.source, campaign_id: f.campaignId || null,
-          list_type: 'manual', note: f.note, country: 'UK', address: f.address,
+          list_type: 'manual', note: f.note, country: f.country, address: f.address,
           services: labels(f.services), service_areas: labels(f.areas),
           ...(confirmSiteMatch ? { confirm_site_match: true } : {}),
         },
@@ -87,10 +109,18 @@ export function AddLeadDialog({ open, onOpenChange, onAdded }: { open: boolean; 
           <DialogDescription>It goes into your Outreach list. If the business is already in the book, it is not added twice.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={label}>Country</label>
+            <Select value={f.country} onValueChange={(v) => setF((p) => ({ ...p, country: v }))}>
+              <SelectTrigger className={field} data-testid="add-lead-country"><SelectValue /></SelectTrigger>
+              <SelectContent>{ADD_COUNTRIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div />
           <div className="sm:col-span-2"><label className={label}>Business name *</label><Input className={field} value={f.businessName} onChange={set('businessName')} /></div>
           <div><label className={label}>Trade *</label><Input className={field} value={f.trade} onChange={set('trade')} placeholder="e.g. plumber" /></div>
           <div><label className={label}>Town</label><Input className={field} value={f.town} onChange={set('town')} /></div>
-          <div><label className={label}>Phone *</label><Input className={field} value={f.phone} onChange={set('phone')} inputMode="tel" placeholder="07… (or give a Maps link)" /></div>
+          <div><label className={label}>Phone *</label><Input className={field} value={f.phone} onChange={set('phone')} inputMode="tel" placeholder={ADD_COUNTRIES.find((c) => c.value === f.country)?.phoneHint ?? ''} /></div>
           <div><label className={label}>Contact name</label><Input className={field} value={f.contactName} onChange={set('contactName')} placeholder="Only if you know it" /></div>
           <div><label className={label}>Website</label><Input className={field} value={f.website} onChange={set('website')} /></div>
           <div><label className={label}>Email</label><Input className={field} value={f.email} onChange={set('email')} inputMode="email" /></div>

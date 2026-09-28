@@ -27,6 +27,7 @@
    not yet confirmed against a billed row. The IDs-only mask would be free but returns no name, and
    a resolver that cannot check the name is the blind-top-result this exists to prevent.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
+import { normCountry } from "./geobias.ts";
 import { runEnrichSource } from "./enrichment/runner.ts";
 import { nameMatches, normalizeForMatch } from "./enrichment/ai-search.ts";
 
@@ -94,8 +95,9 @@ export async function resolvePlaceId(
         },
         body: JSON.stringify({
           textQuery: query,
-          // GB unless the caller says otherwise — the same default the lead rows carry.
-          regionCode: (country ?? "UK") === "UK" ? "GB" : String(country ?? "GB"),
+          // GB unless the caller says otherwise — the same default the lead rows carry. ⛔ Mapped to a real
+          // CLDR code (2026-09-28): "India" used to go out verbatim, which Google does not accept.
+          regionCode: normCountry(country ?? "UK") ?? "GB",
           maxResultCount: 5,
         }),
       });

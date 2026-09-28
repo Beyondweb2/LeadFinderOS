@@ -19,6 +19,13 @@ const COUNTRY_ALIASES: Record<string, string> = {
   US: 'US', USA: 'US', UNITEDSTATES: 'US', AMERICA: 'US',
   AU: 'AU', AUS: 'AU', AUSTRALIA: 'AU',
   CA: 'CA', CANADA: 'CA', IE: 'IE', IRELAND: 'IE', NZ: 'NZ', NEWZEALAND: 'NZ',
+  /* ⛔ EVERY NAME THE FIND LEADS COUNTRY PICKER CAN SEND (the `Country` type, src/types/lead.ts). Before
+     2026-09-28 only the six above were here, so an explicit country of "India" normalised to null and
+     a bare "Pune" was geocoded with a GB bias (rescued, when it was, by the wrong-country retry — and
+     never for a name that also exists elsewhere, e.g. Kochi, Japan). */
+  INDIA: 'IN', SINGAPORE: 'SG', UAE: 'AE', UNITEDARABEMIRATES: 'AE', GERMANY: 'DE', FRANCE: 'FR',
+  SPAIN: 'ES', ITALY: 'IT', NETHERLANDS: 'NL', BELGIUM: 'BE', SOUTHAFRICA: 'ZA', BRAZIL: 'BR',
+  MEXICO: 'MX', JAPAN: 'JP', SWEDEN: 'SE', THAILAND: 'TH',
 };
 
 // Multi-word country phrases to detect inside a location string (checked first).
@@ -37,12 +44,13 @@ const COUNTRY_WORDS: Record<string, string> = {
   US: 'US', USA: 'US', AMERICA: 'US',
   AU: 'AU', AUS: 'AU', AUSTRALIA: 'AU',
   CANADA: 'CA', IRELAND: 'IE', NZ: 'NZ',
+  INDIA: 'IN',
 };
 
 // State/province CODE → country. US takes precedence on any 2-letter collision (it's
 // the common case); AU uses its unambiguous 3-letter codes to avoid the WA/SA/NT
 // clash with US/CA. Canadian provinces fill the remaining 2-letter slots.
-const STATE_CODES: Record<string, 'US' | 'CA' | 'AU'> = {
+const STATE_CODES: Record<string, 'US' | 'CA' | 'AU' | 'IN'> = {
   // US states + DC
   AL: 'US', AK: 'US', AZ: 'US', AR: 'US', CA: 'US', CO: 'US', CT: 'US', DE: 'US', FL: 'US', GA: 'US',
   HI: 'US', ID: 'US', IL: 'US', IN: 'US', IA: 'US', KS: 'US', KY: 'US', LA: 'US', ME: 'US', MD: 'US',
@@ -57,7 +65,7 @@ const STATE_CODES: Record<string, 'US' | 'CA' | 'AU'> = {
 
 // State/province/territory FULL NAME → country (whole-word match). Includes the
 // ambiguous 2-letter AU codes as names so "Perth, Western Australia" etc. resolve.
-const STATE_NAMES: Record<string, 'US' | 'CA' | 'AU'> = {
+const STATE_NAMES: Record<string, 'US' | 'CA' | 'AU' | 'IN'> = {
   ALABAMA: 'US', ALASKA: 'US', ARIZONA: 'US', ARKANSAS: 'US', CALIFORNIA: 'US', COLORADO: 'US', CONNECTICUT: 'US',
   DELAWARE: 'US', FLORIDA: 'US', GEORGIA: 'US', HAWAII: 'US', IDAHO: 'US', ILLINOIS: 'US', INDIANA: 'US', IOWA: 'US',
   KANSAS: 'US', KENTUCKY: 'US', LOUISIANA: 'US', MAINE: 'US', MARYLAND: 'US', MASSACHUSETTS: 'US', MICHIGAN: 'US',
@@ -66,9 +74,16 @@ const STATE_NAMES: Record<string, 'US' | 'CA' | 'AU'> = {
   VIRGINIA: 'US', WISCONSIN: 'US', WYOMING: 'US',
   ONTARIO: 'CA', QUEBEC: 'CA', MANITOBA: 'CA', SASKATCHEWAN: 'CA', ALBERTA: 'CA',
   NSW: 'AU', VICTORIA: 'AU', QUEENSLAND: 'AU', TASMANIA: 'AU',
+  /* Indian states / UTs ("Pune, Maharashtra", "Kochi, Kerala"). ⛔ PUNJAB IS DELIBERATELY ABSENT — Pakistan
+     has one too ("Lahore, Punjab"); a Punjab search keeps no forced country. Multi-word names are
+     matched as whole phrases by the same regex. */
+  MAHARASHTRA: 'IN', KARNATAKA: 'IN', KERALA: 'IN', KERALAM: 'IN', RAJASTHAN: 'IN', HARYANA: 'IN', GUJARAT: 'IN',
+  TELANGANA: 'IN', 'TAMIL NADU': 'IN', 'UTTAR PRADESH': 'IN', 'WEST BENGAL': 'IN', 'ANDHRA PRADESH': 'IN',
+  'MADHYA PRADESH': 'IN', ODISHA: 'IN', BIHAR: 'IN', CHANDIGARH: 'IN', UTTARAKHAND: 'IN', ASSAM: 'IN',
+  JHARKHAND: 'IN', CHHATTISGARH: 'IN', GOA: 'IN',
 };
 
-const COUNTRY_APPEND: Record<string, string> = { US: 'USA', CA: 'Canada', AU: 'Australia' };
+const COUNTRY_APPEND: Record<string, string> = { US: 'USA', CA: 'Canada', AU: 'Australia', IN: 'India' };
 
 /** Normalise an explicit `country` field to an ISO alpha-2 code, or null. */
 export function normCountry(country?: string): string | null {
@@ -92,7 +107,7 @@ function detectCountryWord(upper: string): string | null {
  * name (e.g. "Washington", "Georgia") stays a bare name so the GB default still
  * applies — a real US search always includes the city ("Reading, Pennsylvania").
  */
-function detectStateCountry(upper: string): 'US' | 'CA' | 'AU' | null {
+function detectStateCountry(upper: string): 'US' | 'CA' | 'AU' | 'IN' | null {
   const tokens = upper.split(/[^A-Z]+/).filter(Boolean);
   if (tokens.length < 2) return null;
   // Full name anywhere (whole word).

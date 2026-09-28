@@ -10,21 +10,14 @@ import { displayBusinessName, IDENTIFY_NAME_TEMPLATES } from "../../../src/lib/d
 import { AI_SITE_FINDINGS_V2, AI_SITE_FINDINGS_V2_APPROVED } from "../../../src/lib/siteFindings.ts";
 import { STALE_OFFER_TEMPLATES } from "../../../src/lib/findableOffer.ts";
 
+import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+
 export const GRAPH_VERSION = "v21.0";
 
-/** UK phone → E.164 digits (no '+', as Meta wants). Mirrors send-reminders /
- *  process-whatsapp-queue exactly. Returns null when nothing usable. */
+/** Phone → E.164 digits (no '+', as Meta wants). ONE rule: src/lib/waNumber.ts (UK unchanged; an India
+ *  lead's national form gets 91). Returns null when nothing usable. */
 export function toWhatsAppNumber(raw: string, country?: string | null): string | null {
-  let s = (raw || "").replace(/[^\d+]/g, "");
-  if (!s) return null;
-  if (s.startsWith("00")) s = "+" + s.slice(2);
-  if (s.startsWith("+")) return s.slice(1).replace(/\D/g, "") || null;
-  const cc = (country || "UK").toUpperCase();
-  if (s.startsWith("0")) {
-    if (cc === "UK" || cc === "GB") return "44" + s.slice(1);
-    return s.replace(/\D/g, "");
-  }
-  return s.replace(/\D/g, "") || null;
+  return toWhatsAppDigits(raw, country);
 }
 
 /** Resolve the WhatsApp env + test/live gate, IDENTICAL to process-whatsapp-queue:

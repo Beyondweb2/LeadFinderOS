@@ -223,7 +223,7 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   not_new: 'already past “new”',
   already_contacted: 'already contacted',
   no_phone: 'no phone',
-  not_a_uk_mobile: 'not a UK mobile',
+  not_a_uk_mobile: 'not a UK or Indian mobile',
   opted_out: 'opted out',
   daily_limit: 'over your daily limit',
 };
