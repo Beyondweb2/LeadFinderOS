@@ -204,7 +204,7 @@ export default function SalesDashboard() {
             onUnread={() => (firstUnread ? go('whatsapp', firstUnread) : navigate('/inbox'))} onFollowUps={() => showGroup(w.followUps.overdue.length ? 'overdue' : 'dueToday')} />
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-            <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} /></div>
+            <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} onFocus={viewingSelf ? () => navigate('/focus') : undefined} /></div>
             <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuTouched ? fuGroup : fuDefault} setGroup={(g) => { setFuTouched(true); setFuGroup(g); }} /></div>
           </div>
 

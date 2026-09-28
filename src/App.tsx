@@ -38,6 +38,7 @@ const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
 const Earnings = lazy(() => import("./pages/Earnings"));
+const Focus = lazy(() => import("./pages/Focus"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
 const Team = lazy(() => import("./pages/Team"));
@@ -217,6 +218,7 @@ const App = () => {
               <Route path="/outreach" element={<Outreach />} />
               <Route path="/sales-dashboard" element={<SalesDashboard />} />
               <Route path="/earnings" element={<Earnings />} />
+              <Route path="/focus" element={<Focus />} />
               {/* Archive route removed - merged into Outreach */}
               {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
               {/* OPERATOR baseline view. Inside ProtectedRoute + RequireAdmin like every other

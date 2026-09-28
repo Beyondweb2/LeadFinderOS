@@ -163,7 +163,12 @@ console.log("── one CRM truth: every writer notifies, every reader re-reads 
   ok(/next_action, next_action_date'/.test(useInbox), "the Inbox reads the next action, so the thread header shows it");
   ok((useOut.match(/notifyLeadChanged\(leadId, syncOriginRef\.current\)/g) ?? []).length === 2, "Outreach announces both write paths (admin table, sales functions)");
   ok(/detail\?\.origin === syncOriginRef\.current\) return/.test(useOut), "…and skips only its OWN notice");
-  ok((inbox.match(/notifyLeadChanged\(c\.leadId\)/g) ?? []).length === 2, "the Inbox status pill and star announce too");
+  /* 2026-09-28 (Sales Experience): the pill and the star call src/lib/leadQuickActions.ts, which announces
+     after BOTH writes — the same rule, now in one place shared with Focus Mode. */
+  {
+    const qa = read("src/lib/leadQuickActions.ts");
+    ok(/markLeadInterested\(c\.leadId/.test(inbox) && /setLeadPipelineStatus\(c\.leadId/.test(inbox) && (qa.match(/notifyLeadChanged\(leadId\);/g) ?? []).length === 2, "the Inbox status pill and star announce too (through the one quick-action path)");
+  }
   const saveFn = crm.slice(crm.indexOf("function useSave("), crm.indexOf("/* ── WORK"));
   ok(/if \(r\.ok\) \{ toast\(\{ title: okText \}\); notifyLeadChanged\(leadId, undefined, patch\); \}/.test(saveFn), "the CRM panel announces only after the server's yes, carrying the accepted values");
   ok(/if \(patch\) \{ qc\.setQueryData\(key, before \?\? null\); notifyLeadChanged\(leadId\); \}/.test(saveFn) && /variant: 'destructive'/.test(saveFn), "a refused save puts the old values back everywhere (a plain notice = every reader re-reads) and says why");

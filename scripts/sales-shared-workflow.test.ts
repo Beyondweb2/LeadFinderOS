@@ -89,7 +89,11 @@ console.log("\n── every salesperson edit is a server function, positive matc
     ok(at > 0 && /if \(isSales\(\)\)/.test(hook.slice(at, at + 500)) && /salesUpdateLead\(/.test(hook.slice(at, at + 500)), `${fn} goes through the lead functions for a salesperson`);
   }
   const inbox = strip(read("src/pages/Inbox.tsx"));
-  ok(/perms\.editLeadRecord\n?\s*\? await updateLeadStatus\(c\.leadId, status\)\n?\s*: await salesPatchLead\(c\.leadId, \{ status \}\)/.test(inbox), "the Inbox status pill routes a salesperson through the lead functions");
+  /* 2026-09-28 (Sales Experience): the split lives in src/lib/leadQuickActions.ts (shared with Focus Mode). */
+  {
+    const qa = fs.readFileSync(path.join(root, "src/lib/leadQuickActions.ts"), "utf8").replace(/\r\n/g, "\n");
+    ok(/setLeadPipelineStatus\(c\.leadId, status, perms\.editLeadRecord\)/.test(inbox) && /isAdmin\n?\s*\? await updateLeadStatus\(leadId, status as LeadStatus\)\n?\s*: await salesPatchLead\(leadId, \{ status \}\)/.test(qa), "the Inbox status pill routes a salesperson through the lead functions");
+  }
   ok((inbox.match(/leadRpc\('lead_set_details'/g) ?? []).length === 2, "the Inbox's contact-name and trade/town saves use lead_set_details for a salesperson");
 }
 
