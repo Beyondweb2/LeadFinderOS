@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import {
   OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, leadLoadNotice,
-  leadCountLabel, partialResultsSuffix, mergeAfterBackgroundLoad, type LeadLoadState,
+  leadCountLabel, partialResultsSuffix, mergeAfterBackgroundLoad, visibleWhileLoading, type LeadLoadState,
 } from "../src/lib/outreachLoad.ts";
 import { fetchAllRows, fetchPagesAfterFirst } from "../src/lib/fetchAllRows.ts";
 import { OUTREACH_LIST_COLUMNS, SALES_LIST_COLUMNS, SALES_VIEW_COLUMNS, leadSourceFor } from "../src/lib/outreachLeadColumns.ts";
@@ -33,8 +33,8 @@ const partial: LeadLoadState = { phase: "partial", loaded: 1000, total: 5222, er
 const n1 = leadLoadNotice(partial);
 ok(n1?.tone === "info" && n1.text.startsWith("Showing results so far from the newest 1,000 leads"), `partial notice: "${n1?.text.slice(0, 60)}…"`);
 ok(/4,222/.test(n1!.text) && /unlock when it finishes/.test(n1!.text), "names the remaining count and that things unlock");
-ok(leadCountLabel(partial, 1000) === "1,000 of 5,222, loading", "title count says loading");
-ok(partialResultsSuffix(partial) === " — results so far from the newest 1,000 leads", "search/filter results carry the partial suffix");
+ok(leadCountLabel(partial, 1000) === "1,000 of 5,222 active, loading", "title count: active loaded of active total, loading");
+ok(partialResultsSuffix(partial) === " — partial results: 1,000 of 5,222 active leads loaded so far", "pager/search carry the same active-of-active partial wording");
 ok(leadLoadNotice(LEAD_LOAD_INITIAL) === null, "no notice before anything has shown (the page spinner covers it)");
 
 console.log("── completeness gate: positive match only ──");
@@ -65,6 +65,24 @@ ok(/if \(sharedPhoneOnly && listComplete\)/.test(table) && /Shares a phone \(\{l
   "shared-phone filter and count wait for the whole list");
 ok(/\{filteredAndSortedLeads\.length\}\{partialResultsSuffix\(loadState\)\}/.test(table), "pagination line carries the partial wording");
 ok(/const loadState = leadLoad \?\? LEAD_LOAD_COMPLETE\(leads\.length\)/.test(table), "other OutreachTable callers (no leadLoad) behave as complete — unchanged");
+
+console.log("── partial counts never mix in archived (Paul, 2026-09-28) ──");
+{
+  type A = { id: string; is_archived?: boolean | null };
+  const active: A[] = Array.from({ length: 1000 }, (_, i) => ({ id: `a${i}`, is_archived: false }));
+  const archived: A[] = Array.from({ length: 116 }, (_, i) => ({ id: `z${i}`, is_archived: true }));
+  const st: LeadLoadState = { phase: "partial", loaded: 1000, total: 5370, error: null };
+  const shown = visibleWhileLoading(st, [...active, ...archived]);
+  ok(shown.length === 1000, `partial: the table holds 1,000 visible rows, not 1,116 (${shown.length})`);
+  ok(leadCountLabel(st, 1000) === "1,000 of 5,370 active, loading" && partialResultsSuffix(st).includes("1,000 of 5,370 active"),
+    "title and pager name the SAME numbers");
+  ok(visibleWhileLoading({ ...st, phase: "failed" }, [...active, ...archived]).length === 1000, "failed: still active only");
+  ok(visibleWhileLoading(st, [...active, ...archived], true).length === 1116, "the archive view itself is never filtered");
+  const done = LEAD_LOAD_COMPLETE(1116);
+  ok(visibleWhileLoading(done, [...active, ...archived]).length === 1116 && leadCountLabel(done, 1116) === "1,116" && partialResultsSuffix(done) === "",
+    "complete: archived back in, normal counts, no suffix");
+  ok(/let result = visibleWhileLoading\(loadState, \[\.\.\.leadsWithOptimistic\], isArchiveView\)/.test(table), "OutreachTable's list starts from visibleWhileLoading");
+}
 
 console.log("── background completion (fetchPagesAfterFirst = the full sequential read) ──");
 type Row = { id: string };
@@ -98,7 +116,7 @@ ok(/setLeadLoad\(\(s\) => \(\{ phase: 'failed', loaded: latestRef\.current\.acti
 const failed: LeadLoadState = { phase: "failed", loaded: 1000, total: 5222, error: "boom" };
 const nf = leadLoadNotice(failed)!;
 ok(nf.tone === "error" && /remaining 4,222 leads failed to load/.test(nf.text) && /newest 1,000 leads only/.test(nf.text), "failure says so plainly");
-ok(!datasetComplete(failed) && leadCountLabel(failed, 1000) === "1,000 of 5,222, incomplete", "failure stays incomplete — gates stay shut");
+ok(!datasetComplete(failed) && leadCountLabel(failed, 1000) === "1,000 of 5,222 active, incomplete", "failure stays incomplete — gates stay shut");
 const page = norm("../src/pages/Outreach.tsx");
 ok(/loadNotice\.tone === 'error' && \([\s\S]{0,200}retryLeadLoad\(\)[\s\S]{0,40}Retry/.test(page), "the error notice offers Retry");
 

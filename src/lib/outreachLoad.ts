@@ -55,17 +55,31 @@ export function leadLoadNotice(s: LeadLoadState): { tone: 'info' | 'error'; text
   };
 }
 
-/** The count beside the title: the real total once complete, "loaded of total" before. */
+/* ⛔ ONE COUNT WHILE PARTIAL (Paul, 2026-09-28): ACTIVE loaded of ACTIVE total, in the title AND the
+   pager. The archived leads (loaded whole up front) are left out of the partial list entirely —
+   OutreachTable drops them until complete — so no visible number mixes "1,000 active" with "116
+   archived". Once complete, the normal counts (which include archived) come back unchanged. */
+
+/** The count beside the title: the real total once complete, "active loaded of active total" before. */
 export function leadCountLabel(s: LeadLoadState, shownCount: number): string {
   if (datasetComplete(s) || s.total == null) return n(shownCount);
   return s.phase === 'failed'
-    ? `${n(s.loaded)} of ${n(s.total)}, incomplete`
-    : `${n(s.loaded)} of ${n(s.total)}, loading`;
+    ? `${n(s.loaded)} of ${n(s.total)} active, incomplete`
+    : `${n(s.loaded)} of ${n(s.total)} active, loading`;
 }
 
 /** The suffix for "Showing 1 to 15 of N" / filter results while incomplete. */
 export function partialResultsSuffix(s: LeadLoadState): string {
-  return datasetComplete(s) ? '' : ` — results so far from the newest ${n(s.loaded)} leads`;
+  if (datasetComplete(s)) return '';
+  return s.total != null
+    ? ` — partial results: ${n(s.loaded)} of ${n(s.total)} active leads loaded so far`
+    : ` — partial results from the newest ${n(s.loaded)} leads`;
+}
+
+/** While incomplete the table shows ACTIVE rows only (unless it is the archive view itself). */
+export function visibleWhileLoading<T extends { is_archived?: boolean | null }>(s: LeadLoadState, rows: T[], isArchiveView = false): T[] {
+  if (datasetComplete(s) || isArchiveView) return rows;
+  return rows.filter((r) => r.is_archived !== true);
 }
 
 type Row = { id: string };
