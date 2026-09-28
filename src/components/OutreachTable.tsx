@@ -149,6 +149,8 @@ const AUDIT_JOB_CAP = 100;
    not changeable from here; this is the figure the warning is measured against. */
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
+import { TemplateWordingInList, TemplateWordingPreview, useTemplateHover } from '@/components/TemplateWordingPreview';
+import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { TRADES } from '@/lib/trades';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
@@ -429,6 +431,7 @@ export function OutreachTable({
      batch of accountants without touching the dropdown stamped a barber template on all of them.
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
+  const queueHover = useTemplateHover();
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -3161,19 +3164,23 @@ export function OutreachTable({
           </DialogHeader>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
-            <Select value={queueTemplate} onValueChange={setQueueTemplate}>
+            <Select value={queueTemplate} onValueChange={setQueueTemplate} onOpenChange={queueHover.onOpenChange}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
                 {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value))).map((t) => {
                   const blocked = openerBlocked(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={blocked}>
+                    <SelectItem key={t.value} value={t.value} disabled={blocked} {...queueHover.itemProps(t.value)}>
                       <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}</span>
                     </SelectItem>
                   );
                 })}
+                <TemplateWordingInList hovered={queueHover.hovered} />
               </SelectContent>
             </Select>
+            {/* What the hovered (or chosen) template actually says — Paul, 2026-09-28. */}
+            <TemplateWordingPreview hovered={null} selected={queueTemplate} />
+            <RequestTemplateButton source="queue" />
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
