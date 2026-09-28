@@ -408,7 +408,14 @@ Deno.serve(async (req) => {
     }
     // Genuine render succeeded → record the open (non-bot only). Awaited but fully guarded, so a
     // tracking failure can never break the report the visitor came for.
-    await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
+    /* ⛔ THE APP'S OWN OPENS ARE NOT PROSPECT OPENS (2026-09-28). Every "Open report" button inside
+       LeadFinderOS adds preview=1 (the findable.live proxies pass it through). first_opened_at is set
+       ONCE, so a salesperson checking the report before sending it used to take the prospect's first
+       open for ever. What counts as an open: a non-bot load of the public report WITHOUT preview=1.
+       Anyone can append the flag, which can only UNDER-count — never invent an open. */
+    if (url.searchParams.get("preview") !== "1") {
+      await recordAuditOpen(service, audit.id, req.headers.get("user-agent") ?? "");
+    }
     return htmlResponse(renderReportHtml(data), 200, { noStore: !!data.measuring });
   } catch (e) {
     console.error("[render-audit-report] error:", e instanceof Error ? e.message : e);

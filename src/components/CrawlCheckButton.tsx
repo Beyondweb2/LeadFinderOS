@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { isAggregatorUrl } from '@/lib/aggregators';
@@ -158,6 +159,8 @@ function CrawlCheckDialog(
   { open: boolean; onOpenChange: (o: boolean) => void; lead?: CrawlLead; initialCrawl?: CrawlRow | null; urlMode?: boolean; from: CrawlRequestSource; onDone?: () => void; onRunningChange?: (running: boolean) => void; onErrorChange?: (failed: boolean) => void },
 ) {
   const { toast } = useToast();
+  /* Sales sees the findings and the site info; the template-routing note is operator workflow. */
+  const isAdmin = useSubscription().role === 'admin';
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
@@ -284,6 +287,12 @@ function CrawlCheckDialog(
                     <CircleCheck className="h-4 w-4" /> No AI-visibility faults found.
                   </p>
                 ) : (
+                  <>
+                  {/* The one sentence Sales may say about any of these (Paul, 2026-09-28): they MAY make
+                      it harder — never "this is why AI did not recommend you". */}
+                  <p className="text-xs text-muted-foreground" data-testid="crawl-careful-wording">
+                    These may make it harder for search engines or AI systems to crawl, understand or verify the business.
+                  </p>
                   <ul className="space-y-2">
                     {faults.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
@@ -296,12 +305,13 @@ function CrawlCheckDialog(
                       </li>
                     ))}
                   </ul>
+                  </>
                 )}
               </section>
             )}
 
             {/* ── SECTION 2: SITE INFO (reading material — never gates a template) ── */}
-            {result.signals && !fetchFailed && (
+            {isAdmin && result.signals && !fetchFailed && (
               <p className={`text-xs ${faults.length ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                 {faults.length
                   ? 'Usable for audit_followup_fault — the first finding is the client-facing fault.'

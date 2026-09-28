@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, subscriptionEndedByTerm } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
+import { handoffLine, handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
 import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
@@ -137,11 +138,54 @@ const TEMPLATE_PAYMENT_CONFIRM = "payment_recieved";
  *
  * Admin only. No customer email is sent on this path.
  */
+/** The handoff lines for the PAID email: who sold it, READY TO START / MISSING INFORMATION, and whether
+ *  onboarding is complete — the same rule Paid Clients shows (src/lib/handoffReadiness.ts). Read AFTER
+ *  the payment write. ⛔ NEVER THROWS and never blocks the email: any failure returns nulls and the
+ *  email goes without these lines. No payment detail is read here beyond what the email already has. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function paymentHandoff(service: any, leadId: string | null, onboardingId: string | null): Promise<{ soldBy: string | null; handoff: string | null; onboardingDone: boolean | null }> {
+  const none = { soldBy: null, handoff: null, onboardingDone: null };
+  if (!leadId) return none;
+  try {
+    const [l, ob, crawl, audit] = await Promise.all([
+      service.from("outreach_leads").select("business_name,phone,email,website,amount_paid,status,services_included,service_areas,website_control,delivery_checklist,sold_by_user_id,assigned_to_user_id").eq("id", leadId).maybeSingle(),
+      onboardingId
+        ? service.from("onboarding_responses").select("services,services_list,areas_list,areas_wanted,business_website,confirmed_phone,contact_email,website_route,website_manager,domain_status,gbp_status,confirmed_location").eq("id", onboardingId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      service.from("lead_crawl_checks").select("lead_id").eq("lead_id", leadId).maybeSingle(),
+      service.from("ai_audits").select("id").eq("lead_id", leadId).or("audit_purpose.is.null,audit_purpose.eq.audit,audit_purpose.eq.free_check").limit(1).maybeSingle(),
+    ]);
+    const lead = (l?.data ?? null) as HandoffLead & { sold_by_user_id?: string | null; assigned_to_user_id?: string | null } | null;
+    if (!lead) return none;
+    const seller = lead.sold_by_user_id ?? lead.assigned_to_user_id ?? null;
+    let soldBy: string | null = null;
+    if (seller) {
+      const { data: tm } = await service.from("team_members").select("display_name").eq("user_id", seller).maybeSingle();
+      soldBy = (tm?.display_name as string | undefined) ?? "A teammate";
+    }
+    const onboarding = (ob?.data ?? null) as (HandoffOnboarding & { confirmed_location?: string | null }) | null;
+    const r = handoffReadiness(lead, onboarding, { crawl: !!crawl?.data, hookAudit: !!audit?.data });
+    return { soldBy, handoff: handoffLine(r), onboardingDone: onboarding ? questionnaireComplete(onboarding) : false };
+  } catch (e) {
+    console.error("[stripe-webhook] handoff read failed (non-blocking):", (e as Error).message);
+    return none;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function notifyOfFindablePayment(opts: {
   businessName: string; amountGbp: number; paidFor: string;
   trade: string | null; town: string | null; phone: string | null; email: string | null;
   note?: string | null;
+  /* What the job is (build / add pages …). Was passed by the caller but never declared here. */
+  job?: string | null;
+  /* THE HANDOFF (2026-09-28, src/lib/handoffReadiness.ts): who sold it and whether Paul can start —
+     "READY TO START" or "MISSING INFORMATION: services, GBP access". Read AFTER the payment write, so
+     the sale stamp the trigger just set is the one named. Null = could not be read; the line is left
+     out, never guessed. */
+  soldBy?: string | null;
+  handoff?: string | null;
+  onboardingDone?: boolean | null;
   /* 🔴 THE SUBJECT TAG HAS ITS OWN FACT NOW (2026-09-14). It used to read `opts.note ? " (NOT
      LINKED)" : ""` — one tag inferred from whether ANY note existed, while `note` carries two
      unrelated things: a payment with no CRM lead, and a linked payment whose post-payment details
@@ -170,6 +214,9 @@ async function notifyOfFindablePayment(opts: {
       `${name} has paid.\n\n` +
       /* The job first: it is what decides whether there is anything you can do today. */
       (opts.job ? `  ${opts.job}\n\n` : "") +
+      (opts.handoff ? `  ${opts.handoff}\n\n` : "") +
+      line("Sold by:", opts.soldBy ?? null) +
+      (opts.onboardingDone === true ? "  Onboarding: complete\n" : opts.onboardingDone === false ? "  Onboarding: not complete yet\n" : "") +
       `  Amount: ${amount}\n` +
       `  For:    ${opts.paidFor}\n` +
       line("Trade:", opts.trade) + line("Town:", opts.town) +
@@ -183,6 +230,9 @@ async function notifyOfFindablePayment(opts: {
       `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
       `<h2 style="margin:0 0 12px">${esc(name)} has paid</h2>` +
       (opts.job ? `<p style="margin:0 0 12px;padding:8px 10px;background:#f1f5f9;border-left:3px solid #0f172a;font-weight:700">${esc(opts.job)}</p>` : "") +
+      (opts.handoff ? `<p style="margin:0 0 12px;padding:8px 10px;background:${opts.handoff.startsWith("READY") ? "#ecfdf5;border-left:3px solid #047857" : "#fffbeb;border-left:3px solid #b45309"};font-weight:700">${esc(opts.handoff)}</p>` : "") +
+      row("Sold by:", opts.soldBy ?? null) +
+      (opts.onboardingDone === true ? row("Onboarding:", "complete") : opts.onboardingDone === false ? row("Onboarding:", "not complete yet") : "") +
       row("Amount:", amount) + row("For:", opts.paidFor) +
       row("Trade:", opts.trade) + row("Town:", opts.town) +
       row("Phone:", opts.phone) + row("Email:", opts.email ?? "(not given)") +
@@ -1063,8 +1113,10 @@ Deno.serve(async (req) => {
                `payment_email_sent` trace, which is what makes a Stripe retry quiet without letting a
                crash between the write and the send lose the notification for ever. */
             if (!paidEmailAlreadySent) {
+              const handoff = await paymentHandoff(service, findableLeadId || null, onboardingId || null);
               await notifyOfFindablePayment({
                 onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
+                ...handoff,
                 /* The subject's own fact — never inferred from whether a note exists. */
                 noLead: !findableLeadId,
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),

@@ -245,4 +245,48 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   marked_interested: 'Interested ⭐',
   details_set: 'Details updated',
   archived_set: 'Archive',
+  crawl_run: 'Website crawl started',
+  report_link: 'Report link sent',
 };
+
+const DETAIL_FIELD_LABEL: Record<string, string> = {
+  services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
+  contact_name: 'contact', search_keyword: 'trade', search_location: 'town',
+};
+const REPORT_CHANNEL_LABEL: Record<string, string> = { email: 'Email', linkedin: 'LinkedIn', sms: 'Text message', in_person: 'In person', other: 'Other' };
+
+/** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the
+ *  two screens can never describe the same row differently. */
+export function activityDetail(
+  a: { kind: string; body?: string | null; data?: Record<string, unknown> | null },
+  actorName: (id: string | null) => string,
+): string | null {
+  const d = a.data ?? {};
+  const outcome = CALL_OUTCOMES.find((o) => o.value === d.outcome)?.label ?? String(d.outcome ?? '');
+  const channel = CONTACT_CHANNEL_OPTIONS.find((c) => c.value === d.channel)?.label;
+  switch (a.kind) {
+    case 'note': return a.body ?? null;
+    case 'call_outcome':
+    case 'contact_logged': return `${a.kind === 'contact_logged' && channel ? channel + ': ' : ''}${outcome}${a.body ? ` — ${a.body}` : ''}`;
+    case 'stage_changed': return `${String(d.from ?? '—')} → ${String(d.to ?? '—')}`;
+    case 'follow_up_set': return `${String(d.next_action ?? '').replace(/_/g, ' ')}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
+    case 'bulk_queued': return d.template ? String(d.template) : null;
+    case 'archived_set': return d.archived ? 'Archived' : 'Restored';
+    case 'marked_interested': return d.on === false ? 'Unstarred' : 'Starred';
+    case 'lead_added': return d.source ? `Source: ${String(d.source).replace(/_/g, ' ')}` : null;
+    case 'lead_assigned':
+    case 'lead_unassigned': return `${actorName((d.from as string) ?? null)} → ${d.to ? actorName(d.to as string) : 'Unassigned'}`;
+    case 'details_set': {
+      const parts = Object.keys(d).map((k) => {
+        const v = d[k];
+        const shown = Array.isArray(v) ? (v.length ? v.join(', ') : 'cleared') : v == null || v === '' ? 'cleared' : String(v);
+        return `${DETAIL_FIELD_LABEL[k] ?? k.replace(/_/g, ' ')}: ${shown}`;
+      });
+      return parts.length ? parts.join(' · ') : null;
+    }
+    case 'report_link': return d.channel ? `By ${REPORT_CHANNEL_LABEL[String(d.channel)] ?? String(d.channel)}` : null;
+    case 'website_control_set': return d.value ? String(d.value).replace(/_/g, ' ') : null;
+    case 'crawl_run': return d.url ? String(d.url) : null;
+    default: return null;
+  }
+}

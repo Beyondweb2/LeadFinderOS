@@ -236,7 +236,9 @@ const Outreach = () => {
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
           {/* A lead found outside the app (LinkedIn, referral…) — both roles, server-deduped. */}
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setAddLeadOpen(true)}><UserPlus className="h-3.5 w-3.5" />Add a lead</Button>
-          <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} />
+          {/* Added → its workspace opens at once (the launch waits until the new row is in the list),
+              so services / areas, the AI check and the crawl are the next click, not a search. */}
+          <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} onAdded={(id) => setLaunchIntent({ leadId: id, channel: 'open' })} />
           {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). Admin:
               crawl-check refuses anyone else. */}
           {perms.crawlSite && <CrawlCheckUrlButton />}

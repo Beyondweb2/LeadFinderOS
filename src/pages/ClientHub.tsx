@@ -22,6 +22,7 @@ import { BUILD_ROUTE_LABELS, parseWebsiteBuild, QA_ITEMS, REBUILD_STYLE_LABELS }
 import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
+import { ClientHandoffCard, type ClientHandoff } from '@/components/ClientHandoffCard';
 import { CoveragePanel, DISCOVERY_PLAN_RUNS, DiscoverySection, nearDuplicateCount, useDiscoveryPoll } from '@/components/BaselineDiscovery';
 import { discoveryPlan } from '@/lib/discoveryProgress';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
@@ -31,7 +32,7 @@ import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
-type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary };
+type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary; handoff?: ClientHandoff };
 
 /* THE ONE HUB POLLER. (The Prepare Baseline dialog has its own read-only Discovery poller while a
    Discovery job runs — useDiscoveryPoll in BaselineDiscovery.tsx.) The hub re-reads itself on this interval only while the baseline is `starting`
@@ -411,13 +412,21 @@ export default function ClientHub() {
     try { setHub(await fetchHub()); setPageError(null); }
     catch (e) { setPageError(describe(e, 'Could not refresh this client')); }
   }, [fetchHub]);
+  /* The baseline poller: the moving part only. The handoff does not change while a run drains, so it
+     is not re-read every tick (handoff:false) and the one already on screen is kept. */
+  const poll = useCallback(async () => {
+    try {
+      const next = (await call({ action: 'get', lead_id: leadId, handoff: false })).client as Hub;
+      setHub((prev) => ({ ...next, handoff: prev?.handoff })); setPageError(null);
+    } catch (e) { setPageError(describe(e, 'Could not refresh this client')); }
+  }, [leadId]);
   const retry = () => { setPageError(null); setReloadKey((k) => k + 1); };
   const bs = hubBaselineStatus(hub?.onboarding, hub?.audit);
   useEffect(() => {
     if (!(bs === 'starting' || bs === 'running')) return;
-    const id = window.setInterval(() => { void refresh(); }, HUB_POLL_MS);
+    const id = window.setInterval(() => { void poll(); }, HUB_POLL_MS);
     return () => window.clearInterval(id);
-  }, [bs, refresh]);
+  }, [bs, poll]);
   const runs = hub?.runs ?? [];
   const progress = useMemo(() => formatBaselineProgress(runs, BASELINE_RUNS), [runs]);
 
@@ -429,6 +438,7 @@ export default function ClientHub() {
   return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
   <Card><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div><div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
+  {hub.handoff && <ClientHandoffCard handoff={hub.handoff}/>}
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
   <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
   <div className="grid gap-4 lg:grid-cols-2">

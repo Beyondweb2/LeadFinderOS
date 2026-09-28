@@ -213,6 +213,11 @@ export interface OutreachLead {
   lead_source?: string | null;
   website?: string | null;
   services_included?: string[] | null;
+  /** Towns / areas the business genuinely serves, as recorded by Sales (2026-09-28). Onboarding outranks it. */
+  service_areas?: string[] | null;
+  /** Who brought the client to payment (stamped once by trigger at payment). Admin rows only. */
+  sold_by_user_id?: string | null;
+  sold_at?: string | null;
   // Phase 3b: operator-confirmed services (reviewed/edited from a website scan or
   // by hand) that pre-fill a booking-only page. null = fall back to Maps/defaults.
   confirmed_services?: ConfirmedService[] | null;

@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, website_build")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, service_areas, website_build")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);

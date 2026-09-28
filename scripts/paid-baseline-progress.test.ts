@@ -25,7 +25,7 @@ const checks: Array<[string, boolean]> = [
   ['closing and returning reconstructs identical state', formatBaselineProgress(afterReturn, 3) === expected],
   /* 2026-09-22: the hub owns ONE read-only poller (HUB_POLL_MS) while the baseline is starting or
      running; the dialog still holds no run state of its own. */
-  ['ClientHub formats server-persisted runs rather than modal state', hub.includes('formatBaselineProgress(runs, BASELINE_RUNS)') && hub.split('setInterval(').length === 2 && hub.includes('void refresh();')],
+  ['ClientHub formats server-persisted runs rather than modal state', hub.includes('formatBaselineProgress(runs, BASELINE_RUNS)') && hub.split('setInterval(').length === 2 && hub.includes('void poll();')],
 ];
 
 let failures = 0;

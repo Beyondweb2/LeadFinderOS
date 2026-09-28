@@ -209,7 +209,9 @@ console.log("── Next Action stays human-set ──");
   ok(CALL_OUTCOMES.every((o) => outcomes.includes(`'${o.value}'`)) && (outcomes.match(/'/g) ?? []).length / 2 === CALL_OUTCOMES.length, "the outcome list is lead_log_contact's allowlist, exactly");
   const channels = mig.match(/_channel not in \('call'[^)]*\)/)?.[0] ?? "";
   ok(CONTACT_CHANNEL_OPTIONS.every((c) => channels.includes(`'${c.value}'`)), "the channel list is lead_log_contact's allowlist");
-  ok(Object.keys(LEAD_SOURCE_LABELS).every((k) => new RegExp(`'${k}'`).test(mig.slice(mig.indexOf("outreach_leads_lead_source_check"), mig.indexOf("validate constraint")))), "every source label is allowed by the column's CHECK");
+  /* The CHECK's NEWEST definition (20260928160000 added facebook + email_research). */
+  const srcMig = read("supabase/migrations/20260928160000_self_sourced_handoff.sql");
+  ok(Object.keys(LEAD_SOURCE_LABELS).every((k) => new RegExp(`'${k}'`).test(srcMig.slice(srcMig.indexOf("outreach_leads_lead_source_check"), srcMig.indexOf("validate constraint")))), "every source label is allowed by the column's CHECK");
 }
 
 console.log("── the call script is said by whoever is signed in ──");

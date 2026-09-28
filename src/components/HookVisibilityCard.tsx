@@ -6,7 +6,7 @@ export { HookVisibilityView } from '@/components/HookVisibilityView';
 
 /* The loader half of the Inbox AI visibility card: one lead's audits, polled while the answer can still
    change (useHookVisibility). Everything it shows, and why, is in HookVisibilityView.tsx. */
-export function HookVisibilityCard({ leadId, onRunNew, runNewBusy }: { leadId: string | null | undefined } & HookRunNewProps) {
+export function HookVisibilityCard({ leadId, onRunNew, runNewBusy, onReportCopied }: { leadId: string | null | undefined } & HookRunNewProps) {
   const q = useHookVisibility(leadId);
   if (!leadId || q.isLoading || !q.data) {
     if (q.isError) return <div className="border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground">AI visibility: could not load the audit results.</div>;
@@ -20,6 +20,7 @@ export function HookVisibilityCard({ leadId, onRunNew, runNewBusy }: { leadId: s
       report={q.data.report}
       onRunNew={onRunNew}
       runNewBusy={runNewBusy}
+      onReportCopied={onReportCopied}
       onRefresh={() => { void q.refetch(); }}
       refreshing={q.isFetching}
       issues={<HookWebsiteIssues leadId={leadId} />}

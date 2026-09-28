@@ -36,6 +36,7 @@ import {
 import { createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
+import { canWorkLead, isClientLead, pickRole, type AppRole } from "../../../src/lib/roleRules.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -191,6 +192,7 @@ Deno.serve(async (req) => {
        INTERNAL job (render-audit-report's background populate, CRON_SECRET + x-internal-job). The
        blank-secret guard means an unset CRON_SECRET can never be matched by a blank header. */
     let userId: string | null = null;
+    let role: AppRole | null = null;
     const internal = req.headers.get("x-internal-job") === "1"
       && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
     if (!internal) {
@@ -199,11 +201,36 @@ Deno.serve(async (req) => {
       const { data: claims, error: claimsErr } = await service.auth.getClaims(authHeader.replace("Bearer ", ""));
       userId = (claims?.claims?.sub as string | undefined) ?? null;
       if (claimsErr || !userId) return json({ ok: false, error: "Invalid token" }, 401);
-      const { data: adminRole } = await service.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
-      if (!adminRole) return json({ ok: false, error: "Not authorised" }, 403);
+      const { data: roleRows } = await service.from("user_roles").select("role").eq("user_id", userId);
+      role = pickRole(roleRows);
+      if (!role) return json({ ok: false, error: "Not authorised" }, 403);
     }
 
     const body = await req.json().catch(() => ({}));
+
+    /* ══ SALES: THE FULL CRAWL, ON A LEAD THEY WORK, AND NOTHING ELSE (2026-09-28) ════════════════
+       The same engine and the same one-row-per-lead result the admin's button writes; no second
+       crawler. A salesperson may only name a lead_id they can work (assigned to them, not a client —
+       canWorkLead, the rule every sales function uses). The site is ALWAYS the lead's own website: a
+       sales call cannot pass `url` or `audit_id`, so it can never crawl an arbitrary address or read
+       another lead's audit. The row is filed under the lead's owner (the book), exactly as an admin
+       crawl is; who pressed it goes on the lead's history. Status reads are limited the same way. */
+    let salesLead: { id: string; user_id: string } | null = null;
+    if (role === "sales") {
+      const leadIdIn = typeof body?.lead_id === "string" ? body.lead_id : "";
+      const jobIdIn = typeof body?.job_id === "string" ? body.job_id : "";
+      let targetLead = leadIdIn;
+      if (!targetLead && body?.action === "status" && jobIdIn) {
+        const { data: j } = await service.from("crawl_jobs").select("lead_id").eq("id", jobIdIn).maybeSingle();
+        targetLead = (j?.lead_id as string | undefined) ?? "";
+      }
+      if (!targetLead) return json({ ok: false, error: "lead_required", detail: "Crawl a lead from its workspace." }, 403);
+      const { data: wl } = await service.from("outreach_leads")
+        .select("id, user_id, assigned_to_user_id, amount_paid, status").eq("id", targetLead).maybeSingle();
+      if (!wl || isClientLead(wl) || !canWorkLead({ id: userId!, role }, wl)) return json({ ok: false, error: "not_your_lead" }, 403);
+      if (body?.url || body?.audit_id) return json({ ok: false, error: "lead_website_only", detail: "Sales crawls the lead's own website." }, 403);
+      salesLead = { id: wl.id as string, user_id: wl.user_id as string };
+    }
 
     /* ══ PROGRESS OF AN EXHAUSTIVE CRAWL — read only, operators only ════════════════════════════
        By job id, or the newest job for a lead. Counts come straight from the frontier table. */
@@ -224,6 +251,9 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true, job: { ...jobRow, counts, label: progressLabel(jobRow.status as JobStatus, counts) }, result, full });
     }
+    /* The crawl row is filed under the book: an admin's own id (as always), or the LEAD'S owner for a
+       salesperson — never the rep's id, which owns no rows. */
+    const rowOwnerId: string | null = salesLead ? salesLead.user_id : userId;
     let rawUrl: string = (body?.url ?? "").toString().trim();
     let town: string = (body?.town ?? "").toString().trim();
     const leadId: string | null = body?.lead_id ?? null;
@@ -320,7 +350,7 @@ Deno.serve(async (req) => {
        inline check below records that honestly (as a standard row). */
     if (mode === "full" && home && home.html) {
       const job = await createCrawlJob(service, {
-        leadId, userId, requestedFrom,
+        leadId, userId: rowOwnerId, requestedFrom,
         probe: {
           homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
           readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
@@ -329,6 +359,14 @@ Deno.serve(async (req) => {
         },
       });
       await kickCrawlWorker("start");
+      /* Who started it goes on the lead's history (best-effort; never fails the crawl). A second press
+         while a job runs returns the running job and logs nothing. */
+      if (leadId && userId && !job.reused) {
+        const { error: actErr } = await service.from("lead_activity").insert({
+          lead_id: leadId, actor_user_id: userId, kind: "crawl_run", data: { job_id: job.jobId, url: homeUrl },
+        });
+        if (actErr) console.warn(`[crawl-check] crawl_run activity not recorded: ${actErr.message}`);
+      }
       return json({ ok: true, mode: "full", job_id: job.jobId, reused: job.reused, status: "running", url: homeUrl, served_url: home.finalUrl || homeUrl });
     }
     if (mode === "full") mode = "standard";
@@ -563,7 +601,7 @@ Deno.serve(async (req) => {
           stored = false;
         } else {
           const { error: upErr } = await service.from("lead_crawl_checks").upsert({
-            lead_id: leadId, url: homeUrl, user_id: userId,
+            lead_id: leadId, url: homeUrl, user_id: rowOwnerId,
             /* siteInfo is a SEPARATE key from signals — faults and reading-material never mix. */
             result: storedResult,
             created_at: checkedAt,

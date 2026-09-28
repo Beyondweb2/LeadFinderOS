@@ -135,6 +135,8 @@ export interface FactsLead {
   category?: string | null;
   search_keyword?: string | null;
   services_included?: string[] | null;
+  /** The towns Sales recorded (2026-09-28): the client record for areas, ranked under onboarding. */
+  service_areas?: string[] | null;
   payment_date?: string | null;
 }
 
@@ -289,6 +291,7 @@ export function resolveClientFacts(input: ClientFactsInput): ClientFacts {
     areas: resolveListFact('Service areas', [
       { values: toList(ob?.areas_list), source: 'onboarding' },
       { values: toList(ob?.areas_wanted), source: 'onboarding' },
+      { values: toList(lead?.service_areas), source: 'client_record' },
     ]),
     contactName: resolveFact('Contact name', [
       cand(ob?.contact_name, 'onboarding'),

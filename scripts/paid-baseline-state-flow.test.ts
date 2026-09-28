@@ -99,7 +99,7 @@ async function main() {
   // 3 + 10. One poller, read-only; the start is claimed atomically so two starters cannot both buy.
   {
     check('3. the hub has exactly one poller', count(hub, 'setInterval(') === 1 && hub.includes("if (!(bs === 'starting' || bs === 'running')) return;"));
-    check('3. the poller only reads the hub', hub.includes('void refresh();') && !hubFn.includes('startPaidBaseline') && !hubFn.includes('create-ai-audit'));
+    check('3. the poller only reads the hub', hub.includes('void poll();') && hub.includes("call({ action: 'get', lead_id: leadId, handoff: false })") && !hubFn.includes('startPaidBaseline') && !hubFn.includes('create-ai-audit'));
     const now = Date.now();
     const row = { baseline_status: 'approved', updated_at: new Date(now).toISOString() };
     const aClaims = canClaimStart(row, now);

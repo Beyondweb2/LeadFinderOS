@@ -198,6 +198,30 @@ function buildMarketContext(
 /** A usable town for LOCAL "[service] in [town]" framing — not empty, not the "the local
  *  area" placeholder, and not a bare country/region term. Used to reject a forced-local
  *  audit that has no town rather than silently producing national ("uk") questions. */
+/* ══ THE HOOK PLAN, ONCE (2026-09-26; shared by the run AND the preview since 2026-09-28) ══════════
+   Broadest commercial intent first, capped at HOOK_MAX_QUESTIONS (3) by planHookQuestions.
+   ⛔ EXACTLY THREE: if the generator and its guards left fewer, top up with safe generic trade + place
+   questions (no service is ever invented). The place gets the same UK disambiguation the generator
+   applies, so an engine cannot answer about a same-named town abroad. If even that cannot reach three,
+   the audit runs short and scoreHookRun marks it incomplete: no X/6, no hook, no auto Not Interested.
+   The PREVIEW a salesperson reviews goes through this same function, so the three questions they read
+   are the three that run (confirming sends them back verbatim, and the run re-plans them unchanged). */
+function finalHookPlan(questions: string[], ctx: { town: string; country: string | null; trade: string; businessName: string }): string[] {
+  let qs = planHookQuestions(dedupeQuestions(questions).questions, { town: ctx.town });
+  if (qs.length < HOOK_SCORE_QUESTIONS) {
+    const isUkHook = ["UK", "GB"].includes((ctx.country ?? "").trim().toUpperCase());
+    const hookPlace = ctx.town && isUkHook && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(ctx.town)
+      ? `${ctx.town} UK` : ctx.town;
+    const before = qs.length;
+    qs = topUpHookQuestions(qs, { trade: ctx.trade, place: hookPlace });
+    console.log(`[create-ai-audit] hook: ${before} generated question(s) topped up to ${qs.length} with generic trade/place questions`);
+    if (qs.length < HOOK_SCORE_QUESTIONS) {
+      console.warn(`[create-ai-audit] hook: only ${qs.length} valid question(s) for "${ctx.businessName}" — the audit will be marked incomplete (unable to create ${HOOK_SCORE_QUESTIONS} valid questions)`);
+    }
+  }
+  return qs;
+}
+
 function hasUsableTown(loc: string): boolean {
   const l = loc.trim().toLowerCase();
   if (!l || l === "the local area") return false;
@@ -359,7 +383,7 @@ Deno.serve(async (req) => {
     /* ⛔ SALES: HOOK AUDIT ONLY, ON A LEAD THEY WORK, FILED UNDER THE BOOK'S OWNER. The audit row takes
        the lead's user_id (the data account) so every reader of the one book — the queue, the report,
        the dashboards — sees it exactly as if the admin had run it. The rep is recorded on the lead's
-       activity log by the browser's RPC, not by rewriting who owns the row. */
+       activity log (kind audit_run, written below once the run is queued), not by rewriting who owns the row. */
     if (actor && actor.role !== "admin") {
       const refused = salesAuditRefusal({ purpose: body.purpose, hookAudit: body.hook_audit === true, leadId, reuseAuditId });
       if (refused) return json({ ok: false, error: refused }, 403);
@@ -890,6 +914,11 @@ Deno.serve(async (req) => {
       } else {
         qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
+      /* A HOOK PREVIEW (the prospect workspace's "Propose questions") is planned exactly as the run
+         will plan it, so the three the salesperson reviews are the three that are asked. */
+      if (hookAuditRequested && !isBaseline && !isMeasurement && !isDiscovery) {
+        qs = finalHookPlan(qs, { town: locationText, country, trade: businessType, businessName });
+      }
       return json({
         ok: true,
         preview: true,
@@ -909,7 +938,7 @@ Deno.serve(async (req) => {
     // The town columns ride along for the gate below — one read, both questions.
     if (leadId) {
       const { data: lead } = await service.from("outreach_leads")
-        .select("user_id, derived_town, town_fetch_note").eq("id", leadId).maybeSingle();
+        .select("user_id, derived_town, town_fetch_note, place_id, lead_source").eq("id", leadId).maybeSingle();
       if (!isInternal && (!lead || lead.user_id !== userId)) return json({ ok: false, error: "lead_not_found" }, 403);
       /* ⛔ THE TOWN GATE — Paul's rule, 2026-08-14: an audit of a lead whose town is settled-
          unverifiable would fall back to search_location, the searched town — the exact wrong-town
@@ -936,7 +965,17 @@ Deno.serve(async (req) => {
          find them. */
       /* ⛔ THE REPLAY IS EXEMPT: its town is the baseline's, which came from the client's own
          questionnaire. Without this a client Google cannot resolve is gated at day 28. */
-      if (lead && !isBaseline && !isRemeasure && !townConfirmed && townGated(lead)) {
+      /* ⛔ AND A HAND-ADDED LEAD WITH NO GOOGLE PLACE IS EXEMPT (2026-09-28) — the free-check reasoning
+         above, for the prospect a salesperson found themselves (LinkedIn, a referral, networking). Such a
+         lead has no place id, so resolveDerivedTown stamps 'no_place_id' in THIS request and the gate
+         refused every one of them (409 town_unverified). Its town was TYPED by the person who found the
+         business, for that business — evidence, not a search term. Positive match on all three: the lead
+         carries a lead_source (only sales_add_lead writes one), it has NO place id (a Google-resolved lead
+         keeps the gate exactly as before), and the town in use is that typed one (locationSource 'search',
+         a usable town). Anything else is gated as it always was. */
+      const handTypedTown = !!lead && !lead.place_id && typeof lead.lead_source === "string" && lead.lead_source !== ""
+        && locationSource === "search" && hasUsableTown(locationText);
+      if (lead && !isBaseline && !isRemeasure && !townConfirmed && !handTypedTown && townGated(lead)) {
         return json({ ok: false, error: `town_unverified: ${TOWN_GATE_REASON}` }, 409);
       }
     }
@@ -1356,23 +1395,7 @@ Deno.serve(async (req) => {
        hook, so the score, the report, the Inbox card and the 6/6 rule know how to read it. */
     let hookState: HookStateV2 | null = null;
     if (isHookAudit) {
-      questions = planHookQuestions(questions, { town: locationText });
-      /* ⛔ EXACTLY THREE (2026-09-26). If the generator and its guards left fewer, top up with safe
-         generic trade + place questions (no service is ever invented). The place gets the same UK
-         disambiguation the generator applies, so an engine cannot answer about a same-named town
-         abroad. If even that cannot reach three, the audit runs short and scoreHookRun marks it
-         incomplete: no X/6, no hook, no auto Not Interested. */
-      if (questions.length < HOOK_SCORE_QUESTIONS) {
-        const isUkHook = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
-        const hookPlace = locationText && isUkHook && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText)
-          ? `${locationText} UK` : locationText;
-        const before = questions.length;
-        questions = topUpHookQuestions(questions, { trade: businessType, place: hookPlace });
-        console.log(`[create-ai-audit] hook: ${before} generated question(s) topped up to ${questions.length} with generic trade/place questions`);
-        if (questions.length < HOOK_SCORE_QUESTIONS) {
-          console.warn(`[create-ai-audit] hook: only ${questions.length} valid question(s) for "${businessName}" — the audit will be marked incomplete (unable to create ${HOOK_SCORE_QUESTIONS} valid questions)`);
-        }
-      }
+      questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });
       hookState = initialHookStateV2(questions, AUDIT_ENGINES);
       console.log(`[create-ai-audit] hook: ${questions.length} question(s) × ${AUDIT_ENGINES.length} engines, all queued`);
     }
@@ -1451,6 +1474,19 @@ Deno.serve(async (req) => {
     }));
     const { error: qErr } = await service.from("ai_audit_queue").insert(queueRows);
     if (qErr) return json({ ok: false, error: qErr.message }, 500);
+
+    /* THE LEAD'S HISTORY SAYS WHO RAN IT (2026-09-28). The comment at the sales gate always said the
+       rep was recorded on the lead's activity log — nothing wrote it. A person's hook audit on a lead
+       now does, as the service role (lead_activity has no write policy). Best-effort: a failed log
+       never fails the audit that was just queued. Internal callers (the drip, the reply chain) are not
+       a person and write nothing. */
+    if (actor && leadId && isHookAudit) {
+      const { error: actErr } = await service.from("lead_activity").insert({
+        lead_id: leadId, actor_user_id: actor.id, kind: "audit_run",
+        data: { audit_id: auditId, run_id: runId, questions: questions.length, engines: AUDIT_ENGINES.length },
+      });
+      if (actErr) console.warn(`[create-ai-audit] audit_run activity not recorded: ${actErr.message}`);
+    }
 
     // Optional auto-pitch on completion (Inbox audit button). Best-effort + additive: a failure
     // here never fails the audit that was just created. 23505 = the lead's once-ever slot is
