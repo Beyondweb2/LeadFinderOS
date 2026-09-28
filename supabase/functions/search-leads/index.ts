@@ -5,6 +5,7 @@ import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
 import { qualifierInfo, resolveGeoBias } from '../_shared/geobias.ts';
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
+import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -1370,9 +1371,15 @@ Deno.serve(async (req) => {
     // ─── CACHE CHECK ─────────────────────────────
     // Region searches cache under a distinct key (density-scoped, radius-agnostic)
     // so they never collide with normal/curated results for the same area.
+    /* ⛔ A NON-UK BIAS IS PART OF THE RESULTS KEY (2026-09-28). A bare name the geocoder resolves by
+       country ("Kochi" is in Kerala and in Japan; "Hyderabad" in India and Pakistan) must not be served
+       another country's cached pool. A GB bias (every UK search, and a bare name with no country) adds
+       NOTHING, so every existing UK key is byte-identical and still hits. */
+    const keyBias = region ? null : resolveGeoBias(location, country);
+    const keyLocation = keyBias && keyBias !== 'GB' ? `${location}##${keyBias}` : location;
     const cacheKey = region
       ? await generateCacheKey(keyword, `##region:${density}##${location}`, radius)
-      : await generateCacheKey(keyword, location, radius, townOnly);
+      : await generateCacheKey(keyword, keyLocation, radius, townOnly);
     const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
 
     const { data: cached } = await serviceClient
@@ -1575,6 +1582,9 @@ Deno.serve(async (req) => {
          wrong is a field nobody ever learns to read, and it would have been absent on the one search
          that needed it. */
       resolvedLocation: debug.resolvedLocation ?? null,
+      /* The lead-enum country Google resolved the search to ("India" for "Pune, Maharashtra, India"),
+         or null. The SPA stores THIS on the leads it adds, not the form's remembered choice. */
+      resolvedCountry: countryFromAddress(debug.resolvedLocation ?? null),
       locationCandidates: debug.locationCandidates ?? [],
       gated: isGated,
       _debug: { ...debug, ...selectionDebug },

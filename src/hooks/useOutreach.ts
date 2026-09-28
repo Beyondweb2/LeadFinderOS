@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { campaignMoveText, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { salesAddPayload } from '@/lib/salesAddPayload';
+import { countryFromAddress } from '@/lib/leadCountry';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
@@ -26,6 +27,7 @@ interface OutreachHistoryEntry {
   business_name: string;
   google_maps_url: string | null;
    phone: string | null;
+  country?: string | null;
 }
 
 export type PhoneFetchStatus = 'pending' | 'success' | 'no_phone' | 'failed';
@@ -101,6 +103,11 @@ async function applyPlaceDetailsToLead(
   if (details.phone != null) updates.phone = details.phone;
   if (details.website != null) updates.website = details.website;
   if (details.address != null) updates.address = details.address;
+  /* ⛔ THE COUNTRY THE ADDRESS NAMES (2026-09-28, leadCountry.ts) — the lead's country was the search
+     form's hidden choice, and 349 UK businesses were stored as USA that way. Only a recognised
+     trailing country is written; anything else leaves the stored value alone. */
+  const addressCountry = countryFromAddress(details.address);
+  if (addressCountry) updates.country = addressCountry;
   if (details.category != null) updates.category = details.category;
   if (details.rating != null) updates.rating = details.rating;
   if (details.reviewCount != null) updates.review_count = details.reviewCount;
@@ -598,7 +605,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     let data: OutreachHistoryEntry[] = [];
     try {
       data = (await fetchAllRowsParallel<OutreachHistoryEntry & { id: string }>('Outreach (history)', (from, to) => supabase
-        .from('outreach_history').select('id, business_name, google_maps_url')
+        .from('outreach_history').select('id, business_name, google_maps_url, country')
         .order('id', { ascending: true }).range(from, to), (h) => h.id)).rows;
     } catch (error) {
       console.error('Error fetching outreach history:', error);
@@ -779,9 +786,13 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       return { id: r.lead_id, business_name: lead.name } as unknown as OutreachLead;
     }
 
+    /* ⛔ A NAME IS ONLY A DUPLICATE IN THE SAME COUNTRY (2026-09-28). "Smile Dental Clinic" in Pune is
+       not the one in Leeds. The Maps URL and place id stay country-blind: they ARE the business.
+       A null country is the column default, UK. */
+    const sameCountry = (c: string | null | undefined) => (c || 'UK') === (country || 'UK');
     // Fast local-only duplicate check (no DB round-trips)
     const inHistory = outreachHistory.some(
-      (h) => h.business_name === lead.name || (lead.googleMapsUrl && h.google_maps_url === lead.googleMapsUrl)
+      (h) => (h.business_name === lead.name && sameCountry(h.country)) || (lead.googleMapsUrl && h.google_maps_url === lead.googleMapsUrl)
     );
     if (inHistory) {
       if (!silent) toast({
@@ -793,10 +804,10 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     }
 
     const inActive = leads.some(
-      (l) => l.business_name === lead.name || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
+      (l) => (l.business_name === lead.name && sameCountry(l.country)) || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
     );
     const inArchived = archivedLeads.some(
-      (l) => l.business_name === lead.name || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
+      (l) => (l.business_name === lead.name && sameCountry(l.country)) || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
     );
     if (inActive || inArchived) {
       const message = inArchived
@@ -836,8 +847,12 @@ export function useOutreach({ history = true, progressive = false }: { history?:
         existing = data ?? null;
       }
       if (!existing) {
-        const { data, error: e } = await supabase.from('outreach_leads')
-          .select('id, business_name, is_archived').eq('business_name', lead.name).limit(1).maybeSingle();
+        /* Same name, same country only (see sameCountry above); UK also matches the null default. */
+        const nameQ = supabase.from('outreach_leads')
+          .select('id, business_name, is_archived').eq('business_name', lead.name);
+        const { data, error: e } = await ((country || 'UK') === 'UK'
+          ? nameQ.or('country.is.null,country.eq.UK')
+          : nameQ.eq('country', country)).limit(1).maybeSingle();
         if (e) throw e;
         existing = data ?? null;
       }

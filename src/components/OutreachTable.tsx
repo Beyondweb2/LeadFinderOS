@@ -1196,7 +1196,7 @@ export function OutreachTable({
     const cutoff = Date.now() - CONTACT_FOLLOWUP_MIN_DAYS * 24 * 60 * 60 * 1000;
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
-    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
+    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone, l.country)}` : '');
 
     // Cross-channel suppression (one-no-forever): best-effort; the drainer is authoritative.
     const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
@@ -1305,7 +1305,7 @@ export function OutreachTable({
     const ids = Array.from(selectedIds);
     const leadOf = (id: string) => leads.find((l) => l.id === id);
     // Canonical E.164 ("+…") for a lead, matching the drainer's suppression key (and the SMS lane's, before it went).
-    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone)}` : '');
+    const e164 = (l?: OutreachLead) => (l?.phone ? `+${formatPhoneForWhatsApp(l.phone, l.country)}` : '');
 
     /* ⛔ PRIOR CONTACT AND SUPPRESSION BOTH COME FROM THE SERVER NOW, AND THAT IS A BUG FIX, NOT
        A REFACTOR. This block used to read contact_suppressions directly - a table with RLS enabled

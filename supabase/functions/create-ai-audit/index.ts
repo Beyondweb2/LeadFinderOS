@@ -5,7 +5,7 @@ import { resolveDerivedTown, pickAuditTown } from "../_shared/place-town.ts";
 import { buildTownIndex, lookupTownCentroid, checkTownDistance, type TownDistanceCheck } from "../_shared/town-distance.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { DEFAULT_FIRST_REPLY_TEMPLATE, firstReplyTemplate, pitchEverSent } from "../_shared/auto-reply-rules.ts";
-import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
+import { dropResearchIntent, dropOffTrade, dropMissingTown, qualifyPlace, placeSuffixForCountry, dedupeQuestions, coverageDirective, stripRepeatedWords, capHeadTerms, headTermCap } from "../../../src/lib/seedGuard.ts";
 import { normalizeAuditList, serviceAreaQuestionDirective } from "../../../src/lib/auditQuestionContext.ts";
 import {
   nationalIntentDirective, hybridIntentDirective, nationalFallbackQuestions, marketVocabulary,
@@ -166,6 +166,17 @@ function isNationalScope(loc: string, specialisms: string): boolean {
   return false;
 }
 
+/** The country word for a lead in a LISTED non-UK country ("India"), else null — UK, blank and unknown
+ *  countries all answer null, so every UK path keeps its wording. One rule: seedGuard's map. */
+function otherCountrySuffix(country: string | null): string | null {
+  const s = placeSuffixForCountry(country);
+  return s === "UK" ? null : s;
+}
+/** Whole-word, case-insensitive: "Pune, India" already names India; "Indiana" does not. */
+function mentionsCountryWord(text: string, word: string): boolean {
+  return (" " + text.toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ").includes(" " + word.toLowerCase() + " ");
+}
+
 /** The country/market word a NATIONAL question is qualified by ("uk"). Never a town: a national
  *  business is not chosen for proximity, so the place in its questions is the market it sells into.
  *  Falls back to "uk" — the only market this product sells in — rather than to the location, which
@@ -246,7 +257,11 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
   // make engines answer from the wrong country. Simpler than an ambiguity list and never wrong.
   // Skipped when the location already carries a UK marker.
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
-  const ukTown = (l: string) => (isUK && l && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(l) ? `${l} UK` : l);
+  /* A lead in another LISTED country gets its own name ("Pune India"), never "UK" (2026-09-28). UK
+     wording is unchanged; a blank/unknown country is still left bare here, as before. */
+  const abroad = isUK ? null : otherCountrySuffix(country);
+  const ukTown = (l: string) => (isUK && l && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(l) ? `${l} UK`
+    : abroad && l && !mentionsCountryWord(l, abroad) ? `${l} ${abroad}` : l);
   const niches = specialisms
     ? specialisms.split(/[,;/]|\band\b/i).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 1)
     : [];
@@ -276,7 +291,7 @@ function fallbackQuestions(type: string, loc: string, hasWebsite: boolean, speci
   } else if (national) {
     const l = loc.trim().toLowerCase();
     // Use the real country/region from the location when it is one; else default to "uk".
-    const region = l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l) ? ` ${l}` : " uk";
+    const region = abroad ? ` ${abroad.toLowerCase()}` : l && NATIONAL_LOC_TERMS.has(l) && !NON_GEO_NATIONAL.has(l) ? ` ${l}` : " uk";
     base = [
       ...niches.map((nk) => `${nk} ${t}${region}`),                    // niche-grounded, national
       `${t} for small businesses${region}`,
@@ -1859,7 +1874,9 @@ async function generateQuestions(
   // UK disambiguation for LOCAL question text (mirrors fallbackQuestions.ukTown): always name the
   // place as "<town> UK" so engines can't resolve an ambiguous town to a non-UK city.
   const isUK = ["UK", "GB"].includes((country ?? "").trim().toUpperCase());
-  const locQ = isUK && locationText && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText) ? `${locationText} UK` : loc;
+  const abroadQ = isUK ? null : otherCountrySuffix(country);
+  const locQ = isUK && locationText && !/\b(uk|united kingdom|england|scotland|wales)\b/i.test(locationText) ? `${locationText} UK`
+    : abroadQ && locationText && !mentionsCountryWord(locationText, abroadQ) ? `${locationText} ${abroadQ}` : loc;
   /* ⛔ THE MONEY-QUESTION BLOCK — EMPTY STRING WHEN OFF, so a caller that did not opt in gets a
      prompt byte-identical to the one it got before this existed. The text lives in
      src/lib/moneyQuestions.ts rather than inline here: it is the part Paul tunes, it has to be
@@ -1901,7 +1918,7 @@ async function generateQuestions(
     ? nationalIntentDirective(n, market)
     : `- NEVER use "near me".
 - NEVER use broad head-terms like "best [service] in [country]", "top [service] in [country]", or "leading [service] in [country]". These are dominated by directories and comparison sites, are unwinnable for a single firm, and prove nothing — do not produce any.
-- EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "uk". Prioritise the differentiators / niches in the "known for" field.`;
+- EVERY question must be a SPECIFIC service or problem, qualified by AUDIENCE and national scope. Use the pattern "[specific service] for [audience] [country]" or "[niche] [service] [country]" — e.g. "[service] for small businesses uk", "[niche] [service] uk". Use the real country/region from the location; if the location gives no country, use "${abroadQ ? abroadQ.toLowerCase() : "uk"}". Prioritise the differentiators / niches in the "known for" field.`;
 
   // 'local'/'national' hard-force the matching rule set (no classification); 'hybrid'/null
   // keep the original "classify from the location" heuristic verbatim.
@@ -2109,7 +2126,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
          pins a town far harder — but changing it changes what the engines return for EVERY town,
          and a day-28 re-measurement compares against day-0 wording. Paul's decision, not a
          code change. */
-      const pinned = qualifyPlace(localised.questions, town);
+      const pinned = qualifyPlace(localised.questions, town, placeSuffixForCountry(country));
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] country marker added to ${pinned.repaired.length} question(s) for "${town}": `
@@ -2123,7 +2140,7 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
        is half national by design. */
     if (scope === "hybrid" && hasUsableTown(locationText)) {
       const town = locationText.trim();
-      const pinned = qualifyPlace(spread.questions, town);
+      const pinned = qualifyPlace(spread.questions, town, placeSuffixForCountry(country));
       if (pinned.repaired.length) {
         console.warn(
           `[create-ai-audit] hybrid: country marker added to ${pinned.repaired.length} local question(s) for "${town}": `

@@ -154,9 +154,10 @@ const COUNTRY_DATA: Partial<Record<Country, { flag: string; locations: string[] 
   India: {
     flag: '🇮🇳',
     locations: [
-      'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata',
+      'Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata',
       'Ahmedabad', 'Pune', 'Surat', 'Jaipur', 'Lucknow', 'Kanpur',
       'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Vadodara',
+      'Kochi', 'Chandigarh', 'Gurugram', 'Noida', 'Coimbatore', 'Mysuru',
     ],
   },
   Singapore: {
@@ -207,6 +208,12 @@ const COUNTRY_DATA: Partial<Record<Country, { flag: string; locations: string[] 
 };
 
 const COUNTRIES = Object.keys(COUNTRY_DATA) as Country[];
+
+/** The countries Find Leads can search, with their flag — the form's visible Country picker reads this. */
+export const SEARCH_COUNTRIES: ReadonlyArray<{ value: Country; flag: string }> =
+  COUNTRIES.map((c) => ({ value: c, flag: COUNTRY_DATA[c]?.flag ?? '' }));
+export const countryLabel = (c: Country): string =>
+  c === 'NewZealand' ? 'New Zealand' : c === 'SouthAfrica' ? 'South Africa' : c;
 
 interface QuickLocationsListProps {
   onLocationSelect: (location: string, country: Country) => void;

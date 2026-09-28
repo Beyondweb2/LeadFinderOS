@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
-import { QuickLocationsList } from '@/components/QuickLocationsList';
+import { QuickLocationsList, SEARCH_COUNTRIES, countryLabel } from '@/components/QuickLocationsList';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
@@ -179,9 +180,25 @@ export function SearchForm({
             </div>
 
             <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="location-area">
-              <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
-                Location
-              </Label>
+              {/* ⛔ THE COUNTRY IS SHOWN, NOT REMEMBERED OUT OF SIGHT (2026-09-28). It used to change only on a
+                  Quick Locations click and was never displayed, so typing "Grimsby" after one click on a US
+                  city searched with a US bias and stored 349 UK businesses as USA. It still only BIASES the
+                  search — the leads carry the country Google resolved (leadCountry.ts). */}
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
+                  Location
+                </Label>
+                <Select value={selectedCountry} onValueChange={(v) => setSelectedCountry(v as Country)}>
+                  <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Country" data-testid="find-leads-country">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEARCH_COUNTRIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value} className="text-xs">{c.flag} {countryLabel(c.value)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="relative">
                 <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 <Input

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { toWhatsAppDigits } from '@/lib/waNumber';
 import { conversationLeadId, groupInboxMessages, mergeInboxMessages, mergeReconciledLeads, optionalInboxRows, patchInboxLead, upsertAuditById } from '@/lib/inboxCache';
 import { newestUsableAudit, resolveReportsByLead } from '@/lib/auditReportResolver';
 import { RUN_USABLE } from '@/lib/queueAuditStatus';
@@ -157,16 +158,7 @@ const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassign
 /** Client mirror of the edge toWhatsAppNumber, so a conversation started from a lead
  *  uses the SAME E.164 key the server stores (keeps the thread selected after send). */
 export function normalizeWaNumber(raw: string, country?: string | null): string | null {
-  let s = (raw || '').replace(/[^\d+]/g, '');
-  if (!s) return null;
-  if (s.startsWith('00')) s = '+' + s.slice(2);
-  if (s.startsWith('+')) return s.slice(1).replace(/\D/g, '') || null;
-  const cc = (country || 'UK').toUpperCase();
-  if (s.startsWith('0')) {
-    if (cc === 'UK' || cc === 'GB') return '44' + s.slice(1);
-    return s.replace(/\D/g, '');
-  }
-  return s.replace(/\D/g, '') || null;
+  return toWhatsAppDigits(raw, country); // ONE rule, src/lib/waNumber.ts
 }
 
 /* The rule lives in src/lib/serviceWindow.ts (shared with the warm-reply drafter). */

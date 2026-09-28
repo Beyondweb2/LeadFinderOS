@@ -105,7 +105,7 @@ console.log("\n── the queued line never promises a send the queue will not m
   const qs = q.slice(q.indexOf('if (mode === "queue_state") {'), q.indexOf('if (mode === "queue_state") {') + 900);
   ok(/select\("paused"\)/.test(qs) && !/\.update\(|\.insert\(/.test(qs), "queue_state reads the pause flag and writes nothing");
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
-  ok(!/7am–9:30pm UK window \(max 40\/day\)/.test(controls) && /queuedLeadLine\(useQueueState\(queued\)\)/.test(controls), "the workspace's queued line reads the live state");
+  ok(!/7am–9:30pm UK window \(max 40\/day\)/.test(controls) && /queuedLeadLine\(useQueueState\(queued\)(, lead\.phone)?\)/.test(controls), "the workspace's queued line reads the live state");
   const out = strip(read("src/pages/Outreach.tsx"));
   ok(/data-testid="queue-paused-banner"/.test(out) && /!perms\.queueControls && queuedMine > 0 && queueState\?\.paused/.test(out), "Sales sees a paused-queue banner when their leads are waiting");
 }

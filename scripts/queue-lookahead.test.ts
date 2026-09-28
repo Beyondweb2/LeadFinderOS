@@ -62,7 +62,9 @@ ok(/interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q),
    'and the look-ahead is taken from the campaign round-robin, not from raw FIFO');
 
 console.log('\n-- 🔴 skipping writes NOTHING to the lead it passes over --');
-const block = q.slice(q.indexOf('const scanned = (leadRows ?? [])'), q.indexOf('/* "empty_queue", "nothing left but archived'));
+/* The block starts at the scan read (renamed scannedAll 2026-09-28, when the per-lead send window
+   filter was added in front of the fair order — it only drops rows from the candidate list). */
+const block = q.slice(q.indexOf('const scannedAll = (leadRows ?? [])'), q.indexOf('/* "empty_queue", "nothing left but archived'));
 ok(block.length > 200, `the selection block was found (${block.length} chars)`);
 ok(!/\.update\(/.test(block), 'no update in the selection — a skipped lead is untouched');
 ok(!/status:/.test(block), 'and nothing sets a status');

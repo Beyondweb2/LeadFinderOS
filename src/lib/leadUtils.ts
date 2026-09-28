@@ -1,4 +1,5 @@
 import type { OutreachLead } from '@/types/outreach';
+import { toWhatsAppDigits } from '@/lib/waNumber';
 
 /**
  * Calculate a lead score based on various factors (0-100)
@@ -65,7 +66,10 @@ export function getScoreLabel(score: number): { label: string; color: string } {
 /**
  * Format phone for WhatsApp link (digits only, with country code)
  */
-export function formatPhoneForWhatsApp(phone: string): string {
+export function formatPhoneForWhatsApp(phone: string, country?: string | null): string {
+  /* ⛔ AN INDIA LEAD GOES THROUGH THE ONE RULE (2026-09-28): the UK default below turned "098765 43210"
+     into 449876543210 — a UK number. Every other lead keeps exactly the behaviour it had. */
+  if (country && /^(india|in)$/i.test(country)) return toWhatsAppDigits(phone, country) ?? '';
   // Remove all non-digits except leading +
   let cleaned = phone.replace(/[^\d+]/g, '');
   

@@ -42,7 +42,7 @@ export function WhatsAppLeadControls({
   const queued = lead.status === 'queued';
   /* ⛔ THE QUEUED LINE SAYS WHETHER THE QUEUE IS ACTUALLY SENDING (2026-09-28): paused by the admin
      outranks the sending window, and an unreadable state never claims it will send. */
-  const queueLine = queuedLeadLine(useQueueState(queued));
+  const queueLine = queuedLeadLine(useQueueState(queued), lead.phone);
   /* A salesperson's single-lead queue is the bulk opener path, so it offers the approved openers. */
   const options = salesPath ? WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value)) : WHATSAPP_TEMPLATES;
   /* A template must be CHOSEN before this lead can be queued. Only a name that is currently in the
@@ -65,7 +65,7 @@ export function WhatsAppLeadControls({
         return;
       }
       const st = await fetchQueueState().catch(() => null);
-      toast({ title: 'Queued for WhatsApp', description: `${template} — ${queuedLeadLine(st).text} The queue re-checks it before it sends.` });
+      toast({ title: 'Queued for WhatsApp', description: `${template} — ${queuedLeadLine(st, lead.phone).text} The queue re-checks it before it sends.` });
       window.dispatchEvent(new CustomEvent('lead-row-changed', { detail: { leadId: lead.id } }));
     } finally { setBusy(false); }
   };
