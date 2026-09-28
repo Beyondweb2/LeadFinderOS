@@ -57,3 +57,18 @@ or the admin; anon revoked. Checks: message 1–1,024, use case and why 1–300.
 - Rendered locally (harness, fake data): hover in the list shows "Hi, is this Coastal Mobile Mechanic? …
   Cheers" inside the open list; the form's four fields, the Meta link, Send disabled until the required
   fields are filled.
+
+## 5. Deploy and the live test (2026-09-28)
+
+- Migration applied one statement at a time, read back (RLS on, 14 columns, one SELECT policy, anon no
+  privilege). Edge `template-request` v1 from the merge tree (bundle marker read back; an unsigned call →
+  401). Main `e43e9133`.
+- ⚠️ Cloudflare's build of `e43e9133` FAILED while the same code on the branch (`906f3efc`) built fine and a
+  clean local build of the exact commit passes; `f4bf55d1` (another session's merge) failed the same way
+  earlier the same day and the next push built. The logs are behind the Cloudflare login; a further push
+  re-triggered the build.
+- **One live test request, as the Sales Test account (one-time link, ended 204):** a request with no "why"
+  → 400 `why_required`; the real one (marked TEST, a prices-after-a-call wording with blank lines, two
+  leading spaces and an emoji) → 200 in 0.8 s, `emailed: true`; the row: requester Test (sales), source
+  queue, `email_status` sent, the wording byte-for-byte equal to what was sent; Test reads only its own
+  row. No reply-to (the Test address is .invalid). The row (`194ba2f6…`) is kept as the first record.
