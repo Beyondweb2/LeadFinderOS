@@ -13,6 +13,11 @@ import {
   type CampaignRow, type FunnelCounts, type SalesPerformance, type TemplateRow,
 } from '@/lib/salesPerformance';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { SlidersHorizontal } from 'lucide-react';
+import { useDashboardPrefs } from '@/hooks/useDashboardPrefs';
+import { campaignKey, templateKey, visibleRows, toggleHidden, inactiveKeys, INACTIVE_DAYS } from '@/lib/dashboardVisibility';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE SALES DASHBOARD (2026-09-28, Paul: "what is working, what is not, where should I focus").
@@ -40,6 +45,11 @@ export default function SalesDashboard() {
     queryFn: () => invokeEdge<Perf>('sales-performance', { period, person: isAdmin ? person : 'me' }),
   });
   const d = q.data;
+  /* ⛔ DISPLAY ONLY: which campaign / template rows THIS person sees. Every number is computed on the
+     server exactly as before; the funnel and totals include hidden rows (src/lib/dashboardVisibility.ts). */
+  const prefs = useDashboardPrefs();
+  const campaigns = d ? visibleRows<CampaignRow>(d.campaigns, prefs.hidden.campaigns, campaignKey) : [];
+  const templates = d ? visibleRows<TemplateRow>(d.templates, prefs.hidden.templates, templateKey) : [];
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-3 py-4 sm:px-6 sm:py-6">
@@ -79,12 +89,12 @@ export default function SalesDashboard() {
       {d && (
         <>
           <Funnel f={d.funnel} />
-          <Focus d={d} />
-          <Section title="Campaigns" hint="Which campaign is working. The small grey figure is the rate.">
-            <CampaignTable rows={d.campaigns} />
+          <Focus d={d} templates={templates} />
+          <Section title="Campaigns" hint="Which campaign is working. The small grey figure is the rate." action={<ManageRows kind="campaigns" all={d.campaigns.map((r) => ({ key: campaignKey(r), label: r.name, lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.campaigns} onChange={(next) => prefs.setHidden({ ...prefs.hidden, campaigns: next })} />}>
+            <CampaignTable rows={campaigns} />
           </Section>
-          <Section title="Templates" hint="Which message gets replies. A reply counts for the last template sent before it. “Unclear” means two different templates went out before they replied, so either could have earned it. Interested, link and won count the people whose reply that template earned.">
-            <TemplateTable rows={d.templates} />
+          <Section title="Templates" hint="Which message gets replies. A reply counts for the last template sent before it. “Unclear” means two different templates went out before they replied, so either could have earned it. Interested, link and won count the people whose reply that template earned." action={<ManageRows kind="templates" all={d.templates.map((r) => ({ key: templateKey(r), label: templateLabel(r.template), lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.templates} onChange={(next) => prefs.setHidden({ ...prefs.hidden, templates: next })} />}>
+            <TemplateTable rows={templates} />
           </Section>
           <div className="grid gap-5 xl:grid-cols-2">
             <Section title="Channels" hint="A lead counts once per channel it was contacted on. Calls, LinkedIn, email and in person come from what was logged in the prospect panel.">
@@ -119,10 +129,10 @@ export default function SalesDashboard() {
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ title, hint, action, children }: { title: string; hint?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm sm:p-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{title}</h2>{action}</div>
       {hint && <p className="mb-3 mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>}
       {children}
     </section>
@@ -154,9 +164,9 @@ function Funnel({ f }: { f: FunnelCounts }) {
 }
 
 /** Plain, actionable pointers from counts that exist. Nothing is suggested from a sample too small to mean anything. */
-function Focus({ d }: { d: SalesPerformance }) {
+function Focus({ d, templates }: { d: SalesPerformance; templates: TemplateRow[] }) {
   const MIN = 10;
-  const t = d.templates.filter((r) => r.leadsSent >= MIN).map((r) => ({ r, rate: (r.replies / r.leadsSent) }));
+  const t = templates.filter((r) => r.leadsSent >= MIN).map((r) => ({ r, rate: (r.replies / r.leadsSent) }));
   const best = t.length > 1 ? t.reduce((a, b) => (b.rate > a.rate ? b : a)) : null;
   const worst = t.length > 1 ? t.reduce((a, b) => (b.rate < a.rate ? b : a)) : null;
   const items: string[] = [];
@@ -185,6 +195,46 @@ function rank<T>(rows: T[], num: (r: T) => number, den: (r: T) => number): { bes
   const best = eligible.reduce((a, b) => (by(b) > by(a) ? b : a));
   const worst = eligible.reduce((a, b) => (by(b) < by(a) ? b : a));
   return best === worst ? { best: null, worst: null } : { best, worst };
+}
+
+/** "Manage campaigns / templates": tick what shows on YOUR dashboard. Nothing is deleted or re-counted. */
+function ManageRows({ kind, all, hidden, onChange }: {
+  kind: 'campaigns' | 'templates';
+  all: { key: string; label: string; lastActivityAt: string | null }[];
+  hidden: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const h = new Set(hidden);
+  const hiddenHere = all.filter((r) => h.has(r.key)).length;
+  const stale = inactiveKeys(all, (r) => r.key);
+  const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : 'no activity');
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[11px] text-muted-foreground" data-testid={`manage-${kind}`}>
+          <SlidersHorizontal className="h-3.5 w-3.5" />Manage {kind}{hiddenHere ? ` (${hiddenHere} hidden)` : ''}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-3">
+        <p className="text-xs font-semibold">Show on my dashboard</p>
+        <p className="mb-2 text-[11px] text-muted-foreground">Only changes what you see. Totals above still include everything, and nothing is deleted.</p>
+        <div className="mb-2 flex gap-1.5">
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={hiddenHere === 0} onClick={() => onChange(hidden.filter((k) => !all.some((r) => r.key === k)))}>Show all</Button>
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={stale.every((k) => h.has(k))} onClick={() => onChange([...new Set([...hidden, ...stale])])} title={`Hides anything with nothing sent or logged in ${INACTIVE_DAYS} days`}>Hide inactive ({INACTIVE_DAYS}+ days)</Button>
+        </div>
+        <ul className="max-h-72 space-y-1 overflow-y-auto pr-1 thin-scrollbar">
+          {all.map((r) => (
+            <li key={r.key}>
+              <label className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+                <Checkbox checked={!h.has(r.key)} onCheckedChange={(v) => onChange(toggleHidden(hidden, r.key, v !== true))} className="mt-0.5" />
+                <span className="min-w-0 flex-1"><span className="block truncate">{r.label}</span><span className="text-[10px] text-muted-foreground">Last active: {day(r.lastActivityAt)}</span></span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function CampaignTable({ rows }: { rows: CampaignRow[] }) {
