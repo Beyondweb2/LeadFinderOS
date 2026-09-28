@@ -382,7 +382,8 @@ function LeadDetailBody({
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Work. */
   const [tab, setTab] = useState<WorkspaceTab>(() => initialTab ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'work'));
   const [scriptTab, setScriptTab] = useState<'call' | 'voice'>('call');
-  const openScript = (which: 'call' | 'voice') => { setScriptTab(which); setTab('scripts'); };
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const openScript = (which: 'call' | 'voice') => { setScriptTab(which); setTab('scripts'); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -663,7 +664,7 @@ function LeadDetailBody({
               {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
-          ) : <ContactMethodBadge method={lead.contact_method as ContactMethod} />}
+          ) : lead.contact_method ? <ContactMethodBadge method={lead.contact_method as ContactMethod} /> : null}
 
           {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this LEAD id. onClose fires alongside
               the navigation: this is a modal, and leaving it mounted over the new route would trap
@@ -740,7 +741,7 @@ function LeadDetailBody({
           sign-up link, WhatsApp), SCRIPTS (call script / voice note), PROSPECT (who they are, the AI
           check, contact), HISTORY (everything recorded), CLIENT (admin only: delivery, payment, private
           note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={tab} onValueChange={(v) => { setTab(v as WorkspaceTab); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} className="flex min-h-0 flex-1 flex-col">
         <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
           <TabsTrigger value="work" className="text-xs">Work</TabsTrigger>
           <TabsTrigger value="scripts" className="text-xs">Scripts</TabsTrigger>
@@ -748,7 +749,7 @@ function LeadDetailBody({
           <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
           {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
-        <div className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
           <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
             {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
@@ -778,9 +779,12 @@ function LeadDetailBody({
                 { field: 'phone' as const, Icon: Phone, label: 'Phone', value: lead.phone, color: 'text-sky-400', external: false, hrefFor: (v: string) => `tel:${v}` },
                 { field: 'address' as const, Icon: MapPin, label: 'Address', value: lead.address, color: 'text-amber-500', external: false, hrefFor: null },
               ];
+              /* A salesperson cannot edit these, and the facts card above already shows email / website /
+                 phone — so for them only real social links earn a card (2026-09-28 polish). */
+              if (!perms.editLeadRecord && socials.length === 0) return null;
               return (
                 <section className={CARD}>
-                  <SectionLabel icon={Share2} color="text-blue-400">Socials &amp; contact</SectionLabel>
+                  <SectionLabel icon={Share2} color="text-blue-400">{perms.editLeadRecord ? <>Socials &amp; contact</> : 'Social profiles'}</SectionLabel>
                   <ul className="space-y-1.5">
                     {socials.map(({ key, Icon, label, value, href, color, external }) => (
                       <li key={key} className="flex items-center gap-2 text-xs">
@@ -796,7 +800,7 @@ function LeadDetailBody({
                         </a>
                       </li>
                     ))}
-                    {editableFields.map(({ field, Icon, label, value, color, external, hrefFor }) => {
+                    {(perms.editLeadRecord ? editableFields : []).map(({ field, Icon, label, value, color, external, hrefFor }) => {
                       const isEditing = editingField === field;
                       return (
                         <li key={field} className="flex items-center gap-2 text-xs">

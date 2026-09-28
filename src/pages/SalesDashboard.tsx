@@ -80,13 +80,13 @@ export default function SalesDashboard() {
         <>
           <Funnel f={d.funnel} />
           <Focus d={d} />
-          <Section title="Campaigns" hint="One row per campaign. Leads are counted where they are now; the period is when each lead was first contacted.">
+          <Section title="Campaigns" hint="Which campaign is working. The small grey figure is the rate.">
             <CampaignTable rows={d.campaigns} />
           </Section>
-          <Section title="Templates" hint="Only templates actually sent. A reply is credited to the last template sent before it; 'contested' means two different templates went out with no reply in between, so the credit is by rule, not evidence. Interested, sign-up and won are counted among the leads whose reply that template earned.">
+          <Section title="Templates" hint="Which message gets replies. A reply counts for the last template sent before it. “Unclear” means two different templates went out before they replied, so either could have earned it. Interested, link and won count the people whose reply that template earned.">
             <TemplateTable rows={d.templates} />
           </Section>
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-5 xl:grid-cols-2">
             <Section title="Channels" hint="A lead counts once per channel it was contacted on. Calls, LinkedIn, email and in person come from what was logged in the prospect panel.">
               <SimpleTable head={['Channel', 'Contacted', 'Responded', 'Rate']}
                 rows={d.channels.map((c) => [CHANNEL_LABELS[c.channel], c.contacted, c.responded, pct(c.responded, c.contacted)])} empty="No contact recorded yet." />
@@ -96,7 +96,7 @@ export default function SalesDashboard() {
                 rows={d.sources.map((s) => [leadSourceLabel(s.source), s.leads, s.contacted, s.interested, s.won])} empty="No leads yet." />
             </Section>
           </div>
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-5 xl:grid-cols-2">
             <Section title="Calls" hint={`Logged call outcomes${period === 'all' ? '' : ' in this period'}.`}>
               <p className="mb-2 text-2xl font-bold">{d.calls.total}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -132,18 +132,18 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 function Funnel({ f }: { f: FunnelCounts }) {
   const steps: { label: string; value: number; sub: string }[] = [
     { label: 'Contacted', value: f.contacted, sub: `${f.leads} leads` },
-    { label: 'Responded', value: f.responded, sub: `${pct(f.responded, f.contacted)} of contacted` },
+    { label: 'Replied', value: f.responded, sub: `${pct(f.responded, f.contacted)} of contacted` },
     { label: 'Interested', value: f.interested, sub: `${pct(f.interested, f.contacted)} of contacted` },
     { label: 'Sign-up link sent', value: f.onboardingSent, sub: `${pct(f.onboardingSent, f.interested)} of interested` },
     { label: 'Link opened', value: f.onboardingOpened, sub: `${pct(f.onboardingOpened, f.onboardingSent)} of sent` },
     { label: 'Won', value: f.won, sub: `${pct(f.won, f.onboardingSent)} of sent` },
   ];
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="sales-funnel">
+    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:grid-cols-6" data-testid="sales-funnel">
       {steps.map((s, i) => (
-        <div key={s.label} className="relative rounded-xl border border-border/60 bg-card/60 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{s.label}</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{s.value}</p>
+        <div key={s.label} className="relative rounded-xl border border-border/60 bg-card/60 p-2 sm:p-3">
+          <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-muted-foreground sm:text-[11px]">{s.label}</p>
+          <p className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">{s.value}</p>
           <p className="text-[11px] text-muted-foreground">{s.sub}</p>
           {i < steps.length - 1 && <ArrowRight className="absolute -right-2.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/50 lg:block" />}
         </div>
@@ -173,23 +173,94 @@ function Focus({ d }: { d: SalesPerformance }) {
   );
 }
 
+/* A cell: the number, with its rate small and grey underneath; `wide` columns hide below md. */
+type Cell = { v: string | number; sub?: string; wide?: boolean };
+const MIN_FOR_RANK = 10;
+
+/** Which row is best / lowest on a rate, among rows with enough behind them to mean anything. */
+function rank<T>(rows: T[], num: (r: T) => number, den: (r: T) => number): { best: T | null; worst: T | null } {
+  const eligible = rows.filter((r) => den(r) >= MIN_FOR_RANK);
+  if (eligible.length < 2) return { best: null, worst: null };
+  const by = (r: T) => num(r) / den(r);
+  const best = eligible.reduce((a, b) => (by(b) > by(a) ? b : a));
+  const worst = eligible.reduce((a, b) => (by(b) < by(a) ? b : a));
+  return best === worst ? { best: null, worst: null } : { best, worst };
+}
+
 function CampaignTable({ rows }: { rows: CampaignRow[] }) {
+  const { best, worst } = rank(rows, (r) => r.responded, (r) => r.contacted);
   return (
-    <SimpleTable
-      head={['Campaign', 'Leads', 'Contacted', 'Responded', 'Interested', 'Not int.', 'Followed up', 'Link sent', 'Opened', 'Won']}
-      rows={rows.map((r) => [r.name, r.leads, r.contacted, `${r.responded} (${pct(r.responded, r.contacted)})`, `${r.interested} (${pct(r.interested, r.contacted)})`, r.notInterested, r.followedUp, r.onboardingSent, `${r.onboardingOpened} (${pct(r.onboardingOpened, r.onboardingSent)})`, r.won])}
+    <DataTable
+      head={[{ v: 'Campaign' }, { v: 'Leads', wide: true }, { v: 'Contacted' }, { v: 'Replied' }, { v: 'Interested' }, { v: 'Not int.', wide: true }, { v: 'Followed up', wide: true }, { v: 'Link sent' }, { v: 'Opened' }, { v: 'Won' }]}
+      rows={rows.map((r) => ({
+        tag: r === best ? 'best' : r === worst ? 'lowest' : null,
+        cells: [
+          { v: r.name }, { v: r.leads, wide: true }, { v: r.contacted },
+          { v: r.responded, sub: pct(r.responded, r.contacted) }, { v: r.interested, sub: pct(r.interested, r.contacted) },
+          { v: r.notInterested, wide: true }, { v: r.followedUp, wide: true },
+          { v: r.onboardingSent }, { v: r.onboardingOpened, sub: pct(r.onboardingOpened, r.onboardingSent) }, { v: r.won },
+        ],
+      }))}
+      rankNote="by reply rate"
       empty="No campaign activity yet."
     />
   );
 }
 
 function TemplateTable({ rows }: { rows: TemplateRow[] }) {
+  const { best, worst } = rank(rows, (r) => r.replies, (r) => r.leadsSent);
   return (
-    <SimpleTable
-      head={['Template', 'Leads sent', 'Sends', 'Replies', 'Reply rate', 'Contested', 'Interested', 'Not int.', 'Link sent', 'Opened', 'Won']}
-      rows={rows.map((r) => [templateLabel(r.template), r.leadsSent, r.sends, r.replies, pct(r.replies, r.leadsSent), r.repliesContested, r.interested, r.notInterested, r.onboardingSent, r.onboardingOpened, r.won])}
+    <DataTable
+      head={[{ v: 'Template' }, { v: 'Sent to' }, { v: 'Sends', wide: true }, { v: 'Replies' }, { v: 'Unclear', wide: true }, { v: 'Interested' }, { v: 'Not int.', wide: true }, { v: 'Link sent' }, { v: 'Opened' }, { v: 'Won' }]}
+      rows={rows.map((r) => ({
+        tag: r === best ? 'best' : r === worst ? 'lowest' : null,
+        cells: [
+          { v: templateLabel(r.template) }, { v: r.leadsSent }, { v: r.sends, wide: true },
+          { v: r.replies, sub: pct(r.replies, r.leadsSent) }, { v: r.repliesContested, wide: true },
+          { v: r.interested }, { v: r.notInterested, wide: true }, { v: r.onboardingSent }, { v: r.onboardingOpened }, { v: r.won },
+        ],
+      }))}
+      rankNote="by reply rate"
       empty="No template sends yet."
     />
+  );
+}
+
+function DataTable({ head, rows, empty, rankNote }: { head: Cell[]; rows: { tag: 'best' | 'lowest' | null; cells: Cell[] }[]; empty: string; rankNote?: string }) {
+  if (rows.length === 0) return <p className="text-xs text-muted-foreground">{empty}</p>;
+  const hide = (c: Cell) => (c.wide ? 'hidden md:table-cell' : '');
+  return (
+    <div className="-mx-1 overflow-x-auto thin-scrollbar">
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+            {head.map((h, i) => <th key={String(h.v)} className={cn('px-1.5 py-1.5 font-semibold', i > 0 && 'text-right', hide(h))}>{h.v}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={ri} className={cn('border-b border-border/30 last:border-0', r.tag === 'best' && 'bg-emerald-500/[0.07]', r.tag === 'lowest' && 'bg-rose-500/[0.05]')}>
+              {r.cells.map((c, ci) => (
+                <td key={ci} className={cn('px-1.5 py-1.5 align-top', ci === 0 ? 'max-w-[13rem] font-medium' : 'text-right tabular-nums', hide(c))} title={ci === 0 ? String(c.v) : undefined}>
+                  {ci === 0 ? (
+                    <div className="min-w-0">
+                      <div className="truncate">{c.v}</div>
+                      {r.tag && <div className={cn('text-[10px] font-semibold', r.tag === 'best' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>{r.tag === 'best' ? 'Best' : 'Lowest'} {rankNote}</div>}
+                    </div>
+                  ) : (
+                    <>
+                      <div className={cn(c.v === 0 && 'text-muted-foreground/60')}>{c.v}</div>
+                      {c.sub && c.sub !== '—' && <div className="text-[10px] text-muted-foreground">{c.sub}</div>}
+                    </>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rankNote && <p className="mt-1.5 text-[10px] text-muted-foreground">Best / lowest only among rows with at least {MIN_FOR_RANK} behind them.</p>}
+    </div>
   );
 }
 
@@ -197,9 +268,9 @@ function SimpleTable({ head, rows, empty }: { head: string[]; rows: (string | nu
   if (rows.length === 0) return <p className="text-xs text-muted-foreground">{empty}</p>;
   return (
     <div className="-mx-1 overflow-x-auto thin-scrollbar">
-      <table className="w-full min-w-max border-collapse text-xs">
+      <table className="w-full border-collapse text-xs">
         <thead>
-          <tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
             {head.map((h, i) => <th key={h} className={cn('px-1.5 py-1.5 font-semibold', i > 0 && 'text-right')}>{h}</th>)}
           </tr>
         </thead>
@@ -222,7 +293,7 @@ function HowCounted({ d }: { d: Perf }) {
       <ul className="mt-2 list-disc space-y-1 pl-5 leading-relaxed">
         <li><b>Your leads</b> are the leads assigned to you now. A message the queue sent for you counts as yours; a message somebody else sent by hand does not.</li>
         <li><b>Contacted</b>: a WhatsApp message that was actually delivered to WhatsApp, or a call / LinkedIn / email / in-person contact you logged (a "no answer" counts: you tried).</li>
-        <li><b>Responded</b>: a real reply on WhatsApp after your first message (auto-replies are ignored), or a logged contact where you actually spoke.</li>
+        <li><b>Replied</b>: a real reply on WhatsApp after your first message (auto-replies are ignored), or a logged contact where you actually spoke.</li>
         <li><b>Interested</b>: starred, marked interested or quoted, a logged "interested" or "meeting booked", or won. <b>Not interested</b> is how they stand now.</li>
         <li><b>Sign-up link sent</b>: a WhatsApp message carrying their own link (recorded automatically), or "Sent another way" on the lead. Copying the link does not count.</li>
         <li><b>Opened</b>: their sign-up page was loaded after the link was first sent. Your own "Preview" and links opened from the Inbox are never counted.</li>

@@ -138,7 +138,7 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
           <div className="flex gap-1.5">
             <Button
               size="sm"
-              variant={copied ? 'outline' : 'default'}
+              variant="outline"
               className="h-8 flex-1 gap-1.5 text-xs"
               onClick={copy}
             >

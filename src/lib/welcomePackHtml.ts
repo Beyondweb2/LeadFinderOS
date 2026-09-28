@@ -185,7 +185,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
     ...(hasDetails ? [{ title: 'What we have on file', line: 'The details everything is built on. Please check them.' }] : []),
     ...(hasBaseline ? [{ title: 'Where you stand today', line: 'Your baseline result, how we measured it, and what happens next.' }] : []),
     { title: 'Your plan', line: 'What we do, how long it takes, and our money-back guarantee.' },
-    { title: 'Get more reviews', line: 'A five-minute setup, and the one thing that helps most that only you can do.' },
+    { title: 'Get more reviews', line: 'A five-minute setup for the part only you can do.' },
     { title: 'Your baseline report', line: 'Where AI names you today, question by question. Your starting point, and what we measure the before-and-after against.' },
   ];
   return `
@@ -287,9 +287,9 @@ function planPage2(name: string): string {
       you&rsquo;re not, we get you on.</p>
 
       <h3 class="wp-h3">Your reviews</h3>
-      <p>Reviews are one of the strongest signals AI and search engines use to decide who to recommend,
-      and AI even reads the replies you leave on them. Getting more reviews in, and replying to the
-      ones you get, is the part only you can do. There&rsquo;s a simple five-minute setup for that on
+      <p>Reviews help customers decide whether to trust you, and they add to the public evidence about
+      your business. We don&rsquo;t claim they decide what AI recommends, but they are well worth having.
+      Getting more reviews in, and replying to the ones you get, is the part only you can do. There&rsquo;s a simple five-minute setup for that on
       the next page.</p>
 
       <div class="wp-box-navy">
@@ -315,8 +315,8 @@ function reviewsPage1(reviewLink: string): string {
   return `
       <div class="wp-eyebrow">Your part</div>
       <h1 class="wp-h1">Get more Google reviews</h1>
-      <p>Reviews are one of the strongest signals AI assistants and search engines use when they decide
-      which business to recommend. The easier you make it for customers to leave one, the more you get.
+      <p>Reviews help new customers decide whether to trust you, and they strengthen the public evidence
+      around your business. The easier you make it for customers to leave one, the more you get.
       This takes about five minutes to set up, once.</p>
 
       <div class="wp-rows">
@@ -389,8 +389,8 @@ Thanks,
                 <p class="wp-coltitle">Do</p>
                 <ul>
                   <li>Ask every customer, a few at a time, while the work is fresh in their mind.</li>
-                  <li>Reply to every review you receive. It shows you&rsquo;re active, and AI reads
-                  owner replies too.</li>
+                  <li>Reply to every review you receive. It shows customers you&rsquo;re active and
+                  that you care.</li>
                 </ul>
               </div>
               <div class="wp-col wp-dont">
