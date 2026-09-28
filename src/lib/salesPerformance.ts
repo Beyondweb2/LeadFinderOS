@@ -126,8 +126,21 @@ const zeroFunnel = (): FunnelCounts => ({ leads: 0, contacted: 0, responded: 0, 
 const zeroChannels = (): Record<ContactChannel, number> => Object.fromEntries(CONTACT_CHANNELS.map((c) => [c, 0]));
 const t = (iso: string) => Date.parse(iso);
 
-interface LeadFacts {
+/** Per-lead facts, the ONE reading of contacted / responded / interested / link / won. The dashboard's
+ *  workspace fold (salesWorkspace.ts) reads these — it never re-derives any of them. */
+export interface LeadFacts {
   lead: PerfLead;
+  /** This person's contact moments (real sends + logged contacts), ascending. */
+  contactTimesMs: number[];
+  /** Every human reply on the lead (looksAutomated excluded), ascending. */
+  humanReplyTimesMs: number[];
+  /** The first recorded moment the lead became interested (star, stage, outcome), or null when the
+   *  only evidence is a status with no recorded moment. */
+  interestedAtMs: number | null;
+  linkFirstSentAt: string | null;
+  linkFirstOpenedAt: string | null;
+  /** The lead's WhatsApp thread, ascending (for conversationState). */
+  thread: PerfMessage[];
   firstContactMs: number | null;
   lastContactMs: number | null;
   contactCount: number;
@@ -162,6 +175,11 @@ function groupBy<T extends { lead_id: string }>(rows: T[]): Map<string, T[]> {
 }
 
 export function foldSalesPerformance(input: FoldInput): SalesPerformance {
+  return foldSalesPerformanceWithFacts(input).result;
+}
+
+/** The same fold, plus the per-lead facts it was built from (for the workspace fold). */
+export function foldSalesPerformanceWithFacts(input: FoldInput): { result: SalesPerformance; facts: LeadFacts[] } {
   const { personId, sinceMs } = input;
   const msgsBy = groupBy(input.messages);
   const actBy = groupBy(input.activity);
@@ -195,8 +213,12 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
 
     let latestOutcome: string | null = null;
     let starred = false;
+    let interestedAtMs: number | null = null;
+    const markInterested = (iso: string) => { const v = t(iso); if (interestedAtMs === null || v < interestedAtMs) interestedAtMs = v; };
     for (const a of acts) {
-      if (a.kind === 'marked_interested' && a.data?.on !== false) starred = true;
+      if (a.kind === 'marked_interested' && a.data?.on !== false) { starred = true; markInterested(a.created_at); }
+      if (a.kind === 'stage_changed' && INTERESTED_STATUSES.has(String(a.data?.to ?? ''))) markInterested(a.created_at);
+      if (CONTACT_KINDS.has(a.kind) && INTERESTED_OUTCOMES.has(String(a.data?.outcome ?? ''))) markInterested(a.created_at);
       if (!CONTACT_KINDS.has(a.kind) || !isMine(personId, a.actor_user_id)) continue;
       const outcome = String(a.data?.outcome ?? '');
       const ch = (a.kind === 'call_outcome' ? 'call' : String(a.data?.channel ?? 'other')) as ContactChannel;
@@ -220,6 +242,12 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     const status = String(lead.status ?? '');
     const f: LeadFacts = {
       lead,
+      contactTimesMs: contactTimes.slice().sort((a, b) => a - b),
+      humanReplyTimesMs: msgs.filter((m) => m.direction === 'inbound' && !looksAutomated(m.body ?? '')).map((m) => t(m.created_at)),
+      interestedAtMs,
+      linkFirstSentAt: link.firstSentAt,
+      linkFirstOpenedAt: link.firstOpenedAt,
+      thread: msgs,
       firstContactMs: contactTimes.length ? Math.min(...contactTimes) : null,
       lastContactMs: contactTimes.length ? Math.max(...contactTimes) : null,
       contactCount: contactTimes.length,
@@ -312,7 +340,7 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     .filter((r) => r.leadsSent > 0)
     .sort((a, b) => b.leadsSent - a.leadsSent);
 
-  return {
+  const result: SalesPerformance = {
     funnel,
     focus: {
       interestedNoLink: scoped.filter((f) => f.interested && !f.won && !f.notInterested && !f.onboardingSent).length,
@@ -329,6 +357,7 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     })),
     tracking: { opensSince: new Date(SITE_TRACKING_START).toISOString().slice(0, 10), contactLogSince: CONTACT_LOG_START, senderSince: SENDER_TRACKING_START },
   };
+  return { result, facts };
 }
 
 function rowFor(m: Map<string, TemplateRow & { _leads: Set<string> }>, template: string) {

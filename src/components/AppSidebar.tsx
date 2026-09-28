@@ -12,10 +12,11 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { canOpenRoute, orderNavForRole } from '@/lib/access';
+import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
-  BarChart3,
+  BarChart3, MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
@@ -26,13 +27,18 @@ export function AppSidebar() {
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const { role } = useSubscription();
+  /* The unread badge (per person, fn my_whatsapp_unread): the one number the dashboard's Today strip
+     and the Inbox's Unread filter also read. */
+  const unread = useWhatsAppUnread();
 
   const allNavItems = [
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
-    { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
+    /* ⛔ Sales: the item SAYS WhatsApp (Paul, 2026-09-28: "I should not have to know that Inbox means
+       WhatsApp"). Same route, same page, same conversations — one conversation system. */
+    { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },
     { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'Results by campaign and template' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
@@ -107,6 +113,11 @@ export function AppSidebar() {
                           <span className="truncate">{item.title}</span>
                           <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                         </div>
+                        {item.url === '/inbox' && unread.count > 0 && (
+                          <span className="ml-auto shrink-0 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums" aria-label={`${unread.count} unread WhatsApp conversations`}>
+                            {unread.count > 99 ? '99+' : unread.count}
+                          </span>
+                        )}
                         {item.url === '/find-leads' && searchTooltip && (
                           <span className="absolute -top-1 right-2 whitespace-nowrap text-[10px] font-medium text-amber-400 bg-card/95 border border-amber-500/30 rounded-md px-2 py-1 shadow-lg animate-bounce z-50">
                             {t('completion.findMoreLeads')}

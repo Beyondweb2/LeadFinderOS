@@ -24,8 +24,10 @@ ok(/className="container [^"]*py-4 sm:py-6 lg:py-8"/.test(shell), 'AppLayout pad
 ok(/md:h-\[calc\(100dvh-3rem\)\]/.test(inbox) && /lg:h-\[calc\(100dvh-4rem\)\]/.test(inbox), 'the Inbox is the viewport minus 3rem (sm/md padding) and 4rem (lg padding)');
 ok(/md:min-h-\[560px\]/.test(inbox), 'with a floor, so a short laptop scrolls the page rather than crushing the thread');
 ok(/md:min-h-0 md:flex-1 md:grid-cols-\[300px_1fr\] md:grid-rows-\[minmax\(0,1fr\)\]/.test(inbox), 'the grid takes the rest of the height, one row that may shrink');
-ok(/<Card className="max-h-\[60vh\] overflow-y-auto p-1\.5 md:h-full md:max-h-none">/.test(inbox), 'the conversation list is full height from md (60vh only on phones) and scrolls itself');
-ok(/<Card className="flex h-\[60vh\] min-w-0 flex-col overflow-hidden md:h-full">/.test(inbox), 'the thread panel is full height from md and clips, never widens the page');
+/* 2026-09-28 (Sales Experience): phones no longer STACK the two panels at 60vh each — they switch
+   list ↔ thread like a messaging app (docs/sales-experience.md §2). From md the rule is unchanged. */
+ok(/<Card className=\{cn\('overflow-y-auto p-1\.5 md:h-full md:max-h-none', active \? 'hidden md:block' : 'min-h-\[50vh\]'\)\}>/.test(inbox), 'the conversation list is full height from md and scrolls itself; on a phone it hides while a thread is open');
+ok(/<Card className=\{cn\('min-w-0 flex-col overflow-hidden md:flex md:h-full', active \? 'flex h-\[calc\(100dvh-7\.5rem\)\]' : 'hidden'\)\}>/.test(inbox), 'the thread panel is full height from md and clips, never widens the page; on a phone it fills the screen only when open');
 ok(/<div ref=\{threadRef\} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">/.test(inbox), 'the message list is the part that grows and scrolls (min-h-0), so the composer stays at the bottom');
 
 console.log('── less chrome ──');
