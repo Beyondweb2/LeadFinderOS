@@ -16,6 +16,7 @@ import {
   claimTemplatePayload, renderTemplateBody, resolveWhatsAppEnv, sendViaGraph, toWhatsAppNumber,
 } from "../_shared/whatsapp-send.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
+import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -1058,6 +1059,15 @@ Deno.serve(async (req) => {
                 findableLeadId,
                 "findable lead -> payment_received",
               );
+              /* ⛔ THE PAYMENT LEDGER (2026-09-28): a RECORD of the money that just landed, after the
+                 payment write above so sold_by_user_id is already stamped. Never throws, never blocks
+                 the payment; unique by the payment intent, so a retried event writes nothing twice. */
+              await recordLedger(service, {
+                lead_id: findableLeadId, kind: "initial", amount_gbp: amountGbp, currency: s.currency,
+                occurred_at: new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+                stripe_object_id: stripePaymentIntentId ?? s.id, stripe_payment_intent_id: stripePaymentIntentId,
+                stripe_customer_id: stripeCustomerId, stripe_event_id: event.id, note: `checkout ${s.id}`,
+              });
               /* ⛔ THE STRIPE IDS GO IN A SEPARATE, NON-FATAL WRITE, AND THAT SPLIT IS DELIBERATE.
                  mustWrite above is the one that must not fail - it is the money landing. These
                  columns are newer than some rows and newer than this function's own history, so a
@@ -1257,6 +1267,21 @@ Deno.serve(async (req) => {
         if (!leadId) {
           console.log(`[stripe-webhook] invoice.paid for subscription ${subId} matched no Findable lead - ignored (likely the barber product or a hand-made subscription)`);
           break;
+        }
+        /* The ledger (recording only): a PAID recurring invoice with money in it. A £0 trial invoice
+           is not a payment. Unique by the invoice id. */
+        {
+          const paidMinor = Number((inv as { amount_paid?: number }).amount_paid ?? 0);
+          if (paidMinor > 0) {
+            const paidAt = (inv as { status_transitions?: { paid_at?: number | null } }).status_transitions?.paid_at ?? event.created;
+            await recordLedger(service, {
+              lead_id: leadId, kind: "recurring", amount_gbp: paidMinor / 100, currency: inv.currency,
+              occurred_at: new Date(Number(paidAt) * 1000).toISOString(), stripe_object_id: inv.id,
+              stripe_invoice_id: inv.id, stripe_payment_intent_id: stripeIdOf((inv as { payment_intent?: unknown }).payment_intent),
+              stripe_charge_id: stripeIdOf((inv as { charge?: unknown }).charge), stripe_customer_id: stripeIdOf(inv.customer),
+              stripe_event_id: event.id, note: `subscription ${subId}`,
+            });
+          }
         }
         const periodEnd = (inv as { period_end?: number }).period_end;
         await setFindableSubscription(leadId, {
@@ -1463,6 +1488,19 @@ Deno.serve(async (req) => {
         const refundedMinor = Number(ch.amount_refunded ?? 0);
         const chargedMinor = Number(ch.amount ?? 0);
         const fullyRefunded = refundedMinor > 0 && refundedMinor >= chargedMinor;
+        /* The ledger (recording only): the charge's CUMULATIVE refunded amount, keyed by the charge, so
+           a second partial refund grows the one row. Written before the CRM lookup below so even a
+           refund we cannot place on a lead is on record. Never throws. */
+        if (refundedMinor > 0) {
+          const invId = stripeIdOf((ch as { invoice?: unknown }).invoice);
+          await recordLedger(service, {
+            lead_id: await leadForPayment(service, { paymentIntent: intentId, charge: ch.id, invoice: invId }),
+            kind: "refund", amount_gbp: refundedMinor / 100, currency: ch.currency,
+            occurred_at: new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+            stripe_object_id: ch.id, stripe_charge_id: ch.id, stripe_payment_intent_id: intentId, stripe_invoice_id: invId,
+            stripe_customer_id: customerId, stripe_event_id: event.id,
+          });
+        }
 
         let lead: { id: string; business_name: string | null; status: string | null; refund_reason: string | null } | null = null;
         if (intentId) {
@@ -1537,6 +1575,23 @@ Deno.serve(async (req) => {
             console.error("[stripe-webhook] refund follow-up alert failed:", e instanceof Error ? e.message : String(e));
           }
         }
+        break;
+      }
+      /* ⛔ CHARGEBACKS (2026-09-28): RECORDED ONLY. A dispute takes the commission on that money back
+         until Stripe says it was won (src/lib/commission.ts). Nothing else reacts to a dispute here —
+         the money handling is Stripe's. Keyed by the dispute id; the row follows its latest status. */
+      case "charge.dispute.created":
+      case "charge.dispute.updated":
+      case "charge.dispute.closed": {
+        const dp = event.data.object as Stripe.Dispute;
+        const intentId = stripeIdOf((dp as { payment_intent?: unknown }).payment_intent);
+        const chargeId = stripeIdOf(dp.charge);
+        await recordLedger(service, {
+          lead_id: await leadForPayment(service, { paymentIntent: intentId, charge: chargeId }),
+          kind: "chargeback", status: String(dp.status ?? "open"), amount_gbp: Number(dp.amount ?? 0) / 100, currency: dp.currency,
+          occurred_at: new Date(Number(dp.created ?? event.created) * 1000).toISOString(),
+          stripe_object_id: dp.id, stripe_charge_id: chargeId, stripe_payment_intent_id: intentId, stripe_event_id: event.id,
+        });
         break;
       }
       default:

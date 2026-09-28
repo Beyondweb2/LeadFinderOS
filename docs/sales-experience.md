@@ -70,3 +70,46 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
   `/path` argument into `C:/Program Files/Git/path` — set `MSYS_NO_PATHCONV=1`. At 390 / 1440 / 1920:
   no page-level horizontal overflow on the dashboard; the Inbox list at 390 is 419 px wide for the ADMIN
   only (the pre-existing reply-rule toggle row).
+
+## 4. Release 2 — the payment ledger and earnings
+
+- **Ledger** (migration `20260929130000_payment_ledger.sql`): `payment_ledger` — one row per real
+  payment (`initial`, `recurring`), per refunded charge (`refund`, the charge's cumulative refunded
+  amount, only ever grows) and per dispute (`chargeback`, its latest status). Unique
+  `(kind, stripe_object_id)`: a retried webhook or a second backfill never writes twice (live: run 1
+  "inserted", run 2 "exists"). `sold_by_user_id` is snapshotted from the lead at write time.
+  `commission_payouts` — payouts the admin actually made (`record_payout`), one per person per
+  receipts month. Both: RLS on, no policies, no grants — read only through fn `sales-earnings`.
+- **Writers** (`_shared/payment-ledger.ts` `recordLedger`, never throws, reports to
+  `client_error_reports` `payment_ledger_write_failed`): `stripe-webhook` at four points — after the
+  initial payment write, on a paid (> £0) recurring invoice, on `charge.refunded` (before the CRM
+  lookup, so an unplaceable refund is still on record), on `charge.dispute.*`. **Charging is untouched.**
+- ⚠️ **The Stripe endpoint does not send dispute events** (read 2026-09-28: checkout.session.completed,
+  invoice.paid, invoice.payment_failed, customer.subscription.updated/deleted, charge.refunded). The
+  code records chargebacks the moment `charge.dispute.created/updated/closed` are enabled on the
+  endpoint (Paul's Stripe setting). The backfill reads disputes from Stripe directly regardless.
+- **Backfill** (`sales-earnings` mode `backfill`, admin): lists Stripe charges (+ refunds) and
+  disputes, places each on exactly one lead (payment intent on the lead → checkout session metadata →
+  charge metadata → invoice subscription → customer → billing email of a PAID lead), reports the rest.
+  `apply: false` (default) only reports. **2026-09-28 result:** the Stripe account holds 3 charges ever —
+  MCLocksmiths £99 (17 Sep, matched by payment intent, recorded) and two refunded £99 / £108.99 test
+  charges from Paul's own move37.fun address (not client payments, not recorded). **RG Locksmiths,
+  Ronnie's and SC Plumbing have NO charge in this Stripe account** — they were paid outside it (their
+  CRM rows say paid; nothing was invented). All four are Paul's sales: £0 commission.
+- **Commission** (`src/lib/commission.ts`, derived, never stored): 30% initial, 20% × the next 3
+  recurring, of the real amount (`commissionOn`, pence half-up); a partial refund reverses its share; a
+  won chargeback reverses nothing; a reversal after its month was paid out is an OFFSET (due never goes
+  negative). Payout = first working day of the month after the receipt's London month
+  (`UK_BANK_HOLIDAYS`, 2026–2027 — ⚠️ extend before 2028). Projected = remaining commissionable
+  months × 20% × the last real monthly (else `FINDABLE_MONTHLY_GBP`), only while the subscription is
+  live; never in earned. Only role `sales` earns.
+- **Screens:** `/earnings` (both roles; nav "Earnings", phone: More) — Earned / Due next payout /
+  Projected / Reversed-or-Paid-out, per client, every line with its payout date; admin: by seller,
+  person picker, "Record a payout". Dashboard: the commission card, Today's "Earned today", the recap,
+  the £100 milestone, the commission target and a commission line in the feed all come from the same
+  loader (`_shared/earnings.ts`). **Celebration** (`EarnedCelebration`): "+£X earned" once — the
+  newest line time is saved to `user_preferences.commission_seen_at` BEFORE it shows.
+- **Tests:** `scripts/sales-commission.test.ts`; `supabase/tests/payment-ledger.sql` (rolled back,
+  6/6 live: duplicate blocked, authenticated + anon denied, payout duplicate / non-first-of-month /
+  negative amount blocked). Live: Test (sales) gets only their own (empty) earnings and a 403 on
+  `backfill`; the webhook still answers 400 to a missing / bad signature after the deploy.

@@ -368,7 +368,7 @@ export function MilestonesPanel({ items }: { items: Milestone[] }) {
 }
 
 /* ── Trends ─────────────────────────────────────────────────────────────────────────────────────── */
-export function TrendsPanel({ trends, earningsWeeks }: { trends: SalesWorkspace['trends']; earningsWeeks?: number[] | null }) {
+export function TrendsPanel({ trends }: { trends: SalesWorkspace['trends'] }) {
   const series: { key: 'contacted' | 'replies' | 'interested' | 'won'; label: string; tone: Tone }[] = [
     { key: 'contacted', label: 'Contacted', tone: 'grey' }, { key: 'replies', label: 'Replied', tone: 'blue' },
     { key: 'interested', label: 'Interested', tone: 'green' }, { key: 'won', label: 'Won', tone: 'green' },
@@ -396,7 +396,6 @@ export function TrendsPanel({ trends, earningsWeeks }: { trends: SalesWorkspace[
           })}
         </div>
       )}
-      {earningsWeeks === null && trends.enough && <p className="mt-2 text-[11px] text-muted-foreground">Earnings trend appears once commission is recorded.</p>}
     </Panel>
   );
 }

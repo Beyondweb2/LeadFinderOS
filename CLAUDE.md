@@ -116,6 +116,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   to a site we build**; optimise-only is to get its own structure (NOT YET DEFINED by Paul). Do not
   invent penalties or exit rights. The guarantee applies on top: a valid claim is an exit under its
   own terms. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon`.
+- **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4): 30% of the initial
+  payment + 20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund /
+  chargeback (an offset once paid out), from the **payment ledger** (`payment_ledger`, written by
+  `stripe-webhook` + the admin backfill) — never from a CRM status. Only role `sales` earns.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_MINIMUM_TERM_MONTHS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site

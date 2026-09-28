@@ -11,6 +11,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
+import { useEarnings } from '@/hooks/useEarnings';
+import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { CALL_OUTCOMES } from '@/lib/salesCrm';
 import { templateLabel, WHATSAPP_TEMPLATES } from '@/types/outreach';
@@ -111,6 +113,9 @@ export default function SalesDashboard() {
   const d = q.data;
   const w = d?.workspace;
   const unread = useWhatsAppUnread();
+  /* Commission: the payment ledger through fn sales-earnings — the same numbers as the Earnings page. */
+  const earn = useEarnings(isAdmin ? person : 'me');
+  const et = earn.data?.totals;
   /* ⛔ DISPLAY ONLY: which campaign / template rows THIS person sees. Every number is computed on the
      server exactly as before; the funnel and totals include hidden rows (src/lib/dashboardVisibility.ts). */
   const prefs = useDashboardPrefs();
@@ -140,6 +145,7 @@ export default function SalesDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 pb-6">
+      <EarnedCelebration lines={earn.data?.lines} enabled={viewingSelf && !!earn.data?.commissionable} />
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">{greeting()}{personName ? `, ${personName}` : ''}</p>
@@ -185,15 +191,16 @@ export default function SalesDashboard() {
           {/* ── The four headline numbers. Money is the strongest surface. ── */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
             <div className="col-span-3 lg:col-span-1">
-              <KpiCard hero label="Commission earned" icon={Wallet} tone="green" value="—"
-                sub="Your earnings appear here once the payments ledger is live." />
+              <KpiCard hero label="Commission earned" icon={Wallet} tone="green" value={et ? gbp(et.earned) : earn.isError ? '—' : '…'}
+                sub={et ? `${gbp(et.due)} due ${new Date(`${et.nextPayoutDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${et.projected ? ` · ${gbp(et.projected)} projected` : ''}` : earn.isError ? 'Could not load earnings.' : 'Adding it up…'}
+                onClick={() => navigate('/earnings')} />
             </div>
             <KpiCard label="Replies" icon={MessageCircleReply} tone="blue" value={d.funnel.responded} sub={d.funnel.contacted ? `${pct(d.funnel.responded, d.funnel.contacted)} of ${d.funnel.contacted} contacted · ${w.today.replies} today` : "Nobody contacted yet"} onClick={() => navigate('/inbox')} />
             <KpiCard label="Interested" icon={Star} tone="green" value={d.funnel.interested} sub={`${w.today.interested} today · ${d.funnel.notInterested} not interested`} onClick={() => openStage('interested')} />
             <KpiCard label="Clients won" icon={Trophy} tone="green" value={d.funnel.won} sub={d.funnel.won ? `${pct(d.funnel.won, d.funnel.contacted)} of contacted` : 'Your first win shows here'} onClick={() => openStage('paid')} />
           </div>
 
-          <TodayStrip t={w.today} unread={viewingSelf ? unread.count : null} earnedToday={null}
+          <TodayStrip t={w.today} unread={viewingSelf ? unread.count : null} earnedToday={et ? et.earnedToday : null}
             onUnread={() => (firstUnread ? go('whatsapp', firstUnread) : navigate('/inbox'))} onFollowUps={() => showGroup(w.followUps.overdue.length ? 'overdue' : 'dueToday')} />
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
@@ -212,13 +219,13 @@ export default function SalesDashboard() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2"><ActivityFeed items={w.activity} go={go} /></div>
             <div className="min-w-0 space-y-5">
-              <RecapPanel r={w.recap} earnedToday={null} />
+              <RecapPanel r={w.recap} earnedToday={et ? et.earnedToday : null} />
               {viewingSelf && <TargetsPanel targets={w.targets} canEdit={viewingSelf} onEdit={() => setTargetsOpen(true)} />}
             </div>
           </div>
 
           {viewingSelf && <MilestonesPanel items={w.milestones} />}
-          <TrendsPanel trends={w.trends} earningsWeeks={null} />
+          <TrendsPanel trends={w.trends} />
 
           <Panel title="Conversion" icon={Filter} tone="blue" hint="From contacted to won. The small grey figure is the rate.">
             <Funnel f={d.funnel} />

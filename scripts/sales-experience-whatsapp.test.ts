@@ -105,7 +105,7 @@ const leadsMap = new Map<string, WorkspaceLead>(input.leads.map((l) => [l.id, { 
 leadsMap.get("contacted")!.next_action = "call"; leadsMap.get("contacted")!.next_action_date = "2026-09-29"; leadsMap.get("contacted")!.next_action_note = "ask for the owner";
 leadsMap.get("won")!.sold_at = at(NOW - 2 * H);
 const before = JSON.stringify([...leadsMap.values()]);
-const ws = foldSalesWorkspace({ personId: ME, facts, leads: leadsMap, audits: [{ lead_id: "replied", completed_at: at(NOW - 5 * H) }], activity: input.activity, nowMs: NOW, targets: { period: "week", contacts: 10, commission: 50 }, earnedGbp: null });
+const ws = foldSalesWorkspace({ personId: ME, facts, leads: leadsMap, audits: [{ lead_id: "replied", completed_at: at(NOW - 5 * H) }], activity: input.activity, nowMs: NOW, targets: { period: "week", contacts: 10, commission: 50 }, commission: null });
 ok(JSON.stringify([...leadsMap.values()]) === before, "⛔ the fold never changes a lead or its Next Action");
 const byId = new Map(facts.map((x) => [x.lead.id, x]));
 ok(stageOf(byId.get("fresh")!) === "new", "someone else's hand send does not make MY lead contacted");

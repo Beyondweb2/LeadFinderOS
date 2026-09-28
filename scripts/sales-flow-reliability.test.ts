@@ -28,8 +28,8 @@ console.log("── nav ──");
     .matchAll(/url: '([^']+)'/g)].map((m) => m[1]);
   const items = urls.map((url) => ({ url }));
   const sales = orderNavForRole(items.filter((i) => canOpenRoute("sales", i.url)), "sales").map((i) => i.url);
-  ok(JSON.stringify(sales) === JSON.stringify(["/sales-dashboard", "/find-leads", "/outreach", "/coverage", "/inbox"]),
-    `sales sidebar: Sales dashboard, Find Leads, Outreach, Coverage, Inbox (got ${sales.join(", ")})`);
+  ok(JSON.stringify(sales) === JSON.stringify(["/sales-dashboard", "/earnings", "/find-leads", "/outreach", "/coverage", "/inbox"]),
+    `sales sidebar: Sales dashboard, Earnings, Find Leads, Outreach, Coverage, WhatsApp (got ${sales.join(", ")})`);
   ok(sales[0] === "/sales-dashboard", "Sales dashboard is first");
   ok(sales.indexOf("/find-leads") < sales.indexOf("/outreach"), "Find Leads comes before Outreach");
   ok(sales.indexOf("/coverage") === sales.indexOf("/outreach") + 1, "Coverage is immediately after Outreach");
@@ -48,7 +48,7 @@ console.log("── nav ──");
   const salesBar = mobile.slice(mobile.indexOf("const mainNavItems = role === 'sales'"), mobile.indexOf(": [", mobile.indexOf("const mainNavItems = role === 'sales'")));
   const bar = [...salesBar.matchAll(/url: '([^']+)'/g)].map((m) => m[1]);
   ok(JSON.stringify(bar) === JSON.stringify(["/sales-dashboard", "/find-leads", "/outreach", "/inbox"]), `mobile sales bar: Results, Find Leads, Outreach, Inbox (got ${bar.join(", ")})`);
-  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Coverage', url: '\/coverage'/.test(mobile), "mobile sales: Coverage under More");
+  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Earnings', url: '\/earnings', icon: Wallet \}, \{ title: 'Coverage', url: '\/coverage'/.test(mobile), "mobile sales: Earnings and Coverage under More");
   ok(!/url: '\/(team|paid-clients|ai-audit|templates|admin)'/.test(salesBar), "mobile sales bar has no admin page");
   ok(/icon: MapIcon/.test(mobile) && !/icon: Map \}/.test(mobile), "the mobile nav does not shadow the global Map");
 }
