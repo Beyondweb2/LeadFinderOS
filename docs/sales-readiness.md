@@ -108,3 +108,32 @@ the guarantee, the access tick, the build ownership terms / optimise-only note, 
   refused, no direct writes, self-sourced add + duplicate + no stealing, anon refused, admin sees all.
   Re-run alongside `multi-user-rls` (70), `multi-user-queue` (11), `sales-shared-workflow` (37),
   `sales-media-rls` (23), `next-action-human-only` (18) — all green the same day.
+
+## 8. Deploy and live QA (2026-09-28)
+
+- **Order:** migration (read back) → edge `findable-onboarding`, `sales-performance`, `paid-client-hub`,
+  `render-welcome-pack` (bundle markers read back from the Management API) → findable-site master
+  `8289b1d` (`--branch=master`, account 4148056c…; findable.live's OnboardingFlow chunk carries
+  `payment_status` and "Step 1 of 2", and no longer "We reply to your Google reviews" or "See your
+  four-week results first") → LeadFinderOS main `80cd6443`, then `258cf840` (parallel paging).
+- **Public actions, live:** `payment_status` → paid true for RG, false for an unpaid lead and for an
+  unknown id; `gbp_access` refuses an unpaid lead (`unknown_onboarding`) and an unknown event;
+  `sales-performance` refuses the anon key (401).
+- **Sales Test (one-time link, ended with logout?scope=local, refresh refused after):** nav = Outreach,
+  Inbox, Sales dashboard, Find Leads, Coverage; dashboard = own 83 leads, asking for Paul's scope
+  still returns its own; no amount in any response; workspace tabs Work/Scripts/Prospect/History (no
+  Client); "No answer" logged in 0.77 s; next action set → Outreach row "Follow-up 29 Sept" and the
+  dialog chip at once; History shows both; status unchanged; call script "It's Test from Findable";
+  Clear → row "Set Action". Phone width: the workspace fills the screen, Log a contact in the first
+  screen, no sideways scroll.
+- **Admin (same method):** Inbox header "Prospect"; workspace has Client; next action set in the
+  Inbox → thread header "call · 1 Oct"; cleared in the Inbox → a SECOND tab's Outreach row went to
+  "Set Action" in ~2.3 s without a reload; set in that Outreach tab → the Inbox thread header, the
+  dialog chip and the open panel all showed it. RG's Client tab: sent 3× by WhatsApp, opened 14 Sept,
+  paid, asked "before this was recorded", client says "can't get into their profile".
+- **Timings (server ms inside `sales-performance` / whole call):** a salesperson 1,235–1,904 / 2.1–3.2 s;
+  admin one person 1,942 / 2.1 s; admin everyone 10,279 → **4,078** after parallel paging / 4.3 s;
+  admin page open to funnel ~5.8 s incl. app start. A CRM save shows its toast on the server's yes;
+  the panel's "Now:" line follows the re-read (~4 s measured, the round trip plus the refetch).
+- **Restored:** the 6 `lead_activity` rows and 1 `outreach_activities` row the QA wrote (Proline
+  Roofers Wakefield, Florida Mortgage Firm) were deleted by id; both leads' next action is `none`.
