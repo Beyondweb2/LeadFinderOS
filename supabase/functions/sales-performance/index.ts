@@ -29,17 +29,29 @@ const CHUNK = 150;
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
-/** Every row of a query, paged by id — PostgREST stops at 1,000 silently (CLAUDE.md §4). */
+/** Every row of a query, paged by id — PostgREST stops at 1,000 silently (CLAUDE.md §4).
+ *  The first page carries the exact count; the rest are fetched together, a few at a time (the API
+ *  has ~10 connections for everyone — never all at once). Measured 2026-09-28: the whole book one
+ *  page after another took ~10 s. */
+const WAVE = 4;
 // deno-lint-ignore no-explicit-any
-async function allRows<T>(build: (from: number, to: number) => any): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error) throw new Error(error.message ?? String(error));
-    const rows = (data ?? []) as T[];
-    out.push(...rows);
-    if (rows.length < PAGE) return out;
+async function allRows<T>(build: (from: number, to: number, count: boolean) => any): Promise<T[]> {
+  const first = await build(0, PAGE - 1, true);
+  if (first.error) throw new Error(first.error.message ?? String(first.error));
+  const out: T[] = [...((first.data ?? []) as T[])];
+  const total = typeof first.count === "number" ? first.count : out.length;
+  const starts: number[] = [];
+  for (let from = PAGE; from < total; from += PAGE) starts.push(from);
+  for (let i = 0; i < starts.length; i += WAVE) {
+    const pages = await Promise.all(starts.slice(i, i + WAVE).map((from) => build(from, from + PAGE - 1, false)));
+    for (const p of pages) {
+      if (p.error) throw new Error(p.error.message ?? String(p.error));
+      out.push(...((p.data ?? []) as T[]));
+    }
   }
+  // Deduped by id: a row inserted between the count and a later page must not appear twice.
+  const seen = new Set<string>();
+  return out.filter((r) => { const id = (r as { id?: string }).id; if (!id) return true; if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
 /** Rows keyed to a set of leads: in chunks when the set is small, the whole table filtered in memory
@@ -50,13 +62,14 @@ async function rowsForLeads<T extends { lead_id: string }>(
   if (leadIds.length === 0) return [];
   if (leadIds.length > 600) {
     const set = new Set(leadIds);
-    const rows = await allRows<T>((a, b) => service.from(table).select(columns).not("lead_id", "is", null).order("id").range(a, b));
+    const rows = await allRows<T>((a, b, c) => service.from(table).select(columns, (c ? { count: "exact" } : undefined)).not("lead_id", "is", null).order("id").range(a, b));
     return rows.filter((r) => set.has(r.lead_id));
   }
   const out: T[] = [];
-  for (let i = 0; i < leadIds.length; i += CHUNK) {
-    const ids = leadIds.slice(i, i + CHUNK);
-    out.push(...await allRows<T>((a, b) => service.from(table).select(columns).in("lead_id", ids).order("id").range(a, b)));
+  const chunks: string[][] = [];
+  for (let i = 0; i < leadIds.length; i += CHUNK) chunks.push(leadIds.slice(i, i + CHUNK));
+  for (const ids of chunks) {
+    out.push(...await allRows<T>((a, b, c) => service.from(table).select(columns, (c ? { count: "exact" } : undefined)).in("lead_id", ids).order("id").range(a, b)));
   }
   return out;
 }
@@ -80,9 +93,9 @@ Deno.serve(async (req) => {
 
     const sinceMs = periodSinceMs(typeof body.period === "string" ? body.period : "all");
 
-    const leads = await allRows<PerfLead & { id: string }>((a, b) => {
+    const leads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
-        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source");
+        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source", (c ? { count: "exact" } : undefined));
       if (personId) q = q.eq("assigned_to_user_id", personId);
       return q.order("id").range(a, b);
     });
@@ -93,7 +106,7 @@ Deno.serve(async (req) => {
       rowsForLeads<PerfActivity>(service, "lead_activity", "id, lead_id, actor_user_id, kind, data, created_at", ids),
       rowsForLeads<PerfLinkEvent>(service, "onboarding_link_events", "id, lead_id, kind, channel, actor_user_id, created_at", ids),
       rowsForLeads<PerfHit>(service, "lead_page_hits", "id, lead_id, page, created_at", ids),
-      allRows<{ id: string; name: string }>((a, b) => service.from("campaigns").select("id, name").order("id").range(a, b)),
+      allRows<{ id: string; name: string }>((a, b, c) => service.from("campaigns").select("id, name", (c ? { count: "exact" } : undefined)).order("id").range(a, b)),
     ]);
 
     const result = foldSalesPerformance({
