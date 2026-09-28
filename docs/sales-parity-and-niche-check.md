@@ -92,3 +92,28 @@ coordinates (London is not in the ONS dataset). Side effect measured: the 25 km 
 create-ai-audit now reaches these cities — 132 current leads in them, 8 newly WARN (10–25 km), 1 newly
 BLOCK (Russell Dane Gas Heating & Plumbing, Liverpool, 26 km — overridable). Coverage's default band
 (15k–210k) is unchanged.
+
+## 4. Deploy and live QA (2026-09-28)
+
+- SQL first, read back: `sales_leads` 53 columns ending `town_fetch_note`, security_barrier, authenticated
+  SELECT only, client filter intact; `niche_samples` RLS on, 0 policies, postgres/service_role grants only;
+  `uk_towns` 733 → 750 (17 cities; bands: major 17 in 8 regions, medium 124, small 385).
+- Functions deployed from merge `f0b5fa0a` (the commit pushed to main), each proven by a marker in its
+  live bundle: niche-sample, create-ai-audit, bulk-jobs, send-whatsapp-message (`x-swm-build 2026-09-28a`),
+  process-whatsapp-queue, whatsapp-status, process-ai-audit-queue. SPA `index-DLbPLoSx.js` on
+  leadfinderos-next carries the popup, the paused banner and the niche card.
+- As Sales Test (one-time link, logout 204): hook preview 3 questions; run with an EDITED first question
+  → stored verbatim, purpose audit, hook v2, ChatGPT + Gemini, 1 run, filed under the book owner; a second
+  press → `already_running`, same audit; a second lead's audit concurrently; a client lead → `lead_is_client`;
+  `queue_state` → paused:true; `status` → 403; bulk-jobs create → 403 `admin_only`; niche plan → 403,
+  list → 200. ⚠️ QA leads had to carry a `lead_source` (the hand-typed-town exemption) — without it the
+  existing town gate refused them, as it should.
+- Niche checks as the admin (one-time link, logout 204), ~48p each; a tampered question refused:
+  - **Locksmiths** — Plymouth / Burton upon Trent / Ascot → **WORKABLE, Medium**. Plymouth mixed (top 3 = 71%,
+    52% named every run), Burton few names despite 8 listed providers, Ascot fragmented. ChatGPT 4.4 local
+    firms/answer vs Gemini 2.4, 55% directory sources.
+  - **Roofers** (no history) — Derby / Gosport / Melksham → **PROMISING — NEEDS MORE DATA, Medium**. Derby and
+    Gosport "mixed" (12–13 firms, top 3 = 60–61%, just over the fragmented line), Melksham fragmented.
+    ChatGPT 89% directory sources.
+- Cleaned: 4 QA leads, their 2 audits (2 runs, 6 queue rows), 2 activity rows — 0 left. The two niche
+  samples are real results and stay. Not ours, left: "QA Auto locksmith" (`1a034b26`).
