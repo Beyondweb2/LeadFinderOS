@@ -137,3 +137,29 @@ the guarantee, the access tick, the build ownership terms / optimise-only note, 
   the panel's "Now:" line follows the re-read (~4 s measured, the round trip plus the refetch).
 - **Restored:** the 6 `lead_activity` rows and 1 `outreach_activities` row the QA wrote (Proline
   Roofers Wakefield, Florida Mortgage Firm) were deleted by id; both leads' next action is `none`.
+
+## 9. Polish pass (2026-09-28, later)
+
+- **Reviews wording** (welcome pack): "one of the strongest signals AI … use to decide who to
+  recommend", "AI even reads the replies", "AI reads owner replies too", "the one thing that helps
+  most" → reviews help customers trust you and strengthen the public evidence about a business; "we
+  don't claim they decide what AI recommends". findable-site was already evidence-safe (its FAQs say
+  reviews are not a direct ranking factor). Guarded in `sales-readiness.test.ts`.
+- **Next action lag:** the panel waited for a full re-read (measured 4.4 s / 5.4 s). Now the chosen
+  values show in the open panel at once, go out on an OPTIMISTIC notice (readers show them, nobody
+  re-reads or refetches), then a confirmed notice after the server's yes; a refusal restores the panel
+  and sends a plain notice so every screen re-reads the true row. Measured live as Sales: panel,
+  dialog header and Outreach row 308 ms (save) / 219 ms (clear), server yes 881 / 1,052 ms.
+- **The Inbox froze on every lead change:** one 6.4 s long task re-drawing all 2,201 conversation rows
+  (each with a status dropdown). The list now draws 150 at a time ("Show more"; search/filters still
+  cover all; the open conversation is always drawn). After: no long task; the thread header updates in
+  ~1.1–1.3 s in the hidden QA pane (the pane throttles scheduling; a direct `lead_set_follow_up` is ~300 ms).
+- **Visual fixes:** tabs reset to their top (Scripts opened scrolled to the bottom); empty
+  contact-method badge hidden; Sales no longer sees the duplicate contact editor; the sign-up copy
+  button is secondary; the call guide no longer names the admin-only Crawl site; the Inbox's duplicate
+  "CRM" link removed (Prospect is the one way in); dashboard rates small and grey under each number,
+  low-priority columns hidden below md, best / lowest row marked (≥10 behind it), "Contested" →
+  "Unclear" in plain words, "Responded" → "Replied", funnel 3-up on a phone (326 → 216 px),
+  half-width tables side by side only from xl.
+- **Left alone:** the pay screen; the campaign table still scrolls ~95 px inside its card at 375 px
+  (seven key columns); the "Where to focus" footnote shows even when no template line does.
