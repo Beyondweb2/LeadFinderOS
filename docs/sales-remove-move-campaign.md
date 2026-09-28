@@ -71,3 +71,32 @@ Migration `20260928230000_sales_remove_and_move_campaign.sql`.
   session never made (it needs a template picked in a dialog). No WhatsApp message or send row exists
   for any 07700 9009xx number and the lead is deleted. Most likely the test1 account (in live use
   today) on the QA lead assigned to it; the logs endpoint could not confirm it.
+
+## 5. Closeout pass (2026-09-28, later) — merge `a6a45c01`
+
+- **Archived leads off the Sales list:** Sales Outreach shows ACTIVE leads by default; archived ones are
+  under Filters → "Archived (removed or not interested)" (`rowsForArchiveView`, `src/lib/outreachLoad.ts`).
+  The admin keeps the unified list. Live as Sales Test: a contacted, removed QA lead was absent from
+  "Outreach (84)" and the only row under "Archived (1)"; owner, history and contact kept; not claimable.
+- **Phone backfill (the 82 pre-fix Test roofers):** `google-place-details` as Sales Test, one at a time,
+  blank fields only. 82 attempted · 80 phones · 2 genuinely none on Google (Roof Rhino Ltd, PRECISION
+  ROOFERS LTD — address/town filled) · 0 failed · $1.64 in `api_usage_log` (82 × $0.020, 0 cache hits),
+  trigger `backfill_presfix_sales_20260928`. 82 addresses, 82 towns, 76 ratings.
+- **Damien Smith Locksmiths:** +44 7783 072251 copied from `phone_cache` (no Google call; phone only).
+- **test1** (`c6e21a37`): a Sales account Paul invited at 06:42:45 today and opened 31 s after his own
+  admin sign-in, same browser — his second role-QA login (display name "test1"), not a hired rep. It added
+  JB7 and MB & Son, logged a call, and at 10:50 queued `initial_contact` on MB & Son (a REAL business,
+  still queued; the WhatsApp queue has been PAUSED since 2026-09-27 10:05, so nothing sends until it is
+  un-paused). The earlier QA-lead `bulk_queued` row was deleted with the lead; nothing retained attributes it.
+- **QA cleanup:** removed "QA Domain Test Plumbing" (`f67133ec`) and its questionnaire (`96f1af3c`) —
+  QA Tester / qa-tester@example.com / 07700 900741 / example.com, no payment, nothing else referenced it.
+  Retained campaigns "roofers 2" (82 real roofers) and "test" (49 real dentists, Paul's).
+- **Paid-client writes admin-only** (migration `20260928240000`): restrictive INSERT/UPDATE/DELETE on
+  `client_pages`, `client_page_questions`, `client_listings`. Before: a Sales login could create page
+  records against its own lead, a paying client's and Paul's (proven live, rolled back). After:
+  `supabase/tests/client-tables-admin-only.sql` 32/32; live Sales POSTs 403 (42501), PATCH 0 rows; the
+  service-role server path still writes. All 14 SQL suites re-run green (434 checks).
+- **config.toml:** the 12 missing functions recorded at their live `verify_jwt` (send-whatsapp-message
+  and enrich-business false, ten true), checked against callers; no redeploy (production already ran
+  them). `scripts/function-config-complete.test.ts`.
+- Gate: 219/227, the same eight known failures.
