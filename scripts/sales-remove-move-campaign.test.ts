@@ -82,11 +82,11 @@ console.log("── a removed (archived) lead leaves the salesperson's ACTIVE li
 {
   const rows = [{ id: "a", is_archived: false }, { id: "b", is_archived: true }, { id: "c", is_archived: null }];
   ok(archiveViewFor(true, false) === "active" && archiveViewFor(true, true) === "archived" && archiveViewFor(false, false) === "all" && archiveViewFor(false, true) === "all",
-    "sales: active by default, archived on request; the admin keeps the unified list");
+    "split: active by default, archived on request; unsplit (the archive view itself) shows everything");
   ok(rowsForArchiveView(rows, "active").map((r) => r.id).join() === "a,c", "active view hides archived rows (absent = not archived)");
   ok(rowsForArchiveView(rows, "archived").map((r) => r.id).join() === "b", "archived view shows only archived rows — still viewable");
-  ok(rowsForArchiveView(rows, "all").length === 3, "the admin still sees every row");
-  ok(/const archiveView = archiveViewFor\(perms\.removeFromMyLeads && !isArchiveView, showArchived\)/.test(TABLE), "the table decides the view from the role, not a stored flag");
+  ok(rowsForArchiveView(rows, "all").length === 3, "the unsplit view sees every row");
+  ok(/const archiveView = archiveViewFor\(!isArchiveView, showArchived\)/.test(TABLE), "both roles work the active list (2026-09-28), never a stored flag");
   ok(/result = rowsForArchiveView\(result, archiveView\)/.test(TABLE), "…and filters the list with the one rule");
   ok(/data-testid="filter-archived"/.test(TABLE) && /archiveView !== 'all' &&/.test(TABLE), "Filters → Archived exists for sales only");
   ok(/setShowArchived\(false\)/.test(TABLE), "Clear filters returns to the active list");

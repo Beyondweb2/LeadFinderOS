@@ -397,11 +397,12 @@ export function OutreachTable({
   // Hide leads marked NOT INTERESTED (status='not_interested') — same durable hygiene
   // preference, persisted alongside hideNoWhatsApp so dead leads stay out of the list.
   const [hideNotInterested, setHideNotInterested] = useState(false);
-  /* Sales only: the Archived view (Filters → Archived). Off = the active working list. */
+  /* The Archived view (Filters → Archived). Off = the active working list. Both roles (Paul, 2026-09-28). */
   const [showArchived, setShowArchived] = useState(false);
-  /* A salesperson (the role with "Remove from my leads") works an ACTIVE list; the admin keeps the
-     unified one. Rule: src/lib/outreachLoad.ts rowsForArchiveView. */
-  const archiveView = archiveViewFor(perms.removeFromMyLeads && !isArchiveView, showArchived);
+  /* ⛔ BOTH ROLES WORK AN ACTIVE LIST (Paul, 2026-09-28 — extends the closeout pass's Sales-only rule to
+     the admin): archived leads are hidden by default and shown under Filters → Archived, with owner,
+     history and contact status intact. Rule: src/lib/outreachLoad.ts rowsForArchiveView. */
+  const archiveView = archiveViewFor(!isArchiveView, showArchived);
   // Listing-level signal filters — free (derived from stored website), not verified.
   const [sigWebsite, setSigWebsite] = useState(false);
   /* ⛔ THE INVERSE OF sigWebsite, AND IT IS NOT REDUNDANT. "Has own website" off is not the same
@@ -1835,7 +1836,7 @@ export function OutreachTable({
             <CardTitle className="text-base sm:text-lg">
               {isArchiveView || archiveView === 'archived' ? 'Archived' : 'Outreach'}
               <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
-                ({archiveView === 'all' ? leadCountLabel(loadState, leads.length) : rowsForArchiveView(leads, archiveView).length.toLocaleString()})
+                ({archiveView === 'all' ? leadCountLabel(loadState, leads.length) : archiveView === 'active' ? leadCountLabel(loadState, rowsForArchiveView(leads, 'active').length) : rowsForArchiveView(leads, 'archived').length.toLocaleString()})
               </span>
               {selectedIds.size > 0 && (
                 <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-primary">
