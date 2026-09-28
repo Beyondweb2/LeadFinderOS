@@ -224,13 +224,21 @@ export function tokensContainJoined(hay: string[], needle: string[]): boolean {
 
 const LONE_TOKEN_MIN_CHARS = 8;
 
+/* ⛔ A TITLE IS NOT A NAME (2026-09-28, India readiness). Indian practices lead with the person's title —
+   "Advocate Umesh Sharma", "Advocates Kumar & Co" — and "advocate" is 8 letters and not the searched
+   trade ("lawyer"), so the lone-token rule took it as the firm and "named" him in EVERY answer that
+   mentioned any advocate: 6/6 on a live Jaipur hook whose answers never contained "Umesh". Measured
+   on the whole book first: one audit ever started with "Advocate" (that QA audit) — zero UK results
+   change. Shorter titles (Dr, CA, Adv, Er) are already below LONE_TOKEN_MIN_CHARS. */
+const PERSON_TITLE_TOKENS = new Set(["advocate", "advocates"]);
+
 /** The first core token when it alone can name the firm: alphabetic, ≥ LONE_TOKEN_MIN_CHARS, and
  *  neither the trade, the town, a legal form nor a service word. Null otherwise. */
 function loneDistinctiveToken(coreTokens: string[], ctx: NameMatchContext): string | null {
   const first = coreTokens[0];
   if (!first || !/^[a-z]+$/.test(first) || first.length < LONE_TOKEN_MIN_CHARS) return null;
   const { noise, stems } = contextNoise(ctx);
-  if (noise.has(first) || sharesTradeStem(first, stems) || GENERIC_SERVICE_TOKENS.has(first) || GENERIC_NAME_TOKENS.has(first)) return null;
+  if (noise.has(first) || sharesTradeStem(first, stems) || GENERIC_SERVICE_TOKENS.has(first) || GENERIC_NAME_TOKENS.has(first) || PERSON_TITLE_TOKENS.has(first)) return null;
   return first;
 }
 

@@ -465,7 +465,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **`named` reads `cellNamed(cell, ctx)` everywhere** — with the business + trade/town the ANSWER
   TEXT is the ruler (a verdict may not contradict it; a citation alone is never a naming; joined or
   split spelling of one name is one name, never fuzzy), then the model verdict, then the stored
-  string flag; one ruler per comparison. No context → the verdicts, exactly as before. Never zero on
+  string flag; one ruler per comparison. ⛔ **A title is not a name** (`PERSON_TITLE_TOKENS`, 2026-09-28): "Advocate Umesh
+  Sharma" read 6/6 named from answers about OTHER advocates (`docs/india-readiness.md` §5). No context → the verdicts, exactly as before. Never zero on
   absence (`docs/reports.md` §33b; `named-text-primary.test.ts`).
   "Everywhere" includes the report's per-engine "Named in the answer" line (`recommended`), which
   ran its own string match until 2026-09-22 and disagreed with the summary above it
