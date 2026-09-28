@@ -48,7 +48,8 @@ ok(/<Route path="\/sales" element=\{<Navigate to="\/outreach" replace \/>\} \/>/
 ok(/<Route path="\/sales\/lead\/:leadId" element=\{<LegacySalesLeadRedirect \/>\} \/>/.test(app), "/sales/lead/:id goes through the legacy redirect");
 const legacy = readFileSync(new URL("../src/components/LegacySalesLeadRedirect.tsx", import.meta.url), "utf8");
 ok(/<Navigate to="\/outreach" replace state=\{\{ launch: \{ leadId, channel: 'open' \} \}\} \/>/.test(legacy), "…which opens THAT lead in Outreach (the launch intent)");
-ok(!/\bSalesHome\b|\bSalesLead\b|pages\/Sales/.test(app), "the separate My Leads pages are not routed any more");
+ok(!/\bSalesHome\b|\bSalesLead\b|pages\/Sales(Home|Lead)\b/.test(app), "the separate My Leads pages are not routed any more");
+ok(/<Route path="\/sales-dashboard" element=\{<SalesDashboard \/>\} \/>/.test(app) && canOpenRoute("sales", "/sales-dashboard"), "the Sales Dashboard is routed and open to sales (their own numbers, scoped by the server)");
 ok(!canOpenRoute("sales", "/sales/lead"), "a malformed legacy path is refused (no id)");
 ok(!canOpenRoute("sales", "/sales/lead/x/extra"), "…and an over-long one");
 ok(canOpenRoute("sales", "/sales/lead/abc?x=1#y"), "query and hash do not change the answer");
@@ -56,7 +57,7 @@ const sidebar = readFileSync(new URL("../src/components/AppSidebar.tsx", import.
 ok(!/'My leads'|url: '\/sales'/.test(sidebar), "My Leads is gone from the sidebar");
 const mobile = readFileSync(new URL("../src/components/MobileBottomNav.tsx", import.meta.url), "utf8");
 ok(!/'My leads'|url: '\/sales'|review-replies/.test(mobile), "…and from the mobile nav (and Review Replies with it)");
-ok(/SALES_ORDER = \['\/outreach', '\/inbox', '\/find-leads', '\/coverage'\]/.test(sidebar), "the sales sidebar reads Outreach, Inbox, Find Leads, Coverage");
+ok(/SALES_ORDER = \['\/outreach', '\/inbox', '\/sales-dashboard', '\/find-leads', '\/coverage'\]/.test(sidebar), "the sales sidebar reads Outreach, Inbox, Sales dashboard, Find Leads, Coverage");
 
 console.log("\n── what each role may do on the shared screens ──");
 const A = leadPermissions("admin"), S = leadPermissions("sales"), N = leadPermissions(null);

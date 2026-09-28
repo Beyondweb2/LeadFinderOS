@@ -57,9 +57,12 @@ import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { auditListQueryKey } from '@/types/auditBook';
 import { useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, QUEUE_STATUS_KEY } from '@/lib/queueStatus';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, CalendarClock } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
+import { notifyLeadChanged } from '@/lib/leadSync';
+import { recordOnboardingLinkEvent } from '@/hooks/useOnboardingLink';
+import { ONBOARDING_LINK_RE, previewUrl } from '@/lib/onboardingLinkStatus';
 import {
   DEFAULT_FIRST_REPLY_MODE,
   DEFAULT_FIRST_REPLY_TEMPLATE,
@@ -360,6 +363,22 @@ function AutoReplyToggle() {
   );
 }
 
+/** Message text with any Findable sign-up link made clickable AS A PREVIEW (preview=1), so the
+ *  operator opening it from a thread is never counted as the prospect's open. Other text is untouched. */
+function PreviewLinkedText({ text }: { text: string }) {
+  const parts: (string | { url: string })[] = [];
+  let last = 0;
+  for (const m of text.matchAll(ONBOARDING_LINK_RE)) {
+    const url = m[0].replace(/[).,!?]+$/, '');
+    parts.push(text.slice(last, m.index));
+    parts.push({ url });
+    last = (m.index ?? 0) + url.length;
+  }
+  if (parts.length === 0) return <>{text}</>;
+  parts.push(text.slice(last));
+  return <>{parts.map((p, i) => typeof p === 'string' ? p : <a key={i} href={previewUrl(p.url)} target="_blank" rel="noopener noreferrer" className="underline" title="Opens as a preview. Your visit is not counted as their open.">{p.url}</a>)}</>;
+}
+
 const Inbox = () => {
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
@@ -651,6 +670,7 @@ const Inbox = () => {
         : await salesPatchLead(c.leadId, { is_potential_work: true }).then((r) => (r.ok ? null : { message: refusalText(r.error) }));
       if (error) { toast({ title: 'Could not mark interested', description: error.message, variant: 'destructive' }); return; }
       patchLeadPotentialWork(c.leadId, true);
+      notifyLeadChanged(c.leadId); // Outreach, the prospect panel and other tabs re-read the row
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: true } : s));
       toast({ title: 'Marked interested', description: 'The pipeline status was left unchanged.' });
       return;
@@ -668,6 +688,7 @@ const Inbox = () => {
         void supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: c.leadId, reason: 'not_interested' } });
       }
       patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
+      notifyLeadChanged(c.leadId); // Outreach, the prospect panel and other tabs re-read the row
       /* ⛔ AND THE SYNTHETIC COPY, or the header/list pill would show the OLD status until the next
          refetch. `conversations` is derived from `leads`, so patchLeadStatus covers every real
          conversation — but a synthetic one (startFromLead, a lead with no thread yet) is a useState
@@ -1169,6 +1190,7 @@ const Inbox = () => {
       await navigator.clipboard.writeText(onboardingUrl(activeLead.id, activeLead.business_name));
       setSignupCopied(true);
       setTimeout(() => setSignupCopied(false), 1500);
+      void recordOnboardingLinkEvent(activeLead.id, 'generated', null);
     } catch {
       /* Clipboard refused (insecure context / denied). Show the link so there is still a way to get
          it, rather than the click appearing to do nothing. */
@@ -1826,6 +1848,11 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
+                    {activeLead?.next_action && activeLead.next_action !== 'none' && (
+                      <button type="button" onClick={() => setDetailLeadId(active.leadId)} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted" title="Next action (set by a person). Open the prospect to change it.">
+                        <CalendarClock className="h-3 w-3" />{activeLead.next_action.replace(/_/g, ' ')}{activeLead.next_action_date ? ` · ${new Date(activeLead.next_action_date + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}
+                      </button>
+                    )}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                   </div>
@@ -1834,8 +1861,8 @@ const Inbox = () => {
                       over Inbox (audit, questionnaire, business info, mark-paid). No navigation:
                       the whole point is to see everything without leaving the thread. */}
                   {active.leadId && (
-                    <button type="button" onClick={() => setDetailLeadId(active.leadId)} title="Open full lead details" aria-label="Open full lead details" className={HEADER_ICON_BTN}>
-                      <ListChecks className="h-4 w-4" />
+                    <button type="button" onClick={() => setDetailLeadId(active.leadId)} title="Open the prospect: log a call, scripts, next action, notes, sign-up link" aria-label="Open prospect workspace" className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-semibold text-primary hover:bg-primary/20">
+                      <ListChecks className="h-3.5 w-3.5" />Prospect
                     </button>
                   )}
                   {/* Run the AI audit WITHOUT leaving the Inbox: confirm → fire the chain's auto-audit
@@ -2022,7 +2049,7 @@ const Inbox = () => {
                       {m.direction === 'outbound' && templateSnapshot
                         ? <WhatsAppTemplateMessage snapshot={templateSnapshot} />
                         : isPlayableVoice(m) ? null
-                        : <p className="whitespace-pre-wrap break-words">{bubbleReadable(m) || templateLabel(m.template_name)}</p>}
+                        : <p className="whitespace-pre-wrap break-words"><PreviewLinkedText text={bubbleReadable(m) || templateLabel(m.template_name)} /></p>}
                       {showsAttachment(m) && <MessageMedia message={m} />}
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>

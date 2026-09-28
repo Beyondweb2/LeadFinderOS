@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList, Loader2 } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList, Loader2, PhoneCall, Mic, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
 import { useLeadCrawl } from '@/hooks/useLeadCrawls';
 import { WelcomePackButton } from '@/components/WelcomePackButton';
-import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
-import { VoiceNoteScriptButton } from '@/components/VoiceNoteScriptButton';
+import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProspectFacts } from '@/components/ProspectFacts';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -48,7 +49,7 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
-import { LeadCrmPanel } from '@/components/LeadCrmPanel';
+import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel } from '@/components/LeadCrmPanel';
 
 /* ───────── constants (ported from PotentialWork) ───────── */
 
@@ -283,7 +284,11 @@ interface LeadDetailDialogProps {
   /** Which page mounted the dialog — drives the cockpit's "Go to Inbox conversation" (Outreach
    *  only) and back-link labels. Defaults to 'outreach'. */
   context?: 'outreach' | 'inbox';
+  /** Which workspace tab opens first. Default: Work (a paying client opens on Client for the admin). */
+  initialTab?: WorkspaceTab;
 }
+
+export type WorkspaceTab = 'work' | 'scripts' | 'prospect' | 'history' | 'client';
 
 export function LeadDetailDialog({
   open,
@@ -301,6 +306,7 @@ export function LeadDetailDialog({
   customStatuses = [],
   onAddCustomStatus,
   context = 'outreach',
+  initialTab,
 }: LeadDetailDialogProps) {
   const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
   if (!lead) return null;
@@ -325,8 +331,9 @@ export function LeadDetailDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0">
+      <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0">
         <LeadDetailBody
+          initialTab={initialTab}
           key={fullLead.id}
           lead={fullLead}
           onStatusChange={onStatusChange}
@@ -368,8 +375,14 @@ function LeadDetailBody({
   onAddCustomStatus,
   context = 'outreach',
   onClose,
+  initialTab,
 }: LeadDetailBodyProps) {
   const effectiveSaleType: SaleType = resolveSaleType(lead.sale_type, campaignDefaultSaleType);
+  const permsForTab = useLeadPermissions();
+  /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Work. */
+  const [tab, setTab] = useState<WorkspaceTab>(() => initialTab ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'work'));
+  const [scriptTab, setScriptTab] = useState<'call' | 'voice'>('call');
+  const openScript = (which: 'call' | 'voice') => { setScriptTab(which); setTab('scripts'); };
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -673,11 +686,28 @@ function LeadDetailBody({
               audit, because the report IS the pack's last section. */}
           {perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
 
-          {/* Read-only call guide from this lead's stored evidence — the SAME panel Inbox opens. */}
-          {!isDemoLead(lead.id) && <ColdCallPlaybookButton leadId={lead.id} />}
-
-          {/* Voice-note script from this lead's hook result + site research — text only, never sends. */}
-          {!isDemoLead(lead.id) && <VoiceNoteScriptButton leadId={lead.id} />}
+          {/* THE CALLING TOOLS, one tap: ring the number, then the script is the next tab. */}
+          {lead.phone && (
+            <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300" title="Call this number">
+              <Phone className="h-3 w-3" />{lead.phone}
+            </a>
+          )}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:text-sky-300">
+              <PhoneCall className="h-3 w-3" />Call script
+            </button>
+          )}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={() => openScript('voice')} className="inline-flex items-center gap-1 rounded-full border border-violet-500/40 bg-violet-500/10 px-2.5 py-0.5 text-xs font-semibold text-violet-700 hover:bg-violet-500/20 dark:text-violet-300">
+              <Mic className="h-3 w-3" />Voice note
+            </button>
+          )}
+          {/* The human-set next action, read from the same row Outreach shows. */}
+          {lead.next_action && lead.next_action !== 'none' && (
+            <button type="button" onClick={() => setTab('work')} className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium', dueLabel?.cls ?? 'border-border/60 text-muted-foreground')} title="Next action (set by a person)">
+              <CalendarClock className="h-3 w-3" />Next: {lead.next_action.replace(/_/g, ' ')}{dueLabel ? ` · ${dueLabel.text}` : ''}
+            </button>
+          )}
 
           {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
               website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
@@ -704,41 +734,37 @@ function LeadDetailBody({
         )}
       </div>
 
-      {/* ── Scrollable body ── */}
-      <div className="flex-1 overflow-y-auto thin-scrollbar px-5 py-4 space-y-4">
+      {/* ══ THE PROSPECT WORKSPACE (2026-09-28, Paul: "open one prospect and do the job"). ONE dialog
+          for both roles and both pages (Outreach and the Inbox mount this same component), in tabs so
+          the call tools are never buried under client delivery: WORK (log the call, next action, note,
+          sign-up link, WhatsApp), SCRIPTS (call script / voice note), PROSPECT (who they are, the AI
+          check, contact), HISTORY (everything recorded), CLIENT (admin only: delivery, payment, private
+          note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
+        <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
+          <TabsTrigger value="work" className="text-xs">Work</TabsTrigger>
+          <TabsTrigger value="scripts" className="text-xs">Scripts</TabsTrigger>
+          <TabsTrigger value="prospect" className="text-xs">Prospect</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
+          {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
+        </TabsList>
+        <div className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
+          <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} />}
+            {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
+            {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
+            {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
+            {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
+          </TabsContent>
 
-        {/* ══ THE DELIVERY COCKPIT — key dates, quick launch, checklist, reference (2026-08-18).
-            The at-a-glance client control panel; shared by Outreach + Inbox via this one dialog. ══ */}
-        {perms.clientDelivery && !isDemoLead(lead.id) && (
-          <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />
-        )}
+          <TabsContent value="scripts" className="mt-0" data-testid="workspace-scripts">
+            {/* The call script and the voice-note script, one switch, one lead context. */}
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} />}
+          </TabsContent>
 
-        {/* ══ THE LEAD'S CRM — owner, next action, call booked / outcome, website control, internal
-            notes, activity, Hook Audit. One panel for both roles (moved here from the retired My Leads
-            lead page, 2026-09-27); every write is an ownership-checked server function. ══ */}
-        {!isDemoLead(lead.id) && <LeadCrmPanel leadId={lead.id} />}
-
-        {/* REMOVED 2026-08-18: the Journey stepper (Contacted → Replied → Site sent → Opened →
-            Add-on) — vague prospecting funnel, not real delivery. Binned per Paul's spec. */}
-
-        {/* ── Two-column body ── */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* Left: client info — questionnaire, socials/contact, onboarding link */}
-          <div className="space-y-4">
-            {/* The questionnaire's answers + the manual payment nudge. Fetches through the
-                `submissions` endpoint (onboarding_responses has RLS with no policies — a direct
-                read silently returns nothing, CLAUDE.md §8). Demo leads have no submissions and
-                no edge access, so the section is simply absent for them. */}
-            {perms.clientDelivery && !isDemoLead(lead.id) && (
-              <LeadQuestionnaireSection lead={lead} onUpdateLead={onUpdateLead} />
-            )}
-            {/* REMOVED 2026-08-18: the free-text Delivery section (overview / status / selling /
-                deliverables) is replaced by the cockpit's tickable checklist at the top. The
-                columns still exist and their data is untouched; they simply have no editor here. */}
-
-                        {/* Socials & contact — found socials (FB/IG) are read-only links; the
-                contact fields (email / website / phone / address) are inline-editable
-                (Pencil → input + Check/X), mirroring the name-edit UX. */}
+          <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">
+            <ProspectFacts lead={lead} />
+            {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {(() => {
               const socials = [
                 lead.facebook_url ? { key: 'fb', Icon: Facebook, label: 'Facebook', value: lead.facebook_url, href: lead.facebook_url, color: 'text-blue-600', external: true } : null,
@@ -829,24 +855,40 @@ function LeadDetailBody({
                 </section>
               );
             })()}
+          </TabsContent>
 
-            {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
-            {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
+          <TabsContent value="history" className="mt-0 space-y-4" data-testid="workspace-history">
+            {!isDemoLead(lead.id) && <LeadHistoryPanel leadId={lead.id} />}
+            {fetchActivities && !isDemoLead(lead.id) && (
+              <section className={CARD}>
+                <SectionLabel icon={Clock} color="text-cyan-400">Activity</SectionLabel>
+                {activities.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto thin-scrollbar pr-1">
+                    {activities.slice(0, 20).map((a) => (
+                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
+                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-foreground/70">{a.description}</span>
+                          <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </TabsContent>
 
-            {/* Sign-up link. Sits directly under the WhatsApp controls because that is where the
-                decision to message someone gets made — the link is needed in the same breath. */}
-            {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
-          </div>
-
-          {/* Right: money + operator — payment, notes, activity */}
-          <div className="space-y-4">
-            {/* ── PAYMENT ─────────────────────────────────────────────────────────────────────
-                ⛔ THE ONLY PLACE A PAYMENT AMOUNT CAN BE CORRECTED. It used to be the Paid
-                Clients page; that page is gone, so this editor is the whole of it.
-                ⛔ AND A CLEARED AMOUNT WRITES null, NOT 0 — `paid` means `amount_paid > 0`
-                everywhere (CLAUDE.md §6), so a 0 written for an empty box would un-pay a real
-                customer: out of the Paid filter, out of the Inbox's paid exemption, out of every
-                revenue figure, silently. parseAmountPaid owns that rule and is tested. */}
+          {perms.clientDelivery && (
+          <TabsContent value="client" className="mt-0 space-y-4" data-testid="workspace-client">
+        {perms.clientDelivery && !isDemoLead(lead.id) && (
+          <LeadDeliveryCockpit lead={lead} onUpdateLead={onUpdateLead} context={context} onClose={onClose} />
+        )}
+            {perms.clientDelivery && !isDemoLead(lead.id) && (
+              <LeadQuestionnaireSection lead={lead} onUpdateLead={onUpdateLead} />
+            )}
             {perms.clientDelivery && (
             <section className={CARD}>
               <SectionLabel icon={PoundSterling} color="text-emerald-500">Payment</SectionLabel>
@@ -956,29 +998,10 @@ function LeadDetailBody({
             </section>
             )}
 
-            {fetchActivities && !isDemoLead(lead.id) && (
-              <section className={CARD}>
-                <SectionLabel icon={Clock} color="text-cyan-400">Activity</SectionLabel>
-                {activities.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-44 overflow-y-auto thin-scrollbar pr-1">
-                    {activities.slice(0, 20).map((a) => (
-                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
-                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-foreground/70">{a.description}</span>
-                          <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
+          </TabsContent>
+          )}
         </div>
-      </div>
+      </Tabs>
 
       {/* Footer: Mark Paid is my revenue/convert action and shows ONLY while UNPAID — once
           amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from

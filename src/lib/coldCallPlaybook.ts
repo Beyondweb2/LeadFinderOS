@@ -124,6 +124,9 @@ export interface PlaybookInput {
   leadCrawl: FindingsSource | null;
   messages: PlaybookMessage[];
   nowMs: number;
+  /** Who is ringing: the signed-in person's display name (team_members). Absent means the book
+   *  owner's name, which is what every script said before Sales used it (2026-09-28). */
+  callerName?: string | null;
 }
 
 /* ── Output ───────────────────────────────────────────────────────────────────────────────────── */
@@ -205,6 +208,13 @@ export interface ColdCallPlaybook {
 /* ── Small, pure helpers ──────────────────────────────────────────────────────────────────────── */
 
 const clean = (s: string | null | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim();
+
+/** The name said on the call: the first word of the person's display name, or the book owner's. */
+export const DEFAULT_CALLER_NAME = 'Paul';
+export function callerFirstName(name: string | null | undefined): string {
+  const first = String(name ?? '').trim().split(/\s+/)[0] ?? '';
+  return first && /[A-Za-z]/.test(first) ? first : DEFAULT_CALLER_NAME;
+}
 
 /** "22 Sep 2026", London time — the day Paul would say out loud. */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -511,6 +521,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const town = clean(reportAudit?.location_text) || clean(lead.derived_town) || clean(lead.search_location) || null;
   const trade = tradePlural(reportAudit, lead);
   const callName = displayBusinessName(business, { town, style: 'identify' }) || business;
+  const caller = callerFirstName(input.callerName);
   const lookingAt = trade ? trade + (town ? ' in ' + town : '') : town ? 'businesses like yours in ' + town : 'businesses like yours';
 
   const evidence = selectEvidence(report, business);
@@ -542,19 +553,19 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   if (convo.mode === 'cold') {
     opening.push('Hi, is that ' + callName + '?');
     if (aiFact) {
-      opening.push('It\'s Paul from Findable. I was looking at ' + lookingAt + ' ' + when + ', so I asked AI who it would recommend.');
+      opening.push('It\'s ' + caller + ' from Findable. I was looking at ' + lookingAt + ' ' + when + ', so I asked AI who it would recommend.');
       opening.push(aiFact);
     } else {
-      opening.push('It\'s Paul from Findable. I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
+      opening.push('It\'s ' + caller + ' from Findable. I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
     }
     opening.push('Have you got a minute? I\'ll explain why I\'m ringing.');
   } else {
     const fu = convo.followUp!;
-    opening.push('Hi, is that ' + callName + '? It\'s Paul from Findable — I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.');
+    opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.');
     if (fu.lastInbound && convo.followUp && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '')) {
-      opening.push('Thanks for getting back to me — I thought it would be easier to explain on a quick call.');
+      opening.push('Thanks for getting back to me, I thought it would be easier to explain on a quick call.');
     } else if (fu.reportSentAt) {
-      opening.push('I sent over a short report on what AI says when someone asks for ' + lookingAt + ' — I thought it would be easier to talk you through it.');
+      opening.push('I sent over a short report on what AI says when someone asks for ' + lookingAt + ', so I thought it would be easier to talk you through it.');
     } else {
       opening.push('I thought it would be easier to explain on a quick call than over messages.');
     }
@@ -653,7 +664,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const engine = evidence.engine ?? 'AI';
   const namesLine = top.length ? 'It came back with ' + joinNames(top) + ', but you didn\'t come up.' : 'And you didn\'t come up in the answer it gave.';
   if (convo.mode === 'cold') {
-    callScript.push('Hi, is that ' + callName + '? It\'s Paul from Findable.');
+    callScript.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable.');
     if (evidence.kind === 'gap') callScript.push('I was looking for ' + lookingAt + ' ' + when + ' and asked ' + engine + ' who it would recommend. ' + namesLine);
     else if (evidence.kind === 'named') callScript.push('I asked AI who it would recommend for ' + lookingAt + ' and it did mention you, which is good. I wanted to run something by you about keeping it that way.');
     else callScript.push('I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
@@ -661,7 +672,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   } else {
     const fu = convo.followUp!;
     const repliedLast = !!fu.lastInbound && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '');
-    callScript.push('Hi, is that ' + callName + '? It\'s Paul from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.'
+    callScript.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.'
       + (repliedLast ? ' Thanks for getting back to me, I thought it\'d be easier to explain on a quick call.'
         : fu.reportSentAt ? ' I sent over a short report on what AI says when someone asks for ' + lookingAt + ', so I thought I\'d talk you through it.'
           : ' I thought it\'d be easier to explain on a quick call.'));

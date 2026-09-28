@@ -82,6 +82,9 @@ this section, this section wins.
   - ⛔ **NEVER CLAIM AN SEO SCORE.** "watch the technical side of your site so nothing slips" is the
     ceiling and is written into the comments as one: nothing measures a score, and site quality is
     tested NEGATIVE for being named by AI (§5).
+  - ⛔ **SUPERSEDED 2026-09-28 (Paul): review replies are NOT a Findable deliverable any more** —
+    removed from the welcome pack and the onboarding pay summary (`docs/sales-readiness.md` §5). The
+    Meta-registered `explain_offer` bodies still carry it and stay blocked. History below.
   - ⚠️ **"Reply to your reviews" is a REAL promise since 2026-09-14** (Paul is doing it) and it
     needs the client's GBP access. Every surface used to say *help* replying. If that access ever
     leaves the flow, the word goes back to "help". Asking for a review is still the client's.

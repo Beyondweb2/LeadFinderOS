@@ -64,12 +64,27 @@ export const DELIVERY_CHECKLIST_ITEMS: DeliveryChecklistItem[] = [
      cannot start until they add us as a manager — the ask now shown on the confirmation screens and
      in the welcome pack. Before that existed the tick meant two things at once: "I have done the
      profile work" and "they have let me in", and an untouched box could not tell you which. */
+  /* ⛔ ACCESS CONFIRMED IS FINDABLE'S TICK, NEVER THE CLIENT'S ANSWER (2026-09-28). The paid page asks
+     them to add GBP_MANAGER_EMAIL as a Manager and records what they SAY (onboarding_responses.gbp_status);
+     this tick is a person here confirming the invite was accepted. Nothing verifies Google itself. */
+  { key: 'gbp_access', label: 'Google profile access confirmed', hint: `Tick once you have accepted their Manager invite to ${GBP_MANAGER_EMAIL}. The client saying they sent it is not this — that shows as "Client says" on the Client tab`, kind: 'tick' },
   { key: 'gbp', label: 'Google Business Profile sorted', hint: `Claimed, verified and consistent with the pages. Needs the client to add ${GBP_MANAGER_EMAIL} as a manager first — they are asked at sign-up and in the welcome pack`, kind: 'tick' },
   { key: 'pages', label: 'Pages built', hint: 'One line per planned page (the page-plan queue). Tick a page when it is live on their site', kind: 'pages' },
   { key: 'website', label: 'Website', hint: 'Site built or fixed where there was none / it was blocking', kind: 'tick' },
   { key: 'remeasure', label: 'Week-four re-measure', hint: 'Fires itself on the stored due date (RG Locksmiths: eight weeks, by his contract). Tick once you have checked the replay', kind: 'remeasure' },
   { key: 'results_sent', label: 'Results sent', hint: 'Stamped by the system when the four-week results email goes out (outreach_leads.remeasure_results_sent_at). Starts the client\'s 14-day claim window. Not a tick.', kind: 'stamp' },
 ];
+
+/** The delivery-checklist key Findable ticks when the client's Manager invite has been accepted. */
+export const GBP_ACCESS_CHECKLIST_KEY = 'gbp_access';
+
+/** What the client said on the paid page about adding us (onboarding_responses.gbp_status). */
+export function gbpClientSaysLabel(status: string | null | undefined): string {
+  if (status === 'done') return 'invite sent (their word, not yet confirmed by us)';
+  if (status === 'will_do') return 'will do it later';
+  if (status === 'no_access') return "can't get into their profile, needs a hand";
+  return 'no answer yet';
+}
 
 /** The items a person ticks — everything except the derived pages line and the system stamp. */
 export const TICKABLE_ITEMS: DeliveryChecklistItem[] = DELIVERY_CHECKLIST_ITEMS.filter((i) => i.kind === 'tick' || i.kind === 'remeasure');

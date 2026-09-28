@@ -36,6 +36,7 @@ function normalise(line) {
   return line
     .replace(/\((\d+),(\d+)\)/, '')                                  // line:col — they move
     .replace(/(Conversion of type ).*?( to type )/, '$1…$2')          // 70-field generated literal
+    .replace(/\.\.\. \d+ more \.\.\./g, '... N more ...')          // a new DB column moves the count
     .trim();
 }
 

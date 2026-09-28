@@ -25,6 +25,8 @@ import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus } from '@/lib/queueStatus';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AvailableToClaim } from '@/components/AvailableToClaim';
+import { AddLeadDialog } from '@/components/AddLeadDialog';
+import { UserPlus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Outreach = () => {
@@ -65,6 +67,7 @@ const Outreach = () => {
      "Available to claim". Their rows are their own assigned prospects, read from the safe view. */
   const perms = useLeadPermissions();
   const [salesTab, setSalesTab] = useState<'mine' | 'claim'>('mine');
+  const [addLeadOpen, setAddLeadOpen] = useState(false);
   /* ⚡ START THE TABLE'S OWN READS NOW (2026-09-27, site-wide speed pass). The table and the queue
      panel mount only after every lead has arrived, so the audit map and the queue status used to
      start 2–4 s late. Started here they run alongside the leads; the table and panel join the same
@@ -231,6 +234,9 @@ const Outreach = () => {
           </p>
         </div>
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+          {/* A lead found outside the app (LinkedIn, referral…) — both roles, server-deduped. */}
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setAddLeadOpen(true)}><UserPlus className="h-3.5 w-3.5" />Add a lead</Button>
+          <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} />
           {/* Paste-a-URL crawlability check — for a site sent to Paul before it's a lead (b). Admin:
               crawl-check refuses anyone else. */}
           {perms.crawlSite && <CrawlCheckUrlButton />}

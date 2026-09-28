@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { notifyLeadChanged } from '@/lib/leadSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
 import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
@@ -171,6 +172,9 @@ export function useOutreach({ history = true, progressive = false }: { history?:
   const { role } = useSubscription();
   const roleRef = useRef(role);
   roleRef.current = role;
+  /* This instance's name on the lead-changed signal: it already holds the row it just wrote, so it
+     skips its own notice while every OTHER reader (the Inbox, another Outreach, the CRM panel) re-reads. */
+  const syncOriginRef = useRef(`outreach-${Math.random().toString(36).slice(2)}`);
   // Stable user ID ref to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
 
@@ -216,6 +220,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
         });
     }
     placeRow(row);
+    notifyLeadChanged(leadId, syncOriginRef.current);
     return row;
   }, []);
   /* A change made OUTSIDE this hook's own writers — the CRM panel's functions, a salesperson's queue
@@ -223,8 +228,9 @@ export function useOutreach({ history = true, progressive = false }: { history?:
      so a salesperson reads the view) and replaces the stale copy. Only a row already in the lists. */
   useEffect(() => {
     const onChanged = async (e: Event) => {
-      const leadId = (e as CustomEvent<{ leadId?: string }>).detail?.leadId;
-      if (!leadId) return;
+      const detail = (e as CustomEvent<{ leadId?: string; origin?: string }>).detail;
+      const leadId = detail?.leadId;
+      if (!leadId || detail?.origin === syncOriginRef.current) return;
       const src = leadSourceFor(roleRef.current);
       const { data, error } = await (supabase as unknown as { from: (t: string) => any })
         .from(src.table).select(src.listSelect).eq('id', leadId).maybeSingle();
@@ -997,6 +1003,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     } else {
       setLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
     }
+    notifyLeadChanged(leadId, syncOriginRef.current);
 
     return updatedLead;
   }, []);

@@ -259,7 +259,7 @@ console.log('── 11. OPENING THE PLAYBOOK TRIGGERS NOTHING ──');
     'Inbox: an icon in the header icon row, for the selected conversation\'s own lead');
   ok(/Send WhatsApp message[\s\S]{0,900}setPlaybookLeadId\(lead\.id\)/.test(read('src/components/OutreachTable.tsx')),
     'Outreach: an icon beside the contact buttons');
-  ok(/ColdCallPlaybookSheet/.test(outreach) && /ColdCallPlaybookButton/.test(outreach), 'Outreach opens the same shared panel');
+  ok(/ColdCallPlaybookSheet/.test(outreach) && /ColdCallPlaybookInline/.test(outreach), 'Outreach opens the same shared panel (the row sheet, and inline in the prospect workspace Scripts tab)');
 }
 
 console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');

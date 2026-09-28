@@ -27,9 +27,10 @@ const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\
 
 console.log("── the safe view is the salesperson's only lead source ──");
 {
-  const mig = read("supabase/migrations/20260927100100_multi_user_sales.sql");
+  /* The NEWEST definition of the view (20260928120000 appended lead_source after amount_paid). */
+  const mig = read("supabase/migrations/20260928120000_sales_readiness.sql");
   const view = mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("from public.outreach_leads l", mig.indexOf("create or replace view public.sales_leads")));
-  const cols = [...view.matchAll(/l\.([a-z_]+)/g)].map((m) => m[1]).concat(/null::numeric as amount_paid/.test(view) ? ["amount_paid"] : []);
+  const cols = [...view.matchAll(/(null::numeric as amount_paid)|l\.([a-z_]+)/g)].map((m) => (m[1] ? "amount_paid" : m[2]));
   ok(cols.length === SALES_VIEW_COLUMNS.length && cols.every((c, i) => c === SALES_VIEW_COLUMNS[i]), `SALES_VIEW_COLUMNS equals the view's ${cols.length} columns, in order`);
   ok(/null::numeric as amount_paid/.test(view), "the view's amount_paid is a literal NULL");
   for (const secret of ["notes", "paid_for", "payment_date", "subscription_status", "delivery_checklist", "delivery_notes", "project_value", "user_id", "stripe_customer_id", "baseline_audit_id"]) {
@@ -116,12 +117,12 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(/perms\.auditAdmin \? 'Manage audit'/.test(table) && /else setDetailLead\(lead\)/.test(table), "a salesperson's audit button opens the Hook Audit in the lead detail (the AI Audit page is admin)");
   ok(/lead\.assigned_to_user_id && lead\.assigned_to_user_id !== user\?\.id/.test(table), "the row shows who owns a lead that is not yours");
   const dialog = read("src/components/LeadDetailDialog.tsx");
-  ok(/<LeadCrmPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panel (both roles, Outreach and Inbox)");
+  ok(/<LeadWorkPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
   for (const g of ["perms.clientDelivery && !isDemoLead(lead.id) && (\n          <LeadDeliveryCockpit", "{perms.clientDelivery && (\n            <section className={CARD}>\n              <SectionLabel icon={PoundSterling}", "{perms.privateNote && (", "{perms.clientDelivery && !isPaidLead(lead) && ("]) {
     ok(dialog.includes(g), `the detail withholds: ${g.split("\n")[0].slice(0, 60)}`);
   }
   const crm = read("src/components/LeadCrmPanel.tsx");
-  for (const fn of ["lead_set_follow_up", "lead_set_call_booked", "lead_record_call", "lead_set_website_control", "lead_add_note"]) ok(crm.includes(`'${fn}'`), `the CRM panel saves through ${fn}`);
+  for (const fn of ["lead_set_follow_up", "lead_set_call_booked", "lead_log_contact", "lead_set_website_control", "lead_add_note"]) ok(crm.includes(`'${fn}'`), `the CRM panel saves through ${fn}`);
   ok(/<LeadOwnerControl leadId=\{lead\.id\} \/>/.test(crm) && /<HookVisibilityCard/.test(crm) && /useLeadActivity\(leadId\)/.test(crm), "…with the owner, the Hook Audit and the activity timeline");
   ok(!/\.from\('outreach_leads'\)\.update|\.update\(/.test(strip(crm)), "…and never writes a lead row directly");
   const owner = read("src/components/LeadOwnerControl.tsx");

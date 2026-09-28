@@ -55,6 +55,8 @@ export const SALES_VIEW_COLUMNS = [
   'contact_name', 'website', 'campaign_id', 'search_keyword', 'search_location', 'derived_town', 'review_count',
   'rating', 'lat', 'lng', 'line_type', 'product', 'hook_followup_queued_at', 'contact_followup_queued_at',
   'assigned_to_user_id', 'assigned_at', 'added_by_user_id', 'website_control', 'website_control_note', 'amount_paid',
+  // 2026-09-28 (migration 20260928120000): where a self-sourced lead came from; appended at the view's end.
+  'lead_source',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.

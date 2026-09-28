@@ -43,6 +43,7 @@ below are what the server enforces.
 | Notes, follow-up, call booked, call outcome, website control | all | own leads |
 | Stages | all | interested, price_given, not_interested, won_pending_onboarding |
 | Paid clients, delivery, website build, welcome packs, page generator, page plan, mockups, playbook | yes | no |
+| Sales dashboard (`/sales-dashboard`, fn `sales-performance`, 2026-09-28) | anyone / everyone | own leads only, counts + won names, no money |
 | Dashboard, revenue, Stripe/payment data, submissions | yes | no |
 | Team, invites, disable | yes | no |
 | API usage, Apify usage, queue controls, templates page | yes | no |

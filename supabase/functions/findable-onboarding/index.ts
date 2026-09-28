@@ -15,6 +15,8 @@ import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 //   revise      { onboarding_id, ... }         → pre-payment answer changes (refuses paid rows)
 //   q2_prefill  { onboarding_id }              → the lead's phone for the post-payment form (PAID rows only)
 //   complete_q2 { onboarding_id, answers{...} }→ the post-payment save (paid rows only)
+//   payment_status { onboarding_id?, lead_id? } → { paid } — the paid screen waits on this, never on ?paid=1
+//   gbp_access  { onboarding_id? | lead_id, event } → what the client SAYS about the GBP invite (paid rows only)
 //   status      { lead_id, audit_id }          → the audit's report payload when complete
 //                                                (never winnability: not defensible, see auditReport.ts)
 //
@@ -255,11 +257,16 @@ Deno.serve(async (req) => {
          ⚠️ ONE ROW PER PAGE LOAD, NOT PER VISITOR. A reload writes a second row on purpose: every
          consumer counts DISTINCT LEADS, so duplicates cost nothing, and deduping here would need a
          read on the hot path to save a few bytes. */
+      /* ⛔ A PREVIEW IS NOT AN OPEN (2026-09-28, docs/sales-readiness.md). The operator app opens the
+         link with &preview=1 (the lead card's "Preview" and every onboarding link inside an Inbox
+         thread), and the page passes it here. It is still written — so the record of who looked is
+         complete — but under its own page name, which no open metric counts. A prospect who adds
+         preview=1 by hand only hides their own open; nothing is unlocked by it. */
       try {
         await service.from("lead_page_hits").insert({
           lead_id: lead.id,
           user_id: (lead as Record<string, unknown>).user_id,
-          page: "onboarding",
+          page: body.preview === true ? "onboarding_preview" : "onboarding",
         });
       } catch { /* never blocks the prefill — see above */ }
 
@@ -548,6 +555,80 @@ Deno.serve(async (req) => {
          measurement starts on its own within a minute of this returning, through the path that is
          already proven, rather than through a second caller that could disagree with it. */
       return json({ ok: true, onboarding_id: onboardingId, saved: Object.keys(payload).filter((k) => k !== "updated_at") });
+    }
+
+    /* ── payment_status ─────────────────────────────────────────────────────────────────────────
+       THE PAID SCREEN ASKS THE SERVER BEFORE IT SAYS "PAYMENT RECEIVED" (2026-09-28). Stripe's
+       success_url only proves the browser came back from Stripe; the payment is recorded by
+       stripe-webhook alone, which can land seconds later. So the page polls this and shows
+       "Confirming your payment" until the row says paid. It READS, never writes: visiting the success
+       URL cannot mark anyone paid, and this answer cannot either.
+       Returns only a boolean — no amount, no Stripe id. The onboarding id (session storage) is
+       preferred; the lead id from ?lead= is the fallback for a browser that lost storage. */
+    if (action === "payment_status") {
+      const onboardingId = typeof body.onboarding_id === "string" && UUID_RE.test(body.onboarding_id) ? body.onboarding_id : null;
+      if (!onboardingId && !leadId) return json({ ok: false, error: "bad_request" }, 400);
+      let paid = false;
+      if (onboardingId) {
+        const { data: row, error } = await service.from("onboarding_responses")
+          .select("status, lead_id").eq("id", onboardingId).maybeSingle();
+        if (error) return json({ ok: false, error: "lookup_failed" }, 503);
+        const st = String((row as { status?: string } | null)?.status ?? "");
+        paid = st === "paid" || PAID_OR_BEYOND.has(st);
+      }
+      if (!paid && leadId) {
+        const { data: lead, error } = await service.from("outreach_leads")
+          .select("status, amount_paid").eq("id", leadId).maybeSingle();
+        if (error) return json({ ok: false, error: "lookup_failed" }, 503);
+        const l = lead as { status?: string; amount_paid?: number | null } | null;
+        paid = !!l && (PAID_OR_BEYOND.has(String(l.status ?? "")) || (Number(l.amount_paid ?? 0) > 0));
+      }
+      return json({ ok: true, paid });
+    }
+
+    /* ── gbp_access ─────────────────────────────────────────────────────────────────────────────
+       THE POST-PAYMENT GOOGLE BUSINESS PROFILE STEP (2026-09-28). No password, no login, nothing
+       about their Google account is collected: the page SHOWS the address to add as a Manager
+       (GBP_MANAGER_EMAIL) and the client answers what they did.
+         event 'shown'                     → gbp_access_requested_at (first time only)
+         event 'done' | 'will_do' | 'no_access' → gbp_status + gbp_status_at (what the CLIENT SAYS)
+       ⛔ "I've invited you" IS NOT ACCESS. Findable's own confirmation is the delivery checklist tick
+       'gbp_access', set by a person who accepted the invite — never by this action.
+       PAID ROWS ONLY, like complete_q2. Keyed on the onboarding id, or — when the browser lost it —
+       the newest paid row for ?lead=. */
+    if (action === "gbp_access") {
+      const ev = typeof body.event === "string" ? body.event : "";
+      if (ev !== "shown" && !GBP_STATUS.has(ev)) return json({ ok: false, error: "bad_event" }, 400);
+      const onboardingId = typeof body.onboarding_id === "string" && UUID_RE.test(body.onboarding_id) ? body.onboarding_id : null;
+      let row: { id: string; status: string | null; gbp_access_requested_at: string | null } | null = null;
+      if (onboardingId) {
+        const { data, error } = await service.from("onboarding_responses")
+          .select("id, status, gbp_access_requested_at").eq("id", onboardingId).maybeSingle();
+        if (error) return json({ ok: false, error: "lookup_failed" }, 503);
+        row = data as typeof row;
+      } else if (leadId) {
+        const { data, error } = await service.from("onboarding_responses")
+          .select("id, status, gbp_access_requested_at").eq("lead_id", leadId).eq("status", "paid")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (error) return json({ ok: false, error: "lookup_failed" }, 503);
+        row = data as typeof row;
+      } else {
+        return json({ ok: false, error: "bad_request" }, 400);
+      }
+      if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
+      const st = String(row.status ?? "");
+      if (st !== "paid" && !PAID_OR_BEYOND.has(st)) return json({ ok: false, error: "not_paid" }, 403);
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = {};
+      if (!row.gbp_access_requested_at) patch.gbp_access_requested_at = now;
+      if (ev !== "shown") { patch.gbp_status = ev; patch.gbp_status_at = now; }
+      if (Object.keys(patch).length === 0) return json({ ok: true, unchanged: true });
+      const { error: updErr } = await service.from("onboarding_responses").update(patch).eq("id", row.id);
+      if (updErr) {
+        console.error("[findable-onboarding] gbp_access failed:", updErr.message);
+        return json({ ok: false, error: "save_failed" }, 500);
+      }
+      return json({ ok: true });
     }
 
     // ── submit ──────────────────────────────────────────────────────────────────

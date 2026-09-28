@@ -24,6 +24,9 @@ export type { AppRole } from './roleRules';
 
 /** Route PATTERNS a salesperson may open (react-router syntax, matched by the rule below). */
 export const SALES_ROUTE_PATTERNS: readonly string[] = [
+  /* The Sales Dashboard (2026-09-28): a salesperson's own numbers, scoped by the server
+     (fn sales-performance), never by the page. */
+  '/sales-dashboard',
   '/outreach',
   '/inbox',
   '/find-leads',
@@ -127,6 +130,7 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Bulk initial outreach (the opener chosen for the batch)', admin: 'yes', sales: 'own never-contacted leads' },
   { feature: 'Hook audit ("AI visibility check")', admin: 'yes', sales: 'own leads only' },
   { feature: 'Full measurement / Discovery / Baseline / Remeasure', admin: 'yes', sales: 'no' },
+  { feature: 'Sales dashboard (campaigns, templates, calls, sign-up links, won)', admin: 'anyone or everyone', sales: 'own leads only, no money figures' },
   { feature: 'Coverage', admin: 'yes', sales: 'yes (counts)' },
   { feature: 'Find Leads', admin: 'yes', sales: 'yes' },
   { feature: 'Add a new business', admin: 'yes', sales: 'yes (never a duplicate)' },

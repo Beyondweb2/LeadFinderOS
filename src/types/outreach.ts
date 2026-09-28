@@ -209,6 +209,8 @@ export interface OutreachLead {
   // New fields
   potential_revenue?: number | null;
   contact_name?: string | null;
+  /** Where a person found a self-sourced lead (LinkedIn, referral…). NULL = the app's own search. */
+  lead_source?: string | null;
   website?: string | null;
   services_included?: string[] | null;
   // Phase 3b: operator-confirmed services (reviewed/edited from a website scan or

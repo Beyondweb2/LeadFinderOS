@@ -30,8 +30,10 @@
    would be invented, and a cut-off would silently drop the slow repliers, who are the ones a chase
    is aimed at. Sequence is a fact; a time window would be a guess.
    ============================================================ */
-import { isRealSend } from './realSend';
-import { looksAutomated } from './inboundClassify';
+/* ⚠️ Explicit .ts extensions: this file is reached by an edge function (sales-performance), and Deno
+   resolves nothing without one (CLAUDE.md §3). */
+import { isRealSend } from './realSend.ts';
+import { looksAutomated } from './inboundClassify.ts';
 
 /** The shape both folds need. Deliberately structural, not the DB row type: this file is pure and
  *  must be drivable from a test without a Supabase type in sight. */
@@ -71,29 +73,42 @@ const isTemplatedSend = (m: AttributableMsg): boolean =>
  * cold), and crediting a template that had not been sent yet would be inventing a reply.
  */
 export function creditRepliesByTemplate(msgs: AttributableMsg[]): ReplyCredit[] {
-  const credits: ReplyCredit[] = [];
+  return creditRepliesToSends(msgs).map(({ template, ambiguous }) => ({ template, ambiguous }));
+}
+
+/** A reply credit that also says WHICH send earned it (its index in the input), so a caller can ask
+ *  who sent that message. The Sales Dashboard needs this: a reply is a salesperson's only when the
+ *  send it answers was theirs. */
+export interface SendCredit extends ReplyCredit { sendIndex: number }
+
+/**
+ * THE RULE ITSELF — creditRepliesByTemplate is this, minus the index. One walk, so the campaign card
+ * and the Sales Dashboard cannot disagree about which message earned a reply.
+ */
+export function creditRepliesToSends(msgs: AttributableMsg[]): SendCredit[] {
+  const credits: SendCredit[] = [];
   const seen = new Set<string>();
   /* The run of templated sends since the last inbound. Its LAST entry takes the credit; more than
      one DISTINCT name in it is exactly what "ambiguous" means. */
-  let run: string[] = [];
+  let run: { template: string; index: number }[] = [];
 
-  for (const m of msgs) {
-    if (isTemplatedSend(m)) { run.push(m.template_name!); continue; }
-    if (m.direction !== 'inbound') continue;
+  msgs.forEach((m, index) => {
+    if (isTemplatedSend(m)) { run.push({ template: m.template_name!, index }); return; }
+    if (m.direction !== 'inbound') return;
     /* An auto-responder is not an answer — the same looksAutomated() the auto-pitch rule uses, so
        the sender and the dashboard agree on what a human is. It also must NOT close the run: a
        booking bot replying instantly would otherwise absolve the next send of competing with the
        one before it. */
-    if (looksAutomated(m.body ?? '')) continue;
+    if (looksAutomated(m.body ?? '')) return;
     if (run.length > 0) {
-      const template = run[run.length - 1];
-      if (!seen.has(template)) {
-        seen.add(template);
-        credits.push({ template, ambiguous: new Set(run).size > 1 });
+      const last = run[run.length - 1];
+      if (!seen.has(last.template)) {
+        seen.add(last.template);
+        credits.push({ template: last.template, ambiguous: new Set(run.map((r) => r.template)).size > 1, sendIndex: last.index });
       }
     }
     run = [];
-  }
+  });
   return credits;
 }
 

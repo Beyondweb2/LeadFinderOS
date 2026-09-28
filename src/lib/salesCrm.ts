@@ -187,14 +187,29 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   daily_limit: 'over your daily limit',
 };
 
+/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (migration 20260928120000) — the server refuses
+   anything else, and scripts/sales-readiness.test.ts pins the two together. Two were added
+   2026-09-28 (left voicemail, meeting booked). An outcome records ACTIVITY only: it never writes the
+   status or the next action (Next Action is human-set only). */
 export const CALL_OUTCOMES = [
   { value: 'no_answer', label: 'No answer' },
+  { value: 'left_voicemail', label: 'Left voicemail' },
   { value: 'spoke_to_owner', label: 'Spoke to owner' },
   { value: 'interested', label: 'Interested' },
   { value: 'call_back', label: 'Call back' },
+  { value: 'meeting_booked', label: 'Meeting / call booked' },
   { value: 'not_interested', label: 'Not interested' },
   { value: 'wrong_number', label: 'Wrong number' },
   { value: 'agency_controls_site', label: 'Agency controls site' },
+] as const;
+
+/** How the contact happened. WhatsApp is recorded by the messages themselves, so it is not here. */
+export const CONTACT_CHANNEL_OPTIONS = [
+  { value: 'call', label: 'Call' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'email', label: 'Email' },
+  { value: 'in_person', label: 'In person' },
+  { value: 'other', label: 'Other' },
 ] as const;
 
 export const WEBSITE_CONTROL_OPTIONS = [
@@ -208,6 +223,7 @@ export const WEBSITE_CONTROL_OPTIONS = [
 export const NEXT_ACTION_OPTIONS = [
   { value: 'call', label: 'Call' },
   { value: 'send_follow_up', label: 'WhatsApp follow-up' },
+  { value: 'send_voice_note', label: 'Send voice note' },
   { value: 'follow_up', label: 'Follow up (other)' },
   { value: 'none', label: 'Nothing planned' },
 ] as const;
@@ -222,6 +238,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   follow_up_set: 'Follow-up set',
   call_booked: 'Call booked',
   call_outcome: 'Call',
+  contact_logged: 'Contact',
   website_control_set: 'Website control',
   audit_run: 'AI visibility check run',
   bulk_queued: 'Opener queued',

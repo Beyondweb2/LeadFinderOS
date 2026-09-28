@@ -133,8 +133,8 @@ function TalkAbout({ p }: { p: ColdCallPlaybook }) {
   );
 }
 
-function Scripts({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
-  const [tab, setTab] = useState<'call' | 'voice'>('call');
+function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId: string; initial?: 'call' | 'voice' }) {
+  const [tab, setTab] = useState<'call' | 'voice'>(initial);
   const tabClass = (on: boolean) => cn('rounded-md px-3 py-1 text-sm font-semibold transition-colors', on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted');
   return (
     <section className="rounded-lg border border-primary/40 bg-primary/5 p-3" data-testid="playbook-scripts">
@@ -222,7 +222,29 @@ function ReportLinks({ p }: { p: ColdCallPlaybook }) {
   );
 }
 
-function PlaybookBody({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+function PlaybookBody({ p, leadId, scriptsFirst, initialScript }: { p: ColdCallPlaybook; leadId: string; scriptsFirst?: boolean; initialScript?: 'call' | 'voice' }) {
+  /* Inside the prospect workspace the script is what is read mid-call, so it comes first and the
+     prospect summary (already on the workspace's own tabs) is left out. Same pieces, same data. */
+  if (scriptsFirst) {
+    return (
+      <div className="space-y-4 pb-2" data-testid="cold-call-playbook">
+        {p.warnings.length > 0 && (
+          <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
+            {p.warnings.map((w) => <p key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</p>)}
+          </div>
+        )}
+        <Scripts p={p} leadId={leadId} initial={initialScript} />
+        <Block title="AI opportunity" tone="primary"><AiOpportunity p={p} /></Block>
+        <Block title="What I'd talk about"><TalkAbout p={p} /></Block>
+        <Block title="Questions they may ask"><Questions p={p} /></Block>
+        <details className="rounded-md border border-border/60 px-2.5 py-1.5" data-testid="playbook-evidence-toggle">
+          <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audit evidence</summary>
+          <div className="mt-2"><AuditEvidence leadId={leadId} /></div>
+        </details>
+        <ReportLinks p={p} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-4 pb-6" data-testid="cold-call-playbook">
       <div className="flex flex-wrap items-center gap-2">
@@ -247,6 +269,16 @@ function PlaybookBody({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
       <ReportLinks p={p} />
     </div>
   );
+}
+
+/** The playbook inline — the prospect workspace's Scripts tab (Inbox and Outreach alike). Same data,
+ *  same builder, same call/voice-note switch as the sheet; the script comes first. */
+export function ColdCallPlaybookInline({ leadId, initialScript }: { leadId: string; initialScript?: 'call' | 'voice' }) {
+  const q = useColdCallPlaybook(leadId, true);
+  if (q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the script…</p>;
+  if (q.isError) return <p className="text-sm text-destructive">Couldn't load the script: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>;
+  if (!q.data) return <p className="text-sm text-muted-foreground">Lead not found.</p>;
+  return <PlaybookBody p={q.data} leadId={leadId} scriptsFirst initialScript={initialScript} />;
 }
 
 export function ColdCallPlaybookSheet({ leadId, open, onOpenChange }: { leadId: string | null; open: boolean; onOpenChange: (open: boolean) => void }) {

@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES, leadReportOpenedAt, leadSiteVisitedAt } from '@/lib/templateAttribution';
+import { onLeadChanged } from '@/lib/leadSync';
 import { auditShowsVisibilityGap, resolveSiteFault } from '@/lib/crawlCheck';
 import { hasSiteFindings } from '@/lib/siteFindings';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
@@ -66,7 +67,9 @@ export function inboxLeadTableFor(role: string | null | undefined): InboxLeadTab
   return role === 'sales' ? 'sales_leads' : 'outreach_leads';
 }
 
-const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work';
+/* next_action / next_action_date (2026-09-28): the thread header shows the human-set next action, so a
+   change made in Outreach or the prospect panel is visible here without opening anything. */
+const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, next_action, next_action_date';
 
 /** One lead row, freshly read by id — used to close the gap between an inbound reply's message
  *  (visible the instant its realtime INSERT lands) and its status flip to 'replied' (a second,
@@ -147,7 +150,7 @@ export interface WaConversation {
   isPotentialWork: boolean;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null; is_potential_work: boolean | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null; category: string | null; search_keyword: string | null; search_location: string | null; address: string | null; amount_paid: number | null; contact_name: string | null; hook_followup_queued_at: string | null; is_potential_work: boolean | null; next_action?: string | null; next_action_date?: string | null }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -458,6 +461,12 @@ export function useInbox() {
       void (supabase as any).removeChannel(channel);
     };
   }, [user?.id, queryClient, queryKey, reconcile, catchUpAfterFirstLoad, patchOneAudit, patchOneLead]);
+
+  /* ⛔ THE SAME ROW OUTREACH EDITS (2026-09-28). A status, next action, star or note saved anywhere —
+     Outreach, the prospect panel, another tab — announces itself (src/lib/leadSync.ts) and the Inbox
+     re-reads that ONE lead from its own source. Never the writer's arguments patched in: the server's
+     row is the truth, and this is the path Sales depends on (realtime never reaches a sales session). */
+  useEffect(() => onLeadChanged(({ leadId }) => { void patchOneLead(leadId); }), [patchOneLead]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
