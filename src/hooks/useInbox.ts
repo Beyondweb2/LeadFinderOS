@@ -466,12 +466,12 @@ export function useInbox() {
      Outreach, the prospect panel, another tab — announces itself (src/lib/leadSync.ts) and the Inbox
      re-reads that ONE lead from its own source. Never the writer's arguments patched in: the server's
      row is the truth, and this is the path Sales depends on (realtime never reaches a sales session). */
-  useEffect(() => onLeadChanged(({ leadId, patch }) => {
+  useEffect(() => onLeadChanged(({ leadId, patch, optimistic }) => {
     if (patch) {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, leads: current.leads.map((l) => (l.id === leadId ? { ...l, ...patch } as LeadLite : l)) } : current);
     }
-    void patchOneLead(leadId);
+    if (!optimistic) void patchOneLead(leadId); // re-read only once the server has answered
   }), [patchOneLead, queryClient, queryKey]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
