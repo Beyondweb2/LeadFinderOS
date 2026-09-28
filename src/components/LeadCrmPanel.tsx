@@ -110,11 +110,14 @@ function useSave(leadId: string): SaveFn {
   return async (name, args, okText, patch) => {
     const key = leadCrmKey(leadId);
     const before = patch ? qc.getQueryData<CrmRow | null>(key) : undefined;
-    if (patch) qc.setQueryData<CrmRow | null>(key, (row) => (row ? { ...row, ...patch } as CrmRow : row));
+    if (patch) {
+      qc.setQueryData<CrmRow | null>(key, (row) => (row ? { ...row, ...patch } as CrmRow : row));
+      notifyLeadChanged(leadId, undefined, patch, true); // Outreach, the Inbox, other tabs: at once
+    }
     const r = await leadRpc(name, { _lead_id: leadId, ...args });
     if (r.ok) { toast({ title: okText }); notifyLeadChanged(leadId, undefined, patch); }
     else {
-      if (patch) qc.setQueryData(key, before ?? null);
+      if (patch) { qc.setQueryData(key, before ?? null); notifyLeadChanged(leadId); } // everyone re-reads the true row
       toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
     }
     return r;

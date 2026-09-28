@@ -159,16 +159,18 @@ console.log("── one CRM truth: every writer notifies, every reader re-reads 
   ok(/installLeadSync\(queryClient\)/.test(app), "one app-level listener invalidates the per-lead queries");
   ok(/\['lead-crm', leadId\]/.test(sync) && /\['sales', 'activity', leadId\]/.test(sync) && /\['onboarding-link', leadId\]/.test(sync), "…the CRM panel, the activity and the sign-up link status");
   ok(/BroadcastChannel/.test(sync), "…and other tabs hear it");
-  ok(/onLeadChanged\(\(\{ leadId, patch \}\) => \{/.test(useInbox) && /void patchOneLead\(leadId\);\n  \}\), \[patchOneLead/.test(useInbox), "the Inbox shows the accepted values at once, then re-reads the ONE changed lead from its own source");
+  ok(/onLeadChanged\(\(\{ leadId, patch, optimistic \}\) => \{/.test(useInbox) && /if \(!optimistic\) void patchOneLead\(leadId\);/.test(useInbox), "the Inbox shows the chosen values at once, and re-reads the ONE lead once the server has answered");
   ok(/next_action, next_action_date'/.test(useInbox), "the Inbox reads the next action, so the thread header shows it");
   ok((useOut.match(/notifyLeadChanged\(leadId, syncOriginRef\.current\)/g) ?? []).length === 2, "Outreach announces both write paths (admin table, sales functions)");
   ok(/detail\?\.origin === syncOriginRef\.current\) return/.test(useOut), "…and skips only its OWN notice");
   ok((inbox.match(/notifyLeadChanged\(c\.leadId\)/g) ?? []).length === 2, "the Inbox status pill and star announce too");
   const saveFn = crm.slice(crm.indexOf("function useSave("), crm.indexOf("/* ── WORK"));
   ok(/if \(r\.ok\) \{ toast\(\{ title: okText \}\); notifyLeadChanged\(leadId, undefined, patch\); \}/.test(saveFn), "the CRM panel announces only after the server's yes, carrying the accepted values");
-  ok(/if \(patch\) qc\.setQueryData\(key, before \?\? null\);/.test(saveFn) && /variant: 'destructive'/.test(saveFn), "a refused save puts the old values back and says why");
+  ok(/if \(patch\) \{ qc\.setQueryData\(key, before \?\? null\); notifyLeadChanged\(leadId\); \}/.test(saveFn) && /variant: 'destructive'/.test(saveFn), "a refused save puts the old values back everywhere (a plain notice = every reader re-reads) and says why");
+  ok(/notifyLeadChanged\(leadId, undefined, patch, true\)/.test(saveFn) && saveFn.indexOf("patch, true") < saveFn.indexOf("await leadRpc"), "the chosen values reach Outreach, the Inbox and other tabs before the server answers");
+  ok(/if \(optimistic\) return;/.test(sync) && /if \(detail\?\.optimistic\) return;/.test(useOut), "…and nobody re-reads (or refetches) until it has");
   ok(/next_action: a\.nextAction, next_action_date:/.test(crm), "the next action shows in the open panel the moment Save is pressed");
-  ok(/postMessage\(\{ leadId, patch \}\)/.test(sync), "other tabs get the accepted values too");
+  ok(/postMessage\(\{ leadId, patch, optimistic \}\)/.test(sync), "other tabs get the values too");
   ok(/if \(detail\?\.patch\)/.test(useOut), "Outreach shows the accepted values at once, then re-reads");
 }
 

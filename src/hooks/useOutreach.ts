@@ -228,7 +228,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
      so a salesperson reads the view) and replaces the stale copy. Only a row already in the lists. */
   useEffect(() => {
     const onChanged = async (e: Event) => {
-      const detail = (e as CustomEvent<{ leadId?: string; origin?: string; patch?: Record<string, unknown> }>).detail;
+      const detail = (e as CustomEvent<{ leadId?: string; origin?: string; patch?: Record<string, unknown>; optimistic?: boolean }>).detail;
       const leadId = detail?.leadId;
       if (!leadId || detail?.origin === syncOriginRef.current) return;
       if (detail?.patch) {
@@ -236,6 +236,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
         setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...p } : l)));
         setArchivedLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...p } : l)));
       }
+      if (detail?.optimistic) return; // the server has not answered; a re-read now would bring back the old row
       const src = leadSourceFor(roleRef.current);
       const { data, error } = await (supabase as unknown as { from: (t: string) => any })
         .from(src.table).select(src.listSelect).eq('id', leadId).maybeSingle();

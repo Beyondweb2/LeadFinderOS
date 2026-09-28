@@ -29,6 +29,11 @@ export interface LeadChangedDetail {
   /** Column values the SERVER has just accepted (sent only after a yes). A reader may show them at
    *  once and then re-reads the row as usual, so the screen is instant and the database still wins. */
   patch?: Record<string, unknown>;
+  /** The patch is what the person just chose and the server has NOT answered yet. Readers show it and
+   *  do NOT re-read (a re-read now would bring back the old row). A second notice follows either way:
+   *  after a yes, the confirmed patch; after a refusal, a plain notice, and every reader re-reads the
+   *  true row — which is the revert. */
+  optimistic?: boolean;
 }
 
 let channel: BroadcastChannel | null = null;
@@ -39,10 +44,10 @@ function bc(): BroadcastChannel | null {
 }
 
 /** A lead row, its CRM fields or its activity changed. Call after the server said yes. */
-export function notifyLeadChanged(leadId: string, origin?: string, patch?: Record<string, unknown>): void {
+export function notifyLeadChanged(leadId: string, origin?: string, patch?: Record<string, unknown>, optimistic?: boolean): void {
   if (!leadId || typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId, origin, patch } }));
-  try { bc()?.postMessage({ leadId, patch }); } catch { /* another tab is a bonus, never a requirement */ }
+  window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId, origin, patch, optimistic } }));
+  try { bc()?.postMessage({ leadId, patch, optimistic }); } catch { /* another tab is a bonus, never a requirement */ }
 }
 
 /** Subscribe; returns the unsubscribe. */
@@ -70,13 +75,14 @@ let installed = false;
 export function installLeadSync(qc: QueryClient): () => void {
   if (installed || typeof window === 'undefined') return () => {};
   installed = true;
-  const off = onLeadChanged(({ leadId }) => {
+  const off = onLeadChanged(({ leadId, optimistic }) => {
+    if (optimistic) return; // nothing to re-read until the server has answered
     for (const key of leadQueryKeys(leadId)) void qc.invalidateQueries({ queryKey: key as unknown[] });
   });
   const ch = bc();
   const onMsg = (m: MessageEvent) => {
-    const d = m.data as { leadId?: string; patch?: Record<string, unknown> } | null;
-    if (d?.leadId) window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId: d.leadId, patch: d.patch, remote: true } }));
+    const d = m.data as { leadId?: string; patch?: Record<string, unknown>; optimistic?: boolean } | null;
+    if (d?.leadId) window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId: d.leadId, patch: d.patch, optimistic: d.optimistic, remote: true } }));
   };
   ch?.addEventListener('message', onMsg);
   return () => { off(); ch?.removeEventListener('message', onMsg); installed = false; };
