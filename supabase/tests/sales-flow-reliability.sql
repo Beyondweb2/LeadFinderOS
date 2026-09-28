@@ -3,6 +3,9 @@
 -- results as JSON, so nothing (fake users on example.invalid, claims, adds, campaign changes) commits.
 -- How to run: send this file as one query to the Management API (docs/multi-user.md §6).
 begin;
+-- sales_pool lost its authenticated grant on 2026-09-29 (no caller; it paged the whole pool). This suite still
+-- uses it as the oracle for "is this lead in the claimable pool" -- a TEST-ONLY grant, rolled back with the rest.
+grant execute on function public.sales_pool(text, integer, integer) to authenticated;
 create temp table t_results (n serial, name text, ok boolean, detail text);
 grant all on t_results to authenticated, anon; grant usage, select on sequence t_results_n_seq to authenticated, anon;
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at) values

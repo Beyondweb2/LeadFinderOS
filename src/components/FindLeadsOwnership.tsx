@@ -23,6 +23,13 @@ export interface OwnershipInfo {
 /** Sales: the cell for a non-new business, or null to let the normal Add button render. */
 export function salesOwnershipCell(own: OwnershipInfo | null | undefined, onClaim?: (leadId: string) => void, claiming?: boolean): ReactNode | null {
   if (!own || own.state === 'new') return null;
+  if (own.state === 'paused') {
+    return (
+      <span className="inline-flex items-center h-8 px-2.5 rounded-md bg-muted text-muted-foreground text-xs whitespace-nowrap" title="Usage temporarily paused — contact Paul">
+        Paused
+      </span>
+    );
+  }
   if (own.state === 'yours' && own.leadId) {
     return (
       <Link to={`/sales/lead/${own.leadId}`} title="Already in your pipeline — open it" className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">

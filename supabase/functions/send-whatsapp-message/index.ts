@@ -25,6 +25,7 @@ import { isColdOutreachTemplate } from "../../../src/lib/coldOutreach.ts";
 import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -74,7 +75,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener). */
-const BUILD_ID = "2026-09-28a";
+const BUILD_ID = "2026-09-29a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -636,6 +637,15 @@ Deno.serve(async (req) => {
       payload = textPayload(text);
       messageType = "text";
       storedBody = text;
+    }
+
+    /* ⛔ A SUSPENDED SALESPERSON SENDS NOTHING (2026-09-29, docs/abuse-cost-protection.md). The guard is
+       asked for a REAL send only — a dry run leaves nothing and costs nothing — and only for a
+       salesperson (the admin's sends are already on whatsapp_sends). WhatsApp is not paid API, so the
+       pause modes never touch it; suspension does. */
+    if (!dryRun && actor.role !== "admin") {
+      const guard = await guardAction(service, actor.id, "whatsapp_send", { fn: "send-whatsapp-message", leadId: resolvedLeadId, role: actor.role });
+      if (!guard.ok) return json(guard.body, guard.status);
     }
 
     /* ⛔ THE DRY RUN STOPS HERE — after every guard and the real payload build, before anything

@@ -125,6 +125,9 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["lead CRM panel (operator, both roles)", "src/components/LeadCrmPanel.tsx"],
   ["hook audit popup (operator, both roles)", "src/components/HookAuditDialog.tsx"],
   ["sales CRM wording (operator)", "src/lib/salesCrm.ts"],
+  /* Abuse / cost protection (2026-09-29): the admin's security screen and its alert wording. */
+  ["security panel (admin)", "src/components/SecurityPanel.tsx"],
+  ["security alert wording (admin)", "src/lib/securityAlerts.ts"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

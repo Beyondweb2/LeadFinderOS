@@ -127,7 +127,8 @@ console.log("\n── the Inbox finds the real thread for a salesperson ──")
   ok(/if \(real\) \{ setActiveKey\(real\.key\); setSynthetic\(null\); \}/.test(inbox), "a just-started thread becomes the real one when its first message lands");
   const swm = read("supabase/functions/send-whatsapp-message/index.ts");
   ok(/\.update\(\{ contact_method: "whatsapp" \}\)\s*\n\s*\.eq\("id", resolvedLeadId\)\.is\("contact_method", null\)/.test(swm), "a live send tags an EMPTY contact method as WhatsApp (both roles), never overwriting one");
-  ok(/^const BUILD_ID = "2026-09-28a";/m.test(swm), "the sender's build marker is bumped");
+  // At least the build this pass shipped (2026-09-28a); later passes bump it again (2026-09-29a, abuse protection).
+  ok(((swm.match(/^const BUILD_ID = "([0-9-]+[a-z])";/m) ?? [])[1] ?? "") >= "2026-09-28a", "the sender's build marker is bumped");
 }
 
 if (f) { console.error(`\n${f} FAILED`); process.exit(1); }

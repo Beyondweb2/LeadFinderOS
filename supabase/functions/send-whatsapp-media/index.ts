@@ -15,6 +15,7 @@
 // lead must be assigned to them and not a client (leadAccess) — checked here, on every request.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/whatsapp-send.ts";
 import { uploadMediaToGraph } from "../_shared/whatsapp-media-upload.ts";
 import { sendMediaAttachment } from "../_shared/media-attachment-send.ts";
@@ -71,6 +72,9 @@ Deno.serve(async (req) => {
       const access = await leadAccess(service, actor, salesLeadId);
       if (!access.ok) return json({ ok: false, error: access.error === "lookup_failed" ? "upstream_timeout" : "forbidden" }, access.error === "lookup_failed" ? 503 : 403);
       operatorId = access.bookUserId;
+      /* ⛔ A SUSPENDED SALESPERSON SENDS NOTHING (2026-09-29, docs/abuse-cost-protection.md). */
+      const guard = await guardAction(service, actor.id, "whatsapp_send", { fn: "send-whatsapp-media", leadId: salesLeadId, role: actor.role });
+      if (!guard.ok) return json(guard.body, guard.status);
     }
 
     const env = resolveWhatsAppEnv();

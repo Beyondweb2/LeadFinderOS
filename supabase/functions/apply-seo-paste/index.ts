@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { allStopRefusal } from "../_shared/protection.ts";
 
 // apply-seo-paste — turn a pasted SEOptimer (or similar) report into the AI Visibility
 // report's SEO section. The operator pastes the raw report text for a website audit; we
@@ -238,6 +239,9 @@ Deno.serve(async (req) => {
     const userId = u.user.id;
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    /* ⛔ EMERGENCY STOP (2026-09-29, docs/abuse-cost-protection.md): a paid admin tool refuses while it is on. */
+    const stopped = await allStopRefusal(service, corsHeaders);
+    if (stopped) return stopped;
 
     const body = await req.json().catch(() => ({}));
     const runId: string = typeof body.runId === "string" ? body.runId.trim() : "";

@@ -61,7 +61,7 @@ ok(/orderNavForRole\(/.test(sidebar), "the sidebar orders its items through orde
 
 console.log("\n── what each role may do on the shared screens ──");
 const A = leadPermissions("admin"), S = leadPermissions("sales"), N = leadPermissions(null);
-const adminOnly = ["editLeadRecord", "removeLeads", "importLeads", "enrichLeads", "bulkAudits", "campaigns", "product", "crawlSite", "clientDelivery", "queueControls", "assignOwner", "auditAdmin", "privateNote"] as const;
+const adminOnly = ["editLeadRecord", "removeLeads", "importLeads", "enrichLeads", "bulkAudits", "campaigns", "product", "crawlSite", "clientDelivery", "queueControls", "assignOwner", "auditAdmin", "privateNote", "exportData"] as const;
 for (const k of adminOnly) ok(A[k] === true && S[k] === false && N[k] === false, `${k}: admin yes, sales no, no role no`);
 ok(!("claimPool" in S) && !("claimPool" in A), "no Available-to-claim permission any more (Paul, 2026-09-28: the claim workflow is gone from Sales)");
 ok(A.settableStatuses === null && maySetStatus(A, "payment_received"), "the admin sets every status");

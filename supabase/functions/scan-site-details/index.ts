@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { userTeamRole } from "../_shared/access.ts";
+import { guardAction, recordDenial } from "../_shared/protection.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { isAggregatorUrl, isBookingPlatformUrl, domainOf } from "../_shared/aggregators.ts";
 import { imageVariant, looksLikePlaceholder, resolveImgSizes, GRID_WIDTH, PLACE_WIDTH } from "../_shared/image-variant.ts";
@@ -747,7 +748,18 @@ Deno.serve(async (req) => {
       userId = claimsData.claims.sub as string;
       /* ⛔ A TEAM ROLE IS REQUIRED (2026-09-27, multi-user): a signed-in account with no role, or one
        the admin disabled (role removed), is refused even while its token is still valid. */
-      if (!(await userTeamRole(userId))) return json({ success: false, error: "no_role" }, 403);
+      const role = await userTeamRole(userId);
+      if (!role) return json({ success: false, error: "no_role" }, 403);
+      /* ⛔ ADMIN ONLY FOR A PERSON (2026-09-29): its only screen is the Page Generator (admin) and it
+         scans ANY website with a paid model — nothing in the Sales workflow calls it. Internal callers
+         (above) are unchanged. Then the usage guard (the pause modes). */
+      const guardService = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
+      if (role !== "admin") {
+        await recordDenial(guardService, userId, "scan-site-details");
+        return json({ success: false, error: "admin_only" }, 403);
+      }
+      const guard = await guardAction(guardService, userId, "admin_ai", { fn: "scan-site-details", role });
+      if (!guard.ok) return json(guard.body, guard.status);
     }
 
     // --- Parse + validate ---

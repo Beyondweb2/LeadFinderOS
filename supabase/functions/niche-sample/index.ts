@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { bookOwnerId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction, recordDenial } from "../_shared/protection.ts";
 import { nicheTradeKey } from "../../../src/lib/nicheView.ts";
 import {
   NICHE_PLACES_USD_PER_TOWN, NICHE_SAMPLE_FRESH_DAYS, NICHE_SAMPLE_METHOD, NICHE_SAMPLE_QUESTIONS_PER_TOWN,
@@ -186,7 +187,10 @@ Deno.serve(async (req) => {
     }
 
     /* Spending actions — the admin only (the check costs real money on two vendors). */
-    if (!isAdmin) return json({ ok: false, error: "admin_only" }, 403);
+    if (!isAdmin) {
+      await recordDenial(service, who.actor.id, "niche-sample:" + (action || "?"));
+      return json({ ok: false, error: "admin_only" }, 403);
+    }
 
     if (action === "plan") {
       if (!tradeKey) return json({ ok: false, error: "trade_required" }, 400);
@@ -228,6 +232,18 @@ Deno.serve(async (req) => {
         }
         regions.add(String(row.region));
       }
+      /* ⛔ ONE CHECK IN FLIGHT PER NICHE (2026-09-29, abuse / cost protection). A double-click, a second tab
+         or a retried request answered with the sample already starting or running for this trade, never
+         a second paid sample. Read-then-insert is enough here: this is the admin's own button. */
+      const inFlightSince = new Date(Date.now() - NICHE_SAMPLE_SETTLE_MS).toISOString();
+      const { data: live, error: liveErr } = await service.from("niche_samples").select("id")
+        .eq("trade_key", tradeKey).in("status", ["starting", "running"]).gte("created_at", inFlightSince)
+        .order("created_at", { ascending: false }).limit(1);
+      if (liveErr) return json({ ok: false, error: "in_flight_check_failed" }, 503);
+      if (live && live.length) return json({ ok: true, already_running: true, sample_id: live[0].id });
+      /* The usage guard: the pause modes (a Niche Check is prospecting research) and the ledger row. */
+      const guard = await guardAction(service, who.actor.id, "niche_check", { fn: "niche-sample", role: who.actor.role });
+      if (!guard.ok) return json(guard.body, guard.status);
       const owner = await bookOwnerId(service);
       if (!owner) return json({ ok: false, error: "no_book_owner" }, 503);
       const { data: sample, error: insErr } = await service.from("niche_samples").insert({

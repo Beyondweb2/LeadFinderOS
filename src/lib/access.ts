@@ -110,6 +110,10 @@ export interface LeadPermissions {
   auditAdmin: boolean;
   /** The admin's free-text "Private" note on the row (outreach_leads.notes, not in the sales view). */
   privateNote: boolean;
+  /** CSV export of leads (Outreach, Find Leads). ADMIN ONLY (Paul, 2026-09-29): Sales has no operational
+   *  need to take lead data out of LeadFinderOS, so the route is closed — the server refuses a Sales
+   *  export too (log_data_access). Copy Numbers stays for calling, own leads only, limited and logged. */
+  exportData: boolean;
   /** Statuses this role may SET. null = every status. */
   settableStatuses: readonly string[] | null;
 }
@@ -137,6 +141,7 @@ export function leadPermissions(role: AppRole | null): LeadPermissions {
     assignOwner: admin,
     auditAdmin: admin,
     privateNote: admin,
+    exportData: admin,
     settableStatuses: admin ? null : role === 'sales' ? SALES_SETTABLE_PIPELINE : [],
   };
 }
@@ -175,4 +180,7 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Remove, reset, import, enrichment, campaigns, AI Audit page, Templates, queue controls', admin: 'yes', sales: 'no' },
   { feature: 'Team, roles, invites, disable', admin: 'yes', sales: 'no' },
   { feature: 'API usage, system configuration, secrets', admin: 'yes', sales: 'no' },
+  { feature: 'CSV export of leads (Outreach, Find Leads)', admin: 'yes, logged', sales: 'no' },
+  { feature: 'Copy Numbers', admin: 'yes, logged', sales: 'own leads, limited per copy / hour / day, logged' },
+  { feature: 'Security & usage (suspend, pause paid actions, thresholds)', admin: 'yes', sales: 'no' },
 ];

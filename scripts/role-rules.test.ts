@@ -78,7 +78,7 @@ ok(/grant select on public\.sales_leads to authenticated/.test(mig) && /revoke a
 ok(!/amount_paid,|stripe_|refund_|delivery_notes|payment_date/.test(mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("null::numeric as amount_paid"))), "the sales view selects no money or delivery column");
 
 console.log("\n── The edge functions ──");
-const ADMIN_ONLY = ["paid-client-hub", "paid-baseline", "page-generator", "submissions", "apify-usage-status"];
+const ADMIN_ONLY = ["paid-client-hub", "paid-baseline", "page-generator", "submissions", "apify-usage-status", "security-admin"];
 for (const fn of ADMIN_ONLY) ok(/requireAdmin\(req, /.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} calls requireAdmin`);
 ok(/role', 'admin'/.test(read("supabase/functions/admin-users/index.ts")), "admin-users still checks the admin role");
 const ROLE_REQUIRED = [

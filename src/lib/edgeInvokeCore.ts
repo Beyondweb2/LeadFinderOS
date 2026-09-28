@@ -130,6 +130,9 @@ export const EDGE_ERROR_SENTENCES: Record<string, string> = {
   request_failed: 'The request failed. Try again.',
   method_not_allowed: 'The server refused the request method.',
   unsupported_action: 'The server did not recognise this action.',
+  // The usage guard (2026-09-29): the same words whatever the reason — never a cost (docs/abuse-cost-protection.md).
+  usage_paused: 'Usage temporarily paused — contact Paul',
+  all_stop: 'The emergency stop is on — every paid action is paused. Release it on the API Usage page.',
 };
 
 /** Does this read as a raw machine token (`server_error`, `client_not_found`) rather than a sentence? */

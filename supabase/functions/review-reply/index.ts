@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { allStopRefusal } from "../_shared/protection.ts";
 import { userTeamRole } from "../_shared/access.ts";
 
 // review-reply — the stateless Review Reply Generator (2026-08-19, Paul's spec).
@@ -92,6 +93,9 @@ Deno.serve(async (req) => {
     const role = await userTeamRole(u.user.id);
     if (!role) return json({ ok: false, error: "no_role" }, 403);
     if (role !== "admin") return json({ ok: false, error: "admin_only" }, 403);
+    /* ⛔ EMERGENCY STOP (2026-09-29, docs/abuse-cost-protection.md): a paid admin tool refuses while it is on. */
+    const stopped = await allStopRefusal(createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } }), corsHeaders);
+    if (stopped) return stopped;
 
     const body = await req.json().catch(() => ({}));
     const reviewText = typeof body.review_text === "string" ? body.review_text.trim() : "";

@@ -21,6 +21,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { shootHtml, shotConfigured } from "../_shared/prospect-preview-shot.ts";
 import type { QueueRow, RunRow } from "../../../src/lib/auditReport.ts";
@@ -397,7 +398,13 @@ Deno.serve(async (req) => {
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
     if (action === "status") return await handleStatus(service, lead);
-    if (action === "generate") return await handleGenerate(service, lead, body.regenerate === true);
+    if (action === "generate") {
+      /* ⛔ USAGE GUARD (2026-09-29): suspension, the pause modes, previews per hour. Screenshots have no
+         billed row to estimate from, so it carries no estimate — the limit is the per-hour count. */
+      const guard = await guardAction(service, whoActor.actor.id, "prospect_preview", { fn: "prospect-preview", leadId, role: whoActor.actor.role });
+      if (!guard.ok) return json(guard.body, guard.status);
+      return await handleGenerate(service, lead, body.regenerate === true);
+    }
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {
     const message = String((e as { message?: unknown })?.message ?? e);

@@ -15,7 +15,8 @@
 // onto the lead. Re-hosting of CHOSEN images happens later (2B/2C).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { mayLookUpBusiness, mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
@@ -251,6 +252,17 @@ Deno.serve(async (req) => {
       if (!who.ok) return json(refusalBody(who), who.status);
       const may = await mayWriteLeadId(service, who.actor, leadId);
       if (may !== "ok") return json({ success: false, error: may }, may === "not_your_lead" ? 403 : 503);
+      /* ⛔ ABUSE / COST PROTECTION (2026-09-29). A synthetic lead id passes mayWriteLeadId by design (Find
+         Leads enriches search results), so for a salesperson the BUSINESS itself is checked too: one
+         already in the book under someone else is refused (its phone and photos are theirs to hide),
+         and the cache-busting re-run is the admin's — it pays Apify again for data we already hold. */
+      if (who.actor.role === "sales") {
+        const own = await mayLookUpBusiness(service, who.actor, { placeId, mapsUrl: googleMapsUrl });
+        if (own !== "ok") return json({ success: false, error: own }, own === "not_your_lead" ? 403 : 503);
+        if (force) return json({ success: false, error: "refresh_admin_only", detail: "A fresh re-run is for the admin." }, 403);
+      }
+      const guard = await guardAction(service, who.actor.id, "enrich", { fn: "enrich-business", leadId: leadId || null, role: who.actor.role });
+      if (!guard.ok) return json(guard.body, guard.status);
     }
 
     const apifyToken = Deno.env.get("APIFY_TOKEN");

@@ -19,6 +19,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { leadAccess, refusalBody, resolveActor } from "../_shared/access.ts";
+import { guardAction } from "../_shared/protection.ts";
+
+/* The usage guard's estimate for one script (2026-09-29). Its OpenAI rows are logged under the BOOK
+   owner, so a salesperson's own spend is this estimate. Rounded UP from the billed rows: 6
+   openai_voice_note_script rows = $0.043 (api_usage_log, 30 days to 2026-09-29). */
+const VOICE_SCRIPT_EST_USD = 0.01;
 import { logOpenAiUsage, openAiUsd } from "../_shared/openai-usage.ts";
 import { runSiteResearch, callModel, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
 import { scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
@@ -235,7 +241,12 @@ Deno.serve(async (req) => {
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
     if (action === "latest") return await handleLatest(service, lead);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
-    if (action === "generate") return await handleGenerate(service, lead, who.user.id, body);
+    if (action === "generate") {
+      /* ⛔ USAGE GUARD (2026-09-29): suspension, the pause modes, drafts per hour, spend. */
+      const guard = await guardAction(service, whoActor.actor.id, "ai_draft", { fn: "voice-note-script", leadId, role: whoActor.actor.role, estCostUsd: whoActor.actor.role === "admin" ? 0 : VOICE_SCRIPT_EST_USD });
+      if (!guard.ok) return json(guard.body, guard.status);
+      return await handleGenerate(service, lead, who.user.id, body);
+    }
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {
     const message = String((e as { message?: unknown })?.message ?? e);
