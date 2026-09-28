@@ -649,6 +649,20 @@ const Inbox = () => {
     return list.filter((c) => c.label.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
   }, [list, searchTerm]);
 
+  /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
+     with the whole book (2,201 conversations) ANY change to one lead — a status, a star, a next
+     action — re-drew all of them in one 6.4 s block and froze the page. Search and the filters still
+     cover every conversation; "Show more" draws the next 150; the open conversation is always drawn. */
+  const LIST_PAGE = 150;
+  const [listLimit, setListLimit] = useState(LIST_PAGE);
+  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter]);
+  const shownList = useMemo(() => {
+    const head = filteredList.slice(0, listLimit);
+    if (!activeKey || head.some((c) => c.key === activeKey)) return head;
+    const act = filteredList.find((c) => c.key === activeKey);
+    return act ? [act, ...head] : head;
+  }, [filteredList, listLimit, activeKey]);
+
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
     const base = campaignFilter ? conversations.filter((c) => c.campaignId === campaignFilter || c.unassigned) : conversations;
@@ -1749,7 +1763,7 @@ const Inbox = () => {
                 </>
               )}
             </div>
-          ) : filteredList.map((c) => (
+          ) : shownList.map((c) => (
             <div
               key={c.key}
               role="button"
@@ -1804,6 +1818,11 @@ const Inbox = () => {
               )}
             </div>
           ))}
+          {filteredList.length > listLimit && (
+            <button type="button" onClick={() => setListLimit((n) => n + LIST_PAGE)} className="mx-2 my-2 rounded-md border border-border/60 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+              Show {Math.min(LIST_PAGE, filteredList.length - listLimit)} more ({listLimit} of {filteredList.length} shown)
+            </button>
+          )}
         </Card>
 
         {/* Thread + reply */}
