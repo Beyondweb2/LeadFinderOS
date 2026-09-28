@@ -168,3 +168,38 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
   lists the missing statuses in type-creation order, and the new files changed that order — the same
   error, reworded. No error was fixed or added.
 - **Tests:** `scripts/sales-productivity.test.ts`.
+
+## 7. Release 5 — Feedback, the admin Feedback inbox, What's New
+
+- **Feedback** (migration `20260929150000_feedback.sql`, fn `feedback-submit`): `feedback_items` —
+  kind (feature / bug / confusing / other), message, a POSITIVE-allowlist context (page, viewport,
+  browser, build, role, language, timezone — `src/lib/feedback.ts`), status New / Reviewing / Planned /
+  Fixed / Won't do. Saved FIRST, then emailed to the admin (Resend), the outcome written back; 20 an hour
+  per person. RLS: own or admin SELECT; no browser writes. **The old empty `team_feedback` table is left
+  in place** until this is proven (Paul) — then its drop is deep-clean step 9's.
+- **The loop:** `set_feedback_status` (admin) notifies the author on Planned / Fixed / Won't do —
+  "Your suggestion was added" for a fixed feature, "The bug you reported is fixed" for a bug.
+- **Entry points, always there:** sidebar footer (Feedback · What's new, with a dot until the newest
+  entry is seen), the phone's More menu, the command palette. The dialog lists the person's own
+  feedback and where each stands.
+- **Admin Feedback inbox** (`/feedback`, admin only): the feedback with status buttons and a note; a
+  **Template requests** tab — Approve / Reject (`set_template_request_status`, release 3) tells the
+  requester. ⛔ Approving records the decision; registering with Meta is still done by hand.
+- **What's New** (`src/lib/whatsNew.ts`): a plain list in the code, newest first, per audience.
+- **Tests:** `scripts/sales-feedback.test.ts`; `supabase/tests/feedback.sql` — 8/8 live, rolled back.
+  Live: a too-short message → 400 with words, no row; no auth → 401. **No real feedback was submitted**
+  (it would have emailed Paul) — the insert → email path is the template-request shape, verified by test.
+
+## 8. Open after the five releases (2026-09-28)
+
+- **Stripe dispute events are not enabled on the webhook endpoint** — chargebacks are recorded only
+  once `charge.dispute.created/updated/closed` are added (Paul's Stripe setting), or by the backfill.
+- **RG, Ronnie's and SC Plumbing have no Stripe charge in this account** — the ledger does not hold
+  them (nothing invented). All three are Paul's sales: no commission is affected.
+- **Nobody has seen these screens by eye yet** — layout was checked by machine (headless Edge, the
+  built bundle, 390 / 1440 / 1920) and screenshots were read by Claude, not a person. Paul's review is
+  the first human one; `src/components/salesDash/ui.tsx` holds the colour tokens for quick corrections.
+- **Admin-only Inbox toolbar** is 419 px wide at 390 (the pre-existing reply-rule toggle row).
+- **Unread** counts from 2026-09-28 00:00 UTC; a number never opened before then is not unread for
+  older replies (deliberate).
+- **Commission payouts are recorded by hand** in Earnings (nothing pays anyone from the app).
