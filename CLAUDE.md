@@ -28,9 +28,9 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (219 suites). **Honest green is 212/219 (2026-09-28, all seven also fail on untouched
-  `origin/main`)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs
-  Deno), `onboarding-audit-fields`, `manual-onboarding`, and
+  (221 suites). **Honest green is 215/221 (2026-09-28, with `FINDABLE_SITE_DIR` at a current
+  findable-site; all six also fail on untouched `origin/main`)** — `coverage-lead-counts`,
+  `report-attribution`, `verdict`, `site-origin` (needs Deno), `onboarding-audit-fields`, and
   `check-cross-repo-sync` (needs a current `../findable-site`). Read the FAILED names, never the
   count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
@@ -68,6 +68,14 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   (`src/lib/onboardingLinkStatus.ts`, one rule). GBP access has THREE states, never merged: asked,
   client says (`gbp_status`), confirmed by Findable (checklist `gbp_access`). The paid screen says
   paid only when `payment_status` does.
+  ⛔ **Self-sourced prospects + handoff (2026-09-28, `docs/self-sourced-handoff.md`)**: Sales records
+  services / areas on the LEAD (`services_included`, `service_areas` via `lead_set_profile`) — never a
+  copy of onboarding; every reader ranks onboarding above it. A website match on Add a lead is a
+  WARNING (`site_match`, chains share domains), never a refusal. A hand-added lead with no place id is
+  not town-gated (`handTypedTown`). Sales crawls only a lead they work, its own site. In-app report
+  opens carry `preview=1` and are never counted. **The seller is `sold_by_user_id`, stamped once at
+  payment by trigger — never read the current owner as "who sold it".** READY TO START / MISSING
+  INFORMATION is `handoffReadiness` (one rule: Paid Clients + the PAID email).
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.
@@ -225,6 +233,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - [ ] Edge functions do not auto-deploy. After changing a shared module (`_shared/`, `src/lib/`),
       **walk the transitive import closure and redeploy every function that reaches it — then NAME
       THEM in the report.** Follow real `from "…"` statements, not `grep -l` (matches comments).
+- [ ] 🔴 **Immediately before deploying a function, `git fetch` and check whether `origin/main` has a
+      newer commit touching its closure** — another session may have just deployed it, and your
+      deploy silently replaces theirs (sales-performance, 2026-09-28; caught only by the marker check).
+      Deploy from a tree that contains both.
 - [ ] Verify a deploy by a marker **only the new code produces** (§4). For `send-whatsapp-message`
       the OPTIONS preflight returns `x-swm-build`/`x-swm-caps` — bump `BUILD_ID` in the same commit.
 - [ ] A **new edge function gets its `config.toml` `verify_jwt` entry in the same commit.** Absent =
@@ -705,6 +717,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
 | Warm reply drafter (Inbox) | `src/lib/warmLeadResearch.ts`, `src/lib/warmReply.ts`, `src/lib/serviceWindow.ts`, `src/components/WarmReplyAssistant.tsx`, fn `warm-lead-reply`, table `warm_lead_research` (`docs/warm-lead-reply.md`). ⛔ It drafts into the composer and NEVER sends; a model finding survives only if its quote is on the page |
 | Sales dashboard / prospect workspace / sync | `src/pages/SalesDashboard.tsx`, fn `sales-performance`, `src/lib/salesPerformance.ts`, `LeadDetailDialog` tabs + `LeadCrmPanel` (`LeadWorkPanel`/`LeadHookPanel`/`LeadHistoryPanel`), `ProspectFacts`, `AddLeadDialog`, `ClientOnboardingStrip`, `src/lib/leadSync.ts`, `src/lib/onboardingLinkStatus.ts` + `useOnboardingLink`, table `onboarding_link_events`, SQL `lead_log_contact` / `lead_onboarding_link_event` (`docs/sales-readiness.md`) |
+| Self-sourced prospect + paid handoff | `src/lib/handoffReadiness.ts` (READY / MISSING, edge-reachable), `src/lib/reportShare.ts` + `useReportShare`, `ProspectProfilePanel` + `LeadHookPanel` (propose → review → run) in `LeadCrmPanel`, `ClientHandoffCard`, `create-ai-audit` `finalHookPlan`, SQL `lead_set_profile` / `lead_report_link_event` / `website_identity`, table `report_link_events`, trigger `trg_outreach_leads_sold_by` (`docs/self-sourced-handoff.md`) |
 | Voice-note script (Inbox, lead popup) | `src/lib/voiceNoteScript.ts`, `src/components/VoiceNoteScriptButton.tsx`, fn `voice-note-script`, table `voice_note_scripts` (`docs/voice-note-script.md`). ⛔ Never sends. The site research is `_shared/site-research.ts`, shared with `warm-lead-reply` — change it, redeploy BOTH |
 | Hook audit score (3 q × 2 engines) | `src/lib/hookScore.ts` (`scoreHookRun`, one ruler for card/report/6-of-6/send guard), `hookVisibility.ts`, `src/components/HookVisibilityCard.tsx` (`docs/hook-audit.md`) |
 | Cold Call Playbook (read-only) | `src/lib/coldCallPlaybook.ts`, `src/hooks/useColdCallPlaybook.ts`, `src/components/ColdCallPlaybook.tsx` (`docs/cold-call-playbook.md`) |
@@ -798,6 +811,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
 | The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
+| Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
