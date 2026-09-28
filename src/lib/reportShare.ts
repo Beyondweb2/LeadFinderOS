@@ -12,6 +12,7 @@
      Before 2026-09-28 staff opens DID count, so an old report's first open may be ours.
    Nothing here is invasive: no per-visitor record, no IP, no cookie — one timestamp and one count.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { LINK_SEND_METHODS } from './contactMethods.ts';
 
 export type ReportLinkEvent = {
   audit_id: string; kind: 'generated' | 'sent'; channel: string; actor_user_id: string | null;
@@ -31,13 +32,8 @@ export interface ReportShareStatus {
   openedBeforeSend: boolean;
 }
 
-export const REPORT_SEND_CHANNELS = [
-  { value: 'email', label: 'Email' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'sms', label: 'Text message' },
-  { value: 'in_person', label: 'In person' },
-  { value: 'other', label: 'Other' },
-] as const;
+/** "Sent another way": the one contact-method set's link subset (src/lib/contactMethods.ts). */
+export const REPORT_SEND_CHANNELS = LINK_SEND_METHODS;
 export const REPORT_CHANNEL_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp', copy: 'Copied', ...Object.fromEntries(REPORT_SEND_CHANNELS.map((c) => [c.value, c.label])),
 };

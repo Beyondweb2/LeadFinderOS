@@ -8,6 +8,7 @@
  *
  * ⛔ ENUMERATED, NEVER FALLEN THROUGH. Every known status is listed; an unknown one reads as
  * 'other' and shows its raw value, rather than being quietly filed as "new" or "contacted". */
+import { CONTACT_METHODS, LOGGED_CONTACT_METHODS, contactMethodLabel } from './contactMethods.ts';
 
 export type SalesStage =
   | 'new' | 'queued' | 'contacted' | 'replied' | 'interested' | 'awaiting_decision'
@@ -188,30 +189,35 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   daily_limit: 'over your daily limit',
 };
 
-/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (migration 20260928120000) — the server refuses
-   anything else, and scripts/sales-readiness.test.ts pins the two together. Two were added
-   2026-09-28 (left voicemail, meeting booked). An outcome records ACTIVITY only: it never writes the
+/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260928210000) — the server refuses
+   anything else, and scripts/contact-claim.test.ts pins the two together. Added 2026-09-28: left
+   voicemail, meeting booked, then message_sent. An outcome records ACTIVITY only: it never writes the
    status or the next action (Next Action is human-set only). */
+/* `for`: which methods an outcome is offered for (contactMethods `kind`): 'call' = a phone call only,
+   'message' = anything that is not a call, 'any' = every method. The server accepts every outcome for
+   every method; this only keeps the buttons sensible ("No answer" to an email means nothing). */
 export const CALL_OUTCOMES = [
-  { value: 'no_answer', label: 'No answer' },
-  { value: 'left_voicemail', label: 'Left voicemail' },
-  { value: 'spoke_to_owner', label: 'Spoke to owner' },
-  { value: 'interested', label: 'Interested' },
-  { value: 'call_back', label: 'Call back' },
-  { value: 'meeting_booked', label: 'Meeting / call booked' },
-  { value: 'not_interested', label: 'Not interested' },
-  { value: 'wrong_number', label: 'Wrong number' },
-  { value: 'agency_controls_site', label: 'Agency controls site' },
+  { value: 'no_answer', label: 'No answer', for: 'call' },
+  { value: 'left_voicemail', label: 'Left voicemail', for: 'call' },
+  { value: 'message_sent', label: 'Sent, no reply yet', for: 'message' },
+  { value: 'spoke_to_owner', label: 'Spoke to owner', for: 'any' },
+  { value: 'interested', label: 'Interested', for: 'any' },
+  { value: 'call_back', label: 'Call back', for: 'any' },
+  { value: 'meeting_booked', label: 'Meeting / call booked', for: 'any' },
+  { value: 'not_interested', label: 'Not interested', for: 'any' },
+  { value: 'wrong_number', label: 'Wrong number', for: 'call' },
+  { value: 'agency_controls_site', label: 'Agency controls site', for: 'any' },
 ] as const;
 
-/** How the contact happened. WhatsApp is recorded by the messages themselves, so it is not here. */
-export const CONTACT_CHANNEL_OPTIONS = [
-  { value: 'call', label: 'Call' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'email', label: 'Email' },
-  { value: 'in_person', label: 'In person' },
-  { value: 'other', label: 'Other' },
-] as const;
+/** The outcomes offered for one contact method. */
+export function outcomesFor(method: string) {
+  const kind = CONTACT_METHODS.find((m) => m.value === method)?.kind ?? 'message';
+  return CALL_OUTCOMES.filter((o) => o.for === 'any' || (o.for === 'call' ? kind === 'call' : kind !== 'call'));
+}
+
+/** How the contact happened, as logged by hand — the one set (src/lib/contactMethods.ts). WhatsApp is
+ *  recorded by the messages themselves, so it is never logged here. */
+export const CONTACT_CHANNEL_OPTIONS = LOGGED_CONTACT_METHODS.map((m) => ({ value: m.value, label: m.short }));
 
 export const WEBSITE_CONTROL_OPTIONS = [
   { value: 'client_controls', label: 'They control the website' },
@@ -254,7 +260,6 @@ const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
   contact_name: 'contact', search_keyword: 'trade', search_location: 'town',
 };
-const REPORT_CHANNEL_LABEL: Record<string, string> = { email: 'Email', linkedin: 'LinkedIn', sms: 'Text message', in_person: 'In person', other: 'Other' };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the
  *  two screens can never describe the same row differently. */
@@ -264,7 +269,7 @@ export function activityDetail(
 ): string | null {
   const d = a.data ?? {};
   const outcome = CALL_OUTCOMES.find((o) => o.value === d.outcome)?.label ?? String(d.outcome ?? '');
-  const channel = CONTACT_CHANNEL_OPTIONS.find((c) => c.value === d.channel)?.label;
+  const channel = d.channel ? contactMethodLabel(String(d.channel)) : null;
   switch (a.kind) {
     case 'note': return a.body ?? null;
     case 'call_outcome':
@@ -285,7 +290,7 @@ export function activityDetail(
       });
       return parts.length ? parts.join(' · ') : null;
     }
-    case 'report_link': return d.channel ? `By ${REPORT_CHANNEL_LABEL[String(d.channel)] ?? String(d.channel)}` : null;
+    case 'report_link': return d.channel ? `By ${contactMethodLabel(String(d.channel))}` : null;
     case 'website_control_set': return d.value ? String(d.value).replace(/_/g, ' ') : null;
     case 'crawl_run': return d.url ? String(d.url) : null;
     default: return null;

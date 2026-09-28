@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, ChevronDown, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,9 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, CALL_OUTCOMES, CONTACT_CHANNEL_OPTIONS, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, activityDetail, refusalText } from '@/lib/salesCrm';
+import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText } from '@/lib/salesCrm';
+import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
 
@@ -296,23 +298,45 @@ function LogContact({ save }: { save: SaveFn }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [last, setLast] = useState<string | null>(null);
   const chip = (on: boolean) => cn('rounded-full border px-2.5 py-1 text-xs font-medium transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground hover:bg-muted');
+  /* ⛔ EVERY METHOD OF THE ONE SET (src/lib/contactMethods.ts): the most used as pills, the rest under
+     More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
+     offering a second record of the same message. */
+  const primary = CONTACT_METHODS.filter((m) => m.primary);
+  const more = CONTACT_METHODS.filter((m) => !m.primary);
+  const current = CONTACT_METHODS.find((m) => m.value === channel);
+  const inMore = !!current && !current.primary;
   return (
     <section className={cn(CARD, 'border-primary/30')} data-testid="log-contact">
       <div className="mb-2 flex items-center gap-1.5"><PhoneCall className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Log a contact</span></div>
       <div className="mb-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you contacted them">
-        {CONTACT_CHANNEL_OPTIONS.map((c) => (
-          <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.label}</button>
+        {primary.map((c) => (
+          <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
         ))}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={cn(chip(inMore), 'inline-flex items-center gap-0.5')} aria-label="More contact methods">
+              {inMore ? current!.short : 'More'}<ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {more.map((c) => <DropdownMenuItem key={c.value} className="text-xs" onClick={() => setChannel(c.value)}>{c.label}</DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+      {current?.recordedBy === 'send' ? (
+        <p className="rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
+          WhatsApp messages you send from LeadFinderOS are recorded automatically, with their delivery status — there is nothing to log here.
+        </p>
+      ) : (<>
       <Input value={note} onChange={(e) => setNote(e.target.value)} className="mb-2 h-9 text-xs" placeholder="Note (optional), saved with the outcome" />
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {CALL_OUTCOMES.map((o) => (
+        {outcomesFor(channel).map((o) => (
           <Button key={o.value} type="button" size="sm" variant="outline" disabled={busy !== null}
             className={cn('h-9 justify-start px-2.5 text-xs', (o.value === 'interested' || o.value === 'meeting_booked') && 'border-emerald-500/40', (o.value === 'not_interested' || o.value === 'wrong_number') && 'border-rose-500/30')}
             onClick={async () => {
               setBusy(o.value);
               try {
-                const label = CONTACT_CHANNEL_OPTIONS.find((c) => c.value === channel)?.label ?? 'Contact';
+                const label = contactMethodLabel(channel);
                 const r = await save('lead_log_contact', { _channel: channel, _outcome: o.value, _note: note.trim() || null }, `${label} logged: ${o.label}`);
                 if (r.ok) { setNote(''); setLast(`${label}: ${o.label}`); }
               } finally { setBusy(null); }
@@ -321,6 +345,7 @@ function LogContact({ save }: { save: SaveFn }) {
           </Button>
         ))}
       </div>
+      </>)}
       {last && <p className="mt-2 text-[11px] text-muted-foreground">Logged <span className="font-medium text-foreground">{last}</span>. Set the next action below if one is needed.</p>}
     </section>
   );

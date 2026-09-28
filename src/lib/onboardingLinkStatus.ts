@@ -18,6 +18,7 @@
            · openCount = page loads, not people: a reload is a second load. "Opened" is yes/no.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { OPEN_ATTRIBUTION_SLACK_MS } from './templateAttribution.ts';
+import { LINK_SEND_METHODS } from './contactMethods.ts';
 
 export interface LinkEventRow { kind: string; channel: string; actor_user_id: string | null; created_at: string; template_name?: string | null }
 export interface PageHitRow { page: string; created_at: string }
@@ -67,13 +68,8 @@ export function onboardingLinkStatus(
   };
 }
 
-export const MANUAL_SEND_CHANNELS = [
-  { value: 'email', label: 'Email' },
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'sms', label: 'Text message' },
-  { value: 'in_person', label: 'In person' },
-  { value: 'other', label: 'Other' },
-] as const;
+/** "Sent another way": the one contact-method set's link subset (src/lib/contactMethods.ts). */
+export const MANUAL_SEND_CHANNELS = LINK_SEND_METHODS;
 
 export const LINK_CHANNEL_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp', email: 'email', linkedin: 'LinkedIn', sms: 'text', in_person: 'in person', other: 'other', copy: 'copied',

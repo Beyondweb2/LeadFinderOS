@@ -205,9 +205,12 @@ console.log("── Next Action stays human-set ──");
   const crm = read("src/components/LeadCrmPanel.tsx");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(/'lead_log_contact'/.test(logUi) && !/lead_set_follow_up/.test(logUi), "logging an outcome never schedules a follow-up");
-  const outcomes = mig.match(/_outcome not in \(([^)]*)\)/)?.[1].replace(/\s+/g, " ") ?? "";
+  /* The outcome and channel allowlists were extended 2026-09-28 (20260928210000, the one contact-method
+     set): these two read the NEWEST definition; the checks above still read the original migration. */
+  const newest = read("supabase/migrations/20260928210000_campaign_claim_contact.sql");
+  const outcomes = newest.match(/_outcome not in \(([^)]*)\)/)?.[1].replace(/\s+/g, " ") ?? "";
   ok(CALL_OUTCOMES.every((o) => outcomes.includes(`'${o.value}'`)) && (outcomes.match(/'/g) ?? []).length / 2 === CALL_OUTCOMES.length, "the outcome list is lead_log_contact's allowlist, exactly");
-  const channels = mig.match(/_channel not in \('call'[^)]*\)/)?.[0] ?? "";
+  const channels = newest.match(/_channel not in \('call'[^)]*\)/)?.[0] ?? "";
   ok(CONTACT_CHANNEL_OPTIONS.every((c) => channels.includes(`'${c.value}'`)), "the channel list is lead_log_contact's allowlist");
   /* The CHECK's NEWEST definition (20260928160000 added facebook + email_research). */
   const srcMig = read("supabase/migrations/20260928160000_self_sourced_handoff.sql");

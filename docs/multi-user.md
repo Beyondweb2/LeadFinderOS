@@ -38,7 +38,8 @@ below are what the server enforces.
 | Coverage, niche verdict | yes | yes (book-wide counts, no lead names) |
 | Find Leads search | yes | yes (`search-leads` requires admin or sales) |
 | Add a business | as before | `sales_add_lead` — refuses an existing one |
-| Claim | (assigns) | unassigned + never contacted + not archived + not a client |
+| Claim | (assigns) | unassigned + never contacted (`lead_contact_attempt_at`: any genuine attempt on any channel, 2026-09-28) + not archived + not a client |
+| Campaigns | create / edit / delete (RLS, restrictive, 2026-09-28) | read all; set one on an own lead (`lead_set_campaign`); no create/edit/delete |
 | Assign / reassign / unassign | `assign_lead`, Team "move all" | no |
 | Notes, follow-up, call booked, call outcome, website control | all | own leads |
 | Stages | all | interested, price_given, not_interested, won_pending_onboarding |

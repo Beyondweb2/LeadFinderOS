@@ -29,6 +29,7 @@
      made in it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isRealSend } from './realSend.ts';
+import { CONTACT_METHODS } from './contactMethods.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
 import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution.ts';
@@ -58,8 +59,9 @@ export interface PerfActivity { lead_id: string; actor_user_id: string | null; k
 export interface PerfLinkEvent { lead_id: string; kind: string; channel: string; actor_user_id: string | null; created_at: string }
 export interface PerfHit { lead_id: string; page: string; created_at: string }
 
-export const CONTACT_CHANNELS = ['whatsapp', 'call', 'linkedin', 'email', 'in_person', 'other'] as const;
-export type ContactChannel = typeof CONTACT_CHANNELS[number];
+/** The dashboard's channels ARE the one contact-method set (src/lib/contactMethods.ts, 2026-09-28). */
+export const CONTACT_CHANNELS: readonly string[] = CONTACT_METHODS.map((m) => m.value);
+export type ContactChannel = string;
 /** Outcomes that mean a real conversation happened. */
 export const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set([
   'spoke_to_owner', 'interested', 'call_back', 'meeting_booked', 'not_interested', 'agency_controls_site',
@@ -121,7 +123,7 @@ export const CONTACT_LOG_START = '2026-09-27';
 export const SENDER_TRACKING_START = '2026-09-27';
 
 const zeroFunnel = (): FunnelCounts => ({ leads: 0, contacted: 0, responded: 0, interested: 0, notInterested: 0, followedUp: 0, onboardingSent: 0, onboardingOpened: 0, won: 0 });
-const zeroChannels = (): Record<ContactChannel, number> => ({ whatsapp: 0, call: 0, linkedin: 0, email: 0, in_person: 0, other: 0 });
+const zeroChannels = (): Record<ContactChannel, number> => Object.fromEntries(CONTACT_CHANNELS.map((c) => [c, 0]));
 const t = (iso: string) => Date.parse(iso);
 
 interface LeadFacts {
@@ -363,6 +365,4 @@ export const LEAD_SOURCE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 export const leadSourceLabel = (s: string | null | undefined) => (s ? LEAD_SOURCE_LABELS[s] ?? s : 'App search');
-export const CHANNEL_LABELS: Record<ContactChannel, string> = {
-  whatsapp: 'WhatsApp', call: 'Calls', linkedin: 'LinkedIn', email: 'Email', in_person: 'In person', other: 'Other',
-};
+export const CHANNEL_LABELS: Record<ContactChannel, string> = Object.fromEntries(CONTACT_METHODS.map((m) => [m.value, m.label]));
