@@ -158,3 +158,17 @@ Migration `20260928210000_campaign_claim_contact.sql`; branch `fix/campaign-clai
 - ⚠️ Found, not ours, left alone: a lead "QA Domain Test Plumbing" (fictional 447700900741, added
   07:24 today by another session) is still in production; the sales-flow-reliability suite's test phone
   moved to 07700 900851 because of it.
+- **Deploy (2026-09-28):** migration applied one statement at a time, read back (restrictive policies;
+  claim_lead / sales_pool / lead_identity_lookup read `lead_contact_attempt_at`; `sales_queue_opener`
+  untouched); edge `sales-performance` v6 → v7 (the live v6 matched main; v7 keeps `lastActivityAt` and
+  `sold_by_user_id`) → main `e003d480`; leadfinderos-next served it at 08:17, ~15 min after the push
+  (`index-rpW5iz4i.js`, every new method label, "Sent, no reply yet", the WhatsApp line).
+- **Live QA (Sales Test + admin, one-time links, both ended 204):** Sales directly against the API:
+  create campaign 403 (42501), edit an admin campaign 0 rows, delete 0 rows, edit its OWN earlier
+  campaign 0 rows, still reads 19. Admin: create 201, edit 1 row, delete 1 row. Sales set a campaign on
+  its own QA lead (ok) and was refused on Paul's (403 `not_your_lead`). Four fictional QA leads (07700 900
+  901–904): call / no answer, email, LinkedIn, social each logged → exactly one History row with its
+  method and note → unassigned by the admin → not in Available to claim, claim `already_contacted`. A
+  fifth: Hook Audit run as Sales (3 proposed questions, run complete) → unassigned → back in Available to
+  claim, and claimed. Coverage pairs (pinned) 1.19 s. No message sent. All five leads, 22 activity rows,
+  the audit, its run and 3 queue rows deleted by id; 0 left.
