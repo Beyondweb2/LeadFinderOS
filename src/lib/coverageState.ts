@@ -89,6 +89,59 @@ export function countLeadsByPair(pairs: readonly { trade: string; town: string }
 }
 
 
+/** One person who worked a trade+town: the owner of at least one contacted lead there. `n` (how many)
+ *  is sent to the admin only; for a salesperson it is null. */
+export interface CoverageWorker { id: string; n: number | null }
+
+/** The coverage endpoint's `workedBy` entries (one per RAW trade+town pair). */
+export interface WorkedByEntry { trade: string; town: string; users: ReadonlyArray<{ id: string; n?: number }> }
+
+/**
+ * Who worked each trade+town, folded onto the SAME key the rung uses (coverageKey), so "Plumbers" and
+ * "plumber" rows merge exactly as their `worked` state does. Most-worked first when counts are known,
+ * then by id so the order is stable. Anything malformed is dropped, never guessed.
+ */
+export function workersByPair(entries: ReadonlyArray<WorkedByEntry> | null | undefined): Map<string, CoverageWorker[]> {
+  const acc = new Map<string, Map<string, number | null>>();
+  for (const e of entries ?? []) {
+    if (!e || typeof e.trade !== 'string' || typeof e.town !== 'string' || !Array.isArray(e.users)) continue;
+    const key = coverageKey(e.trade, e.town);
+    const m = acc.get(key) ?? new Map<string, number | null>();
+    for (const u of e.users) {
+      if (!u || typeof u.id !== 'string' || !u.id) continue;
+      const n = typeof u.n === 'number' && Number.isFinite(u.n) ? u.n : null;
+      const prev = m.get(u.id);
+      m.set(u.id, n === null && (prev === undefined || prev === null) ? null : (prev ?? 0) + (n ?? 0));
+    }
+    acc.set(key, m);
+  }
+  const out = new Map<string, CoverageWorker[]>();
+  for (const [key, m] of acc) {
+    out.set(key, [...m.entries()].map(([id, n]) => ({ id, n }))
+      .sort((a, b) => (b.n ?? 0) - (a.n ?? 0) || a.id.localeCompare(b.id)));
+  }
+  return out;
+}
+
+/** The words beside the avatars: "Worked by Paul and Test" (+ counts for the admin). A worker the team
+ *  directory cannot name is counted, never given a made-up name. */
+export function describeWorkers(
+  workers: ReadonlyArray<CoverageWorker>,
+  nameOf: (id: string) => string | null | undefined,
+): { named: Array<{ id: string; name: string; n: number | null }>; unnamed: number; text: string } {
+  const named: Array<{ id: string; name: string; n: number | null }> = [];
+  let unnamed = 0;
+  for (const w of workers) {
+    const name = (nameOf(w.id) ?? '').trim();
+    if (name) named.push({ id: w.id, name, n: w.n }); else unnamed++;
+  }
+  named.sort((a, b) => (b.n ?? 0) - (a.n ?? 0) || a.name.localeCompare(b.name));
+  const parts = named.map((w) => (w.n !== null ? `${w.name} (${w.n} contacted)` : w.name));
+  if (unnamed) parts.push(`${unnamed} other${unnamed === 1 ? '' : 's'}`);
+  const list = parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return { named, unnamed, text: list ? `Worked by ${list}` : '' };
+}
+
 /** Normalise a town name the way the audit book stores it: ONS parentheticals and case removed. */
 export function coverageTownKey(name: string | null | undefined): string {
   return String(name ?? '')

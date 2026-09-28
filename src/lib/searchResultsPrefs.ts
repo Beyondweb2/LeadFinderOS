@@ -14,6 +14,10 @@ export interface SearchResultsView {
   page: number;
   /** Active listing-social filters ('instagram' | 'facebook'; validated by the caller). */
   socials?: string[];
+  /** The result set this view was set on (resultSetSignature). The table restores the view only onto
+   *  the same results — a later search starts unfiltered (2026-09-28). Absent on older entries, which
+   *  therefore restore nothing. */
+  sig?: string;
 }
 
 function key(userId?: string | null): string {
@@ -29,7 +33,8 @@ export function readSearchResultsView(userId?: string | null): SearchResultsView
     const filters = Array.isArray(parsed.filters) ? parsed.filters.filter((f): f is string => typeof f === 'string') : [];
     const page = typeof parsed.page === 'number' && parsed.page > 0 ? Math.floor(parsed.page) : 1;
     const socials = Array.isArray(parsed.socials) ? parsed.socials.filter((s): s is string => typeof s === 'string') : [];
-    return { filters, page, socials };
+    const sig = typeof parsed.sig === 'string' ? parsed.sig : undefined;
+    return { filters, page, socials, sig };
   } catch {
     return null;
   }

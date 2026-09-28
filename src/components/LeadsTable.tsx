@@ -27,6 +27,8 @@ import type { OutreachLead } from '@/types/outreach';
 import { SearchLeadContact } from './SearchLeadContact';
 import { useAuth } from '@/hooks/useAuth';
 import { readSearchResultsView, writeSearchResultsView } from '@/lib/searchResultsPrefs';
+import { resultSetSignature } from '@/lib/searchResultsCache';
+import { visibleResults } from '@/lib/searchResultsView';
 
 function initials(name: string | null): string {
   if (!name) return '?';
@@ -125,7 +127,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   // Restore the saved page + website filter once (per-user, safe-wrapped storage).
   // Invalid/empty saved filters fall back to "all" so we never restore a view that
   // shows nothing. The saved page is clamped to the live result set below.
-  const savedView = useRef(readSearchResultsView(user?.id)).current;
+  /* ⛔ THE SAVED VIEW BELONGS TO ONE RESULT SET (2026-09-28). Coverage → Find Leads showed "10 found"
+     over "No leads match your current filters": the website/listing filters were remembered per
+     person and applied, unseen, to every LATER search — an earlier "Listing = Instagram" or
+     website-only choice hid all ten. Now the view is stored with the signature of the results it was
+     set on and restored only onto that same set (leaving and returning keeps your place); a new
+     search starts with every result shown. */
+  const signature = useMemo(() => resultSetSignature(leads), [leads]);
+  const savedView = useRef((() => {
+    const v = readSearchResultsView(user?.id);
+    return v && v.sig === signature ? v : null;
+  })()).current;
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>(() => {
     const restored = (savedView?.filters ?? []).filter((s): s is WebsiteStatus => (ALL_STATUSES as string[]).includes(s));
     return restored.length ? restored : ALL_STATUSES;
@@ -136,6 +148,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     (savedView?.socials ?? []).filter((s): s is 'instagram' | 'facebook' => s === 'instagram' || s === 'facebook'),
   );
   const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, savedView?.page ?? 1));
+  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); }, [ALL_STATUSES]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -149,6 +162,20 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     });
   }, [leads, statusFilters, socialFilters]);
 
+  const visible = visibleResults(leads.length, filteredLeads.length);
+  const filterNotice = visible.filtered ? (
+    <span className="ml-2 inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400" data-testid="results-filtered">
+      {visible.line}
+      <button type="button" className="font-medium underline underline-offset-2 hover:no-underline" onClick={clearFilters}>Show all</button>
+    </span>
+  ) : null;
+  const emptyRows = (
+    <span className="inline-flex flex-wrap items-center justify-center gap-2">
+      {visible.emptyText}
+      {visible.filtered && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={clearFilters}>Show all {leads.length}</Button>}
+    </span>
+  );
+
   const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
   // Render against a CLAMPED page so a page beyond the current set (restored from
   // storage, or after a filter toggle shrinks the results) never shows an empty
@@ -159,15 +186,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     safePage * ITEMS_PER_PAGE,
   );
 
-  // Reset to page 1 only when a NEW search loads (leads change while mounted) — NOT
-  // on first mount (we restore the saved page) and NOT on filter toggle (Fix B:
-  // keep the page; the clamp below handles out-of-range).
-  const didMountRef = useRef(false);
+  // A NEW result set while mounted (a new search — the ids changed): page 1, every
+  // filter off, selection cleared. NOT on first mount (the saved view was restored above
+  // when it belongs to these results), NOT on a filter toggle (the clamp handles range),
+  // and NOT on a website-status correction (same ids, same result set).
+  const lastSigRef = useRef(signature);
   useEffect(() => {
-    if (!didMountRef.current) { didMountRef.current = true; return; }
+    if (lastSigRef.current === signature) return;
+    lastSigRef.current = signature;
     setCurrentPage(1);
+    clearFilters();
     setSelectedIds(new Set()); // new search → stale selection would act on gone rows
-  }, [leads]);
+  }, [signature, clearFilters]);
 
   // Reconcile state to the clamped page so persistence + pagination buttons stay
   // in range (e.g. after a filter toggle reduces the page count).
@@ -177,8 +207,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
 
   // Persist page + filters (per-user, survives nav / reload / re-login).
   useEffect(() => {
-    writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage, socials: socialFilters });
-  }, [user?.id, statusFilters, safePage, socialFilters]);
+    writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage, socials: socialFilters, sig: signature });
+  }, [user?.id, statusFilters, safePage, socialFilters, signature]);
 
   // ── Multi-select (mirrors OutreachTable's pattern: Set-based ids, header
   // select-all across ALL filtered rows, per-row checkboxes, cleared after acting).
@@ -527,6 +557,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
+              {filterNotice && <><br />{filterNotice}</>}
             </p>
              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
                Tap 👁 to view details · 📋 to save to your list
@@ -550,7 +581,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
                <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
-               <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>
+               {filterNotice ?? <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -569,7 +600,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         {/* Mobile View */}
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">No leads match your current filters.</div>
+            <div className="text-center py-6 text-muted-foreground text-sm">{emptyRows}</div>
               ) : paginatedLeads.map((lead, index) => {
             const checked = isChecked?.(lead.name, lead.googleMapsUrl);
             const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
@@ -725,7 +756,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               {paginatedLeads.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={bulkAllowed ? 5 : 4} className="h-24 text-center text-muted-foreground">
-                    No leads match your current filters.
+                    {emptyRows}
                   </TableCell>
                 </TableRow>
               ) : paginatedLeads.map((lead, index) => {

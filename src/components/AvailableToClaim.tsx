@@ -9,6 +9,11 @@ import { refusalText } from '@/lib/salesCrm';
 
 const PAGE = 50;
 
+/** What the pool IS, in one line a new salesperson understands without training (Paul, 2026-09-28).
+ *  The tab's hover text and this panel's subtitle both say it; the server rules it describes are
+ *  sales_pool + claim_lead (unassigned, never contacted, not archived, not a client). */
+export const CLAIM_POOL_HELP = 'Leads nobody owns and nobody has contacted yet. Claim one to add it to your pipeline — it becomes yours, with its history.';
+
 /* AVAILABLE TO CLAIM — inside Outreach, for a salesperson (2026-09-27; was the bottom of My Leads).
  *
  * ⛔ The list is sales_pool (server): unassigned, never contacted, not archived, not a client — and
@@ -41,7 +46,7 @@ export function AvailableToClaim({ onClaimed }: { onClaimed: () => void }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto">
           <h2 className="font-semibold">Available to claim</h2>
-          <p className="text-xs text-muted-foreground">Never contacted and not assigned to anyone. Claiming one makes it yours — nobody else can then take it.</p>
+          <p className="text-xs text-muted-foreground">{CLAIM_POOL_HELP} Once a business has been contacted it leaves this list, so nobody can take a lead someone is already working.</p>
         </div>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setPage(0); setQuery(q.trim()); }}>
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Business, trade or town" className="h-8 w-56" />

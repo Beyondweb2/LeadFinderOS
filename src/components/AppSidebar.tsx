@@ -11,7 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { canOpenRoute } from '@/lib/access';
+import { canOpenRoute, orderNavForRole } from '@/lib/access';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
@@ -31,23 +31,22 @@ export function AppSidebar() {
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
+    { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     { title: 'Inbox', url: '/inbox', icon: Inbox, description: 'WhatsApp conversations' },
     { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'Results by campaign and template' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
-    { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
     { title: 'Page generator', url: '/page-generator', icon: FileCode2, description: 'Client delivery pages, aimed at the measured queries' },
     { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
   ];
-  /* ⛔ The matrix decides (src/lib/access.ts). The admin keeps every item; a salesperson sees the
-     same Outreach, Inbox, Find Leads and Coverage — there is no separate My Leads workspace any more
-     (2026-09-27). Presentation only — see access.ts. */
-  const SALES_ORDER = ['/outreach', '/inbox', '/sales-dashboard', '/find-leads', '/coverage'];
-  const navItems = allNavItems.filter((item) => canOpenRoute(role, item.url))
-    .sort((a, b) => (role === 'sales' ? SALES_ORDER.indexOf(a.url) - SALES_ORDER.indexOf(b.url) : 0));
+  /* ⛔ The matrix decides WHAT is shown (src/lib/access.ts); this decides the ORDER. The admin keeps
+     every item in the list order above (Dashboard, Find Leads, Outreach, Coverage directly below it,
+     then Inbox…). A salesperson's order is the working day, Paul 2026-09-28: results → find leads →
+     work the pipeline → market coverage → messages (SALES_NAV_ORDER). Presentation only. */
+  const navItems = orderNavForRole(allNavItems.filter((item) => canOpenRoute(role, item.url)), role);
 
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);

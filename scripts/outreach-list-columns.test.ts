@@ -35,7 +35,7 @@ const STOP_AT = ["src/components/LeadDetailDialog.tsx", COLUMN_LISTS];
 /* ── Hand-checked 2026-09-27: these files NAME the column, but never read it off a list row. ──────
    Pinned per FILE: the same column read in any other file still fails. */
 const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
-  rating: { files: ["src/hooks/useOutreach.ts", "src/lib/auditReport.ts", "supabase/functions/_shared/place-details.ts", "src/components/AvailableToClaim.tsx"], why: "written from Place Details; `lead.rating` in addLead is the SEARCH result; auditReport/place-details are other objects; AvailableToClaim reads sales_pool rows" },
+  rating: { files: ["src/hooks/useOutreach.ts", "src/lib/auditReport.ts", "supabase/functions/_shared/place-details.ts", "src/components/AvailableToClaim.tsx", "src/lib/salesAddPayload.ts"], why: "written from Place Details; `lead.rating` in addLead is the SEARCH result; auditReport/place-details are other objects; AvailableToClaim reads sales_pool rows; salesAddPayload maps a SEARCH result + Place Details into the sales add" },
   review_count: { files: ["src/hooks/useOutreach.ts", "src/components/AvailableToClaim.tsx"], why: "written from Place Details; named in HAND_MIGRATED_LEAD_COLS; AvailableToClaim reads sales_pool rows" },
   contact_name: { files: ["src/lib/leadRpc.ts", "src/lib/salesPatchPlan.ts"], why: "a PATCH key a salesperson's edit may carry, sent to lead_set_details — never read off a list row" },
   next_action_note: { files: ["src/lib/leadRpc.ts"], why: "read from sales_leads by id before a follow-up write (so the note is not wiped) — not a list row" },

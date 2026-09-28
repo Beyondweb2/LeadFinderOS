@@ -15,7 +15,6 @@ import {
   countLeadsByPair, coverageKey, coverageStateFor, COVERAGE_STATES,
   type CoverageFacts,
 } from "../src/lib/coverageState.ts";
-import { summariseSearchResults } from "../src/lib/searchOutcome.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -69,45 +68,7 @@ for (const state of COVERAGE_STATES) {
   ok((counts.get(coverageKey("locksmiths", "Ely")) ?? 0) === 0, "  and shows no count");
 }
 
-console.log("\n── THE SEARCH RESULT LINE: DID THE CLICK DO ANYTHING? ──");
-{
-  const fresh = summariseSearchResults(12, 0, { trade: "locksmiths", town: "Ipswich" });
-  ok(fresh.tone === "new" && fresh.newCount === 12, "12 found, none held -> 12 new");
-  ok(fresh.headline === "12 found for locksmiths in Ipswich: 12 new to add.", `headline: ${fresh.headline}`);
-
-  const mixed = summariseSearchResults(12, 3, { trade: "locksmiths", town: "Ipswich" });
-  ok(mixed.newCount === 9, "12 found, 3 held -> 9 new");
-  ok(mixed.headline.includes("9 new to add, 3 already in your CRM"), `headline: ${mixed.headline}`);
-
-  const allKnown = summariseSearchResults(12, 12, { trade: "locksmiths", town: "Ipswich" });
-  ok(allKnown.tone === "all_known" && allKnown.newCount === 0, "every result already held -> all_known");
-  ok(allKnown.headline.includes("already added, 0 new"), `⛔ Paul's own words for this state: ${allKnown.headline}`);
-
-  const empty = summariseSearchResults(0, 0, { trade: "locksmiths", town: "Nowhereton" });
-  ok(empty.tone === "empty", "nothing found -> empty");
-  ok(empty.headline.startsWith("Nothing found for locksmiths in Nowhereton"), `headline: ${empty.headline}`);
-}
-
-console.log("\n── ⛔ IT NEVER CLAIMS AN ADD HAPPENED ──");
-/* A search writes nothing to the CRM. The word "added" may appear only in "already added". */
-for (const [found, held] of [[12, 0], [12, 3], [12, 12], [0, 0], [1, 1]]) {
-  const o = summariseSearchResults(found, held, { trade: "locksmiths", town: "Ipswich" });
-  const claimsAdd = /\badded\b/.test(o.headline) && !o.headline.includes("already added");
-  ok(!claimsAdd, `${found}/${held}: says found, not added — "${o.headline}"`);
-}
-
-console.log("\n── THE ABSENT AND ABSURD INPUTS ──");
-ok(summariseSearchResults(0, 5).newCount === 0, "more held than found -> newCount floors at 0, never negative");
-ok(summariseSearchResults(10, 99).alreadyInCrm === 10, "held is bounded by found — a stale CRM list cannot print -89 new");
-ok(summariseSearchResults(Number.NaN, Number.NaN).found === 0, "NaN -> 0, never \"NaN found\" on screen");
-ok(summariseSearchResults(-4, -1).found === 0, "negatives clamp to 0");
-{
-  const noWhere = summariseSearchResults(5, 1);
-  ok(!noWhere.headline.includes(" for "), `no trade/town -> the sentence omits them cleanly: ${noWhere.headline}`);
-  const halfWhere = summariseSearchResults(5, 1, { trade: "locksmiths", town: "" });
-  ok(!halfWhere.headline.includes(" for "), "⛔ trade WITHOUT town omits both — \"for locksmiths in\" reads like a bug");
-  const trimmed = summariseSearchResults(5, 1, { trade: "  locksmiths  ", town: "  Ipswich  " });
-  ok(trimmed.headline.includes("for locksmiths in Ipswich"), "whitespace-padded inputs are trimmed");
-}
+/* The search result line (summariseSearchResults) was deleted 2026-09-28 with the Find Leads banner it
+   drew (Paul); the Search Results heading and its "Showing X of Y" line replace it (sales-flow-reliability). */
 
 console.log(f ? `\n${f} FAILURES` : "\nALL PASS");

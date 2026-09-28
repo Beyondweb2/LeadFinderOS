@@ -169,8 +169,9 @@ so under the Inbox's parallel load one of them intermittently answers 500 (57014
   is shared by the whole team (one number).
 - `request-call`, `stripe-webhook`, `notify-onboarding-submit` still email the admin address, not
   the lead's owner.
-- Sales-added leads skip the browser's Place Details top-up (it writes the row directly, which sales
-  cannot).
+- ~~Sales-added leads skip the browser's Place Details top-up~~ — fixed 2026-09-28: Sales looks the
+  place up BEFORE the add and `sales_add_lead` stores the phone, address, rating and town
+  (docs/sales-flow-reliability.md).
 - Auth config: `site_url` must be the production app and the redirect allow-list must include
   `/set-password`, or invite links land on localhost.
 
