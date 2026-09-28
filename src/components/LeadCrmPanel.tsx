@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, ChevronDown, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, ChevronDown, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { leadPermissions } from '@/lib/access';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,13 +20,13 @@ import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { OwnerAvatar } from '@/components/OwnerBadge';
-import { leadRpc, type RpcResult } from '@/lib/leadRpc';
+import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText } from '@/lib/salesCrm';
+import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -203,9 +205,10 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 }
 
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
-export function LeadWorkPanel({ leadId }: { leadId: string }) {
+export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
   const crm = useLeadCrmRow(leadId);
   const save = useSave(leadId);
+  const { role } = useSubscription();
   const lead = crm.data;
   if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
   if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
@@ -272,7 +275,62 @@ export function LeadWorkPanel({ leadId }: { leadId: string }) {
           </div>
         </div>
       </details>
+
+      {leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
     </div>
+  );
+}
+
+/* ── REMOVE FROM MY LEADS (sales, 2026-09-28) ─────────────────────────────────────────────────────
+   ⛔ Never a delete, and the server decides what it means (sales_remove_leads): never contacted →
+   back to Available to claim; contacted on any channel → archived and still theirs, never claimable.
+   The confirmation says both before anything happens. */
+function RemoveFromMyLeads({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    const r = await salesRemoveLeads([leadId]);
+    setBusy(false);
+    const outcome = r.results?.[0];
+    if (!r.ok || !outcome || outcome.outcome === 'refused') {
+      toast({ title: 'Not removed', description: refusalText(r.ok ? outcome?.reason : r.error), variant: 'destructive' });
+      return;
+    }
+    setOpen(false);
+    toast({ title: 'Removed from your leads', description: removeOutcomeText(r) });
+    void qc.invalidateQueries({ queryKey: leadCrmKey(leadId) });
+    notifyLeadChanged(leadId);
+    window.dispatchEvent(new CustomEvent('sales-lead-changed'));
+    onRemoved?.();
+  };
+  return (
+    <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')} data-testid="remove-from-my-leads">
+      <span className="text-xs text-muted-foreground">Not working this one?</span>
+      <AlertDialog open={open} onOpenChange={(o) => { if (!busy) setOpen(o); }}>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setOpen(true)}>
+          <UserMinus className="mr-1.5 h-3.5 w-3.5" />{REMOVE_FROM_MY_LEADS_LABEL}
+        </Button>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this lead from your leads?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <ul className="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground">
+                {REMOVE_FROM_MY_LEADS_EXPLAINER.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); void run(); }}>
+              {busy ? 'Removing…' : REMOVE_FROM_MY_LEADS_LABEL}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   );
 }
 

@@ -71,9 +71,17 @@ console.log("\n── every salesperson edit is a server function, positive matc
   ok(planSalesPatch({ whatsapp_status: "yes", contact_method: "whatsapp" }).steps.length === 0 && planSalesPatch({ whatsapp_status: "yes", contact_method: "whatsapp" }).refused.length === 0, "server-written / cosmetic keys are an accepted no-op");
   const hook = read("src/hooks/useOutreach.ts");
   ok(/if \(isSales\(\)\) return salesUpdateLead\(leadId, updates as Record<string, unknown>\);\n\s+const \{ data, error \} = await supabase\n\s+\.from\('outreach_leads'\)\n\s+\.update\(updates\)/.test(hook), "useOutreach.updateLead routes a salesperson before the direct write");
-  for (const fn of ["deleteLead", "deleteMultiple", "resetMultiple", "resetToFreshMultiple", "deleteAllLeads", "assignCampaign", "bulkImportLeads", "bulkLookupPhones", "removeFreshLead", "retryPhoneFetch"]) {
+  for (const fn of ["deleteLead", "deleteMultiple", "resetMultiple", "resetToFreshMultiple", "deleteAllLeads", "bulkImportLeads", "bulkLookupPhones", "removeFreshLead", "retryPhoneFetch"]) {
     const at = hook.indexOf(`const ${fn} = useCallback(`);
     ok(at > 0 && /if \(isSales\(\)\) \{ refuseForSales\(/.test(hook.slice(at, at + 400)), `${fn} refuses a salesperson before writing`);
+  }
+  {
+    /* assignCampaign is no longer admin-only (2026-09-28): a salesperson moves their OWN leads through
+       leads_set_campaign, which runs lead_set_campaign per lead — routed BEFORE the admin's direct write. */
+    const at = hook.indexOf("const assignCampaign = useCallback(");
+    const body = hook.slice(at, hook.indexOf("const removeFromMyLeads", at));
+    const rpc = body.indexOf("leadsSetCampaign("), direct = body.indexOf(".from('outreach_leads')");
+    ok(at > 0 && rpc > 0 && direct > rpc, "assignCampaign routes a salesperson through leads_set_campaign before the direct write");
   }
   for (const fn of ["archiveLeadInternal", "unarchiveLead", "archiveMultiple", "unarchiveMultiple", "markMultipleAsInterested", "updateStatus"]) {
     const at = hook.indexOf(`const ${fn} = useCallback(`);
@@ -118,7 +126,7 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(/perms\.auditAdmin \? 'Manage audit'/.test(table) && /else setDetailLead\(lead\)/.test(table), "a salesperson's audit button opens the Hook Audit in the lead detail (the AI Audit page is admin)");
   ok(/lead\.assigned_to_user_id && lead\.assigned_to_user_id !== user\?\.id/.test(table), "the row shows who owns a lead that is not yours");
   const dialog = read("src/components/LeadDetailDialog.tsx");
-  ok(/<LeadWorkPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
+  ok(/<LeadWorkPanel leadId=\{lead\.id\}( onRemoved=\{onClose\})? \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\} \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
   for (const g of ["perms.clientDelivery && !isDemoLead(lead.id) && (\n          <LeadDeliveryCockpit", "{perms.clientDelivery && (\n            <section className={CARD}>\n              <SectionLabel icon={PoundSterling}", "{perms.privateNote && (", "{perms.clientDelivery && !isPaidLead(lead) && ("]) {
     ok(dialog.includes(g), `the detail withholds: ${g.split("\n")[0].slice(0, 60)}`);
   }

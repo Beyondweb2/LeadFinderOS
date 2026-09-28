@@ -69,6 +69,27 @@ export async function salesPatchLead(leadId: string, patch: Record<string, unkno
   return { ok: true, refused: [], wrote };
 }
 
+/** "Remove from my leads" (sales only; migration 20260928230000). The SERVER decides per lead, under
+ *  the row lock: never contacted → released (unassigned, back to Available to claim if otherwise
+ *  eligible); contacted on any channel → archived with the owner kept (never claimable); anything else
+ *  refused (not theirs / a client, an opener waiting in the queue, won / onboarding). Never a delete. */
+export interface RemoveFromMyLeadsResult extends RpcResult {
+  released?: number;
+  archived?: number;
+  skipped?: Record<string, number>;
+  results?: Array<{ id: string; outcome: 'released' | 'archived' | 'refused'; reason?: string }>;
+}
+export function salesRemoveLeads(leadIds: string[]): Promise<RemoveFromMyLeadsResult> {
+  return leadRpc('sales_remove_leads', { _lead_ids: leadIds }) as Promise<RemoveFromMyLeadsResult>;
+}
+
+/** The Outreach selection's "Move to campaign" for a salesperson: every lead goes through
+ *  lead_set_campaign (the workspace card's own rule) inside leads_set_campaign. An EXISTING campaign or
+ *  null ("No campaign"); leads they may not work are skipped and counted. */
+export function leadsSetCampaign(leadIds: string[], campaignId: string | null): Promise<RpcResult & { moved?: number; unchanged?: number; skipped?: Record<string, number> }> {
+  return leadRpc('leads_set_campaign', { _lead_ids: leadIds, _campaign_id: campaignId });
+}
+
 /** Bulk initial outreach for a salesperson: THE TEMPLATE THEY CHOSE for this batch, stored on each
  *  lead by the server (sales_queue_opener). Never a default, never a substitute. */
 export function salesQueueOpener(leadIds: string[], template: string): Promise<RpcResult> {
