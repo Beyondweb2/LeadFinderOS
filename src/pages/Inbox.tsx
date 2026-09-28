@@ -38,6 +38,8 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
+import { TemplateWordingInList, TemplateWordingPreview, useTemplateHover } from '@/components/TemplateWordingPreview';
+import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -505,6 +507,7 @@ const Inbox = () => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
+  const templateHover = useTemplateHover();
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
   const sending = !!activeKey && sendingKeys.has(activeKey);
@@ -1109,7 +1112,7 @@ const Inbox = () => {
   const templatePicker = (
     <>
       <div className="flex items-center gap-2">
-        <Select value={template} onValueChange={setTemplate}>
+        <Select value={template} onValueChange={setTemplate} onOpenChange={templateHover.onOpenChange}>
           <SelectTrigger className="flex-1"><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
           <SelectContent>
             {WHATSAPP_TEMPLATES.map((t) => {
@@ -1117,7 +1120,7 @@ const Inbox = () => {
               const group = WA_TEMPLATE_REQS[t.value]?.group;
               const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
               return (
-                <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
+                <SelectItem key={t.value} value={t.value} disabled={!s.ok} {...templateHover.itemProps(t.value)}>
                   <span className="flex flex-col">
                     <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
                     {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
@@ -1125,6 +1128,7 @@ const Inbox = () => {
                 </SelectItem>
               );
             })}
+            <TemplateWordingInList hovered={templateHover.hovered} values={{ businessName: activeLead?.business_name }} />
           </SelectContent>
         </Select>
         {/* ⛔ PREVIEW BEFORE SEND — the dry run (useInbox.preview → send-whatsapp-message
@@ -1156,6 +1160,11 @@ const Inbox = () => {
           Send template
         </Button>
       </div>
+      {/* What the hovered (or chosen) template says, with this lead's business name (Paul, 2026-09-28).
+          A reading aid; the dry run above is still the exact payload. */}
+      <TemplateWordingPreview className="mt-2" hovered={null} selected={template}
+        values={{ businessName: activeLead?.business_name, firstName: (activeLead as { contact_name?: string | null } | undefined)?.contact_name, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? (activeLead as { search_location?: string | null } | undefined)?.search_location, trade: (activeLead as { search_keyword?: string | null } | undefined)?.search_keyword }} />
+      <RequestTemplateButton source="inbox" />
       {/* ⛔ SHOWN ONLY FOR THE TEMPLATE AND THREAD IT WAS RUN FOR. A stale preview under a different
           template reads as a guarantee about a message nobody previewed. */}
       {previewResult && previewOf && previewOf.template === template && previewOf.key === active?.key && (

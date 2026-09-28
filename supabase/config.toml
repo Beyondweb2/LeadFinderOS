@@ -184,6 +184,11 @@ verify_jwt = true
 [functions.sales-performance]
 verify_jwt = true
 
+# template-request: "Request a template" (2026-09-28). SPA-only caller with the signed-in user's JWT; the
+# handler resolves the role itself (admin or sales), saves the request, then emails Paul. Never calls Meta.
+[functions.template-request]
+verify_jwt = true
+
 # prospect-preview: the AI Audit screen's "Generate prospect preview" (outreach homepage mock-up +
 # evidence card + screenshots). SPA-only caller with the operator's JWT; the handler does its own
 # resolveOperator + lead-ownership check. Spends Cloudflare Browser Rendering only; NEVER sends a message.
