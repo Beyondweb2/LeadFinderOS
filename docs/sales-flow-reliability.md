@@ -83,3 +83,26 @@ Branch `feat/sales-flow-reliability`. Migration `20260928200000_sales_flow_relia
   filters, the Campaign card (options without New/Manage; saved via lead_set_campaign), claim wording,
   375 px (bar: Results, Search, Outreach, Inbox, More; no sideways scroll), admin nav + counts, admin
   still has New/Manage campaigns. No console errors.
+
+## 4. Deploy and live QA (2026-09-28)
+
+- **Order:** migration `20260928200000` (6 statements, one at a time, read back: both functions SECURITY
+  DEFINER, anon EXECUTE false, authenticated true) → edge `coverage` v32 from the merge tree (bundle read
+  back: `workedBy` and the admin-only count; `verify_jwt` unchanged true; the live v31 matched main
+  before it was replaced) → main `b3d3c85b` pushed (origin was unmoved at `d7bf5e04`) → leadfinderos-next
+  entry `index-Bdf8Ayh1.js` → `index-C8s0c_Xa.js` within ~70 s, every new marker present, the banner and
+  "Show suppressed" gone.
+- **Sales Test (one-time link, ended with logout?scope=local, 204):** coverage `pairs` 200 in 3.6 s, 645
+  worked pairs named, no count sent to Sales. Find leads for Mobile mechanics / Cleethorpes: 10 found
+  (cached, free), 0 with a phone in the search result; ownership 9 new + 1 "Already added · Paul". Added
+  "MB & Son Recovery and Repairs" the way the browser does: Place Details 2.3 s (Google had a phone),
+  `sales_add_lead` 0.4 s → stored phone +44 7593 833577, address, trade "Mobile mechanics", town
+  Cleethorpes (derived Cleethorpes), rating 5 / 21 reviews, place id, Maps link, owner Test. Campaign
+  set 0.26 s, stored; another lead refused (403 `not_your_lead`). `sales-performance` 2.4 s: the campaign's
+  row shows leads 1, contacted 0. `sales_pool` 200. No message sent or queued.
+- **Admin (same method, 204 at the end):** coverage `pairs` with counts on every worked entry (645 pairs,
+  1 person — Paul); `lead_set_campaign` on the rep's lead 0.28 s, stored, owner still Test; team directory
+  Paul / Test / test1.
+- **Restored:** the QA lead and its 3 activity rows deleted by id; 0 left (the business is "new" again).
+- **Not seen by a person:** production screens were proven by bundle markers and server responses, the
+  layout by the local render. Paul should glance at Coverage, Find Leads and a lead's Campaign card once.
