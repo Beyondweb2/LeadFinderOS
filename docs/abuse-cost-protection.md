@@ -162,3 +162,50 @@ the sweep emails `webhook_unsigned` once.
 
 See the final report of this pass (Google Cloud quota + budget alert, OpenAI monthly limit, Apify cap,
 Meta App Secret → `WHATSAPP_APP_SECRET`).
+
+## 10. Deploy and live QA (2026-09-28 UTC, merged to main `793b3ee4`)
+
+- **SQL**: `20260929100000_abuse_cost_protection.sql` applied in one transaction after regenerating it from
+  the live definitions (identical); `20260929100100_guard_suspended_alert_once.sql` after live QA. Read
+  back: 5 ledger columns, suspension columns, settings row, `sales_pool` not executable by authenticated,
+  `guard_action` service-only, claim / add / queue guarded, the India +91 rule kept, the new message
+  policy text. All 15 SQL suites on the live schema: **524/524**, no fixtures left.
+- **Edge**: 37 functions deployed from a tree containing `origin/main` `b23fb48d` — security-admin,
+  admin-ai-opener, admin-api-usage, admin-users, apify-usage-status, apply-seo-paste, bulk-jobs,
+  check-website, coverage, create-ai-audit, enrich-business, enrich-lead, extract-email, extract-facebook,
+  google-place-details, market-view, niche-sample, page-generator, paid-baseline, paid-client-hub,
+  playbook-evidence, process-ai-audit-queue, process-whatsapp-queue, prospect-preview, review-reply,
+  run-seo-scan, sales-performance, scan-site-details, search-leads, send-whatsapp-media,
+  send-whatsapp-message (preflight `x-swm-build: 2026-09-29a`), send-whatsapp-voice, submissions,
+  template-request, voice-note-script, warm-lead-reply, whatsapp-status. Markers read from the deployed
+  bodies. Every cron call after the deploy answered 200.
+- **Cron**: `security-sweep-run` (`*/5 * * * *`, `invoke_security_sweep()`). First two sweeps emailed 3
+  and 4 alerts (Resend accepted; `alerted_at` set).
+- **SPA**: leadfinderos-next served the new chunks on the second poll (Team, AdminApiUsage,
+  dataAccessLog, Index, salesCrm carry the new strings).
+- **Live QA (Sales Test account, direct calls like a compromised browser; admin via a one-time session;
+  both ended with `logout?scope=local`)**:
+  - NORMAL: own leads read; a Find Leads search ran; Paul's lead and a client came back masked (state +
+    owner name, no ids).
+  - ABUSE: place details / enrich of Paul's lead and a client → 403 `not_your_lead` (no spend); Sales
+    CSV export → refused + alert; copy of Paul's number → refused; `sales_pool` → permission denied;
+    `outreach_leads`, `api_usage_log`, `security_events` → `[]`; `protection_settings`, `guard_action` →
+    permission denied; 11 admin-only calls → 403 each + one `denied_burst` alert; admin-users, niche
+    start, scan-site-details → 403.
+  - BURST: lookup limit set to 2 more → the third answered `paused` (restored).
+  - WARNING: warning line lowered → the search still ran, logged `warned`, alert emailed (restored).
+  - RESTRICTED: hard line lowered → search 429 with the one sentence and ZERO Google calls; the CRM
+    still read (restored).
+  - SUSPENDED (Team action `team_suspend`, Test's session already open): search, place details, claim,
+    lookup (`paused`), add, queue opener, Copy Numbers, hook audit, AI draft, voice script, prospect
+    preview — all refused; own leads and team row still read. `team_unsuspend` → search works again.
+  - PAUSE: "prospecting paused" refused both Sales and admin searches; "running" restored them.
+  - Found in QA and fixed: a suspended account raised one alert PER ACTION (ten lines) → now one per
+    person per day (follow-up migration).
+  - Cleanup: the QA guard rows (41) and events (39) deleted; the two real Google charges of the QA
+    searches kept (true spend); thresholds verified byte-equal to the defaults; mode running; no overrides.
+- **Latency**: the guard costs ~1.5 ms in the database (20-call average) and ~20 ms on a guarded RPC
+  (median, interleaved 8×: 276 vs 255 ms from this machine, whose ~250 ms is network distance). An edge
+  function adds one in-region round trip.
+- Observed, not changed: a revoked session's token is answered 503 `auth_unavailable` by
+  `_shared/operator-auth.ts` instead of 401 (pre-existing classification; suspension does not rely on it).
