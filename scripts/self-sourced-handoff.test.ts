@@ -212,7 +212,8 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
 {
   ok(ACTIVITY_LABEL.crawl_run && ACTIVITY_LABEL.report_link && ACTIVITY_LABEL.audit_run, "labels for crawl / report share / audit run");
   ok(activityDetail({ kind: "details_set", data: { services: ["A", "B"], service_areas: [] } }, () => "x") === "services: A, B · service areas: cleared", "profile edits read in words");
-  ok(activityDetail({ kind: "report_link", data: { channel: "linkedin" } }, () => "x") === "By LinkedIn", "a report share names its channel");
+  // The label comes from the one contact-method set (src/lib/contactMethods.ts, 2026-09-28): "LinkedIn message".
+  ok(activityDetail({ kind: "report_link", data: { channel: "linkedin" } }, () => "x") === "By LinkedIn message", "a report share names its channel");
   ok(/activityDetail\(a, actorName\)/.test(read("src/components/LeadCrmPanel.tsx")) && /activityDetail\(a,/.test(read("src/components/ClientHandoffCard.tsx")), "History and the handoff describe activity with the same function");
 }
 

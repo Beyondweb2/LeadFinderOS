@@ -79,6 +79,7 @@ import {
   Users,
   ScrollText,
   UserMinus,
+  Archive,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -118,7 +119,7 @@ import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
-import { datasetComplete, leadCountLabel, partialResultsSuffix, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
+import { archiveViewFor, datasetComplete, leadCountLabel, partialResultsSuffix, rowsForArchiveView, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
 import { auditMapHasRunning, auditRowState, fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_POLL_MS, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
 import { HookAuditDialog } from './HookAuditDialog';
@@ -396,6 +397,11 @@ export function OutreachTable({
   // Hide leads marked NOT INTERESTED (status='not_interested') — same durable hygiene
   // preference, persisted alongside hideNoWhatsApp so dead leads stay out of the list.
   const [hideNotInterested, setHideNotInterested] = useState(false);
+  /* Sales only: the Archived view (Filters → Archived). Off = the active working list. */
+  const [showArchived, setShowArchived] = useState(false);
+  /* A salesperson (the role with "Remove from my leads") works an ACTIVE list; the admin keeps the
+     unified one. Rule: src/lib/outreachLoad.ts rowsForArchiveView. */
+  const archiveView = archiveViewFor(perms.removeFromMyLeads && !isArchiveView, showArchived);
   // Listing-level signal filters — free (derived from stored website), not verified.
   const [sigWebsite, setSigWebsite] = useState(false);
   /* ⛔ THE INVERSE OF sigWebsite, AND IT IS NOT REDUNDANT. "Has own website" off is not the same
@@ -1568,6 +1574,7 @@ export function OutreachTable({
     // active-loaded against active-total (src/lib/outreachLoad.ts). Complete → unchanged.
     // (loadState only matters through listComplete, which is in the deps; the fallback object is new each render.)
     let result = visibleWhileLoading(loadState, [...leadsWithOptimistic], isArchiveView);
+    result = rowsForArchiveView(result, archiveView);
 
     // Filter by search
     if (searchQuery) {
@@ -1719,7 +1726,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1826,9 +1833,9 @@ export function OutreachTable({
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             <CardTitle className="text-base sm:text-lg">
-              {isArchiveView ? 'Archived' : 'Outreach'}
+              {isArchiveView || archiveView === 'archived' ? 'Archived' : 'Outreach'}
               <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
-                ({leadCountLabel(loadState, leads.length)})
+                ({archiveView === 'all' ? leadCountLabel(loadState, leads.length) : rowsForArchiveView(leads, archiveView).length.toLocaleString()})
               </span>
               {selectedIds.size > 0 && (
                 <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-primary">
@@ -2399,7 +2406,7 @@ export function OutreachTable({
                 (unchanged); the trigger shows the active count. */}
             {(() => {
               const activeFilterCount =
-                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
+                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, archiveView === 'archived'].filter(Boolean).length;
               const toggle = (setter: (updater: (prev: boolean) => boolean) => void) => () => {
                 setter((v) => !v);
                 setCurrentPage(1);
@@ -2408,6 +2415,7 @@ export function OutreachTable({
                 setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
                 setHideNoWhatsApp(false); setHideNotInterested(false);
                 setSigWebsite(false); setSigNoWebsite(false); setSigFacebook(false); setSigInstagram(false);
+                setShowArchived(false);
                 setCurrentPage(1);
               };
               return (
@@ -2444,6 +2452,15 @@ export function OutreachTable({
                     <DropdownMenuCheckboxItem checked={sharedPhoneOnly} disabled={!listComplete} onCheckedChange={toggle(setSharedPhoneOnly)} onSelect={(e) => e.preventDefault()}>
                       <Users className="h-3.5 w-3.5 mr-2 text-amber-600" /> Shares a phone ({listComplete ? sharedPhoneIds.size : 'when all leads have loaded'})
                     </DropdownMenuCheckboxItem>
+                    {archiveView !== 'all' && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>View</DropdownMenuLabel>
+                        <DropdownMenuCheckboxItem checked={showArchived} data-testid="filter-archived" onCheckedChange={() => { setShowArchived((v) => !v); setCurrentPage(1); }} onSelect={(e) => e.preventDefault()}>
+                          <Archive className="h-3.5 w-3.5 mr-2" /> Archived (removed or not interested)
+                        </DropdownMenuCheckboxItem>
+                      </>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Hide</DropdownMenuLabel>
                     <DropdownMenuCheckboxItem checked={hideNoWhatsApp} onCheckedChange={toggle(setHideNoWhatsApp)} onSelect={(e) => e.preventDefault()}>

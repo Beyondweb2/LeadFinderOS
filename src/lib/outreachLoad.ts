@@ -82,6 +82,21 @@ export function visibleWhileLoading<T extends { is_archived?: boolean | null }>(
   return rows.filter((r) => r.is_archived !== true);
 }
 
+/* ⛔ WHICH ROWS THE LIST SHOWS BY ARCHIVE STATE (2026-09-28, Paul): a salesperson's Outreach is their
+   ACTIVE working list — archived leads (a contacted lead they removed, a not-interested one) are hidden
+   unless they switch to the Archived view under Filters. Archived rows keep owner, history and contact
+   activity; hiding them changes nothing in the data and nothing about the claim rule. The admin keeps
+   the unified list ('all') exactly as before. */
+export type ArchiveView = 'all' | 'active' | 'archived';
+export function archiveViewFor(splitArchived: boolean, showArchived: boolean): ArchiveView {
+  return splitArchived ? (showArchived ? 'archived' : 'active') : 'all';
+}
+export function rowsForArchiveView<T extends { is_archived?: boolean | null }>(rows: T[], view: ArchiveView): T[] {
+  if (view === 'archived') return rows.filter((r) => r.is_archived === true);
+  if (view === 'active') return rows.filter((r) => r.is_archived !== true);
+  return rows;
+}
+
 type Row = { id: string };
 
 /**

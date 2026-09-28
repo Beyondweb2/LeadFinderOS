@@ -9,6 +9,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
 import { leadPermissions, PERMISSION_MATRIX } from "../src/lib/access.ts";
+import { archiveViewFor, rowsForArchiveView } from "../src/lib/outreachLoad.ts";
 import { REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, campaignMoveText, refusalText, removeOutcomeText } from "../src/lib/salesCrm.ts";
 
 let f = 0;
@@ -75,6 +76,20 @@ console.log("── the screens ──");
   ok(/onRemoved=\{onClose\}/.test(read("src/components/LeadDetailDialog.tsx")), "…and closes the workspace once the lead has left the list");
   ok(/if \(!data\) \{\s*if \(roleRef\.current === 'sales'\)/.test(HOOK), "a lead no longer in the salesperson's view leaves their Outreach list");
   ok(!/Trash2/.test(PANEL.match(/function RemoveFromMyLeads[\s\S]*?\n}\n/)?.[0] ?? "Trash2"), "the workspace action has no delete icon");
+}
+
+console.log("── a removed (archived) lead leaves the salesperson's ACTIVE list (2026-09-28 closeout) ──");
+{
+  const rows = [{ id: "a", is_archived: false }, { id: "b", is_archived: true }, { id: "c", is_archived: null }];
+  ok(archiveViewFor(true, false) === "active" && archiveViewFor(true, true) === "archived" && archiveViewFor(false, false) === "all" && archiveViewFor(false, true) === "all",
+    "sales: active by default, archived on request; the admin keeps the unified list");
+  ok(rowsForArchiveView(rows, "active").map((r) => r.id).join() === "a,c", "active view hides archived rows (absent = not archived)");
+  ok(rowsForArchiveView(rows, "archived").map((r) => r.id).join() === "b", "archived view shows only archived rows — still viewable");
+  ok(rowsForArchiveView(rows, "all").length === 3, "the admin still sees every row");
+  ok(/const archiveView = archiveViewFor\(perms\.removeFromMyLeads && !isArchiveView, showArchived\)/.test(TABLE), "the table decides the view from the role, not a stored flag");
+  ok(/result = rowsForArchiveView\(result, archiveView\)/.test(TABLE), "…and filters the list with the one rule");
+  ok(/data-testid="filter-archived"/.test(TABLE) && /archiveView !== 'all' &&/.test(TABLE), "Filters → Archived exists for sales only");
+  ok(/setShowArchived\(false\)/.test(TABLE), "Clear filters returns to the active list");
 }
 
 console.log("── the words ──");

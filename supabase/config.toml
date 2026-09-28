@@ -194,3 +194,53 @@ verify_jwt = true
 # resolveOperator + lead-ownership check. Spends Cloudflare Browser Rendering only; NEVER sends a message.
 [functions.prospect-preview]
 verify_jwt = true
+
+# ── RECORDED 2026-09-28: twelve functions that were deployed with no entry here (so a plain redeploy
+# took the platform default, verify_jwt = TRUE). Each value below is what the LIVE function runs today
+# (`supabase functions list`), checked against its callers; nothing was changed in production.
+# There is no per-function region setting: the app pins every call to eu-west-1 (src/lib/edgeRegion.ts).
+
+# send-whatsapp-message: FALSE live and must stay false. The handler authenticates every request itself
+# (resolveActor: the operator's or salesperson's JWT, lead ownership, role) and answers the OPTIONS
+# preflight with its x-swm-build marker. A redeploy WITHOUT this entry would flip it to TRUE.
+[functions.send-whatsapp-message]
+verify_jwt = false
+
+# enrich-business: FALSE live and must stay false. bulk-jobs calls it server-to-server with CRON_SECRET
+# (x-cron-secret + x-internal-job), which the gateway cannot verify; the handler checks that secret, or
+# the caller's JWT via resolveActor + mayWriteLeadId, before any spend.
+[functions.enrich-business]
+verify_jwt = false
+
+# The ten below are TRUE live, and every caller sends a real JWT: the app's supabase.functions.invoke
+# with the signed-in user's session, or (playbook-evidence) check-directory-listings with the service key.
+# Each handler also does its own role / admin check.
+[functions.apify-usage-status]
+verify_jwt = true
+
+[functions.apply-seo-paste]
+verify_jwt = true
+
+[functions.backfill-lead-towns]
+verify_jwt = true
+
+[functions.check-directory-listings]
+verify_jwt = true
+
+[functions.check-website]
+verify_jwt = true
+
+[functions.clear-enrichment-cache]
+verify_jwt = true
+
+[functions.coverage]
+verify_jwt = true
+
+[functions.market-view]
+verify_jwt = true
+
+[functions.playbook-evidence]
+verify_jwt = true
+
+[functions.submissions]
+verify_jwt = true
