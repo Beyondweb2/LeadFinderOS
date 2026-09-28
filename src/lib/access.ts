@@ -83,7 +83,15 @@ export interface LeadPermissions {
   enrichLeads: boolean;
   /** Bulk AI audits (the paid multi-lead audit job). A salesperson runs the one-lead Hook Audit. */
   bulkAudits: boolean;
+  /** Create, rename, delete campaigns (restrictive RLS: admin only). */
   campaigns: boolean;
+  /** Put leads into an EXISTING campaign — one lead (the workspace card) or the Outreach selection.
+   *  Both roles; lead_set_campaign / leads_set_campaign limit a salesperson to their own non-client leads. */
+  moveToCampaign: boolean;
+  /** "Remove from my leads" (sales_remove_leads): a salesperson hands back a never-contacted lead
+   *  (unassigned, claimable again) or archives a contacted one (owner kept, never claimable). Never a
+   *  delete. Sales only — the admin reassigns or removes instead. */
+  removeFromMyLeads: boolean;
   product: boolean;
   /** The paste-any-URL crawl check and the crawl buttons on the list rows / Inbox header (admin). */
   crawlSite: boolean;
@@ -121,6 +129,8 @@ export function leadPermissions(role: AppRole | null): LeadPermissions {
     enrichLeads: admin,
     bulkAudits: admin,
     campaigns: admin,
+    moveToCampaign: admin || role === 'sales',
+    removeFromMyLeads: role === 'sales',
     product: admin,
     crawlSite: admin,
     crawlOwnLead: admin || role === 'sales',
@@ -157,6 +167,8 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Claim an unassigned, never-contacted lead (Available to claim)', admin: 'assigns instead', sales: 'yes' },
   { feature: 'Claim / add a contacted or owned lead', admin: 'reassigns', sales: 'no' },
   { feature: 'Assign / reassign / unassign', admin: 'yes', sales: 'no' },
+  { feature: 'Move leads to an existing campaign (one or a selection)', admin: 'any lead', sales: 'own leads only' },
+  { feature: 'Remove from my leads (never contacted → back to Available to claim; contacted → archived, still yours)', admin: 'reassigns instead', sales: 'own leads, never a client or a won/onboarding lead' },
   { feature: 'Internal notes, follow-ups, call outcomes, website control, archive', admin: 'all leads', sales: 'own leads' },
   { feature: 'Stages', admin: 'all', sales: 'interested, price given, not interested, won (awaiting admin)' },
   { feature: 'Review replies', admin: 'yes', sales: 'no' },

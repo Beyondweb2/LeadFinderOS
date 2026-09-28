@@ -78,6 +78,7 @@ import {
   Tag,
   Users,
   ScrollText,
+  UserMinus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -129,7 +130,7 @@ import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
 import { salesQueueOpener } from '@/lib/leadRpc';
-import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
+import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
@@ -227,6 +228,8 @@ interface OutreachTableProps {
   /** Bulk-move the selected leads to a campaign (null = "No campaign"). Single
    *  batched write, owner-RLS scoped. Demo leads are filtered by the caller. */
   onAssignCampaign?: (leadIds: string[], campaignId: string | null) => Promise<boolean> | void;
+  /** Sales only: "Remove from my leads" over the selection (sales_remove_leads decides per lead). */
+  onRemoveFromMyLeads?: (leadIds: string[]) => Promise<boolean> | void;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -305,6 +308,7 @@ export function OutreachTable({
   onBulkJob,
   bulkJobActive = false,
   onAssignCampaign,
+  onRemoveFromMyLeads,
 }: OutreachTableProps) {
   const { toast } = useToast();
   /* ⛔ THE ONE GATE (src/lib/outreachLoad.ts). Select all, every bulk action, CSV, the Paid filter and
@@ -424,6 +428,8 @@ export function OutreachTable({
   const [showImportDialog, setShowImportDialog] = useState(false);
   // "Reset to fresh" confirm (destructive — deletes the site + wipes enrichment).
   const [resetFreshOpen, setResetFreshOpen] = useState(false);
+  const [removeMineOpen, setRemoveMineOpen] = useState(false);
+  const [removeMineBusy, setRemoveMineBusy] = useState(false);
   // Bulk WhatsApp-queue template picker (chosen at queue-time).
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
   /* Unselected by default. This pre-selected WHATSAPP_TEMPLATES[0] = booking_page_intro, the barber
@@ -1986,10 +1992,14 @@ export function OutreachTable({
 
                       {/* Bulk "Move to campaign" — reuses CampaignPicker (assign mode,
                           which adds a "No campaign" option). Each pick fires one batched
-                          write over the selection, skipping demo leads, then clears it. */}
-                      {onAssignCampaign && perms.campaigns && (
+                          write over the selection, skipping demo leads, then clears it.
+                          Both roles (2026-09-28): a salesperson's move goes through
+                          leads_set_campaign (own leads only) and can only PICK an existing
+                          campaign — New / Manage stay the admin's (hideCreate). */}
+                      {onAssignCampaign && perms.moveToCampaign && (
                         <CampaignPicker
                           mode="assign"
+                          hideCreate={!perms.campaigns}
                           value={null}
                           triggerLabel={`Move to campaign (${selectedIds.size})`}
                           className="w-[180px] h-8 text-xs bg-background"
@@ -2000,6 +2010,52 @@ export function OutreachTable({
                             setSelectedIds(new Set());
                           }}
                         />
+                      )}
+
+                      {/* "Remove from my leads" — a salesperson only. Never a delete: the server
+                          releases a never-contacted lead to Available to claim and archives a
+                          contacted one (still theirs). The dialog says exactly that first. */}
+                      {onRemoveFromMyLeads && perms.removeFromMyLeads && (
+                        <AlertDialog open={removeMineOpen} onOpenChange={(o) => { if (!removeMineBusy) setRemoveMineOpen(o); }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRemoveMineOpen(true)}
+                            className="bg-background text-xs h-8"
+                            data-testid="bulk-remove-from-my-leads"
+                            title="Take these leads out of your pipeline. Nothing is deleted."
+                          >
+                            <UserMinus className="h-3.5 w-3.5 mr-1.5" />
+                            {REMOVE_FROM_MY_LEADS_LABEL} ({selectedIds.size})
+                          </Button>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remove {selectedIds.size} lead{selectedIds.size === 1 ? '' : 's'} from your leads?</AlertDialogTitle>
+                              <AlertDialogDescription asChild>
+                                <ul className="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground">
+                                  {REMOVE_FROM_MY_LEADS_EXPLAINER.map((line) => <li key={line}>{line}</li>)}
+                                </ul>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={removeMineBusy}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                disabled={removeMineBusy}
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
+                                  if (ids.length === 0) { setRemoveMineOpen(false); return; }
+                                  setRemoveMineBusy(true);
+                                  try { await onRemoveFromMyLeads(ids); } finally { setRemoveMineBusy(false); }
+                                  setRemoveMineOpen(false);
+                                  setSelectedIds(new Set());
+                                }}
+                              >
+                                {removeMineBusy ? 'Removing…' : REMOVE_FROM_MY_LEADS_LABEL}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
                     </>
                   )}

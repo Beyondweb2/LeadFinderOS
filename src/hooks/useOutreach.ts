@@ -4,12 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/fetchAllRows';
 import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
-import { salesPatchLead } from '@/lib/leadRpc';
+import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { refusalText } from '@/lib/salesCrm';
+import { campaignMoveText, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { salesAddPayload } from '@/lib/salesAddPayload';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
@@ -258,7 +258,16 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       const src = leadSourceFor(roleRef.current);
       const { data, error } = await (supabase as unknown as { from: (t: string) => any })
         .from(src.table).select(src.listSelect).eq('id', leadId).maybeSingle();
-      if (error || !data) return;
+      if (error) return;
+      /* A salesperson's view answering NO ROW means the lead is no longer theirs (removed from their
+         leads, or reassigned by the admin): drop the stale copy rather than keep showing it. */
+      if (!data) {
+        if (roleRef.current === 'sales') {
+          setLeads((prev) => prev.filter((l) => l.id !== leadId));
+          setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
+        }
+        return;
+      }
       placeRow(data as OutreachLead);
     };
     window.addEventListener('lead-row-changed', onChanged);
@@ -1041,9 +1050,27 @@ export function useOutreach({ history = true, progressive = false }: { history?:
   // write, owner-RLS scoped (only the caller's own rows are touched). Optimistically
   // patches both leads + archivedLeads lists so the move shows instantly (and leads
   // re-bucket under the page's campaign filter without a refetch).
-  const assignCampaign = useCallback(async (leadIds: string[], campaignId: string | null): Promise<boolean> => {
-    if (isSales()) { refuseForSales('Moving leads between campaigns'); return false; }
+  const assignCampaign = useCallback(async (leadIds: string[], campaignId: string | null, campaignName: string | null = null): Promise<boolean> => {
     if (leadIds.length === 0) return false;
+    /* ⛔ A SALESPERSON MOVES THROUGH THE SAME RULE AS THE WORKSPACE'S CAMPAIGN CARD (2026-09-28):
+       leads_set_campaign runs lead_set_campaign on each lead — own, non-client leads only, an existing
+       campaign, the one campaign_id column, one activity row per change. A direct update here would be
+       a silent 0-row "success" for them. The moved rows are then re-read from their view. */
+    if (isSales()) {
+      const r = await leadsSetCampaign(leadIds, campaignId);
+      if (!r.ok) {
+        toast({ title: 'Not moved', description: refusalText(r.error), variant: 'destructive' });
+        return false;
+      }
+      const src = leadSourceFor('sales');
+      const { data } = await (supabase as unknown as { from: (t: string) => any })
+        .from(src.table).select(src.listSelect).in('id', leadIds);
+      for (const row of (data ?? []) as OutreachLead[]) placeRow(row);
+      for (const id of leadIds) notifyLeadChanged(id, syncOriginRef.current);
+      const skipped = Object.values(r.skipped ?? {}).reduce((a, b) => a + b, 0);
+      toast({ title: skipped ? 'Some leads not moved' : 'Moved', description: campaignMoveText(r, campaignName), variant: skipped ? 'destructive' : undefined });
+      return (r.moved ?? 0) + (r.unchanged ?? 0) > 0;
+    }
     const { error } = await supabase
       .from('outreach_leads')
       .update({ campaign_id: campaignId })
@@ -1058,6 +1085,37 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     setArchivedLeads((prev) => prev.map(patch));
     return true;
   }, []);
+
+  /* "REMOVE FROM MY LEADS" — a salesperson only (2026-09-28). The server decides per lead
+     (sales_remove_leads): never contacted → released to Available to claim; contacted → archived and
+     still theirs; clients, won/onboarding and queued leads refused. Nothing is deleted. Released rows
+     leave both lists; archived ones are re-read and move to the archive. */
+  const removeFromMyLeads = useCallback(async (leadIds: string[]): Promise<boolean> => {
+    if (!isSales()) { toast({ title: 'Not available', description: 'The admin reassigns or removes leads instead.', variant: 'destructive' }); return false; }
+    if (leadIds.length === 0) return false;
+    const r = await salesRemoveLeads(leadIds);
+    if (!r.ok) {
+      toast({ title: 'Not removed', description: refusalText(r.error), variant: 'destructive' });
+      return false;
+    }
+    const released = new Set((r.results ?? []).filter((x) => x.outcome === 'released').map((x) => x.id));
+    const archived = (r.results ?? []).filter((x) => x.outcome === 'archived').map((x) => x.id);
+    if (released.size) {
+      setLeads((prev) => prev.filter((l) => !released.has(l.id)));
+      setArchivedLeads((prev) => prev.filter((l) => !released.has(l.id)));
+    }
+    if (archived.length) {
+      const src = leadSourceFor('sales');
+      const { data } = await (supabase as unknown as { from: (t: string) => any })
+        .from(src.table).select(src.listSelect).in('id', archived);
+      for (const row of (data ?? []) as OutreachLead[]) placeRow(row);
+    }
+    for (const x of r.results ?? []) if (x.outcome !== 'refused') notifyLeadChanged(x.id, syncOriginRef.current);
+    window.dispatchEvent(new CustomEvent('sales-lead-changed'));
+    const skipped = Object.values(r.skipped ?? {}).reduce((a, b) => a + b, 0);
+    toast({ title: skipped ? 'Some leads not removed' : 'Removed from your leads', description: removeOutcomeText(r), variant: skipped ? 'destructive' : undefined });
+    return released.size + archived.length > 0;
+  }, [placeRow]);
 
   const deleteLead = useCallback(async (leadId: string, silent = false) => {
     if (isSales()) { refuseForSales('Removing a lead'); return false; }
@@ -1873,6 +1931,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     addLead,
     updateLead,
     assignCampaign,
+    removeFromMyLeads,
     updateStatus,
     updateNextAction,
     updateNotes,

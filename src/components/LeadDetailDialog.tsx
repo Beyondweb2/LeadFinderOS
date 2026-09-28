@@ -752,7 +752,7 @@ function LeadDetailBody({
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
           <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}

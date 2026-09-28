@@ -172,8 +172,47 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'stage_not_allowed': return 'Only the admin can set that status';
     case 'admin_only': return 'Only the admin can change that';
     case 'unknown_campaign': return 'That campaign no longer exists';
+    case 'sales_only': return 'Only a salesperson removes leads from their own list';
+    case 'queued': return 'An opener is waiting to send — it cannot be removed until it has gone';
+    case 'onboarding': return 'Won / onboarding — the admin handles it from here';
+    case 'not_yours': return 'Not assigned to you, or a client';
+    case 'no_leads': return 'Select at least one lead';
+    case 'too_many': return 'Too many at once — select 500 or fewer';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
+}
+
+/* ── "REMOVE FROM MY LEADS" (2026-09-28) — the words, in one place for the workspace and the bulk bar.
+   What happens is decided by sales_remove_leads, per lead; this only says it. ⛔ Never "delete". */
+export const REMOVE_FROM_MY_LEADS_LABEL = 'Remove from my leads';
+export const REMOVE_FROM_MY_LEADS_EXPLAINER: readonly string[] = [
+  'Never contacted: it goes back to Available to claim, so someone else can pick it up. Its notes and history stay with it.',
+  'Already contacted (a call, message, email or any logged contact): it is archived and stays yours, with its history. It never goes back to Available to claim.',
+  'Nothing is deleted. Clients, won / onboarding leads and leads with an opener waiting to send are left as they are.',
+];
+
+/** One sentence for what the server did. */
+export function removeOutcomeText(r: { released?: number; archived?: number; skipped?: Record<string, number> }): string {
+  const parts: string[] = [];
+  const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
+  if (r.released) parts.push(`${n(r.released, 'lead', 'leads')} back in Available to claim`);
+  if (r.archived) parts.push(`${n(r.archived, 'contacted lead', 'contacted leads')} archived (still yours)`);
+  for (const [reason, count] of Object.entries(r.skipped ?? {})) {
+    if (count > 0) parts.push(`${count} not removed — ${refusalText(reason)}`);
+  }
+  return parts.length ? parts.join(' · ') : 'Nothing changed';
+}
+
+/** One sentence for a bulk campaign move. */
+export function campaignMoveText(r: { moved?: number; unchanged?: number; skipped?: Record<string, number> }, campaignName: string | null): string {
+  const parts: string[] = [];
+  const to = campaignName ? `to ${campaignName}` : 'out of their campaign';
+  if (r.moved) parts.push(`${r.moved} moved ${to}`);
+  if (r.unchanged) parts.push(`${r.unchanged} already there`);
+  for (const [reason, count] of Object.entries(r.skipped ?? {})) {
+    if (count > 0) parts.push(`${count} not moved — ${refusalText(reason)}`);
+  }
+  return parts.length ? parts.join(' · ') : 'Nothing changed';
 }
 
 export const QUEUE_SKIP_LABEL: Record<string, string> = {

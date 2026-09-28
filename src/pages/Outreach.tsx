@@ -40,6 +40,7 @@ const Outreach = () => {
     updateNotes,
     updateBusinessName,
     assignCampaign,
+    removeFromMyLeads,
     fetchActivities,
     deleteMultiple,
     resetMultiple,
@@ -379,8 +380,11 @@ const Outreach = () => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateLead(leadId, { image_url: imageUrl });
         } : undefined}
-        onAssignCampaign={perms.campaigns ? (leadIds, campaignId) =>
-          assignCampaign(leadIds.filter((id) => !isDemoLead(id)), campaignId)
+        onAssignCampaign={perms.moveToCampaign ? (leadIds, campaignId) =>
+          assignCampaign(leadIds.filter((id) => !isDemoLead(id)), campaignId, campaigns.find((c) => c.id === campaignId)?.name ?? null)
+        : undefined}
+        onRemoveFromMyLeads={perms.removeFromMyLeads ? (leadIds) =>
+          removeFromMyLeads(leadIds.filter((id) => !isDemoLead(id)))
         : undefined}
         fetchActivities={perms.editLeadRecord ? fetchActivities : undefined}
         campaignDefaultSaleTypeByLead={campaignDefaultSaleTypeByLead}
