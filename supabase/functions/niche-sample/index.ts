@@ -220,9 +220,11 @@ Deno.serve(async (req) => {
       for (const t of plan.towns) {
         const row = byCode.get(t.ons_code);
         const q = nicheQuestions(trade, t.name);
-        if (!row || row.suppressed_at || row.name.trim() !== t.name || bandOf(row.population) !== t.band || regions.has(String(row.region))
-          || !q.ok || JSON.stringify(q.questions) !== JSON.stringify(t.questions)) {
+        if (!row || row.suppressed_at || row.name.trim() !== t.name || bandOf(row.population) !== t.band || regions.has(String(row.region))) {
           return json({ ok: false, error: "plan_invalid", detail: `Plan the check again — ${t.name} no longer matches the towns list.` }, 400);
+        }
+        if (!q.ok || JSON.stringify(q.questions) !== JSON.stringify(t.questions)) {
+          return json({ ok: false, error: "plan_invalid", detail: `Plan the check again — the questions for ${t.name} are not the four this check asks.` }, 400);
         }
         regions.add(String(row.region));
       }

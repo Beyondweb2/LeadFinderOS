@@ -344,9 +344,13 @@ export function nicheSampleVerdict(trade: string, inputs: readonly NicheTownInpu
   if (agree(w.length)) {
     verdict = 'WORKABLE';
     const lowCov = count('low_coverage_healthy_market');
-    why = lowCov >= count('fragmented')
-      ? `Google lists plenty of local ${tradeWords}, but Gemini names few of them in ${lowCov} of ${readable.length} towns — the gap Findable's work on a client's own website closes.`
-      : `Gemini spreads its answers across many different local ${tradeWords} in ${count('fragmented')} of ${readable.length} towns — no small group holds the recommendations, so a client can win a place.`;
+    const frag = count('fragmented');
+    /* Name every town that supports the verdict — "1 of 3 towns" under a WORKABLE read as the minority. */
+    why = lowCov && frag
+      ? `In ${w.length} of ${readable.length} towns Gemini leaves room: it spreads its answers across many local ${tradeWords} in ${frag === 1 ? 'one' : frag}, and names few of the providers Google lists in ${lowCov === 1 ? 'another' : lowCov} — the gap Findable closes.`
+      : lowCov
+        ? `Google lists plenty of local ${tradeWords}, but Gemini names few of them in ${lowCov} of ${readable.length} towns — the gap Findable's work on a client's own website closes.`
+        : `Gemini spreads its answers across many different local ${tradeWords} in ${frag} of ${readable.length} towns — no small group holds the recommendations, so a client can win a place.`;
     nextStep = `Find leads in these towns and start outreach — pitch Gemini visibility first.`;
   } else if (agree(h.length)) {
     verdict = 'HARDER NICHE';
