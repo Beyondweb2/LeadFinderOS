@@ -78,7 +78,11 @@ export interface FunnelCounts {
   onboardingOpened: number;
   won: number;
 }
-export interface CampaignRow extends FunnelCounts { campaignId: string | null; name: string; byChannel: Record<ContactChannel, number> }
+export interface CampaignRow extends FunnelCounts {
+  campaignId: string | null; name: string; byChannel: Record<ContactChannel, number>;
+  /** The newest contact (send or logged contact) on any of its leads — for "Hide inactive" only. */
+  lastActivityAt: string | null;
+}
 export interface TemplateRow {
   template: string;
   sends: number;
@@ -90,6 +94,8 @@ export interface TemplateRow {
   onboardingSent: number;
   onboardingOpened: number;
   won: number;
+  /** The newest real send of this template — for "Hide inactive" only. */
+  lastActivityAt: string | null;
 }
 export interface ChannelRow { channel: ContactChannel; contacted: number; responded: number }
 export interface SourceRow extends FunnelCounts { source: string | null }
@@ -119,6 +125,7 @@ const t = (iso: string) => Date.parse(iso);
 interface LeadFacts {
   lead: PerfLead;
   firstContactMs: number | null;
+  lastContactMs: number | null;
   contactCount: number;
   channels: Set<ContactChannel>;
   respondedChannels: Set<ContactChannel>;
@@ -207,6 +214,7 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     const f: LeadFacts = {
       lead,
       firstContactMs: contactTimes.length ? Math.min(...contactTimes) : null,
+      lastContactMs: contactTimes.length ? Math.max(...contactTimes) : null,
       contactCount: contactTimes.length,
       channels, respondedChannels,
       responded: respondedChannels.size > 0,
@@ -236,6 +244,7 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
       if (sinceMs !== null && t(m.created_at) < sinceMs) continue;
       const row = rowFor(templateAgg, m.template_name);
       row.sends += 1; row._leads.add(lead.id);
+      if (!row.lastActivityAt || m.created_at > row.lastActivityAt) row.lastActivityAt = m.created_at;
     }
     for (const tpl of mineCredited) {
       const row = rowFor(templateAgg, tpl);
@@ -270,10 +279,14 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
     const cKey = f.lead.campaign_id ?? '';
     let row = byCampaign.get(cKey);
     if (!row) {
-      row = { ...zeroFunnel(), campaignId: f.lead.campaign_id, name: f.lead.campaign_id ? (input.campaignNames.get(f.lead.campaign_id) ?? 'Campaign') : 'No campaign', byChannel: zeroChannels() };
+      row = { ...zeroFunnel(), campaignId: f.lead.campaign_id, name: f.lead.campaign_id ? (input.campaignNames.get(f.lead.campaign_id) ?? 'Campaign') : 'No campaign', byChannel: zeroChannels(), lastActivityAt: null };
       byCampaign.set(cKey, row);
     }
     add(row, f);
+    if (f.lastContactMs !== null) {
+      const iso = new Date(f.lastContactMs).toISOString();
+      if (!row.lastActivityAt || iso > row.lastActivityAt) row.lastActivityAt = iso;
+    }
     for (const ch of f.channels) row.byChannel[ch] += 1;
     const sKey = f.lead.lead_source ?? '';
     let srow = bySource.get(sKey);
@@ -314,7 +327,7 @@ export function foldSalesPerformance(input: FoldInput): SalesPerformance {
 function rowFor(m: Map<string, TemplateRow & { _leads: Set<string> }>, template: string) {
   let r = m.get(template);
   if (!r) {
-    r = { template, sends: 0, leadsSent: 0, replies: 0, repliesContested: 0, interested: 0, notInterested: 0, onboardingSent: 0, onboardingOpened: 0, won: 0, _leads: new Set() };
+    r = { template, sends: 0, leadsSent: 0, replies: 0, repliesContested: 0, interested: 0, notInterested: 0, onboardingSent: 0, onboardingOpened: 0, won: 0, lastActivityAt: null, _leads: new Set() };
     m.set(template, r);
   }
   return r;
