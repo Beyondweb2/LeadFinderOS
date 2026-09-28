@@ -92,9 +92,10 @@ const ACTION_ICON: Record<string, typeof Clock> = {
   reply_waiting: MessageCircleReply, follow_up_overdue: AlertTriangle, follow_up_due: CalendarClock, signup_opened: Flame,
   interested_untouched: Star, signup_unopened: Send, audit_ready: Sparkles, going_cold: Snowflake,
 };
-export function NextActions({ items, go }: { items: NextAction[]; go: Go }) {
+export function NextActions({ items, go, onFocus }: { items: NextAction[]; go: Go; onFocus?: () => void }) {
   return (
-    <Panel title="Your next best actions" icon={Target} tone="blue" hint="The most useful thing to do for each lead, most urgent first. Tap to open it.">
+    <Panel title="Your next best actions" icon={Target} tone="blue" hint="The most useful thing to do for each lead, most urgent first. Tap to open it."
+      action={onFocus && items.length > 0 ? <Button size="sm" className="h-8 gap-1 text-xs" onClick={onFocus}><Target className="h-3.5 w-3.5" />Focus Mode</Button> : undefined}>
       {items.length === 0 ? <Empty icon={CheckCircle2}>Nothing waiting on you right now. New replies, due follow-ups and warm leads will show here.</Empty> : (
         <ul className="space-y-1.5">
           {items.map((a) => {

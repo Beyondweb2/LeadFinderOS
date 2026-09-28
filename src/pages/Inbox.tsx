@@ -67,6 +67,7 @@ import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTrian
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import { notifyLeadChanged } from '@/lib/leadSync';
+import { markLeadInterested, setLeadPipelineStatus } from '@/lib/leadQuickActions';
 import { recordOnboardingLinkEvent } from '@/hooks/useOnboardingLink';
 import { ONBOARDING_LINK_RE, previewUrl } from '@/lib/onboardingLinkStatus';
 import {
@@ -726,13 +727,10 @@ const Inbox = () => {
     // persist the separate tracked/starred flag instead.
     if (!maySetStatus(perms, status)) { toast({ title: 'Admin only', description: refusalText('stage_not_allowed'), variant: 'destructive' }); return; }
     if (status === 'interested') {
-      const error = perms.editLeadRecord
-        ? (await (supabase as unknown as { from: (t: string) => any })
-            .from('outreach_leads').update({ is_potential_work: true }).eq('id', c.leadId)).error
-        : await salesPatchLead(c.leadId, { is_potential_work: true }).then((r) => (r.ok ? null : { message: refusalText(r.error) }));
-      if (error) { toast({ title: 'Could not mark interested', description: error.message, variant: 'destructive' }); return; }
+      /* ONE path for both roles (src/lib/leadQuickActions.ts, shared with Focus Mode); it notifies too. */
+      const r = await markLeadInterested(c.leadId, perms.editLeadRecord);
+      if (!r.ok) { toast({ title: 'Could not mark interested', description: r.error, variant: 'destructive' }); return; }
       patchLeadPotentialWork(c.leadId, true);
-      notifyLeadChanged(c.leadId); // Outreach, the prospect panel and other tabs re-read the row
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: true } : s));
       toast({ title: 'Marked interested', description: 'The pipeline status was left unchanged.' });
       return;
@@ -742,15 +740,11 @@ const Inbox = () => {
     }
     setSavingStatusKey(c.key);
     try {
-      const { error } = perms.editLeadRecord
-        ? await updateLeadStatus(c.leadId, status)
-        : await salesPatchLead(c.leadId, { status }).then((r) => ({ error: r.ok ? null : refusalText(r.error) }));
-      if (error) { toast({ title: 'Could not update status', description: error, variant: 'destructive' }); return; }
-      if (!perms.editLeadRecord && status === 'not_interested') {
-        void supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: c.leadId, reason: 'not_interested' } });
-      }
+      /* ONE path for both roles (src/lib/leadQuickActions.ts): the admin's direct write, a salesperson's
+         ownership-checked one + the queue stop on "not interested"; it notifies every screen. */
+      const r = await setLeadPipelineStatus(c.leadId, status, perms.editLeadRecord);
+      if (!r.ok) { toast({ title: 'Could not update status', description: r.error, variant: 'destructive' }); return; }
       patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
-      notifyLeadChanged(c.leadId); // Outreach, the prospect panel and other tabs re-read the row
       /* ⛔ AND THE SYNTHETIC COPY, or the header/list pill would show the OLD status until the next
          refetch. `conversations` is derived from `leads`, so patchLeadStatus covers every real
          conversation — but a synthetic one (startFromLead, a lead with no thread yet) is a useState

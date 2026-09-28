@@ -30,6 +30,9 @@ export const SALES_ROUTE_PATTERNS: readonly string[] = [
   /* Earnings (2026-09-28): a salesperson's own commission from the payment ledger (fn sales-earnings
      scopes it server-side). */
   '/earnings',
+  /* Focus Mode (2026-09-28): one of the person's own leads at a time — the same reads and lead
+     functions as the lead workspace. */
+  '/focus',
   '/outreach',
   '/inbox',
   '/find-leads',
@@ -57,7 +60,7 @@ function matches(pattern: string, path: string): boolean {
 /** A salesperson's navigation, in the order of the working day (Paul, 2026-09-28): results → find
  *  leads → work the pipeline → market coverage → messages. Order only — canOpenRoute decides what is
  *  shown. The sidebar reads it; the mobile bar follows it (Inbox stays on the bar, see there). */
-export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/earnings', '/find-leads', '/outreach', '/coverage', '/inbox'];
+export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/earnings', '/focus', '/find-leads', '/outreach', '/coverage', '/inbox'];
 
 /** Sort nav items for a role. Admin: unchanged (the list's own order). Sales: SALES_NAV_ORDER, and any
  *  sales-visible item not named there goes AFTER them, in list order — never jumps to the top. */
@@ -167,6 +170,7 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Full measurement / Discovery / Baseline / Remeasure', admin: 'yes', sales: 'no' },
   { feature: 'Sales dashboard (campaigns, templates, calls, sign-up links, won)', admin: 'anyone or everyone', sales: 'own leads only; own commission only' },
   { feature: 'Earnings (commission from real client payments)', admin: 'everyone, per seller; records payouts', sales: 'own clients only' },
+  { feature: 'Focus Mode, command palette (Ctrl K), recent leads, saved views', admin: 'yes', sales: 'own leads only' },
   { feature: 'Coverage', admin: 'yes', sales: 'yes (counts)' },
   { feature: 'Find Leads', admin: 'yes', sales: 'yes' },
   { feature: 'Add a new business', admin: 'yes', sales: 'yes (never a duplicate)' },

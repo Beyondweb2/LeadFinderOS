@@ -5,6 +5,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { ReviewQueueTab } from '@/components/ReviewQueueTab';
 import { NotificationCenter } from '@/components/NotificationCenter';
+import { CommandPalette, PaletteButton } from '@/components/CommandPalette';
 import appLogo from '@/assets/logo.png';
 import { useAuth } from '@/hooks/useAuth';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -55,7 +56,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Phone top bar (Sales Experience, 2026-09-28): the notification bell's home on a phone. */}
           <div className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between border-b border-border/60 bg-card/95 px-3 backdrop-blur-xl md:hidden">
             <span className="flex items-center gap-2 text-sm font-bold tracking-tight"><img src={appLogo} alt="" className="h-6 w-6" />Lead<span className="-ml-2 text-primary">Finder</span></span>
-            <NotificationCenter variant="mobile" />
+            <span className="flex items-center gap-0.5"><PaletteButton compact /><NotificationCenter variant="mobile" /></span>
           </div>
           <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
             <div className="container max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
@@ -75,6 +76,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* The notification bell, bottom-right on desktop (the phone's is in the top bar above). */}
         <NotificationCenter variant="desktop" />
+        <CommandPalette />
 
         {/* ⛔ THE REVIEW QUEUE, HERE BECAUSE THIS SHELL MOUNTS ONCE. It renders nothing at all when
             nobody is waiting, so it costs every other screen a single cheap RLS-scoped read and no

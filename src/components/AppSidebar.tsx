@@ -16,8 +16,9 @@ import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
-  BarChart3, MessageCircle, Wallet,
+  BarChart3, MessageCircle, Wallet, Target,
 } from 'lucide-react';
+import { PaletteButton } from '@/components/CommandPalette';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
 
@@ -41,6 +42,7 @@ export function AppSidebar() {
     { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },
     { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'Results by campaign and template' },
     { title: 'Earnings', url: '/earnings', icon: Wallet, description: 'Commission from client payments' },
+    { title: 'Focus Mode', url: '/focus', icon: Target, description: 'One lead at a time' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
@@ -85,6 +87,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="p-2">
+        <div className="px-1 pb-2 pt-1"><PaletteButton /></div>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>

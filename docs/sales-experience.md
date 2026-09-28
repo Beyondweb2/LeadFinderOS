@@ -142,3 +142,29 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
 - **Tests:** `scripts/sales-notifications.test.ts`; `supabase/tests/notifications.sql` — 16/16 live, rolled
   back (two replies → one row count 2; failed send; own-row reads, other rep 0, anon 0, forged insert
   denied; mark read; assignment rules; follow-up once per date; clear).
+
+## 6. Release 4 — Focus Mode, the command palette, recent leads, saved views, shortcuts
+
+- **Focus Mode** (`/focus`, both roles; nav + phone More; dashboard "Focus Mode" button): one lead at a
+  time from a queue (`src/lib/focusQueue.ts`) — the dashboard's next best actions, or a SAVED VIEW:
+  follow up today, overdue, replied unanswered, interested, signup sent, warm, going cold (the same
+  workspace lists, so a view means one thing everywhere). `?lead=` opens one lead first. It shows the
+  business, trade, town, contact, status; WhatsApp (the deep link) / Call (tel:) / LinkedIn (a search
+  link) / Email; the latest 6 messages; the audit (`LeadHookPanel`); optional talking points (the call
+  script, folded away); and the lead workspace's own `LeadWorkPanel` (log a contact on any channel,
+  Next Action, campaign, internal note). Interested / Not interested use `src/lib/leadQuickActions.ts`.
+- **One path for Interested / Not interested** (`leadQuickActions.ts`): the Inbox's status pill now calls
+  it too, so the admin-direct / sales-ownership-checked split and the sales "suppress_lead" queue stop
+  are written once.
+- **Command palette** (`CommandPalette`, in the shell; Ctrl/Cmd+K, the sidebar "Search…" box, the phone
+  top bar's search icon): lead search (the person's own table/view, archived excluded), recent leads,
+  go-to pages (only routes the role can open), follow-ups, saved views, campaigns (opens Outreach on that
+  campaign). Each lead row: Open (workspace) · WhatsApp · Focus.
+- **Recent leads** (`useRecentLeads`): what THIS person worked — their own `lead_activity` and their own
+  hand-sent WhatsApp messages, newest first.
+- **Shortcuts** (`src/lib/shortcuts.ts`): Ctrl/Cmd+K; `g d/w/o/l/f/e/c`; `?` help; Focus → / ← (n / p).
+  Never while typing, and none of them sends or writes (asserted by test).
+- ⚠️ **Typecheck baseline re-recorded (count unchanged, 9):** the `OutreachStatusBadge` TS2740 message
+  lists the missing statuses in type-creation order, and the new files changed that order — the same
+  error, reworded. No error was fixed or added.
+- **Tests:** `scripts/sales-productivity.test.ts`.
