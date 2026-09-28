@@ -25,6 +25,7 @@ import { qualifyPlace, placeSuffixForCountry } from '../src/lib/seedGuard.ts';
 import { sendWindowForDigits, windowOpenForDigits, anyWindowOpen, INDIA_SEND_WINDOW, LONDON_SEND_WINDOW } from '../src/lib/sendWindow.ts';
 import { salesAddPayload } from '../src/lib/salesAddPayload.ts';
 import { queuedLeadLine } from '../src/lib/queueLine.ts';
+import { nameMatches } from '../src/lib/nameMatch.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
@@ -197,6 +198,16 @@ console.log('\n── Add a lead (Sales + Admin share it) asks for the country �
 
 console.log('\n── Free-check / backfill place resolver sends a real region code ──');
 ok(/regionCode: normCountry\(country \?\? "UK"\) \?\? "GB"/.test(read('supabase/functions/_shared/place-resolve.ts')), 'regionCode via normCountry (India → IN; UK → GB as before)');
+
+console.log('\n── Naming: a title is not a name (live Jaipur hook, 2026-09-28) ──');
+{
+  const ctx = { trade: 'lawyer', town: 'Jaipur' };
+  const rival = 'Top picks: **Advocate Hemant Sharma:** frequently recommended for civil matters. Advocate Shruti Goyal handles family law.';
+  ok(!nameMatches(rival, 'Advocate Umesh Sharma', ctx), '"Advocate Umesh Sharma" is NOT named by an answer about other advocates (was 6/6)');
+  ok(nameMatches('You could try Advocate Umesh Sharma in Jaipur.', 'Advocate Umesh Sharma', ctx), '…and IS named when the answer names him');
+  ok(nameMatches('Umesh Sharma is a well-regarded advocate.', 'Umesh Sharma Advocate', ctx), 'a name with the title last still matches its core');
+  ok(nameMatches('Try MC Locksmiths centre, they are quick.', 'MCLocksmiths centre', { trade: 'locksmith', town: 'Canterbury' }), 'UK unchanged: the lone-token rule still names MCLocksmiths');
+}
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
 console.log('\nALL PASS');

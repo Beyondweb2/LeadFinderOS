@@ -91,9 +91,46 @@ already finds the right businesses; the salesperson can type the Indian term.
 - Deploy: SQL applied and read back (India clause + unchanged UK clause, grants and search_path kept);
   15 functions deployed and each bundle carries a new-code marker.
 
-## 5. Hook Audit and the engines
+## 5. Hook Audit and the engines (4 live hooks, 24 answers, 2026-09-28)
 
-(filled in below from the two live audits)
+Audits: MISS DENTIST (Pune, as Sales), CA Sagar Parsewar (Pune, as admin), Floorplan Interior Design
+Studio (Bengaluru), Advocate Umesh Sharma (Jaipur). Stored `ai_audits.country = India`; the actor ran
+with `countryCode: in`. Questions (proposed by the app, unedited): "best dentist in Pune India",
+"dentist for children in Pune India", "emergency dentist in Pune India who can see me today", "best
+chartered accountant in Pune India", "who can help me with my tax returns if I'm self-employed in Pune
+India", "financial statements preparation for startups in Pune India", "best lawyer in Jaipur India",
+"family lawyer in Jaipur India", "who is a good lawyer for property disputes in Jaipur India", and three
+Bengaluru interior-design questions. UK preview unchanged ("best locksmith in Wisbech UK …").
+
+- **24/24 answered (6/6 per hook), 0 mention the UK, every answer is about the Indian city.**
+- ChatGPT named ≥1 firm in 12/12 (mean 6.2); **Gemini in 8/12 (mean 3.0)** — Gemini answered 4 of the
+  12 with generic advice and no firm (emergency dentist, self-employed tax, startup accounts, property
+  disputes). The same shape as the UK: Gemini is the harder, more fragmented engine.
+- Rivals named are real local firms — many are the same businesses Find Leads returned (MJS And Co,
+  CA Dhiraj Ostwal, Smilekraft Dentistry, Go-Best Dentist, Advocate J P Rinwa, Sunil Sharma & Associates).
+  Chains/nationals appear too: Clove Dental and Sabka Dentist (Gemini), Livspace / HomeLane / Design
+  Cafe (interior design, both engines), Jehangir Hospital. Office interiors surfaced nationals/MNCs
+  (Space Matrix, M Moser, Gensler).
+- Citations: ChatGPT leaned on directories/portals — practo.com (2), lawrato.com (3), livspace.com (2),
+  nobroker.in, icai.org / mca.gov.in / incometax.gov.in; **Gemini cited firms' OWN sites** where it cited
+  at all (jprinwa.com, advocateshrutigoyal.com, panchaminteriors.com, interiordesk.in) plus justdial.com
+  once. Consistent with the UK finding (ChatGPT reads directories, Gemini reads businesses' websites) —
+  4 hooks, evidence not proof.
+- The audited businesses were named 0/6 (dentist, CA), 2/6 (Floorplan — a dictionary-word name, see
+  below) and 0/6 (Umesh Sharma, after the fix).
+- 🔴 **Found and fixed: a title read as a name.** "Advocate Umesh Sharma" scored **6/6 named** (stored
+  flag AND the app's ruler) although "Umesh" appears in no answer: the lone-token rule in
+  `src/lib/nameMatch.ts` took "advocate" (8 letters, not the trade "lawyer") as the firm. Titles are now
+  excluded (`PERSON_TITLE_TOKENS`); the ruler reads 0/6. Measured first: one audit in the book ever
+  started with "Advocate" (this QA one) — zero UK results change. The stored flag on that QA audit
+  stays as written; it was deleted with the QA records.
+- ⚠️ Not fixed: "Floorplan Interior Design Studio" reads 2/6 because answers say "floor plan" and the
+  joined-spelling rule makes that "floorplan". A dictionary-word business name — not India-specific.
+- Report: questions and rivals read correctly for India; **the no-website panel shows "£99 to start,
+  then £99 a month…" and the refund line "£99"** — do not send Indian prospects the report link until
+  Paul decides the India offer copy (§6). No other UK wording on the page.
+- Language: English only was tested. Hindi / Hinglish questions ("Pune mein accha dentist") are worth a
+  later controlled test — Indian users often search that way; nothing here was built for it.
 
 ## 6. Pricing / INR — what closing needs (not built)
 
