@@ -167,7 +167,9 @@ export function serveDecision(input: ServeInput): ServeDecision {
       code: "platform_unknown",
       reason: migrate === "no"
         ? "Won't move the site and we don't know what it's built on. Check the site by hand before ruling it out."
-        : "Website questions not asked yet — they come after payment. Nothing known about the platform, which is normal for a new submission.",
+        /* 2026-09-28: the domain / site-access questions are asked BEFORE payment now; only the platform
+           and the move-to-our-hosting question still come after it (complete_q2). */
+        : "Website platform not known yet — that question comes after payment, which is normal for a new submission.",
     };
   }
 
