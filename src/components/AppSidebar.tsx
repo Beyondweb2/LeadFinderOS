@@ -16,8 +16,9 @@ import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
-  BarChart3, MessageCircle, Wallet, Target,
+  BarChart3, MessageCircle, Wallet, Target, MessageSquarePlus,
 } from 'lucide-react';
+import { FeedbackNewsButtons } from '@/components/FeedbackAndNews';
 import { PaletteButton } from '@/components/CommandPalette';
 import { cn } from '@/lib/utils';
 import appLogo from '@/assets/logo.png';
@@ -50,6 +51,7 @@ export function AppSidebar() {
     { title: 'Page plan', url: '/page-plan', icon: ListOrdered, description: 'The per-client page queue: distinct jobs, waves, editable' },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Team', url: '/team', icon: Users, description: 'Salespeople, invites and lead ownership' },
+    { title: 'Feedback inbox', url: '/feedback', icon: MessageSquarePlus, description: 'Team feedback and template requests' },
   ];
   /* ⛔ The matrix decides WHAT is shown (src/lib/access.ts); this decides the ORDER. The admin keeps
      every item in the list order above (Dashboard, Find Leads, Outreach, Coverage directly below it,
@@ -138,6 +140,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0 space-y-2">
+        <FeedbackNewsButtons />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">

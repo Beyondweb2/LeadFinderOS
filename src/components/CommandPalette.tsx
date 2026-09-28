@@ -92,6 +92,8 @@ export function CommandPalette() {
     for (const g of GO_SHORTCUTS) if (canOpenRoute(role, g.to) && match(g.label)) out.push({ id: `go:${g.to}`, group: 'Go to', label: g.label, hint: g.keys, icon: GO_ICON[g.to] ?? ArrowRight, run: close(() => navigate(g.to)) });
     if (canOpenRoute(role, '/sales-dashboard') && match('Follow-ups due')) out.push({ id: 'go:follow-ups', group: 'Go to', label: 'Follow-ups', hint: 'dashboard', icon: CalendarClock, run: close(() => { navigate('/sales-dashboard'); window.setTimeout(() => document.getElementById('follow-ups')?.scrollIntoView({ behavior: 'smooth' }), 900); }) });
     if (canOpenRoute(role, '/focus')) for (const v of FOCUS_VIEWS) if (match(v.label) || (t && 'saved view'.includes(t))) out.push({ id: `view:${v.key}`, group: 'Saved views', label: v.label, hint: 'Focus Mode', icon: Target, run: close(() => navigate(`/focus?view=${v.key}`)) });
+    if (match('Send feedback') || match('bug') || match('suggest')) out.push({ id: 'act:feedback', group: 'Help', label: 'Send feedback', icon: ArrowRight, run: close(() => window.dispatchEvent(new Event('open-feedback'))) });
+    if (match("What's new")) out.push({ id: 'act:news', group: 'Help', label: "What's new", icon: ArrowRight, run: close(() => window.dispatchEvent(new Event('open-whats-new'))) });
     for (const c of campaigns.data ?? []) if (t && match(c.name)) out.push({ id: `camp:${c.id}`, group: 'Campaigns', label: c.name, hint: 'open in Outreach', icon: Megaphone, run: close(() => { writeCampaignFilter(user?.id, c.id); navigate('/outreach'); }) });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps

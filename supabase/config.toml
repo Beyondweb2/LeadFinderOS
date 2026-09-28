@@ -188,6 +188,10 @@ verify_jwt = true
 [functions.sales-earnings]
 verify_jwt = true
 
+# Feedback, saved then emailed (Sales Experience release 5): signed-in callers only.
+[functions.feedback-submit]
+verify_jwt = true
+
 # template-request: "Request a template" (2026-09-28). SPA-only caller with the signed-in user's JWT; the
 # handler resolves the role itself (admin or sales), saves the request, then emails Paul. Never calls Meta.
 [functions.template-request]

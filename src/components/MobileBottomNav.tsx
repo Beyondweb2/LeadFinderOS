@@ -5,8 +5,9 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3, Map as MapIcon, Wallet, Target,
+  BarChart3, Map as MapIcon, Wallet, Target, MessageSquarePlus, Gift,
 } from 'lucide-react';
+import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -100,7 +101,7 @@ export function MobileBottomNav() {
   }, []);
 
   const allMoreItems = isAdmin 
-    ? [...moreNavItems, { title: t('common.admin'), url: '/admin', icon: ShieldCheck }, { title: 'Team', url: '/team', icon: Users }]
+    ? [...moreNavItems, { title: t('common.admin'), url: '/admin', icon: ShieldCheck }, { title: 'Team', url: '/team', icon: Users }, { title: 'Feedback inbox', url: '/feedback', icon: MessageSquarePlus }]
     : moreNavItems;
   const isMoreActive = allMoreItems.some(item => location.pathname === item.url);
 
@@ -179,6 +180,12 @@ export function MobileBottomNav() {
                 );
               })}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_FEEDBACK_EVENT))} className="flex items-center gap-3 cursor-pointer">
+                <MessageSquarePlus className="h-4 w-4" /><span>Send feedback</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_WHATS_NEW_EVENT))} className="flex items-center gap-3 cursor-pointer">
+                <Gift className="h-4 w-4" /><span>What's new</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setThemeSheetOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <Palette className="h-4 w-4" />
                 <span>{t('theme.themeColor')}</span>
