@@ -214,6 +214,8 @@ console.log("\n── alerts ──");
   ok(/if \(!isInternalCall\(req\)\) return json\(\{ ok: false, error: "forbidden" \}, 403\);/.test(sa), "the sweep is CRON_SECRET only");
   ok(/coalesce\(v_reason, v_warn\) not in \('paused', 'all_stop'\)\)/.test(MIG), "the admin's own pause is never emailed back");
   ok(/_actor::text \|\| ':' \|\| coalesce\(v_reason, v_warn\) \|\| ':' \|\| _action \|\| ':' \|\| v_day/.test(MIG) && /on conflict \(alert_key\) do update/.test(MIG), "one alert per person / event / action / day (repeats count, never re-email)");
+  ok(/case when v_reason = 'suspended' then 'any' else _action end/.test(read("supabase/migrations/20260929100100_guard_suspended_alert_once.sql")),
+    "a suspended account's attempts are ONE alert per person per day (follow-up migration, live QA)");
   const cfg = read("supabase/config.toml");
   ok(/\[functions\.security-admin\]\nverify_jwt = false/.test(cfg), "security-admin has its config.toml entry");
 }
