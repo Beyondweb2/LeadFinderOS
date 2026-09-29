@@ -13,8 +13,15 @@ const TONE: Record<string, string> = {
   green: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
 };
 
-export function ConvStateChip({ state, compact = false }: { state: ConversationState | undefined; compact?: boolean }) {
+export function ConvStateChip({ state, compact = false, hideQueued = false }: { state: ConversationState | undefined; compact?: boolean; hideQueued?: boolean }) {
   if (!state || !state.label) return null;
+  /* ⛔ ONE INDICATOR PER FACT (UI cleanup pass, 2026-09-29): a due Next Action is drawn by the
+     NextActionPill beside this chip (Overdue / Today / date) — the chip no longer repeats it as
+     "Follow-up due". hideQueued: the thread header has its own Queued pill (it says when the queue is
+     paused). */
+  const onlyFollowUp = !state.failed && state.waitingSinceMs === null && state.followUpDue;
+  const onlyQueued = !state.failed && state.waitingSinceMs === null && !state.followUpDue && state.queued;
+  if (onlyFollowUp || (hideQueued && onlyQueued)) return null;
   const Icon = state.failed ? AlertTriangle : state.waitingSinceMs !== null ? MessageCircleReply : state.followUpDue ? CalendarClock : Timer;
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full font-semibold', compact ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-[11px]', TONE[state.tone])}

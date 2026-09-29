@@ -56,6 +56,12 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   ⛔ **Next Action is human-set only** (Paul, 2026-09-28) — no add/claim/send/reply/audit/status/queue/
   cron path may write `next_action`/`next_action_date` (clearing to 'none' is fine).
   `scripts/next-action-human-only.test.ts` sweeps every writer; `supabase/tests/next-action-human-only.sql`.
+  ⛔ **One Next Action display** (UI cleanup 2026-09-29, `docs/ui-cleanup-pass.md`): every screen draws it
+  through `src/lib/nextActionView.ts` + `NextActionPill` (red overdue / amber today / grey later) and
+  offers the popup's four choices (`NEXT_ACTION_OPTIONS`, salesCrm). No device-local custom labels.
+  ⛔ **No hover template preview, anywhere** — one line under the picker, full wording only on Preview.
+  ⛔ **A logged outcome's follow-on is `outcomeStatusEffect`** (star / not interested) + the Work panel's
+  agency / call-booked / call-back prompts; `lead_log_contact` itself still writes activity only.
   ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
   what is stored and sent (`docs/whatsapp-templates.md`, last section).
   ⛔ **Abuse / API-cost protection (2026-09-29, `docs/abuse-cost-protection.md`)**: every paid or data-heavy

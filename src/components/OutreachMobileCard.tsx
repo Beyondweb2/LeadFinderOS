@@ -21,7 +21,6 @@ import {
 import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
-import { NextActionBadge } from './NextActionBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -158,7 +157,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
           )}
 
           {/* Per-type contact enrichment (email / facebook / instagram) */}
-          {onUpdateLead && (
+          {/* Enrichment is admin work (perms.enrichLeads), as on the desktop row. */}
+          {onUpdateLead && perms.enrichLeads && (
             <div className="pt-0.5">
               <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
             </div>

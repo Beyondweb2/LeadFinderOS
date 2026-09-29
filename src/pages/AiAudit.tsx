@@ -3328,15 +3328,7 @@ const AiAudit = () => {
                           GATED ON auditId ALONE, deliberately not on liveTally.done: the ranking
                           is trade-level, so the document is complete even when THIS run failed.
                           Macca-Gas's run died at the Apify cap and its playbook is still right. */}
-                      {auditId && (
-                        <DropdownMenuItem asChild>
-                          {/* Carries the open run, so Back comes straight back to this audit's
-                              results rather than dropping you at the top of the list. */}
-                          <Link to={`/playbook/${auditId}`} state={{ from: runId ? `/ai-audit?runId=${runId}` : '/ai-audit', fromLabel: 'AI Audit' }}>
-                            <MapIcon className="mr-2 h-4 w-4" /> Playbook
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
+                      {/* ⛔ REMOVED 2026-09-29 (UI cleanup): the Playbook menu item — no longer used (Paul). */}
                       {/* Credentials moved in here: an occasional field that was holding a
                           permanent row of vertical space above the actual result. */}
                       {!isDraining && liveTally.done > 0 && auditId && (

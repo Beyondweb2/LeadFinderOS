@@ -1,0 +1,130 @@
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE UI CLEANUP PASS (2026-09-29, Paul: "less UI, clearer state, fewer dead controls, every action
+   has a purpose"). Record: docs/ui-cleanup-pass.md. Pins:
+     · ONE Next Action, drawn by one rule everywhere (popup, Inbox list + header, Outreach, Focus);
+     · every logged outcome is visible afterwards (Last contact) and its follow-on is the one rule;
+     · no hover template preview anywhere; Playbook entry points gone (one kept, on purpose);
+     · Find email: our records first, then the website — and it only ever fills a blank;
+     · the Admin dashboard uses the Sales dashboard's surfaces and dropped the dead cards.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { readFileSync, existsSync } from "node:fs";
+import { nextActionView, nextActionViewOf, nextActionText } from "../src/lib/nextActionView.ts";
+import { lastLoggedContact, outcomeStatusEffect, CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail } from "../src/lib/salesCrm.ts";
+
+let f = 0;
+const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
+const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const has = (p: string) => existsSync(new URL(`../${p}`, import.meta.url));
+
+console.log("── the Next Action in words ──");
+{
+  const today = "2026-10-01";
+  ok(nextActionView(null, today) === null && nextActionView({ next_action: "none", next_action_date: "2026-10-02" }, today) === null, "none / missing → nothing drawn");
+  const od = nextActionView({ next_action: "call", next_action_date: "2026-09-29" }, today)!;
+  ok(od.bucket === "overdue" && od.when === "Overdue · 29 Sept" && od.short === "Overdue" && od.label === "Call", `overdue: "${od.when}"`);
+  const td = nextActionView({ next_action: "send_follow_up", next_action_date: today }, today)!;
+  ok(td.bucket === "today" && td.when === "Today" && td.label === "WhatsApp follow-up", "today: Today");
+  const tm = nextActionView({ next_action: "call", next_action_date: "2026-10-02" }, today)!;
+  ok(tm.when === "Tomorrow" && tm.bucket === "upcoming", "tomorrow: Tomorrow");
+  const wk = nextActionView({ next_action: "call", next_action_date: "2026-10-04" }, today)!;
+  ok(wk.when === "Sun 4 Oct" && wk.short === "4 Oct", `this week: "${wk.when}" (list: "${wk.short}")`);
+  const far = nextActionView({ next_action: "follow_up", next_action_date: "2026-11-12", next_action_note: "  ring after their website contract ends " }, today)!;
+  ok(far.when === "12 Nov" && far.note === "ring after their website contract ends", "later: the date; the note trimmed");
+  ok(nextActionText(far) === "Follow up · 12 Nov · ring after their website contract ends", "one line: action · when · note");
+  const nod = nextActionView({ next_action: "call", next_action_date: null }, today)!;
+  ok(nod.when === null && nod.short === null && nod.bucket === "none", "an action with no date still shows, with no day");
+  ok(nextActionViewOf("remove_if_no_reply", null)!.label === "Close if no reply" && nextActionViewOf("mystery_value", null)!.label === "mystery value", "older stored values have words; an unknown one shows as itself, never dropped");
+  for (const o of NEXT_ACTION_OPTIONS.filter((x) => x.value !== "none")) ok(!!nextActionViewOf(o.value, null), `the popup's choice "${o.label}" is drawn`);
+}
+
+console.log("\n── one pill, every screen ──");
+{
+  ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /<NextActionPill lead=\{row\} onClick=\{onOpenWork\} \/>/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, from the Work tab's own row; tap → Work");
+  const inbox = read("src/pages/Inbox.tsx");
+  ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
+  ok(/<NextActionPill lead=\{activeLead\} onClick=\{\(\) => setDetailLeadId\(active\.leadId\)\} \/>/.test(inbox), "Inbox header: the pill, tap → the prospect");
+  ok(/next_action, next_action_date, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note, so the header pill carries it");
+  ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
+  ok(/<NextActionPill lead=\{crm\.data\} \/>/.test(read("src/pages/Focus.tsx")), "Focus Mode: the pill on the lead card");
+  const editor = read("src/components/NextActionEditor.tsx");
+  ok(/nextActionViewOf\(action, date\)/.test(editor) && /NEXT_ACTION_OPTIONS \} from '@\/lib\/salesCrm'/.test(editor), "Outreach cell: the same words and the same four choices as the popup");
+  ok(!has("src/hooks/useCustomNextActions.ts") && !has("src/components/NextActionBadge.tsx") && !/custom::|CUSTOM_PREFIX|setLeadCustomAction/.test(editor), "the device-only custom action labels are gone (a second, invisible next-action system)");
+  const pill = read("src/components/NextActionPill.tsx");
+  ok(/overdue: 'border-red/.test(pill) && /today: 'border-amber/.test(pill) && /upcoming: 'border-border/.test(pill), "overdue red, today amber, later quiet");
+}
+
+console.log("\n── an outcome you log stays visible ──");
+{
+  const rows = [
+    { kind: "note", body: "x", data: {}, created_at: "2026-09-29T10:00:00Z", actor_user_id: "a" },
+    { kind: "call_outcome", body: null, data: { outcome: "no_answer", channel: "call" }, created_at: "2026-09-28T10:00:00Z", actor_user_id: "a" },
+    { kind: "contact_logged", body: " owner away till Friday ", data: { outcome: "wrong_number", channel: "email" }, created_at: "2026-09-29T09:00:00Z", actor_user_id: "b" },
+  ];
+  const last = lastLoggedContact(rows)!;
+  ok(last.outcome === "wrong_number" && last.tone === "bad" && last.actorId === "b" && last.note === "owner away till Friday", "the newest LOGGED contact wins (a note is not a contact); wrong number reads red");
+  ok(lastLoggedContact([]) === null && lastLoggedContact(null) === null, "nothing logged → no line");
+  ok(CALL_OUTCOMES.every((o) => lastLoggedContact([{ kind: "call_outcome", data: { outcome: o.value, channel: "call" }, created_at: "2026-09-29T00:00:00Z" }])!.outcomeLabel === o.label), "every outcome button has its words on the Last contact line");
+  ok(/<LeadStateStrip/.test(read("src/components/LeadDetailDialog.tsx")) && /data-testid="last-contact"/.test(read("src/components/LeadStateStrip.tsx")), "the popup shows Last contact on every tab");
+}
+
+console.log("\n── the one rule for what an outcome also changes ──");
+{
+  const lead = { status: "replied", is_potential_work: false, amount_paid: null };
+  ok(outcomeStatusEffect("interested", lead) === "interested" && outcomeStatusEffect("meeting_booked", lead) === "interested", "Interested / Meeting booked → the Interested star");
+  ok(outcomeStatusEffect("interested", { ...lead, is_potential_work: true }) === null, "…not twice");
+  ok(outcomeStatusEffect("not_interested", lead) === "not_interested" && outcomeStatusEffect("not_interested", { ...lead, status: "not_interested" }) === null, "Not interested → status Not interested, once");
+  ok(outcomeStatusEffect("interested", { ...lead, amount_paid: 99 }) === null && outcomeStatusEffect("not_interested", { ...lead, status: "payment_received" }) === null && outcomeStatusEffect("not_interested", { ...lead, status: "won_pending_onboarding" }) === null, "a client or a won lead is never touched");
+  for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back", "wrong_number", "agency_controls_site"]) ok(outcomeStatusEffect(o, lead) === null, `${o}: no status change (the record itself)`);
+  const crm = read("src/components/LeadCrmPanel.tsx");
+  ok(/outcome === 'agency_controls_site' && lead\.website_control !== 'agency_controls'/.test(crm) && /'lead_set_website_control', \{ _value: 'agency_controls'/.test(crm), "Agency controls site → Who controls the website = an agency (persisted, shown in the header)");
+  ok(/outcome === 'call_back'\) \{\s*\n\s*setPreset\('call'\)/.test(crm), "Call back → Call pre-selected in Next action (the person picks the day and saves)");
+  const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
+  ok(!/lead_set_follow_up/.test(logUi), "⛔ logging an outcome still never saves a next action by itself");
+  ok(/outcome === 'meeting_booked'\) \{ setAskWhen\(true\)/.test(crm) && /'lead_set_call_booked', \{ _at: v \}, 'Call booked', \{ call_booked_at: v \}/.test(crm), "Meeting booked → asks when, saved as the booked call");
+  ok(/outcomeStatusEffect\(outcome, lead\)/.test(read("src/components/LeadDetailDialog.tsx")) && /outcomeStatusEffect\(outcome, lead\)/.test(read("src/pages/Focus.tsx")), "the popup and Focus Mode share the one rule");
+}
+
+console.log("\n── no hover template preview ──");
+{
+  for (const p of ["src/pages/Inbox.tsx", "src/components/WhatsAppLeadControls.tsx", "src/components/OutreachTable.tsx", "src/components/TemplateWordingPreview.tsx"]) {
+    ok(!/useTemplateHover\(|<TemplateWordingInList|onPointerEnter/.test(read(p)), `${p}: nothing opens on hover`);
+  }
+}
+
+console.log("\n── Playbook ──");
+{
+  for (const p of ["src/components/LeadDetailDialog.tsx", "src/components/LeadDeliveryCockpit.tsx", "src/components/audit/AuditBookList.tsx", "src/pages/AiAudit.tsx", "src/pages/Inbox.tsx", "src/components/OutreachTable.tsx"]) {
+    ok(!/to=\{`\/playbook\//.test(read(p)), `${p}: no Playbook link`);
+  }
+  ok(/to=\{`\/playbook\/\$\{audit\.id\}`\}/.test(read("src/pages/ClientHub.tsx")), "KEPT on purpose: the paid-client hub's Action Plan step (a delivery step, Paul to decide)");
+}
+
+console.log("\n── Find email ──");
+{
+  const btn = read("src/components/FindEmailButton.tsx");
+  ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
+  ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <div[^>]*><FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
+    ok(re.test(read(p)), `${p}: beside the email option, only when there is none`);
+  }
+  const mig = read("supabase/migrations/20260929180000_lead_find_email.sql");
+  ok((mig.match(/perform public\._require_work\(_lead_id\);/g) ?? []).length === 2, "both functions check role + ownership first");
+  ok((mig.match(/where id = _lead_id and coalesce\(btrim\(email\), ''\) = ''/g) ?? []).length === 2, "⛔ both only FILL a blank email, never overwrite");
+  ok(/siteInfo/.test(mig) && /onboarding_responses/.test(mig) && /l\.place_id = v_lead\.place_id/.test(mig), "sources: their crawl, their questionnaire, the same business on another row");
+  ok(/revoke all on function public\.lead_find_email\(uuid\) from public, anon;/.test(mig) && /revoke all on function public\.lead_set_email\(uuid, text\) from public, anon;/.test(mig), "anon cannot call either");
+  ok(/email_source: 'found in'/.test(read("src/lib/salesCrm.ts")) && /their website crawl/.test(activityDetail({ kind: "details_set", data: { email: "a@b.co", email_source: "website_crawl" } }, () => "") ?? ""), "History says where it was found");
+}
+
+console.log("\n── the Admin dashboard ──");
+{
+  const dash = read("src/pages/Dashboard.tsx");
+  ok(/from '@\/components\/salesDash\/ui'/.test(dash) && /from '@\/components\/salesDash\/sections'/.test(dash), "built from the Sales dashboard's own surfaces");
+  ok(/person: 'all'/.test(dash), "the whole book's next actions and follow-ups (admin + team)");
+  for (const gone of ["TipBar", "AdminZone", "CampaignStatsSection", "ChannelPerformanceCard", "PipelineCard", "Quick Actions"]) ok(!dash.includes(gone), `removed: ${gone}`);
+  for (const kept of ["ClientDeliveryCard", "FreeCheckProgressCard", "SubmissionsCard", "NextActionsCard", "AuditFunnelCard"]) ok(dash.includes(`<${kept}`), `kept: ${kept}`);
+  ok(/\/admin\/api-usage/.test(dash), "API usage stays reachable (it was only linked from the removed Admin zone)");
+  ok(!/next_action:/.test(dash), "the dashboard writes no next action at all now");
+}
+
+console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
+process.exit(f === 0 ? 0 : 1);

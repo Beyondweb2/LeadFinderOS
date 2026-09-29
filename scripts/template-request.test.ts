@@ -29,9 +29,12 @@ console.log("── the preview is the approved wording ──");
   ok(templatePreviewText("not_a_template") === null && templatePreviewText(null) === null, "no body → null (the box says it can't be previewed, never blank)");
   for (const [file, src] of [["src/components/OutreachTable.tsx", "queue"], ["src/components/WhatsAppLeadControls.tsx", "lead"], ["src/pages/Inbox.tsx", "inbox"]] as const) {
     const s = read(file);
-    ok(/<TemplateWordingInList hovered=\{\w+\.hovered\}/.test(s) && /\.itemProps\(t\.value\)/.test(s) && /onOpenChange=\{\w+\.onOpenChange\}/.test(s),
-      `${file}: hovering an option shows its wording INSIDE the open list (the list covers anything drawn under it)`);
-    ok(/<TemplateWordingPreview [^>]*hovered=\{null\}/.test(s), `${file}: …and the chosen one shows under the picker once it closes`);
+    /* ⛔ NO HOVER PREVIEW (Paul, 2026-09-29): moving the pointer through the list changes nothing. The
+       chosen template shows one line under the picker; the full wording only on an explicit Preview. */
+    ok(!/useTemplateHover|TemplateWordingInList|itemProps\(|onPointerEnter/.test(s), `${file}: no hover preview of any kind`);
+    ok(/<TemplateSnippet [^>]*selected=\{\w+\}/.test(s), `${file}: the chosen template shows one line under the picker`);
+    ok(src === "inbox" ? /await preview\(\{ phone: active\.phone/.test(s) : /<TemplatePreviewButton [^>]*selected=\{\w+\}/.test(s),
+      `${file}: …and an explicit Preview shows the full wording (the Inbox's is the dry run)`);
     ok(new RegExp(`<RequestTemplateButton source="${src}" />`).test(s), `${file}: has Request a template`);
   }
 }

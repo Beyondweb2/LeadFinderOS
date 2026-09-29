@@ -38,16 +38,16 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
-import { TemplateWordingInList, TemplateWordingPreview, useTemplateHover } from '@/components/TemplateWordingPreview';
+import { TemplateSnippet } from '@/components/TemplateWordingPreview';
+import { NextActionPill } from '@/components/NextActionPill';
+import { FindEmailButton } from '@/components/FindEmailButton';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { WelcomePackButton } from '@/components/WelcomePackButton';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
 import { warmStage } from '@/lib/warmStage';
-import { ColdCallPlaybookButton } from '@/components/ColdCallPlaybook';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
@@ -63,7 +63,7 @@ import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
 import { conversationState, INBOX_QUICK_FILTERS, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
-import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, CalendarClock, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
+import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
 import { notifyLeadChanged } from '@/lib/leadSync';
@@ -323,7 +323,7 @@ function AutoReplyToggle() {
 
   const sending = mode === 'send';
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 h-9">
+    <div className="flex min-h-9 max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/60 bg-background px-2.5 py-1">
       {/* 🔴 "On reply" WAS TOO SHORT TO CARRY THE SCOPE. With options reading "Run audit only" and
           "Audit + auto-send", the control looked like a global audit switch: Paul set it expecting
           it to govern the outreach QUEUE and then reasonably believed it was why outreach had
@@ -525,7 +525,6 @@ const Inbox = () => {
      AdminSiteManage earlier; this was the last one. '' means "not set" and the send button stays
      disabled until the operator picks. */
   const [template, setTemplate] = useState('');
-  const templateHover = useTemplateHover();
   const [sendingKeys, setSendingKeys] = useState<Set<string>>(new Set());
   const sendingKeysRef = useRef(new Set<string>());
   const sending = !!activeKey && sendingKeys.has(activeKey);
@@ -1173,16 +1172,16 @@ const Inbox = () => {
   // doSend(true) → send-whatsapp-message, which resolves vars per-lead server-side (safe).
   const templatePicker = (
     <>
-      <div className="flex items-center gap-2">
-        <Select value={template} onValueChange={setTemplate} onOpenChange={templateHover.onOpenChange}>
-          <SelectTrigger className="flex-1"><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={template} onValueChange={setTemplate}>
+          <SelectTrigger className="min-w-0 flex-1 basis-48"><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
           <SelectContent>
             {WHATSAPP_TEMPLATES.map((t) => {
               const s = templateSendability(t.value);
               const group = WA_TEMPLATE_REQS[t.value]?.group;
               const groupLabel = group === 'site' ? 'Site / claim' : group === 'audit' ? 'Audit' : 'Opener';
               return (
-                <SelectItem key={t.value} value={t.value} disabled={!s.ok} {...templateHover.itemProps(t.value)}>
+                <SelectItem key={t.value} value={t.value} disabled={!s.ok}>
                   <span className="flex flex-col">
                     <span>{t.label} <span className="text-[10px] text-muted-foreground">· {groupLabel}</span></span>
                     {!s.ok && <span className="text-[10px] text-amber-600">{s.reason}</span>}
@@ -1190,7 +1189,6 @@ const Inbox = () => {
                 </SelectItem>
               );
             })}
-            <TemplateWordingInList hovered={templateHover.hovered} values={{ businessName: activeLead?.business_name }} />
           </SelectContent>
         </Select>
         {/* ⛔ PREVIEW BEFORE SEND — the dry run (useInbox.preview → send-whatsapp-message
@@ -1222,9 +1220,9 @@ const Inbox = () => {
           Send template
         </Button>
       </div>
-      {/* What the hovered (or chosen) template says, with this lead's business name (Paul, 2026-09-28).
-          A reading aid; the dry run above is still the exact payload. */}
-      <TemplateWordingPreview className="mt-2" hovered={null} selected={template}
+      {/* One line of the chosen template, with this lead's details. No hover preview (Paul, 2026-09-29):
+          the full message is the Preview button's dry run above — the exact payload. */}
+      <TemplateSnippet className="mt-1.5" selected={template}
         values={{ businessName: activeLead?.business_name, firstName: (activeLead as { contact_name?: string | null } | undefined)?.contact_name, town: (activeLead as { derived_town?: string | null; search_location?: string | null } | undefined)?.derived_town ?? (activeLead as { search_location?: string | null } | undefined)?.search_location, trade: (activeLead as { search_keyword?: string | null } | undefined)?.search_keyword }} />
       <RequestTemplateButton source="inbox" />
       {/* ⛔ SHOWN ONLY FOR THE TEMPLATE AND THREAD IT WAS RUN FOR. A stale preview under a different
@@ -1932,6 +1930,8 @@ const Inbox = () => {
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                     : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
                   <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
+                  {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
+                  <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
                 </div>
               )}
             </div>
@@ -1988,19 +1988,18 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
-                    {activeLead?.next_action && activeLead.next_action !== 'none' && (
-                      <button type="button" onClick={() => setDetailLeadId(active.leadId)} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted" title="Next action (set by a person). Open the prospect to change it.">
-                        <CalendarClock className="h-3 w-3" />{activeLead.next_action.replace(/_/g, ' ')}{activeLead.next_action_date ? ` · ${new Date(activeLead.next_action_date + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}
-                      </button>
-                    )}
+                    {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
+                    <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
-                    <ConvStateChip state={activeState} />
+                    <ConvStateChip state={activeState} hideQueued />
                     {active.leadStatus === 'queued' && (
                       <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', queueState?.paused ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground')}>
                         <Timer className="h-3 w-3" />{queueState?.paused ? 'Queued · queue paused' : 'Queued'}
                       </span>
                     )}
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
+                    {/* No email on file → find one (our records first, then their website). */}
+                    {activeLead && !activeLead.email && <FindEmailButton leadId={activeLead.id} website={activeLead.website} className="text-[11px]" />}
                   </div>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
                   {/* FULL LEAD DETAILS — opens the SAME rich dialog Outreach uses, as an overlay
@@ -2047,9 +2046,8 @@ const Inbox = () => {
                       from="inbox"
                     />
                   )}
-                  {/* Cold Call Playbook — read-only call guide for THIS conversation's lead, the SAME
-                      panel Outreach opens. An icon in this row like its siblings (Paul, 2026-09-23). */}
-                  {active.leadId && <ColdCallPlaybookButton leadId={active.leadId} className={HEADER_ICON_BTN} iconOnly />}
+                  {/* ⛔ REMOVED 2026-09-29 (UI cleanup): the Cold Call Playbook icon — the same script is the
+                      Prospect workspace's Scripts tab, one tap from the Prospect button. */}
                   {/* No "CRM" link here: the Prospect button opens the same workspace (2026-09-28 polish). */}
                   {active.leadId && <LeadOwnerControl leadId={active.leadId} />}
                   {/* Sign-up link. Hidden entirely for a lead who has actually paid - same rule as the
@@ -2090,14 +2088,8 @@ const Inbox = () => {
                       squares sharing HEADER_ICON_BTN), which is why the class is passed in rather
                       than a second button being written. Label carried by title/aria-label, as every
                       sibling in this row does. */}
-                  {perms.clientDelivery && active.leadId && (
-                    <WelcomePackButton
-                      leadId={active.leadId}
-                      businessName={activeLead?.business_name ?? active.label ?? 'this client'}
-                      className={HEADER_ICON_BTN}
-                      iconOnly
-                    />
-                  )}
+                  {/* ⛔ REMOVED 2026-09-29 (UI cleanup): the Welcome pack icon — the same button is in the
+                      Prospect workspace's header (admin), where the rest of the client's delivery lives. */}
                   {/* ⛔ THE LESS-USED LINKS LIVE IN ONE "MORE" MENU (2026-09-27, "more conversation, less
                       chrome"): Google Maps (stored URL, else built from place_id), the website, email,
                       the chat in the WhatsApp app (wa.me), and Remove from inbox (sets the lead to

@@ -9,7 +9,6 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useCampaigns } from '@/hooks/useCampaigns';
-import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 import type { DashTask, TaskKind } from '@/lib/dashboardTasks';
 
 interface NextActionsCardProps {
@@ -166,7 +165,7 @@ export function NextActionsCard({ tasks, onClearTask, onClearAll, onDismiss }: N
               const Icon = KIND_ICON[task.kind];
               const campaignName = task.campaignId ? campaignById[task.campaignId] : undefined;
               // A hand-picked custom action name beats the generic "Your task" label.
-              const label = (task.kind === 'manual' && task.leadId && getLeadCustomAction(task.leadId)) || task.label;
+              const label = task.label;
               // Row = flex container; the jump area and the X are SIBLINGS (no nested buttons).
               return (
                 <div key={task.key} className="group flex items-center gap-1 rounded-md transition-colors hover:bg-muted/50">

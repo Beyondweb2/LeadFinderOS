@@ -46,7 +46,7 @@ const keyHandler = focus.slice(focus.indexOf("const onKey = (e: KeyboardEvent)")
 ok(/go\(1\)/.test(keyHandler) && !/quick\(|save|rpc|invoke/.test(keyHandler), "Focus Mode's keys only move between leads");
 
 console.log("\n── one CRM, no second copy ──");
-ok(/<LeadWorkPanel key=\{item\.leadId\} leadId=\{item\.leadId\} \/>/.test(focus) && /<LeadHookPanel key=\{item\.leadId\} leadId=\{item\.leadId\} \/>/.test(focus), "Focus reuses the lead workspace's own panels (log contact, Next Action, notes, audit)");
+ok(/<LeadWorkPanel key=\{item\.leadId\} leadId=\{item\.leadId\}( onOutcome=\{onOutcome\})? \/>/.test(focus) && /<LeadHookPanel key=\{item\.leadId\} leadId=\{item\.leadId\} \/>/.test(focus), "Focus reuses the lead workspace's own panels (log contact, Next Action, notes, audit)");
 ok(/markLeadInterested\(lead\.id, perms\.editLeadRecord\)/.test(focus) && /setLeadPipelineStatus\(lead\.id, 'not_interested', perms\.editLeadRecord\)/.test(focus), "Focus's Interested / Not interested use the one path");
 const inbox = read("src/pages/Inbox.tsx");
 ok(/markLeadInterested\(c\.leadId, perms\.editLeadRecord\)/.test(inbox) && /setLeadPipelineStatus\(c\.leadId, status, perms\.editLeadRecord\)/.test(inbox) && !/mode: 'suppress_lead', lead_id: c\.leadId/.test(inbox), "…and so does the Inbox (the queue stop is written once)");

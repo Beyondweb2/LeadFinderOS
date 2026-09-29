@@ -93,9 +93,9 @@ const ACTION_ICON: Record<string, typeof Clock> = {
   interested_untouched: Star, signup_unopened: Send, audit_ready: Sparkles, going_cold: Snowflake,
   quick_close_finish: PoundSterling, quick_close_link: PoundSterling, quick_close_review: AlertTriangle,
 };
-export function NextActions({ items, go, onFocus }: { items: NextAction[]; go: Go; onFocus?: () => void }) {
+export function NextActions({ items, go, onFocus, title = "Your next best actions", hint = "The most useful thing to do for each lead, most urgent first. Tap to open it." }: { items: NextAction[]; go: Go; onFocus?: () => void; title?: string; hint?: string }) {
   return (
-    <Panel title="Your next best actions" icon={Target} tone="blue" hint="The most useful thing to do for each lead, most urgent first. Tap to open it."
+    <Panel title={title} icon={Target} tone="blue" hint={hint}
       action={onFocus && items.length > 0 ? <Button size="sm" className="h-8 gap-1 text-xs" onClick={onFocus}><Target className="h-3.5 w-3.5" />Focus Mode</Button> : undefined}>
       {items.length === 0 ? <Empty icon={CheckCircle2}>Nothing waiting on you right now. New replies, due follow-ups and warm leads will show here.</Empty> : (
         <ul className="space-y-1.5">
@@ -132,11 +132,11 @@ export const FOLLOW_UP_GROUPS: { key: FollowUpGroup; label: string; tone: Tone; 
   { key: 'signupSent', label: 'Signup sent', tone: 'amber', link: 'whatsapp' },
   { key: 'goingCold', label: 'Going cold', tone: 'grey', link: 'whatsapp' },
 ];
-export function FollowUpQueue({ fu, go, group, setGroup }: { fu: SalesWorkspace['followUps']; go: Go; group: FollowUpGroup; setGroup: (g: FollowUpGroup) => void }) {
+export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next Actions are shown as you set them — never changed for you." }: { fu: SalesWorkspace['followUps']; go: Go; group: FollowUpGroup; setGroup: (g: FollowUpGroup) => void; hint?: string }) {
   const g = FOLLOW_UP_GROUPS.find((x) => x.key === group) ?? FOLLOW_UP_GROUPS[0];
   const rows = fu[g.key];
   return (
-    <Panel id="follow-ups" title="Follow-up queue" icon={CalendarCheck} tone="amber" hint="Your own Next Actions are shown as you set them — never changed for you.">
+    <Panel id="follow-ups" title="Follow-up queue" icon={CalendarCheck} tone="amber" hint={hint}>
       <div className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
         {FOLLOW_UP_GROUPS.map((x) => (
           <button key={x.key} type="button" role="tab" aria-selected={x.key === g.key} onClick={() => setGroup(x.key)}
@@ -164,11 +164,11 @@ export function FollowUpQueue({ fu, go, group, setGroup }: { fu: SalesWorkspace[
 }
 
 /* ── Response timers ────────────────────────────────────────────────────────────────────────────── */
-export function WaitingPanel({ waiting, go }: { waiting: SalesWorkspace['waiting']; go: Go }) {
+export function WaitingPanel({ waiting, go, title = "Waiting on you" }: { waiting: SalesWorkspace['waiting']; go: Go; title?: string }) {
   const [, tick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => tick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
   return (
-    <Panel title="Waiting on you" icon={Clock} tone="blue" hint="Replies in the last 14 days that nothing has answered yet, longest wait first.">
+    <Panel title={title} icon={Clock} tone="blue" hint="Replies in the last 14 days that nothing has answered yet, longest wait first.">
       {waiting.length === 0 ? <Empty icon={CheckCircle2}>Every reply has an answer.</Empty> : (
         <ul className="space-y-1">
           {waiting.map((w) => {
@@ -241,9 +241,9 @@ const FEED_ICON: Record<string, typeof Clock> = {
   reply: MessageCircleReply, interested: Star, signup_sent: Send, signup_opened: Flame, payment: Trophy, audit: Sparkles,
   follow_up: CalendarClock, assigned: UserPlus, contact: PhoneCall, commission: PoundSterling,
 };
-export function ActivityFeed({ items, go }: { items: FeedItem[]; go: Go }) {
+export function ActivityFeed({ items, go, title = "Activity", hint = "What happened on your leads in the last 14 days." }: { items: FeedItem[]; go: Go; title?: string; hint?: string }) {
   return (
-    <Panel title="Activity" icon={Users} tone="blue" hint="What happened on your leads in the last 14 days.">
+    <Panel title={title} icon={Users} tone="blue" hint={hint}>
       {items.length === 0 ? <Empty>No activity in the last 14 days yet.</Empty> : (
         <ol className="relative max-h-96 space-y-0.5 overflow-y-auto pr-1">
           {items.map((it, i) => {

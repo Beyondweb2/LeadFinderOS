@@ -19,8 +19,11 @@ import { markLeadInterested, setLeadPipelineStatus } from '@/lib/leadQuickAction
 import { isTypingTarget } from '@/lib/shortcuts';
 import { LEAD_CHANGED_EVENT } from '@/lib/leadSync';
 import type { SalesWorkspace } from '@/lib/salesWorkspace';
-import { LeadHookPanel, LeadWorkPanel } from '@/components/LeadCrmPanel';
+import { LeadHookPanel, LeadWorkPanel, useLeadCrmRow } from '@/components/LeadCrmPanel';
+import { outcomeStatusEffect } from '@/lib/salesCrm';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
+import { FindEmailButton } from '@/components/FindEmailButton';
+import { NextActionPill } from '@/components/NextActionPill';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { Empty, Panel } from '@/components/salesDash/ui';
 import { cn } from '@/lib/utils';
@@ -111,6 +114,7 @@ export default function Focus() {
   }, [leadQ, msgQ]);
 
   const lead = leadQ.data;
+  const crm = useLeadCrmRow(item?.leadId ?? '');
   const town = lead?.derived_town || lead?.search_location || null;
   const [busy, setBusy] = useState<string | null>(null);
   const quick = async (kind: 'interested' | 'not_interested') => {
@@ -122,6 +126,19 @@ export default function Focus() {
     toast({ title: kind === 'interested' ? 'Marked interested' : 'Marked not interested', description: kind === 'not_interested' ? 'No more automatic messages to them.' : undefined });
     setDone((s) => new Set(s).add(lead.id));
     if (kind === 'not_interested') go(1);
+  };
+
+  /* A logged outcome's effect on the lead — the one rule (outcomeStatusEffect), the same writes as the
+     Interested / Not interested buttons above. It never moves to the next lead by itself. */
+  const onOutcome = async (outcome: string): Promise<string | null> => {
+    if (!lead) return null;
+    const effect = outcomeStatusEffect(outcome, lead);
+    if (!effect) return null;
+    const r = effect === 'interested' ? await markLeadInterested(lead.id, perms.editLeadRecord) : await setLeadPipelineStatus(lead.id, 'not_interested', perms.editLeadRecord);
+    if (!r.ok) { toast({ title: 'Outcome logged, status not changed', description: r.error, variant: 'destructive' }); return null; }
+    setDone((s) => new Set(s).add(lead.id));
+    void leadQ.refetch();
+    return effect === 'interested' ? 'Marked Interested ⭐' : 'Status set to Not interested';
   };
 
   return (
@@ -159,7 +176,11 @@ export default function Focus() {
                 <p className="text-sm text-muted-foreground">This lead is not available to you any more.</p>
               ) : (
                 <>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">{item.why}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">{item.why}</p>
+                    {/* The ONE next action — the same row the Work panel on the right saves, so it updates at once. */}
+                    <NextActionPill lead={crm.data} />
+                  </div>
                   <h2 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight">
                     <span className="min-w-0 truncate" title={lead.business_name ?? ''}>{lead.business_name ?? 'Unnamed business'}</span>
                     {(lead.is_potential_work || done.has(lead.id)) && <Star className="h-5 w-5 shrink-0 fill-amber-400 text-amber-500" aria-label="Interested" />}
@@ -176,6 +197,8 @@ export default function Focus() {
                     <ContactButton href={linkedInSearchUrl(lead.business_name, town)} icon={Linkedin} label="LinkedIn" tone="border border-border bg-background hover:bg-muted" external />
                     <ContactButton href={lead.email ? `mailto:${lead.email}` : null} icon={Mail} label="Email" tone="border border-border bg-background hover:bg-muted" disabled={!lead.email} />
                   </div>
+                  {/* No email on file → look for one (our records first, then their website). */}
+                  {!lead.email && <div className="mt-2 flex justify-end"><FindEmailButton leadId={lead.id} website={lead.website} /></div>}
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     {lead.phone && <span className="tabular-nums text-muted-foreground">{lead.phone}</span>}
                     {siteHref(lead.website) && <a href={siteHref(lead.website)!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><Globe className="h-3.5 w-3.5" />Website</a>}
@@ -221,7 +244,7 @@ export default function Focus() {
           </div>
 
           <div className="min-w-0 space-y-4 lg:col-span-2">
-            <LeadWorkPanel key={item.leadId} leadId={item.leadId} />
+            <LeadWorkPanel key={item.leadId} leadId={item.leadId} onOutcome={onOutcome} />
             <Button className="w-full gap-1" onClick={() => go(1)} disabled={idx >= queue.length - 1}>Next lead<ArrowRight className="h-4 w-4" /></Button>
             <p className="text-center text-[11px] text-muted-foreground">Shortcuts: → or N next · ← or P previous</p>
           </div>

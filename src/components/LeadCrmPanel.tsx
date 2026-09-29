@@ -17,7 +17,6 @@ import { reportShareKey, useReportShare } from '@/hooks/useReportShare';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
-import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
@@ -49,8 +48,17 @@ import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority
    checks the role and — for a salesperson — that the lead is assigned to them and is not a client,
    and writes the activity row. After a yes, ONE notice (notifyLeadChanged): the Inbox, Outreach and
    these panels all re-read the same row. No local copy is edited in place.
-   ⛔ An outcome is ACTIVITY only. It never sets the status or the next action — Next Action is
-   human-set only (Paul, 2026-09-28); the person chooses it in the box right below.
+   ⛔ An outcome is written as ACTIVITY (lead_log_contact never writes a status or a next action).
+   What else a tap does is done by the ordinary controls, in the open, and said in the confirmation
+   line (UI cleanup pass, 2026-09-29 — Paul: "one button = one real consequence"):
+     Interested / Meeting booked → the Interested star (the same write as the status menu's Interested);
+     Not interested → status Not interested (the same write as the status menu);
+     Agency controls site → "Who controls the website?" = an agency (lead_set_website_control);
+     Meeting booked → asks when, into "Call booked for" (lead_set_call_booked);
+     Call back → pre-selects Call in Next action and scrolls to it — the PERSON picks the day and
+       saves: Next Action stays human-set only (Paul, 2026-09-28).
+   The rest (no answer, voicemail, sent, spoke to owner, wrong number) are the record itself, shown as
+   "Last contact" at the top of the popup and in History.
    ⛔ Reads come from the caller's OWN source (leadSourceFor): a salesperson reads the sales_leads
    view, so a lead that is not theirs simply returns nothing here.
    ⛔ Internal notes are activity rows and are NEVER sent to the lead.
@@ -104,6 +112,7 @@ export function useLeadCrmRow(leadId: string) {
   const src = leadSourceFor(role);
   return useQuery({
     queryKey: leadCrmKey(leadId),
+    enabled: !!leadId,
     queryFn: async () => {
       const { data, error } = await sb.from(src.table).select(CRM_COLUMNS).eq('id', leadId).maybeSingle();
       if (error) throw error;
@@ -207,27 +216,64 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 }
 
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
-export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
+/** What a logged outcome also changed, in words for the confirmation line — or null for nothing. */
+export type OutcomeFollowOn = (outcome: string) => Promise<string | null>;
+
+export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string; onRemoved?: () => void; onOutcome?: OutcomeFollowOn }) {
   const crm = useLeadCrmRow(leadId);
   const save = useSave(leadId);
   const { role } = useSubscription();
   const lead = crm.data;
+  const [preset, setPreset] = useState<string | null>(null);
+  const [askWhen, setAskWhen] = useState(false);
+  const nextRef = useRef<HTMLElement>(null);
   if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
   if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
   if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
 
+  /* The follow-on of one outcome (see the header). Returns the words for what else changed. */
+  const followOn = async (outcome: string): Promise<string | null> => {
+    const said: string[] = [];
+    if (outcome === 'call_back') {
+      setPreset('call');
+      requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      said.push('Pick when to call back below, then Save next action');
+    }
+    if (outcome === 'meeting_booked') { setAskWhen(true); said.push('Add when it is below'); }
+    if (outcome === 'agency_controls_site' && lead.website_control !== 'agency_controls') {
+      const r = await save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency controls the website', { website_control: 'agency_controls' });
+      if (r.ok) said.push('Website control set to: an agency');
+    }
+    const more = onOutcome ? await onOutcome(outcome) : null;
+    if (more) said.unshift(more);
+    return said.length ? said.join(' · ') : null;
+  };
+
   return (
     <div className="space-y-3">
-      <LogContact save={save} />
+      <LogContact save={save} followOn={followOn} />
 
-      <section className={CARD}>
-        <div className="mb-2.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-          <LeadOwnerControl leadId={lead.id} />
-        </div>
-        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}`} lead={lead}
-          onSave={(a) => save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
-            { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note })} />
+      {askWhen && (
+        <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-emerald-500/40')} data-testid="meeting-when">
+          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting?
+            <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? toLocalInput(lead.call_booked_at) : ''} />
+          </label>
+          <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setAskWhen(false)}>Later</Button>
+          <Button size="sm" className="h-9 text-xs" onClick={async () => {
+            const el = document.getElementById(`meeting-at-${lead.id}`) as HTMLInputElement | null;
+            const v = el?.value ? new Date(el.value).toISOString() : null;
+            if (!v) return;
+            const r = await save('lead_set_call_booked', { _at: v }, 'Call booked', { call_booked_at: v });
+            if (r.ok) setAskWhen(false);
+          }}>Save</Button>
+        </section>
+      )}
+
+      <section className={CARD} ref={nextRef}>
+        <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
+        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ?? ''}`} lead={lead} preset={preset}
+          onSave={async (a) => { const r = await save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
+            { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note }); if (r.ok) setPreset(null); return r; }} />
       </section>
 
       <LeadCampaign lead={lead} save={save} />
@@ -246,12 +292,12 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
               onBlur={async (e) => {
                 const v = e.target.value ? new Date(e.target.value).toISOString() : null;
                 if (v === (lead.call_booked_at ? new Date(lead.call_booked_at).toISOString() : null)) return;
-                await save('lead_set_call_booked', { _at: v }, v ? 'Call booked' : 'Call cleared');
+                await save('lead_set_call_booked', { _at: v }, v ? 'Call booked' : 'Call cleared', { call_booked_at: v });
               }} />
           </div>
           <div className="space-y-1.5">
             <label className="block text-[11px] font-medium text-muted-foreground">Who controls the website?</label>
-            <Select value={lead.website_control ?? ''} onValueChange={(v) => void save('lead_set_website_control', { _value: v, _note: lead.website_control_note }, 'Saved')}>
+            <Select value={lead.website_control ?? ''} onValueChange={(v) => void save('lead_set_website_control', { _value: v, _note: lead.website_control_note }, 'Saved', { website_control: v })}>
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Not asked yet" /></SelectTrigger>
               <SelectContent>{WEBSITE_CONTROL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
             </Select>
@@ -259,7 +305,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
               onBlur={async (e) => {
                 const v = e.target.value.trim() || null;
                 if (v === (lead.website_control_note ?? null)) return;
-                await save('lead_set_website_control', { _value: lead.website_control, _note: v }, 'Saved');
+                await save('lead_set_website_control', { _value: lead.website_control, _note: v }, 'Saved', { website_control_note: v });
               }} />
           </div>
           {/* ⛔ THE DOMAIN RULE (Paul, 2026-09-28): managed by an agency is usually fine; OWNED or controlled
@@ -352,11 +398,12 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
 }
 
 /** One tap per outcome. The channel defaults to Call; the note is optional and saved with it. */
-function LogContact({ save }: { save: SaveFn }) {
+function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowOn }) {
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [last, setLast] = useState<string | null>(null);
+  const [lastMore, setLastMore] = useState<string | null>(null);
   const chip = (on: boolean) => cn('rounded-full border px-2.5 py-1 text-xs font-medium transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground hover:bg-muted');
   /* ⛔ EVERY METHOD OF THE ONE SET (src/lib/contactMethods.ts): the most used as pills, the rest under
      More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
@@ -398,7 +445,12 @@ function LogContact({ save }: { save: SaveFn }) {
               try {
                 const label = contactMethodLabel(channel);
                 const r = await save('lead_log_contact', { _channel: channel, _outcome: o.value, _note: note.trim() || null }, `${label} logged: ${o.label}`);
-                if (r.ok) { setNote(''); setLast(`${label}: ${o.label}`); }
+                if (r.ok) {
+                  setNote('');
+                  setLast(`${label}: ${o.label}`);
+                  const more = await followOn(o.value);
+                  setLastMore(more);
+                }
               } finally { setBusy(null); }
             }}>
             {busy === o.value ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}{o.label}
@@ -406,7 +458,7 @@ function LogContact({ save }: { save: SaveFn }) {
         ))}
       </div>
       </>)}
-      {last && <p className="mt-2 text-[11px] text-muted-foreground">Logged <span className="font-medium text-foreground">{last}</span>. Set the next action below if one is needed.</p>}
+      {last && <p className="mt-2 text-[11px] text-muted-foreground" data-testid="logged-line">Logged <span className="font-medium text-foreground">{last}</span> — shown as Last contact at the top and in History.{lastMore ? <> <span className="font-medium text-foreground">{lastMore}.</span></> : null}</p>}
     </section>
   );
 }
@@ -427,12 +479,14 @@ function InternalNote({ save }: { save: SaveFn }) {
   );
 }
 
-function FollowUp({ lead, onSave }: {
+function FollowUp({ lead, onSave, preset }: {
   lead: { next_action: string | null; next_action_date: string | null; next_action_note: string | null };
   onSave: (a: { nextAction: string; date: string | null; note: string | null }) => Promise<unknown>;
+  /** "Call back" was just logged: Call is pre-selected (not saved — the person picks the day and saves). */
+  preset?: string | null;
 }) {
   const known = NEXT_ACTION_OPTIONS.some((o) => o.value === lead.next_action);
-  const [nextAction, setNextAction] = useState(lead.next_action ?? 'none');
+  const [nextAction, setNextAction] = useState(preset ?? lead.next_action ?? 'none');
   const [date, setDate] = useState(lead.next_action_date ?? '');
   const [note, setNote] = useState(lead.next_action_note ?? '');
   const has = !!lead.next_action && lead.next_action !== 'none';
@@ -643,7 +697,7 @@ function ReportSharePanel({ leadId, auditId }: { leadId: string; auditId: string
 }
 
 /* ── HISTORY: everything recorded on the lead, newest first ─────────────────────────────────────── */
-export function LeadHistoryPanel({ leadId }: { leadId: string }) {
+export function LeadHistoryPanel({ leadId, older }: { leadId: string; older?: ReadonlyArray<{ id: string; user_id: string | null; description: string; created_at: string }> }) {
   const team = useTeamDirectory();
   const activity = useLeadActivity(leadId);
   const link = useOnboardingLink(leadId);
@@ -656,6 +710,7 @@ export function LeadHistoryPanel({ leadId }: { leadId: string }) {
   (link.data?.events ?? []).forEach((e, i) => {
     items.push({ key: `link-${i}`, at: e.created_at, actor: e.actor_user_id, link: true, title: e.kind === 'sent' ? 'Sign-up link sent' : 'Sign-up link copied', detail: e.kind === 'sent' ? `${LINK_CHANNEL_LABEL[e.channel] ?? e.channel}${e.template_name ? ` (${e.template_name})` : ''}` : null });
   });
+  for (const o of older ?? []) items.push({ key: `older-${o.id}`, at: o.created_at, actor: o.user_id, title: o.description });
   const st = link.data?.status;
   if (st?.firstOpenedAt) items.push({ key: 'link-open', at: st.firstOpenedAt, actor: null, link: true, title: 'Sign-up page first opened', detail: st.openCount > 1 ? `${st.openCount} page loads since` : null });
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
