@@ -30,6 +30,8 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
   lead_assigned: { icon: UserPlus, tone: 'grey' },
   feedback_update: { icon: MessageSquareHeart, tone: 'purple' },
   feature_update: { icon: Megaphone, tone: 'purple' },
+  quick_close_review: { icon: AlertTriangle, tone: 'amber' },
+  quick_close_paid: { icon: Trophy, tone: 'green' },
 };
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };

@@ -206,3 +206,59 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
 - **Unread** counts from 2026-09-28 00:00 UTC; a number never opened before then is not unread for
   older replies (deliberate).
 - **Commission payouts are recorded by hand** in Earnings (nothing pays anyone from the app).
+
+## 9. Quick Close (2026-09-29)
+
+Paul: VERBAL YES → 60-SECOND QUICK CLOSE → STRIPE LINK → £99 PAYMENT → HANDOFF TO PAUL.
+
+- **Where:** a green "Quick Close" button in the lead workspace header (`LeadDetailDialog` — so Outreach
+  AND the WhatsApp Inbox's "Prospect") and in Focus Mode. `QuickCloseDialog`: full screen on a phone,
+  one question at a time, 56 px answers, progress bar, every tap saved (optimistic — the next question
+  shows at once; a refusal restores).
+- **Prefill** (fn `quick-close` load, service role, only safe fields): business, trade, town, phone,
+  email, website, contact, Google rating, campaign, source, salesperson. "Correct a detail" writes the
+  ONBOARDING row (contact name / email / phone / website), never the lead. A blank trade is asked (the
+  checkout refuses a lead without one) and fills only a blank.
+- **Five questions only** (`src/lib/quickClose.ts`): decision maker · owns/controls domain · who manages
+  the site · could give access · authority to replace/move if a third party runs it (asked only then).
+- **The gate** (positive; "not sure" is never a yes): decision maker "No" → blocked, no link.
+  Domain no / not sure, agency or third party without clear authority, manager not sure, no site access
+  → **DOMAIN / AGENCY ISSUE — Paul review required**: Paul is notified once (notification
+  `quick_close_review`), the rep is told not to interpret anything, and **Paul releases it**
+  (`approve_review`, admin only) — the opportunity is kept. Changing an answer clears an old release
+  and an old link.
+- **One onboarding record:** `public.quick_close_row` (advisory-locked find-or-create; the lead's
+  newest non-free-check row, else a new `source = 'quick_close'` row). Answers go to the canonical
+  columns (`onboardingColumnsFor`: domain_status / domain_owned / website_manager / website_platform /
+  authority_confirmed) and `onboarding_responses.quick_close`. The self-service link is untouched and
+  still the fallback.
+- **The link is the EXISTING `findable-checkout`**, called server-to-server with only the row id and
+  the lead id — every existing refusal (already paid, cannot serve, domain unresolved, no trade, no
+  lead) applies unchanged; nothing in the request can price, discount or add a line. A link younger than
+  `LINK_REUSE_MS` is reused; a concurrent click waits on `quick_close_claim_link`.
+- **Sending:** Copy payment link (the big button), Copy message (both figures, `quickCloseMessage`),
+  Send on WhatsApp through `send-whatsapp-message` (disabled when the 24-hour window is closed — the
+  server refuses outside it anyway). An editable "What to tell them" (both figures, no promised result).
+- **After payment:** the existing webhook marks the row paid → state Paid (derived). The PAID email to
+  Paul carries a Quick Close block (`quickCloseHandoffLines`): closer and date, the five answers, any
+  domain flag and Paul's release note, confirmed contact, campaign / source, latest sales note, latest
+  3 messages, what is still to collect. `quick_close_events` gets `paid`. The seller keeps read-only
+  access to the Paid state after the lead becomes a client. Attribution: the session carries
+  `metadata[lead_id]`; `sold_by_user_id` is stamped from the lead's assignee at payment.
+- **Dashboard:** next best actions "Finish Quick Close", "Quick Close ready — send the payment link",
+  "Payment link sent — not paid yet", "Quick Close waiting for Paul".
+- **Audit trail** `quick_close_events` (answers_saved with the from→to of every change, review_requested,
+  review_approved, link_generated / link_reused / link_refused, paid). RLS: admin or the rep's own leads;
+  no browser writes.
+- ⚠️ An abandoned Quick Close row gets the SAME 20-minute "onboarding not paid" email to Paul as an
+  abandoned self-service form (notify-onboarding-submit) — deliberately the same system.
+- **Tests:** `scripts/quick-close.test.ts`; `supabase/tests/quick-close.sql` (8/8, rolled back). **Live
+  end-to-end (2026-09-29, a QA lead for the Sales Test account, removed after): 20/20** — prefill; no
+  money field returned; another rep 403; partial save survives reload; No → blocked, link refused;
+  domain not sure → review, link refused, Paul notified once; the rep cannot release; Paul releases →
+  ready; TWO SIMULTANEOUS CLICKS → ONE Stripe session (£99.00, tied to the row and lead, one
+  `checkout_session_created`); a later click reuses it; ONE onboarding row with the canonical columns;
+  the full audit trail; an answer change invalidates link + release. Timings after the speed pass:
+  load 2.7 s, save 1.6 s, link 3.0 s. ⚠️ Three unpaid live Stripe sessions were created by the QA runs;
+  they expire unused after 24 hours. **Not exercised live: a real payment** (it would cost £99) — the
+  paid path is the unchanged webhook plus the non-fatal handoff read, covered by the tests.

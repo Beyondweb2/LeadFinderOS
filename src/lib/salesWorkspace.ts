@@ -15,6 +15,7 @@
 import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
 import { conversationState, londonToday } from './conversationState.ts';
 import { NEXT_ACTION_OPTIONS } from './salesCrm.ts';
+import type { QuickCloseState } from './quickClose.ts';
 
 export const WARM_DAYS = 7;
 export const NEEDS_FOLLOW_UP_DAYS = 3;
@@ -86,6 +87,8 @@ export interface WorkspaceInput {
    *  £100 milestone, the commission target, the feed and "earned today". Null when the person earns no
    *  commission; a milestone that needs it then says so rather than guessing. */
   commission?: { at: string; amount: number; leadId: string; label: string; business: string }[] | null;
+  /** Quick Close per lead (derived state + when the payment link was made), for the next best actions. */
+  quickClose?: Map<string, { state: QuickCloseState; linkAt: string | null }>;
 }
 
 export const STAGES: { key: StageKey; label: string }[] = [
@@ -229,6 +232,14 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     if (w === 'going_cold') {
       followUps.goingCold.push(pl);
       actions.push({ kind: 'going_cold', leadId: f.lead.id, name, title: 'Warm lead going cold', detail: `No contact for ${GOING_COLD_DAYS}+ days`, at: pl.at, tone: 'amber', link: 'whatsapp', rank: 7 });
+    }
+
+    // ── Quick Close: finish it, or chase the link ──
+    const qcs = input.quickClose?.get(f.lead.id);
+    if (qcs && !f.won) {
+      if (qcs.state === 'in_progress' || qcs.state === 'ready') actions.push({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: qcs.state === 'ready' ? 'Quick Close ready — send the payment link' : 'Finish Quick Close', detail: 'Answers are saved — pick up where you left off', at: null, tone: 'amber', link: 'lead', rank: 2 });
+      else if (qcs.state === 'link_generated') actions.push({ kind: 'quick_close_link', leadId: f.lead.id, name, title: 'Payment link sent — not paid yet', detail: qcs.linkAt ? `Link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Check they received it', at: qcs.linkAt, tone: 'green', link: 'whatsapp', rank: 3 });
+      else if (qcs.state === 'needs_review') actions.push({ kind: 'quick_close_review', leadId: f.lead.id, name, title: 'Quick Close waiting for Paul', detail: 'Domain / agency issue under review', at: null, tone: 'amber', link: 'lead', rank: 8 });
     }
 
     // ── Activity feed (meaningful events only) ──

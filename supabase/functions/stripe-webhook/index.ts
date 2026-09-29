@@ -17,6 +17,7 @@ import {
 } from "../_shared/whatsapp-send.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
+import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -145,8 +146,8 @@ const TEMPLATE_PAYMENT_CONFIRM = "payment_recieved";
  *  the payment write. ⛔ NEVER THROWS and never blocks the email: any failure returns nulls and the
  *  email goes without these lines. No payment detail is read here beyond what the email already has. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function paymentHandoff(service: any, leadId: string | null, onboardingId: string | null): Promise<{ soldBy: string | null; handoff: string | null; onboardingDone: boolean | null }> {
-  const none = { soldBy: null, handoff: null, onboardingDone: null };
+async function paymentHandoff(service: any, leadId: string | null, onboardingId: string | null): Promise<{ soldBy: string | null; handoff: string | null; onboardingDone: boolean | null; quickClose: string[] | null }> {
+  const none = { soldBy: null, handoff: null, onboardingDone: null, quickClose: null };
   if (!leadId) return none;
   try {
     const [l, ob, crawl, audit] = await Promise.all([
@@ -167,7 +168,32 @@ async function paymentHandoff(service: any, leadId: string | null, onboardingId:
     }
     const onboarding = (ob?.data ?? null) as (HandoffOnboarding & { confirmed_location?: string | null }) | null;
     const r = handoffReadiness(lead, onboarding, { crawl: !!crawl?.data, hookAudit: !!audit?.data });
-    return { soldBy, handoff: handoffLine(r), onboardingDone: onboarding ? questionnaireComplete(onboarding) : false };
+    /* QUICK CLOSE (2026-09-29): when a salesperson closed this client on the phone, the handoff carries
+       their answers, any domain / agency flag, the contact they confirmed, campaign / source, the
+       latest sales note and the latest messages — and the audit trail records the payment. Non-fatal. */
+    let quickClose: string[] | null = null;
+    if (onboardingId) {
+      try {
+        const { data: q } = await service.from("onboarding_responses").select("quick_close, contact_name, contact_email, confirmed_phone, business_website").eq("id", onboardingId).maybeSingle();
+        if (q?.quick_close) {
+          const [lx, note, msgs] = await Promise.all([
+            service.from("outreach_leads").select("campaign_id, lead_source").eq("id", leadId).maybeSingle(),
+            service.from("lead_activity").select("body").eq("lead_id", leadId).eq("kind", "note").order("created_at", { ascending: false }).limit(1),
+            service.from("whatsapp_messages").select("direction, body").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(3),
+          ]);
+          let campaign: string | null = null;
+          if (lx?.data?.campaign_id) campaign = ((await service.from("campaigns").select("name").eq("id", lx.data.campaign_id).maybeSingle()).data?.name as string | undefined) ?? null;
+          quickClose = quickCloseHandoffLines({
+            qc: q.quick_close, closedBy: soldBy, campaign, leadSource: (lx?.data?.lead_source as string | null) ?? null,
+            contact: { name: q.contact_name, email: q.contact_email, phone: q.confirmed_phone, website: q.business_website },
+            latestNote: ((note?.data ?? [])[0]?.body as string | undefined) ?? null,
+            latestMessages: ((msgs?.data ?? []) as { direction: string; body: string | null }[]).reverse(),
+          });
+          await service.from("quick_close_events").insert({ lead_id: leadId, onboarding_id: onboardingId, actor_user_id: null, kind: "paid", data: { sold_by: seller } });
+        }
+      } catch (e) { console.error("[stripe-webhook] quick close handoff failed (non-blocking):", (e as Error).message); }
+    }
+    return { soldBy, handoff: handoffLine(r), onboardingDone: onboarding ? questionnaireComplete(onboarding) : false, quickClose };
   } catch (e) {
     console.error("[stripe-webhook] handoff read failed (non-blocking):", (e as Error).message);
     return none;
@@ -188,6 +214,8 @@ async function notifyOfFindablePayment(opts: {
   soldBy?: string | null;
   handoff?: string | null;
   onboardingDone?: boolean | null;
+  /* The Quick Close handoff lines (src/lib/quickClose.ts), when a salesperson closed the client. */
+  quickClose?: string[] | null;
   /* 🔴 THE SUBJECT TAG HAS ITS OWN FACT NOW (2026-09-14). It used to read `opts.note ? " (NOT
      LINKED)" : ""` — one tag inferred from whether ANY note existed, while `note` carries two
      unrelated things: a payment with no CRM lead, and a linked payment whose post-payment details
@@ -224,6 +252,7 @@ async function notifyOfFindablePayment(opts: {
       line("Trade:", opts.trade) + line("Town:", opts.town) +
       line("Phone:", opts.phone) + line("Email:", opts.email ?? "(not given)") +
       (opts.note ? `\n${opts.note}\n` : "") +
+      (opts.quickClose?.length ? `\n${opts.quickClose.join("\n")}\n` : "") +
       `\nSetup is promised within two working days.\n`;
     const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const row = (k: string, v: string | null) =>
@@ -239,6 +268,7 @@ async function notifyOfFindablePayment(opts: {
       row("Trade:", opts.trade) + row("Town:", opts.town) +
       row("Phone:", opts.phone) + row("Email:", opts.email ?? "(not given)") +
       (opts.note ? `<p style="margin:10px 0 0;color:#b45309"><strong>${esc(opts.note)}</strong></p>` : "") +
+      (opts.quickClose?.length ? `<div style="margin:12px 0 0;padding:8px 10px;background:#eff6ff;border-left:3px solid #1d4ed8">${opts.quickClose.map((l, i) => `<p style="margin:0 0 2px${i === 0 ? ";font-weight:700" : ""}${/DOMAIN \/ AGENCY ISSUE/.test(l) ? ";color:#b91c1c;font-weight:700" : ""}">${esc(l.trim())}</p>`).join("")}</div>` : "") +
       `<p style="margin:10px 0 0;color:#475569">Setup is promised within two working days.</p>` +
       `</div>`;
     const out = await postResend({

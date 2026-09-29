@@ -7,6 +7,7 @@ import {
 import { foldSalesWorkspace, parseTargets, AUDIT_READY_DAYS, FEED_DAYS, type WorkspaceLead } from "../../../src/lib/salesWorkspace.ts";
 import { loadEarnings } from "../_shared/earnings.ts";
 import { londonDayOf } from "../../../src/lib/commission.ts";
+import { quickCloseState } from "../../../src/lib/quickClose.ts";
 
 // sales-performance — the Sales Dashboard's numbers (2026-09-28, docs/sales-readiness.md).
 //
@@ -145,12 +146,24 @@ Deno.serve(async (req) => {
       const names = new Map(e.clients.map((c) => [c.leadId, c.business]));
       if (e.commissionable) commission = e.lines.filter((l) => l.status !== "not_commissionable").map((l) => ({ at: l.occurredAt, amount: l.commission, leadId: l.leadId, label: l.label, business: names.get(l.leadId) ?? "Client" }));
     } catch (err) { console.error("[sales-performance] earnings", err instanceof Error ? err.message : err); }
+    /* Quick Close states (small: only rows that have one), for "finish it" / "chase the link". */
+    const quickClose = new Map<string, { state: ReturnType<typeof quickCloseState>; linkAt: string | null }>();
+    try {
+      const { data: qrows } = await service.from("onboarding_responses").select("lead_id, status, quick_close").not("quick_close", "is", null).not("lead_id", "is", null).limit(2000);
+      for (const r of (qrows ?? []) as { lead_id: string; status: string | null; quick_close: { link_generated_at?: string | null } | null }[]) {
+        if (!idSet.has(r.lead_id)) continue;
+        const s = quickCloseState(r.status, r.quick_close as never);
+        const prev = quickClose.get(r.lead_id);
+        if (!prev || s === "paid") quickClose.set(r.lead_id, { state: s, linkAt: r.quick_close?.link_generated_at ?? null });
+      }
+    } catch (err) { console.error("[sales-performance] quick close", err instanceof Error ? err.message : err); }
     const workspace = foldSalesWorkspace({
       personId, facts, activity, nowMs: Date.now(),
       leads: new Map((leads as unknown as WorkspaceLead[]).map((l) => [l.id, l])),
       audits: runs.map((r) => ({ lead_id: auditLead.get(r.audit_id)!, completed_at: r.created_at })),
       targets: personId === actor.id ? parseTargets(body.targets) : null,
       commission,
+      quickClose,
     });
 
     // A salesperson learns only that a lead of theirs was won — never a figure. The fold already

@@ -192,6 +192,10 @@ verify_jwt = true
 [functions.feedback-submit]
 verify_jwt = true
 
+# Quick Close (Sales Experience, 2026-09-29): signed-in callers only; lead access checked in the handler.
+[functions.quick-close]
+verify_jwt = true
+
 # template-request: "Request a template" (2026-09-28). SPA-only caller with the signed-in user's JWT; the
 # handler resolves the role itself (admin or sales), saves the request, then emails Paul. Never calls Meta.
 [functions.template-request]
