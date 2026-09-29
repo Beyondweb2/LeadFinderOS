@@ -82,6 +82,21 @@ interface CrmRow {
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
+export const wrongNumberKey = (leadId: string) => ['lead-wrong-number', leadId] as const;
+
+/** Is this lead's number marked Wrong number (the canonical contact_suppressions row, read through
+ *  lead_wrong_number — the table itself has no browser policies)? */
+export function useWrongNumber(leadId: string) {
+  return useQuery({
+    queryKey: wrongNumberKey(leadId),
+    enabled: !!leadId,
+    queryFn: async () => {
+      const r = await leadRpc('lead_wrong_number', { _lead_id: leadId });
+      if (!r.ok) throw new Error(String(r.error ?? 'lookup_failed'));
+      return { wrong: r.wrong_number === true, at: typeof r.at === 'string' ? r.at : null };
+    },
+  });
+}
 
 const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
 const LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-foreground/70';
@@ -224,6 +239,7 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
   const save = useSave(leadId);
   const { role } = useSubscription();
   const lead = crm.data;
+  const qc = useQueryClient();
   const [preset, setPreset] = useState<string | null>(null);
   const [askWhen, setAskWhen] = useState(false);
   const nextRef = useRef<HTMLElement>(null);
@@ -243,6 +259,14 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
     if (outcome === 'agency_controls_site' && lead.website_control !== 'agency_controls') {
       const r = await save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency controls the website', { website_control: 'agency_controls' });
       if (r.ok) said.push('Website control set to: an agency');
+    }
+    /* ⛔ WRONG NUMBER SUPPRESSES THE NUMBER (Paul, 2026-09-29): the one canonical row
+       (contact_suppressions, lead_mark_wrong_number) that every template and automated sender refuses
+       on. The lead and its history stay; the admin clears it from the popup header. */
+    if (outcome === 'wrong_number') {
+      const r = await leadRpc('lead_mark_wrong_number', { _lead_id: leadId });
+      if (r.ok) { said.push('Number suppressed: no templates, queue or automated WhatsApp to it'); void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) }); notifyLeadChanged(leadId); }
+      else said.push(`Not suppressed — ${refusalText(r.error)}`);
     }
     const more = onOutcome ? await onOutcome(outcome) : null;
     if (more) said.unshift(more);

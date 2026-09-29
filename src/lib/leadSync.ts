@@ -67,6 +67,7 @@ export function leadQueryKeys(leadId: string): readonly (readonly unknown[])[] {
     ['sales', 'activity', leadId],
     ['onboarding-link', leadId],
     ['cold-call-playbook', leadId],
+    ['lead-wrong-number', leadId],
   ];
 }
 

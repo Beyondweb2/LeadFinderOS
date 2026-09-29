@@ -1,5 +1,13 @@
-import { AlertTriangle, CalendarCheck, Globe, History } from 'lucide-react';
-import { useLeadCrmRow } from '@/components/LeadCrmPanel';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, CalendarCheck, Globe, History, PhoneOff } from 'lucide-react';
+import { useLeadCrmRow, useWrongNumber, wrongNumberKey } from '@/components/LeadCrmPanel';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useToast } from '@/hooks/use-toast';
+import { leadPermissions } from '@/lib/access';
+import { leadRpc } from '@/lib/leadRpc';
+import { notifyLeadChanged } from '@/lib/leadSync';
+import { refusalText } from '@/lib/salesCrm';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { NextActionPill } from '@/components/NextActionPill';
 import { useLeadActivity, useTeamDirectory } from '@/hooks/useSalesCrm';
@@ -35,6 +43,24 @@ export function LeadStateStrip({ leadId, onOpenWork }: { leadId: string; onOpenW
      its outcome logged); an older one is history, which the timeline keeps. */
   const callShown = callAt && Number.isFinite(callAt.getTime()) && callAt.getTime() >= Date.now() - 12 * 3600_000;
   const agency = row?.website_control === 'agency_controls';
+  /* WRONG NUMBER (2026-09-29): the number's canonical suppression — no templates, queue or automated
+     WhatsApp. The admin (assignOwner = the admin's own lead powers) can clear a mark made in error. */
+  const wrong = useWrongNumber(leadId);
+  const { role } = useSubscription();
+  const canClear = leadPermissions(role).assignOwner;
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [clearing, setClearing] = useState(false);
+  const clearWrong = async () => {
+    if (!window.confirm('Clear Wrong number? Templates, the queue and automated WhatsApp can reach this number again.')) return;
+    setClearing(true);
+    const r = await leadRpc('lead_clear_wrong_number', { _lead_id: leadId });
+    setClearing(false);
+    if (!r.ok) { toast({ title: 'Not cleared', description: refusalText(r.error), variant: 'destructive' }); return; }
+    toast({ title: 'Wrong number cleared', description: r.still_suppressed ? 'The number is still held back for another reason (archived, not interested or a decline).' : 'Messaging is available again.' });
+    void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
+    notifyLeadChanged(leadId);
+  };
   const chip = 'inline-flex min-w-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium';
   return (
     <div className="mt-2.5 space-y-1.5" data-testid="lead-state-strip">
@@ -44,6 +70,12 @@ export function LeadStateStrip({ leadId, onOpenWork }: { leadId: string; onOpenW
         {callShown && (
           <span className={cn(chip, 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300')} title="Call / meeting booked (Work tab)">
             <CalendarCheck className="h-3 w-3" />Call booked · {callAt!.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })} UK
+          </span>
+        )}
+        {wrong.data?.wrong && (
+          <span className={cn(chip, 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300')} data-testid="wrong-number-pill" title="Marked Wrong number: no templates, queue or automated WhatsApp go to this number. History is kept.">
+            <PhoneOff className="h-3 w-3" />Wrong number · no WhatsApp outreach
+            {canClear && <button type="button" onClick={() => void clearWrong()} disabled={clearing} className="ml-1 font-semibold underline underline-offset-2 hover:no-underline" data-testid="clear-wrong-number">{clearing ? 'Clearing…' : 'Clear'}</button>}
           </span>
         )}
         {agency && (

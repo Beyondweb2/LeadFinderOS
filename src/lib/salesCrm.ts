@@ -181,6 +181,8 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'too_many': return 'Too many at once — select 500 or fewer';
     // The usage guard (2026-09-29). The same words everywhere, never a cost or a limit's number.
     case 'usage_paused': return 'Usage temporarily paused — contact Paul';
+    case 'no_phone': return 'This lead has no phone number';
+    case 'wrong_number': return 'This number is marked Wrong number — the admin can clear it on the lead';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
 }
@@ -349,7 +351,7 @@ const EMAIL_SOURCE_WORDS: Record<string, string> = { website_crawl: 'their websi
 
 const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
-  contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in',
+  contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in', wrong_number: 'wrong number',
 };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the
@@ -376,7 +378,7 @@ export function activityDetail(
     case 'details_set': {
       const parts = Object.keys(d).map((k) => {
         const v = d[k];
-        const shown = k === 'email_source' ? (EMAIL_SOURCE_WORDS[String(v)] ?? String(v)) : Array.isArray(v) ? (v.length ? v.join(', ') : 'cleared') : v == null || v === '' ? 'cleared' : String(v);
+        const shown = k === 'wrong_number' ? (v === true ? 'marked — no templates or automated WhatsApp' : 'cleared by the admin') : k === 'email_source' ? (EMAIL_SOURCE_WORDS[String(v)] ?? String(v)) : Array.isArray(v) ? (v.length ? v.join(', ') : 'cleared') : v == null || v === '' ? 'cleared' : String(v);
         return `${DETAIL_FIELD_LABEL[k] ?? k.replace(/_/g, ' ')}: ${shown}`;
       });
       return parts.length ? parts.join(' · ') : null;

@@ -26,6 +26,7 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
+import { checkWrongNumber } from "../_shared/suppression.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -75,7 +76,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener). */
-const BUILD_ID = "2026-09-29a";
+const BUILD_ID = "2026-09-29b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -313,6 +314,14 @@ Deno.serve(async (req) => {
        which ids exist and are archived. 409, not 403: the caller is allowed here, the lead's state
        is what refuses. */
     if (leadArchived) return json({ ok: false, error: "lead_archived" }, 409);
+    /* ⛔ WRONG NUMBER: NO TEMPLATE GOES TO IT (2026-09-29, Paul). The canonical state is the number's
+       contact_suppressions row (_shared/suppression.ts) — the same row every automated sender already
+       refuses on. Checked before the payload and the dry-run return, so Preview and the Inbox's bulk
+       pre-check report it and skip the lead. A free-text reply inside an open conversation (they wrote
+       to us) is not outreach and is not refused. The admin clears the mark on the lead. */
+    if (templateName && await checkWrongNumber(service, "+" + to)) {
+      return json({ ok: false, error: "wrong_number", reason: "This number is marked Wrong number — no templates or automated messages go to it. The admin can clear it on the lead." }, 200);
+    }
 
     // --- 24h customer-service window (from the operator's own inbound rows) ---
     const { data: lastIn } = await service

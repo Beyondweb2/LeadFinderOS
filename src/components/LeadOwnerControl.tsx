@@ -58,9 +58,9 @@ export function LeadOwnerControl({ leadId, onOpenDetail }: { leadId: string; onO
         if (!r.ok) { toast({ title: 'Not reassigned', description: refusalText(r.error), variant: 'destructive' }); return; }
         void qc.invalidateQueries({ queryKey: ['sales', 'owner', leadId] });
         window.dispatchEvent(new CustomEvent('lead-row-changed', { detail: { leadId } }));
-        toast({ title: to ? `Assigned to ${team.byId.get(to)?.display_name ?? 'them'}` : 'Unassigned' });
+        toast({ title: to ? `Assigned to ${team.byId.get(to)?.display_name ?? 'them'} — they've been notified` : 'Unassigned' });
       }}>
-        <SelectTrigger className="h-7 w-32 text-xs" title="Owner"><SelectValue placeholder="Owner" /></SelectTrigger>
+        <SelectTrigger className="h-7 w-36 text-xs" title="Assign this lead to someone (they are notified)" aria-label="Assign to"><span className="mr-1 text-muted-foreground">Assign:</span><SelectValue placeholder="Owner" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__none">Unassigned</SelectItem>
           {members.map((m) => <SelectItem key={m.user_id} value={m.user_id}>{m.display_name}</SelectItem>)}

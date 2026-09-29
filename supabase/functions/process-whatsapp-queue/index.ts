@@ -1822,6 +1822,14 @@ Deno.serve(async (req) => {
     /* The SHARED check. This was the LAST inline copy of the rule — phone-only, and it swallowed a
        failed lookup as "not suppressed". Now matches on phone, email and lead id, and fails closed. */
     const mainSupp = await checkSuppressed(service, { phone: `+${toNumber}`, email: lead.email ?? null, leadId: lead.id });
+    /* ⛔ A WRONG NUMBER IS NOT AN OPT-OUT (2026-09-29). It is refused like every suppression, but the
+       lead goes back to where it was before it was queued — not to opted_out — because the admin can
+       clear the mark, and an opted_out status would outlive it. */
+    if (mainSupp.suppressed && mainSupp.wrongNumber) {
+      const back = (lead.previous_status as string | null) && lead.previous_status !== "queued" ? (lead.previous_status as string) : "not_contacted";
+      await service.from("outreach_leads").update({ status: back, whatsapp_delivery_status: "wrong_number" }).eq("id", lead.id);
+      return json({ ok: true, skipped: "wrong_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    }
     if (mainSupp.suppressed) {
       await service.from("outreach_leads").update({
         status: "opted_out", whatsapp_delivery_status: "suppressed", contact_method: null,

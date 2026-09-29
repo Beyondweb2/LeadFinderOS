@@ -52,7 +52,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   instagram_method: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
   instagram_last_checked_at: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
   enrichment_source: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
-  user_id: { files: ["src/hooks/useOutreach.ts", "src/hooks/useSalesCrm.ts", "src/hooks/useSubscription.tsx"], why: "`.eq('user_id', …)` filters and team members' user_id — never a lead's" },
+  user_id: { files: ["src/hooks/useOutreach.ts", "src/hooks/useSalesCrm.ts", "src/hooks/useSubscription.tsx", "src/components/BulkAssignSelect.tsx"], why: "`.eq('user_id', …)` filters and team members' user_id — never a lead's" },
   updated_at: { files: ["src/hooks/useOutreach.ts", "src/components/TemplatePicker.tsx", "src/hooks/useBulkJobs.ts"], why: "`.order('updated_at')` strings and other tables' rows" },
   website_build: { files: ["src/lib/fullCrawl.ts"], why: "the crawl request-source constant 'website_build'" },
   call_booked_at: { files: ["src/lib/salesCrm.ts"], why: "read off SALES rows (sales_leads view); Find Leads imports salesCrm only for refusalText" },
