@@ -15,6 +15,9 @@ import { londonDayOf } from "../../../src/lib/commission.ts";
 //     REPORTS what it would write; { apply: true } writes (idempotent — unique by the Stripe object).
 //     ⛔ Never invents a transaction: a charge it cannot tie to exactly one lead is reported, not written.
 //   webhook_config (admin) — which events the Stripe webhook endpoint sends (read-only).
+//   webhook_enable_disputes (admin; Paul approved 2026-09-29) — ADDS the three dispute events to the
+//     endpoint that points at our stripe-webhook, keeping every event it already sends. The one Stripe
+//     write in this file; it changes which events Stripe sends, never money.
 // ⛔ Stripe is only READ here. Nothing is charged, refunded or changed.
 
 const corsHeaders = {
@@ -38,6 +41,20 @@ async function stripeGet(path: string, params: Record<string, string | string[]>
   const r = await fetch(`https://api.stripe.com/v1/${path}?${qs}`, { headers: { Authorization: `Bearer ${key}`, "Stripe-Version": "2024-06-20" } });
   const j = await r.json();
   if (!r.ok) throw new Error(`stripe ${path}: ${j?.error?.message ?? r.status}`);
+  return j;
+}
+/** DISPUTE_EVENTS: what stripe-webhook records as chargebacks (the payment ledger). */
+export const DISPUTE_EVENTS = ["charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed"] as const;
+async function stripeAddEvents(endpointId: string, events: string[]): Promise<Obj> {
+  const key = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+  if (!key) throw new Error("stripe_not_configured");
+  const form = new URLSearchParams();
+  for (const e of events) form.append("enabled_events[]", e);
+  const r = await fetch(`https://api.stripe.com/v1/webhook_endpoints/${endpointId}`, {
+    method: "POST", headers: { Authorization: `Bearer ${key}`, "Stripe-Version": "2024-06-20", "Content-Type": "application/x-www-form-urlencoded" }, body: form,
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(`stripe webhook_endpoints: ${j?.error?.message ?? r.status}`);
   return j;
 }
 async function stripeList(path: string, params: Record<string, string | string[]>): Promise<Obj[]> {
@@ -170,6 +187,17 @@ Deno.serve(async (req) => {
     if (mode === "backfill") {
       const since = typeof body.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.since) ? body.since : "2026-06-01";
       return json({ ok: true, ...(await backfill(service, body.apply === true, since)), ms: Date.now() - started });
+    }
+    if (mode === "webhook_enable_disputes") {
+      const eps = (await stripeList("webhook_endpoints", {})).filter((e) => String(e.url ?? "").includes("/functions/v1/stripe-webhook"));
+      if (eps.length !== 1) return json({ ok: false, error: "endpoint_not_unique", detail: `Expected exactly one endpoint pointing at stripe-webhook, found ${eps.length}.` }, 409);
+      const ep = eps[0];
+      const before: string[] = ep.enabled_events ?? [];
+      if (before.includes("*")) return json({ ok: true, changed: false, detail: "The endpoint already sends every event.", enabled_events: before });
+      const after = [...new Set([...before, ...DISPUTE_EVENTS])];
+      if (after.length === before.length) return json({ ok: true, changed: false, enabled_events: before });
+      const updated = await stripeAddEvents(ep.id, after);
+      return json({ ok: true, changed: true, before, enabled_events: updated.enabled_events });
     }
     if (mode === "webhook_config") {
       const eps = await stripeList("webhook_endpoints", {});
