@@ -15,6 +15,7 @@ import { countryFromAddress } from '@/lib/leadCountry';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
+import { businessKey, isWithoutWebsite } from '@/lib/websiteStatusClass';
 import { statusUpdatePatch, isFreshLead } from '@/lib/leadStatus';
 
 // Statuses that represent an outreach attempt (message/call sent). The legacy per-channel
@@ -61,6 +62,18 @@ interface PlaceDetailsResponse {
   derivedTown?: string | null;
   /** null = a town was found. Absent entirely = the edge function predates this change. */
   townNote?: string | null;
+}
+
+/** 🔴 COVERAGE: ADDED TO CRM (2026-09-29). Called only AFTER an insert succeeded, for a result that
+ *  came from a recorded search run: credits the business to that run, with the search's own website
+ *  verdict. Fire-and-forget — reporting must never slow or fail an add. */
+function recordSearchAddition(lead: Lead) {
+  const runId = lead.searchRunId;
+  const key = businessKey(lead);
+  if (!runId || !key) return;
+  void Promise.resolve((supabase.rpc as unknown as (n: string, a: unknown) => Promise<{ error: unknown }>)('record_search_addition', {
+    _run_id: runId, _key: key, _without_website: isWithoutWebsite(lead.websiteStatus),
+  })).catch(() => {});
 }
 
 /** One Place Details lookup for a salesperson's add (see addLead). null on any failure — the add goes
@@ -782,6 +795,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       }
       window.dispatchEvent(new CustomEvent('crm-lead-added'));
       window.dispatchEvent(new CustomEvent('sales-lead-changed'));
+      recordSearchAddition(lead);
       if (!silent) toast({ title: 'Added to My leads', description: lead.name });
       return { id: r.lead_id, business_name: lead.name } as unknown as OutreachLead;
     }
@@ -927,6 +941,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
 
     const newLead = data as OutreachLead;
     setLeads((prev) => [newLead, ...prev]);
+    recordSearchAddition(lead);
 
     // Notify bottom nav immediately
     window.dispatchEvent(new CustomEvent('crm-lead-added'));

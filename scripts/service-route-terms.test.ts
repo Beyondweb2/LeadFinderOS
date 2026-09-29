@@ -98,7 +98,8 @@ ok(QUICK_CLOSE_QUESTIONS.find((q) => q.key === 'route')!.options.map((o) => o.la
 ok(missingQuestions(base).includes('route') && !quickCloseGate(base).complete, 'no route → the close is not complete');
 ok(!mayGenerateLink('answers_saved', { answers: base }), 'no route → no payment link');
 for (const route of ['build', 'optimise'] as const) {
-  const a = cleanAnswers({ ...base, route });
+  /* 2026-09-29: Build also needs its three consents confirmed (coverage-found-added.test.ts pins them). */
+  const a = cleanAnswers({ ...base, route, ...(route === 'build' ? { build_consents: 'yes' } : {}) });
   ok(quickCloseGate(a).complete && mayGenerateLink('answers_saved', { answers: a }), `${route}: complete and ready for the link`);
   const cols = onboardingColumnsFor(a);
   ok(cols.plan_tier === planTierForRoute(route) && cols.website_addon === (route === 'build'), `${route}: writes plan_tier=${cols.plan_tier}, website_addon=${cols.website_addon}`);

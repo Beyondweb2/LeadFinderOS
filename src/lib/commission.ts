@@ -1,8 +1,16 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    SALES COMMISSION (Sales Experience, 2026-09-28; Paul's rules, not to be re-asked):
-   - 30% of the qualifying INITIAL payment actually received; 20% of each of the NEXT THREE qualifying
-     recurring payments actually received. Always a percentage of the REAL amount — a £29.99 monthly
-     earns £6.00, a £99 monthly £19.80. Never a hard-coded figure.
+   - 🔴 THE INITIAL PAYMENT IS TIERED BY THE WEEK (Paul, 2026-09-29): per salesperson, Monday–Sunday
+     (London), clients 1–3 earn 30%, clients 4–6 40%, client 7 onwards 50% of the initial payment. NOT
+     retrospective — each sale keeps the rate of its own place; the sequence resets every Monday; a
+     client counts when the successful initial payment lands in the ledger, ordered by payment time
+     then payment id. The place and rate are STAMPED on the ledger row by the database (migration
+     20260929180000, restamp_weekly_commission) and read from there, so a later rule change never
+     rewrites history. A row with no stamped rate (earned before the rule) keeps the flat
+     COMMISSION_INITIAL_RATE it was earned under. There is no weekly bonus on top of this.
+   - 20% of each of the NEXT THREE qualifying recurring payments actually received (unchanged).
+     Always a percentage of the REAL amount — a £29.99 monthly earns £6.00, a £99 monthly £19.80.
+     Never a hard-coded figure.
    - EARNED the moment the payment is received (NOT held for the refund window).
    - DISPUTES (Paul, 2026-09-29): while a dispute / inquiry is OPEN the commission on that money is
      HELD (it comes off what is due, it is not a permanent reversal); WON, or an inquiry that closed with
@@ -18,9 +26,36 @@
    The money facts come ONLY from payment_ledger (Stripe); never from a CRM status.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+/** The flat initial rate every sale earned BEFORE the weekly tiers (and the rate of tier 1). Applied
+ *  only to a ledger row with no stamped rate. */
 export const COMMISSION_INITIAL_RATE = 0.30;
 export const COMMISSION_RECURRING_RATE = 0.20;
 export const COMMISSION_RECURRING_COUNT = 3;
+
+/** 🔴 THE WEEKLY TIERS (Paul, 2026-09-29). `upTo` is the last weekly client number at that rate.
+ *  ⛔ MIRRORED by public.weekly_tier_rate() in the database, which is what actually stamps a sale —
+ *  scripts/weekly-commission-tiers.test.ts pins the two against each other. */
+export const WEEKLY_TIERS: readonly { upTo: number; rate: number }[] = [
+  { upTo: 3, rate: 0.30 },
+  { upTo: 6, rate: 0.40 },
+  { upTo: Infinity, rate: 0.50 },
+];
+/** The rule name the database stamps; a row on any other rule is never renumbered. */
+export const WEEKLY_TIER_RULE = 'weekly_tier_v1';
+
+/** The initial rate for the Nth client of a week (N from 1). */
+export function weeklyTierRate(seq: number): number {
+  return (WEEKLY_TIERS.find((t) => seq <= t.upTo) ?? WEEKLY_TIERS[WEEKLY_TIERS.length - 1]).rate;
+}
+
+/** The Monday (YYYY-MM-DD) of the London week an instant falls in — the same week the database uses. */
+export function londonWeekStart(iso: string): string {
+  const day = londonDayOf(iso);
+  const d = new Date(`${day}T12:00:00Z`);
+  const dow = (d.getUTCDay() + 6) % 7; // Monday = 0
+  d.setUTCDate(d.getUTCDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
 
 /** England & Wales bank holidays (gov.uk). ⚠️ Extend before 2028 — a missing year only means a payout
  *  date could land on a holiday; it is never a money figure. */
@@ -41,6 +76,11 @@ export interface LedgerRow {
   stripe_charge_id: string | null;
   stripe_invoice_id: string | null;
   sold_by_user_id: string | null;
+  /** Stamped by the database on an initial payment (weekly tiers). Absent = earned before the rule. */
+  commission_rule?: string | null;
+  commission_week_start?: string | null;
+  commission_week_seq?: number | null;
+  commission_rate?: number | string | null;
 }
 export interface PayoutRow { user_id: string; period_month: string; amount_gbp: number; paid_at: string }
 
@@ -64,6 +104,9 @@ export interface CommissionLine {
   status: LineStatus;
   /** A dispute still open: the commission is held back, not permanently reversed. */
   held?: boolean;
+  /** Initial payments on the weekly tiers: the Monday of their week and their place in it (stored). */
+  weekStart?: string | null;
+  weekSeq?: number | null;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -144,7 +187,16 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     let initialSeen = false; let recurringSeen = 0;
     for (const p of payments) {
       let n: number; let rate: number; let label: string;
-      if (p.kind === 'initial' && !initialSeen) { initialSeen = true; n = 1; rate = COMMISSION_INITIAL_RATE; label = 'Initial payment'; }
+      let weekStart: string | null = null; let weekSeq: number | null = null;
+      if (p.kind === 'initial' && !initialSeen) {
+        initialSeen = true; n = 1;
+        /* ⛔ THE STORED RATE, never recomputed here: what the sale earned when it landed. */
+        const stamped = p.commission_rate === null || p.commission_rate === undefined || p.commission_rate === '' ? NaN : Number(p.commission_rate);
+        rate = Number.isFinite(stamped) ? stamped : COMMISSION_INITIAL_RATE;
+        weekSeq = typeof p.commission_week_seq === 'number' ? p.commission_week_seq : null;
+        weekStart = p.commission_week_start ? String(p.commission_week_start).slice(0, 10) : null;
+        label = weekSeq ? `Initial payment · client ${weekSeq} of the week` : 'Initial payment';
+      }
       else if (p.kind === 'recurring') { recurringSeen += 1; n = 1 + recurringSeen; rate = recurringSeen <= COMMISSION_RECURRING_COUNT ? COMMISSION_RECURRING_RATE : 0; label = `Month ${recurringSeen}`; }
       else { n = 1; rate = 0; label = 'Additional one-off payment'; }
       if (!earns) rate = 0;
@@ -155,6 +207,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         id: `pay:${p.id}`, leadId, sellerId: seller, kind: 'payment', paymentNumber: n, label, clientAmount: round2(p.amount_gbp), rate,
         commission: commissionOn(p.amount_gbp, rate), occurredAt: p.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
         status: !earns ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
+        ...(weekSeq ? { weekStart, weekSeq } : {}),
       });
     }
     // Reversals: a refunded charge or a lost/open chargeback takes back the commission on that money.
@@ -241,4 +294,55 @@ export function earningsTotals(lines: CommissionLine[], payouts: PayoutRow[], pr
     projected: round2(projections.filter((p) => p.active && p.monthlyGbp && p.paymentsLeft > 0)
       .reduce((s, p) => s + p.paymentsLeft * commissionOn(p.monthlyGbp!, COMMISSION_RECURRING_RATE), 0)),
   };
+}
+
+/* ══ THE WEEKLY TRACKER (Paul, 2026-09-29) ═════════════════════════════════════════════════════════
+   Monday–Sunday (London) for ONE salesperson, from the SAME lines the Earnings page lists — so the
+   tracker and the ledger cannot disagree. "Clients closed" = initial payments landed this week (a later
+   refund does not un-count one: the sequence never renumbers). "Earned" = the commission on those
+   initial payments, net of any reversal of them (a held dispute counts as held, i.e. not earned). */
+export interface WeeklyTracker {
+  weekStart: string;
+  weekEnd: string;
+  clients: number;
+  /** Initial-payment commission earned this week, net of reversals of those payments. */
+  earned: number;
+  /** The rate of the latest client (tier 1 before the first). */
+  currentRate: number;
+  /** The rate the NEXT client this week would earn. */
+  nextClientRate: number;
+  /** The next higher rate, or null at the top tier. */
+  nextTierRate: number | null;
+  /** More clients needed (after this one) before the next tier applies; 0 = the next client earns it. */
+  clientsToNextTier: number | null;
+  topTier: boolean;
+}
+
+export function weeklyTracker(lines: CommissionLine[], todayIso: string): WeeklyTracker {
+  const weekStart = londonWeekStart(todayIso);
+  const end = new Date(`${weekStart}T12:00:00Z`); end.setUTCDate(end.getUTCDate() + 6);
+  const initials = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && l.weekStart === weekStart && l.weekSeq);
+  const leads = new Set(initials.map((l) => l.leadId));
+  const reversals = lines.filter((l) => l.kind === 'reversal' && l.paymentNumber === 1 && leads.has(l.leadId));
+  const clients = initials.length;
+  const earned = round2(initials.reduce((s, l) => s + l.commission, 0) + reversals.reduce((s, l) => s + l.commission, 0));
+  const tierIdx = WEEKLY_TIERS.findIndex((t) => Math.max(clients, 1) <= t.upTo);
+  const tier = WEEKLY_TIERS[tierIdx];
+  const next = WEEKLY_TIERS[tierIdx + 1] ?? null;
+  return {
+    weekStart, weekEnd: end.toISOString().slice(0, 10), clients, earned,
+    currentRate: weeklyTierRate(Math.max(clients, 1)),
+    nextClientRate: weeklyTierRate(clients + 1),
+    nextTierRate: next ? next.rate : null,
+    clientsToNextTier: next ? Math.max(0, tier.upTo - clients) : null,
+    topTier: !next,
+  };
+}
+
+/** The tracker's one line of words: "1 more client unlocks 40%" / "Your next client earns 40%" / "Top tier reached". */
+export function weeklyTrackerNextLine(t: WeeklyTracker): string {
+  const pct = (r: number) => `${Math.round(r * 100)}%`;
+  if (t.topTier || t.nextTierRate === null) return 'Top tier reached';
+  if (t.clientsToNextTier === 0) return `Your next client earns ${pct(t.nextTierRate)}`;
+  return `${t.clientsToNextTier} more client${t.clientsToNextTier === 1 ? '' : 's'} unlocks ${pct(t.nextTierRate)}`;
 }

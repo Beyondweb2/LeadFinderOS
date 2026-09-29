@@ -76,7 +76,9 @@ export function useTownLeadSearch(isLeadExcluded: (lead: Lead) => boolean) {
       });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
-      const raw = Array.isArray(data?.leads) ? data!.leads! : [];
+      /* Each result carries the run search-leads recorded, so an add from here is credited to it (Coverage). */
+      const runId = typeof (data as { searchRunId?: unknown } | null)?.searchRunId === 'string' ? (data as { searchRunId: string }).searchRunId : null;
+      const raw = (Array.isArray(data?.leads) ? data!.leads! : []).map((l) => (runId ? { ...l, searchRunId: runId } : l));
       const leads = sortLeadsForDisplay(raw.filter((l) => !isLeadExcluded(l)));
       setStates((p) => ({ ...p, [key]: { kind: 'done', leads } }));
     } catch (e) {

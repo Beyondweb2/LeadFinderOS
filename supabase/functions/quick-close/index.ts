@@ -148,6 +148,11 @@ Deno.serve(async (req) => {
       const changed = ([...new Set([...Object.keys(answers), ...Object.keys(prev)])] as (keyof QuickCloseAnswers)[]).filter((k) => answers[k] !== prev[k]);
       /* A route dropped by the re-clean clears the row's route too — never left behind as a stale sale. */
       if (prev.route && !answers.route) { patch.plan_tier = null; patch.website_addon = null; }
+      /* Build consents withdrawn (Not yet, or the route moved off Build): the consent columns they set go too. */
+      if (prev.build_consents === "yes" && answers.build_consents !== "yes") {
+        patch.dns_permission = null; patch.materials_confirmed = null;
+        patch.authority_confirmed = answers.authority === "yes" ? true : answers.authority === "no" ? false : null;
+      }
       const next: Obj = { ...(qc ?? {}), answers, updated_at: now, updated_by: actor.id };
       if (!qc?.started_by) { next.started_by = actor.id; next.started_at = now; }
       if (gate.complete && !qc?.completed_at) { next.completed_at = now; next.completed_by = actor.id; }
@@ -190,7 +195,7 @@ Deno.serve(async (req) => {
       if (!mayGenerateLink(row.status, qc)) {
         const s = quickCloseState(row.status, qc);
         await event(service, leadId, row.id, actor.id, "link_refused", { state: s });
-        return json({ ok: false, error: s, detail: s === "blocked" ? "The decision maker needs to approve and sign up." : s === "needs_review" ? "Domain / agency issue — Paul needs to review this first." : "Finish the questions first." }, 409);
+        return json({ ok: false, error: s, detail: s === "blocked" ? "The decision maker needs to approve and sign up." : s === "consents_needed" ? "For a new website they need to confirm the three Build consents first (domain, DNS, content)." : s === "needs_review" ? "Domain / agency issue — Paul needs to review this first." : "Finish the questions first." }, 409);
       }
       // A recent link is reused: one Stripe session per close, however many clicks.
       if (qc?.link_url && qc.link_generated_at && Date.now() - Date.parse(qc.link_generated_at) < LINK_REUSE_MS) {

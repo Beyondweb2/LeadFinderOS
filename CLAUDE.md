@@ -120,13 +120,26 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   theirs and is never taken over or down. Where the route is known, name ONLY its count; pre-choice
   surfaces name both. Do not invent penalties or exit rights. The guarantee applies on top, identical on
   both. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon` alone.
+- **Coverage Found vs Added** (2026-09-29, `docs/state-coverage-market.md` last section): per trade+town, FOUND = distinct
+  businesses the recorded search runs RETURNED (`search_history.found_keys`, written when the run happens,
+  BEFORE the page's exclusions), ADDED = those then successfully inserted (`added_keys`, written by
+  `record_search_addition` after the insert), each split by the search's own website verdict
+  (`isWithoutWebsite`, the one definition). ⛔ Never inferred from the CRM; a run from before 29 Sep is "not
+  recorded" (its counts were post-exclusion), never estimated.
 - **Quick Close** (`src/lib/quickClose.ts`, fn `quick-close`, `docs/sales-experience.md` §9): a salesperson's
   5-question close + the required website route (Build / Optimise) on the SAME onboarding row (locked find-or-create) → the EXISTING `findable-checkout`
   (row + lead only; never a price). Domain / agency doubt = Paul review, never silently safe.
-- **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4): 30% of the initial
-  payment + 20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund /
-  chargeback (an offset once paid out), from the **payment ledger** (`payment_ledger`, written by
-  `stripe-webhook` + the admin backfill) — never from a CRM status. Only role `sales` earns.
+- **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4, §11): the INITIAL payment
+  earns by the **weekly tier** (Paul, 2026-09-29) — per salesperson, Monday–Sunday London, clients 1–3 30%,
+  4–6 40%, 7+ 50%, NOT retrospective, reset every Monday, ordered by payment time then payment id — plus
+  20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund / chargeback (an
+  offset once paid out), from the **payment ledger** (`payment_ledger`, written by `stripe-webhook` + the
+  admin backfill) — never from a CRM status. Only role `sales` earns. ⛔ **The place and rate are STAMPED by
+  the database** (`restamp_weekly_commission`, a trigger on the ledger, per-seller-week lock) into
+  `commission_week_seq` / `commission_rate`, and the code READS them — never recompute a rate in code. A
+  refund never renumbers a week. Rows from before the tiers are `flat_30_v0` and never counted. There is
+  no weekly bonus. `WEEKLY_TIERS` (TS) and `weekly_tier_rate()` (SQL) are one table in two places —
+  `scripts/weekly-commission-tiers.test.ts` pins them.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_BUILD_TOTAL_PAYMENTS` / `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site
@@ -768,7 +781,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
 | Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, `LeadCrmPanel`, `AvailableToClaim`, `src/lib/leadRpc.ts` + `salesPatchPlan.ts`, pages `Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400` + `140000`, view `sales_leads`, tables `team_members`/`lead_activity` |
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
-| Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts`, fns `coverage`, `market-view` |
+| Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
 | Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`, recon: `reconSchema.ts` (the JSON contract, `reconVersion`), `recon.ts` (prompt, safe import, merge), `manifestSummary.ts` (fenced per-route summaries — never the raw JSON in a prompt), mapping: `templateMapping.ts` (`computeMapping` — trade-agnostic; a template only DECLARES fields / catalogue / slots in `websiteTemplates.ts`; only `ready` values reach the config; recon risk rule `LOW_RISK_FACT_KEYS` is a positive allowlist), execution: `buildExecution.ts` (Build Execution prompt refused while blocked; PREVIEW READY is gated by `previewGateProblems` — pages.dev + noindex + clean seed scrub + passing checks, whatever Claude claims; a failed result never erases the last good build); column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |

@@ -28,6 +28,9 @@ export interface Lead {
      town they were searched from — Keyworx Auto Locksmiths CORBY from a Wisbech search. A mark
      nobody can see is worse than no mark, because the search LOOKS town-scoped. */
   outsideTown?: boolean;
+  /** The search_history row (search run) this result came from — so a later add is recorded against
+   *  the run that found it (Coverage: Found vs Added). Absent on results not from a recorded run. */
+  searchRunId?: string;
 }
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';

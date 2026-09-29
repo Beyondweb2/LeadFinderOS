@@ -20,20 +20,21 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
 const SAFE = { decision_maker: "yes", domain: "yes", manager: "owner", access: "yes", route: "optimise" } as const;
 
 console.log("\n── the bare minimum ──");
-ok(QUICK_CLOSE_QUESTIONS.length === 6 && QUICK_CLOSE_QUESTIONS[5].key === "route", "five questions plus the website route (2026-09-29), nothing else before payment");
-ok(!/service|opening hours|credential|description|photo|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS)), "no services, hours, credentials, copy, images or GBP questions before payment");
+ok(QUICK_CLOSE_QUESTIONS.length === 7 && QUICK_CLOSE_QUESTIONS[5].key === "route" && QUICK_CLOSE_QUESTIONS[6].key === "build_consents", "five questions, the website route and the Build-only consents (2026-09-29), nothing else before payment");
+/* The Build consents' own wording (their `detail`) is a confirmation, not a collection, so it is not scanned. */
+ok(!/service|opening hours|credential|description|photo|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS.map((q) => ({ key: q.key, text: q.text, options: q.options })))), "no services, hours, credentials, copy, images or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
 ok(missingQuestions({}).join() === "decision_maker,domain,manager,access,authority,route", "nothing answered: everything missing, the route included");
 ok(missingQuestions(SAFE).length === 0, "owner-managed site: the authority question does not apply");
 ok(missingQuestions({ ...SAFE, manager: "agency" }).includes("authority") && missingQuestions({ ...SAFE, manager: "agency", authority: "not_applicable" }).includes("authority"), "agency-managed: authority must be answered ('not applicable' does not answer it)");
-ok(missingQuestions({ decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build" }).length === 0, "no website: access and authority do not apply");
+ok(missingQuestions({ decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build", build_consents: "yes" }).length === 0, "no website: access and authority do not apply");
 
 console.log("\n── the gate ──");
 {
   const g = quickCloseGate({ ...SAFE, decision_maker: "no" });
   ok(g.blocked && quickCloseState("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }) === "blocked" && !mayGenerateLink("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }), "decision maker 'No' blocks payment");
   ok(quickCloseGate(SAFE).review.length === 0 && quickCloseState("answers_saved", { answers: SAFE }) === "ready" && mayGenerateLink("answers_saved", { answers: SAFE }), "safe answers → ready for payment");
-  ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build" } }) === "ready", "no domain + no website is a normal, safe route (they register a domain)");
+  ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build", build_consents: "yes" } }) === "ready", "no domain + no website is a normal, safe route (they register a domain)");
   ok(quickCloseState("answers_saved", { answers: { ...SAFE, manager: "agency", authority: "yes" } }) === "ready", "an agency that manages the site is fine when the client has authority");
   for (const [label, a, reason] of [
     ["agency + no authority", { ...SAFE, manager: "agency", authority: "no" }, "third_party_no_authority"],

@@ -39,10 +39,11 @@ ok(cleaningSweepDue(Date.UTC(2026, 8, 27, 14, 0, 34, 500)) && !cleaningSweepDue(
 {
   const cov = read("supabase/functions/coverage/index.ts");
   ok(!/auth\.getUser\(/.test(cov) && /const who = await resolveActor\(req, service\);/.test(cov) && /let userId = who\.actor\.id;/.test(cov), "coverage: one sign-in check (resolveActor), no second getUser");
-  ok(/await Promise\.all\(\[timed\("audits", marketAuditsP\), timed\("runs", completedP\), timed\("leads", leadsP\), timed\("history", historyP\), timed\("cache", cacheRowsP\)\]\)/.test(cov), "coverage: the four source reads run together");
+  /* 2026-09-29: a sixth source, the search runs (Found vs Added), joins the same Promise.all. */
+  ok(/await Promise\.all\(\[timed\("audits", marketAuditsP\), timed\("runs", completedP\), timed\("leads", leadsP\), timed\("history", historyP\), timed\("cache", cacheRowsP\), timed\("searchRuns", runsP\)\]\)/.test(cov), "coverage: the source reads run together");
   ok(/const leadsP = allInWaves\(/.test(cov) && /\.order\("id", \{ ascending: true \}\)\.range\(from, to\)\);\s*\n\s*const historyP/.test(cov), "coverage: the ~5,300-lead read pages in waves, ordered by id");
   ok(/await Promise\.all\(chunks\.map\(/.test(cov), "coverage: the completed-run chunks run together");
-  ok((cov.match(/\.order\("id", \{ ascending: true \}\)\.range\(from, to\)/g) ?? []).length === 5, "coverage: every paged read has the id tiebreaker (5 reads)");
+  ok((cov.match(/\.order\("id", \{ ascending: true \}\)\.range\(from, to\)/g) ?? []).length === 6, "coverage: every paged read has the id tiebreaker (6 reads)");
   const pg = read("supabase/functions/page-generator/index.ts");
   ok(!/auth\.getUser\(/.test(pg) && /const userId = gate\.actor\.id;/.test(pg), "page-generator: one sign-in check (requireAdmin)");
   ok(/const \[measured, \{ data: obRow \}, \{ data: leadRow \}\] = await Promise\.all\(\[/.test(pg), "page-generator: the plan's three inputs are read together");

@@ -7,6 +7,9 @@ import { reportClientError } from '@/lib/errorReporting';
 import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { legacySearchResultKeys, packSearchResults, searchResultsKey, unpackSearchResults } from '@/lib/searchResultsCache';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { foundRecord, isWithoutWebsite } from '@/lib/websiteStatusClass';
+
+type SearchLeadLike = Parameters<typeof foundRecord>[0][number];
 import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
 
 /* ══ THE SEARCH THAT PRODUCED THE RESULTS ══════════════════════════════════════════════
@@ -332,18 +335,26 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     return matchesBusiness(excludedBusinesses, lead) && !matchesBusiness(inListBusinesses, lead);
   }, [excludedBusinesses, inListBusinesses]);
 
-  const saveSearch = async (filters: SearchFilters, resultsCount: number, noWebsiteCount: number = 0) => {
+  /* 🔴 THE RUN ALSO RECORDS WHAT THE SEARCH FOUND (Coverage: Found vs Added, 2026-09-29). `found` is the
+     discovery result as search-leads returned it — BEFORE this page's own exclusions — with the search's
+     own website verdict (foundRecord). results_count / no_website_count keep their old meaning (after
+     exclusions). Returns the row id so each result can carry it and an add can be credited to its run.
+     Never fatal: a failed write loses the record, never the search. */
+  const saveSearch = async (filters: SearchFilters, resultsCount: number, noWebsiteCount: number, found: SearchLeadLike[]): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) return null;
 
-    await supabase.from('search_history').insert({
+    const { data: row, error } = await supabase.from('search_history').insert({
       user_id: user.id,
       keyword: filters.keyword.toLowerCase().trim(),
       location: filters.location.toLowerCase().trim(),
       radius: filters.radius,
       results_count: resultsCount,
       no_website_count: noWebsiteCount,
-    });
+      ...foundRecord(found),
+    } as never).select('id').single();
+    if (error) { console.warn('[search] history write failed', error.message); return null; }
+    return (row as { id?: string } | null)?.id ?? null;
   };
 
   const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false, isDemo: boolean = false) => {
@@ -602,9 +613,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             try { sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters })); } catch {}
           }
 
-          const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+          const noWebsiteCount = filteredLeads.filter((l) => isWithoutWebsite(l.websiteStatus)).length;
 
-          await saveSearch(filters, filteredLeads.length, noWebsiteCount);
+          const runId = await saveSearch(filters, filteredLeads.length, noWebsiteCount, data.leads as SearchLeadLike[]);
+          /* Each result carries its run, so an add from it is recorded against what this run found. */
+          if (runId && !controller.signal.aborted) setLeads((prev) => prev.map((l) => ({ ...l, searchRunId: runId })));
 
           // Notify demo checklist that a search completed
           window.dispatchEvent(new CustomEvent('demo-checklist-search'));

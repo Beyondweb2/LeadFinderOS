@@ -26,7 +26,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function loadEarnings(service: Service, personId: string | null, todayIso: string): Promise<Earnings> {
   const [ledgerRes, rolesRes, payoutsRes] = await Promise.all([
-    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id").order("occurred_at").limit(10000),
+    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_week_start, commission_week_seq, commission_rate").order("occurred_at").limit(10000),
     service.from("user_roles").select("user_id, role"),
     service.from("commission_payouts").select("user_id, period_month, amount_gbp, paid_at"),
   ]);

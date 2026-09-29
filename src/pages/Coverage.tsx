@@ -17,6 +17,7 @@ import {
   COVERAGE_STATES, COVERAGE_LABEL, findLeadsHref, type CoverageState,
 } from '@/lib/coverageState';
 import { CoverageWorkers } from '@/components/CoverageWorkers';
+import { CoverageFoundAdded } from '@/components/CoverageFoundAdded';
 
 /* ══ WHERE HAVE I BEEN? ═══════════════════════════════════════════════════════════════════════
    ⛔ WHAT THIS REPLACES: asking someone for town names. Every candidate town for a trade, with the
@@ -277,29 +278,16 @@ export default function Coverage() {
                     {t.population?.toLocaleString() ?? '—'}
                   </td>
                   <td className="px-3 py-1.5">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline" className={`text-xs ${STATE_STYLE[t.state]}`}>
-                        {COVERAGE_LABEL[t.state]}
-                      </Badge>
-                      {t.state === 'worked' && t.workers.length > 0 && (
-                        <CoverageWorkers workers={t.workers} trade={trade} town={t.name} />
-                      )}
-                      {/* ⛔ THE COUNT IS A SECOND MARKER, NOT A FIFTH RUNG. The ladder is exclusive —
-                          a town shows at its furthest rung only — so "Measured" or "Worked" said
-                          nothing about whether leads had ever been pulled there, which is exactly
-                          the question ("which towns have I pulled leads from, without clicking in").
-                          Same Badge, same outline variant, same colour vocabulary as the `leads`
-                          rung, so it reads as the existing language rather than a new control.
-                          Rendered ONLY when there are leads: a "0 leads" badge on 700 untouched
-                          towns is noise, and the Untouched rung already says it. */}
-                      {t.leadCount > 0 && (
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${STATE_STYLE.leads}`}
-                          title={`${t.leadCount} lead${t.leadCount === 1 ? '' : 's'} in your CRM for ${trade} in ${t.name}`}
-                        >
-                          {t.leadCount} lead{t.leadCount === 1 ? '' : 's'}
-                        </Badge>
+                    {/* 🔴 FOUND vs ADDED (Paul, 2026-09-29) replaced the "Worked" rung badge and the "N leads" count:
+                        four numbers from the search runs — what discovery returned and what was then added to
+                        the CRM, each with / without a website. "Contacted" (and who) stays, as a plain marker. */}
+                    <span className="flex flex-col gap-1">
+                      <CoverageFoundAdded fa={t.foundAdded} trade={trade} town={t.name} />
+                      {t.state === 'worked' && (
+                        <span className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <Badge variant="outline" className={`text-[11px] ${STATE_STYLE.worked}`}>{COVERAGE_LABEL.worked}</Badge>
+                          {t.workers.length > 0 && <CoverageWorkers workers={t.workers} trade={trade} town={t.name} />}
+                        </span>
                       )}
                     </span>
                   </td>

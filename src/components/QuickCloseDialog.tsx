@@ -38,7 +38,7 @@ interface View {
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
 const STATE_TONE: Record<QuickCloseState, string> = {
   not_started: 'bg-muted text-muted-foreground', in_progress: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
-  blocked: 'bg-red-500/15 text-red-700 dark:text-red-300', needs_review: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  blocked: 'bg-red-500/15 text-red-700 dark:text-red-300', consents_needed: 'bg-amber-500/15 text-amber-700 dark:text-amber-300', needs_review: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
   ready: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', link_generated: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   paid: 'bg-emerald-600 text-white',
 };
@@ -77,7 +77,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
   const missing = useMemo(() => missingQuestions(answers), [answers]);
   // A decision-maker "No" ends the questions (nothing after it can lead to payment).
   const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
-  const shownQs = QUICK_CLOSE_QUESTIONS.filter((x) => !(x.key === 'access' && answers.manager === 'no_website') && !(x.key === 'authority' && (answers.manager === 'owner' || answers.manager === 'employee' || answers.manager === 'no_website')));
+  const shownQs = QUICK_CLOSE_QUESTIONS.filter((x) => !(x.key === 'access' && answers.manager === 'no_website') && !(x.key === 'authority' && (answers.manager === 'owner' || answers.manager === 'employee' || answers.manager === 'no_website')) && !(x.key === 'build_consents' && answers.route !== 'build'));
   useEffect(() => { if (!open) { setStep(null); setEditing(false); setCopied(null); } }, [open]);
   useEffect(() => { if (v?.onboarding) setFix({ contact_name: v.onboarding.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding.business_website ?? v.lead.website ?? '' }); }, [v?.onboarding?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -181,7 +181,12 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
             <section aria-live="polite">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, shownQs.length)} of {shownQs.length}</p>
               <p className="mt-1 text-lg font-semibold leading-snug">{QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.text}</p>
-              <div className={cn('mt-3 grid gap-2', current === 'route' ? 'grid-cols-1' : 'grid-cols-2')}>
+              {QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.detail && (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground" data-testid="qc-build-consents">
+                  {QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.detail!.map((d) => <li key={d}>{d}</li>)}
+                </ul>
+              )}
+              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.options
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
                   .map((o) => {
@@ -226,6 +231,12 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
             <section className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">
               <p className="flex items-center gap-2 font-semibold text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4" />The decision maker needs to approve this</p>
               <p className="mt-1 text-muted-foreground">No payment link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</p>
+            </section>
+          )}
+          {v && v.state === 'consents_needed' && (
+            <section className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm" data-testid="qc-consents-needed">
+              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />Build consents needed before the payment link</p>
+              <p className="mt-1 text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes. If they would rather keep their current site, choose Optimise instead.</p>
             </section>
           )}
           {v && v.state === 'needs_review' && (

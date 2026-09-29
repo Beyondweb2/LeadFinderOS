@@ -272,3 +272,35 @@ Paul: VERBAL YES → 60-SECOND QUICK CLOSE → STRIPE LINK → £99 PAYMENT → 
   that closed with no money lost) RELEASE it — the line disappears. `lost` REVERSES it permanently
   ("Chargeback"). Totals gain `held`. Ledger rows, idempotency and offsets unchanged.
 - Redeployed: sales-earnings, sales-performance, stripe-webhook (all reach commission.ts).
+
+## 11. Weekly commission tiers + Quick Close Build consents (2026-09-29, Paul)
+
+- **The rule:** per salesperson, Monday–Sunday (London), the INITIAL payment earns 30% for clients 1–3,
+  40% for 4–6, 50% from client 7 (£29.70 / £39.60 / £49.50 at £99). Not retrospective; resets every Monday;
+  a client counts when its successful initial payment lands in `payment_ledger`; ordered by payment time,
+  then payment id. Recurring unchanged (20% × the next 3). Refund / dispute behaviour unchanged, and a
+  refund never renumbers the week (client 4 stays a 40% sale if client 2 refunds; only client 2 reverses).
+- **Recon:** no £30 / 3-client / 6-client bonus existed anywhere (code, DB, docs, findable-site). The only
+  rule was the flat 30% + 20% × 3. The ledger held one initial payment (an admin sale, not commissionable).
+- **Stored, not recomputed:** migration `20260929180000_weekly_commission_tiers.sql` adds
+  `commission_rule`, `commission_week_start`, `commission_week_seq`, `commission_rate` to
+  `payment_ledger`. An AFTER INSERT/UPDATE trigger calls `restamp_weekly_commission(seller, week)` under a
+  per-seller-week advisory lock: it numbers that seller's initial payments in that London week by
+  (occurred_at, stripe_object_id, id) and stamps `weekly_tier_rate(seq)`. A payment that arrives late but
+  happened earlier takes its true place (rates only ever rise in that case). Only rows on
+  `weekly_tier_v1` are ever touched; the pre-existing row was marked `flat_30_v0` at 30%.
+  `commissionLines` reads the stamped rate (a row with none falls back to the flat 30%).
+- **Live test** (`supabase/tests/weekly-commission-tiers.sql`, rolled back): 10 sales → 1–3 @30, 4–6 @40,
+  7–10 @50; two same-second payments inserted in reverse id order numbered by id; a late-arriving earlier
+  sale took place 3; a refund renumbered nothing; Sun 23:30 London stayed in its week (#11 @50), Mon 00:30
+  started a new one (#1 @30); the legacy row untouched.
+- **Screens:** Sales dashboard + Earnings show "This week's tier" (`WeeklyTierTracker`, from the SAME
+  earnings lines: clients this week, initial commission net of reversals, current tier, "N more clients
+  unlocks X%" / "Your next client earns X%" / "Top tier reached"). Earnings lines show "w/c · client N";
+  the admin gets "Weekly tiers — audit": every week per seller in stored order with rate and commission.
+  What's New entry for Sales.
+- **Quick Close Build consents** (Paul's answer to the open question): a Build-only question, "For the
+  new website, can they confirm all three?" — domain ownership/authority, DNS permission, rights to the
+  content they supply. "Yes" writes `dns_permission`, `materials_confirmed` (and `authority_confirmed`
+  unless the authority answer was no / not sure). "Not yet" → state `consents_needed`, no link, and
+  Paul's review release does NOT override it. Withdrawing clears the columns. Optimise unchanged.
