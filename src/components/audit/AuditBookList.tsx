@@ -373,14 +373,7 @@ export function AuditBookList({
                             deep-link into a specific audit.
                             ⚠️ Falls back to the plain path when there is no run: a link that
                             cannot say which run should ask for the list, not for a broken one. */}
-                        <DropdownMenuItem asChild>
-                          <Link
-                            to={`/playbook/${a.id}`}
-                            state={{ from: run?.id ? `/ai-audit?runId=${run.id}` : '/ai-audit', fromLabel: 'AI Audit' }}
-                          >
-                            <ListChecks className="mr-2 h-4 w-4" /> Delivery checklist
-                          </Link>
-                        </DropdownMenuItem>
+                        {/* ⛔ REMOVED 2026-09-29 (UI cleanup): "Delivery checklist" (the Playbook) — no longer used. */}
                         {/* ⛔ ARCHIVE IS ONLY OFFERED FOR A SINGLE-AUDIT BUSINESS. With several
                             audits it is ambiguous which one goes, so it lives on each audit in
                             the expanded detail instead. Unchanged from before. */}

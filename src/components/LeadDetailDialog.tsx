@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList, Loader2, PhoneCall, Mic, CalendarClock } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, Loader2, PhoneCall, Mic, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
@@ -13,7 +13,6 @@ import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
-import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,172 +36,24 @@ import {
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, formatDistanceToNow, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { parseAmountPaid, isPaidLead } from '@/lib/leadPayment';
-import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
-import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
+import { NextActionPill } from '@/components/NextActionPill';
+import { LeadStateStrip } from '@/components/LeadStateStrip';
+import { FindEmailButton } from '@/components/FindEmailButton';
 import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
+import { isClientLead } from '@/lib/roleRules';
+import { outcomeStatusEffect } from '@/lib/salesCrm';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
-
-/* ───────── constants (ported from PotentialWork) ───────── */
-
-export const DEFAULT_POTENTIAL_WORK_STATUSES: { value: string; label: string }[] = [
-  { value: 'qualified', label: 'Call Booked' },
-  { value: 'discovery_call_booked', label: 'Sent Quote' },
-  { value: 'proposal_sent', label: 'Sent Draft' },
-  { value: 'reviewing_proposal', label: 'Waiting for Feedback' },
-  { value: 'revision_requested', label: 'Changes Requested' },
-  { value: 'paid', label: 'Invoice Sent' },
-  { value: 'payment_received', label: 'Payment Received' },
-  { value: 'closed_lost', label: 'Not Going Ahead' },
-];
-
-/* Map legacy DB statuses → new pipeline statuses */
-const LEGACY_STATUS_MAP: Record<string, string> = {
-  interested: 'qualified',
-  paid_for_draft: 'paid',
-  reviewing_draft: 'reviewing_proposal',
-  completed: 'paid',
-  wants_draft: 'proposal_sent',
-  on_hold: 'qualified',
-};
-
-export const PIPELINE_STAGES = DEFAULT_POTENTIAL_WORK_STATUSES.map((s) => s.value);
-
-export const mapLegacyStatus = (status: string): string => LEGACY_STATUS_MAP[status] || status;
-
-/* Track Leads pipeline actions — mapped to DB enum values */
-// The barber-outreach Next Action list. Each option carries a dbValue that is a
-// valid NextActionType (we reuse existing DB enum values rather than adding new
-// columns); LEGACY_ACTION_MAP below maps every DB value back to exactly one of
-// these keys so a lead always renders as one of the five (never blank/wrong).
-const TRACK_NEXT_ACTION_OPTIONS: { value: string; label: string; dbValue: NextActionType }[] = [
-  { value: 'none', label: 'None', dbValue: 'none' },
-  { value: 'follow_up', label: 'Follow Up', dbValue: 'follow_up' },
-  { value: 'send_link', label: 'Send Link', dbValue: 'send_draft' },
-  { value: 'book_call', label: 'Book Call', dbValue: 'call' },
-  { value: 'check_in', label: 'Check In', dbValue: 'send_follow_up' },
-  { value: 'send_invoice', label: 'Send Invoice', dbValue: '2nd_follow_up' },
-];
-
-/* Map every DB next_action value → one of the five Track action keys above, so
-   stored/auto-filled actions always round-trip to a valid option. */
-const LEGACY_ACTION_MAP: Record<string, string> = {
-  follow_up: 'follow_up',
-  send_draft: 'send_link',
-  call: 'book_call',
-  send_follow_up: 'check_in',
-  '2nd_follow_up': 'send_invoice',
-  // Older / Outreach-side enum values fold to sensible equivalents.
-  send_initial_text: 'send_link',
-  send_voice_note: 'follow_up',
-  check_3_day_removal: 'follow_up',
-  remove_if_no_reply: 'follow_up',
-};
-
-const mapLegacyAction = (action: string | null): string => {
-  if (!action || action === 'none') return 'none';
-  return LEGACY_ACTION_MAP[action] || action;
-};
-
-const TRACK_ACTION_KEY_PREFIX = 'leadfinder_track_action_';
-
-const getTrackActionForLead = (leadId: string): string | null => {
-  try {
-    const raw = localStorage.getItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`);
-    return raw || null;
-  } catch {
-    return null;
-  }
-};
-
-// The UI choice is stored device-locally; an older build may have saved a key
-// that no longer exists in TRACK_NEXT_ACTION_OPTIONS. Only trust it if it's still
-// a valid option — otherwise callers fall back to the DB value (mapLegacyAction),
-// which always resolves to one of the five. Keeps the pill from showing blank.
-const getValidTrackActionForLead = (leadId: string): string | null => {
-  const raw = getTrackActionForLead(leadId);
-  return raw && TRACK_NEXT_ACTION_OPTIONS.some((o) => o.value === raw) ? raw : null;
-};
-
-const setTrackActionForLead = (leadId: string, actionKey: string | null) => {
-  try {
-    if (actionKey && actionKey !== 'none') {
-      localStorage.setItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`, actionKey);
-    } else {
-      localStorage.removeItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`);
-    }
-  } catch {}
-};
-
-// Keyed by Track action key (the value in TRACK_NEXT_ACTION_OPTIONS).
-const NEXT_ACTION_COLORS: Record<string, string> = {
-  follow_up: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
-  send_link: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
-  book_call: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
-  check_in: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
-  send_invoice: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
-  none: 'bg-muted text-muted-foreground border-border/50',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  qualified: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
-  discovery_call_booked: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
-  proposal_sent: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
-  reviewing_proposal: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent',
-  revision_requested: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent',
-  paid: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
-  payment_received: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
-  closed_lost: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent',
-  interested: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
-  not_interested: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent',
-};
-
-/* ───────── helpers ───────── */
-
-const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType | null) => {
-  if (!nextActionDate || !nextAction || nextAction === 'none') return null;
-  const d = startOfDay(new Date(nextActionDate));
-  const today = startOfDay(new Date());
-  const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { text: `Overdue ${Math.abs(diffDays)}d`, cls: 'text-red-500 bg-red-500/10 border-red-500/25' };
-  if (diffDays === 0) return { text: 'Today', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
-  if (diffDays === 1) return { text: 'Tomorrow', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
-  return { text: `${diffDays}d`, cls: 'text-muted-foreground bg-muted border-border/50' };
-};
-
-const getStatusLabel = (status: string, customStatuses: { value: string; label: string }[]) => {
-  const mapped = mapLegacyStatus(status);
-  const found = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].find((s) => s.value === mapped);
-  return found?.label || status;
-};
-
-const getMappedStatusColor = (status: string): string => {
-  const mapped = mapLegacyStatus(status);
-  return STATUS_COLORS[mapped] || STATUS_COLORS[status] || 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent';
-};
-
-const getStageIndex = (status: string): number => {
-  const mapped = mapLegacyStatus(status);
-  return PIPELINE_STAGES.indexOf(mapped);
-};
-
-const PROJECT_STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not Started' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'waiting_on_client', label: 'Waiting On Client' },
-  { value: 'completed', label: 'Completed' },
-];
-
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
 /** The popup's Crawl site button, seeded with THIS lead's stored crawl (the one row every screen
@@ -379,7 +230,6 @@ function LeadDetailBody({
   onClose,
   initialTab,
 }: LeadDetailBodyProps) {
-  const effectiveSaleType: SaleType = resolveSaleType(lead.sale_type, campaignDefaultSaleType);
   const permsForTab = useLeadPermissions();
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Work. */
   const [tab, setTab] = useState<WorkspaceTab>(() => initialTab ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'work'));
@@ -391,13 +241,6 @@ function LeadDetailBody({
   const [notesDirty, setNotesDirty] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
-  const customLabel = getLeadCustomAction(lead.id);
-  const [nextAction, setNextAction] = useState<string>(
-    customLabel ? `custom::${customLabel}` : getValidTrackActionForLead(lead.id) || mapLegacyAction(lead.next_action || 'none')
-  );
-  const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
-    lead.next_action_date ? new Date(lead.next_action_date) : undefined
-  );
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
   const [emailCopied, setEmailCopied] = useState(false);
@@ -405,20 +248,12 @@ function LeadDetailBody({
   // name-edit UX (Pencil → input + Check/X). One field editable at a time.
   const [editingField, setEditingField] = useState<null | 'phone' | 'email' | 'website' | 'address'>(null);
   const [editValue, setEditValue] = useState('');
-  const { customActions, addAction } = useCustomNextActions();
   /* ⛔ THE SAME DIALOG FOR BOTH ROLES (2026-09-27). A salesperson gets everything that works or closes
      a lead — status (their allowed stages), the CRM panel, contact details, WhatsApp outreach, the
      call playbook, voice-note script, sign-up link — and not the admin's record editing, client
      delivery, payment or private-note sections, whose data the safe view never sends them anyway. */
   const perms = useLeadPermissions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
-  const [showAddCustomAction, setShowAddCustomAction] = useState(false);
-  const [newCustomAction, setNewCustomAction] = useState('');
-  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
-  const [potentialRevenue, setPotentialRevenue] = useState<string>(lead.potential_revenue?.toString() || '');
-  const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
-  const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
-  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
   /* ── PAYMENT. Lives here because the Paid Clients page (its previous and only home) is gone, and
         without an editor there would be no way to correct an amount that arrived wrong. ── */
   const [amountPaid, setAmountPaid] = useState<string>(lead.amount_paid?.toString() ?? '');
@@ -492,52 +327,6 @@ function LeadDetailBody({
     setIsEditingNotes(false);
   };
 
-  const handleNextActionChange = async (v: string) => {
-    if (v === '__add_custom_action__') {
-      setShowAddCustomAction(true);
-      return;
-    }
-    setNextAction(v);
-    const isCustom = v.startsWith('custom::');
-    let dbAction: NextActionType;
-    if (isCustom) {
-      dbAction = 'follow_up';
-      setLeadCustomAction(lead.id, v.slice(8));
-      setTrackActionForLead(lead.id, null);
-    } else {
-      setLeadCustomAction(lead.id, null);
-      const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === v);
-      dbAction = trackOpt ? trackOpt.dbValue : (v as NextActionType);
-      setTrackActionForLead(lead.id, v);
-    }
-    if (dbAction === 'none' || v === 'none') {
-      setNextActionDate(undefined);
-      setTrackActionForLead(lead.id, null);
-    }
-    await onNextActionChange(lead.id, dbAction, dbAction === 'none' ? undefined : nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
-    if (dbAction !== 'none') {
-      window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
-      window.dispatchEvent(new CustomEvent('demo-checklist-step4-action-set'));
-    }
-  };
-
-  const handleDateChange = async (d: Date | undefined) => {
-    setNextActionDate(d);
-    if (d) {
-      setDatePopoverOpen(false);
-      const isCustom = nextAction.startsWith('custom::');
-      const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === nextAction);
-      const dbAction: NextActionType = isCustom ? 'follow_up' : trackOpt?.dbValue || (nextAction as NextActionType);
-      await onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
-      if (dbAction !== 'none') {
-        window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
-        window.dispatchEvent(new CustomEvent('demo-checklist-step4-action-set'));
-      }
-      window.dispatchEvent(new CustomEvent('demo-checklist-next-date-set'));
-      window.dispatchEvent(new CustomEvent('demo-checklist-step4-date-set'));
-    }
-  };
-
   const copyEmail = async () => {
     if (!lead.email) return;
     try {
@@ -548,41 +337,7 @@ function LeadDetailBody({
   };
 
 
-  const handleAddCustomActionSubmit = () => {
-    const trimmed = newCustomAction.trim();
-    if (!trimmed) return;
-    addAction(trimmed);
-    setNewCustomAction('');
-    setShowAddCustomAction(false);
-    handleNextActionChange(`custom::${trimmed}`);
-  };
-
-  const handleStatusSelect = async (v: string) => {
-    if (v === '__add_custom__') {
-      onAddCustomStatus?.();
-      return;
-    }
-    await onStatusChange(lead.id, v as LeadStatus);
-    if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
-      setNextAction('none');
-      setNextActionDate(undefined);
-      setTrackActionForLead(lead.id, null);
-      setLeadCustomAction(lead.id, null);
-      await onNextActionChange(lead.id, 'none' as NextActionType);
-    }
-    if (v === 'payment_received') {
-      const seenKey = 'leadfinder_seen_paid_popup';
-      if (!localStorage.getItem(seenKey)) {
-        localStorage.setItem(seenKey, '1');
-        setShowPaidPopup(true);
-      }
-    }
-    window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
-    window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
-  };
-
-  // Exit actions. Paid -> Payment Received + leaves Track; Lost -> Not Going
-  // Ahead + leaves Track. Both also clear is_potential_work.
+  // Mark Paid: Payment Received + leaves Track (clears is_potential_work).
   const handleMarkPaid = async () => {
     await onStatusChange(lead.id, 'payment_received' as LeadStatus);
     await onUpdateLead(lead.id, { is_potential_work: false } as Partial<OutreachLead>);
@@ -593,14 +348,17 @@ function LeadDetailBody({
     }
     onClose();
   };
-  const handleMarkLost = async () => {
-    await onStatusChange(lead.id, 'closed_lost' as LeadStatus);
-    await onUpdateLead(lead.id, { is_potential_work: false } as Partial<OutreachLead>);
-    onClose();
+
+  /* WHAT A LOGGED OUTCOME ALSO CHANGES ON THE LEAD (UI cleanup pass, 2026-09-29): the same writes the
+     status menu makes, so Outreach, the Inbox and the dashboards all agree. A client, a won lead or a
+     lead already in that state is left alone. Returns the words for the Work tab's confirmation. */
+  const handleOutcome = async (outcome: string): Promise<string | null> => {
+    const effect = isClientLead(lead) ? null : outcomeStatusEffect(outcome, lead);
+    if (!effect) return null;
+    await onStatusChange(lead.id, effect as LeadStatus);
+    if (effect === 'interested') return 'Marked Interested ⭐';
+    return perms.removeFromMyLeads ? 'Status set to Not interested (it leaves your working list)' : 'Status set to Not interested';
   };
-
-  const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
-
   return (
     <>
       {/* ── Header: name + glanceable pills (does not scroll) ── */}
@@ -648,27 +406,30 @@ function LeadDetailBody({
 
         <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
 
-        {/* Glanceable pills — status / next action / due / contact / revenue */}
+        {/* ── WHERE THIS LEAD STANDS (UI cleanup pass, 2026-09-29) ─────────────────────────────────────
+            Line 1: status (the SAME list as the Outreach row), the Interested star, the channel.
+            The state strip: owner, next action, call booked, agency — and the last contact logged, so
+            what was recorded on the Work tab is visible on every tab and after reopening.
+            Last line: how to reach them, and the tools (scripts, crawl, welcome pack, site check).
+            ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {/* Status — the SAME list as the Outreach row (PIPELINE_STATUS_OPTIONS) so a
-              lead offers identical options everywhere; badge matches the row too. */}
           <Select value={PIPELINE_STATUS_OPTIONS.some((o) => o.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="Status">
               <PipelineStatusBadge status={lead.status as PipelineStatus} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
               {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
-
-          {/* REMOVED 2026-08-18 (delivery-cockpit redesign): the next-action Select and its due-date
-              pill were prospecting machinery — a client cockpit keeps only status. The re-measure
-              date (the date that actually matters) now lives in the cockpit's Key Dates. */}
-
+          {lead.is_potential_work && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300" title="Marked interested (the star)">
+              <Star className="h-3 w-3 fill-current" />Interested
+            </span>
+          )}
           {/* Contact method — same component + dropdown as the Outreach table */}
           {perms.editLeadRecord ? (
           <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="Channel">
               <ContactMethodBadge method={lead.contact_method as ContactMethod} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
@@ -676,75 +437,47 @@ function LeadDetailBody({
             </SelectContent>
           </Select>
           ) : lead.contact_method ? <ContactMethodBadge method={lead.contact_method as ContactMethod} /> : null}
-
-          {/* DELIVERY CHECKLIST — /playbook/:id, resolved from this LEAD id. onClose fires alongside
-              the navigation: this is a modal, and leaving it mounted over the new route would trap
-              the operator behind an overlay. */}
-          {perms.clientDelivery && (
-          <Link
-            to={`/playbook/${lead.id}`}
-            state={{ from: '/outreach', fromLabel: 'Outreach' }}
-            onClick={onClose}
-            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/20"
-            title="Open the delivery checklist for this lead"
-          >
-            <ClipboardList className="h-3 w-3" />
-            Playbook
-          </Link>
-          )}
-
-          {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report
-              with the selling sections hidden. Refuses with a toast when the lead has no completed
-              audit, because the report IS the pack's last section. */}
-          {perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
-
-          {/* THE CALLING TOOLS, one tap: ring the number, then the script is the next tab. */}
-          {lead.phone && (
-            <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300" title="Call this number">
-              <Phone className="h-3 w-3" />{lead.phone}
-            </a>
-          )}
-          {!isDemoLead(lead.id) && (
-            <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:text-sky-300">
-              <PhoneCall className="h-3 w-3" />Call script
-            </button>
-          )}
-          {!isDemoLead(lead.id) && (
-            <button type="button" onClick={() => openScript('voice')} className="inline-flex items-center gap-1 rounded-full border border-violet-500/40 bg-violet-500/10 px-2.5 py-0.5 text-xs font-semibold text-violet-700 hover:bg-violet-500/20 dark:text-violet-300">
-              <Mic className="h-3 w-3" />Voice note
-            </button>
-          )}
-          {/* The human-set next action, read from the same row Outreach shows. */}
-          {lead.next_action && lead.next_action !== 'none' && (
-            <button type="button" onClick={() => setTab('work')} className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium', dueLabel?.cls ?? 'border-border/60 text-muted-foreground')} title="Next action (set by a person)">
-              <CalendarClock className="h-3 w-3" />Next: {lead.next_action.replace(/_/g, ' ')}{dueLabel ? ` · ${dueLabel.text}` : ''}
-            </button>
-          )}
-
-          {/* Site check on engagement — renders only for a replied-or-beyond lead with a real
-              website whose completed audit skipped the SEO scan (the email lane's up-front skip). */}
-          {perms.clientDelivery && !isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
-          {/* Free crawlability check — run on the prospect BEFORE messaging so the outreach can name
-              their actual problem. Fetches only (£0), never the Apify SEO scanner. Both roles: a
-              salesperson crawls a lead they work (crawl-check checks it server-side). */}
-          {perms.crawlOwnLead && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
-          {/* REMOVED 2026-08-18: the Revenue field (top-right) — confirmed waste for the cockpit. */}
         </div>
 
-        {/* Contact — email, from scraping or from the questionnaire. */}
-        {lead.email && (
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs">
-            {lead.email && (
-              <div className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
-                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <a href={`mailto:${lead.email}`} className="truncate text-foreground/80 hover:text-primary hover:underline">{lead.email}</a>
-                <button onClick={copyEmail} className="text-muted-foreground/60 hover:text-foreground shrink-0" title="Copy email">
-                  {emailCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        {isDemoLead(lead.id)
+          ? <div className="mt-2.5"><NextActionPill lead={lead} /></div>
+          : <LeadStateStrip leadId={lead.id} onOpenWork={() => { setTab('work'); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} />}
+
+        {/* Reach them + the tools. Plain links, not pills: the pills above are state, these are actions. */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs">
+          {lead.phone && (
+            <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline dark:text-emerald-300" title="Call this number">
+              <Phone className="h-3.5 w-3.5" />{lead.phone}
+            </a>
+          )}
+          {lead.email && (
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <a href={`mailto:${lead.email}`} className="truncate text-foreground/80 hover:text-primary hover:underline">{lead.email}</a>
+              <button type="button" onClick={copyEmail} className="shrink-0 text-muted-foreground/60 hover:text-foreground" title="Copy email" aria-label="Copy email">
+                {emailCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+              </button>
+            </span>
+          )}
+          {!lead.email && !isDemoLead(lead.id) && <FindEmailButton leadId={lead.id} website={lead.website} />}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 font-medium text-sky-700 hover:underline dark:text-sky-300">
+              <PhoneCall className="h-3.5 w-3.5" />Call script
+            </button>
+          )}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={() => openScript('voice')} className="inline-flex items-center gap-1 font-medium text-violet-700 hover:underline dark:text-violet-300">
+              <Mic className="h-3.5 w-3.5" />Voice note
+            </button>
+          )}
+          {/* Free crawlability check — both roles: a salesperson crawls a lead they work (crawl-check
+              checks it server-side). Fetches only (£0), never the Apify SEO scanner. */}
+          {perms.crawlOwnLead && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
+          {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report. */}
+          {perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
+          {/* Site check on engagement — only for a replied-or-beyond lead whose audit skipped the SEO scan. */}
+          {perms.clientDelivery && !isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
+        </div>
       </div>
 
       {/* ══ THE PROSPECT WORKSPACE (2026-09-28, Paul: "open one prospect and do the job"). ONE dialog
@@ -763,7 +496,7 @@ function LeadDetailBody({
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
           <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} onOutcome={handleOutcome} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
@@ -875,27 +608,9 @@ function LeadDetailBody({
           </TabsContent>
 
           <TabsContent value="history" className="mt-0 space-y-4" data-testid="workspace-history">
-            {!isDemoLead(lead.id) && <LeadHistoryPanel leadId={lead.id} />}
-            {fetchActivities && !isDemoLead(lead.id) && (
-              <section className={CARD}>
-                <SectionLabel icon={Clock} color="text-cyan-400">Activity</SectionLabel>
-                {activities.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-44 overflow-y-auto thin-scrollbar pr-1">
-                    {activities.slice(0, 20).map((a) => (
-                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
-                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-foreground/70">{a.description}</span>
-                          <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
+            {/* ONE timeline (2026-09-29): the CRM activity, the sign-up link events and the older
+                outreach_activities rows (lead added, status changes) — no second "Activity" card. */}
+            {!isDemoLead(lead.id) && <LeadHistoryPanel leadId={lead.id} older={activities} />}
           </TabsContent>
 
           {perms.clientDelivery && (
@@ -1031,30 +746,6 @@ function LeadDetailBody({
           </Button>
         </div>
       )}
-
-      {/* Custom Action Dialog */}
-      <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Custom Action</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="e.g. Send Proposal"
-            value={newCustomAction}
-            onChange={(e) => setNewCustomAction(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddCustomActionSubmit()}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowAddCustomAction(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddCustomActionSubmit} disabled={!newCustomAction.trim()}>
-              Add
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Payment Received popup */}
       <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>

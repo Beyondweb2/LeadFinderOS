@@ -3,6 +3,8 @@ import { useCampaigns } from '@/hooks/useCampaigns';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { leadSourceLabel } from '@/lib/salesPerformance';
 import type { OutreachLead } from '@/types/outreach';
+import { FindEmailButton } from '@/components/FindEmailButton';
+import { isDemoLead } from '@/lib/demoLeads';
 
 /* WHO IS THIS? — the prospect in one card, for the workspace's Prospect tab (2026-09-28). Only what we
    genuinely hold: a contact name shows only when one was recorded, never a guess from the business
@@ -20,7 +22,7 @@ export function ProspectFacts({ lead }: { lead: OutreachLead }) {
     { icon: User, label: 'Contact', value: lead.contact_name || <span className="italic text-muted-foreground/60">Not known</span> },
     { icon: Phone, label: 'Phone', value: lead.phone ? <a href={`tel:${lead.phone}`} className="font-semibold hover:underline">{lead.phone}</a> : <span className="italic text-muted-foreground/60">None</span> },
     { icon: Globe, label: 'Website', value: site ? <a href={site} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lead.website!.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}</a> : <span className="italic text-muted-foreground/60">None on file</span> },
-    { icon: Mail, label: 'Email', value: lead.email ? <a href={`mailto:${lead.email}`} className="hover:underline">{lead.email}</a> : <span className="italic text-muted-foreground/60">None on file</span> },
+    { icon: Mail, label: 'Email', value: lead.email ? <a href={`mailto:${lead.email}`} className="hover:underline">{lead.email}</a> : <span className="inline-flex flex-wrap items-center gap-x-2"><span className="italic text-muted-foreground/60">None on file</span>{!isDemoLead(lead.id) && <FindEmailButton leadId={lead.id} website={lead.website} />}</span> },
     { icon: MapPin, label: 'Location', value: [town, lead.address && lead.address !== town ? lead.address : null].filter(Boolean).join(' · ') || <span className="italic text-muted-foreground/60">Unknown</span> },
     { icon: Compass, label: 'Source', value: leadSourceLabel(lead.lead_source) },
     { icon: Megaphone, label: 'Campaign', value: campaign },

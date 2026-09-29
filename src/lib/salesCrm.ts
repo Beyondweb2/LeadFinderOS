@@ -251,6 +251,52 @@ export const CALL_OUTCOMES = [
   { value: 'agency_controls_site', label: 'Agency controls site', for: 'any' },
 ] as const;
 
+/** How each outcome reads when it is the LAST thing logged on a lead (the popup's "Last contact"
+ *  line): the dead ends red, the good news green, the rest quiet. */
+export const OUTCOME_TONE: Record<string, 'good' | 'bad' | 'neutral'> = {
+  interested: 'good', meeting_booked: 'good', spoke_to_owner: 'neutral', call_back: 'neutral',
+  no_answer: 'neutral', left_voicemail: 'neutral', message_sent: 'neutral',
+  not_interested: 'bad', wrong_number: 'bad', agency_controls_site: 'neutral',
+};
+
+export interface LastContact { outcome: string; outcomeLabel: string; channelLabel: string | null; at: string; actorId: string | null; note: string | null; tone: 'good' | 'bad' | 'neutral' }
+
+/** The newest logged contact (lead_log_contact's call_outcome / contact_logged rows) — derived from
+ *  the activity timeline, never stored. `rows` may be in any order. */
+type ActivityRow = { kind: string; body?: string | null; data?: Record<string, unknown> | null; created_at: string; actor_user_id?: string | null };
+export function lastLoggedContact(rows: ReadonlyArray<ActivityRow> | null | undefined): LastContact | null {
+  let best: ActivityRow | null = null;
+  for (const r of rows ?? []) {
+    if (r.kind !== 'call_outcome' && r.kind !== 'contact_logged') continue;
+    if (!best || Date.parse(r.created_at) > Date.parse(best.created_at)) best = r;
+  }
+  if (!best) return null;
+  const outcome = String(best.data?.outcome ?? '');
+  const ch = best.data?.channel ? String(best.data.channel) : null;
+  return {
+    outcome,
+    outcomeLabel: CALL_OUTCOMES.find((o) => o.value === outcome)?.label ?? (outcome.replace(/_/g, ' ') || 'Contact'),
+    channelLabel: ch ? contactMethodLabel(ch) : null,
+    at: best.created_at,
+    actorId: best.actor_user_id ?? null,
+    note: (best.body ?? '').trim() || null,
+    tone: OUTCOME_TONE[outcome] ?? 'neutral',
+  };
+}
+
+/** THE ONE RULE for what a logged outcome also does to the lead's state (UI cleanup pass, 2026-09-29),
+ *  shared by the lead popup and Focus Mode: Interested / Meeting booked → the Interested star (unless
+ *  already starred); Not interested → status not_interested (unless already). A client, a won lead or
+ *  an unknown outcome → nothing. The write itself is the ordinary status control's. */
+export function outcomeStatusEffect(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown }): 'interested' | 'not_interested' | null {
+  const stage = salesStageOf(lead.status);
+  const paid = Number(lead.amount_paid ?? 0);
+  if ((Number.isFinite(paid) && paid > 0) || stage === 'won' || stage === 'client') return null;
+  if ((outcome === 'interested' || outcome === 'meeting_booked') && !lead.is_potential_work) return 'interested';
+  if (outcome === 'not_interested' && stage !== 'not_interested') return 'not_interested';
+  return null;
+}
+
 /** The outcomes offered for one contact method. */
 export function outcomesFor(method: string) {
   const kind = CONTACT_METHODS.find((m) => m.value === method)?.kind ?? 'message';
@@ -298,9 +344,12 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   report_link: 'Report link sent',
 };
 
+/** Where Find email found an address (lead_find_email / lead_set_email). */
+const EMAIL_SOURCE_WORDS: Record<string, string> = { website_crawl: 'their website crawl', onboarding: 'their questionnaire', same_business: 'another record of the same business', website_scrape: 'their website' };
+
 const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
-  contact_name: 'contact', search_keyword: 'trade', search_location: 'town',
+  contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in',
 };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the
@@ -327,7 +376,7 @@ export function activityDetail(
     case 'details_set': {
       const parts = Object.keys(d).map((k) => {
         const v = d[k];
-        const shown = Array.isArray(v) ? (v.length ? v.join(', ') : 'cleared') : v == null || v === '' ? 'cleared' : String(v);
+        const shown = k === 'email_source' ? (EMAIL_SOURCE_WORDS[String(v)] ?? String(v)) : Array.isArray(v) ? (v.length ? v.join(', ') : 'cleared') : v == null || v === '' ? 'cleared' : String(v);
         return `${DETAIL_FIELD_LABEL[k] ?? k.replace(/_/g, ' ')}: ${shown}`;
       });
       return parts.length ? parts.join(' · ') : null;

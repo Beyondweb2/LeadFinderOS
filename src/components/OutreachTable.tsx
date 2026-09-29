@@ -137,7 +137,8 @@ import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerAvatar } from './OwnerBadge';
-import { NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS as CRM_NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
+import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage, apifyWarningText } from '@/hooks/useApifyUsage';
 import {
@@ -154,7 +155,7 @@ const AUDIT_JOB_CAP = 100;
    not changeable from here; this is the figure the warning is measured against. */
 const AUDIT_DAILY_CAP_USD = 12.0;
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
-import { TemplateWordingInList, TemplateWordingPreview, useTemplateHover } from '@/components/TemplateWordingPreview';
+import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { TRADES } from '@/lib/trades';
@@ -451,7 +452,6 @@ export function OutreachTable({
      batch of accountants without touching the dropdown stamped a barber template on all of them.
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
-  const queueHover = useTemplateHover();
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -1691,9 +1691,10 @@ export function OutreachTable({
       result = result.filter((lead) => lead.country === countryFilter);
     }
 
-    // Filter: interested-only toggle (status = 'interested')
+    // Filter: interested-only toggle. Interested is the STAR (is_potential_work) — the status menu's
+    // Interested writes the star, never a status — plus any legacy row still carrying the old status.
     if (trackedOnly) {
-      result = result.filter((lead) => lead.status === 'interested');
+      result = result.filter((lead) => lead.is_potential_work === true || lead.status === 'interested');
     }
 
     // Contactability filters (AND) — only REAL stored values, matching the row icons.
@@ -2014,9 +2015,10 @@ export function OutreachTable({
                           <SelectValue placeholder="Set Action..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {NEXT_ACTION_OPTIONS.map((opt) => (
+                          {/* The popup's four choices + clear — the one Next Action list (src/lib/salesCrm.ts). */}
+                          {CRM_NEXT_ACTION_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
+                              {opt.value === 'none' ? 'Clear (nothing planned)' : opt.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -2640,7 +2642,7 @@ export function OutreachTable({
                     <TableRow
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
-                        lead.status === 'interested' ? 'bg-primary/5' : ''
+                        lead.is_potential_work || lead.status === 'interested' ? 'bg-primary/5' : ''
                       } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
                       onClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                     >
@@ -2824,51 +2826,12 @@ export function OutreachTable({
                           )}
                           {lead.phone ? (
                             <>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    className="p-1.5 rounded-md hover:bg-amber-500/10 text-amber-500 hover:text-amber-400 transition-colors"
-                                    title="Call options"
-                                  >
-                                    <Phone className="h-4 w-4" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="center" className="min-w-[160px]">
-                                  <DropdownMenuItem asChild>
-                                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleCallClick(lead)}>
-                                      <PhoneCall className="h-4 w-4" />
-                                      Normal Call
-                                    </a>
-                                  </DropdownMenuItem>
-                                  {/* ⛔ WAS A wa.me LINK LABELLED "WhatsApp Call", AND BOTH HALVES OF
-                                      THAT WERE WRONG. wa.me opens a CHAT, not a call — so this was
-                                      never a calling affordance, it was a second way to message
-                                      someone OUTSIDE the app. Anything sent that way writes no
-                                      whatsapp_messages row, so it has no thread, no reply window and
-                                      is invisible to every count in the CRM (CLAUDE.md §6: counts
-                                      come from whatsapp_messages, never from lead status).
-                                      Now the in-app thread, via the same handler as the green
-                                      WhatsApp button — which resolves the conversation key from the
-                                      lead (normalizeWaNumber) and creates a synthetic thread when
-                                      there are no messages yet, then lands on /inbox?c=<key>.
-                                      Hand-building that URL here would need a second copy of the key
-                                      rule and would open an EMPTY inbox for a lead with no thread.
-                                      ⛔ AND handleCallClick IS DELIBERATELY NOT CALLED. It was on the
-                                      old link and keeping it "to preserve behaviour" would now RECORD
-                                      A CALL THAT NEVER HAPPENS: it writes contact_method='call' and
-                                      runs executeContact(lead,'call'), so this item would log a call
-                                      attempt and then race handleWhatsAppClick's 'whatsapp' write for
-                                      the same field. The item is not a call any more, so it does
-                                      exactly what the green WhatsApp button does and nothing else. */}
-                                  <DropdownMenuItem
-                                    className="flex items-center gap-2 cursor-pointer"
-                                    onClick={() => handleWhatsAppClick(lead)}
-                                  >
-                                    <Phone className="h-4 w-4 text-green-500" />
-                                    WhatsApp thread
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {/* ONE tap to call (UI cleanup 2026-09-29). This was a two-item menu: Normal Call, and
+                                  "WhatsApp thread" — an exact duplicate of the green WhatsApp button beside it. */}
+                              <a href={`tel:${lead.phone}`} onClick={() => handleCallClick(lead)} title={`Call ${lead.phone}`} aria-label={`Call ${lead.phone}`}
+                                className="p-1.5 rounded-md hover:bg-amber-500/10 text-amber-500 hover:text-amber-400 transition-colors">
+                                <Phone className="h-4 w-4" />
+                              </a>
                               <button
                                 onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                 className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
@@ -3254,22 +3217,23 @@ export function OutreachTable({
           </DialogHeader>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Template</label>
-            <Select value={queueTemplate} onValueChange={setQueueTemplate} onOpenChange={queueHover.onOpenChange}>
+            <Select value={queueTemplate} onValueChange={setQueueTemplate}>
               <SelectTrigger><SelectValue placeholder="Not set — choose a template" /></SelectTrigger>
               <SelectContent>
                 {(perms.queueControls ? WHATSAPP_TEMPLATES : WHATSAPP_TEMPLATES.filter((t) => isInitialOpener(t.value))).map((t) => {
                   const blocked = openerBlocked(t.value);
                   return (
-                    <SelectItem key={t.value} value={t.value} disabled={blocked} {...queueHover.itemProps(t.value)}>
+                    <SelectItem key={t.value} value={t.value} disabled={blocked}>
                       <span className="flex flex-col"><span>{t.label}</span>{blocked && <span className="text-[10px] text-amber-600">Waiting on Meta approval</span>}</span>
                     </SelectItem>
                   );
                 })}
-                <TemplateWordingInList hovered={queueHover.hovered} />
               </SelectContent>
             </Select>
-            {/* What the hovered (or chosen) template actually says — Paul, 2026-09-28. */}
-            <TemplateWordingPreview hovered={null} selected={queueTemplate} />
+            {/* The chosen template: one line of it, and its full wording on Preview (no hover preview —
+                Paul, 2026-09-29; src/components/TemplateWordingPreview.tsx). */}
+            <TemplateSnippet selected={queueTemplate} />
+            <TemplatePreviewButton selected={queueTemplate} />
             <RequestTemplateButton source="queue" />
           </div>
           <DialogFooter>

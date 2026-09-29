@@ -160,7 +160,7 @@ console.log("── one CRM truth: every writer notifies, every reader re-reads 
   ok(/\['lead-crm', leadId\]/.test(sync) && /\['sales', 'activity', leadId\]/.test(sync) && /\['onboarding-link', leadId\]/.test(sync), "…the CRM panel, the activity and the sign-up link status");
   ok(/BroadcastChannel/.test(sync), "…and other tabs hear it");
   ok(/onLeadChanged\(\(\{ leadId, patch, optimistic \}\) => \{/.test(useInbox) && /if \(!optimistic\) void patchOneLead\(leadId\);/.test(useInbox), "the Inbox shows the chosen values at once, and re-reads the ONE lead once the server has answered");
-  ok(/next_action, next_action_date'/.test(useInbox), "the Inbox reads the next action, so the thread header shows it");
+  ok(/next_action, next_action_date, next_action_note'/.test(useInbox), "the Inbox reads the next action, so the thread header shows it");
   ok((useOut.match(/notifyLeadChanged\(leadId, syncOriginRef\.current\)/g) ?? []).length === 2, "Outreach announces both write paths (admin table, sales functions)");
   ok(/detail\?\.origin === syncOriginRef\.current\) return/.test(useOut), "…and skips only its OWN notice");
   /* 2026-09-28 (Sales Experience): the pill and the star call src/lib/leadQuickActions.ts, which announces

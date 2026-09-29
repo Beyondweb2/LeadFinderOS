@@ -3,7 +3,7 @@ import { MessageSquare, Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
-import { TemplateWordingInList, TemplateWordingPreview, useTemplateHover } from '@/components/TemplateWordingPreview';
+import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { classifyLineType } from '@/lib/lineType';
 import { isInitialOpener } from '@/lib/openerVariant';
@@ -38,7 +38,6 @@ export function WhatsAppLeadControls({
   const salesPath = !perms.queueControls;
   const [salesTemplate, setSalesTemplate] = useState('');
   const template = salesPath ? salesTemplate : (lead.whatsapp_template ?? '');
-  const hover = useTemplateHover();
   const queued = lead.status === 'queued';
   /* ⛔ THE QUEUED LINE SAYS WHETHER THE QUEUE IS ACTUALLY SENDING (2026-09-28): paused by the admin
      outranks the sending window, and an unreadable state never claims it will send. */
@@ -149,21 +148,20 @@ export function WhatsAppLeadControls({
             </p>
           )}
           <label className="mb-1 block text-[11px] text-muted-foreground">Template</label>
-          <Select value={template} disabled={salesPath && queued} onOpenChange={hover.onOpenChange} onValueChange={(v) => (salesPath ? setSalesTemplate(v) : onUpdate(lead.id, { whatsapp_template: v }))}>
+          <Select value={template} disabled={salesPath && queued} onValueChange={(v) => (salesPath ? setSalesTemplate(v) : onUpdate(lead.id, { whatsapp_template: v }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={salesPath && queued ? (lead.whatsapp_template ?? 'Queued') : 'Choose a template'} /></SelectTrigger>
             <SelectContent>
               {options.map((t) => {
                 const o = getTemplateSendability(t.value, { shareToken: null }, {});
-                return <SelectItem key={t.value} value={t.value} disabled={isInitialOpener(t.value) && !o.ok} {...hover.itemProps(t.value)}>{t.label}{isInitialOpener(t.value) && !o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
+                return <SelectItem key={t.value} value={t.value} disabled={isInitialOpener(t.value) && !o.ok}>{t.label}{isInitialOpener(t.value) && !o.ok ? ` — ${o.reason}` : ''}</SelectItem>;
               })}
-              <TemplateWordingInList hovered={hover.hovered} values={{ businessName: lead.business_name, firstName: lead.contact_name, town: lead.derived_town ?? lead.search_location, trade: lead.search_keyword }} />
             </SelectContent>
           </Select>
           <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">
             Sends the chosen template with the business name + this lead's claim link.
           </p>
-          <TemplateWordingPreview className="mt-2" hovered={null} selected={template}
-            values={{ businessName: lead.business_name, firstName: lead.contact_name, town: lead.derived_town ?? lead.search_location, trade: lead.search_keyword }} />
+          <TemplateSnippet className="mt-1.5" selected={template} values={{ businessName: lead.business_name, firstName: lead.contact_name, town: lead.derived_town ?? lead.search_location, trade: lead.search_keyword }} />
+          <TemplatePreviewButton className="mt-1" selected={template} values={{ businessName: lead.business_name, firstName: lead.contact_name, town: lead.derived_town ?? lead.search_location, trade: lead.search_keyword }} />
           <RequestTemplateButton source="lead" />
           {!(salesPath && queued) && <Button
             size="sm"

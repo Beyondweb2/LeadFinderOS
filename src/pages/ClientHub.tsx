@@ -468,10 +468,10 @@ export default function ClientHub() {
     </Stage>
     <WelcomePackStage lead={lead} audit={audit}/>
     <Stage title="3. Action Plan">{audit?.baseline_completed_at ? <><p>Derived from the completed baseline; no second audit is run.</p><Button asChild variant="outline"><Link to={`/playbook/${audit.id}`}>Open action plan</Link></Button></> : <p>Available when the baseline completes.</p>}</Stage>
-    <Stage title="4. Directories"><p>Directory opportunities are intentionally unverified until checked.</p><Button variant="outline" disabled>Directory catalogue integration</Button></Stage>
+    <Stage title="4. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
     <Stage title="6. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
-    <Stage title="7. Remeasure"><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <Button variant="outline" disabled>Runs automatically when due</Button>}</Stage>
+    <Stage title="7. Remeasure"><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>
     <Stage title="8. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
   </div></div>;
 }

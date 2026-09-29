@@ -40,7 +40,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   rating: { files: ["src/hooks/useOutreach.ts", "src/lib/auditReport.ts", "supabase/functions/_shared/place-details.ts", "src/lib/salesAddPayload.ts"], why: "written from Place Details; `lead.rating` in addLead is the SEARCH result; auditReport/place-details are other objects; salesAddPayload maps a SEARCH result + Place Details into the sales add" },
   review_count: { files: ["src/hooks/useOutreach.ts"], why: "written from Place Details; named in HAND_MIGRATED_LEAD_COLS" },
   contact_name: { files: ["src/lib/leadRpc.ts", "src/lib/salesPatchPlan.ts"], why: "a PATCH key a salesperson's edit may carry, sent to lead_set_details — never read off a list row" },
-  next_action_note: { files: ["src/lib/leadRpc.ts"], why: "read from sales_leads by id before a follow-up write (so the note is not wiped) — not a list row" },
+  next_action_note: { files: ["src/lib/leadRpc.ts", "src/lib/nextActionView.ts"], why: "nextActionView: the Next Action pill reads a note when the row carries one (the popup's CRM row, the Inbox, Focus) and shows none on a list row, which does not download it (2026-09-29); leadRpc: read from sales_leads by id before a follow-up write (so the note is not wiped) — not a list row" },
   whatsapp_checked_at: { files: ["src/lib/salesPatchPlan.ts"], why: "a server-written PATCH key the sales translator accepts as a no-op" },
   town_fetched_at: { files: ["src/hooks/useOutreach.ts"], why: "written from Place Details; named in HAND_MIGRATED_LEAD_COLS" },
   email_status: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys — copied FROM search enrichment onto the insert" },
@@ -113,7 +113,11 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
 // The Dashboard's leads: every column its code reads is downloaded; the dead reads stay gone.
 {
   const DASH = new Set<string>(DASHBOARD_LEAD_COLUMNS);
-  const d = columnReads(root, ["src/pages/Dashboard.tsx", "src/hooks/useDashboardMetrics.ts"], [COLUMN_LISTS], LIVE);
+  /* 2026-09-29: the Dashboard also draws the Sales dashboard's panels. Those read the sales-performance
+     response and the team directory (server-folded rows), never the Dashboard's lead list — so the walk
+     stops at them, as it stops at the column lists. */
+  const SALES_SURFACES = ["src/components/salesDash/sections.tsx", "src/components/salesDash/ui.tsx", "src/lib/salesWorkspace.ts", "src/lib/salesLinks.ts", "src/hooks/useSalesCrm.ts"];
+  const d = columnReads(root, ["src/pages/Dashboard.tsx", "src/hooks/useDashboardMetrics.ts"], [COLUMN_LISTS, ...SALES_SURFACES], LIVE);
   ok(d.files.length > 50, `the Dashboard walk reached ${d.files.length} files`);
   const missing = [...d.reads.keys()].filter((c) => !DASH.has(c));
   ok(missing.length === 0, missing.length ? `Dashboard code reads ${missing.map((c) => `${c} (${d.reads.get(c)!.join(", ")})`).join("; ")} — add to DASHBOARD_LEAD_COLUMNS` : `all ${d.reads.size} lead columns the Dashboard reads are downloaded`);

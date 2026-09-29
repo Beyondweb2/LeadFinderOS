@@ -47,7 +47,8 @@ for (const label of ['Open in Google Maps', 'Open website', 'Email the business'
 }
 ok(/onClick=\{\(\) => handleRemoveFromInbox\(active\)\}/.test(more), '   Remove from inbox keeps its handler');
 for (const kept of ['Open prospect workspace', 'Run AI audit']) ok(header.includes(`aria-label="${kept}"`), `"${kept}" stays on the row`);
-ok(/<CrawlCheckButton/.test(header) && /<ColdCallPlaybookButton/.test(header) && /<LeadOwnerControl/.test(header) && /<WelcomePackButton/.test(header), 'crawl, playbook, owner and welcome pack stay on the row');
+ok(/<CrawlCheckButton/.test(header) && /<LeadOwnerControl/.test(header), 'crawl and owner stay on the row');
+ok(!/<ColdCallPlaybookButton/.test(header) && !/<WelcomePackButton/.test(header), 'the call script and welcome pack are NOT repeated on the row (UI cleanup 2026-09-29: both live in the Prospect workspace)');
 ok(/copySignupLink/.test(header), 'the sign-up link (and its warning dot) stays on the row');
 
 console.log('── the composer ──');

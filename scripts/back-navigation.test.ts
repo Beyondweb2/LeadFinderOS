@@ -63,7 +63,8 @@ console.log("\n── ⛔ EVERY LINK INTO A BackLink PAGE CARRIES `state` ──
       ok(/\bstate=/.test(tag), `${file}: <Link to=/${m[1]}/…> carries state`);
     }
   }
-  ok(checked >= 5, `found ${checked} links into a BackLink page (expected at least 5)`);
+  /* 4 since 2026-09-29: three Playbook links were removed with the feature's entry points. */
+  ok(checked >= 4, `found ${checked} links into a BackLink page (expected at least 4)`);
 }
 
 console.log("\n── 🔴 THE CYCLE ITSELF: Baseline ↔ Compare must both pass state through ──");
@@ -94,8 +95,11 @@ console.log("\n── ⚠️ LINKS OUT OF AN AUDIT CARRY THE RUN, so Back reopen
 {
   for (const file of ["src/components/audit/AuditBookList.tsx", "src/components/audit/AuditPills.tsx", "src/pages/AiAudit.tsx"]) {
     const src = read(file);
+    /* Only a file that still links OUT to a BackLink page owes the run (the Playbook links left
+       AuditBookList and AiAudit on 2026-09-29). */
+    const linksOut = /<Link\b[^>]*?to=\{`\/(playbook|baseline)\//s.test(src);
     const hasRunId = /from:\s*[^,\n]*\?runId=/.test(src);
-    ok(hasRunId, `${file}: back state carries ?runId=`);
+    ok(!linksOut || hasRunId, `${file}: back state carries ?runId=${linksOut ? '' : ' (no link out any more)'}`);
   }
 }
 
