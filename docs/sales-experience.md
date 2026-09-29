@@ -192,10 +192,13 @@ Paul's decisions for this work are in memory `sales-experience-decisions` and ar
 
 ## 8. Open after the five releases (2026-09-28)
 
-- **Stripe dispute events are not enabled on the webhook endpoint** — chargebacks are recorded only
-  once `charge.dispute.created/updated/closed` are added (Paul's Stripe setting), or by the backfill.
+- ~~Stripe dispute events not enabled~~ — **enabled 2026-09-29** (Paul approved): `sales-earnings` mode
+  `webhook_enable_disputes` ADDED `charge.dispute.created/updated/closed` to the one endpoint pointing at
+  stripe-webhook, keeping its six existing events (read back from Stripe: nine). Chargebacks now reach
+  the ledger and reverse commission automatically.
 - **RG, Ronnie's and SC Plumbing have no Stripe charge in this account** — the ledger does not hold
-  them (nothing invented). All three are Paul's sales: no commission is affected.
+  them (nothing invented). All three are Paul's sales: no commission is affected. **Paul, 2026-09-29: leave
+  them; backfill only if the real payment source is confirmed.**
 - **Nobody has seen these screens by eye yet** — layout was checked by machine (headless Edge, the
   built bundle, 390 / 1440 / 1920) and screenshots were read by Claude, not a person. Paul's review is
   the first human one; `src/components/salesDash/ui.tsx` holds the colour tokens for quick corrections.
