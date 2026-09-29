@@ -48,6 +48,10 @@ export interface SuppressionHit {
   /** Which identifier matched, for logging that names the reason rather than just refusing. */
   matchedOn?: "phone" | "email" | "lead_id" | "lookup_failed";
   reason?: string | null;
+  /** The number is marked WRONG NUMBER (wrong_number_at on the row, 2026-09-29). Every automated
+   *  sender already refuses any suppressed row; manual TEMPLATE sends refuse this one too
+   *  (checkWrongNumber). A queue must not relabel it opted_out — the mark can be cleared. */
+  wrongNumber?: boolean;
 }
 
 /**
@@ -71,8 +75,8 @@ export async function checkSuppressed(service: any, who: SuppressionIdentity): P
        change the filter's meaning. Three cheap indexed lookups beat one clever unparseable one. */
     if (phone) {
       const { data } = await service.from("contact_suppressions")
-        .select("reason").eq("phone_e164", phone).limit(1).maybeSingle();
-      if (data) return { suppressed: true, matchedOn: "phone", reason: data.reason ?? null };
+        .select("reason, wrong_number_at").eq("phone_e164", phone).limit(1).maybeSingle();
+      if (data) return { suppressed: true, matchedOn: "phone", reason: data.reason ?? null, wrongNumber: !!data.wrong_number_at };
     }
     if (email) {
       const { data } = await service.from("contact_suppressions")
@@ -88,6 +92,26 @@ export async function checkSuppressed(service: any, who: SuppressionIdentity): P
   } catch (e) {
     console.error("[suppression] lookup FAILED — failing closed:", (e as Error).message);
     return { suppressed: true, matchedOn: "lookup_failed", reason: "lookup_failed" };
+  }
+}
+
+/**
+ * Is this PHONE marked wrong number? The one check a manual template send makes (send-whatsapp-message),
+ * reading the same contact_suppressions row every automated sender refuses on. Only a phone can be a
+ * wrong number. ⚠️ FAILS CLOSED like the rest of this file: a failed lookup answers true.
+ */
+// deno-lint-ignore no-explicit-any
+export async function checkWrongNumber(service: any, rawPhone: string | null | undefined): Promise<boolean> {
+  const phone = toE164(rawPhone);
+  if (!phone) return false;
+  try {
+    const { data, error } = await service.from("contact_suppressions")
+      .select("id").eq("phone_e164", phone).not("wrong_number_at", "is", null).limit(1).maybeSingle();
+    if (error) throw new Error((error as { message?: string }).message ?? "read failed");
+    return !!data;
+  } catch (e) {
+    console.error("[suppression] wrong-number lookup FAILED — failing closed:", (e as Error).message);
+    return true;
   }
 }
 

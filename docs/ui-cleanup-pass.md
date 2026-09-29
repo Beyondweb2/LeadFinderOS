@@ -97,3 +97,39 @@ Outreach, Focus, the popup (after the auto-reply control fix). Nobody has looked
 - Keep or remove the paid-client hub's "Action Plan" (the last Playbook entry point)?
 - Should **Wrong number** stop future WhatsApp to that number (today it is recorded and shown only)?
 - A logged **Not interested** sets the status for both roles; for Sales that also archives it (existing status rule).
+
+## 6. Second pass — Paul's two decisions + assign (2026-09-29)
+
+**Playbook: gone.** The paid-client hub's "3. Action Plan" step (a link, nothing else) is removed and
+the steps renumbered 1–7; the `/playbook/:id` route, `src/pages/Playbook.tsx`, `usePlaybook` and
+`useDirectoryCheck` are deleted — an old link now lands on Not found. Kept, because non-UI code or
+tests use them: `buildPlaybook` (`check-directory-listings` imports `norm`), fn `playbook-evidence`,
+and the pure document/rule modules `playbookDoc`, `clientRequestDoc`, `clientHeld` (orphans now).
+
+**Wrong number suppresses the number.** Canonical state: the number's `contact_suppressions` row
+(phone only, never lead_id — that would also stop email), with `wrong_number_at` / `wrong_number_by`
+(migration `20260929200000_wrong_number_suppression.sql`, applied and read back). Functions:
+`lead_mark_wrong_number` (both roles, own leads; called by the Wrong number outcome button),
+`lead_clear_wrong_number` (admin only; deletes the row only if the mark created it, otherwise just
+un-marks it, so an opt-out on the same number stays), `lead_wrong_number` (read for the popup),
+`phone_e164_key` (the '+44…' key the edge senders compare on).
+Who refuses it, all through `_shared/suppression.ts`:
+| Path | How |
+|---|---|
+| Drip queue, first-reply lane, hook + contact follow-up lanes | `checkSuppressed` (already); the drip now puts a wrong-number lead back to its previous status instead of `opted_out` |
+| Auto-replies, free-check result, bulk audits | `checkSuppressed` / `isSuppressed` (already) |
+| Sales bulk queue (`sales_queue_opener`), admin bulk queue (`contact_check`) | exclude any suppressed phone (already) |
+| Manual + Inbox bulk template sends (`send-whatsapp-message`) | NEW `checkWrongNumber`, before the dry run — Preview and the bulk pre-check show "marked Wrong number" |
+Not refused, on purpose: a free-text reply inside an open conversation (they wrote to us), and
+media / voice replies (only possible in that window). Popup header: red "Wrong number · no WhatsApp
+outreach", admin-only Clear. History records mark and clear.
+Live test (rolled-back transaction, JB7): sales marks → row with wrong_number_at, queue exclusion sees
+it; sales Clear → admin_only; admin Clear → cleared; 0 messages touched; 2 history rows.
+⚠️ Side effect of the FIRST pass's test: pressing Not interested on JB7 wrote a permanent
+`not_interested` suppression (source operator_status, 13:00 UTC); JB7 went back to New but stays
+suppressed until that row is removed (Paul's call).
+
+**Assign to a teammate (admin).** Outreach's selection toolbar: "Assign to… (N)" (`BulkAssignSelect`,
+`assign_lead` per lead). The popup's owner picker reads "Assign: …". The person is told by the
+existing `trg_notify_lead_assigned` ("Lead assigned to you", linked to the lead) and the lead shows in
+their Outreach, Focus Mode and WhatsApp.

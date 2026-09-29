@@ -136,6 +136,7 @@ import { maySetStatus } from '@/lib/access';
 import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
+import { BulkAssignSelect } from '@/components/BulkAssignSelect';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS as CRM_NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
 import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
@@ -2044,6 +2045,12 @@ export function OutreachTable({
                             setSelectedIds(new Set());
                           }}
                         />
+                      )}
+
+                      {/* ASSIGN TO A TEAMMATE — admin only (Paul, 2026-09-29): hand cold or unworked leads to a
+                          salesperson; they are notified (src/components/BulkAssignSelect.tsx). */}
+                      {perms.assignOwner && (
+                        <BulkAssignSelect ids={Array.from(selectedIds).filter((id) => !isDemoLead(id))} onDone={() => { setSelectedIds(new Set()); onRefreshLeads?.(); }} />
                       )}
 
                       {/* "Remove from my leads" — a salesperson only. Never a delete: the server

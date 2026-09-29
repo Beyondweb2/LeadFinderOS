@@ -33,7 +33,6 @@ const PaidClients = lazy(() => import("./pages/PaidClients"));
 const ClientHub = lazy(() => import("./pages/ClientHub"));
 const WebsiteBuild = lazy(() => import("./pages/WebsiteBuild"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
-const PlaybookPage = lazy(() => import("./pages/Playbook"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
@@ -234,10 +233,7 @@ const App = () => {
               {/* BEFORE/AFTER. Operator-side like the baseline it hangs off: the noise band and the
               unproven markings are part of the document, so it is shown WITH them or not at all. */}
               <Route path="/compare/:auditId" element={<ComparePage />} />
-              {/* OPERATOR delivery checklist. Same shell as /baseline/:auditId and for the same reason:
-              WHO'S WINNING is the client's competitor list, which is working intelligence, not
-              something the client is shown. The id resolves as an AUDIT id first — see usePlaybook. */}
-              <Route path="/playbook/:id" element={<PlaybookPage />} />
+              {/* ⛔ /playbook/:id REMOVED 2026-09-29 (Paul): the Playbook is deprecated — no route, no page. */}
               {/* THE MOCKUP PICKER — one screen per business.
                   /mockups      the mockups-waiting list (in the app rather than in SQL, Paul's ask)
                   /mockups/:id  place the images for one business

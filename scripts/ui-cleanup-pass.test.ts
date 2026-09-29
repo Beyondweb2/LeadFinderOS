@@ -96,7 +96,35 @@ console.log("\n── Playbook ──");
   for (const p of ["src/components/LeadDetailDialog.tsx", "src/components/LeadDeliveryCockpit.tsx", "src/components/audit/AuditBookList.tsx", "src/pages/AiAudit.tsx", "src/pages/Inbox.tsx", "src/components/OutreachTable.tsx"]) {
     ok(!/to=\{`\/playbook\//.test(read(p)), `${p}: no Playbook link`);
   }
-  ok(/to=\{`\/playbook\/\$\{audit\.id\}`\}/.test(read("src/pages/ClientHub.tsx")), "KEPT on purpose: the paid-client hub's Action Plan step (a delivery step, Paul to decide)");
+  /* Paul, 2026-09-29 (second pass): no user-facing entry into the Playbook, and no hidden route. */
+  ok(!/to=\{`\/playbook\//.test(read("src/pages/ClientHub.tsx")) && !/title="[0-9]. Action Plan"/.test(read("src/pages/ClientHub.tsx")), "the paid-client hub's Action Plan step is gone");
+  ok(!/\/playbook/.test(read("src/App.tsx").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")) && !has("src/pages/Playbook.tsx") && !has("src/hooks/usePlaybook.ts"), "no /playbook route, no page, no page hook");
+  const hub = read("src/pages/ClientHub.tsx");
+  ok(["1. Baseline", "2. Welcome Pack", "3. Directories", "4. Website Build", "5. Review Replies", "6. Remeasure", "7. Results"].every((t) => hub.includes(`title="${t}"`)), "the hub's steps are numbered without a gap");
+}
+
+console.log("\n── Wrong number suppresses future outreach ──");
+{
+  const mig = read("supabase/migrations/20260929200000_wrong_number_suppression.sql");
+  ok(/on conflict \(phone_e164\) do update/.test(mig) && !/insert into public\.contact_suppressions \([^)]*lead_id/.test(mig), "the mark is a contact_suppressions row on the PHONE (never lead_id, which would also stop email)");
+  ok(/if public\.my_role\(\) is distinct from 'admin' then return jsonb_build_object\('ok', false, 'error', 'admin_only'\)/.test(mig.slice(mig.indexOf("lead_clear_wrong_number"))), "only the admin clears it");
+  ok(/delete from public\.contact_suppressions where phone_e164 = v_key and reason = 'wrong_number'/.test(mig) && /set wrong_number_at = null/.test(mig), "clearing removes only what the mark added — an opt-out on the same number stays");
+  ok(!/delete from public\.(outreach_leads|whatsapp_messages|lead_activity)/.test(mig), "nothing is deleted from the lead, its messages or its history");
+  const supp = read("supabase/functions/_shared/suppression.ts");
+  ok(/export async function checkWrongNumber\(/.test(supp) && /wrongNumber: !!data\.wrong_number_at/.test(supp), "one module answers it: every automated sender's checkSuppressed sees the row, templates ask checkWrongNumber");
+  const swm = read("supabase/functions/send-whatsapp-message/index.ts");
+  ok(/if \(templateName && await checkWrongNumber\(service, "\+" \+ to\)\)/.test(swm) && swm.indexOf("checkWrongNumber(service") < swm.indexOf('mode: "dry_run"'), "templates are refused, before the dry run (so Preview and the bulk pre-check exclude it)");
+  const q = read("supabase/functions/process-whatsapp-queue/index.ts");
+  ok(/if \(mainSupp\.suppressed && mainSupp\.wrongNumber\)/.test(q) && q.indexOf("mainSupp.suppressed && mainSupp.wrongNumber") < q.indexOf('status: "opted_out", whatsapp_delivery_status: "suppressed"'), "the queue refuses it without relabelling the lead opted_out");
+  for (const lane of ["sendSupp", "hSupp", "cSupp", "mainSupp"]) ok(new RegExp(`const ${lane} = await checkSuppressed\\(`).test(q), `queue lane ${lane} checks the same table`);
+  ok(/'lead_mark_wrong_number'/.test(read("src/components/LeadCrmPanel.tsx")) && /'lead_clear_wrong_number'/.test(read("src/components/LeadStateStrip.tsx")) && /canClear && <button/.test(read("src/components/LeadStateStrip.tsx")), "the button marks it; the header shows it and only the admin gets Clear");
+}
+
+console.log("\n── Assign to a teammate (admin) ──");
+{
+  const bulk = read("src/components/BulkAssignSelect.tsx");
+  ok(/'assign_lead'/.test(bulk) && /perms\.assignOwner && \(\s*\n\s*<BulkAssignSelect/.test(read("src/components/OutreachTable.tsx")), "Outreach selection: Assign to… (admin only), through assign_lead");
+  ok(/they've been notified/.test(read("src/components/LeadOwnerControl.tsx")), "the popup's picker says the person was told");
 }
 
 console.log("\n── Find email ──");
