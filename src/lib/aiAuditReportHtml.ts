@@ -17,7 +17,7 @@ import { articleTrade } from './templateVars.ts';
 /* RELATIVE paths with explicit .ts extensions, NOT the "@/" alias: this file is bundled into
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, REMEASURE_CLAIM_SENTENCE } from './findableOffer.ts';
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
 import type { CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
@@ -490,7 +490,9 @@ function siteCheckPendingSection(): string {
    🔴 "Building it is included in your £99" CAME OUT 2026-09-23: a site we build is built, hosted and
    managed inside the 12-payment term and only transfers once it is paid, so pinning the build to the
    £99 alone understated what the customer commits to. The panel now says there is no separate build
-   fee and names the whole offer from FINDABLE_OFFER_SUMMARY, so the figures cannot drift. */
+   fee and names the whole offer from offerSummaryFor, so the figures cannot drift.
+   🔴 2026-09-29: a business with no website can only be Findable Build, so the panel names that route
+   alone (12 payments) — never both routes to a reader for whom one is impossible. */
 function noWebsiteSection(): string {
   return `
     <!-- NO WEBSITE &mdash; what we will build, where the SEO grade would be -->
@@ -501,7 +503,7 @@ function noWebsiteSection(): string {
         AI can&rsquo;t recommend a business it can&rsquo;t read, and right now there&rsquo;s nothing for it to read.
         We&rsquo;ll build you a simple site that&rsquo;s set up properly for AI from the start: your services,
         your area, your credentials, all written the way AI quotes them. Building and hosting it are
-        part of the service, with no separate build fee: ${esc(FINDABLE_OFFER_SUMMARY)}
+        part of the service, with no separate build fee. ${esc(offerSummaryFor('build'))}
       </p>
     </section>`;
 }

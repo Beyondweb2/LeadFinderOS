@@ -89,11 +89,11 @@ const WEBSITE_PLATFORM = new Set(["wordpress", "wix", "squarespace", "godaddy", 
    flow sent the value, and it was still silently dropped here, because this function builds its
    insert from an explicit key list and an unlisted key simply vanishes. */
 const WILLING_TO_MIGRATE = new Set(["yes", "not_sure", "no"]);
-/* The site-access answer the customer gave (2026-09-17): keep their own site, or have a new one
-   built. ⚠️ Since 2026-09-18 both are billed the ONE plan — £99 today, then £99/month for the
-   12-month minimum (findableOffer.ts). The value is stored because the ownership/hosting terms apply
-   only to a site Findable builds, and optimise-only is to get its own structure (not yet defined).
-   Anything not in this set stores null. */
+/* THE SERVICE ROUTE the customer chose (2026-09-29, findableOffer.ts): "new_site" = Findable Build
+   (12 payments), "keep" = Findable Optimise (6 payments). Same price, different length, and the
+   ownership/hosting terms apply only to a site Findable builds. findable-checkout reads it off the row
+   and REFUSES a row without one — anything not in this set stores null, which is UNDECIDED, never a
+   default route. */
 const PLAN_TIER = new Set(["keep", "new_site"]);
 /* DOMAIN OWNERSHIP + AUTHORITY (2026-09-28, src/lib/domainAuthority.ts): the new-website service only
    goes ahead where the client owns / controls the domain and may authorise the change. Validated to
@@ -793,9 +793,9 @@ Deno.serve(async (req) => {
            "on" from some future form library cannot silently sell someone a website. Absent → null
            → shed by NEWER_COLS below → reads as not ticked, which is the safe direction. */
         website_addon: a.website_addon === true ? true : (a.website_addon === false ? false : null),
-        /* ⛔ THE TIER, IN ALL THREE LISTS LIKE website_addon (answers / NEWER_COLS / optional) or it
+        /* ⛔ THE ROUTE, IN ALL THREE LISTS LIKE website_addon (answers / NEWER_COLS / optional) or it
            vanishes on the way to the row the checkout reads. Validated to the known set; anything
-           else stores null, which reads downstream as the keep default — the safe direction. */
+           else stores null = UNDECIDED, which the checkout refuses (never a silent 12 or 6). */
         plan_tier: typeof a.plan_tier === "string" && PLAN_TIER.has(a.plan_tier) ? a.plan_tier : null,
         domain_status: a.domain_status === "existing" || a.domain_status === "new" ? a.domain_status : null,
         /* ⛔ THE DOMAIN ANSWERS, IN ALL THREE LISTS (answers / NEWER_COLS / optional) or they vanish.

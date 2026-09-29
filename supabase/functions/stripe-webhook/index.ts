@@ -1,11 +1,11 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { createDelayedSubscription, subscriptionEndedByTerm } from "../_shared/delayed-subscription.ts";
+import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments } from "../_shared/delayed-subscription.ts";
 import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { handoffLine, handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
 import { DOMAIN_ROW_COLUMNS } from "../../../src/lib/domainAuthority.ts";
-import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, SERVICE_ROUTE_NAME, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, serviceRouteFromRow, subscriptionEndedEmail, termCompleteEmail, totalPaymentsFor, type FindableSiteKind, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -1052,23 +1052,37 @@ Deno.serve(async (req) => {
                "no add-on": charging-direction safety, exactly as findable-checkout reads it. */
             let boughtWebsite = false;
             let siteManager: string | null = null;
+            let rowRoute: ServiceRoute | null = null;
+            let rowReadOk = false;
             try {
               const { data: obJob } = await service.from("onboarding_responses")
-                .select("website_addon, website_manager").eq("id", onboardingId).maybeSingle();
-              const j = obJob as { website_addon?: unknown; website_manager?: unknown } | null;
+                .select("website_addon, website_manager, plan_tier").eq("id", onboardingId).maybeSingle();
+              const j = obJob as { website_addon?: unknown; website_manager?: unknown; plan_tier?: unknown } | null;
               boughtWebsite = j?.website_addon === true;
               siteManager = typeof j?.website_manager === "string" ? j.website_manager : null;
+              rowRoute = serviceRouteFromRow(j);
+              rowReadOk = !!j;
             } catch (e) {
               console.error("[stripe-webhook] could not read the website answer — recording the audit-only label:", (e as Error).message);
             }
+            /* ══ THE ROUTE THIS PAYMENT WAS MADE ON (Paul, 2026-09-29) ══════════════════════════════════
+               Build = 12 payments, Optimise = 6. ⛔ THE SESSION'S OWN METADATA DECIDES — findable-checkout
+               set it from the row AND named that count on the Stripe page the customer paid on. The row
+               is the second witness: if it now says something else (an answer changed after the link was
+               made), NO schedule is created and Paul is told — never a guess between the two. A session
+               with no route (created before this change) creates none either. */
+            const paid = resolvePaidRoute(s.metadata ?? null, rowReadOk ? rowRoute : undefined);
+            if (paid.route) boughtWebsite = paid.route === "build";
             /* ⛔ THREE JOBS, NOT TWO, AND THE MIDDLE ONE IS THE POINT. "Add pages to their site"
                splits on who holds the keys: when an agency manages it the first move is not ours,
                and that is the only one of the three where the work cannot start on our say-so.
                ⚠️ NO COLUMN RECORDS *WHY* A BUILD IS NEEDED (refused access / wanted a new one / no
                site at all), deliberately — they are the same job and the reason is not actionable. */
-            const paidForLabel = boughtWebsite
-              ? "Findable - AI visibility (first cycle) + website build + hosting"
-              : "Findable - AI visibility, first cycle";
+            const paidForLabel = paid.route
+              ? `${SERVICE_ROUTE_NAME[paid.route]} - ${paid.route === "build" ? "AI visibility + new website" : "AI visibility on their existing website"} (${totalPaymentsFor(paid.route)} payments)`
+              : boughtWebsite
+                ? "Findable - AI visibility (first cycle) + website build + hosting"
+                : "Findable - AI visibility, first cycle";
             const jobLine = boughtWebsite
               ? "BUILD AND HOST A NEW SITE — they have no site we can publish to."
               : siteManager === "web_company"
@@ -1076,6 +1090,8 @@ Deno.serve(async (req) => {
                 : siteManager === "direct_access"
                   ? "ADD PAGES to their existing site — they can let you in themselves."
                   : "ADD PAGES to their existing site — who controls it was not recorded.";
+            /* Set when no monthly schedule could be created — the PAID email says so out loud. */
+            let billingProblem: string | null = null;
 
             if (findableLeadId) {
               await mustWrite(
@@ -1124,6 +1140,15 @@ Deno.serve(async (req) => {
                  42-day trial. This makes the promised six-week start independent of when the
                  four-week measurement email happens to be sent. A replayed webhook reads the
                  stored subscription id and therefore cannot create a duplicate. */
+              /* ⛔ THE CONTRACT, STAMPED ONCE (2026-09-29): the payment count this client agreed to on the
+                 Stripe page. Written only when the route is resolved; a DB trigger refuses to change it
+                 once set. Non-fatal — the payment above is already recorded. */
+              if (paid.route) {
+                const { error: cErr } = await service.from("outreach_leads")
+                  .update({ contract_total_payments: totalPaymentsFor(paid.route) })
+                  .eq("id", findableLeadId).is("contract_total_payments", null);
+                if (cErr) console.error(`[stripe-webhook] could not stamp the contract on lead ${findableLeadId}: ${cErr.message}`);
+              }
               if (stripeCustomerId) {
                 const { data: billingLead } = await service.from("outreach_leads")
                   .select("id, business_name, stripe_customer_id, stripe_subscription_id")
@@ -1134,12 +1159,17 @@ Deno.serve(async (req) => {
                     id: findableLeadId, business_name: null, stripe_customer_id: stripeCustomerId, stripe_subscription_id: null,
                   },
                   new Date().toISOString(),
+                  paid.route,
                 );
                 if (subscription.kind === "failed") {
+                  billingProblem = paid.route ? subscription.reason : paid.problem;
                   await recordPaymentFailure("monthly_subscription_create_failed", {
                     onboarding_id: onboardingId, lead_id: findableLeadId, reason: subscription.reason,
+                    route_problem: paid.problem, session_route: paid.sessionRoute, row_route: paid.rowRoute,
                   });
                 }
+              } else {
+                billingProblem = "Stripe gave no customer id, so no monthly subscription could be created.";
               }
             } else {
               // No lead id on the session: the payment lands on the onboarding row but nothing
@@ -1163,7 +1193,11 @@ Deno.serve(async (req) => {
                 businessName: ((leadForEmail?.business_name as string) ?? "").trim(),
                 amountGbp,
                 paidFor: paidForLabel,
-                job: jobLine,
+                job: [
+                  paid.route ? `${SERVICE_ROUTE_NAME[paid.route].toUpperCase()} — ${totalPaymentsFor(paid.route)} payments in total (this one is payment 1).` : null,
+                  jobLine,
+                  billingProblem ? `NO MONTHLY SCHEDULE WAS CREATED — ${billingProblem} Set it up by hand in Stripe once the route is confirmed.` : null,
+                ].filter(Boolean).join(" "),
                 trade: (((leadForEmail?.category as string) || (leadForEmail?.search_keyword as string) || "").trim()) || null,
                 town: ((leadForEmail?.search_location as string) ?? "").trim() || null,
                 phone: ((leadForEmail?.phone as string) ?? "").trim() || null,
@@ -1377,7 +1411,8 @@ Deno.serve(async (req) => {
             break;
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl });
+          /* The count this client is told is the one this subscription was created for (its metadata). */
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }) });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1471,13 +1506,14 @@ Deno.serve(async (req) => {
                If you ever want it back" to a client who had paid all twelve.
                ⛔ A POSITIVE TEST (subscriptionEndedByTerm): our own cancel_at, reached, not in arrears.
                Anything absent or different falls to the existing two endings. */
-            const termComplete = subscriptionEndedByTerm(sub as { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown }, becauseOfPayment);
+            const termComplete = subscriptionEndedByTerm(sub as { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown; metadata?: unknown }, becauseOfPayment);
+            const termTotal = subscriptionTotalPayments(sub as { metadata?: unknown });
             /* Whose website it is decides the ownership words (findableSiteKind: positive, else unknown). */
             const siteKind = await siteKindForLead(leadId);
             await emailClientForLead(
               leadId,
               termComplete ? "term_complete" : "monthly_ended",
-              termComplete ? termCompleteEmail({ siteKind }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
+              termComplete ? termCompleteEmail({ siteKind, totalPayments: termTotal }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
               {
                 subscription: sub.id,
                 cancellation_reason: reason || "(none given)",

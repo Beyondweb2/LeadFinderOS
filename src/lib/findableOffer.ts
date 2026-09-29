@@ -41,11 +41,11 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
  *  simplified to a single £99 plan on 2026-09-18, commit 3a49d5e9; the words caught up 2026-09-23).
  *
  *  It starts FINDABLE_MONTHLY_DELAY_DAYS after the £99 signup payment (Stripe holds it as a trial —
- *  _shared/delayed-subscription.ts). The £99 at sign-up IS payment 1 of FINDABLE_TOTAL_PAYMENTS; Stripe
- *  then bills FINDABLE_RECURRING_PAYMENTS more and stops.
+ *  _shared/delayed-subscription.ts). The £99 at sign-up IS payment 1 of totalPaymentsFor(route); Stripe
+ *  then bills recurringPaymentsFor(route) more and stops (see the TWO ROUTES note below).
  *  ⛔ THERE IS NO PAYMENT AFTER THE 12TH — no £29.99 continuation, no open-ended £99.
  *
- *  ⚠️ DECLARED HERE, ABOVE CARD_SAVED_NOTICE, AND THAT IS STRUCTURAL. That constant interpolates
+ *  ⚠️ DECLARED HERE, NEAR THE TOP, AND THAT IS STRUCTURAL. The offer strings below interpolate
  *  this one, and a const referenced before its declaration throws ReferenceError at module load —
  *  which in this file would take down the checkout, not a screen. It used to live at the bottom. */
 export const FINDABLE_MONTHLY_GBP = 99;
@@ -53,35 +53,89 @@ export const FINDABLE_MONTHLY_GBP = 99;
 /** The first recurring payment is exactly six weeks after the successful £99 signup payment. */
 export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
 
-/** 🔴 THE MINIMUM TERM: a 12-month minimum commitment (Paul, 2026-09-23).
- *  It is a real commitment — the old note here said the 12 months did not bind the client, which is no longer
- *  the offer. The PAYMENT count is FINDABLE_TOTAL_PAYMENTS below, and the sign-up £99 is one of them.
- *
- *  ⛔ WHAT PAUL HAS DECIDED (2026-09-23), recorded, not yet all written into customer copy:
- *    · For a website Findable BUILDS: we build, host and manage it during the 12 months and own the
- *      build during that period; once the term is complete and everything due is paid, ownership
- *      transfers to the client; after that there is no compulsory monthly fee. If payment is
- *      overdue during the term, the Findable-hosted site may be suspended after reasonable written
- *      notice until the arrears are paid.
- *    · The four-week visibility guarantee still applies on top (FINDABLE_GUARANTEE): a valid claim
- *      is an exit under the guarantee's own terms.
- *    · Those ownership / suspension terms apply ONLY to a site Findable builds. Optimising a site
- *      the client already owns is to have a separate pricing / service structure, NOT YET DEFINED —
- *      until it is, checkout sells every client this one plan.
- *  ⛔ DO NOT INVENT penalties, early-exit charges or cancellation rights beyond the above. */
-export const FINDABLE_MINIMUM_TERM_MONTHS = 12;
+/* 🔴 TWO ROUTES, ONE PRICE, TWO LENGTHS (Paul, 2026-09-29). The price never changes — £99 at sign-up,
+   then £99 a month from six weeks after sign-up — but the NUMBER of payments depends on the website
+   route the client takes:
+     · FINDABLE BUILD — Findable builds, hosts and manages a new website: 12 payments in total.
+     · FINDABLE OPTIMISE — the client keeps their own website and gives us access: 6 payments in total.
+   ⛔ THE SIGN-UP £99 IS PAYMENT 1 ON BOTH ROUTES. Build = sign-up + 11 monthly; Optimise = sign-up + 5
+   monthly. Never "£99 plus 12 more" / "£99 plus 6 more" — the recurring counts are DERIVED below.
+   ⛔ NOTHING AFTER THE LAST PAYMENT on either route: Stripe's cancel_at stops it (_shared/delayed-
+   subscription.ts). No continuation price, no open-ended £99.
+   ⛔ THE ROUTE IS STORED ON THE ONBOARDING ROW as `plan_tier` ('new_site' = Build, 'keep' = Optimise),
+   written by the self-service questionnaire and by Quick Close, read by findable-checkout. A row with no
+   route is UNDECIDED and is never sold a schedule — never a silent 12 or 6 (serviceRouteFromRow).
+   ⛔ OWNERSHIP (Paul, 2026-09-23, unchanged): for a site Findable BUILDS we build, host and manage it in
+   the term and own the build; it transfers once the term is complete and paid; an overdue term may see
+   the hosted site suspended after reasonable written notice. ⛔ NONE OF THAT APPLIES TO OPTIMISE: the
+   client's existing website stays theirs, and we never take it over or disable it because the service
+   ends. The guarantee applies on top on both routes: a valid claim is an exit under its own terms.
+   ⛔ DO NOT INVENT penalties, early-exit charges or cancellation rights beyond the above.
+   ⚠️ findable-site carries its own copies (site.ts BUILD_TOTAL_PAYMENTS / OPTIMISE_TOTAL_PAYMENTS);
+   scripts/check-cross-repo-sync.mjs fails on drift. */
+export type ServiceRoute = 'build' | 'optimise';
+export const SERVICE_ROUTES: readonly ServiceRoute[] = ['build', 'optimise'];
+/** Payments in total on the Build route, the sign-up £99 included. */
+export const FINDABLE_BUILD_TOTAL_PAYMENTS = 12;
+/** Payments in total on the Optimise route, the sign-up £99 included. */
+export const FINDABLE_OPTIMISE_TOTAL_PAYMENTS = 6;
 
-/** 🔴 TWELVE PAYMENTS IN TOTAL, AND THE SIGN-UP £99 IS THE FIRST OF THEM (Paul, 2026-09-23).
- *  Payment 1 is FINDABLE_SETUP_PRICE_GBP at checkout; payments 2-12 are FINDABLE_RECURRING_PAYMENTS
- *  monthly charges of FINDABLE_MONTHLY_GBP; nothing after the 12th.
- *  ⛔ The first version of the term (earlier the same day) billed 12 RECURRING payments on top of the
- *  sign-up — 13 in total. The recurring count is DERIVED here so it can never be typed as 11 in one
- *  place and 12 in another. */
-export const FINDABLE_TOTAL_PAYMENTS = 12;
+export const SERVICE_ROUTE_NAME: Record<ServiceRoute, string> = { build: 'Findable Build', optimise: 'Findable Optimise' };
+/** What the route means, in a few plain words (operator + customer surfaces). */
+export const SERVICE_ROUTE_MEANING: Record<ServiceRoute, string> = {
+  build: 'we build and manage a new website',
+  optimise: 'we optimise your existing website',
+};
+
+/** Payments in total for a route, the sign-up payment included. */
+export function totalPaymentsFor(route: ServiceRoute): number {
+  return route === 'build' ? FINDABLE_BUILD_TOTAL_PAYMENTS : FINDABLE_OPTIMISE_TOTAL_PAYMENTS;
+}
 /** Monthly charges Stripe makes after the sign-up payment. Derived — never write the number. */
-export const FINDABLE_RECURRING_PAYMENTS = FINDABLE_TOTAL_PAYMENTS - 1;
+export function recurringPaymentsFor(route: ServiceRoute): number {
+  return totalPaymentsFor(route) - 1;
+}
+/** The minimum term in months: one payment a month, so it equals the payment count. */
+export function termMonthsFor(route: ServiceRoute): number {
+  return totalPaymentsFor(route);
+}
 /** The nominal value of the whole commitment: the sign-up payment plus every recurring one. */
-export const FINDABLE_CONTRACT_TOTAL_GBP = FINDABLE_SETUP_PRICE_GBP + FINDABLE_RECURRING_PAYMENTS * FINDABLE_MONTHLY_GBP;
+export function contractTotalGbpFor(route: ServiceRoute): number {
+  return FINDABLE_SETUP_PRICE_GBP + recurringPaymentsFor(route) * FINDABLE_MONTHLY_GBP;
+}
+/** A payment count Stripe metadata / the lead carries → the route it belongs to (positive match only). */
+export function serviceRouteForTotal(total: unknown): ServiceRoute | null {
+  const n = Number(total);
+  if (n === FINDABLE_BUILD_TOTAL_PAYMENTS) return 'build';
+  if (n === FINDABLE_OPTIMISE_TOTAL_PAYMENTS) return 'optimise';
+  return null;
+}
+export function isServiceRoute(v: unknown): v is ServiceRoute {
+  return v === 'build' || v === 'optimise';
+}
+/** The onboarding column value for a route. */
+export function planTierForRoute(route: ServiceRoute): 'new_site' | 'keep' {
+  return route === 'build' ? 'new_site' : 'keep';
+}
+/** THE ROUTE A SALE IS MADE ON, from the onboarding row. ⛔ POSITIVE ONLY: `plan_tier` 'new_site' →
+ *  build, 'keep' → optimise; blank or unknown → null (UNDECIDED — the checkout refuses it). Both sale
+ *  paths write `website_addon` from the SAME decision (true = we build); a row where the two disagree
+ *  is also null, never a guess — a stale row that says keep while the site answer said build must not
+ *  be sold six payments. */
+export function serviceRouteFromRow(row: { plan_tier?: unknown; website_addon?: unknown } | null | undefined): ServiceRoute | null {
+  const tier = String(row?.plan_tier ?? '').trim();
+  const route: ServiceRoute | null = tier === 'new_site' ? 'build' : tier === 'keep' ? 'optimise' : null;
+  if (!route) return null;
+  const addon = row?.website_addon;
+  if (route === 'optimise' && addon === true) return null;
+  if (route === 'build' && addon === false) return null;
+  return route;
+}
+
+/** The term in words for one route: "12 payments in total, including the sign-up payment (a 12-month minimum term)". */
+export function termLineFor(route: ServiceRoute): string {
+  return `${totalPaymentsFor(route)} payments in total, including the £${FINDABLE_SETUP_PRICE_GBP} at sign-up (a ${termMonthsFor(route)}-month minimum term)`;
+}
 
 /** 🔴 THE ONE CALCULATION OF WHEN THE FIRST RECURRING PAYMENT IS: FINDABLE_MONTHLY_DELAY_DAYS after
  *  the successful sign-up payment. _shared/delayed-subscription.ts sets Stripe's trial_end from
@@ -101,7 +155,7 @@ export function firstRecurringPaymentIso(signupIso: string | null | undefined): 
  *  ⛔ POSITIVE MATCHES ONLY, and a conflict or a blank is `unknown`, which gets NEITHER set of words:
  *  telling a client whose site we built that "your pages stay exactly where they are" contradicts
  *  /refunds and /terms, and telling an optimise-only client a build "transfers to you" claims an
- *  ownership we never had. The build terms (FINDABLE_MINIMUM_TERM_MONTHS note) apply only to
+ *  ownership we never had. The build terms (the TWO ROUTES note above) apply only to
  *  `findable_built`. Reads the onboarding row: `plan_tier` from the questionnaire, `website_route`
  *  from a hand-added client (PaidClients). */
 export type FindableSiteKind = 'findable_built' | 'client_owned' | 'unknown';
@@ -132,10 +186,17 @@ export function remeasureWeeksFor(row: { plan_tier?: unknown; website_route?: un
   return isNewDomainBuild(row) ? REMEASURE_WEEKS_NEW_DOMAIN : REMEASURE_WEEKS_STANDARD;
 }
 
-/** The offer in one line, for operator surfaces that quote it (the Cold Call Playbook). Built from
- *  the constants so a price move cannot leave a stale figure in a call script. */
+/** The offer in one line, BEFORE a route is chosen (the Cold Call Playbook, a prospect's report): it
+ *  names both lengths. Built from the constants so a price move cannot leave a stale figure in a call
+ *  script. ⛔ Where the route is known, use offerSummaryFor(route) — never both options to a client who
+ *  has already chosen one. */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${FINDABLE_TOTAL_PAYMENTS} payments in total, a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have.`;
+
+/** The offer in one line for ONE route. */
+export function offerSummaryFor(route: ServiceRoute): string {
+  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term.`;
+}
 
 /** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
  *  £29.99 a month … Stop any time"). Code cannot change what Meta sends, so they are BLOCKED on every
@@ -352,15 +413,21 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean; siteKind:
 /* ⛔ THE TERM ENDED BECAUSE IT WAS COMPLETE — A THIRD ENDING, NOT A CANCELLATION (2026-09-23).
    Stripe fires customer.subscription.deleted when `cancel_at` is reached after the last recurring
    payment, with reason `cancellation_requested` — so before this, a client who had paid all
-   FINDABLE_TOTAL_PAYMENTS was told "Your monthly is cancelled … If you ever want it back".
+   of their payments was told "Your monthly is cancelled … If you ever want it back".
    ⛔ The transfer sentence is for `findable_built` ONLY (findableSiteKind); anyone else is told the
    payments are complete and nothing more, because we never owned their site. */
-export function termCompleteEmail(i: { siteKind: FindableSiteKind }): { subject: string; paragraphs: string[] } {
+/* 🔴 ROUTE-AWARE (2026-09-29): the count comes from the subscription's own record (its metadata
+   total_payments, written when it was created), so a 6-payment Optimise client is never told twelve.
+   An unknown count names no number at all. */
+export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null }): { subject: string; paragraphs: string[] } {
+  const route = serviceRouteForTotal(i.totalPayments);
   return {
     subject: "Your Findable payments are complete",
     paragraphs: [
       `Hi,`,
-      `All ${FINDABLE_TOTAL_PAYMENTS} of your payments are complete, so your ${FINDABLE_MINIMUM_TERM_MONTHS}-month term has finished and nothing more will be charged.`,
+      route
+        ? `All ${totalPaymentsFor(route)} of your payments are complete, so your ${termMonthsFor(route)}-month term has finished and nothing more will be charged.`
+        : `All of your payments are complete, so your term has finished and nothing more will be charged.`,
       ...(i.siteKind === 'findable_built'
         ? [`As set out in our terms, the website build we made for you now transfers to you. Reply to this email and we'll arrange the handover.`]
         : []),
@@ -377,16 +444,19 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind }): { subject:
    weeks ahead on the standard timeline), and this is the reminder, not the announcement.
    ⚠️ Rendered by the webhook. Plain, no selling, and the date and amount are in the first line. */
 /* ⛔ NO "cancel before that date and nothing is taken" (Paul, 2026-09-23): the monthly is a
-   FINDABLE_MINIMUM_TERM_MONTHS minimum term now, so offering a free exit here would contradict what
-   was sold. `cancelUrl` stays in the signature for the caller and is deliberately not printed. */
-export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null }): { subject: string; paragraphs: string[] } {
+   minimum term now, so offering a free exit here would contradict what was sold. `cancelUrl` stays in
+   the signature for the caller and is deliberately not printed.
+   🔴 ROUTE-AWARE (2026-09-29): `route` is the subscription's own (its metadata); null names no count. */
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null }): { subject: string; paragraphs: string[] } {
   return {
     subject: `Your Findable monthly starts on ${i.startsOn}`,
     paragraphs: [
       `Hi,`,
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
-      `It runs for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term: ${FINDABLE_TOTAL_PAYMENTS} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`,
+      i.route
+        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`
+        : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`,
       `Any questions, just reply to this email.`,
       `Paul, findable`,
     ],
@@ -409,11 +479,20 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    monthly without ever pricing it, on the one screen where somebody enters a card — so the only
    number in front of them at the moment they pay was the smaller half of what they owe. */
 /* 🔴 12-MONTH MINIMUM (Paul, 2026-09-23). "You can cancel before it starts" came out: the monthly is a
-   FINDABLE_MINIMUM_TERM_MONTHS minimum term, and the only exit is the guarantee, which the Stripe line
+   minimum term (termMonthsFor), and the only exit is the guarantee, which the Stripe line
    item's description carries verbatim (FINDABLE_GUARANTEE). ⚠️ findable.live's pre-pay screen shows
    its own copy of this sentence and must be changed to match (separate repo, deployed by hand). */
-export const CARD_SAVED_NOTICE =
-  `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term — ${FINDABLE_TOTAL_PAYMENTS} payments in total, including today's. Nothing is charged after the ${FINDABLE_TOTAL_PAYMENTS}th.`;
+/* 🔴 PER ROUTE (2026-09-29): the checkout reads the route off the row and shows THAT route's count —
+   the Stripe page a customer pays on names exactly the schedule the webhook then creates. */
+export function cardSavedNoticeFor(route: ServiceRoute): string {
+  const n = totalPaymentsFor(route);
+  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. Nothing is charged after the ${n}th.`;
+}
+/** The Stripe line-item name for a route — what the payer sees on the Stripe page and the receipt. */
+export function checkoutLineNameFor(route: ServiceRoute): string {
+  const what = route === 'build' ? 'AI visibility + a new website we build and manage' : 'AI visibility on your existing website';
+  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum)`;
+}
 
 export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
 

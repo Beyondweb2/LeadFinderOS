@@ -25,7 +25,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './questionnaireComplete.ts';
-import { FINDABLE_TOTAL_PAYMENTS } from './findableOffer.ts';
+import { FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_OPTIMISE_TOTAL_PAYMENTS } from './findableOffer.ts';
 import type { DomainAccessAnswer, YesNoNotSure } from './domainAuthority.ts';
 
 /* ── the questions, verbatim ──────────────────────────────────────────────────────────────────── */
@@ -90,8 +90,8 @@ export function websiteManagerFromBranch(agency: AgencyManages | null): 'web_com
 /** findable-site siteAccess.ts accessConsequenceText — positive match on the one answer that keeps the site. */
 export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
   return answer !== 'yes_access'
-    ? `No problem, we'll build you a new website as part of the same service. It transfers to you once all ${FINDABLE_TOTAL_PAYMENTS} payments are complete.`
-    : "We'll optimise your existing website as part of the same Findable service, at no extra cost. Your website stays yours.";
+    ? `No problem, we'll build and manage a new website for you as part of the service: ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total. It transfers to you once all ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments are complete.`
+    : `We'll work on your existing website as part of the service: ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total. Your website stays yours.`;
 }
 /** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {

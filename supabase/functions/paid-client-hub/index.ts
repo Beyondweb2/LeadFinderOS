@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { clientContract } from "../../../src/lib/clientContract.ts";
 import { attachPersistedQueueProgress } from "../../../src/lib/baselineProgress.ts";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
@@ -26,12 +27,12 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments";
 
 /* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
    Paul can start. The list reads the same readiness, so these columns ride on the list too. */
 const HUB_LIST_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id,service_terminated_at";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,services_included,service_areas,website_control,assigned_to_user_id,sold_by_user_id,service_terminated_at,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments";
 /* The prospect audits a paid client arrives with: the hook / quick check / free check. Never a baseline,
    a measurement, Discovery or a replay (those are delivery, shown elsewhere on the hub). */
 const PROSPECT_AUDIT_PURPOSES = ["audit", "free_check"];
@@ -153,6 +154,19 @@ async function handoffEvidenceFor(service: any, leadIds: string[]) {
   return { onboardingByLead, crawled, auditByLead };
 }
 
+/** The payment ledger rows for many leads, in one read (the contract summary counts payments made). */
+// deno-lint-ignore no-explicit-any
+async function ledgerFor(service: any, leadIds: string[]): Promise<Map<string, Array<{ kind: string; status: string; amount_gbp: number | string }>>> {
+  const out = new Map<string, Array<{ kind: string; status: string; amount_gbp: number | string }>>();
+  if (!leadIds.length) return out;
+  const { data, error } = await service.from("payment_ledger").select("lead_id,kind,status,amount_gbp").in("lead_id", leadIds).order("id");
+  if (error) throw error;
+  for (const r of (data ?? []) as Array<{ lead_id: string; kind: string; status: string; amount_gbp: number | string }>) {
+    const a = out.get(r.lead_id); if (a) a.push(r); else out.set(r.lead_id, [r]);
+  }
+  return out;
+}
+
 // deno-lint-ignore no-explicit-any
 async function teamNames(service: any): Promise<Map<string, string>> {
   const { data } = await service.from("team_members").select("user_id,display_name");
@@ -181,7 +195,7 @@ Deno.serve(async (req) => {
       /* Membership is isPaidClient (src/lib/paidClient.ts): a recorded amount OR a status Paul set by
          hand. payment_source says which, so a hand-marked client is never shown as Stripe-paid. */
       const members = (leads ?? []).filter(isPaidClient) as Array<Record<string, unknown>>;
-      const [ev, names] = await Promise.all([handoffEvidenceFor(service, members.map((l) => String(l.id))), teamNames(service)]);
+      const [ev, names, ledger] = await Promise.all([handoffEvidenceFor(service, members.map((l) => String(l.id))), teamNames(service), ledgerFor(service, members.map((l) => String(l.id)))]);
       const clients = members.map((l) => {
         const id = String(l.id);
         const readiness = handoffReadiness(l as HandoffLead, (ev.onboardingByLead.get(id) ?? null) as HandoffOnboarding | null,
@@ -191,6 +205,7 @@ Deno.serve(async (req) => {
           ...l, payment_source: paidClientSource(l),
           handoff: { ready: readiness.ready, label: readiness.label, missing: readiness.missing },
           sold_by_name: soldBy ? names.get(soldBy) ?? "A teammate" : null,
+          contract: clientContract({ lead: l as Record<string, never>, onboarding: (ev.onboardingByLead.get(id) ?? null) as Record<string, unknown> | null, ledger: ledger.get(id) ?? [] }),
         };
       });
       return json({ ok: true, clients });
@@ -267,6 +282,8 @@ Deno.serve(async (req) => {
       if (body.handoff === false) {
         return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob } });
       }
+      /* What they bought: Findable Build / Optimise, payments made and remaining, the next charge. */
+      const contract = clientContract({ lead: lead as Record<string, never>, onboarding: (onboarding ?? null) as Record<string, unknown> | null, ledger: (await ledgerFor(service, [leadId])).get(leadId) ?? [] });
       const L = lead as Record<string, unknown>;
       const [ev, names, act] = await Promise.all([
         handoffEvidenceFor(service, [leadId]),
@@ -293,7 +310,7 @@ Deno.serve(async (req) => {
         prospect_audit: ev.auditByLead.get(leadId) ?? null,
         activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
       };
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff } });
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract } });
     }
 
     /* ══ END THE SERVICE: a client-side domain / authority / IP dispute (Paul, 2026-09-28) ══════════

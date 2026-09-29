@@ -61,7 +61,9 @@ const live: Record<string, string[]> = {
     /* 2026-09-28, the handoff (read back from information_schema that day). */
     'service_areas','website_control','website_control_note','lead_source','assigned_to_user_id','added_by_user_id','sold_by_user_id','sold_at','user_id',
     /* 2026-09-28, the domain rule + ending the service (read back from information_schema that day). */
-    'domain_control','service_terminated_at','service_termination_reason','service_termination_note','stripe_subscription_id','subscription_status'],
+    'domain_control','service_terminated_at','service_termination_reason','service_termination_note','stripe_subscription_id','subscription_status',
+    /* 2026-09-29, the service route (subscription_renews_at existed; contract_total_payments is migration 20260929170000, read back that day). */
+    'subscription_renews_at','contract_total_payments'],
   lead_activity: ['id','lead_id','actor_user_id','kind','body','data','created_at'],
   team_members: ['user_id','display_name'],
   onboarding_responses: ['id','business_name','business_website','confirmed_location','business_address','services','services_list','areas_list','areas_wanted','contact_name','contact_email','confirmed_phone','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','must_not_say','website_platform','website_platform_other','willing_to_migrate','competitor_name','gbp_consent','gbp_exists','gbp_status','gbp_verified','gbp_manager_email','incomplete',
@@ -75,6 +77,8 @@ const live: Record<string, string[]> = {
   /* The exhaustive crawl's tables (migration 20260923020000_crawl_jobs.sql, read back 2026-09-23). */
   crawl_jobs: ['id','lead_id','status','started_at','completed_at'],
   crawl_urls: ['id','url','status','skip_reason','http_status','final_url','source','depth','evidence'],
+  /* The contract summary counts payments made (migration 20260929130000_payment_ledger.sql). */
+  payment_ledger: ['lead_id','kind','status','amount_gbp'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

@@ -34,17 +34,18 @@ export async function loadEarnings(service: Service, personId: string | null, to
   const ledger = ((ledgerRes.data ?? []) as LedgerRow[]).map((r) => ({ ...r, amount_gbp: Number(r.amount_gbp) }));
   const sales = new Set(((rolesRes.data ?? []) as { user_id: string; role: string }[]).filter((r) => r.role === "sales").map((r) => r.user_id));
   const leadIds = [...new Set(ledger.map((r) => r.lead_id).filter((x): x is string => !!x))];
-  const leads = new Map<string, { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null }>();
+  const leads = new Map<string, { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null }>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(error.message);
-    for (const l of (data ?? []) as { id: string; business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null }[]) leads.set(l.id, l);
+    for (const l of (data ?? []) as { id: string; business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null }[]) leads.set(l.id, l);
   }
   const sellerOfLead = new Map([...leads].map(([id, l]) => [id, l.sold_by_user_id]));
   const all = commissionLines({
     ledger, payouts: ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })),
     isCommissionable: (u) => !!u && sales.has(u),
     sellerOfLead, businessName: new Map([...leads].map(([id, l]) => [id, l.business_name ?? "Client"])),
+    contractTotalOf: new Map([...leads].map(([id, l]) => [id, l.contract_total_payments ?? null])),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cleanAnswers, missingQuestions, mayGenerateLink, onboardingColumnsFor, quickCloseGate, quickCloseHandoffLines, quickCloseMessage,
-  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_SCRIPT, QUICK_CLOSE_AFTER_PAYMENT,
+  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT,
 } from "../src/lib/quickClose.ts";
 import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
 
@@ -16,23 +16,24 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 const root = path.resolve(import.meta.dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(/\r\n/g, "\n");
 
-const SAFE = { decision_maker: "yes", domain: "yes", manager: "owner", access: "yes" } as const;
+/* 2026-09-29: the website route is a required answer (service-route-terms.test.ts pins it). */
+const SAFE = { decision_maker: "yes", domain: "yes", manager: "owner", access: "yes", route: "optimise" } as const;
 
 console.log("\n── the bare minimum ──");
-ok(QUICK_CLOSE_QUESTIONS.length === 5, "five questions, nothing else before payment");
+ok(QUICK_CLOSE_QUESTIONS.length === 6 && QUICK_CLOSE_QUESTIONS[5].key === "route", "five questions plus the website route (2026-09-29), nothing else before payment");
 ok(!/service|opening hours|credential|description|photo|google business/i.test(JSON.stringify(QUICK_CLOSE_QUESTIONS)), "no services, hours, credentials, copy, images or GBP questions before payment");
 ok(JSON.stringify(cleanAnswers({ decision_maker: "yes", domain: "maybe", evil: "x" })) === JSON.stringify({ decision_maker: "yes" }), "only known answers survive");
-ok(missingQuestions({}).join() === "decision_maker,domain,manager,access,authority", "nothing answered: everything missing");
+ok(missingQuestions({}).join() === "decision_maker,domain,manager,access,authority,route", "nothing answered: everything missing, the route included");
 ok(missingQuestions(SAFE).length === 0, "owner-managed site: the authority question does not apply");
 ok(missingQuestions({ ...SAFE, manager: "agency" }).includes("authority") && missingQuestions({ ...SAFE, manager: "agency", authority: "not_applicable" }).includes("authority"), "agency-managed: authority must be answered ('not applicable' does not answer it)");
-ok(missingQuestions({ decision_maker: "yes", domain: "no_domain", manager: "no_website" }).length === 0, "no website: access and authority do not apply");
+ok(missingQuestions({ decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build" }).length === 0, "no website: access and authority do not apply");
 
 console.log("\n── the gate ──");
 {
   const g = quickCloseGate({ ...SAFE, decision_maker: "no" });
   ok(g.blocked && quickCloseState("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }) === "blocked" && !mayGenerateLink("answers_saved", { answers: { ...SAFE, decision_maker: "no" } }), "decision maker 'No' blocks payment");
   ok(quickCloseGate(SAFE).review.length === 0 && quickCloseState("answers_saved", { answers: SAFE }) === "ready" && mayGenerateLink("answers_saved", { answers: SAFE }), "safe answers → ready for payment");
-  ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes", domain: "no_domain", manager: "no_website" } }) === "ready", "no domain + no website is a normal, safe route (they register a domain)");
+  ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build" } }) === "ready", "no domain + no website is a normal, safe route (they register a domain)");
   ok(quickCloseState("answers_saved", { answers: { ...SAFE, manager: "agency", authority: "yes" } }) === "ready", "an agency that manages the site is fine when the client has authority");
   for (const [label, a, reason] of [
     ["agency + no authority", { ...SAFE, manager: "agency", authority: "no" }, "third_party_no_authority"],
@@ -59,8 +60,9 @@ ok(onboardingColumnsFor({ manager: "agency", authority: "yes" }).website_manager
 ok(onboardingColumnsFor({ authority: "not_sure" }).authority_confirmed === undefined, "'not sure' never writes a yes");
 
 console.log("\n── the words ──");
-ok(QUICK_CLOSE_SCRIPT.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && QUICK_CLOSE_SCRIPT.includes(`£${FINDABLE_MONTHLY_GBP} a month`), "the script names both figures (house rule: never one without the other)");
-const msg = quickCloseMessage("ABC Plumbing", "https://checkout.stripe.com/c/pay/x");
+const QUICK_CLOSE_SCRIPT = quickCloseScript("build") + " " + quickCloseScript("optimise") + " " + quickCloseScript(null);
+ok([quickCloseScript("build"), quickCloseScript("optimise"), quickCloseScript(null)].every((s) => s.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && s.includes(`£${FINDABLE_MONTHLY_GBP} a month`)), "the script names both figures on every route (house rule: never one without the other)");
+const msg = quickCloseMessage("ABC Plumbing", "https://checkout.stripe.com/c/pay/x", "build");
 ok(msg.includes("https://checkout.stripe.com/c/pay/x") && msg.includes(`£${FINDABLE_MONTHLY_GBP} a month`), "the WhatsApp / copy message carries the link and both figures");
 ok(!/guarantee|guaranteed|improve|rank|top of/i.test(QUICK_CLOSE_SCRIPT + msg + QUICK_CLOSE_AFTER_PAYMENT.join(" ")), "no promised result, no guaranteed improvement");
 

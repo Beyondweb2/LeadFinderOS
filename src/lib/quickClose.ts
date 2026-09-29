@@ -11,7 +11,9 @@
    (the opportunity is kept, flagged, and Paul can release it). Sales is never asked to read a contract.
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS } from './findableOffer.ts';
+import {
+  FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, planTierForRoute, totalPaymentsFor, type ServiceRoute,
+} from './findableOffer.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
 export type QcDomain = 'yes' | 'no' | 'not_sure' | 'no_domain';
@@ -25,6 +27,9 @@ export interface QuickCloseAnswers {
   manager?: QcManager | null;
   access?: QcAccess | null;
   authority?: QcAuthority | null;
+  /** 🔴 THE WEBSITE ROUTE (Paul, 2026-09-29): Findable Build (12 payments) or Findable Optimise (6).
+   *  Required — a Quick Close with no route never reaches a payment link. */
+  route?: ServiceRoute | null;
 }
 export type QcKey = keyof QuickCloseAnswers;
 
@@ -34,7 +39,19 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; options
   { key: 'manager', text: 'Who currently manages or controls the website?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
   { key: 'access', text: 'Could you give Findable access to the current website if needed?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'authority', text: 'If an agency or third party manages the site, do you have the authority to replace, move or materially change the website?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
+  { key: 'route', text: 'Website route', options: [{ value: 'build', label: 'Build me a new Findable website' }, { value: 'optimise', label: 'Keep my existing website and optimise it' }] },
 ];
+
+/** The commercial consequence of a route, as the rep sees it the moment it is chosen. From the
+ *  constants — the rep can change none of it (price, count, cadence, discount). */
+export function routeTermsLines(route: ServiceRoute): string[] {
+  return [`£${FINDABLE_SETUP_PRICE_GBP} today`, `Then £${FINDABLE_MONTHLY_GBP}/month from week six`, `${totalPaymentsFor(route)} payments total`];
+}
+
+/** Optimise needs a site to optimise: with no website only Build is offered. */
+export function routeAvailable(a: QuickCloseAnswers, route: ServiceRoute): boolean {
+  return !(route === 'optimise' && a.manager === 'no_website');
+}
 
 const VALID: Record<QcKey, ReadonlySet<string>> = Object.fromEntries(QUICK_CLOSE_QUESTIONS.map((q) => [q.key, new Set<string>(q.options.map((o) => o.value))])) as unknown as Record<QcKey, ReadonlySet<string>>;
 
@@ -46,6 +63,8 @@ export function cleanAnswers(raw: unknown): QuickCloseAnswers {
     const v = r[q.key];
     if (typeof v === 'string' && VALID[q.key].has(v)) (out as Record<string, string>)[q.key] = v;
   }
+  // An Optimise route for a business with no website is not an answer (there is nothing to optimise).
+  if (out.route && !routeAvailable(out, out.route)) delete out.route;
   return out;
 }
 
@@ -61,10 +80,11 @@ export function missingQuestions(a: QuickCloseAnswers): QcKey[] {
   if (!a.access && !noSite(a)) miss.push('access');
   // Authority is asked only where a third party runs the site; "not applicable" does not answer it there.
   if (thirdPartyManaged(a) ? !(a.authority && a.authority !== 'not_applicable') : !a.authority && !noSite(a) && a.manager !== 'owner' && a.manager !== 'employee') miss.push('authority');
+  if (!a.route) miss.push('route');
   return miss;
 }
 
-export type QcReviewReason = 'domain_not_owned' | 'domain_unsure' | 'third_party_no_authority' | 'third_party_authority_unsure' | 'manager_unsure' | 'no_site_access';
+export type QcReviewReason = 'domain_not_owned' | 'domain_unsure' | 'third_party_no_authority' | 'third_party_authority_unsure' | 'manager_unsure' | 'no_site_access' | 'optimise_access_unsure';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
   domain_not_owned: 'The business says it does not own or control the domain',
   domain_unsure: 'Not sure who owns or controls the domain',
@@ -72,6 +92,7 @@ export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
   third_party_authority_unsure: 'An agency / third party runs the site and authority to replace or move it is unclear',
   manager_unsure: 'Not sure who manages the website',
   no_site_access: 'They could not give Findable access to the current website',
+  optimise_access_unsure: 'Optimise chosen, but an agency / third party runs the site and access to it is not confirmed',
 };
 
 export interface QuickCloseGate {
@@ -96,6 +117,9 @@ export function quickCloseGate(a: QuickCloseAnswers): QuickCloseGate {
   }
   if (a.manager === 'not_sure') review.push('manager_unsure');
   if (a.access === 'no' && !noSite(a)) review.push('no_site_access');
+  /* ⛔ OPTIMISE IS NEVER SILENTLY SAFE ON A SITE SOMEONE ELSE RUNS (Paul, 2026-09-29): the whole route is
+     work on that site, so an agency / third party site with access not confirmed goes to Paul. */
+  if (a.route === 'optimise' && thirdPartyManaged(a) && a.access !== 'yes' && a.access !== 'no') review.push('optimise_access_unsure');
   const notes: string[] = [];
   if (a.access === 'not_sure') notes.push('Website access to be confirmed after payment');
   if (a.domain === 'no_domain') notes.push('No domain yet — the business registers one in its own name');
@@ -113,6 +137,10 @@ export function onboardingColumnsFor(a: QuickCloseAnswers): Record<string, unkno
   if (a.manager === 'no_website') out.website_platform = 'no_website';
   if (a.authority === 'yes') out.authority_confirmed = true;
   else if (a.authority === 'no') out.authority_confirmed = false;
+  /* THE ROUTE, IN THE SAME TWO COLUMNS THE SELF-SERVICE FORM WRITES (plan_tier + website_addon, from
+     one decision), so the checkout reads one interpretation whichever path made the sale. An unset
+     route writes NOTHING — never a default. */
+  if (a.route) { out.plan_tier = planTierForRoute(a.route); out.website_addon = a.route === 'build'; }
   return out;
 }
 
@@ -143,7 +171,7 @@ export function mayGenerateLink(rowStatus: string | null | undefined, qc: QuickC
 
 export const answerLabel = (key: QcKey, value: string | null | undefined) =>
   QUICK_CLOSE_QUESTIONS.find((q) => q.key === key)?.options.find((o) => o.value === value)?.label ?? '—';
-const SHORT_Q: Record<QcKey, string> = { decision_maker: 'Decision maker', domain: 'Owns / controls domain', manager: 'Website managed by', access: 'Can give site access', authority: 'Authority to replace / move site' };
+const SHORT_Q: Record<QcKey, string> = { decision_maker: 'Decision maker', domain: 'Owns / controls domain', manager: 'Website managed by', access: 'Can give site access', authority: 'Authority to replace / move site', route: 'Website route' };
 
 /** The handoff lines for the PAID email when a salesperson Quick-Closed the client. Pure. */
 export function quickCloseHandoffLines(i: {
@@ -158,6 +186,7 @@ export function quickCloseHandoffLines(i: {
   const out: string[] = [];
   out.push(`QUICK CLOSE by ${i.closedBy ?? 'a teammate'}${i.qc.completed_at ? ` on ${i.qc.completed_at.slice(0, 10)}` : ''} — the client did the minimum on the phone; everything else is yours to collect.`);
   for (const q of QUICK_CLOSE_QUESTIONS) out.push(`  ${SHORT_Q[q.key]}: ${answerLabel(q.key, a[q.key])}`);
+  if (a.route) out.push(`  Sold as: ${SERVICE_ROUTE_NAME[a.route]} — ${totalPaymentsFor(a.route)} payments in total`);
   if (g.review.length) out.push(`  DOMAIN / AGENCY ISSUE: ${g.review.map((r) => QC_REVIEW_TEXT[r]).join('; ')}${i.qc.review_approved_at ? ` (you released it${i.qc.review_note ? `: ${i.qc.review_note}` : ''})` : ''}`);
   for (const n of g.notes) out.push(`  Note: ${n}`);
   const c = i.contact;
@@ -174,16 +203,24 @@ export function quickCloseHandoffLines(i: {
 export const LINK_REUSE_MS = 20 * 3_600_000;
 
 /* ── The words (editable by the rep; never a script to read word for word) ────────────────────────── */
-const priceLine = `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month from week six (${FINDABLE_TOTAL_PAYMENTS} payments in total)`;
+/* 🔴 PER ROUTE (2026-09-29): the words name the route's own count, never both — the client has chosen. */
+const priceLine = (route: ServiceRoute) =>
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month from week six (${totalPaymentsFor(route)} payments in total)`;
+const routeWords: Record<ServiceRoute, string> = {
+  build: 'we build and manage a new website for you as part of the service',
+  optimise: 'we work on your existing website, which stays yours',
+};
 
-export const QUICK_CLOSE_SCRIPT =
-  `That's everything I need from you for now. I'll send you the sign-up link: it's ${priceLine}. ` +
-  `Once that's paid, we'll run your full baseline AI visibility measurement. Paul will then introduce himself and take over the setup, ` +
-  `including website and domain access and anything else we need — you don't need to sort any of that out today.`;
+export function quickCloseScript(route: ServiceRoute | null | undefined): string {
+  const what = route ? `it's ${SERVICE_ROUTE_NAME[route]} — ${routeWords[route]} — at ${priceLine(route)}` : `it's £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month from week six`;
+  return `That's everything I need from you for now. I'll send you the sign-up link: ${what}. ` +
+    `Once that's paid, we'll run your full baseline AI visibility measurement. Paul will then introduce himself and take over the setup, ` +
+    `including website and domain access and anything else we need — you don't need to sort any of that out today.`;
+}
 
-export function quickCloseMessage(businessName: string | null | undefined, url: string): string {
+export function quickCloseMessage(businessName: string | null | undefined, url: string, route: ServiceRoute): string {
   const hi = businessName && businessName.trim() ? `Hi ${businessName.trim()}` : 'Hi';
-  return `${hi}, here's your Findable sign-up link (${priceLine}):\n${url}\n\nOnce it's paid we'll run your full baseline AI visibility measurement, and Paul will be in touch to take over the setup.`;
+  return `${hi}, here's your ${SERVICE_ROUTE_NAME[route]} sign-up link (${priceLine(route)}):\n${url}\n\nOnce it's paid we'll run your full baseline AI visibility measurement, and Paul will be in touch to take over the setup.`;
 }
 
 export const QUICK_CLOSE_AFTER_PAYMENT: readonly string[] = [

@@ -13,10 +13,11 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
-  QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_SCRIPT, QUICK_CLOSE_STATE_LABEL, missingQuestions, quickCloseMessage,
+  QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL, missingQuestions, quickCloseMessage, quickCloseScript,
+  routeAvailable, routeTermsLines,
   type QcKey, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from '@/lib/findableOffer';
+import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
 
 /* ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
@@ -66,10 +67,13 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
   const [editing, setEditing] = useState(false);
   const [fix, setFix] = useState<Record<string, string>>({});
   const [trade, setTrade] = useState('');
-  const [script, setScript] = useState(QUICK_CLOSE_SCRIPT);
+  const [script, setScript] = useState(quickCloseScript(null));
   const [copied, setCopied] = useState<string | null>(null);
 
   const answers = v?.answers ?? {};
+  const route = answers.route ?? null;
+  // The words follow the route: a new route resets them (the rep can still edit freely after).
+  useEffect(() => { setScript(quickCloseScript(route)); }, [route]);
   const missing = useMemo(() => missingQuestions(answers), [answers]);
   // A decision-maker "No" ends the questions (nothing after it can lead to payment).
   const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
@@ -110,7 +114,8 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
     if (!v?.link || !v.lead.phone) return;
     setBusy('wa');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).functions.invoke('send-whatsapp-message', { body: { phone: v.lead.phone, lead_id: leadId, body: quickCloseMessage(v.lead.business_name, v.link.url) } });
+    if (!route) return;
+    const { data, error } = await (supabase as any).functions.invoke('send-whatsapp-message', { body: { phone: v.lead.phone, lead_id: leadId, body: quickCloseMessage(v.lead.business_name, v.link.url, route) } });
     setBusy(null);
     if (error || !data?.ok) { toast({ title: 'Not sent on WhatsApp', description: data?.error === 'outside_window' || /window/i.test(String(data?.error ?? error?.message ?? '')) ? 'The WhatsApp window is closed. Copy the link and send it another way.' : String(data?.detail ?? data?.error ?? error?.message ?? 'Send failed'), variant: 'destructive' }); return; }
     toast({ title: data.simulated ? 'Sent (test mode)' : 'Sent on WhatsApp' });
@@ -176,16 +181,20 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
             <section aria-live="polite">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Question {Math.min(answeredCount + 1, shownQs.length)} of {shownQs.length}</p>
               <p className="mt-1 text-lg font-semibold leading-snug">{QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.text}</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className={cn('mt-3 grid gap-2', current === 'route' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)!.options
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
-                  .map((o) => (
-                    <button key={o.value} type="button" disabled={busy === 'link' || busy === 'fix'} onClick={() => void answer(current, o.value)}
-                      className={cn('flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        answers[current] === o.value ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200' : 'border-border bg-background hover:bg-muted')}>
-                      {busy === `a:${current}` && answers[current] !== o.value ? o.label : o.label}
-                    </button>
-                  ))}
+                  .map((o) => {
+                    const off = current === 'route' && !routeAvailable(answers, o.value as ServiceRoute);
+                    return (
+                      <button key={o.value} type="button" disabled={busy === 'link' || busy === 'fix' || off} onClick={() => void answer(current, o.value)}
+                        className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
+                          answers[current] === o.value ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200' : 'border-border bg-background hover:bg-muted')}>
+                        {o.label}
+                        {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — they have no website' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routeTermsLines(o.value as ServiceRoute)[2]}`}</span>}
+                      </button>
+                    );
+                  })}
               </div>
               {step && <button type="button" onClick={() => setStep(null)} className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" />Back</button>}
             </section>
@@ -203,6 +212,14 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
                 </li>
               ))}
             </ul>
+          )}
+
+          {v && route && (
+            <section aria-live="polite" className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="qc-route-terms">
+              <p className="text-sm font-bold">{SERVICE_ROUTE_NAME[route]}</p>
+              <ul className="mt-1 space-y-0.5 text-sm">{routeTermsLines(route).map((l) => <li key={l}>{l}</li>)}</ul>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Set by the offer — the price, the number of payments and the timing cannot be changed here.</p>
+            </section>
           )}
 
           {v && v.state === 'blocked' && (
@@ -230,7 +247,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
                   <Button className="h-14 w-full gap-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700" onClick={() => void generate()} disabled={busy === 'link' || busy === 'fix'}>
                     {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : <PoundSterling className="h-5 w-5" />}Generate £{FINDABLE_SETUP_PRICE_GBP} payment link
                   </Button>
-                  <p className="text-center text-xs text-muted-foreground">£{FINDABLE_SETUP_PRICE_GBP} today, then £{FINDABLE_MONTHLY_GBP} a month from week six — the standard Findable sign-up, the same Stripe page as the sign-up link.</p>
+                  <p className="text-center text-xs text-muted-foreground">{route ? `${SERVICE_ROUTE_NAME[route]}: ${routeTermsLines(route).join(' · ')}` : ''} — the same Stripe page as the sign-up link.</p>
                 </>
               ) : (
                 <>
@@ -243,7 +260,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
                     <Button variant="outline" className="h-12 gap-1.5" onClick={() => void sendWhatsApp()} disabled={!v.windowOpen || !v.lead.phone || busy === 'wa'} title={v.windowOpen ? 'Sends the link in their open WhatsApp conversation' : 'The WhatsApp window is closed — copy the link instead'}>
                       {busy === 'wa' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}Send on WhatsApp
                     </Button>
-                    <Button variant="outline" className="h-12 gap-1.5" onClick={() => void doCopy('message', quickCloseMessage(v.lead.business_name, v.link!.url))}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
+                    <Button variant="outline" className="h-12 gap-1.5" disabled={!route} onClick={() => { if (route) void doCopy('message', quickCloseMessage(v.lead.business_name, v.link!.url, route)); }}><ClipboardCopy className="h-4 w-4" />{copied === 'message' ? 'Copied' : 'Copy message'}</Button>
                   </div>
                   {!v.windowOpen && <p className="text-xs text-muted-foreground">WhatsApp window closed (no reply in 24 hours): copy the link and text or email it.</p>}
                 </>

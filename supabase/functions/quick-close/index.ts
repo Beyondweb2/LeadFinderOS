@@ -37,6 +37,7 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   already_client: "This business has already paid.",
   cannot_serve: "The website answers mean Findable cannot deliver on this site as it stands — Paul needs to look at it.",
   domain_unresolved: "The domain answers need Paul's review before payment.",
+  route_undecided: "Choose the website route (Build or Optimise) first.",
   needs_trade: "Add the business's trade first (it decides what the baseline measures).",
   no_lead_attribution: "This payment could not be tied to the lead.",
   unknown_onboarding: "The onboarding record was not found.",
@@ -122,7 +123,8 @@ Deno.serve(async (req) => {
     if (mode === "save") {
       const incoming = cleanAnswers(body.answers);
       const prev = cleanAnswers(qc?.answers);
-      const answers: QuickCloseAnswers = { ...prev, ...incoming };
+      // Re-cleaned as a whole: an answer can invalidate another (Optimise is dropped when "No website" is chosen).
+      const answers: QuickCloseAnswers = cleanAnswers({ ...prev, ...incoming });
       const rowId: string = row?.id ?? (await service.rpc("quick_close_row", { _lead_id: leadId, _business_name: lead.business_name ?? null })).data;
       if (!rowId) return json({ ok: false, error: "not_saved" }, 500);
       // Corrections go on the onboarding record (what the client confirmed), never over the lead's own fields.
@@ -143,7 +145,9 @@ Deno.serve(async (req) => {
       const gate = quickCloseGate(answers);
       const now = new Date().toISOString();
       // Answers that change after a review approval, or after a link, invalidate both (the link was for the old answers).
-      const changed = (Object.keys(answers) as (keyof QuickCloseAnswers)[]).filter((k) => answers[k] !== prev[k]);
+      const changed = ([...new Set([...Object.keys(answers), ...Object.keys(prev)])] as (keyof QuickCloseAnswers)[]).filter((k) => answers[k] !== prev[k]);
+      /* A route dropped by the re-clean clears the row's route too — never left behind as a stale sale. */
+      if (prev.route && !answers.route) { patch.plan_tier = null; patch.website_addon = null; }
       const next: Obj = { ...(qc ?? {}), answers, updated_at: now, updated_by: actor.id };
       if (!qc?.started_by) { next.started_by = actor.id; next.started_at = now; }
       if (gate.complete && !qc?.completed_at) { next.completed_at = now; next.completed_by = actor.id; }

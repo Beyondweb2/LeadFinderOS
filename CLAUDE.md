@@ -102,29 +102,33 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
-- **Offer (Paul, 2026-09-23): £99 to start, then £99/month from six weeks after sign-up, for a
-  12-month minimum term — ONE plan** (`FINDABLE_OFFER_SUMMARY`). The monthly is a Stripe
-  subscription created by the webhook at sign-up with a `FINDABLE_MONTHLY_DELAY_DAYS` trial
-  (`_shared/delayed-subscription.ts`) and `cancel_at` after `FINDABLE_RECURRING_PAYMENTS` charges.
-  ⛔ **12 payments IN TOTAL (`FINDABLE_TOTAL_PAYMENTS`), and the sign-up £99 is payment 1** — 11
-  recurring, £1,188 nominal (`FINDABLE_CONTRACT_TOTAL_GBP`); never "£99 plus 12 more". Nothing after the 12th — no reduced continuation price, no open-ended £99. The
-  old two-tier offer (keep-your-site monthly / new-site schedule) is RETIRED; `plan_tier` is still
-  stored. ⛔ **The 12 months is a real minimum** — never write "cancel any time" / "stop any time" /
-  "cancel before it starts" beside it. For a site Findable BUILDS: we build, host and manage it in
-  the term and own the build; ownership transfers once the term is complete and paid; an overdue
-  term may see the hosted site suspended after reasonable written notice. **Those terms apply only
-  to a site we build**; optimise-only is to get its own structure (NOT YET DEFINED by Paul). Do not
-  invent penalties or exit rights. The guarantee applies on top: a valid claim is an exit under its
-  own terms. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon`.
+- **Offer (Paul, 2026-09-29): £99 to start, then £99/month from six weeks after sign-up — TWO ROUTES,
+  same price, different LENGTH** (`docs/business-and-offer.md` §00). **Findable Build** (we build, host
+  and manage a new website): **12 payments in total**. **Findable Optimise** (they keep their own site):
+  **6 payments in total**. ⛔ The sign-up £99 is payment 1 on both (`FINDABLE_BUILD_TOTAL_PAYMENTS`,
+  `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`; recurring = `recurringPaymentsFor(route)` = 11 / 5) — never "£99 plus
+  12 / 6 more"; nothing after the last. ⛔ **The route is `onboarding_responses.plan_tier`** (`new_site` =
+  Build, `keep` = Optimise), written by the questionnaire and by Quick Close, read ONLY through
+  `serviceRouteFromRow`; undecided (blank / unknown / contradicting `website_addon`) → findable-checkout
+  refuses `route_undecided` — **never a default 12 or 6**. The checkout names the route's count on the
+  Stripe page and carries it in session metadata; the webhook creates the subscription from the SESSION's
+  route (`resolvePaidRoute`) with `cancel_at` after `recurringPaymentsFor(route)` charges, and refuses
+  (Paul told) on a mismatch. `outreach_leads.contract_total_payments` is the stamped contract (NULL = not
+  recorded — a pre-route client is NEVER given a 12 or 6); triggers lock it and a paid row's route against
+  every API role. ⛔ Each is a real minimum — never "no commitment" / "cancel any time" beside it. The
+  build ownership / suspension / transfer terms apply ONLY to Build; an Optimise client's site stays
+  theirs and is never taken over or down. Where the route is known, name ONLY its count; pre-choice
+  surfaces name both. Do not invent penalties or exit rights. The guarantee applies on top, identical on
+  both. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon` alone.
 - **Quick Close** (`src/lib/quickClose.ts`, fn `quick-close`, `docs/sales-experience.md` §9): a salesperson's
-  5-question close on the SAME onboarding row (locked find-or-create) → the EXISTING `findable-checkout`
+  5-question close + the required website route (Build / Optimise) on the SAME onboarding row (locked find-or-create) → the EXISTING `findable-checkout`
   (row + lead only; never a price). Domain / agency doubt = Paul review, never silently safe.
 - **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4): 30% of the initial
   payment + 20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund /
   chargeback (an offset once paid out), from the **payment ledger** (`payment_ledger`, written by
   `stripe-webhook` + the admin backfill) — never from a CRM status. Only role `sales` earns.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
-  `FINDABLE_MONTHLY_GBP`, `FINDABLE_MINIMUM_TERM_MONTHS`, `FINDABLE_OFFER_SUMMARY`,
+  `FINDABLE_MONTHLY_GBP`, `FINDABLE_BUILD_TOTAL_PAYMENTS` / `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site
   carries its own copies; `scripts/check-cross-repo-sync.mjs` (exists in BOTH repos) fails the build
   on drift for the pairs it lists. Change one repo, change the other. `scripts/findable-offer-terms.test.ts`
@@ -172,7 +176,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   approves the copy. **RG is due 2026-10-06** — approve before then or his results hold.
   ⛔ **Billing and the claim window are TWO clocks**: billing = `firstRecurringPaymentIso(sign-up)`
   (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
-  (`resultsBillingStartIso`) or none — never "that same day". The end of the 12 payments is
+  (`resultsBillingStartIso`) or none — never "that same day". The end of the route's payments (12 / 6) is
   `subscriptionEndedByTerm` → `termCompleteEmail`; ownership words only for `findableSiteKind ===
   'findable_built'`. ⛔ **Re-measure clock: 4 weeks, or 8 for a site we BUILD on a brand-new domain**
   (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
