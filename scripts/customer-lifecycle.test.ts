@@ -10,8 +10,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import {
-  CARD_SAVED_NOTICE, FINDABLE_CONTRACT_TOTAL_GBP, FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_OFFER_SUMMARY,
-  FINDABLE_RECURRING_PAYMENTS, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, findableSiteKind, firstRecurringPaymentIso,
+  cardSavedNoticeFor, contractTotalGbpFor, FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_OFFER_SUMMARY,
+  recurringPaymentsFor, FINDABLE_SETUP_PRICE_GBP, totalPaymentsFor, findableSiteKind, firstRecurringPaymentIso,
   monthlyStartingSoonEmail, paymentFailedEmail, subscriptionEndedEmail, termCompleteEmail, type FindableSiteKind,
   FINDABLE_GUARANTEE, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, remeasureWeeksFor,
 } from '../src/lib/findableOffer.ts';
@@ -53,13 +53,14 @@ const SIGNUPS: Array<[string, string]> = [
 for (const [label, signup] of SIGNUPS) {
   const first = firstRecurringPaymentIso(signup)!;
   ok(Date.parse(first) - Date.parse(signup) === FINDABLE_MONTHLY_DELAY_DAYS * 86_400_000, `${label}: first recurring is exactly six weeks after sign-up (${first.slice(0, 10)})`);
-  const cancelAt = minimumTermCancelAt(sec(first));
+  /* The Build route (12 payments); scripts/service-route-terms.test.ts runs Optimise (6) the same way. */
+  const cancelAt = minimumTermCancelAt(sec(first), recurringPaymentsFor('build'));
   const charges = recurringCharges(sec(first), cancelAt);
-  ok(charges.length === FINDABLE_RECURRING_PAYMENTS, `${label}: ${charges.length} recurring payments follow the sign-up (want ${FINDABLE_RECURRING_PAYMENTS})`);
-  ok(1 + charges.length === FINDABLE_TOTAL_PAYMENTS, `${label}: the sign-up £${FINDABLE_SETUP_PRICE_GBP} is payment 1 → ${1 + charges.length} in total`);
-  ok(FINDABLE_SETUP_PRICE_GBP + charges.length * FINDABLE_MONTHLY_GBP === 1188 && FINDABLE_CONTRACT_TOTAL_GBP === 1188, `${label}: £1,188 nominal`);
+  ok(charges.length === recurringPaymentsFor('build'), `${label}: ${charges.length} recurring payments follow the sign-up (want ${recurringPaymentsFor('build')})`);
+  ok(1 + charges.length === totalPaymentsFor('build'), `${label}: the sign-up £${FINDABLE_SETUP_PRICE_GBP} is payment 1 → ${1 + charges.length} in total`);
+  ok(FINDABLE_SETUP_PRICE_GBP + charges.length * FINDABLE_MONTHLY_GBP === 1188 && contractTotalGbpFor('build') === 1188, `${label}: £1,188 nominal`);
   /* What a 13th payment would be: the next anchor after the last one. It must fall at or after cancel_at. */
-  const next = recurringCharges(sec(first), Number.MAX_SAFE_INTEGER)[FINDABLE_RECURRING_PAYMENTS];
+  const next = recurringCharges(sec(first), Number.MAX_SAFE_INTEGER)[recurringPaymentsFor('build')];
   ok(next >= cancelAt, `${label}: the would-be 13th (${new Date(next * 1000).toISOString().slice(0, 10)}) is at or after the end (${new Date(cancelAt * 1000).toISOString().slice(0, 10)}) — never charged`);
 }
 ok(firstRecurringPaymentIso(null) === null && firstRecurringPaymentIso('junk') === null && firstRecurringPaymentIso('') === null, 'no / unreadable sign-up → no date, never NaN');
@@ -77,7 +78,7 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   ok(billing !== claimWindowCloseIso(resultsSent), `billing (${billing?.slice(0, 10)}) and the claim window close (${claimWindowCloseIso(resultsSent)?.slice(0, 10)}) are two clocks, not one`);
   const base = { businessName: 'MCLocksmiths', town: 'Canterbury', beforeNamed: 4, beforeAnswered: 120, afterNamed: 11, afterAnswered: 120, questions: 20, documentUrl: 'https://findable.live/results/x', withinNoise: false };
   for (const wentUp of [true, false]) {
-    const p = resultsEmailParagraphs({ ...base, wentUp, monthlyStartsOn: pretty(billing!) });
+    const p = resultsEmailParagraphs({ ...base, wentUp, monthlyStartsOn: pretty(billing!), totalPayments: 12 });
     const line = p.find((x) => x.includes('4 November 2026')) ?? '';
     ok(!!line && line.includes(`£${FINDABLE_MONTHLY_GBP}`), `wentUp=${wentUp}: names 4 November 2026 and £${FINDABLE_MONTHLY_GBP}`);
     ok(/payment 2 of 12/.test(line) && /nothing is charged after the 12th/.test(line), `wentUp=${wentUp}: counts it as payment 2 of 12, nothing after the 12th`);
@@ -104,14 +105,19 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   const claim = sender.indexOf('.is("remeasure_results_sent_at", null)');
   ok(built > 0 && claim > 0 && built < claim, 'the email words are built before the once-only claim');
   ok(/subscription_status, subscription_renews_at/.test(sender), 'the bundle reads the subscription status and renewal date');
+  ok(/totalPayments: lead\.contract_total_payments \?\? null/.test(sender), 'and passes the client\'s own contracted count to the words');
+  const unknown = resultsEmailParagraphs({ ...base, wentUp: true, monthlyStartsOn: pretty(billing!), totalPayments: null }).join(' ');
+  ok(/It is payment 2, counting/.test(unknown) && !/payment 2 of/.test(unknown), 'no recorded contract → payment 2 with no invented total');
 }
 
 console.log('── 9, 10. NO £29.99, NO FREE EXIT, IN ANY ACTIVE LIFECYCLE TEXT ──');
 const KINDS: FindableSiteKind[] = ['findable_built', 'client_owned', 'unknown'];
 const texts: Array<[string, string]> = [
-  ['card notice', CARD_SAVED_NOTICE],
+  ['card notice (build)', cardSavedNoticeFor('build')],
+  ['card notice (optimise)', cardSavedNoticeFor('optimise')],
   ['offer summary', FINDABLE_OFFER_SUMMARY],
-  ['monthly-starts reminder', monthlyStartingSoonEmail({ businessName: 'X', startsOn: '4 November 2026', cancelUrl: 'https://billing.stripe.com/p/x' }).paragraphs.join(' ')],
+  ['monthly-starts reminder', monthlyStartingSoonEmail({ businessName: 'X', startsOn: '4 November 2026', cancelUrl: 'https://billing.stripe.com/p/x', route: 'build' }).paragraphs.join(' ')],
+  ['monthly-starts reminder (optimise)', monthlyStartingSoonEmail({ businessName: 'X', startsOn: '4 November 2026', cancelUrl: null, route: 'optimise' }).paragraphs.join(' ')],
   ['payment failed', paymentFailedEmail({ payUrl: null }).paragraphs.join(' ')],
   ['results (up, with billing)', resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 5, afterAnswered: 10, questions: 3, wentUp: true, withinNoise: false, documentUrl: 'u', monthlyStartsOn: '4 November 2026' }).join(' ')],
   ['results (not up, with billing)', resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 1, afterAnswered: 10, questions: 3, wentUp: false, withinNoise: true, documentUrl: 'u', monthlyStartsOn: '4 November 2026' }).join(' ')],
@@ -119,7 +125,7 @@ const texts: Array<[string, string]> = [
   ...KINDS.flatMap((k) => [
     [`ended by card (${k})`, subscriptionEndedEmail({ becauseOfPayment: true, siteKind: k }).paragraphs.join(' ')],
     [`ended on purpose (${k})`, subscriptionEndedEmail({ becauseOfPayment: false, siteKind: k }).paragraphs.join(' ')],
-    [`term complete (${k})`, termCompleteEmail({ siteKind: k }).paragraphs.join(' ')],
+    [`term complete (${k})`, termCompleteEmail({ siteKind: k, totalPayments: k === 'client_owned' ? 6 : 12 }).paragraphs.join(' ')],
   ] as Array<[string, string]>),
 ];
 const pb = buildColdCallPlaybook({ lead: { id: 'l', business_name: 'Acme Plumbing', phone: '07700900123', website: null }, reportAudit: null, report: null, runCrawls: [], leadCrawl: null, messages: [], nowMs: Date.now() });
@@ -127,7 +133,7 @@ texts.push(['cold call playbook offer', JSON.stringify(pb.offer)]);
 for (const [label, t] of texts) {
   ok(!/29\.99/.test(t), `${label}: no £29.99`);
   ok(!/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i.test(t), `${label}: no "cancel/stop any time", "not binding" or "cancel before it starts"`);
-  ok(!/13 payments|12 (more|further) payments|plus 12/i.test(t), `${label}: nothing that implies a 13th payment`);
+  ok(!/13 payments|7 payments|(12|6) (more|further) payments|plus (12|6)\b/i.test(t), `${label}: nothing that implies an extra payment`);
 }
 
 console.log('── 11. OWNERSHIP WORDS ONLY FOR A SITE FINDABLE BUILT ──');
@@ -139,9 +145,10 @@ ok(findableSiteKind(null) === 'unknown' && findableSiteKind({}) === 'unknown' &&
 ok(findableSiteKind({ plan_tier: 'keep', website_route: 'new_site' }) === 'unknown', 'a conflict → unknown, never a guess');
 const OWN = /transfers? to you|website build|we built and host|we own|handover/i;
 for (const k of KINDS) {
-  const term = termCompleteEmail({ siteKind: k }).paragraphs.join(' ');
+  const n = k === 'client_owned' ? 6 : 12;   // an Optimise client's own site; a Build client's is ours until the end
+  const term = termCompleteEmail({ siteKind: k, totalPayments: n }).paragraphs.join(' ');
   ok(k === 'findable_built' ? /website build we made for you now transfers to you/.test(term) : !OWN.test(term), `term complete (${k}): ${k === 'findable_built' ? 'says the build transfers' : 'makes no ownership claim'}`);
-  ok(/All 12 of your payments are complete/.test(term) && /nothing more will be charged/.test(term) && !/cancel/i.test(term), `term complete (${k}): all 12 paid, nothing more, not called a cancellation`);
+  ok(new RegExp(`All ${n} of your payments are complete`).test(term) && /nothing more will be charged/.test(term) && !/cancel/i.test(term), `term complete (${k}): all ${n} paid, nothing more, not called a cancellation`);
   for (const byCard of [true, false]) {
     const e = subscriptionEndedEmail({ becauseOfPayment: byCard, siteKind: k }).paragraphs.join(' ');
     const stays = /stay exactly where they are/.test(e);
@@ -150,21 +157,21 @@ for (const k of KINDS) {
   }
 }
 const report = read('src/lib/aiAuditReportHtml.ts');
-ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee: \$\{esc\(FINDABLE_OFFER_SUMMARY\)\}/.test(report), 'report no-website panel: no "included in your £99", names the whole offer');
-ok(/If we build the site:/.test(pb.offer.monthly), 'the playbook scopes its ownership line to "If we build the site"');
+ok(!/Building it is included in\s+your &pound;99/.test(report) && /no separate build fee\. \$\{esc\(offerSummaryFor\('build'\)\)\}/.test(report), 'report no-website panel: no "included in your £99", names the Build offer (the only route with no website)');
+ok(/If we build the site \(Findable Build\):/.test(pb.offer.monthly) && /If they keep their own site \(Findable Optimise\): it stays theirs/.test(pb.offer.monthly), 'the playbook scopes its ownership line to "If we build the site", and says an Optimise site stays theirs');
 
 console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ──');
 {
   const trialEnd = sec(firstRecurringPaymentIso('2026-09-23T10:00:00.000Z')!);
-  const cancelAt = minimumTermCancelAt(trialEnd);
-  const done = { cancel_at: cancelAt, trial_end: trialEnd, ended_at: cancelAt };
+  const cancelAt = minimumTermCancelAt(trialEnd, recurringPaymentsFor('build'));
+  const done = { cancel_at: cancelAt, trial_end: trialEnd, ended_at: cancelAt, metadata: { service_route: 'build', total_payments: '12' } };
   ok(subscriptionEndedByTerm(done, false), 'reached our own cancel_at, not in arrears → term complete');
   ok(!subscriptionEndedByTerm(done, true), 'in arrears at the end → NOT complete (not all sums paid)');
-  ok(!subscriptionEndedByTerm({ ...done, ended_at: cancelAt - 30 * 86400 }), 'ended a month early (a guarantee exit or a hand cancel) → not complete');
+  ok(!subscriptionEndedByTerm({ ...done, ended_at: cancelAt - 30 * 86400 }, false), 'ended a month early (a guarantee exit or a hand cancel) → not complete');
   ok(!subscriptionEndedByTerm({ ...done, cancel_at: cancelAt + 86400, ended_at: cancelAt + 86400 }, false), 'a hand-set cancel_at → not ours, not complete');
   ok(!subscriptionEndedByTerm({ trial_end: trialEnd, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, trial_end: trialEnd }, false), 'any date absent → not complete');
   const wh = code('supabase/functions/stripe-webhook/index.ts');
-  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind \}\)/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
+  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
 }
 
 console.log('── NEW DOMAINS: RE-MEASURED LATER, NOT EXCLUDED (Paul, 2026-09-23) ──');

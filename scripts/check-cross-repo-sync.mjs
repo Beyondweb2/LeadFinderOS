@@ -134,6 +134,27 @@ const PAIRS = [
     why: 'The site DISPLAYS this and findable-checkout CHARGES it. A mismatch means the screen says one number and the card is charged another.',
   },
   {
+    what: 'the Findable Build payment count',
+    kind: 'number',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_BUILD_TOTAL_PAYMENTS' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'BUILD_TOTAL_PAYMENTS' },
+    why: 'The site and the pay screen NAME this count and stripe-webhook BILLS it (cancel_at after count - 1 monthly charges). A mismatch sells one length and bills another.',
+  },
+  {
+    what: 'the Findable Optimise payment count',
+    kind: 'number',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_OPTIMISE_TOTAL_PAYMENTS' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'OPTIMISE_TOTAL_PAYMENTS' },
+    why: 'The site and the pay screen NAME this count and stripe-webhook BILLS it (cancel_at after count - 1 monthly charges). A mismatch sells one length and bills another.',
+  },
+  {
+    what: 'the monthly price',
+    kind: 'number',
+    mine: { file: path.join(LFOS, 'findableOffer.ts'), name: 'FINDABLE_MONTHLY_GBP' },
+    theirs: { file: path.join(SITE, 'site.ts'), name: 'CONTINUATION_MONTHLY_GBP' },
+    why: 'The site DISPLAYS the monthly and the subscription builder refuses any Stripe price that is not FINDABLE_MONTHLY_GBP.',
+  },
+  {
     /* ⛔ THIS PAIR DRIFTED IN PRODUCTION FOR A FORTNIGHT (2026-08-03 → 2026-08-17). The server half
        (the FINDABLE_SITE_ORIGIN Supabase secret) moved to https://findable.live while the SPA's
        constant stayed on the raw pages.dev domain — so template-sent onboarding links went out

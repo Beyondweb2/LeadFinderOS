@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
-import { CARD_SAVED_NOTICE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_TOTAL_PAYMENTS, FINDABLE_GUARANTEE } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
+import { mayGenerateLink, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -130,7 +131,7 @@ Deno.serve(async (req) => {
       .from("onboarding_responses")
       // The three website answers come back too: they decide whether we can serve this customer at
       // all, and that has to be settled BEFORE a Stripe session exists. See the gate below.
-      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, " + DOMAIN_ROW_COLUMNS)
+      .select("id, lead_id, status, website_platform, website_platform_other, website_manager, willing_to_migrate, quick_close, " + DOMAIN_ROW_COLUMNS)
       .eq("id", onboardingId).maybeSingle();
     if (!ob) return json({ ok: false, error: "unknown_onboarding" }, 404);
 
@@ -197,8 +198,28 @@ Deno.serve(async (req) => {
        already-paid checks, so an existing client is never re-gated. Optimising their own site is not
        affected (the rule does not apply). The onboarding page shows the same verdict and a route to
        Paul; this refusal is the thing that actually stops a Stripe session. */
+    /* ══ THE ROUTE (Paul, 2026-09-29): Findable Build = 12 payments, Findable Optimise = 6 ══════════════
+       Read from the ROW (plan_tier, written by the questionnaire or Quick Close), never the request. An
+       undecided or contradictory route is REFUSED here — no Stripe session may exist without the
+       schedule it will create, and neither 12 nor 6 is ever a default (serviceRouteFromRow). */
+    const route = serviceRouteFromRow(ob as { plan_tier?: unknown; website_addon?: unknown });
+    if (!route) {
+      await recordRefusal("checkout_refused_route_undecided", {
+        lead_id: effectiveLeadId, plan_tier: (ob as { plan_tier?: unknown }).plan_tier ?? null, website_addon: (ob as { website_addon?: unknown }).website_addon ?? null,
+      });
+      return json({ ok: false, error: "route_undecided" }, 409);
+    }
+
+    /* ⚠️ QUICK CLOSE KEEPS ITS OWN DOMAIN GATE (2026-09-29). A Quick Close answers the domain questions
+       on the phone (owns / controls the domain, who manages the site, authority) and sends ANY doubt to
+       Paul, whose release is required before a link exists (quickClose.ts). It does not collect the
+       self-service consents (DNS permission, supplied material), which Paul gathers after payment —
+       and Paid Clients is never READY for a build without them. Before routes existed a Quick Close row
+       never carried a build flag, so this rule never reached it; recording Build on it must not turn
+       that into a refusal of every Quick Close build. The self-service path is unchanged. */
+    const quickCloseCleared = mayGenerateLink((ob as { status?: string }).status, ((ob as { quick_close?: unknown }).quick_close ?? null) as QuickCloseRecord | null);
     const domain = domainAuthority(domainInputFromRow(ob as DomainRow));
-    if (domain.applies && !domain.ready) {
+    if (domain.applies && !domain.ready && !quickCloseCleared) {
       await recordRefusal("checkout_refused_domain_authority", { lead_id: effectiveLeadId, reasons: domain.reasons });
       console.log(`[findable-checkout] refused ${onboardingId}: domain ${domain.reasons.join(",")}`);
       return json({ ok: false, error: "domain_unresolved", reasons: domain.reasons }, 403);
@@ -304,9 +325,8 @@ Deno.serve(async (req) => {
        taken today is £99 in payment mode either way; the recurring shape is built later by
        _shared/delayed-subscription.ts, which reads plan_tier itself. Browser never decides money, so
        this is read off the onboarding row, never from `body`.
-       ⚠️ SINCE 2026-09-18 THERE IS ONE PLAN (£99 today, then £99/month for the 12-month minimum), so
-       the tier no longer changes this page at all; it is still stored for the separate optimise-only
-       structure Paul has yet to define (findableOffer.ts, FINDABLE_MINIMUM_TERM_MONTHS). */
+       🔴 SINCE 2026-09-29 THE TIER IS THE ROUTE (serviceRouteFromRow, above): the price is the same on
+       both, the NUMBER of payments is not — Build 12, Optimise 6 — and it is named on this page. */
     /* ⛔ IT MUST BE A PRICE ID, NOT A PRODUCT ID, AND THAT IS NOT A THEORETICAL MISTAKE — IT IS THE
        ONE THAT ACTUALLY HAPPENED (2026-09-03, first live test). A *_PRICE_ID secret was set to
        `prod_VBse8QguSes2Zr` and Stripe answered
@@ -346,7 +366,7 @@ Deno.serve(async (req) => {
        length at creation, so no number put here could express the offer.
        ⛔ SUPERSEDED TOO: the subscription is NOT created when the results go out any more. Since
        2026-09-18 stripe-webhook creates it on the successful £99 (_shared/delayed-subscription.ts),
-       trial_end = firstRecurringPaymentIso(sign-up), cancel_at after FINDABLE_RECURRING_PAYMENTS.
+       trial_end = firstRecurringPaymentIso(sign-up), cancel_at after recurringPaymentsFor(route).
        The results sender only reads it. A valid guarantee claim therefore has a subscription to cancel.
        ⛔ WHAT THIS SESSION DOES: takes the £99 and RETAINS THE CARD. Both settings below
        are payment-mode only and both are required — without the customer there is nobody to bill
@@ -358,7 +378,7 @@ Deno.serve(async (req) => {
     /* ⛔ AND THE CUSTOMER IS TOLD, ON THE PAGE WHERE THE CARD IS ENTERED. Saving a card without
        saying so is the indefensible part of this, and Stripe's submit message is the only place
        the words sit beside the card field itself. */
-    form.set("custom_text[submit][message]", CARD_SAVED_NOTICE);
+    form.set("custom_text[submit][message]", cardSavedNoticeFor(route));
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */
@@ -383,6 +403,10 @@ Deno.serve(async (req) => {
     );
     form.set("metadata[onboarding_id]", onboardingId);
     if (effectiveLeadId) form.set("metadata[lead_id]", effectiveLeadId);
+    /* ⛔ THE ROUTE THE CUSTOMER IS SHOWN, CARRIED TO THE WEBHOOK. stripe-webhook creates the schedule
+       from THIS (the words on this Stripe page), and refuses if the row's route has since changed. */
+    form.set("metadata[service_route]", route);
+    form.set("metadata[total_payments]", String(totalPaymentsFor(route)));
     const priceId = Deno.env.get("FINDABLE_SETUP_PRICE_ID") ?? "";
     if (priceId) {
       form.set("line_items[0][price]", priceId);
@@ -407,8 +431,8 @@ Deno.serve(async (req) => {
          so it is the last place that should describe only the first one.
          ⚠️ Both figures are interpolated from the constants, never typed: this string is read by
          a customer and a price move must not be able to leave a stale number on a receipt. */
-      form.set("line_items[0][price_data][product_data][name]",
-        `Findable — AI visibility: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${FINDABLE_TOTAL_PAYMENTS} payments in total (${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum)`);
+      /* 🔴 PER ROUTE (2026-09-29): "Findable Build … 12 payments" or "Findable Optimise … 6 payments". */
+      form.set("line_items[0][price_data][product_data][name]", checkoutLineNameFor(route));
       form.set("line_items[0][price_data][product_data][description]", FINDABLE_GUARANTEE);
       form.set("line_items[0][quantity]", "1");
     }
@@ -487,6 +511,9 @@ Deno.serve(async (req) => {
           website_addon: wantsWebsite,
           addon_deferred_to_results: addOnReady,
           ai_line_gbp: offer.gbp,
+          service_route: route,
+          total_payments: totalPaymentsFor(route),
+          quick_close_domain_gate: quickCloseCleared && domain.applies && !domain.ready,
         },
       });
     } catch (e) {

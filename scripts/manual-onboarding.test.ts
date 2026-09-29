@@ -67,7 +67,7 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     const siteTs = fs.readFileSync(path.join(site, 'lib', 'site.ts'), 'utf8');
     const constant = (name: string) => new RegExp(`export const ${name} = (\\d+);`).exec(siteTs)?.[1] ?? '?';
     const customer = norm((fs.readFileSync(flowPath, 'utf8') + fs.readFileSync(accessPath, 'utf8') + siteTs)
-      .replace(/\$\{MINIMUM_TERM_MONTHS\}/g, constant('MINIMUM_TERM_MONTHS')).replace(/\$\{TOTAL_PAYMENTS\}/g, constant('TOTAL_PAYMENTS')));
+      .replace(/\$\{BUILD_TOTAL_PAYMENTS\}/g, constant('BUILD_TOTAL_PAYMENTS')).replace(/\$\{OPTIMISE_TOTAL_PAYMENTS\}/g, constant('OPTIMISE_TOTAL_PAYMENTS')));
     const strings: string[] = [];
     const walk = (v: unknown) => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
     walk(ONBOARDING_COPY);

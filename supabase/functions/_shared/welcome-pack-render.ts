@@ -32,7 +32,7 @@ import { isShortCode } from "../../../src/lib/reportSlug.ts";
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
-  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id";
+  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id,contract_total_payments";
 
 /** ⛔ CLIENT-SAFE ONBOARDING COLUMNS. `must_not_say` is read because it is a CONSTRAINT on what we
  *  may write, never rendered; it is dropped before the pack input is built. */
@@ -185,6 +185,8 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
       phone: facts.phone.value,
     },
     baseline: buildBaselineSummary(report, (audit as { baseline_completed_at?: string | null }).baseline_completed_at ?? null),
+    /* The client's own contracted payment count (stamped at payment; null for a client who paid before routes). */
+    totalPayments: (lead as { contract_total_payments?: number | null } | null)?.contract_total_payments ?? null,
   });
 
   return { ok: true, html };

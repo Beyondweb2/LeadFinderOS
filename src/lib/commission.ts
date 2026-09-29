@@ -110,6 +110,9 @@ export interface CommissionInput {
   /** Fallback seller when a ledger row has no snapshot (the lead's sold_by_user_id). */
   sellerOfLead?: Map<string, string | null>;
   businessName?: Map<string, string>;
+  /** The client's contracted payment count (outreach_leads.contract_total_payments: Build 12,
+   *  Optimise 6; null = not recorded). Caps what a projection may count — never adds to it. */
+  contractTotalOf?: Map<string, number | null>;
 }
 
 export interface ClientEarnings {
@@ -184,9 +187,14 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       if (!held && payLine && back >= p.amount_gbp && payLine.status === 'due') payLine.status = 'reversed';
     }
     const earned = lines.filter((l) => l.leadId === leadId && l.kind === 'payment').reduce((s, l) => s + l.commission, 0);
+    /* ⛔ NEVER PROJECT PAST THE CONTRACT (2026-09-29). The commission rule is unchanged (the next
+       COMMISSION_RECURRING_COUNT recurring payments); what changed is that a client's contract can be
+       shorter, so the recurring payments still to come are also capped by it where it is known. */
+    const contractTotal = input.contractTotalOf?.get(leadId) ?? null;
+    const contractRecurringLeft = typeof contractTotal === 'number' && contractTotal > 0 ? Math.max(0, contractTotal - 1 - recurringSeen) : Infinity;
     clients.push({
       leadId, business, sellerId: seller, payments: payments.length, earned: round2(earned), reversed: round2(reversedTotal),
-      commissionablePaymentsLeft: earns ? Math.max(0, COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT)) : 0,
+      commissionablePaymentsLeft: earns ? Math.max(0, Math.min(COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT), contractRecurringLeft)) : 0,
       commissionable: earns,
     });
   }

@@ -4,10 +4,62 @@
 
 > Moved from CLAUDE.md §1 on 2026-09-16. Verbatim. Cross-references (§N) use the ORIGINAL CLAUDE.md numbering — `docs/INDEX.md` maps them.
 
-## 0. THE CURRENT OFFER (2026-09-23) — supersedes every price and term below
+## 00. THE CURRENT OFFER (2026-09-29) — TWO ROUTES — supersedes §0 and everything below
+
+Where anything below disagrees with this section, this section wins.
+
+- **Same price, two lengths (Paul, 2026-09-29).** £99 at sign-up, then £99 a month from six weeks
+  after sign-up, on both routes. The LENGTH depends on the website route:
+  - **Findable Build** — we build, host and manage a new website: **12 payments in total** (sign-up +
+    11 monthly, £1,188), a 12-month minimum term. The build ownership / transfer / suspension terms of
+    2026-09-23 (§0 below) apply unchanged.
+  - **Findable Optimise** — the client keeps their own website and gives us access: **6 payments in
+    total** (sign-up + 5 monthly, £594), a 6-month minimum term. The website stays theirs; none of the
+    build terms apply; we never take it over or take it down because the service ends (/terms has an
+    "Your existing website (Findable Optimise)" section).
+  - The sign-up £99 is payment 1 on both. Nothing is charged after the last. The guarantee is
+    unchanged and identical on both; neither route is ever "no commitment".
+- **Where the route lives:** the EXISTING column `onboarding_responses.plan_tier` (`new_site` = Build,
+  `keep` = Optimise). No new route column. `serviceRouteFromRow` (findableOffer.ts) is the one reading:
+  positive match; blank, unknown, or a row whose `website_addon` contradicts it → **undecided**, and
+  findable-checkout refuses it (`409 route_undecided`) before any Stripe session.
+- **Who writes it:** the self-service questionnaire (findable-site `planTierForAnswer(siteAccess)`:
+  "yes, you can edit my site" → keep, anything else → new_site; unanswered → null) and Quick Close (a
+  required sixth question, "Website route": Build me a new Findable website / Keep my existing website
+  and optimise it; `onboardingColumnsFor` writes `plan_tier` + `website_addon` from it). 🔴 findable-site's
+  main submit had hardcoded `plan_tier: "keep"` since 2026-09-18 (`e48f787`), so every self-service row
+  from then said keep whatever the answer — fixed; such an old unpaid row (keep + website_addon true)
+  now reads as undecided and is refused rather than sold 6 payments.
+- **Stripe:** one mechanism, unchanged in shape — the webhook creates the subscription at sign-up with
+  the 42-day trial and `cancel_at = minimumTermCancelAt(trial_end, recurringPaymentsFor(route))`
+  (11 or 5 months after the first recurring charge). findable-checkout puts `service_route` +
+  `total_payments` on the session and names the route's count on the Stripe page (line name + card
+  notice); the webhook creates the schedule from the SESSION's route (`resolvePaidRoute`) and refuses
+  (no schedule, Paul told in the PAID email) if the row's route has since changed or the session has
+  none. The subscription carries `service_route` / `total_payments` metadata, read back by the
+  starting-soon and term-complete emails and by `subscriptionEndedByTerm`.
+- **The contract, stamped:** `outreach_leads.contract_total_payments` (nullable, migration
+  `20260929170000_service_route.sql`) — written once by the webhook from the session; NULL = not
+  recorded, never fabricated. DB triggers refuse, from any API role, a route change on a PAID onboarding
+  row and any change to a stamped contract; only a direct admin SQL change (with Stripe) can.
+- **Quick Close's domain gate:** a Quick Close that passed its own gate (or Paul released it) is not
+  refused at checkout for the self-service consents (DNS permission, supplied material) it never asks;
+  Paid Clients stays not-READY for a build without them. Before routes, a Quick Close row carried no
+  build flag, so the rule never reached it; this keeps that.
+- **Commission:** rule unchanged (30% initial, 20% × next 3 recurring). Projections are also capped by
+  the client's contract, so none can run past payment 6 / 12.
+- **Admin:** Paid Clients and the Client Hub show "Findable Build · 12 payments" / "Findable Optimise ·
+  6 payments", payments made / remaining, next charge, and building vs optimising
+  (`src/lib/clientContract.ts`). A client who paid before routes shows "Payment term not recorded —
+  Paul to confirm".
+- **Existing customers (2026-09-29):** RG Locksmiths, Ronnie's, MCLocksmiths, SC Plumbing (refunded)
+  and BS4 were left exactly as they were: no contract stamped, no route written, no Stripe change.
+  None has a Stripe subscription.
+
+## 0. THE PREVIOUS OFFER (2026-09-23) — one plan; superseded by §00 above
 
 Everything after this section is the dated record and is kept as written. Where it disagrees with
-this section, this section wins.
+§00, §00 wins.
 
 - **£99 to start, then £99 a month from six weeks after sign-up, for a 12-month minimum term.** One
   plan (`FINDABLE_OFFER_SUMMARY` in `src/lib/findableOffer.ts`). Billing was simplified to this single

@@ -23,7 +23,7 @@
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD } from './findableOffer.ts';
+import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
 /** "four" / "eight" — the client's re-measure clock in words (remeasureWeeksFor). */
@@ -218,6 +218,9 @@ export interface ResultsCopyInput {
    *  only when a trialing subscription will charge on it. Absent otherwise (no subscription, already
    *  billing), and then the email says nothing about billing. */
   monthlyStartsOn?: string | null;
+  /** The client's contracted payment count (outreach_leads.contract_total_payments, stamped at
+   *  payment). Absent/unknown → the billing sentence names no count. */
+  totalPayments?: number | null;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -272,9 +275,12 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
      closed; billing now runs from sign-up (six weeks), so that was false. The date is Stripe's own
      (resultsBillingStartIso) and the sentence counts the payments the way the offer does:
      the sign-up £99 is payment 1, this is payment 2, and nothing follows the last. */
+  /* 🔴 PER ROUTE (2026-09-29): the count is the client's own contract (Build 12, Optimise 6). */
   if (i.monthlyStartsOn) {
-    out.push(
-      `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you, for the rest of your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term. It is payment 2 of ${FINDABLE_TOTAL_PAYMENTS}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${FINDABLE_TOTAL_PAYMENTS}th.`,
+    const route = serviceRouteForTotal(i.totalPayments);
+    out.push(route
+      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you, for the rest of your ${termMonthsFor(route)}-month minimum term. It is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
+      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you. It is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
     );
   }
   out.push(`Paul, findable`);

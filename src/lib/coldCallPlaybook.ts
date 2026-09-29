@@ -28,7 +28,7 @@
       don't show up". The finding copy is siteFindings.ts's, which is already hedged and tested for it.
 
    🔴 THE OFFER IS READ FROM findableOffer.ts, NEVER TYPED HERE: FINDABLE_OFFER_SUMMARY (£99 to start,
-      then £99 a month, 12-month minimum — Paul, 2026-09-23) and FINDABLE_GUARANTEE. Until that date
+      then £99 a month; 12 payments on Build, 6 on Optimise — Paul, 2026-09-29) and FINDABLE_GUARANTEE. Until that date
       the sources disagreed and the playbook said "check current offer"; they are one source now.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { CRAWL_FRESH_MS, usableCrawlSignals, type CrawlSignals } from './crawlCheck.ts';
@@ -43,7 +43,7 @@ import { pluraliseTrade } from './templateVars.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, FINDABLE_TOTAL_PAYMENTS, reportPublicUrl } from './findableOffer.ts';
+import { FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 
@@ -613,8 +613,8 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       FINDABLE_OFFER_SUMMARY,
       FINDABLE_GUARANTEE,
     ],
-    /* Paul's build terms (findableOffer.ts, FINDABLE_MINIMUM_TERM_MONTHS) — they apply to a site we build. */
-    monthly: 'If we build the site: we build, host and manage it for the ' + FINDABLE_MINIMUM_TERM_MONTHS + " months, and once the term is complete and paid, it's theirs. Nothing is charged after the " + FINDABLE_TOTAL_PAYMENTS + 'th payment (the sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first).',
+    /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. */
+    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; nothing is charged after the " + totalPaymentsFor('build') + 'th payment. If they keep their own site (Findable Optimise): it stays theirs, and nothing is charged after the ' + totalPaymentsFor('optimise') + 'th payment. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
     nextSteps,
   };
 

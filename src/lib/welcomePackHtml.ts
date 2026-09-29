@@ -2,8 +2,8 @@
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MINIMUM_TERM_MONTHS, FINDABLE_MONTHLY_GBP, FINDABLE_TOTAL_PAYMENTS,
-  FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay,
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
+  FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
 
@@ -45,6 +45,9 @@ export interface WelcomePackInput {
   /** The completed paid baseline, folded (src/lib/baselineSummary.ts). Absent → the baseline page
    *  is omitted entirely rather than rendered with an empty result. */
   baseline?: BaselineSummary | null;
+  /** The client's contracted payment count (outreach_leads.contract_total_payments: Build 12,
+   *  Optimise 6). Absent/unknown → the pack names no count, never a guessed one. */
+  totalPayments?: number | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -224,7 +227,15 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
       <p class="wp-guar">Backed by our money-back guarantee</p>`;
 }
 
-function planPage1(name: string): string {
+/* 🔴 PER ROUTE (2026-09-29): the client's own count; an unknown one names none. */
+function termPhrase(totalPayments: number | null | undefined): string {
+  const route = serviceRouteForTotal(totalPayments);
+  return route
+    ? `, for your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments in total, counting your first)`
+    : `, until your agreed payments are complete (counting your first)`;
+}
+
+function planPage1(name: string, totalPayments: number | null | undefined): string {
   const n = esc(name);
   return `
       <div class="wp-eyebrow">Your plan</div>
@@ -257,7 +268,7 @@ function planPage1(name: string): string {
         ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins, for your ${FINDABLE_MINIMUM_TERM_MONTHS}-month minimum term (${FINDABLE_TOTAL_PAYMENTS} payments in total, counting your first) — that is the work that keeps you there: more pages every month and an eye on the technical side of your site. We will email you before it starts.`)}
+        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)} — that is the work that keeps you there: more pages every month and an eye on the technical side of your site. We will email you before it starts.`)}
       </div>`;
 }
 
@@ -592,7 +603,7 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
     coverPage(name, !!input.facts, !!input.baseline),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     ...(input.baseline ? [baselinePage(name, input.baseline)] : []),
-    planPage1(name),
+    planPage1(name, input.totalPayments),
     planPage2(name),
     reviewsPage1(reviewLink),
     reviewsPage2(),

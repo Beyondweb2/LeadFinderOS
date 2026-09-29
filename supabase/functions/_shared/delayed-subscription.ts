@@ -1,4 +1,7 @@
-import { FINDABLE_MONTHLY_GBP, FINDABLE_RECURRING_PAYMENTS, firstRecurringPaymentIso } from "../../../src/lib/findableOffer.ts";
+import {
+  FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_MONTHLY_GBP, firstRecurringPaymentIso, isServiceRoute, recurringPaymentsFor,
+  serviceRouteForTotal, totalPaymentsFor, type ServiceRoute,
+} from "../../../src/lib/findableOffer.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -32,19 +35,21 @@ async function stripe(secret: string, path: string, body?: string): Promise<{ ok
 }
 
 /**
- * When the subscription ends: exactly FINDABLE_RECURRING_PAYMENTS calendar months after the first
- * monthly charge (the trial end), in UTC — the same anchor Stripe bills from, so the periods charged
- * are trial_end + 0 … + (N-1) months: N recurring payments, then it stops. With the sign-up £99 that
- * is FINDABLE_TOTAL_PAYMENTS in total (Paul, 2026-09-23: "12 total payments, not £99 plus 12").
+ * When the subscription ends: exactly N calendar months after the first monthly charge (the trial
+ * end), in UTC, where N = recurringPaymentsFor(route) — the same anchor Stripe bills from, so the
+ * periods charged are trial_end + 0 … + (N-1) months: N recurring payments, then it stops. With the
+ * sign-up £99 that is totalPaymentsFor(route) in total: 12 on Build (11 recurring), 6 on Optimise
+ * (5 recurring) — Paul, 2026-09-23 / 2026-09-29: the sign-up is payment 1.
  * ⛔ The first version used 12 here, which made 13 payments with the sign-up; before that the
  * subscription was open-ended.
  */
-export function minimumTermCancelAt(trialEndSec: number): number {
+export function minimumTermCancelAt(trialEndSec: number, recurringPayments: number): number {
+  if (!Number.isInteger(recurringPayments) || recurringPayments < 1) throw new Error(`bad recurring payment count ${recurringPayments}`);
   const d = new Date(trialEndSec * 1000);
   /* Clamp the day to the target month's last day (29 Feb → 28 Feb), as Stripe's own anchor does —
-     rolling into March would open a 13th period and charge it. */
+     rolling into March would open an extra period and charge it. */
   const y = d.getUTCFullYear();
-  const m = d.getUTCMonth() + FINDABLE_RECURRING_PAYMENTS;
+  const m = d.getUTCMonth() + recurringPayments;
   const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   const end = new Date(Date.UTC(y, m, Math.min(d.getUTCDate(), lastDay), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()));
   return Math.floor(end.getTime() / 1000);
@@ -54,27 +59,78 @@ export function minimumTermCancelAt(trialEndSec: number): number {
  * Did this subscription end because the fixed term was COMPLETED (Stripe reached our cancel_at),
  * rather than being cancelled early or dying on a card? Stripe reports both with reason
  * `cancellation_requested`, so this is decided from the subscription's own dates.
- * ⛔ POSITIVE, EVERY PART REQUIRED: cancel_at is exactly minimumTermCancelAt(its own trial_end) — our
- * fixed-term subscription, not a date set by hand — it ended at or after that moment, and it was not
- * in arrears ("once the term is complete and all amounts due are paid"). Absent fields → false.
+ * ⛔ POSITIVE, EVERY PART REQUIRED: the subscription's own payment count is known
+ * (subscriptionTotalPayments), cancel_at is exactly minimumTermCancelAt(its own trial_end, that count
+ * minus the sign-up) — our fixed-term subscription, not a date set by hand — it ended at or after that
+ * moment, and it was not in arrears ("once the term is complete and all amounts due are paid").
+ * Absent fields → false.
  */
 export function subscriptionEndedByTerm(
-  s: { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown },
+  s: { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown; metadata?: unknown },
   inArrears: boolean,
 ): boolean {
   if (inArrears) return false;
   if (typeof s.cancel_at !== "number" || typeof s.trial_end !== "number" || typeof s.ended_at !== "number") return false;
-  return s.cancel_at === minimumTermCancelAt(s.trial_end) && s.ended_at >= s.cancel_at - 60;
+  const total = subscriptionTotalPayments(s);
+  if (!total) return false;
+  return s.cancel_at === minimumTermCancelAt(s.trial_end, total - 1) && s.ended_at >= s.cancel_at - 60;
 }
 
-/** Creates the one standard £99/month subscription immediately after the £99 signup payment.
- * Stripe owns the six-week delay as a trial, so a delayed worker cannot move the first charge. */
+/** The payment count a subscription was CREATED for, from its own metadata (`total_payments`, written
+ *  by createDelayedSubscription). ⛔ A subscription with no such metadata but our product tag predates
+ *  the two routes and was created for the one 12-payment plan. Anything else unrecognised → null. */
+export function subscriptionTotalPayments(s: { metadata?: unknown }): number | null {
+  const m = (s.metadata && typeof s.metadata === "object" ? s.metadata : {}) as Record<string, unknown>;
+  if (m.total_payments === undefined || m.total_payments === null || m.total_payments === "") {
+    return m.product === "findable_standard_monthly" ? FINDABLE_BUILD_TOTAL_PAYMENTS : null;
+  }
+  const route = serviceRouteForTotal(m.total_payments);
+  return route ? totalPaymentsFor(route) : null;
+}
+
+/** The route a subscription was created for (its metadata), or null. */
+export function subscriptionRoute(s: { metadata?: unknown }): ServiceRoute | null {
+  const m = (s.metadata && typeof s.metadata === "object" ? s.metadata : {}) as Record<string, unknown>;
+  if (isServiceRoute(m.service_route)) return m.service_route;
+  return serviceRouteForTotal(subscriptionTotalPayments(s));
+}
+
+/** THE ROUTE A COMPLETED CHECKOUT WAS PAID ON. ⛔ The session's metadata (set by findable-checkout from
+ *  the row, and named on the Stripe page) decides; its payment count must agree with the route; the
+ *  row's route — when it could be read (`undefined` = not read) — must not contradict it. Anything else
+ *  is `route: null` with the reason, and no schedule is created. Pure. */
+export function resolvePaidRoute(
+  metadata: Record<string, unknown> | null | undefined,
+  rowRoute: ServiceRoute | null | undefined,
+): { route: ServiceRoute | null; problem: string | null; sessionRoute: string | null; rowRoute: ServiceRoute | null } {
+  const m = metadata ?? {};
+  const raw = typeof m.service_route === "string" ? m.service_route : null;
+  const base = { sessionRoute: raw, rowRoute: rowRoute ?? null };
+  if (!isServiceRoute(raw)) {
+    return { ...base, route: null, problem: raw ? `the checkout carried an unknown route "${raw}".` : "the checkout session carries no Build / Optimise route (it was created before routes existed)." };
+  }
+  if (Number(m.total_payments) !== totalPaymentsFor(raw)) {
+    return { ...base, route: null, problem: `the checkout's payment count (${String(m.total_payments ?? "none")}) does not match ${raw}.` };
+  }
+  if (rowRoute !== undefined && rowRoute !== raw) {
+    return { ...base, route: null, problem: `the customer paid on ${raw} but the onboarding record now says ${rowRoute ?? "no route"}.` };
+  }
+  return { ...base, route: raw, problem: null };
+}
+
+/** Creates the £99/month subscription immediately after the £99 signup payment, for the ROUTE the
+ * customer paid on (Build: recurringPaymentsFor('build') more; Optimise: recurringPaymentsFor('optimise')
+ * more). Stripe owns the six-week delay as a trial, so a delayed worker cannot move the first charge.
+ * ⛔ NO ROUTE, NO SUBSCRIPTION: an undecided route is a failure reported to Paul, never a default. */
 export async function createDelayedSubscription(
   service: Client,
   lead: DelayedSubscriptionLead,
   signupAtIso: string,
+  route: ServiceRoute | null,
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
+  if (!isServiceRoute(route)) return { kind: "failed", reason: "the service route (Build / Optimise) is not decided, so no payment schedule was created" };
+  const recurring = recurringPaymentsFor(route);
 
   const secret = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
   if (!secret) return { kind: "failed", reason: "STRIPE_SECRET_KEY is not set" };
@@ -106,9 +162,9 @@ export async function createDelayedSubscription(
     customer: customerId,
     default_payment_method: paymentMethodId,
     trial_end: String(trialEnd),
-    /* FINDABLE_RECURRING_PAYMENTS charges after the sign-up, then nothing: cancel_at on the period
+    /* recurringPaymentsFor(route) charges after the sign-up, then nothing: cancel_at on the period
        boundary after the last one, no proration. */
-    cancel_at: String(minimumTermCancelAt(trialEnd)),
+    cancel_at: String(minimumTermCancelAt(trialEnd, recurring)),
     proration_behavior: "none",
     "trial_settings[end_behavior][missing_payment_method]": "cancel",
     "items[0][price]": priceId,
@@ -116,6 +172,10 @@ export async function createDelayedSubscription(
     "metadata[lead_id]": lead.id,
     "metadata[product]": "findable_standard_monthly",
     "metadata[signup_at]": signupAtIso,
+    /* The contract this subscription was created for — read back by the term-complete and
+       starting-soon emails, so the count a client is told is the count Stripe bills. */
+    "metadata[service_route]": route,
+    "metadata[total_payments]": String(totalPaymentsFor(route)),
   }));
   if (!created.ok) return { kind: "failed", reason: `Stripe refused the subscription: ${created.text.slice(0, 300)}` };
   const subscriptionId = String(created.json.id ?? "");

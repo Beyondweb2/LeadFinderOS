@@ -78,7 +78,9 @@ const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], busines
     ok(inAnswers && lists >= 2, `findable-onboarding saves ${col} (answers + NEWER_COLS + optional)`);
   }
   const co = read("supabase/functions/findable-checkout/index.ts");
-  ok(/const domain = domainAuthority\(domainInputFromRow\(ob as DomainRow\)\);\s*if \(domain\.applies && !domain\.ready\)/.test(co) && /error: "domain_unresolved"/.test(co), "checkout refuses a new-site payment whose domain / authority is unresolved (server-side, from the row)");
+  /* 2026-09-29: a Quick Close that passed ITS domain gate (or Paul released it) is exempt from the
+     self-service consents, which Quick Close never collects (service-route-terms.test.ts pins it). */
+  ok(/const domain = domainAuthority\(domainInputFromRow\(ob as DomainRow\)\);\s*if \(domain\.applies && !domain\.ready && !quickCloseCleared\)/.test(co) && /error: "domain_unresolved"/.test(co), "checkout refuses a new-site payment whose domain / authority is unresolved (server-side, from the row)");
   ok(co.indexOf("checkout_refused_row_already_paid") < co.indexOf("domain_unresolved"), "…after the already-paid checks (an existing client is never re-gated)");
   const rr = read("supabase/functions/_shared/remeasure-results.ts");
   ok(/if \(lead\.service_terminated_at\) return \{ kind: "skipped"/.test(rr), "no 'the guarantee applies' results email after Findable ends the service for a dispute");
