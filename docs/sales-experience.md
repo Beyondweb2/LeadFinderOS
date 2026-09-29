@@ -262,3 +262,13 @@ Paul: VERBAL YES → 60-SECOND QUICK CLOSE → STRIPE LINK → £99 PAYMENT → 
   load 2.7 s, save 1.6 s, link 3.0 s. ⚠️ Three unpaid live Stripe sessions were created by the QA runs;
   they expire unused after 24 hours. **Not exercised live: a real payment** (it would cost £99) — the
   paid path is the unchanged webhook plus the non-fatal handoff read, covered by the tests.
+
+## 10. Dispute rule refined (2026-09-29, Paul)
+
+- `src/lib/commission.ts`: an OPEN dispute / inquiry (`warning_needs_response`, `warning_under_review`,
+  `needs_response`, `under_review`, or any status we do not know) HOLDS the commission — a line labelled
+  "Held — dispute open" that comes off what is due (the offset logic unchanged if already paid out) but is
+  NOT counted as reversed and never marks the payment reversed. `won` and `warning_closed` (an inquiry
+  that closed with no money lost) RELEASE it — the line disappears. `lost` REVERSES it permanently
+  ("Chargeback"). Totals gain `held`. Ledger rows, idempotency and offsets unchanged.
+- Redeployed: sales-earnings, sales-performance, stripe-webhook (all reach commission.ts).

@@ -4,7 +4,10 @@
      recurring payments actually received. Always a percentage of the REAL amount — a £29.99 monthly
      earns £6.00, a £99 monthly £19.80. Never a hard-coded figure.
    - EARNED the moment the payment is received (NOT held for the refund window).
-   - A refund / chargeback REVERSES the commission on the money that went back (a partial refund
+   - DISPUTES (Paul, 2026-09-29): while a dispute / inquiry is OPEN the commission on that money is
+     HELD (it comes off what is due, it is not a permanent reversal); WON, or an inquiry that closed with
+     no money lost (Stripe 'warning_closed'), RELEASES it; LOST reverses it permanently.
+   - A refund / lost chargeback REVERSES the commission on the money that went back (a partial refund
      reverses that share). If the commission was already paid out, the reversal is an OFFSET against
      future commission.
    - PAYOUT: the first working day of the month after the receipt's month (weekends and England &
@@ -59,6 +62,8 @@ export interface CommissionLine {
   periodMonth: string;
   payoutDate: string;
   status: LineStatus;
+  /** A dispute still open: the commission is held back, not permanently reversed. */
+  held?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -90,6 +95,12 @@ export function nextPayoutDate(todayIso: string): string {
   const thisMonths = payoutDateFor(prevMonthDay);
   return thisMonths >= todayIso.slice(0, 10) ? thisMonths : payoutDateFor(todayIso);
 }
+
+/** Stripe dispute statuses. RELEASED: the money stayed or came back. LOST: it is gone. Anything else
+ *  (warning_needs_response, warning_under_review, needs_response, under_review, or a status we do not
+ *  know) is still OPEN — held, never released on a guess. */
+export const DISPUTE_RELEASED: ReadonlySet<string> = new Set(['won', 'warning_closed']);
+export const DISPUTE_LOST: ReadonlySet<string> = new Set(['lost']);
 
 export interface CommissionInput {
   ledger: LedgerRow[];
@@ -151,7 +162,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     let reversedTotal = 0;
     for (const r of rows) {
       if (r.kind !== 'refund' && r.kind !== 'chargeback') continue;
-      if (r.kind === 'chargeback' && r.status === 'won') continue; // the money came back: nothing reversed
+      if (r.kind === 'chargeback' && DISPUTE_RELEASED.has(r.status)) continue; // won / inquiry closed: released, nothing taken
+      const held = r.kind === 'chargeback' && !DISPUTE_LOST.has(r.status); // still open: held, not reversed
       const p = paymentFor(r);
       if (!p) continue; // a refund we cannot tie to a payment reverses nothing we counted
       const pr = rateOf.get(p.id)!;
@@ -159,16 +171,17 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       const amount = commissionOn(back, pr.rate);
       const day = londonDayOf(r.occurred_at);
       const pm = monthOf(day);
-      reversedTotal += amount;
+      if (!held) reversedTotal += amount;
       lines.push({
         id: `rev:${r.id}`, leadId, sellerId: seller, kind: 'reversal', paymentNumber: pr.n,
-        label: r.kind === 'refund' ? (back >= p.amount_gbp ? 'Refunded' : 'Partly refunded') : 'Chargeback',
+        label: r.kind === 'refund' ? (back >= p.amount_gbp ? 'Refunded' : 'Partly refunded') : held ? 'Held — dispute open' : 'Chargeback',
         clientAmount: round2(back), rate: pr.rate, commission: -amount, occurredAt: r.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
         status: !earns ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
+        ...(held ? { held: true } : {}),
       });
-      // The payment line reads Reversed once fully taken back.
+      // The payment line reads Reversed once fully taken back (never for a hold — that may be released).
       const payLine = lines.find((l) => l.id === `pay:${p.id}`);
-      if (payLine && back >= p.amount_gbp && payLine.status === 'due') payLine.status = 'reversed';
+      if (!held && payLine && back >= p.amount_gbp && payLine.status === 'due') payLine.status = 'reversed';
     }
     const earned = lines.filter((l) => l.leadId === leadId && l.kind === 'payment').reduce((s, l) => s + l.commission, 0);
     clients.push({
@@ -188,6 +201,8 @@ export interface EarningsTotals {
   earnedThisMonth: number;
   earnedToday: number;
   reversed: number;
+  /** Commission held back by disputes still open (included in due / offset, NOT in reversed). */
+  held: number;
   paidOut: number;
   /** Owed at the next payout: every unpaid line, net. Never negative — see offset. */
   due: number;
@@ -209,7 +224,8 @@ export function earningsTotals(lines: CommissionLine[], payouts: PayoutRow[], pr
     earned: sum(counted),
     earnedThisMonth: sum(counted.filter((l) => l.periodMonth === month)),
     earnedToday: sum(counted.filter((l) => londonDayOf(l.occurredAt) === today)),
-    reversed: round2(-sum(counted.filter((l) => l.kind === 'reversal'))),
+    reversed: round2(-sum(counted.filter((l) => l.kind === 'reversal' && !l.held))),
+    held: round2(-sum(counted.filter((l) => l.held))),
     paidOut: round2(payouts.reduce((s, p) => s + Number(p.amount_gbp), 0)),
     due: Math.max(0, unpaid),
     offset: Math.min(0, unpaid),
