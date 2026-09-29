@@ -524,3 +524,25 @@ present), `unverifiable` (no town AND a settled note), `unchecked` (everything e
 
 ---
 
+
+## Coverage: Found vs Added, with / without a website (2026-09-29, Paul)
+
+- Each Coverage row now shows four numbers instead of "Worked" / "N leads": **Found** (with website ·
+  without) and **Added** (with website · without). Rung labels renamed "Contacted" / "Added, not contacted"
+  / "Untouched"; who contacted it is kept.
+- **Found** = the distinct businesses that recorded search runs for the trade+town RETURNED — the discovery
+  result, before Find Leads' own exclusions — keyed by place id (else Maps URL, else name), verdict from
+  the latest run. Written when the run happens: `search_history.found_keys` + `found_with_website` /
+  `found_without_website` (the browser's own history row, from `data.leads`; search-leads' own row for
+  the Niche panel town search, which now returns `searchRunId`).
+- **Added** = those that were then successfully inserted into the CRM: `record_search_addition(run, key,
+  withoutWebsite)` is called only after `addLead`'s insert (admin) or `sales_add_lead` (Sales) succeeds,
+  and only for the searcher's own recorded run (`search_history.added_keys`, idempotent per business).
+- **The verdict** is the search's own `websiteStatus`: NO_WEBSITE / DIRECTORY_ONLY = without
+  (`src/lib/websiteStatusClass.ts` `isWithoutWebsite`, the same split `no_website_count` always used).
+- **History:** the 423 runs before this carry counts taken AFTER the page's exclusions, so they are not
+  Found; a trade+town searched only then reads **"Breakdown not recorded"**, never an estimate. Never
+  searched → "Not searched". Nothing back-filled.
+- Coverage reads every run in the book (Sales searches too). Adds from the Add-a-lead dialog or a CSV have
+  no run and are not in Added. Search, qualification, dedupe, ownership and claiming unchanged.
+- Tests: `scripts/coverage-found-added.test.ts`; live `supabase/tests/coverage-found-added.sql` (rolled back).

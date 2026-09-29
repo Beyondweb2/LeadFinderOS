@@ -30,8 +30,9 @@ export type CoverageState =
 export const COVERAGE_STATES: CoverageState[] = ['worked', 'leads', 'untouched'];
 
 export const COVERAGE_LABEL: Record<CoverageState, string> = {
-  worked: 'Worked',
-  leads: 'Leads found',
+  /* 2026-09-29: "Worked" / "Leads found" read as counts next to Coverage's Found / Added numbers. */
+  worked: 'Contacted',
+  leads: 'Added, not contacted',
   untouched: 'Untouched',
 };
 
@@ -312,4 +313,53 @@ export function applySuppressionPatch<T extends SuppressibleTown>(
 export function hasLeadPool(trade: string, town: CoverageTown, facts: CoverageFacts): boolean {
   if (!facts.pooledPairs) return true;
   return facts.pooledPairs.has(coverageKey(trade, town.name));
+}
+
+/* ══ FOUND vs ADDED, WITH / WITHOUT A WEBSITE (Paul, 2026-09-29) ═══════════════════════════════════
+   Per trade+town, from the SEARCH RUNS (search_history), never from what is in the CRM today:
+   - FOUND = every distinct business any recorded run for this trade+town returned (the discovery
+     result, before the page's own exclusions), split by the search's own website verdict. A business
+     found by two runs counts once; its verdict is the latest run's.
+   - ADDED = every distinct one of those that was then successfully inserted into the CRM, recorded at
+     the insert, with the verdict it had when it was added.
+   - A trade+town whose runs all predate the recording is NOT RECORDED — never estimated. One with no
+     run at all was never searched. Folded on coverageKey, like every other Coverage fact. */
+export interface SearchRunRecord { trade: string; town: string; found: Record<string, boolean> | null; added: Record<string, boolean> | null }
+export interface FoundAdded {
+  /** 'recorded' = at least one run recorded its result; 'not_recorded' = searched, but only before recording. */
+  status: 'recorded' | 'not_recorded';
+  foundWithWebsite: number;
+  foundWithoutWebsite: number;
+  addedWithWebsite: number;
+  addedWithoutWebsite: number;
+  /** Runs for this pair from before recording began (their businesses are not in the figures). */
+  unrecordedRuns: number;
+}
+
+/** Runs must arrive oldest first (the endpoint orders them), so a later sighting's verdict wins. */
+export function foundAddedByPair(runs: ReadonlyArray<SearchRunRecord> | null | undefined): Map<string, FoundAdded> {
+  const acc = new Map<string, { found: Map<string, boolean>; added: Map<string, boolean>; recorded: boolean; unrecorded: number }>();
+  for (const r of runs ?? []) {
+    const k = coverageKey(r.trade, r.town);
+    const e = acc.get(k) ?? { found: new Map(), added: new Map(), recorded: false, unrecorded: 0 };
+    if (r.found) {
+      e.recorded = true;
+      for (const [biz, noSite] of Object.entries(r.found)) e.found.set(biz, noSite === true);
+      for (const [biz, noSite] of Object.entries(r.added ?? {})) e.added.set(biz, noSite === true);
+    } else {
+      e.unrecorded += 1;
+    }
+    acc.set(k, e);
+  }
+  const out = new Map<string, FoundAdded>();
+  for (const [k, e] of acc) {
+    const count = (m: Map<string, boolean>, noSite: boolean) => [...m.values()].filter((v) => v === noSite).length;
+    out.set(k, {
+      status: e.recorded ? 'recorded' : 'not_recorded',
+      foundWithWebsite: count(e.found, false), foundWithoutWebsite: count(e.found, true),
+      addedWithWebsite: count(e.added, false), addedWithoutWebsite: count(e.added, true),
+      unrecordedRuns: e.unrecorded,
+    });
+  }
+  return out;
 }

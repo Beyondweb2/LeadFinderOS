@@ -194,7 +194,15 @@ Deno.serve(async (req) => {
         .eq("user_id", userId).order("id", { ascending: true }).range(from, to));
       const cacheRowsP = all((from, to) => service
         .from("search_cache").select("cache_key").order("id", { ascending: true }).range(from, to));
-      const [marketAudits, completed, leads, history, cacheRows] = await Promise.all([timed("audits", marketAuditsP), timed("runs", completedP), timed("leads", leadsP), timed("history", historyP), timed("cache", cacheRowsP)]);
+      /* ── FOUND vs ADDED (2026-09-29) ─────────────────────────────────────────────────────────────
+         Every search run in the ONE book (anyone who searched), oldest first: what it FOUND (recorded by
+         the search when it ran) and what was then ADDED to the CRM from it (recorded at each successful
+         insert). A run from before the recording has found_keys NULL and is sent as unrecorded — its
+         old counts were taken after the page's exclusions, so they are not used. Keys only, no names. */
+      const runsP = all((from, to) => service
+        .from("search_history").select("keyword, location, found_keys, added_keys")
+        .order("searched_at", { ascending: true }).order("id", { ascending: true }).range(from, to));
+      const [marketAudits, completed, leads, history, cacheRows, searchRuns] = await Promise.all([timed("audits", marketAuditsP), timed("runs", completedP), timed("leads", leadsP), timed("history", historyP), timed("cache", cacheRowsP), timed("searchRuns", runsP)]);
       const hashStart = Date.now();
       const measured: Pair[] = marketAudits
         .filter((a) => completed.has(String(a.id)))
@@ -294,7 +302,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      return { measured, leads: leadPairs, worked: workedPairs, pooled, workedBy: workedByOut };
+      const runs = searchRuns.map((r) => ({
+        trade: String(r.keyword ?? ""), town: String(r.location ?? ""),
+        found: (r.found_keys && typeof r.found_keys === "object") ? r.found_keys as Record<string, boolean> : null,
+        added: (r.added_keys && typeof r.added_keys === "object") ? r.added_keys as Record<string, boolean> : null,
+      })).filter((r) => r.trade && r.town);
+      return { measured, leads: leadPairs, worked: workedPairs, pooled, workedBy: workedByOut, runs };
     };
 
     /* Where the time went, for the next person who measures this (auth = the sign-in + role check). */

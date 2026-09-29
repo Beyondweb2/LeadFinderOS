@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import { useEarnings } from '@/hooks/useEarnings';
+import { WeeklyTierTracker } from '@/components/salesDash/WeeklyTracker';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { CALL_OUTCOMES } from '@/lib/salesCrm';
@@ -199,6 +200,9 @@ export default function SalesDashboard() {
             <KpiCard label="Interested" icon={Star} tone="green" value={d.funnel.interested} sub={`${w.today.interested} today · ${d.funnel.notInterested} not interested`} onClick={() => openStage('interested')} />
             <KpiCard label="Clients won" icon={Trophy} tone="green" value={d.funnel.won} sub={d.funnel.won ? `${pct(d.funnel.won, d.funnel.contacted)} of contacted` : 'Your first win shows here'} onClick={() => openStage('paid')} />
           </div>
+
+          {/* The weekly commission tier (2026-09-29): one salesperson's week — never a mix of sellers. */}
+          {earn.data?.commissionable && person !== 'all' && <WeeklyTierTracker lines={earn.data.lines} />}
 
           <TodayStrip t={w.today} unread={viewingSelf ? unread.count : null} earnedToday={et ? et.earnedToday : null}
             onUnread={() => (firstUnread ? go('whatsapp', firstUnread) : navigate('/inbox'))} onFollowUps={() => showGroup(w.followUps.overdue.length ? 'overdue' : 'dueToday')} />

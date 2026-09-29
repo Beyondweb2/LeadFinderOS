@@ -4,9 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   coverageKey, coverageStateFor,
-  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair, workersByPair,
+  hasLeadPool, summarise, applyFilters, applySuppressionPatch, countLeadsByPair, workersByPair, foundAddedByPair,
   type CoverageFacts, type CoverageRow, type CoverageTown, type CoverageSummary,
-  type SuppressionPatch, type CoverageWorker, type WorkedByEntry,
+  type SuppressionPatch, type CoverageWorker, type WorkedByEntry, type FoundAdded, type SearchRunRecord,
 } from '@/lib/coverageState';
 import { coverageQueryKey, coverageTownsQueryKey } from '@/lib/coverageFreshness';
 
@@ -27,7 +27,8 @@ export interface CoverageTownRow extends CoverageTown {
    `worked` town said nothing about whether leads had been pulled there. That was the gap: the rung
    answers "how far has this gone", the count answers "have I pulled leads from here". */
 /* `workers` = who owns a contacted lead in this trade+town (2026-09-28); empty when nobody can be named. */
-export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[] };
+/* `foundAdded` = Found vs Added, with / without a website, from the search runs (2026-09-29); null = never searched. */
+export type GradedTown = CoverageTownRow & { state: CoverageRow['state']; leadCount: number; hasPool: boolean; workers: CoverageWorker[]; foundAdded: FoundAdded | null };
 
 interface Pair { trade: string; town: string }
 
@@ -39,7 +40,7 @@ interface Pair { trade: string; town: string }
 interface TownsData { towns: CoverageTownRow[] }
 /* `pooled` is OPTIONAL: an older `coverage` deploy does not send it, and the client must be able
    to tell "not sent" from "none" — see hasLeadPool. */
-interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; pooled?: Pair[]; workedBy?: WorkedByEntry[] } }
+interface PairsData { pairs: { measured: Pair[]; leads: Pair[]; worked: Pair[]; pooled?: Pair[]; workedBy?: WorkedByEntry[]; runs?: SearchRunRecord[] } }
 
 /* ⛔ THE KEY IS DEFINED IN src/lib/coverageFreshness.ts, not here, because the WRITER needs it too.
    useOutreach marks this query stale when the lead list changes — and it has to be the writer's job,
@@ -121,6 +122,8 @@ export function useCoverage() {
   );
   /* Who worked each pair, folded on the same key as the rung. An older deploy sends no workedBy: no names. */
   const workers = useMemo(() => workersByPair(pairs?.workedBy), [pairs]);
+  /* Found vs Added per pair, from the search runs. An older deploy sends no runs: no breakdown (null). */
+  const foundAdded = useMemo(() => foundAddedByPair(pairs?.runs), [pairs]);
 
   const gradeFor = useCallback((trade: string, includeSuppressed: boolean): GradedTown[] => {
     return towns
@@ -135,8 +138,9 @@ export function useCoverage() {
            canonicalisation must not run 733 times in a render loop. */
         hasPool: hasLeadPool(trade, t, facts),
         workers: workers.get(coverageKey(trade, t.name)) ?? [],
+        foundAdded: foundAdded.get(coverageKey(trade, t.name)) ?? null,
       }));
-  }, [towns, facts, leadCounts, workers]);
+  }, [towns, facts, leadCounts, workers, foundAdded]);
 
   const setSuppressed = useCallback(async (townId: string, suppress: boolean, reason?: string) => {
     const { data: res, error: e } = await supabase.functions.invoke('coverage', {

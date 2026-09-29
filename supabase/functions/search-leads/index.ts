@@ -7,6 +7,7 @@ import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shar
 import { qualifierInfo, resolveGeoBias } from '../_shared/geobias.ts';
 import { generateCacheKey } from '../_shared/search-cache-key.ts';
 import { countryFromAddress } from '../../../src/lib/leadCountry.ts';
+import { foundRecord } from '../../../src/lib/websiteStatusClass.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -1511,9 +1512,11 @@ Deno.serve(async (req) => {
        which is strictly better than losing the results.
        ⚠️ Counts are the RAW result counts this function returned. The SPA's own row uses its
        post-exclusion counts, which is why it opts out rather than letting both write. */
+    /* The run's id, returned so a caller can credit an add to the run that found it (Coverage). */
+    let searchRunId: string | null = null;
     if (!skipHistory && userId) {
       try {
-        await serviceClient.from('search_history').insert({
+        const { data: runRow } = await serviceClient.from('search_history').insert({
           user_id: userId,
           keyword: String(keyword).toLowerCase().trim(),
           location: String(location).toLowerCase().trim(),
@@ -1521,7 +1524,10 @@ Deno.serve(async (req) => {
           results_count: leads.length,
           no_website_count: leads.filter((l: { websiteStatus?: string }) =>
             l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length,
-        });
+          /* Coverage (2026-09-29): what this run FOUND, with the search's own website verdict. */
+          ...foundRecord(leads),
+        }).select('id').maybeSingle();
+        searchRunId = (runRow as { id?: string } | null)?.id ?? null;
       } catch (histErr) {
         console.error('[search-leads] search_history write failed (non-blocking):', histErr);
       }
@@ -1581,6 +1587,7 @@ Deno.serve(async (req) => {
     }
 
     return jsonResponse({
+      searchRunId,
       leads: isGated ? stripGatedFields(leads) : leads,
       totalFound: leads.length,
       searchId: crypto.randomUUID(),

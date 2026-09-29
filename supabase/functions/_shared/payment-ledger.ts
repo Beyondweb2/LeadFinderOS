@@ -95,7 +95,7 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
   try {
     if (!leadId) return;
     const [{ data: rows }, { data: lead }, { data: owner }] = await Promise.all([
-      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id").eq("lead_id", leadId),
+      service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_week_start, commission_week_seq, commission_rate").eq("lead_id", leadId),
       service.from("outreach_leads").select("business_name, sold_by_user_id").eq("id", leadId).maybeSingle(),
       service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle(),
     ]);
@@ -111,7 +111,7 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
     const out: Record<string, unknown>[] = [];
     if (sellerIsSales && seller && line && line.commission !== 0) {
       out.push(line.commission > 0
-        ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${line.label.toLowerCase()}).`, link: "/earnings", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }
+        ? { user_id: seller, kind: "commission_earned", title: `+£${line.commission.toFixed(2)} commission earned`, body: `${biz} paid £${line.clientAmount.toFixed(2)} (${line.label.toLowerCase()}, ${Math.round(line.rate * 100)}%).`, link: "/earnings", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` }
         : { user_id: seller, kind: "commission_reversed", title: `−£${(-line.commission).toFixed(2)} commission reversed`, body: `${biz}: ${line.label.toLowerCase()}.`, link: "/earnings", lead_id: leadId, priority: 2, dedupe_key: `commission:${me.id}` });
     }
     const ownerId = (owner as { user_id?: string } | null)?.user_id;

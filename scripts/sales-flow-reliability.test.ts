@@ -93,7 +93,8 @@ console.log("\n── coverage ──");
   ok(describeWorkers([], () => "x").text === "", "nobody → nothing rendered");
   const comp = read("src/components/CoverageWorkers.tsx");
   ok(/team\.isLoading \|\| !d\.text/.test(comp), "no '+1 other' flash before the team names load");
-  ok(/t\.state === 'worked' && t\.workers\.length > 0/.test(page), "avatars only on a Worked row with someone to name");
+  /* 2026-09-29: the names sit inside the Contacted marker (Found vs Added replaced the rung badge). */
+  ok(/t\.state === 'worked' && \([\s\S]{0,400}t\.workers\.length > 0 && <CoverageWorkers/.test(page), "avatars only on a Contacted row with someone to name");
 }
 
 /* ── 5. COVERAGE → FIND LEADS: the count matches what you can see ─────────────────────────────── */

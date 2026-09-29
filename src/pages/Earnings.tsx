@@ -13,7 +13,8 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useEarnings } from '@/hooks/useEarnings';
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
-import { COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, type CommissionLine } from '@/lib/commission';
+import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, WEEKLY_TIERS, type CommissionLine } from '@/lib/commission';
+import { WeeklyTierTracker } from '@/components/salesDash/WeeklyTracker';
 import { leadLaunchState } from '@/lib/salesLinks';
 import { cn } from '@/lib/utils';
 import { Empty, KpiCard, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
@@ -34,6 +35,9 @@ const STATUS: Record<CommissionLine['status'], { label: string; tone: Tone }> = 
 };
 const day = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' });
 const pct = (r: number) => `${Math.round(r * 100)}%`;
+/** The weekly tiers in words: "30% for clients 1–3, 40% for 4–6, 50% from 7". */
+const TIER_WORDS = WEEKLY_TIERS.map((t, i) => { const from = i === 0 ? 1 : WEEKLY_TIERS[i - 1].upTo + 1; return Number.isFinite(t.upTo) ? `${pct(t.rate)} for clients ${from}–${t.upTo}` : `${pct(t.rate)} from client ${from}`; }).join(', ');
+const wc = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 export default function Earnings() {
   const { role } = useSubscription();
@@ -95,6 +99,11 @@ export default function Earnings() {
             <p className="flex items-start gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300"><Undo2 className="mt-0.5 h-4 w-4 shrink-0" />A refund came after its commission was paid out. {gbp(-d.totals.offset)} will be taken from future commission.</p>
           )}
 
+          {d.commissionable && !isAdmin && <WeeklyTierTracker lines={d.lines} />}
+          {isAdmin && person !== 'all' && person !== 'me' && <WeeklyTierTracker lines={d.lines} />}
+
+          {isAdmin && <WeeklyAudit lines={d.lines} nameOf={nameOf} bizOf={bizOf} />}
+
           {isAdmin && person === 'all' && (
             <Panel title="By salesperson" icon={Wallet} tone="green" hint="Only salespeople earn commission.">
               {d.bySeller.length === 0 ? <Empty>No salesperson has earned commission yet.</Empty> : (
@@ -103,7 +112,7 @@ export default function Earnings() {
             </Panel>
           )}
 
-          <Panel title="Clients" icon={CheckCircle2} tone="green" hint={`Commission is ${pct(COMMISSION_INITIAL_RATE)} of the first payment and ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments actually received.`}>
+          <Panel title="Clients" icon={CheckCircle2} tone="green" hint={`The first payment earns by your weekly tier (${TIER_WORDS}), and ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments actually received.`}>
             {d.clients.length === 0 ? <Empty icon={Wallet}>No client payments yet. When a client you sold pays, it shows here the same day.</Empty> : (
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {d.clients.map((c) => (
@@ -127,9 +136,9 @@ export default function Earnings() {
           <Panel title="Every payment" icon={PiggyBank} tone="green" hint="Newest first. Each line is a real payment or refund recorded from Stripe.">
             {d.lines.length === 0 ? <Empty>Nothing yet.</Empty> : (
               <div className="-mx-1 overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-sm">
+                <table className="w-full min-w-[720px] border-collapse text-sm">
                   <thead><tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {['Client', 'Payment', 'Date', 'Client paid', 'Rate', 'Commission', 'Status', 'Payout'].map((h, i) => <th key={h} className={cn('px-2 py-2 font-semibold', i >= 3 && i !== 6 && 'text-right')}>{h}</th>)}
+                    {['Client', 'Payment', 'Date', 'Week · place', 'Client paid', 'Rate', 'Commission', 'Status', 'Payout'].map((h, i) => <th key={h} className={cn('px-2 py-2 font-semibold', i >= 4 && i !== 7 && 'text-right')}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {d.lines.map((l) => (
@@ -137,6 +146,7 @@ export default function Earnings() {
                         <td className="max-w-[12rem] truncate px-2 py-2 font-medium" title={bizOf.get(l.leadId)}>{bizOf.get(l.leadId) ?? 'Client'}</td>
                         <td className="px-2 py-2 text-muted-foreground">{l.label}</td>
                         <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">{day(l.occurredAt)}</td>
+                        <td className="whitespace-nowrap px-2 py-2 text-muted-foreground" data-testid="line-week">{l.weekSeq && l.weekStart ? `w/c ${wc(l.weekStart)} · client ${l.weekSeq}` : '—'}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{l.kind === 'reversal' ? `−${gbp(l.clientAmount)}` : gbp(l.clientAmount)}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{pct(l.rate)}</td>
                         <td className={cn('px-2 py-2 text-right font-semibold tabular-nums', l.commission > 0 ? 'text-emerald-600 dark:text-emerald-300' : l.commission < 0 ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground')}>{l.commission < 0 ? `−${gbp(-l.commission)}` : gbp(l.commission)}</td>
@@ -153,7 +163,9 @@ export default function Earnings() {
           <details className="rounded-xl border border-border/60 bg-card/40 p-3.5 text-xs text-muted-foreground">
             <summary className="flex cursor-pointer select-none items-center gap-1.5 font-semibold text-foreground"><Info className="h-3.5 w-3.5" />How commission works</summary>
             <ul className="mt-2 list-disc space-y-1 pl-5 leading-relaxed">
-              <li><b>Earned</b> the moment a client payment is received: {pct(COMMISSION_INITIAL_RATE)} of the first payment, {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} monthly payments — always of the amount actually paid.</li>
+              <li><b>Earned</b> the moment a client payment is received — always of the amount actually paid.</li>
+              <li><b>First payment, by weekly tier</b>: {TIER_WORDS}, counted Monday to Sunday. Each client keeps the rate of their own place in the week (reaching client 4 does not raise clients 1–3), and the count starts again every Monday. A later refund never changes another sale's rate.</li>
+              <li><b>Monthly payments</b>: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} monthly payments.</li>
               <li><b>Due</b>: paid on the first working day of the month after the payment (weekends and bank holidays move it to the next working day).</li>
               <li><b>Projected</b>: what future monthly payments would earn if they arrive. Never added to earned.</li>
               <li><b>Reversed</b>: a refund or chargeback takes back the commission on that money. If it was already paid out, it comes off future commission.</li>
@@ -219,5 +231,56 @@ function PayoutDialog({ open, onOpenChange, sellers }: { open: boolean; onOpenCh
         <DialogFooter><Button onClick={() => void save()} disabled={saving || !seller || !month || !amount}>{saving ? 'Saving…' : 'Record payout'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** ADMIN: every Monday–Sunday week, per salesperson, in the order the sales were numbered — the STORED
+ *  place and rate (payment_ledger commission_week_seq / commission_rate), so what is audited is what was
+ *  earned. A refund shows beside the sale it reverses; it never renumbers the others. */
+function WeeklyAudit({ lines, nameOf, bizOf }: { lines: CommissionLine[]; nameOf: Map<string, string>; bizOf: Map<string, string> }) {
+  const weeks = useMemo(() => {
+    const byKey = new Map<string, { seller: string | null; weekStart: string; rows: CommissionLine[] }>();
+    for (const l of lines) {
+      if (l.kind !== 'payment' || !l.weekSeq || !l.weekStart) continue;
+      const k = `${l.weekStart}|${l.sellerId ?? ''}`;
+      const e = byKey.get(k) ?? { seller: l.sellerId, weekStart: l.weekStart, rows: [] };
+      e.rows.push(l);
+      byKey.set(k, e);
+    }
+    for (const e of byKey.values()) e.rows.sort((a, b) => (a.weekSeq ?? 0) - (b.weekSeq ?? 0));
+    return [...byKey.values()].sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+  }, [lines]);
+  const reversedLeads = useMemo(() => new Set(lines.filter((l) => l.kind === 'reversal' && l.paymentNumber === 1 && !l.held).map((l) => l.leadId)), [lines]);
+  const heldLeads = useMemo(() => new Set(lines.filter((l) => l.kind === 'reversal' && l.paymentNumber === 1 && l.held).map((l) => l.leadId)), [lines]);
+  return (
+    <Panel title="Weekly tiers — audit" icon={CalendarClock} tone="grey" hint="Each Monday–Sunday week per salesperson: the order sales were counted (payment time, then payment id) and the rate stored on each.">
+      {weeks.length === 0 ? <Empty>No sale has been counted on the weekly tiers yet.</Empty> : (
+        <div className="space-y-3">
+          {weeks.map((w) => (
+            <div key={`${w.weekStart}|${w.seller}`} className="rounded-lg border border-border/60" data-testid="weekly-audit-week">
+              <p className="border-b border-border/40 px-2.5 py-1.5 text-xs font-semibold">{nameOf.get(w.seller ?? '') ?? 'Salesperson'} · week of {wc(w.weekStart)} · {w.rows.length} client{w.rows.length === 1 ? '' : 's'}</p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead><tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">{['#', 'Business', 'Paid', 'Payment', 'Rate', 'Commission', ''].map((h, i) => <th key={i} className={cn('px-2.5 py-1 font-semibold', i >= 3 && i <= 5 && 'text-right')}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {w.rows.map((l) => (
+                      <tr key={l.id} className="border-t border-border/30">
+                        <td className="px-2.5 py-1.5 tabular-nums">{l.weekSeq}</td>
+                        <td className="max-w-[12rem] truncate px-2.5 py-1.5">{bizOf.get(l.leadId) ?? 'Client'}</td>
+                        <td className="whitespace-nowrap px-2.5 py-1.5 text-muted-foreground">{new Date(l.occurredAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })}</td>
+                        <td className="px-2.5 py-1.5 text-right tabular-nums">{gbp(l.clientAmount)}</td>
+                        <td className="px-2.5 py-1.5 text-right tabular-nums">{pct(l.rate)}</td>
+                        <td className="px-2.5 py-1.5 text-right font-semibold tabular-nums">{gbp(l.commission)}</td>
+                        <td className="px-2.5 py-1.5 text-[11px] text-muted-foreground">{reversedLeads.has(l.leadId) ? 'Reversed' : heldLeads.has(l.leadId) ? 'Held — dispute' : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }

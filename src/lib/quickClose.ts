@@ -20,6 +20,7 @@ export type QcDomain = 'yes' | 'no' | 'not_sure' | 'no_domain';
 export type QcManager = 'owner' | 'employee' | 'agency' | 'third_party' | 'no_website' | 'not_sure';
 export type QcAccess = 'yes' | 'no' | 'not_sure' | 'not_applicable';
 export type QcAuthority = 'yes' | 'no' | 'not_sure' | 'not_applicable';
+export type QcConsents = 'yes' | 'not_yet';
 
 export interface QuickCloseAnswers {
   decision_maker?: QcDecisionMaker | null;
@@ -30,16 +31,31 @@ export interface QuickCloseAnswers {
   /** 🔴 THE WEBSITE ROUTE (Paul, 2026-09-29): Findable Build (12 payments) or Findable Optimise (6).
    *  Required — a Quick Close with no route never reaches a payment link. */
   route?: ServiceRoute | null;
+  /** 🔴 BUILD ONLY (Paul, 2026-09-29): the three essential consents, confirmed on the call before a link.
+   *  'yes' = all three confirmed; 'not_yet' = not (yet) — the link waits. Never asked on Optimise. */
+  build_consents?: QcConsents | null;
 }
 export type QcKey = keyof QuickCloseAnswers;
 
-export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; options: readonly { value: string; label: string }[] }[] = [
+/** The three Build consents, in plain words (Paul, 2026-09-29).
+ *  ⚠️ DECLARED ABOVE QUICK_CLOSE_QUESTIONS, WHICH READS IT: a const read before its declaration throws
+ *  at module load, and this module loads inside fn quick-close. */
+export const BUILD_CONSENTS: readonly string[] = [
+  'They own or control the domain, or have the authority to make the changes the new website needs.',
+  'Findable has their permission to make the necessary domain / DNS changes.',
+  'They have the right to provide and use the business content, logos and photos they give Findable.',
+];
+
+export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly { value: string; label: string }[] }[] = [
   { key: 'decision_maker', text: 'Are you authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
   { key: 'domain', text: 'Do you own or control the domain name?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no_domain', label: 'No domain' }] },
   { key: 'manager', text: 'Who currently manages or controls the website?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
   { key: 'access', text: 'Could you give Findable access to the current website if needed?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'authority', text: 'If an agency or third party manages the site, do you have the authority to replace, move or materially change the website?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
   { key: 'route', text: 'Website route', options: [{ value: 'build', label: 'Build me a new Findable website' }, { value: 'optimise', label: 'Keep my existing website and optimise it' }] },
+  /* Asked ONLY on Build. The three consents the new site cannot go ahead without, read out as written. */
+  { key: 'build_consents', text: 'For the new website, can they confirm all three?', detail: BUILD_CONSENTS,
+    options: [{ value: 'yes', label: 'Yes — they confirm all three' }, { value: 'not_yet', label: 'Not yet' }] },
 ];
 
 /** The commercial consequence of a route, as the rep sees it the moment it is chosen. From the
@@ -65,6 +81,8 @@ export function cleanAnswers(raw: unknown): QuickCloseAnswers {
   }
   // An Optimise route for a business with no website is not an answer (there is nothing to optimise).
   if (out.route && !routeAvailable(out, out.route)) delete out.route;
+  // The Build consents belong to Build: on any other route (or none) they are not an answer.
+  if (out.route !== 'build') delete out.build_consents;
   return out;
 }
 
@@ -81,6 +99,7 @@ export function missingQuestions(a: QuickCloseAnswers): QcKey[] {
   // Authority is asked only where a third party runs the site; "not applicable" does not answer it there.
   if (thirdPartyManaged(a) ? !(a.authority && a.authority !== 'not_applicable') : !a.authority && !noSite(a) && a.manager !== 'owner' && a.manager !== 'employee') miss.push('authority');
   if (!a.route) miss.push('route');
+  if (a.route === 'build' && !a.build_consents) miss.push('build_consents');
   return miss;
 }
 
@@ -104,6 +123,8 @@ export interface QuickCloseGate {
   review: QcReviewReason[];
   /** Things to settle after payment — shown in the handoff, never a stop. */
   notes: string[];
+  /** Build chosen and the three consents are not confirmed: no link until they are. */
+  consentsNeeded: boolean;
 }
 
 export function quickCloseGate(a: QuickCloseAnswers): QuickCloseGate {
@@ -124,7 +145,7 @@ export function quickCloseGate(a: QuickCloseAnswers): QuickCloseGate {
   if (a.access === 'not_sure') notes.push('Website access to be confirmed after payment');
   if (a.domain === 'no_domain') notes.push('No domain yet — the business registers one in its own name');
   if (thirdPartyManaged(a) && a.authority === 'yes') notes.push('An agency / third party runs the site; the client says they may replace or move it');
-  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, notes };
+  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, notes, consentsNeeded: a.route === 'build' && a.build_consents !== 'yes' };
 }
 
 /** The canonical onboarding columns these answers set (the same ones the self-service form writes). */
@@ -141,13 +162,19 @@ export function onboardingColumnsFor(a: QuickCloseAnswers): Record<string, unkno
      one decision), so the checkout reads one interpretation whichever path made the sale. An unset
      route writes NOTHING — never a default. */
   if (a.route) { out.plan_tier = planTierForRoute(a.route); out.website_addon = a.route === 'build'; }
+  /* The Build consents land in the SAME columns the self-service domain pages write. Authority is never
+     turned into a yes over an explicit 'no' / 'not sure' to the authority question. */
+  if (a.route === 'build' && a.build_consents === 'yes') {
+    out.dns_permission = true; out.materials_confirmed = true;
+    if (a.authority !== 'no' && a.authority !== 'not_sure') out.authority_confirmed = true;
+  }
   return out;
 }
 
-export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'needs_review' | 'ready' | 'link_generated' | 'paid';
+export type QuickCloseState = 'not_started' | 'in_progress' | 'blocked' | 'consents_needed' | 'needs_review' | 'ready' | 'link_generated' | 'paid';
 export interface QuickCloseRecord { answers?: QuickCloseAnswers | null; review_approved_at?: string | null; link_url?: string | null; link_generated_at?: string | null }
 export const QUICK_CLOSE_STATE_LABEL: Record<QuickCloseState, string> = {
-  not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', needs_review: 'Paul review required',
+  not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', consents_needed: 'Build consents needed', needs_review: 'Paul review required',
   ready: 'Ready for payment', link_generated: 'Payment link generated', paid: 'Paid',
 };
 
@@ -159,6 +186,8 @@ export function quickCloseState(rowStatus: string | null | undefined, qc: QuickC
   const g = quickCloseGate(cleanAnswers(qc.answers));
   if (g.blocked) return 'blocked';
   if (!g.complete) return 'in_progress';
+  /* ⛔ NOT RELEASABLE: Paul's review release does not stand in for the client's own Build consents. */
+  if (g.consentsNeeded) return 'consents_needed';
   if (g.review.length && !qc.review_approved_at) return 'needs_review';
   return 'ready';
 }
@@ -171,7 +200,7 @@ export function mayGenerateLink(rowStatus: string | null | undefined, qc: QuickC
 
 export const answerLabel = (key: QcKey, value: string | null | undefined) =>
   QUICK_CLOSE_QUESTIONS.find((q) => q.key === key)?.options.find((o) => o.value === value)?.label ?? '—';
-const SHORT_Q: Record<QcKey, string> = { decision_maker: 'Decision maker', domain: 'Owns / controls domain', manager: 'Website managed by', access: 'Can give site access', authority: 'Authority to replace / move site', route: 'Website route' };
+const SHORT_Q: Record<QcKey, string> = { decision_maker: 'Decision maker', domain: 'Owns / controls domain', manager: 'Website managed by', access: 'Can give site access', authority: 'Authority to replace / move site', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)' };
 
 /** The handoff lines for the PAID email when a salesperson Quick-Closed the client. Pure. */
 export function quickCloseHandoffLines(i: {
