@@ -69,9 +69,25 @@ console.log("\n── refunds, chargebacks, offsets ──");
   ok(part.lines.find((l) => l.kind === "reversal")!.commission === -14.85 && part.lines.find((l) => l.kind === "payment")!.status === "due", "a partial refund reverses only that share (£49.50 → -£14.85); the payment stays due");
   const pay3 = row("i", "initial", 99, "2026-09-17T13:00:00Z");
   const cbOpen = run([pay3, row("i", "chargeback", 99, "2026-09-25T10:00:00Z", { kind: "chargeback", status: "needs_response", stripe_charge_id: pay3.stripe_charge_id, stripe_payment_intent_id: null })]);
-  ok(cbOpen.lines.some((l) => l.kind === "reversal" && l.commission === -29.7 && l.label === "Chargeback"), "an open chargeback reverses the commission");
+  ok(cbOpen.lines.some((l) => l.kind === "reversal" && l.commission === -29.7 && l.held === true && l.label === "Held — dispute open"), "an open chargeback HOLDS the commission (Paul, 2026-09-29 — was: reversed)");
   const cbWon = run([pay3, row("i", "chargeback", 99, "2026-09-25T10:00:00Z", { kind: "chargeback", status: "won", stripe_charge_id: pay3.stripe_charge_id, stripe_payment_intent_id: null })]);
   ok(!cbWon.lines.some((l) => l.kind === "reversal"), "a WON chargeback reverses nothing");
+  // Paul, 2026-09-29: open = HELD, won / inquiry closed = RELEASED, lost = REVERSED.
+  const cb = (status: string) => run([pay3, row("i", "chargeback", 99, "2026-09-25T10:00:00Z", { kind: "chargeback", status, stripe_charge_id: pay3.stripe_charge_id, stripe_payment_intent_id: null })]);
+  for (const s of ["warning_needs_response", "warning_under_review", "needs_response", "under_review", "some_new_status"]) {
+    const x = cb(s); const l = x.lines.find((y) => y.kind === "reversal");
+    const t = earningsTotals(x.lines, [], [], "2026-09-28");
+    ok(!!l?.held && l.commission === -29.7 && l.label === "Held — dispute open" && x.lines.find((y) => y.kind === "payment")!.status === "due" && t.held === 29.7 && t.reversed === 0 && t.due === 0 && x.clients[0].reversed === 0, `dispute ${s}: commission HELD (off what is due, not a permanent reversal)`);
+  }
+  const inq = cb("warning_closed");
+  ok(!inq.lines.some((l) => l.kind === "reversal") && earningsTotals(inq.lines, [], [], "2026-09-28").due === 29.7, "an inquiry that closed with no money lost RELEASES the commission");
+  ok(earningsTotals(cbWon.lines, [], [], "2026-09-28").due === 29.7, "a won dispute RELEASES it (due again)");
+  const lost = cb("lost"); const ll = lost.lines.find((y) => y.kind === "reversal")!;
+  const tl = earningsTotals(lost.lines, [], [], "2026-09-28");
+  ok(!ll.held && ll.label === "Chargeback" && lost.lines.find((y) => y.kind === "payment")!.status === "reversed" && tl.reversed === 29.7 && tl.held === 0 && lost.clients[0].reversed === 29.7, "a LOST dispute reverses the commission permanently");
+  const heldAfterPayout = run([pay3, row("i", "chargeback", 99, "2026-10-05T10:00:00Z", { kind: "chargeback", status: "needs_response", stripe_charge_id: pay3.stripe_charge_id, stripe_payment_intent_id: null })], [{ user_id: REP, period_month: "2026-09-01", amount_gbp: 29.7, paid_at: "2026-10-01" }]);
+  const th = earningsTotals(heldAfterPayout.lines, [{ user_id: REP, period_month: "2026-09-01", amount_gbp: 29.7, paid_at: "2026-10-01" }], [], "2026-10-06");
+  ok(th.offset === -29.7 && th.held === 29.7 && th.reversed === 0, "a hold after payout sits as an offset (the existing offset logic), still not a reversal");
   const stray = run([row("j", "initial", 99, "2026-09-17T13:00:00Z"), row("j", "refund", 99, "2026-09-20T10:00:00Z", { stripe_payment_intent_id: "pi_other", stripe_charge_id: "ch_other" })]);
   ok(!stray.lines.some((l) => l.kind === "reversal"), "a refund tied to no counted payment reverses nothing we counted");
   // Paid out in September, refunded in October → an offset against the next payout.
