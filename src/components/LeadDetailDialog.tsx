@@ -3,6 +3,7 @@ import { isDemoLead } from '@/lib/demoLeads';
 import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, ClipboardList, Loader2, PhoneCall, Mic, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
+import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -636,6 +637,8 @@ function LeadDetailBody({
           </DialogTitle>
           {/* Lead → its WhatsApp conversation (the one Inbox deep link). Not shown inside the Inbox,
               where the conversation is already open beside this panel. */}
+          {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
+          <QuickCloseButton leadId={lead.id} />
           {context !== 'inbox' && lead.phone && (
             <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-500/20 dark:text-blue-300" aria-label={`Open ${lead.business_name} on WhatsApp`}>
               <Phone className="h-3.5 w-3.5" />WhatsApp

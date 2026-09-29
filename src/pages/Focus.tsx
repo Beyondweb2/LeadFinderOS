@@ -21,6 +21,7 @@ import { LEAD_CHANGED_EVENT } from '@/lib/leadSync';
 import type { SalesWorkspace } from '@/lib/salesWorkspace';
 import { LeadHookPanel, LeadWorkPanel } from '@/components/LeadCrmPanel';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
+import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { Empty, Panel } from '@/components/salesDash/ui';
 import { cn } from '@/lib/utils';
 
@@ -182,6 +183,7 @@ export default function Focus() {
                     <button type="button" onClick={() => navigate('/outreach', { state: leadLaunchState(lead.id) })} className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />Full workspace</button>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
+                    <QuickCloseButton leadId={lead.id} size="lg" />
                     <Button size="sm" variant="outline" className="gap-1.5 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300" onClick={() => void quick('interested')} disabled={busy !== null || !!lead.is_potential_work}>
                       {busy === 'interested' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}Interested
                     </Button>

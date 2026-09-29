@@ -116,6 +116,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   to a site we build**; optimise-only is to get its own structure (NOT YET DEFINED by Paul). Do not
   invent penalties or exit rights. The guarantee applies on top: a valid claim is an exit under its
   own terms. ⛔ The £9.99 hosting add-on is RETIRED; only a LEGACY row still carries `website_addon`.
+- **Quick Close** (`src/lib/quickClose.ts`, fn `quick-close`, `docs/sales-experience.md` §9): a salesperson's
+  5-question close on the SAME onboarding row (locked find-or-create) → the EXISTING `findable-checkout`
+  (row + lead only; never a price). Domain / agency doubt = Paul review, never silently safe.
 - **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4): 30% of the initial
   payment + 20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund /
   chargeback (an offset once paid out), from the **payment ledger** (`payment_ledger`, written by

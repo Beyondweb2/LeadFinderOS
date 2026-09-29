@@ -91,6 +91,7 @@ export function LeadListSheet({ open, onOpenChange, title, description, leads, g
 const ACTION_ICON: Record<string, typeof Clock> = {
   reply_waiting: MessageCircleReply, follow_up_overdue: AlertTriangle, follow_up_due: CalendarClock, signup_opened: Flame,
   interested_untouched: Star, signup_unopened: Send, audit_ready: Sparkles, going_cold: Snowflake,
+  quick_close_finish: PoundSterling, quick_close_link: PoundSterling, quick_close_review: AlertTriangle,
 };
 export function NextActions({ items, go, onFocus }: { items: NextAction[]; go: Go; onFocus?: () => void }) {
   return (
