@@ -1,4 +1,4 @@
-import { SalesStatePill } from '@/components/SalesStatePill';
+import { OneStatusPill } from '@/components/PipelineStatusSelect';
 import type { SalesStateView } from '@/lib/leadState';
 import { memo } from 'react';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
 import { ContactMethodBadge } from './ContactMethodBadge';
-import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks } from './SocialLinks';
@@ -34,8 +33,8 @@ import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTION
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
-  /** The lead's sales state (leadState.salesStateOf), or null when the pipeline badge already says it —
-   *  decided once by the table (rowSalesState), 2026-09-30. */
+  /** The lead's sales state (leadState.salesStateOf), from the table (rowSalesState). The card draws ONE
+   *  status pill from it and the pipeline status (leadState.oneStatusOf, 2026-10-01). */
   salesState?: SalesStateView | null;
   /** Muted campaign-name sub-line under the business name — passed only in the
    *  "All campaigns" view when the lead has a campaign; null/undefined hides it. */
@@ -204,7 +203,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
                 )}
 
-                {salesState && <SalesStatePill view={salesState} size="xs" />}
                 {/* Pipeline Status */}
                 {onPipelineStatusChange && (
                   <Select
@@ -224,7 +222,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                         : undefined}
                       {...(isLastContacted ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}
                     >
-                      <PipelineStatusBadge status={lead.status as PipelineStatus} compact />
+                      <OneStatusPill status={lead.status} stage={salesState} compact />
                     </SelectTrigger>
                     <SelectContent>
                       {PIPELINE_STATUS_OPTIONS.map((opt) => (
@@ -235,6 +233,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     </SelectContent>
                   </Select>
                 )}
+                {!onPipelineStatusChange && <OneStatusPill status={lead.status} stage={salesState} compact />}
               </div>
 
               {/* Row 2: Next Action (always below) */}

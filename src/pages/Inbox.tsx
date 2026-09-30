@@ -40,9 +40,8 @@ import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
-import { SalesStatePill } from '@/components/SalesStatePill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
-import { INTERESTED_STATUSES } from '@/lib/leadState';
+import { INTERESTED_STATUSES, salesStateOf } from '@/lib/leadState';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
@@ -691,6 +690,9 @@ const Inbox = () => {
      Unread is withheld until this person's read times have loaded, so a slow read never flashes the
      whole day's replies as unread. */
   const leadByIdForState = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
+  /* The list row's stage for its ONE status pill — the same reading as the header, from the row the Inbox
+     already holds (status, star, amount paid, meeting, opener sent). */
+  const listStageOf = (leadId: string | null) => { const l = leadId ? leadByIdForState.get(leadId) : undefined; return l ? salesStateOf(l) : null; };
   const stateByKey = useMemo(() => {
     const out = new Map<string, ConversationState>();
     const nowMs = Date.now();
@@ -2017,7 +2019,7 @@ const Inbox = () => {
                 <div className="mt-0.5 flex items-center gap-1">
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
+                    : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />}
                   <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
                   {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
                   <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
@@ -2095,17 +2097,19 @@ const Inbox = () => {
                     {active.leadId && (
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
+                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
-                    {/* The sales state pill — hidden only when it would just repeat the star. */}
-                    {active.leadId && activeSales.view && !(activeSales.view.state === 'interested' && active.isPotentialWork) && <SalesStatePill view={activeSales.view} size="xs" />}
+                    {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
+                        control above draws the stage OR the pipeline status (leadState.oneStatusOf) — the separate
+                        sales-state pill that repeated it ("Replied" beside "Replied") is gone. */}
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
                     <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <ConvStateChip state={activeState} hideQueued />
-                    {active.leadStatus === 'queued' && (
-                      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', queueState?.paused ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-muted text-muted-foreground')}>
-                        <Timer className="h-3 w-3" />{queueState?.paused ? 'Queued · queue paused' : 'Queued'}
+                    {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
+                    {active.leadStatus === 'queued' && queueState?.paused && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                        <Timer className="h-3 w-3" />Queue paused
                       </span>
                     )}
                     {/* No email on file → find one (our records first, then their website). */}

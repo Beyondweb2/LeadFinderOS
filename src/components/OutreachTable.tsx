@@ -106,7 +106,7 @@ import { useNavigate } from 'react-router-dom';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
-import { PipelineStatusBadge } from './PipelineStatusBadge';
+import { OneStatusPill } from './PipelineStatusSelect';
 import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
@@ -172,9 +172,7 @@ import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { useLastLoggedContacts, useWrongNumbers } from '@/hooks/useLastLoggedContacts';
-import { contactAgo, meetingIsCurrent, meetingWhen, salesStateOf, stateShownByBadge, type SalesStateView } from '@/lib/leadState';
-import { SalesStatePill } from '@/components/SalesStatePill';
-import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
+import { contactAgo, meetingIsCurrent, meetingWhen, salesStateOf, type SalesStateView } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1900,12 +1898,11 @@ export function OutreachTable({
   const wrongNums = useWrongNumbers(pageLeadIds);
   /* THE ROW'S SALES STATE (Paul, 2026-09-30: "actions visibly change the lead wherever the rep is
      working") — the same reading as Focus Mode and the popup (leadState.salesStateOf), from the row, its
-     last logged contact and the Wrong number mark. null when the pipeline badge beside it already says
-     exactly that state (stateShownByBadge) — one pill, never two. */
-  const rowSalesState = (lead: OutreachLead): SalesStateView | null => {
+     last logged contact and the Wrong number mark. ⛔ ONE PILL (2026-10-01): it is handed to the status
+     control, which draws EITHER the stage OR the pipeline badge (leadState.oneStatusOf) — never both. */
+  const rowSalesState = (lead: OutreachLead): SalesStateView => {
     const lc = lastLogged.data?.get(lead.id);
-    const v = salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
-    return stateShownByBadge(v, pipelineStatusLabel(lead.status)) ? null : v;
+    return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
   };
 
   // Always point walkthrough Step 5 to a visible, actionable track button
@@ -2851,10 +2848,10 @@ export function OutreachTable({
                               ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at)
                               : undefined}
                           >
-                            {(() => { const v = rowSalesState(lead); return v ? <SalesStatePill view={v} size="xs" className="mb-1" /> : null; })()}
                             {onPipelineStatusChange ? (
                               <PipelineStatusSelect
                                 value={lead.status}
+                                stage={rowSalesState(lead)}
                                 triggerProps={lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : undefined}
                                 onValueChange={(status) => {
                                   // Clear optimistic override so manual change isn't blocked
@@ -2866,7 +2863,7 @@ export function OutreachTable({
                                 }}
                               />
                             ) : (
-                              <PipelineStatusBadge status={lead.status as PipelineStatus} />
+                              <OneStatusPill status={lead.status} stage={rowSalesState(lead)} />
                             )}
                             {/* ONE SMALL LINE, ONLY WHEN THERE IS SOMETHING TO SAY: a current meeting (the
                                 sales state's Meeting booked — leadState.meetingIsCurrent), else the last
