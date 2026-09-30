@@ -23,7 +23,7 @@ import {
 } from '@/components/admin/controlCentre';
 import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
-import { FindableFunnelPanel } from '@/components/admin/traffic';
+import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traffic';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -157,6 +157,7 @@ const Dashboard = () => {
 
           <Section title="Traffic">
             <FindableFunnelPanel o={o} />
+            <ClientSearchPanel o={o} />
           </Section>
 
           <Section title="System">

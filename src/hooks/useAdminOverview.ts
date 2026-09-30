@@ -13,6 +13,10 @@ export type AdminOverviewResponse = AdminOverview & {
   commissionError: string | null;
   /** The Findable funnel (SQL admin_site_funnel); null = unreadable. */
   site: SiteFunnel | null;
+  /** Google Search Console per paying client, by lead id; null = unreadable. */
+  search: Record<string, SearchSummary> | null;
+  /** Whether a Google service-account credential is set at all. */
+  searchConfigured: boolean;
   /** Background jobs (admin_job_runs); null = unreadable. */
   jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null;
   generatedAt: string;
@@ -22,6 +26,16 @@ export type AdminOverviewResponse = AdminOverview & {
 export interface PeriodChoice { key: PeriodKey; from?: string; to?: string }
 
 type Bucket = { key: string | null; n: number };
+/** One client's Search Console summary (release 5). Figures exist only when state is "populated". */
+export interface SearchSummary {
+  state: 'not_connected' | 'property_missing' | 'no_data' | 'error' | 'populated';
+  property?: string | null; lastSyncedAt?: string | null; lastError?: string | null;
+  window?: { from: string; to: string };
+  clicks?: number; impressions?: number; ctr?: number | null; position?: number | null;
+  previous?: { clicks: number; impressions: number } | null;
+  dataFrom?: string | null;
+  topPages?: { path: string; clicks: number; impressions: number }[];
+}
 /** What SQL admin_site_funnel returns (release 5). Browser counts are SESSIONS; server counts are rows. */
 export interface SiteFunnel {
   tracking_since: string | null;

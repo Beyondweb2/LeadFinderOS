@@ -8,6 +8,7 @@ import {
 import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
 import type { ClientExtras } from "../../../src/lib/clientHealth.ts";
 import type { UsageRow } from "../../../src/lib/adminIntelligence.ts";
+import { finaliseTotals, pagePath, periodWindows, resolvePerformanceState, sumTotals, totalsFromAggregate } from "../../../src/lib/searchPerformance.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { UNRECORDED_SPEND, USD_TO_GBP_ESTIMATE } from "../../../src/lib/apiCostLabels.ts";
@@ -30,7 +31,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30f";
+const BUILD_ID = "admin-overview-2026-09-30g";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -169,6 +170,47 @@ Deno.serve(async (req) => {
       else if (error) console.error("[admin-overview] site funnel", error.message);
     }
 
+    /* Release 5 — Google Search Console per paying client (ported; docs §Search Console). The state is
+       the one resolver (searchPerformance.ts); a figure appears only when the state is "populated", and
+       "vs previous" only when stored data covers the previous window. Nothing is estimated. */
+    const searchConfigured = !!(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON") ?? "").trim();
+    let search: Record<string, unknown> | null = null;
+    try {
+      const paidIds = leads.filter((l) => Number(l.amount_paid ?? 0) > 0).map((l) => l.id);
+      const { data: conns, error: sErr } = paidIds.length
+        ? await service.from("client_search_connections").select("lead_id, gsc_property, status, last_synced_at, last_sync_error").in("lead_id", paidIds)
+        : { data: [], error: null };
+      if (sErr) throw new Error(sErr.message);
+      const w = periodWindows(28, londonDay(nowMs));
+      const out: Record<string, unknown> = {};
+      for (const id of paidIds) {
+        const c = ((conns ?? []) as { lead_id: string; gsc_property: string | null; status: string; last_synced_at: string | null; last_sync_error: string | null }[]).find((x) => x.lead_id === id) ?? null;
+        if (!c || !w) { out[id] = { state: resolvePerformanceState(c, 0) }; continue; }
+        const [cur, prev, cov] = await Promise.all([
+          service.rpc("search_console_page_totals", { p_lead: id, p_from: w.current.from, p_to: w.current.to }),
+          service.rpc("search_console_page_totals", { p_lead: id, p_from: w.previous.from, p_to: w.previous.to }),
+          service.rpc("search_console_coverage", { p_lead: id }),
+        ]);
+        const curRows = (cur.data ?? []) as { page: string; clicks: number; impressions: number; position_impressions: number }[];
+        const state = resolvePerformanceState(c, curRows.length);
+        const covRow = ((cov.data ?? []) as { first_date: string | null }[])[0] ?? null;
+        const prevCovered = !!covRow?.first_date && covRow.first_date <= w.previous.from;
+        const total = finaliseTotals(sumTotals(curRows.map(totalsFromAggregate)));
+        const prevTotal = prevCovered ? finaliseTotals(sumTotals(((prev.data ?? []) as { clicks: number; impressions: number; position_impressions: number }[]).map(totalsFromAggregate))) : null;
+        out[id] = {
+          state, property: c.gsc_property, lastSyncedAt: c.last_synced_at, lastError: c.last_sync_error, window: w.current,
+          ...(state === "populated" ? {
+            clicks: total.clicks, impressions: total.impressions, ctr: total.ctr, position: total.position,
+            previous: prevTotal ? { clicks: prevTotal.clicks, impressions: prevTotal.impressions } : null,
+            dataFrom: covRow?.first_date ?? null,
+            topPages: curRows.sort((a, b) => Number(b.clicks) - Number(a.clicks) || Number(b.impressions) - Number(a.impressions)).slice(0, 5)
+              .map((r) => ({ path: pagePath(r.page), clicks: Number(r.clicks) || 0, impressions: Number(r.impressions) || 0 })),
+          } : {}),
+        };
+      }
+      search = out;
+    } catch (err) { console.error("[admin-overview] search console", err instanceof Error ? err.message : err); search = null; }
+
     /* Background jobs: last run, status, error (admin_job_runs). Unreadable → null, shown as unknown. */
     let jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null = null;
     {
@@ -196,7 +238,7 @@ Deno.serve(async (req) => {
       exclusions: exclusions.rows.map((r) => ({ kind: r.kind, reason: r.reason })),
       costNotes: { unrecorded: UNRECORDED_SPEND, usdToGbp: USD_TO_GBP_ESTIMATE },
       commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
-      jobs, site,
+      jobs, site, search, searchConfigured,
       generatedAt: new Date(nowMs).toISOString(), ms: Date.now() - started,
     });
   } catch (e) {
