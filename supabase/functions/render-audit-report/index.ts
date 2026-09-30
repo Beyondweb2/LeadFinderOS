@@ -20,6 +20,7 @@ import { onboardingUrl, resolveSiteOrigin, ORIGIN_ENV } from "../_shared/onboard
 
 import { auditCodeFromSlug, isShortCode, shortReportUrl } from "../../../src/lib/reportSlug.ts";
 import { paidReportKind } from "../../../src/lib/reportKind.ts";
+import { WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { buildFaultLines, CRAWL_CHECK_VERSION, CRAWL_FRESH_MS, type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
 import { usableSiteEvidence, type SiteEvidence } from "../../../src/lib/siteEvidence.ts";
 
@@ -178,7 +179,8 @@ Deno.serve(async (req) => {
       // cheaper founder offer.
       // baseline_target_runs decides the website section: graded for a paid baseline, plain issues
       // for everything a prospect sees before paying (seoStyleForAudit).
-      // audit_purpose + is_measurement + baseline_target_runs feed isInternalMeasurement below.
+      // audit_purpose decides the one purpose refused below (the weekly check). Measurement audits ARE
+      // served as client reports since 15634d49 (Paul, 2026-09-18).
       .select("id, short_code, business_name, business_type, location_text, specialism, website, has_website, is_market, lead_id, baseline_target_runs, is_measurement, audit_purpose")
       .eq("id", auditId).maybeSingle();
     if (!audit) return unavailable("Audit not found.");
@@ -190,6 +192,15 @@ Deno.serve(async (req) => {
        Reads the column, never the name. */
     if ((audit as { is_market?: boolean }).is_market === true) {
       console.log(`[render-audit-report] REFUSED market audit ${audit.id}: no business attached.`);
+      return unavailable("No report for this audit.");
+    }
+    /* ⛔ THE WEEKLY VISIBILITY CHECK IS NEVER A CLIENT REPORT (Admin control centre, release 4,
+       2026-09-30). It is Paul's directional monitoring — often a partial set, one run — and a client who
+       reached its link could read it as their guarantee result. Refused exactly like a market audit.
+       Keyed on the stored purpose, the one marker. Nothing else changes: every other audit renders as
+       before. */
+    if ((audit as { audit_purpose?: string | null }).audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE) {
+      console.log(`[render-audit-report] REFUSED weekly check ${audit.id}: internal monitoring.`);
       return unavailable("No report for this audit.");
     }
 

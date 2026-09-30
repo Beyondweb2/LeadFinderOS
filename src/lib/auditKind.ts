@@ -60,8 +60,10 @@ export const DISCOVERY_AUDIT_PURPOSE = 'discovery';
    set run ONCE a week for a paying client whose improvements are live — directional monitoring for
    Paul. ⛔ NEVER the baseline, never the four-week replay, never read by the guarantee: the pointer
    triggers key on 'baseline' / 'measurement' / 'remeasure' only (read live 2026-09-30), and this value
-   is none of them. INTERNAL (a working document): isInternalMeasurement is true, so no report is ever
-   served or sent for it. Created only by fn weekly-visibility (create-ai-audit accepts it internally). */
+   is none of them. INTERNAL (a working document): isInternalMeasurement is true (the SPA's labels and
+   report links), and render-audit-report refuses it by this purpose — note that measurement audits ARE
+   served publicly since 15634d49, so that refusal is explicit, not inherited. Created only by fn
+   weekly-visibility (create-ai-audit accepts it internally). */
 export const WEEKLY_CHECK_AUDIT_PURPOSE = 'weekly_check';
 
 /** The audit kinds a reader can meet. */
