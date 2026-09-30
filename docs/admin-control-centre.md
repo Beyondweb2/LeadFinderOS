@@ -267,6 +267,40 @@ excluded, meaningful events only, landing page / referrer / UTM.
   Browser steps say "not tracked yet" until the first event exists — never a zero that means "unknown".
 - The privacy page's "Cookies and tracking" section lists exactly these fields.
 
+## Search Console — client website traffic (release 5)
+
+Paul: integrate the parked 2026-09-22 branch `feat/client-performance` (e712b980), but audit it
+first, keep what is still correct, respect the current model, never overwrite newer Paid Client work,
+show "Not connected" when missing, never invent numbers.
+
+**Audit findings (2026-09-30):** sound core (Google client, the maths, the "not connected" states); unsafe
+as it stood — owner `FOR ALL` RLS policies would have let a browser session write traffic rows and set
+`status = 'connected'`; `client-performance` had no admin check; `performance-sync` used a plain `===`
+secret compare plus the dead service-role bearer, synced an arbitrary first 10 clients (`.limit(10)`, no
+order) and ignored ended clients; its cron invoker was callable with the public key; a second
+`outreach_leads.canonical_domain` would duplicate `website_build->>canonical_domain`; its `ClientHub.tsx`
+would have overwritten ~380 lines of newer hub work; 5 files conflict with main.
+
+**Ported (fixed):** `_shared/google-search-console.ts` and `src/lib/searchPerformance.ts` byte-identical
+(two raw NUL separators rewritten as `\u0000` for the no-control-chars rule), `scripts/search-performance.test.ts`;
+migration `20261001160000_search_console.sql` (connections with the domain on the row, page + query daily
+tables, RLS on with NO policies, SQL functions service-role only, revoked invoker, cron
+`performance-sync-run` 05:00 UTC); fn `performance-sync` rewritten (cron via `isInternalCall` +
+`x-internal-job` or `requireAdmin`; `admin_job_runs` lease; every connected paying client, ordered;
+ended / refunded / archived skipped; "not configured" when the credential is missing). The dashboard reads
+it in `admin-overview` (state via the one `resolvePerformanceState`; figures only when populated; "vs
+previous 28 days" only when stored data covers it; impressions labelled "summed across pages").
+Pinned by `scripts/search-console-port.test.ts`.
+**Not ported:** the branch's `ClientHub.tsx` diff, its `/paid-clients/:id/performance` page and
+`client-tracked-pages` — nothing needs them yet, and the hub belongs to another session.
+
+**Live state:** no `GOOGLE_SERVICE_ACCOUNT_JSON` secret exists, so every client reads "Not connected".
+Setup (Paul): a Google Cloud service account with the Search Console API enabled; add its email as a user on
+each client's Search Console property; set the JSON key as the edge secret; add a
+`client_search_connections` row per client (property string exactly as Search Console shows it — probe with
+`performance-sync` mode `properties`). The branch's MCL seed SQL is NOT safe to run as written (it writes
+the dropped column and lists 14 pages that now redirect).
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |

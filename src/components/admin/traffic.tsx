@@ -1,7 +1,7 @@
-import { Globe } from 'lucide-react';
+import { Globe, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE } from '@/components/salesDash/ui';
-import type { AdminOverviewResponse, SiteFunnel } from '@/hooks/useAdminOverview';
+import type { AdminOverviewResponse, SearchSummary, SiteFunnel } from '@/hooks/useAdminOverview';
 
 /* ══ FINDABLE SITE TRAFFIC + FUNNEL (release 5) ════════════════════════════════════════════════════
    First-party, cookie-free (fn site-analytics). Browser steps count SESSIONS; server steps count what
@@ -21,6 +21,54 @@ function List({ title, rows }: { title: string; rows: { key: string | null; n: n
         ))}</ul>
       )}
     </div>
+  );
+}
+
+const SEARCH_STATE: Record<SearchSummary['state'], string> = {
+  not_connected: 'Not connected',
+  property_missing: 'Connected, but no Search Console property set',
+  no_data: 'Connected — no search data in the last 28 days yet',
+  error: 'Last sync failed',
+  populated: 'Connected',
+};
+
+/** Client websites in Google search (Search Console) — figures only where a real connection has data. */
+export function ClientSearchPanel({ o }: { o: O }) {
+  const clients = o.clients.filter((c) => !c.refunded);
+  const s = o.search;
+  const connected = s ? clients.filter((c) => s[c.leadId]?.state === 'populated').length : 0;
+  return (
+    <Panel collapseKey="admin.cc.search" title="Client websites · Google search" icon={Search} tone="green" defaultOpen={false}
+      hint="Clicks and impressions from each client's Google Search Console, last full 28 days. Not connected means no numbers — never an estimate."
+      summary={!o.searchConfigured ? 'Google not set up yet — every client reads Not connected' : `${connected} of ${clients.length} client${clients.length === 1 ? '' : 's'} connected`}>
+      {!o.searchConfigured && (
+        <p className="mb-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">No Google service account is set up yet, so no client can be connected. Setting one up is a one-off: a Google Cloud service account, added as a user on each client's Search Console property.</p>
+      )}
+      {!s ? <Empty>Search Console data could not be read just now.</Empty> : !clients.length ? <Empty>No paid clients yet.</Empty> : (
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+          {clients.map((c) => {
+            const x = s[c.leadId] ?? { state: 'not_connected' as const };
+            return (
+              <li key={c.leadId} className="px-3 py-2.5 text-sm">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-medium">{c.business}</span>
+                  <span className={cn('text-xs', x.state === 'populated' ? TONE.green.text : x.state === 'error' ? TONE.red.text : 'text-muted-foreground')}>{SEARCH_STATE[x.state]}</span>
+                </div>
+                {x.state === 'error' && x.lastError && <p className="text-xs text-muted-foreground">{x.lastError}</p>}
+                {x.state === 'populated' && (
+                  <div className="mt-1 text-xs">
+                    <p className="tabular-nums"><span className="font-semibold">{num(x.clicks)}</span> clicks · <span className="font-semibold">{num(x.impressions)}</span> impressions (summed across pages)
+                      {x.previous ? <span className="text-muted-foreground"> · previous 28 days {num(x.previous.clicks)} / {num(x.previous.impressions)}</span> : <span className="text-muted-foreground"> · no comparison yet (data from {x.dataFrom})</span>}
+                    </p>
+                    {!!x.topPages?.length && <p className="text-muted-foreground">Top pages: {x.topPages.map((p) => `${p.path} (${num(p.clicks)})`).join(' · ')}</p>}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }
 
