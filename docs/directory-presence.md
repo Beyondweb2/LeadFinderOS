@@ -205,6 +205,19 @@ deployed function can run (no Apify token outside the edge).
 - `playbook-evidence` itself still times out; its only remaining caller is the orphaned `check-directory-listings`. Fixing or retiring both is a deep-clean decision.
 - `check-directory-listings` + `lead_directory_checks` and `client_listings` are superseded by this and
   unused; retiring them is a deep-clean decision for Paul.
+- `_shared/safe-fetch.ts` holds the same SSRF guard + capped reader as `_shared/site-research.ts`
+  (two copies). It exists so this function does not import site-research, whose closure is the whole
+  report/hook stack (hookScore, auditReport, salesStyle…) — that had made directory-presence one of the
+  functions to redeploy whenever those change. Switching site-research onto the leaf means redeploying
+  warm-lead-reply and voice-note-script (other sessions' functions) — owed, not done. The function's
+  closure is now 20 files: `directoryPresence`, `presenceSources`, `directoryFacts`, `directoryHosts`,
+  `buildPlaybook`, `nameMatch`, `fullCrawl` (+ `crawlCheck`, `crawlUrl`), `competitorCleaning`,
+  `knownEntities`, `protectionLimits`, `roleRules`, and `_shared/` `access`, `operator-auth`,
+  `protection`, `safe-fetch`, `enrichment/apify`, `ai-search`, `apify-usage`.
+- The Social Profiles work (`src/lib/socialProfiles.ts`, fn `social-profiles`, merged by another session
+  the same day) finds Facebook/Instagram with confidence grading. This engine reads the lead's
+  `facebook_url`/`instagram_url` and treats `*_method = 'manual'` as operator-recorded; a later pass
+  could read social-profiles' confidence too.
 - Host lists overlap three ways (`siteInfo.ts` SOCIAL/DIRECTORIES, `fullCrawl.ts` THIRD_PARTY,
   `presenceSources.ts`): consolidating onto `presenceSources` is owed, not done here (those feed live
   crawl output another session reads).

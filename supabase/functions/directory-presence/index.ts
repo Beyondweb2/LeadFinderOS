@@ -4,7 +4,7 @@ import { allStopRefusal } from "../_shared/protection.ts";
 import { startApifyRun, getApifyRun, getApifyRunItems, abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { AI_SEARCH_ACTOR, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { USAGE_CRITICAL_PCT } from "../_shared/enrichment/apify-usage.ts";
-import { isPublicHttpUrl, readCapped } from "../_shared/site-research.ts";
+import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import {
   assemblePresence, buildIdentity, claimedCredentials, extractSiteSignals, foldClientCitations, mergePresence,
   operatorSetStatus, presenceQueries, presenceSummary,
@@ -44,7 +44,7 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30e";
+const BUILD_ID = "directory-presence-2026-09-30f";
 const RUN_POLL_MS = 3_000;
 /** 100 s, up from the 60 s check-directory-listings used: three of eight live searches timed out at 60 s
  *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
