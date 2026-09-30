@@ -59,6 +59,7 @@ import {
   RefreshCw,
   DatabaseZap,
   Loader2,
+  SearchCheck,
   MessageSquare,
   Upload,
   Eye,
@@ -114,6 +115,7 @@ import { Badge } from '@/components/ui/badge';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
+import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
@@ -859,6 +861,26 @@ export function OutreachTable({
   // ── Server-side bulk jobs (enrich / site-gen): confirm-before-spend, hand the
   // ids to the bulk-jobs edge function, clear the selection. The job runs
   // server-side (leave-safe); progress renders in the page-level banner.
+  /* Free bulk Find socials (admin, 2026-09-30): the selected leads, at most SOCIAL_BULK_MAX, a few at a
+     time; it always ends with one toast saying what it found. */
+  const [socialBulk, setSocialBulk] = useState<string | null>(null);
+  const handleBulkFindSocials = async () => {
+    if (needsFullList()) return;
+    if (socialBulk) return;
+    const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
+    if (!ids.length) return;
+    const capped = ids.length > SOCIAL_BULK_MAX;
+    setSocialBulk(`0/${Math.min(ids.length, SOCIAL_BULK_MAX)}`);
+    try {
+      const r = await findSocialsForLeads(ids, (d, t) => setSocialBulk(`${d}/${t}`));
+      toast({
+        title: `Socials checked for ${r.checked} lead${r.checked === 1 ? '' : 's'}`,
+        description: `${r.withProfile} now have at least one confirmed or likely profile.${r.failed ? ` ${r.failed} could not be checked — try those again.` : ''}${capped ? ` Only the first ${SOCIAL_BULK_MAX} were checked — run it again for the rest.` : ''}`,
+        variant: r.failed && !r.withProfile ? 'destructive' : undefined,
+      });
+    } finally { setSocialBulk(null); }
+  };
+
   const handleBulkEnrichJob = async () => {
     if (needsFullList()) return;
     if (!onBulkJob || bulkJobActive) return;
@@ -869,7 +891,7 @@ export function OutreachTable({
       `Enrich ${ids.length} selected lead${ids.length === 1 ? '' : 's'} — finds email, Facebook, Instagram & WhatsApp signal?
 
 ` +
-      `~$0.035 each · up to ~$${est} (already-cached leads are free). Respects the $2/day enrichment cap — remaining leads are skipped if it's reached.
+      `~$0.035 each · up to ~$${est}. Our own records and each lead's website are checked first (free) — a lead that already has a confirmed Facebook, Instagram and an email is not bought again, and cached leads are free. Respects the $2/day enrichment cap — remaining leads are skipped if it's reached.
 
 ` +
       `Runs server-side: you can leave this page or close the browser. Progress shows in the banner; results save to your leads.`,
@@ -1915,6 +1937,20 @@ export function OutreachTable({
                     Enrich selected ({selectedIds.size})
                   </Button>
                 )}
+                {!readOnly && perms.enrichLeads && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-background text-xs h-8"
+                    disabled={socialBulk !== null}
+                    title={`Free: look for Facebook / Instagram / LinkedIn in our records, then on each lead's own website (at most ${SOCIAL_BULK_MAX} per run)`}
+                    onClick={handleBulkFindSocials}
+                    data-testid="bulk-find-socials"
+                  >
+                    {socialBulk ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5 mr-1.5 text-sky-500" />}
+                    {socialBulk ? `Finding socials ${socialBulk}` : `Find socials (${Math.min(selectedIds.size, SOCIAL_BULK_MAX)})`}
+                  </Button>
+                )}
                 {!readOnly && onBulkJob && perms.bulkAudits && (
                   <Button
                     variant="outline"
@@ -2840,8 +2876,10 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
+                          {/* The one Socials line (2026-09-30) — both roles; the admin's paid Enrich no longer draws them twice. */}
+                          {!isDemoLead(lead.id) && <SocialLinks lead={lead} size="xs" />}
                           {onUpdateLead && perms.enrichLeads && !isDemoLead(lead.id) && (
-                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
+                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" socials={false} />
                           )}
                           {perms.crawlSite && !isDemoLead(lead.id) && (
                             <CrawlCheckButton lead={{ id: lead.id, website: lead.website }} crawl={crawlByLeadId.get(lead.id) ?? null} iconOnly from="outreach" />

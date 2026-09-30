@@ -133,7 +133,7 @@ console.log("\n── Find email ──");
   const btn = read("src/components/FindEmailButton.tsx");
   ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
   ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
-  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <div[^>]*><FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
     ok(re.test(read(p)), `${p}: beside the email option, only when there is none`);
   }
   const mig = read("supabase/migrations/20260929180000_lead_find_email.sql");

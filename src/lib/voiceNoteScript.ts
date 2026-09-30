@@ -52,9 +52,12 @@ import { articleTrade } from './templateVars.ts';
 import { findingMentioned, sayableDetails, findingSourceLabel, selectReplyFindings } from './warmReply.ts';
 import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
+import { SALES_STYLE_RULES, salesStyleProblems } from './salesStyle.ts';
 
-/** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows. */
-export const VOICE_NOTE_GENERATOR_VERSION = 3;
+/** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows.
+ *  v4 (2026-09-30): the shared house style (salesStyle.ts) in the prompt and the checks, one beat per
+ *  line so it reads aloud with a breath between, and the derived short version (shortVoiceNote). */
+export const VOICE_NOTE_GENERATOR_VERSION = 4;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
 /** The spoken target, ~30–45 seconds at Paul's pace (Paul, 2026-09-27: shorter is better). */
@@ -263,15 +266,18 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Google AI). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
 
 THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
-1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI who it recommended" or "i asked Google AI for electricians in Shrewsbury". Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
+1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Google AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
 2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
 3. THE FINDING: "i had a look at what might be holding you back, and" + the ONE website point you are given, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence.
 4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
 5. THE QUESTION (the CTA line you are given): a simple question about who owns and controls their website. It ends the note. Nothing after it.
 
 LENGTH: about 65 to 100 spoken words (30 to 45 seconds). Shorter is better when the evidence is simple. Never pad, never over 125.
+LAYOUT: put each beat on its own line, so Paul can take a breath between them. Short clauses he can say in one go; no sentence he would have to read twice.
 
-STYLE: Paul talking into his phone. Relaxed, British, conversational, direct. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Short sentences. "mate" once or twice, never more. No corporate language, nothing polished, nothing salesy. Lowercase is fine.
+STYLE: Paul talking into his phone, not reading. Relaxed, British, conversational, direct. Contractions everywhere (i'm, i'd, you're, didn't, there's, it's). Short sentences, simple joins ("and", "so", "but"). "mate" once or twice, never more. No corporate language, nothing polished, nothing salesy. Lowercase is fine.
+
+${SALES_STYLE_RULES}
 TALK TO THEM: the note is addressed to the business owner. Never say the business's own name; say "you" ("you didn't come up").
 NEVER put the search in quotation marks, never read it word for word, never say "UK" after the town.
 NEVER: "I hope this message finds you well", "unlock your potential", "leverage", "digital presence", "revolutionise", "dominate Google", any guarantee. No em dash or en dash. No price, no figures about money, no link, no website address. Do not offer to send the audit, do not offer to "show you exactly what i'd change" or "explain what i'd change": the quick check does not contain a change plan. Do not ask for a call.
@@ -353,6 +359,37 @@ export function voiceNoteCtaInstruction(site: Pick<VoiceNoteSite, 'mode' | 'sour
 export function spokenTrade(trade: string): string {
   const t = articleTrade(trade);
   return t.ok ? t.value : trade.trim();
+}
+
+/* ─────────────────────────────── the short version (derived, never stored) ─────────────────────────────── */
+
+/**
+ * The 20-second version (Paul, 2026-09-30: "where appropriate, a short version and a slightly longer
+ * one"). The SAME saved result — engine, that search's own competitors, the ownership question for this
+ * website — with the website finding and the positioning detail left out. Built by code from the saved
+ * row, so it costs nothing, invents nothing and always agrees with the full script beside it.
+ * Returns null when there is not enough to say it honestly (no names, no trade).
+ */
+export function shortVoiceNote(i: {
+  engineLabel: string; competitors: readonly string[]; trade: string | null | undefined; area: string | null | undefined;
+  site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'>;
+}): string | null {
+  const names = i.competitors.map((c) => c.trim()).filter(Boolean).slice(0, 3);
+  const t = articleTrade(i.trade ?? '');
+  const town = String(i.area ?? '').replace(/,?\s*\b(?:UK|United Kingdom)$/i, '').trim();
+  if (!names.length || !t.ok || !i.engineLabel.trim()) return null;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  const label = i.site.sourceLabel ?? 'directory';
+  const ask = voiceNoteCtaKind(i.site) === 'own_site'
+    ? 'quick one, do you look after the website yourself, or is it managed by an agency?'
+    : voiceNoteCtaKind(i.site) === 'profile'
+      ? `quick one, have you got a website of your own, or is ${label} mainly what you're using?`
+      : 'quick one, have you got a website at the moment, or not yet?';
+  return [
+    `hi mate, i asked ${i.engineLabel} for ${t.value}${town ? ` in ${town}` : ''} and it came up with ${list}, but you didn't come up.`,
+    'i specialise in AI visibility for local businesses.',
+    ask,
+  ].join('\n');
 }
 
 export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
@@ -444,10 +481,10 @@ const CAUSATION: RegExp[] = [
 ];
 const PRICE = /£\s?\d|\b\d+\s?(quid|pounds|pence)\b|\bprice|\bpricing\b|\bper month\b|\bmonthly\b|\b(a|per) year\b|\bfee\b|\bdiscount/;
 const LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(co\.uk|com|uk|live|net|org|io)\b|\bfindable\b/i;
+/* The general filler ("hope this finds you", "unlock", "leverage", "digital presence", "revolutionise"…)
+   is salesStyle.ts's list, checked below; these two are the voice note's own. */
 const BANNED: Array<[RegExp, string]> = [
-  [/hope (this|the) message finds you/, '"hope this message finds you well"'],
-  [/\bunlock\b/, '"unlock"'], [/\bleverag/, '"leverage"'], [/digital presence/, '"digital presence"'],
-  [/revolutionis|revolutioniz/, '"revolutionise"'], [/\bdominat/, '"dominate"'], [/guarantee/, 'a guarantee'],
+  [/\bdominat/, '"dominate"'], [/guarantee/, 'a guarantee'],
 ];
 
 /** A technical/website claim, and the findings that may back it. */
@@ -617,6 +654,8 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   if (PRICE.test(tb) || /£/.test(bare)) problems.push('Mentions a price or money.');
   if (LINK.test(bare)) problems.push('Contains a link or web address.');
   for (const [re, label] of BANNED) if (re.test(tb)) problems.push(`Uses ${label}.`);
+  // The house style (salesStyle.ts): no filler on the search, no stock sales phrases. Names are not ours.
+  for (const p of salesStyleProblems(script, [...ctx.evidence.competitors, ctx.business ?? ''])) problems.push(p);
   // Website claims must be backed by a supplied finding.
   const supplied = ctx.site.findings;
   // "there isn't anything obviously broken" is the honest fallback, not a claim.

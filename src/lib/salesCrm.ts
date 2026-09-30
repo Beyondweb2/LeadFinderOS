@@ -163,18 +163,19 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   daily_limit: 'over your daily limit',
 };
 
-/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260928210000) — the server refuses
+/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930140000) — the server refuses
    anything else, and scripts/contact-claim.test.ts pins the two together. Added 2026-09-28: left
    voicemail, meeting booked, then message_sent. An outcome records ACTIVITY only: it never writes the
    status or the next action (Next Action is human-set only). What a tap ALSO does is src/lib/leadState.ts
    (outcomeRule — every value here has one; agency_controls_site is kept for old rows, no longer offered). */
 /* `for`: which methods an outcome is offered for (contactMethods `kind`): 'call' = a phone call only,
-   'message' = anything that is not a call, 'any' = every method. The server accepts every outcome for
+   'message' = anything that is not a call, 'linkedin' = a LinkedIn message only, 'any' = every method. The server accepts every outcome for
    every method; this only keeps the buttons sensible ("No answer" to an email means nothing). */
 export const CALL_OUTCOMES = [
   { value: 'no_answer', label: 'No answer', for: 'call' },
   { value: 'left_voicemail', label: 'Left voicemail', for: 'call' },
   { value: 'message_sent', label: 'Sent, no reply yet', for: 'message' },
+  { value: 'connection_sent', label: 'Connection request sent', for: 'linkedin' },
   { value: 'spoke_to_owner', label: 'Spoke to owner', for: 'any' },
   { value: 'interested', label: 'Interested', for: 'any' },
   { value: 'call_back', label: 'Call back', for: 'any' },
@@ -190,8 +191,12 @@ export const CALL_OUTCOMES = [
 /** The outcomes offered for one contact method. */
 export function outcomesFor(method: string) {
   const kind = CONTACT_METHODS.find((m) => m.value === method)?.kind ?? 'message';
-  return CALL_OUTCOMES.filter((o) => o.for === 'any' || (o.for === 'call' ? kind === 'call' : kind !== 'call'));
+  return CALL_OUTCOMES.filter((o) => o.for === 'any' || (o.for === 'linkedin' ? method === 'linkedin' : o.for === 'call' ? kind === 'call' : kind !== 'call'));
 }
+
+/* The social follow-up ("LinkedIn message sent → Follow up in 3 days", Social Enrichment 2026-09-30) is
+   part of the ONE outcome → Next Action rule, src/lib/leadState.ts suggestNextAction (merged 2026-09-30 —
+   it was a second copy of the same rule: same days, same note). */
 
 /** How the contact happened, as logged by hand — the one set (src/lib/contactMethods.ts). WhatsApp is
  *  recorded by the messages themselves, so it is never logged here. */
@@ -248,6 +253,7 @@ const EMAIL_SOURCE_WORDS: Record<string, string> = { website_crawl: 'their websi
 const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
   contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in', wrong_number: 'wrong number',
+  social: 'social profile', facebook_url: 'Facebook', instagram_url: 'Instagram', cleanup: 'why', original: 'was',
 };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the

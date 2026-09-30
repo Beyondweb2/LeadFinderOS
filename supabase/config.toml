@@ -53,6 +53,11 @@ verify_jwt = false
 [functions.crawl-check]
 verify_jwt = false
 
+# Directory + public-profile presence audit (read-only discovery). Handler-side requireAdmin, or
+# CRON_SECRET for a future scheduled recheck — so the gateway must not demand a JWT.
+[functions.directory-presence]
+verify_jwt = false
+
 # Internal only (CRON_SECRET): drains exhaustive manual crawl jobs. Called by its own chain and the
 # one-minute backstop cron invoke_crawl_worker.
 [functions.crawl-worker]
@@ -176,6 +181,12 @@ verify_jwt = true
 # JWT; the handler does its own resolveOperator + lead-ownership check. Spends OpenAI money and may read
 # the prospect's site (the shared warm research path), but NEVER sends a message.
 [functions.voice-note-script]
+verify_jwt = true
+
+# social-profiles: Find socials / add / confirm / not them (2026-09-30). SPA-only caller with the operator's
+# JWT (admin or sales); the handler does resolveActor + leadAccess itself. Free: our records, then the
+# lead's own website. Never fetches LinkedIn, never spends money, never writes an email.
+[functions.social-profiles]
 verify_jwt = true
 
 # sales-performance: the Sales Dashboard's counts. SPA-only caller with the signed-in user's JWT; the

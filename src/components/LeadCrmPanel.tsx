@@ -28,7 +28,7 @@ import { reviewedHookQuestions } from '@/lib/hookQuestionEdit';
 import { OUTREACH_AUDIT_MAP_ROOT } from '@/lib/outreachAuditMap';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
 import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
-import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
+import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
@@ -502,9 +502,12 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
      More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
      offering a second record of the same message. */
   const primary = CONTACT_METHODS.filter((m) => m.primary);
-  const more = CONTACT_METHODS.filter((m) => !m.primary);
+  const more = CONTACT_METHODS.filter((m) => !m.primary && !m.social);
   const current = CONTACT_METHODS.find((m) => m.value === channel);
-  const inMore = !!current && !current.primary;
+  const inMore = !!current && !current.primary && !current.social;
+  /* Social outreach → platform → outcome: ONE Social pill; picking it shows LinkedIn / Facebook /
+     Instagram (LinkedIn first). Keeps the row at five pills. */
+  const inSocial = !!current?.social;
   return (
     <section className={cn(CARD, 'border-primary/30')} data-testid="log-contact">
       <div className="mb-2 flex items-center gap-1.5"><PhoneCall className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Log a contact</span></div>
@@ -512,6 +515,7 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
         {primary.map((c) => (
           <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
         ))}
+        <button type="button" role="radio" aria-checked={inSocial} className={chip(inSocial)} onClick={() => { if (!inSocial) setChannel(SOCIAL_CONTACT_METHODS[0].value); }} data-testid="log-social">Social</button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={cn(chip(inMore), 'inline-flex items-center gap-0.5')} aria-label="More contact methods">
@@ -523,6 +527,14 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {inSocial && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Which social network" data-testid="log-social-platform">
+          <span className="text-[11px] text-muted-foreground">On:</span>
+          {SOCIAL_CONTACT_METHODS.map((c) => (
+            <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
+          ))}
+        </div>
+      )}
       {current?.recordedBy === 'send' ? (<>
         <p className="mb-2 rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
           WhatsApp messages are recorded automatically — nothing to log. What came of the conversation?

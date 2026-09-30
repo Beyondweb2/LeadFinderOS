@@ -43,7 +43,17 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
   Feedback page. 22 functions are deployed with no source (2 belong to the
   findable-directory repo and stay). ⛔ **Step 7 (delete the multi-user surface) is OVERTURNED** —
-  Paul, 2026-09-27: see the next bullet.
+  Paul, 2026-09-27: see the next bullet. ⛔ **Step 4 is OVERTURNED for SOCIAL discovery** (Paul,
+  2026-09-30, `docs/social-profiles.md`): Find socials / `social-profiles` / `enrich-business` /
+  `lead_social_profiles` are live and kept; Find email too (2026-09-29).
+- ⛔ **Social profiles (2026-09-30, `docs/social-profiles.md`)**: ONE grade rule (`src/lib/socialProfiles.ts`,
+  confirmed / likely / unverified) and ONE canonical pick (`_social_profiles_sync`, SQL trigger) that
+  mirrors onto `facebook_url` / `instagram_url` / `linkedin_url` + `*_status`. **Never write those
+  columns from code** — write `lead_social_profiles` through `_shared/social-find.ts` `saveGraded`
+  (never re-activates a rejected row, never touches a person's row, only RAISES a grade). Unverified is
+  never canonical; two at the top rank = review. ⛔ **LinkedIn is never scraped** — own-site link or
+  pasted only; "Search LinkedIn" is a search link. ⛔ **Paid Enrich is ADMIN-ONLY** and never
+  overwrites an email. Confirmed and Likely must LOOK different on every surface (`SocialLinks`).
 - **Multi-user is built: ADMIN + SALES on ONE book** (2026-09-27, `docs/multi-user.md` — read it before
   touching auth, RLS, a lead read/write, or any edge function a salesperson can reach). Every row
   keeps `user_id` = the book owner; who WORKS a lead is `assigned_to_user_id`. A salesperson never
@@ -513,6 +523,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   run withholds rival names from the client report (`competitorCleaning.ts`); RG's frozen baseline
   `f64920ce` stays suppressed by the junk rule — do not re-extract evidence.
 - **`classifySource` grades any `.org` as authority** — known report-accuracy bug, not yet fixed.
+- **A directory listing is CONFIRMED only by an identifier** (a link from their own site, the place id, their phone/domain, name + postcode) — never by a name; an inconsistency needs a confirmed listing; nothing is "worth adding" without positive evidence; absence never downgrades (`directoryPresence.ts`, `docs/directory-presence.md`). Discovery only — nothing creates a listing.
 
 **Derived, never stored** — `serveGate`, `townVerdict`, `nameIsJudgeable`, `needsQ2`, the free-check
 progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`. A stored verdict freezes
@@ -695,6 +706,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Client-facing copy is scanned** by `client-copy-claims.test.ts` (no eight weeks, no £49.99, no
   founder, no hedge, no Bing). Add every new renderer. Things no script can check and are hand-kept:
   the Stripe Payment Link, every Meta-registered body.
+- **Sales words have ONE style source: `src/lib/salesStyle.ts`** (Paul, 2026-09-30). A new model
+  prompt that writes to a prospect includes `SALES_STYLE_RULES` verbatim; new generated or scripted
+  sales copy is checked with `salesStyleProblems` (pass the inserted names as `ignore`) and added to
+  `scripts/sales-style.test.ts`. Say the search as trade + town ("a plumber in Rugby"), never the audit
+  query or an adjective on it. Record: `docs/sales-language.md`.
 - **Page generator**: anti-stuffing is CODE (phrase/town/noun-spam caps, measured); "based here" only on
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
@@ -743,6 +759,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 **Website Build**
 - ⛔ **Preview Ready = technical AND perceived quality** (`websiteQuality.ts`, 2026-09-25): read it through `previewReadyProblems`, never `previewGateProblems` alone (a test fails if the page or the retry prompt does). An existing-site rebuild is not Preview Ready until every old-site strength is decided (preserve / modernise / improve, or removed WITH a reason), every content intent is assessed, and the build reports old vs new at 1440 + a phone width as `upgrade` with nothing the old site still wins. Recon reads strengths from the RENDERED page (BS4: a JS reviews widget was invisible to an HTML read).
 - ⛔ **…AND the build standard** (`websiteBuildStandard.ts`, 2026-09-27 — what MCL + BS4 were rescued for by hand): image roles (**Areas hub → the MAP by default**; fallback a genuine local image, then a job photo only if it shows the locality, each with a reason — never an unrelated one; a map is never a hero background; phone crop keeps labels legible; never drawn / pinned), the mobile hero photo BEHIND the copy (one first screen), **genuine reviews AND the confidently sourced rating / count shown by default** (rating with a snapshot date; held only for conflict / identity / unsourced — not a routine Paul approval), a real form through fn `site-enquiry` (a mailto form always fails; a working old form never becomes none; proven by a test-mode submission), credentials prominent, no repeated photos, photographic strength preserved (judged — never a photo quota). The build reports `quality.standard`; `standardProblems` × `standardEvidence(state)` gate it inside `previewReadyProblems`. Principles, not a clone — never name a reference client in the rules.
+- ⛔ **…AND the Site Quality Gate** (`scripts/site-quality-gate.mjs` + `src/lib/siteGate.ts`, 2026-09-30, `docs/website-build-seo-gate.md`): the build's own `qa.*` is a CLAIM; the gate reads the real output (robots / sitemap / canonicals / noindex incl. `_headers` scope / links / orphans / titles / H1s / cloned pages / schema / identity / intent ownership) and its failures are imported as ERRORS that also turn the matching `qa.*` false. Not run = an error. Stored in the existing `errors` / `warnings` / `qa` keys — keep it that way (no `paid-client-hub` redeploy). The X6b **Site Intent Map** gives every service / location / content intent / frozen baseline question ONE owning page; a baseline question is a QA label, never a title / H1 (the gate fails a verbatim one). Never weaken a check to pass a build. The gate fetches from LeadFinderOS **main** — a change to it is live for every build once merged.
+- ⛔ **Current-site facts (Paul, 2026-09-30, `recon.ts` `SOURCE_SITE_FACT_KEYS`)**: anything the client's own site states is approved source-site evidence by default — services, hours, credentials, licences, insurance, awards, FAQs, history, contact details… Paul decides only conflicts, ambiguity, 24/7 vs stated hours (`availabilityConflict`), superlatives, prices, tracking IDs and unknown keys. Never re-add a routine approval for a stated fact.
+- ⛔ **The MCL template seeds the SUPERSEDED `Beyondweb2/MCLocksmiths`** (blanket `/*` noindex in `_headers`, `aggregateRating` in Layout, near-duplicate service pages). X1 + the gate catch all three; re-seeding from `MCLocksmiths-New` is Paul's call. No Findable surface emits rating / review schema (Prospect Preview removed it).
 
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
@@ -806,6 +825,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
+| Directory / profile presence (discovery only) | `src/lib/directoryPresence.ts`, `presenceSources.ts`, fn `directory-presence`, tables `lead_directory_presence` (one row per lead × source) + `_runs` |
 | Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`, recon: `reconSchema.ts` (the JSON contract, `reconVersion`), `recon.ts` (prompt, safe import, merge), `manifestSummary.ts` (fenced per-route summaries — never the raw JSON in a prompt), mapping: `templateMapping.ts` (`computeMapping` — trade-agnostic; a template only DECLARES fields / catalogue / slots in `websiteTemplates.ts`; only `ready` values reach the config; recon risk rule `LOW_RISK_FACT_KEYS` is a positive allowlist), execution: `buildExecution.ts` (Build Execution prompt refused while blocked; PREVIEW READY is gated by `previewGateProblems` — pages.dev + noindex + clean seed scrub + passing checks, whatever Claude claims; a failed result never erases the last good build); column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
@@ -933,6 +953,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
 | Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
+| Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, Loader2, PhoneCall, Mic } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, Mic } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
@@ -46,6 +46,7 @@ import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { NextActionPill } from '@/components/NextActionPill';
 import { LeadStateStrip } from '@/components/LeadStateStrip';
 import { FindEmailButton } from '@/components/FindEmailButton';
+import { SocialLinks, SocialProfilesPanel } from '@/components/SocialLinks';
 import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -452,6 +453,7 @@ function LeadDetailBody({
             </span>
           )}
           {!lead.email && !isDemoLead(lead.id) && <FindEmailButton leadId={lead.id} website={lead.website} />}
+          {!isDemoLead(lead.id) && <SocialLinks lead={lead} withFind />}
           {!isDemoLead(lead.id) && (
             <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 font-medium text-sky-700 hover:underline dark:text-sky-300">
               <PhoneCall className="h-3.5 w-3.5" />Call script
@@ -502,13 +504,12 @@ function LeadDetailBody({
 
           <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">
             <ProspectFacts lead={lead} />
+            {!isDemoLead(lead.id) && <SocialProfilesPanel lead={lead} />}
             {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
             {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {(() => {
-              const socials = [
-                lead.facebook_url ? { key: 'fb', Icon: Facebook, label: 'Facebook', value: lead.facebook_url, href: lead.facebook_url, color: 'text-blue-600', external: true } : null,
-                lead.instagram_url ? { key: 'ig', Icon: Instagram, label: 'Instagram', value: lead.instagram_url, href: lead.instagram_url, color: 'text-pink-500', external: true } : null,
-              ].filter(Boolean) as { key: string; Icon: typeof Mail; label: string; value: string; href: string; color: string; external: boolean }[];
+              /* Social profiles live in ONE place, SocialProfilesPanel above (2026-09-30) — never a second
+                 list of the same links here. This card is the admin's editable contact fields only. */
               // Editable contact fields — rendered even when empty so a missing value
               // can be added. `hrefFor` keeps the mailto/tel/open affordance in view mode.
               const editableFields = [
@@ -517,27 +518,12 @@ function LeadDetailBody({
                 { field: 'phone' as const, Icon: Phone, label: 'Phone', value: lead.phone, color: 'text-sky-400', external: false, hrefFor: (v: string) => `tel:${v}` },
                 { field: 'address' as const, Icon: MapPin, label: 'Address', value: lead.address, color: 'text-amber-500', external: false, hrefFor: null },
               ];
-              /* A salesperson cannot edit these, and the facts card above already shows email / website /
-                 phone — so for them only real social links earn a card (2026-09-28 polish). */
-              if (!perms.editLeadRecord && socials.length === 0) return null;
+              /* A salesperson cannot edit these, and the facts card above already shows them. */
+              if (!perms.editLeadRecord) return null;
               return (
                 <section className={CARD}>
-                  <SectionLabel icon={Share2} color="text-blue-400">{perms.editLeadRecord ? <>Socials &amp; contact</> : 'Social profiles'}</SectionLabel>
+                  <SectionLabel icon={Share2} color="text-blue-400">Contact details</SectionLabel>
                   <ul className="space-y-1.5">
-                    {socials.map(({ key, Icon, label, value, href, color, external }) => (
-                      <li key={key} className="flex items-center gap-2 text-xs">
-                        <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
-                        <span className="w-16 shrink-0 text-muted-foreground/70">{label}</span>
-                        <a
-                          href={href}
-                          {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                          className="min-w-0 flex-1 truncate text-foreground/80 hover:text-primary hover:underline"
-                          title={value}
-                        >
-                          {external ? value.replace(/^https?:\/\//, '').replace(/\/$/, '') : value}
-                        </a>
-                      </li>
-                    ))}
                     {(perms.editLeadRecord ? editableFields : []).map(({ field, Icon, label, value, color, external, hrefFor }) => {
                       const isEditing = editingField === field;
                       return (

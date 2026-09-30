@@ -22,6 +22,7 @@ import { LastContactLine, SalesStatePill } from '@/components/SalesStatePill';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { FindEmailButton } from '@/components/FindEmailButton';
+import { SocialLinks } from '@/components/SocialLinks';
 import { NextActionPill } from '@/components/NextActionPill';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { Empty, Panel } from '@/components/salesDash/ui';
@@ -43,11 +44,13 @@ import { cn } from '@/lib/utils';
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 // The lead fields Focus shows that the CRM panel does not read (both the table and the sales view have them).
-const FOCUS_COLUMNS = 'id, business_name, contact_name, phone, email, website, address, search_location, derived_town, category, search_keyword, status, is_potential_work, google_maps_url';
+const FOCUS_COLUMNS = 'id, business_name, contact_name, phone, email, website, address, search_location, derived_town, category, search_keyword, status, is_potential_work, google_maps_url, facebook_url, instagram_url, linkedin_url, facebook_status, instagram_status, linkedin_status';
 interface FocusLead {
   id: string; business_name: string | null; contact_name: string | null; phone: string | null; email: string | null; website: string | null;
   address: string | null; search_location: string | null; derived_town: string | null; category: string | null; search_keyword: string | null;
   status: string | null; is_potential_work: boolean | null; google_maps_url: string | null;
+  facebook_url: string | null; instagram_url: string | null; linkedin_url: string | null;
+  facebook_status: string | null; instagram_status: string | null; linkedin_status: string | null;
 }
 interface Msg { id: string; direction: string; body: string | null; message_type: string; created_at: string; status: string; template_name: string | null }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,11 +181,14 @@ export default function Focus() {
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <ContactButton href={whatsAppLinkForLead(lead.id)} internal onNav={navigate} icon={MessageCircle} label="WhatsApp" tone="bg-blue-500 text-white hover:bg-blue-600" disabled={!lead.phone} />
                     <ContactButton href={telHref(lead.phone)} icon={Phone} label="Call" tone="bg-emerald-600 text-white hover:bg-emerald-700" disabled={!lead.phone} />
-                    <ContactButton href={linkedInSearchUrl(lead.business_name, town)} icon={Linkedin} label="LinkedIn" tone="border border-border bg-background hover:bg-muted" external />
+                    <ContactButton href={lead.linkedin_url || linkedInSearchUrl(lead.business_name, town)} icon={Linkedin} label={lead.linkedin_url ? 'LinkedIn' : 'Search LinkedIn'} tone="border border-border bg-background hover:bg-muted" external />
                     <ContactButton href={lead.email ? `mailto:${lead.email}` : null} icon={Mail} label="Email" tone="border border-border bg-background hover:bg-muted" disabled={!lead.email} />
                   </div>
                   {/* No email on file → look for one (our records first, then their website). */}
-                  {!lead.email && <div className="mt-2 flex justify-end"><FindEmailButton leadId={lead.id} website={lead.website} /></div>}
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
+                    <SocialLinks lead={lead} withFind />
+                    {!lead.email && <FindEmailButton leadId={lead.id} website={lead.website} />}
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     {lead.phone && <span className="tabular-nums text-muted-foreground">{lead.phone}</span>}
                     {siteHref(lead.website) && <a href={siteHref(lead.website)!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><Globe className="h-3.5 w-3.5" />Website</a>}

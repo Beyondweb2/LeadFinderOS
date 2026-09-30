@@ -32,6 +32,7 @@ import { CLAIM_VERDICT_LABELS, isPublishable, mapTemplateClaims } from './buildF
 import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
 import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
+import { SITE_GATE_EXPECT_FILE, SITE_GATE_FETCH } from './siteGate.ts';
 import { manifestBuildLines } from './manifestSummary.ts';
 import { QUALITY_STANDARD_LINES } from './websiteQuality.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
@@ -881,7 +882,7 @@ export function seoQaPrompt(i: BuildPackInput): PackItem {
     '- robots.txt: valid, points at the sitemap, ALLOWS OAI-SearchBot, ChatGPT-User, Claude-User, PerplexityBot. Fetch a page with the',
     '  OAI-SearchBot user agent and confirm a 200 with real content.',
     '- Crawlable HTML: the page\'s main content and H1 are in the raw HTML (fetch without JavaScript).',
-    '- Schema: valid JSON-LD, one LocalBusiness entity with a stable @id, every field a VERIFIED fact, matching the visible page. No review or rating markup unless reviews are verified and shown.',
+    '- Schema: valid JSON-LD, one business entity (the schema.org trade subtype where one exists) with a stable @id, every field a VERIFIED fact, matching the visible page; BreadcrumbList below home. Never review or rating markup — genuine reviews are shown as visible content only.',
     '- Internal links: no broken links, no orphan important pages, services ↔ locations ↔ contact linked sensibly.',
     '- Redirects: every line of the approved map returns ONE 301 straight to a 200. No chains, no loops, no mass redirect to the homepage.',
     '- Page ownership: one primary page per intent; no two pages competing for the same service/town.',
@@ -890,6 +891,11 @@ export function seoQaPrompt(i: BuildPackInput): PackItem {
     '- Factual consistency: name, phone, email, address, hours, services and areas are identical on every page, the footer and the schema — and match VERIFIED FACTS below exactly.',
     '- Credentials and third-party profiles: only verified ones appear, links go to the real profiles.',
     '- Mobile: viewport set, readable, tap targets, no horizontal scroll.',
+    '',
+    'THE AUTOMATED GATE — run it first, then judge what it cannot:',
+    '- If scripts/findable-site-gate.mjs is not in the repo: ' + SITE_GATE_FETCH,
+    '- Build, then: node scripts/findable-site-gate.mjs --dist ' + codeConfig(s, i.template).outputDir + ' --domain ' + domain + ' --expect ' + SITE_GATE_EXPECT_FILE + ' (the Site Intent Map from the build; without it the identity and intent checks are SKIPPED, never passed)' + '. Fix every FAIL in the site (never the gate); read every WARN.',
+    '- Its NEEDS A HUMAN list is yours: answer each one in the report — the gate never calls those passed.',
     '',
     'VERIFIED FACTS MAY BE USED:', ...verifiedFactLines(i.facts),
     '', 'UNVERIFIED FACTS MUST NOT BE PUBLISHED — if any of these appear, remove them:', ...forbiddenFactLines(i.facts),
@@ -983,6 +989,7 @@ export function finalQaPrompt(i: BuildPackInput): PackItem {
     '- All assets load from the new domain; nothing is hotlinked from the old site.',
     '- No placeholder text, no template leftovers, no unverified claim anywhere (compare with VERIFIED FACTS).',
     '- Mobile check on the live site at 375x812.',
+    '- THE GATE ON PRODUCTION: node scripts/findable-site-gate.mjs --url ' + prod + ' --domain ' + (s.canonical_domain || MARK.domain) + ' --expect ' + SITE_GATE_EXPECT_FILE + ' (fetch it first if missing: ' + SITE_GATE_FETCH + '). It checks http / www / apex in one hop, no noindex header, the search crawlers\' user agents getting the real page (Cloudflare WAF / Bot Fight Mode), and Cloudflare email obfuscation. Every FAIL is reported to Paul — a DNS or Cloudflare setting is his to change, never yours.',
     '',
     'VERIFIED FACTS:', ...verifiedFactLines(i.facts),
     '', 'Redirects to test:', ...(s.redirects.length ? s.redirects.map((r) => '    ' + r.from + ' -> ' + r.to) : ['    (none recorded)']),

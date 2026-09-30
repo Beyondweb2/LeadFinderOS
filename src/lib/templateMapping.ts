@@ -282,7 +282,8 @@ const IDENTITY_KINDS = new Set(['business_name', 'owner', 'phone', 'email', 'dom
  * Scan any text (the generated config now; the built site later) for the template's seed values.
  * Identity values (name, owner, phone, email, domain, address, image ids) always BLOCK. Towns,
  * credentials, profiles and brands block unless the client has the same value VERIFIED by the
- * client or Paul (never merely auto-accepted from a site). Trade words and claims warn.
+ * client or Paul, or stated on the client's OWN site (source-site evidence with a source URL that is not
+ * the seed client's). Trade words and claims warn.
  * The seed client's own build (its name is the template's seed name) skips the guard, and says so.
  */
 export function scanSeedValues(text: string, t: WebsiteTemplate | null, rows: FactRow[], businessName: string): SeedGuard {
@@ -290,7 +291,11 @@ export function scanSeedValues(text: string, t: WebsiteTemplate | null, rows: Fa
   const seedNames = t.forbiddenSeedValues.filter((v) => v.kind === 'business_name').map((v) => norm(v.value).replace(/ /g, ''));
   const me = norm(businessName).replace(/ /g, '');
   if (me && seedNames.some((n) => n && (me.startsWith(n) || n.startsWith(me)))) return { hits: [], skipped: 'This client is the template’s seed client (' + businessName + ') — its own values are expected.' };
-  const confirmed = rows.filter((r) => r.status === 'verified' && r.basis !== 'source_site').map((r) => r.value).join(' | ');
+  /* Source-site evidence (Paul, 2026-09-30) confirms a value like any other — unless it was read from
+     the SEED client's own site, which is exactly the contamination this guard exists to catch. */
+  const seedHosts = t.forbiddenSeedValues.filter((v) => v.kind === 'domain').map((v) => v.value.toLowerCase());
+  const fromSeedSite = (r: FactRow) => !r.source_url || seedHosts.some((h) => r.source_url.toLowerCase().includes(h));
+  const confirmed = rows.filter((r) => r.status === 'verified' && (r.basis !== 'source_site' || !fromSeedSite(r))).map((r) => r.value).join(' | ');
   const hits: SeedHit[] = [];
   for (const v of t.forbiddenSeedValues) {
     if (!seedValueIn(text, v.value)) continue;

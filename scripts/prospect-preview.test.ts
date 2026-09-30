@@ -372,6 +372,12 @@ ok(suggestedMessage(eesHeadline(), selectFindings(eesResearch('strong')), false)
     ok(r.send === 'card_only', 'rec: site down + no business content → card only');
     ok(r.weaknesses.length >= 2 && !/error|fail/i.test(r.why), 'rec: reasons listed, worded as guidance not an error');
   }
+  {
+    const withRating = planPreview({ ...eesFacts({ photos: true }), googleRating: 4.9, googleReviewCount: 57 } as Parameters<typeof planPreview>[0]);
+    const h = withRating.ok ? withRating.template.render(withRating.config, { year: 2026 }) : '';
+    const ld = [...h.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).join(' ');
+    ok(withRating.ok && ld.length > 0 && !/aggregateRating|"Review"/i.test(ld), 'schema: no aggregateRating / Review markup in the structured data, ever (the Findable build standard)');
+  }
   // No services but otherwise fine → card only with the service sentence.
   const noSvc = gen({ facts: { ...eesFacts({ photos: true }), siteInfo: { ...eesFacts().siteInfo!, services: [] }, pages: [{ url: 'https://www.ees-electrical.example/', ok: true, text: 'E.E.S Electrical is based in Addlestone. Call 01632 960123.', metaDescription: null, title: 'Home' }] } });
   ok(noSvc.ok && noSvc.preview.recommendation.send === 'card_only' && noSvc.preview.recommendation.why === 'Homepage preview is missing reliable service content.', 'rec: no reliable services → card only, and says why');

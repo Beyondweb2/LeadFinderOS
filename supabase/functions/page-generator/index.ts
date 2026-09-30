@@ -639,6 +639,12 @@ Deno.serve(async (req) => {
       if (!OPENAI_API_KEY) return json({ ok: false, error: "openai_not_configured" }, 500);
 
       const qaMode: QaMode = qaModeFor(qaAudit.business_type);
+      /* The client's own "must never claim" answer binds Q&A pages too (both modes passed "" until
+         2026-09-30, so a Q&A page could say what the client had forbidden). Newest questionnaire row. */
+      const { data: qaOb } = qaAudit.lead_id
+        ? await service.from("onboarding_responses").select("must_not_say").eq("lead_id", qaAudit.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle()
+        : { data: null };
+      const qaMustNotSay = String((qaOb as { must_not_say?: string | null } | null)?.must_not_say ?? "").trim();
 
       /* ── ADVICE MODE — drafted answers, guarded sentence by sentence on the way out. ───────── */
       if (qaMode === "advice") {
@@ -648,7 +654,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             model: MODEL, temperature: 0.5,
             messages: [
-              { role: "system", content: systemPromptQAAnswer(qaAudit.business_name, qaAudit.business_type ?? "", "") },
+              { role: "system", content: systemPromptQAAnswer(qaAudit.business_name, qaAudit.business_type ?? "", qaMustNotSay) },
               { role: "user", content: `The question this page answers: "${question}". Write the page via return_qa_answer.` },
             ],
             tools: [QA_ANSWER_TOOL], tool_choice: { type: "function", function: { name: "return_qa_answer" } },
@@ -744,7 +750,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             model: MODEL, temperature: 0.5,
             messages: [
-              { role: "system", content: systemPromptQA(qaAudit.business_type ?? "", "") },
+              { role: "system", content: systemPromptQA(qaAudit.business_type ?? "", qaMustNotSay) },
               { role: "user", content: `The question this page answers: "${question}". Business: ${qaAudit.business_name}${qaAudit.business_type ? ` (${qaAudit.business_type})` : ""}. Return the scaffolding via return_qa.` },
             ],
             tools: [QA_TOOL], tool_choice: { type: "function", function: { name: "return_qa" } },

@@ -284,7 +284,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   ok(asksWebsiteControl('just so i know what would actually be possible, do you own the site yourself or is it with an agency?', SITE_F), 'a natural variation of the own-site question passes');
   ok(checkVoiceNoteScript(GOOD.replace('i had a look at what might be holding you back', 'i looked into why Google AI recommended them instead'), { evidence: EV, site: SITE_F }).problems.some((x) => /reason/.test(x)), '"i looked into why Google AI recommended them" is a causation claim');
   ok(checkVoiceNoteScript(GOOD.replace(OWN_CTA, "i can send you the audit and show you exactly what i'd change. " + OWN_CTA), { evidence: EV, site: SITE_F }).problems.some((x) => /change plan/.test(x)), '"send you the audit and show you exactly what i\'d change" is rejected');
-  ok(VOICE_NOTE_GENERATOR_VERSION === 3, 'generator version 3 marks the new shape in stored rows');
+  ok(VOICE_NOTE_GENERATOR_VERSION === 4, 'generator version 4 marks the house-style pass in stored rows');
 }
 {
   // The card's pick (score.hook) wins whenever it has two usable names — even over a three-name miss.
