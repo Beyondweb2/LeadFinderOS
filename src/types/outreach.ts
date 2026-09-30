@@ -63,7 +63,10 @@ export type NextActionType =
   | 'send_initial_text'
   | 'send_voice_note'
   | 'send_follow_up'
-  | 'check_3_day_removal';
+  | 'check_3_day_removal'
+  | 'email'
+  | 'send_info'
+  | 'meeting';
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden' | 'Thailand';
 
@@ -772,19 +775,6 @@ const SITE_SENT_OR_BEYOND = ['site_sent', 'interested', 'not_interested', 'payme
 export function isSiteSentStatus(status?: string | null): boolean {
   return !!status && SITE_SENT_OR_BEYOND.includes(status);
 }
-
-export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
-  { value: 'send_initial_text', label: 'Send Initial Text' },
-  { value: 'send_voice_note', label: 'Send Voice Note' },
-  { value: 'send_follow_up', label: 'Send Follow-up' },
-  { value: '2nd_follow_up', label: '2nd Follow-up' },
-  { value: 'check_3_day_removal', label: 'Check 3-Day Removal' },
-  { value: 'call', label: 'Call' },
-  { value: 'follow_up', label: 'Follow-up' },
-  { value: 'send_draft', label: 'Respond' },
-  { value: 'remove_if_no_reply', label: 'Remove if no reply' },
-  { value: 'none', label: 'Set Action' },
-];
 
 /* ⛔ WHICH STATUSES MAY BE CRAWLED, AND WHY THE DEFAULT IS THESE TWO.
    The crawl itself contacts nobody — but it MANUFACTURES THE ABILITY TO CONTACT, and that is what

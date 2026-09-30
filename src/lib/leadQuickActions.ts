@@ -2,8 +2,9 @@
    The Inbox's status pill and Focus Mode's two buttons both call these, so the two roles' routes are
    written once: the admin writes the row directly; a salesperson goes through the ownership-checked
    lead functions (salesPatchLead) — a direct write from a sales session silently changes nothing —
-   and a salesperson's "not interested" also stops the queue for that lead (suppress_lead), exactly as
-   the admin's does server-side. Every screen then re-reads (notifyLeadChanged). */
+   and "not interested" also stops the queue for that lead (suppress_lead), for both roles. Every
+   screen then re-reads (notifyLeadChanged). A LOGGED OUTCOME does not come through here: it is
+   src/lib/leadOutcome.ts (the one outcome rule, src/lib/leadState.ts). */
 import { supabase } from '@/integrations/supabase/client';
 import { updateLeadStatus } from '@/lib/leadStatus';
 import type { LeadStatus } from '@/types/outreach';
@@ -30,7 +31,9 @@ export async function setLeadPipelineStatus(leadId: string, status: string, isAd
     ? await updateLeadStatus(leadId, status as LeadStatus)
     : await salesPatchLead(leadId, { status }).then((r) => ({ error: r.ok ? null : refusalText(r.error) }));
   if (error) return { ok: false, error: String(error) };
-  if (!isAdmin && status === 'not_interested') {
+  /* Both roles (lead state audit, 2026-09-30): the admin path wrote the status directly and NO
+     suppression row, so the number stayed reachable on its other lead rows. */
+  if (status === 'not_interested') {
     void supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'suppress_lead', lead_id: leadId, reason: 'not_interested' } });
   }
   notifyLeadChanged(leadId);

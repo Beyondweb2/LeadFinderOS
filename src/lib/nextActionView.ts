@@ -9,13 +9,16 @@
  * not know is shown as its own words, never dropped. */
 import { followUpBucket, londonToday, type FollowUpBucket } from './salesCrm.ts';
 
-/** The words for each stored next_action value. The first four are the ones the popup offers today
+/** The words for each stored next_action value. The first six are the ones the popup offers today
  *  (NEXT_ACTION_OPTIONS); the rest are older values that can still be on a row. */
 export const NEXT_ACTION_LABEL: Record<string, string> = {
   call: 'Call',
   send_follow_up: 'WhatsApp follow-up',
-  send_voice_note: 'Voice note',
+  email: 'Email',
   follow_up: 'Follow up',
+  send_info: 'Send information',
+  meeting: 'Meeting',
+  send_voice_note: 'Voice note',
   send_initial_text: 'Send opener',
   '2nd_follow_up': 'Second follow-up',
   send_draft: 'Send link',

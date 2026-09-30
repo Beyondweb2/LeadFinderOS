@@ -28,7 +28,7 @@ ok(focusQueue(w, "overdue")[0].why === "Call", "a follow-up shows the person's o
 ok(focusQueue(w, "interested")[0].leadId === "f" && focusQueue(w, "warm")[0].leadId === "f", "interested and warm views");
 ok(focusQueue(w, "signup_sent")[0].why === "Not opened yet" && focusQueue(w, "going_cold")[0].leadId === "b" && focusQueue(w, "replied")[0].leadId === "a", "signup sent / going cold / replied views");
 ok(focusQueue(w, "nonsense").length === 2, "an unknown view falls back to next best actions");
-ok(FOCUS_VIEWS.length === 8, "eight saved views");
+ok(FOCUS_VIEWS.length === 9 && FOCUS_VIEWS.some((v) => v.key === "meetings"), "nine saved views (Meetings booked added 2026-09-30)");
 ok(linkedInSearchUrl("Acme Locks", "Leeds") === "https://www.linkedin.com/search/results/all/?keywords=Acme%20Locks%20Leeds" && linkedInSearchUrl(null, null) === null, "LinkedIn is a search link, never a scrape");
 
 console.log("\n── shortcuts are safe ──");
@@ -47,11 +47,14 @@ ok(/go\(1\)/.test(keyHandler) && !/quick\(|save|rpc|invoke/.test(keyHandler), "F
 
 console.log("\n── one CRM, no second copy ──");
 ok(/<LeadWorkPanel key=\{item\.leadId\} leadId=\{item\.leadId\}( onOutcome=\{onOutcome\})? \/>/.test(focus) && /<LeadHookPanel key=\{item\.leadId\} leadId=\{item\.leadId\} \/>/.test(focus), "Focus reuses the lead workspace's own panels (log contact, Next Action, notes, audit)");
-ok(/markLeadInterested\(lead\.id, perms\.editLeadRecord\)/.test(focus) && /setLeadPipelineStatus\(lead\.id, 'not_interested', perms\.editLeadRecord\)/.test(focus), "Focus's Interested / Not interested use the one path");
+/* 2026-09-30 (lead state audit): Focus's separate Interested / Not interested buttons are gone — they were
+   the same writes as the Log Contact outcomes, which the Work panel carries out through the one executor
+   (src/lib/leadOutcome.ts) for both roles. scripts/lead-state.test.ts holds the full rule. */
+ok(!/markLeadInterested|setLeadPipelineStatus/.test(focus) && /applyOutcome\(/.test(read("src/components/LeadCrmPanel.tsx")), "Focus's Interested / Not interested are the Work panel's outcomes — the one path");
 const inbox = read("src/pages/Inbox.tsx");
 ok(/markLeadInterested\(c\.leadId, perms\.editLeadRecord\)/.test(inbox) && /setLeadPipelineStatus\(c\.leadId, status, perms\.editLeadRecord\)/.test(inbox) && !/mode: 'suppress_lead', lead_id: c\.leadId/.test(inbox), "…and so does the Inbox (the queue stop is written once)");
 const qa = read("src/lib/leadQuickActions.ts");
-ok((qa.match(/mode: 'suppress_lead'/g) ?? []).length === 1 && /if \(!isAdmin && status === 'not_interested'\)/.test(qa), "a salesperson's not-interested stops the queue, once, in one place");
+ok((qa.match(/mode: 'suppress_lead'/g) ?? []).length === 1 && /if \(status === 'not_interested'\)/.test(qa), "not-interested stops the queue, once, in one place — for both roles (the admin path wrote no suppression, 2026-09-30)");
 ok(canOpenRoute("sales", "/focus") && /<Route path="\/focus" element=\{<Focus \/>\} \/>/.test(read("src/App.tsx")), "Focus Mode is routed and open to Sales");
 
 console.log("\n── the palette and recent leads ──");

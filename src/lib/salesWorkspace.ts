@@ -16,6 +16,7 @@ import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
 import { conversationState, londonToday } from './conversationState.ts';
 import { NEXT_ACTION_OPTIONS } from './salesCrm.ts';
 import type { QuickCloseState } from './quickClose.ts';
+import { meetingWhen } from './leadState.ts';
 
 export const WARM_DAYS = 7;
 export const NEEDS_FOLLOW_UP_DAYS = 3;
@@ -30,6 +31,9 @@ export const FEED_DAYS = 14;
  *  lead going cold (it still sits in the "Replied, unanswered" group, newest first). */
 export const REPLY_ACTION_DAYS = 14;
 export const TREND_WEEKS = 8;
+/** A booked meeting is an action from this long before it starts until MEETING_ACTION_AFTER_MS after. */
+export const MEETING_ACTION_BEFORE_MS = 36 * 3600_000;
+export const MEETING_ACTION_AFTER_MS = 12 * 3600_000;
 /** A trend is drawn only with at least this many contacted leads across the weeks, in this many weeks. */
 export const TREND_MIN_CONTACTED = 20;
 export const TREND_MIN_ACTIVE_WEEKS = 3;
@@ -43,6 +47,8 @@ export interface WorkspaceLead {
   next_action_date: string | null;
   next_action_note: string | null;
   sold_at?: string | null;
+  /** A booked call / meeting (lead_set_call_booked) — the Meetings list and the top of Next best actions. */
+  call_booked_at?: string | null;
 }
 /** A completed hook audit on one of the person's leads (ai_audit_runs status 'complete'). */
 export interface WorkspaceAudit { lead_id: string; completed_at: string }
@@ -55,7 +61,7 @@ export interface NextAction { kind: string; leadId: string; name: string; title:
 export interface FeedItem { kind: string; leadId: string; name: string; text: string; at: string; tone: Tone; link: ActionLink }
 export interface HealthWarning { key: string; tone: Tone; text: string; group?: FollowUpGroup }
 export interface Milestone { key: string; label: string; achieved: boolean; achievedAt: string | null; progress: number | null; target: number | null; note?: string }
-export type FollowUpGroup = 'overdue' | 'dueToday' | 'repliedUnanswered' | 'interestedUntouched' | 'signupSent' | 'goingCold';
+export type FollowUpGroup = 'overdue' | 'dueToday' | 'repliedUnanswered' | 'interestedUntouched' | 'signupSent' | 'goingCold' | 'meetings';
 export type StageKey = 'new' | 'contacted' | 'replied' | 'interested' | 'signup_sent' | 'paid';
 export interface TargetInput { period?: 'week' | 'month'; contacts?: number; replies?: number; interested?: number; wins?: number; commission?: number }
 
@@ -152,7 +158,7 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
   for (const l of actBy.values()) l.sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at));
 
   const pipeline = STAGES.map((s) => ({ ...s, count: 0, leads: [] as PipeLead[] }));
-  const followUps: Record<FollowUpGroup, PipeLead[]> = { overdue: [], dueToday: [], repliedUnanswered: [], interestedUntouched: [], signupSent: [], goingCold: [] };
+  const followUps: Record<FollowUpGroup, PipeLead[]> = { overdue: [], dueToday: [], repliedUnanswered: [], interestedUntouched: [], signupSent: [], goingCold: [], meetings: [] };
   const warmth: Record<Warmth, number> = { warm: 0, needs_follow_up: 0, going_cold: 0 };
   const actions: (NextAction & { rank: number })[] = [];
   const waiting: { leadId: string; name: string; since: string; ms: number }[] = [];
@@ -182,6 +188,20 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     // ── The conversation, by the one rule ──
     const st = conversationState({ messages: f.thread, lastReadAt: null, leadStatus: f.lead.status, nextAction: lead?.next_action, nextActionDate: lead?.next_action_date, nowMs: now });
     const out = f.won || f.notInterested;
+
+    /* ── A booked meeting (lead state audit, 2026-09-30): it outranks everything — prepare for it, then
+       log how it went. Every upcoming one is on the Meetings list; the action is for the next 36 hours
+       and the 12 after it started. Not for a lead that is won or out. ── */
+    const meetMs = lead?.call_booked_at ? Date.parse(lead.call_booked_at) : NaN;
+    if (!out && Number.isFinite(meetMs) && meetMs >= now - MEETING_ACTION_AFTER_MS) {
+      const when = meetingWhen(lead!.call_booked_at!);
+      followUps.meetings.push({ ...pl, at: iso(meetMs), detail: when });
+      if (meetMs <= now + MEETING_ACTION_BEFORE_MS) {
+        const started = meetMs <= now;
+        actions.push({ kind: 'meeting', leadId: f.lead.id, name, title: started ? 'Meeting — log how it went' : onToday(meetMs) ? 'Meeting today' : 'Meeting booked',
+          detail: when, at: iso(meetMs), tone: 'blue', link: 'lead', rank: -1 });
+      }
+    }
 
     // ── Follow-ups (a person's Next Action — read, never changed) ──
     const na = lead?.next_action && lead.next_action !== 'none' ? lead.next_action : null;

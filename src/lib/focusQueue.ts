@@ -7,6 +7,7 @@ import type { PipeLead, SalesWorkspace, Warmth } from './salesWorkspace.ts';
 
 export const FOCUS_VIEWS = [
   { key: 'next', label: 'Next best actions' },
+  { key: 'meetings', label: 'Meetings booked' },
   { key: 'follow_up_today', label: 'Follow up today' },
   { key: 'overdue', label: 'Overdue follow-ups' },
   { key: 'replied', label: 'Replied, unanswered' },
@@ -28,6 +29,7 @@ export function focusQueue(w: SalesWorkspace, view: FocusView | string): FocusIt
   switch (view) {
     case 'follow_up_today': items = fromLeads([...w.followUps.overdue, ...w.followUps.dueToday], (l) => l.detail ?? 'Follow-up due'); break;
     case 'overdue': items = fromLeads(w.followUps.overdue, (l) => l.detail ?? 'Overdue'); break;
+    case 'meetings': items = fromLeads(w.followUps.meetings ?? [], (l) => `Meeting · ${l.detail ?? ''}`); break;
     case 'replied': items = fromLeads(w.followUps.repliedUnanswered, () => 'Replied — waiting on you'); break;
     case 'interested': items = fromLeads(w.pipeline.find((p) => p.key === 'interested')?.leads ?? [], () => 'Interested'); break;
     case 'signup_sent': items = fromLeads(w.followUps.signupSent, (l) => l.detail ?? 'Signup sent'); break;
