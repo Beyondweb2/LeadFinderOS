@@ -116,6 +116,13 @@ ok(gradeSocialCandidates([{ url: "https://www.tiktok.com/@anything1", source: "q
 // 4. no socials; builder / junk only
 const r = gradeSocialCandidates([{ url: "https://www.instagram.com/wix", source: "website" }, { url: "https://twitter.com", source: "website" }], biz);
 ok(r.graded.length === 0 && r.rejected.length === 2, "4. a site with only builder / bare links → nothing, both rejected with reasons");
+// the false positives the 2026-09-30 backfill sample caught
+ok(norm("https://twitter.com/DVLAgovuk") === "REJECT platform_account" && norm("https://x.com/bold_themes") === "REJECT platform_account", "a government account and a theme author are never the business");
+ok(norm("https://www.facebook.com/govanplumbing").startsWith("facebook") && norm("https://www.instagram.com/themeparkcafe").startsWith("instagram"), "…but a name that merely starts with gov / theme is fine");
+ok(gradeSocialCandidates([{ url: "https://www.youtube.com/@WittyChannelTV", source: "website" }], biz).graded[0].confidence === "unverified", "own-site YouTube / X / TikTok not naming the business → needs checking (a video embed, a stranger's channel)");
+ok(gradeSocialCandidates([{ url: "https://www.facebook.com/937326503092188", source: "website" }], biz).graded[0].confidence === "likely", "own-site numeric Facebook page → likely (it cannot name anyone)");
+ok(gradeSocialCandidates([{ url: "https://www.linkedin.com/in/tim-ramsell", source: "website" }], { name: "You're in Lock", website: "https://youreinlock.com" }).graded[0].confidence === "likely", "the owner's LinkedIn linked from their own site → likely (Sales confirms)");
+ok(/ownSite \? \{ url, source: "website" \} : \{ url, source: "web_search"/.test(read("supabase/functions/_shared/social-find.ts")), "a crawl of a directory page is graded like a found result, never as their own site");
 // dedupe: the same profile from two sources keeps the stronger
 g = gradeSocialCandidates([{ url: "https://www.facebook.com/rushelectrics", source: "web_search", context: "nothing" }, { url: "https://m.facebook.com/rushelectrics/", source: "website" }], biz).graded;
 ok(g.length === 1 && g[0].confidence === "confirmed" && g[0].source === "website", "one profile from two places → one row, the stronger grade");
@@ -139,7 +146,7 @@ ok(!/confidence = 'unverified'/.test(mig.slice(mig.indexOf("_social_profiles_syn
 ok(!/\bemail\b\s*=/.test(mig.replace(/--[^\n]*/g, "")), "the migration never writes an email");
 ok(/pg_trigger_depth\(\) > 1/.test(mig), "the sync's own update does not recurse");
 ok(/'malformed_legacy'/.test(mig) && /'rejected'/.test(mig) && /'original'/.test(mig), "legacy junk is kept as rejected rows with the original text (audit trail)");
-ok(/for select to authenticated[\s\S]{0,120}my_sales_lead_ids/.test(mig) && /revoke insert, update, delete, truncate on public.lead_social_profiles from authenticated/.test(mig), "RLS: read own leads; writes service role only");
+ok(/for select to authenticated[\s\S]{0,120}my_sales_lead_ids/.test(mig) && /revoke insert, update, delete, truncate, references, trigger on public.lead_social_profiles from authenticated/.test(mig), "RLS: read own leads; writes service role only");
 
 console.log("\n── contact channels: Facebook / Instagram / LinkedIn, one set ──");
 const allow = (mig.match(/_channel not in \(([^)]+)\)/) ?? [])[1] ?? "";

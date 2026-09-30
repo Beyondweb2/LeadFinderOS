@@ -21,10 +21,17 @@
       unverified — anything weaker, or two different profiles competing for one platform on one
                    source, or a link already on a DIFFERENT business. Never canonical — a person decides.
    ⛔ LinkedIn is never scraped (Paul, 2026-09-30). A person's /in/ profile is stored only when their
-      own website links to it; otherwise Sales gets Search LinkedIn (focusQueue.ts linkedInSearchUrl) and pastes the right one.
+      own website links to it; otherwise Sales gets Search LinkedIn (linkedInSearchUrl, below) and pastes the right one.
 
    Pure and edge-reachable: no imports, no `@/`.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** A LinkedIn people search for the business (a search link, never a scrape) — the Sales route to an
+ *  owner / founder (Paul, 2026-09-30). Re-exported by focusQueue.ts for Focus Mode. */
+export function linkedInSearchUrl(name: string | null | undefined, town?: string | null): string | null {
+  const q = [name, town].filter((x) => x && String(x).trim()).join(' ').trim();
+  return q ? `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(q)}` : null;
+}
 
 export type SocialPlatform = 'facebook' | 'instagram' | 'linkedin_company' | 'linkedin_person' | 'tiktok' | 'youtube' | 'x';
 export type SocialConfidence = 'confirmed' | 'likely' | 'unverified';
@@ -125,6 +132,12 @@ function handleProblem(handle: string): SocialRejectReason | null {
   if (!h) return 'no_profile';
   if (NOT_THE_BUSINESS_HANDLES.has(h.replace(/[._-]/g, ''))) return 'platform_account';
   if (PLACEHOLDER.test(h)) return 'placeholder';
+  /* Accounts a small-business site links that are NOT the business (measured on the 2026-09-30
+     backfill): a government body (x.com/DVLAgovuk on driving-school sites) and a theme / template
+     author (x.com/bold_themes in a WordPress footer). */
+  const flat = h.replace(/[._-]/g, '');
+  if (/(govuk|govau|govus)$|^(gov|govuk|nhs|nhsuk)$/.test(flat)) return 'platform_account';
+  if (/themes$|template/.test(flat)) return 'platform_account';
   return null;
 }
 
@@ -354,7 +367,12 @@ export function gradeSocialCandidates(
     if (c.source === 'manual') { confidence = 'confirmed'; why = 'added by a person'; }
     else if (c.source === 'questionnaire') { confidence = 'confirmed'; why = 'the business gave it'; }
     else if (OWN_SOURCES.has(c.source)) {
-      confidence = nameMatch || c.source === 'website_schema' ? 'confirmed' : 'likely';
+      /* An own-site link whose handle does not name the business: likely on Facebook / Instagram /
+         LinkedIn (a numeric page id cannot name anyone, and own-site links there were right on the
+         2026-09-30 sample); on X / YouTube / TikTok it was a stranger's channel as often as not (a video
+         embed, a theme author), so it waits for a person. */
+      const strongOnMismatch = n.platform === 'facebook' || n.platform === 'instagram' || n.platform === 'linkedin_company' || n.platform === 'linkedin_person';
+      confidence = nameMatch || c.source === 'website_schema' ? 'confirmed' : strongOnMismatch ? 'likely' : 'unverified';
       why = nameMatch ? 'on their own site / listing and the handle matches the name' : c.source === 'website_schema' ? "in their site's own profile list (sameAs)" : 'on their own site / listing, but the handle does not match the name';
     } else if (c.source === 'web_search') {
       townMatch = textMentionsTown(c.context ?? '', business.town);

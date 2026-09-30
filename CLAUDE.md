@@ -43,7 +43,17 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   not to be built on: the barber/salon product, Instantly, Twilio/SMS, contact discovery, the
   Feedback page. 22 functions are deployed with no source (2 belong to the
   findable-directory repo and stay). ⛔ **Step 7 (delete the multi-user surface) is OVERTURNED** —
-  Paul, 2026-09-27: see the next bullet.
+  Paul, 2026-09-27: see the next bullet. ⛔ **Step 4 is OVERTURNED for SOCIAL discovery** (Paul,
+  2026-09-30, `docs/social-profiles.md`): Find socials / `social-profiles` / `enrich-business` /
+  `lead_social_profiles` are live and kept; Find email too (2026-09-29).
+- ⛔ **Social profiles (2026-09-30, `docs/social-profiles.md`)**: ONE grade rule (`src/lib/socialProfiles.ts`,
+  confirmed / likely / unverified) and ONE canonical pick (`_social_profiles_sync`, SQL trigger) that
+  mirrors onto `facebook_url` / `instagram_url` / `linkedin_url` + `*_status`. **Never write those
+  columns from code** — write `lead_social_profiles` through `_shared/social-find.ts` `saveGraded`
+  (never re-activates a rejected row, never touches a person's row, only RAISES a grade). Unverified is
+  never canonical; two at the top rank = review. ⛔ **LinkedIn is never scraped** — own-site link or
+  pasted only; "Search LinkedIn" is a search link. ⛔ **Paid Enrich is ADMIN-ONLY** and never
+  overwrites an email. Confirmed and Likely must LOOK different on every surface (`SocialLinks`).
 - **Multi-user is built: ADMIN + SALES on ONE book** (2026-09-27, `docs/multi-user.md` — read it before
   touching auth, RLS, a lead read/write, or any edge function a salesperson can reach). Every row
   keeps `user_id` = the book owner; who WORKS a lead is `assigned_to_user_id`. A salesperson never

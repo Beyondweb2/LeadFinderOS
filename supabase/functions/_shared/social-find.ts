@@ -50,16 +50,22 @@ export async function candidatesFromRecords(service: Service, lead: SocialLead):
   const out: SocialCandidateInput[] = [];
   const used = new Set<string>();
 
+  /* A crawl of the lead's OWN site is the business pointing at its profiles. A crawl of a directory
+     page (TradeHQ, Checkatrade…) is not — its links are graded like a found result: the name AND the
+     town must match, and then only "likely". */
+  const ownSite = classifyLeadWebsite(lead.website).source === "own_site";
+  const town = lead.derived_town || lead.search_location || "";
+  const crawled = (url: string): SocialCandidateInput => ownSite ? { url, source: "website" } : { url, source: "web_search", context: `${lead.business_name ?? ""} ${town}` };
   const { data: crawls } = await service.from("lead_crawl_checks").select("result").eq("lead_id", lead.id).limit(5);
   for (const c of (crawls ?? []) as Array<{ result: { siteInfo?: { socialLinks?: unknown } } | null }>) {
-    for (const url of socialLinksOf(c.result?.siteInfo?.socialLinks)) { out.push({ url, source: "website" }); used.add("website crawl"); }
+    for (const url of socialLinksOf(c.result?.siteInfo?.socialLinks)) { out.push(crawled(url)); used.add("website crawl"); }
   }
   const { data: audits } = await service.from("ai_audits").select("id").eq("lead_id", lead.id).order("created_at", { ascending: false }).limit(10);
   const auditIds = ((audits ?? []) as Array<{ id: string }>).map((a) => a.id);
   if (auditIds.length) {
     const { data: runs } = await service.from("ai_audit_runs").select("results_crawl_check").in("audit_id", auditIds).not("results_crawl_check", "is", null).limit(20);
     for (const r of (runs ?? []) as Array<{ results_crawl_check: { siteInfo?: { socialLinks?: unknown } } | null }>) {
-      for (const url of socialLinksOf(r.results_crawl_check?.siteInfo?.socialLinks)) { out.push({ url, source: "website" }); used.add("audit crawl"); }
+      for (const url of socialLinksOf(r.results_crawl_check?.siteInfo?.socialLinks)) { out.push(crawled(url)); used.add("audit crawl"); }
     }
   }
   // Google gave a social profile as the business's "website" — the listing's own link.

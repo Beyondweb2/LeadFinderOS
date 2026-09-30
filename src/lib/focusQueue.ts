@@ -39,8 +39,5 @@ export function focusQueue(w: SalesWorkspace, view: FocusView | string): FocusIt
   return items.filter((i) => (seen.has(i.leadId) ? false : (seen.add(i.leadId), true)));
 }
 
-/** A LinkedIn people search for the business (a search link, never a scrape). */
-export function linkedInSearchUrl(name: string | null | undefined, town?: string | null): string | null {
-  const q = [name, town].filter((x) => x && String(x).trim()).join(' ').trim();
-  return q ? `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(q)}` : null;
-}
+/** A LinkedIn people search for the business — ONE copy, in socialProfiles.ts (2026-09-30). */
+export { linkedInSearchUrl } from './socialProfiles.ts';

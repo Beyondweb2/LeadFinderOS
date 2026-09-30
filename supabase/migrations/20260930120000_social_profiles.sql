@@ -53,7 +53,7 @@ drop policy if exists lead_social_profiles_select on public.lead_social_profiles
 create policy lead_social_profiles_select on public.lead_social_profiles for select to authenticated
   using ((select public.my_role()) = 'admin' or lead_id in (select public.my_sales_lead_ids()));
 revoke all on public.lead_social_profiles from public, anon;
-revoke insert, update, delete, truncate on public.lead_social_profiles from authenticated;
+revoke insert, update, delete, truncate, references, trigger on public.lead_social_profiles from authenticated;
 grant select on public.lead_social_profiles to authenticated;
 
 -- The canonical pick + the mirror onto the lead's columns. A platform with NO rows at all leaves the

@@ -4,13 +4,12 @@ import { Check, Facebook, Instagram, Linkedin, Loader2, Search, SearchCheck, X, 
 import { supabase } from '@/integrations/supabase/client';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
-import { linkedInSearchUrl } from '@/lib/focusQueue';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
-  SOCIAL_CONFIDENCE_LABEL, SOCIAL_SOURCE_LABEL, socialOutcomes, socialOutcomeSentence, socialPlatformLabel,
+  SOCIAL_CONFIDENCE_LABEL, SOCIAL_SOURCE_LABEL, linkedInSearchUrl, socialOutcomes, socialOutcomeSentence, socialPlatformLabel,
   type SocialConfidence, type SocialProfileRow, type SocialSource,
 } from '@/lib/socialProfiles';
 
