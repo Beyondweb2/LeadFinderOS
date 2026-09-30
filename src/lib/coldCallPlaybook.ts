@@ -192,6 +192,8 @@ export interface ColdCallPlaybook {
    *  strongest finding, the Findable line and the next step as ONE read, one paragraph per beat. The
    *  structured pieces below (opening, explain, transition, offer) are what it is assembled from. */
   callScript: string[];
+  /** The same facts written for LinkedIn and for email (2026-09-30). Copy-only; nothing sends. */
+  messages: { linkedin: string; email: { subject: string; body: string } };
   opening: string[];
   evidence: PlaybookEvidence;
   findings: PlaybookFinding[];
@@ -591,13 +593,21 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
      already hedged), a profile page, or no site at all. Nothing when there is nothing strong. */
   const lead0 = f.findings[0] ?? null;
   const lowerClause = (s: string) => s.charAt(0).toLowerCase() + s.slice(1).replace(/\.$/, '');
-  /* Two lines for a finding — what I saw, then why it matters — so it is said with a breath between. */
+  /* Two lines for a finding — what I saw, then why it matters — so it is said with a breath between.
+     🔴 "I had a look at why you weren't coming up" (Paul, 2026-09-30) is used only after a MISS, and what
+     was found only "could be holding you back": never "that's why", never a proven cause. "Something"
+     for one finding, "a few things" only when there is more than one. */
+  const missed = evidence.kind === 'gap';
+  const lookedWhy = 'I had a look at why you weren\'t coming up';
+  const foundWhat = f.findings.length > 1 ? 'a few things' : 'something';
   const siteLines: string[] = siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
-    ? ['I also looked for your website and could only find your ' + siteKind.label + ' profile. Without a site of your own there\'s a lot less for AI to go on about what you do and where.']
+    ? [(missed ? lookedWhy + ', and I could only find your ' : 'I also looked for your website and could only find your ') + siteKind.label + ' profile, not a site of your own. Without one there\'s a lot less for AI to go on about what you do and where.']
     : siteKind.source === 'none'
-      ? ['I also couldn\'t find a website for you, and without one it\'s much harder for AI to know what you do and where.']
+      ? [(missed ? lookedWhy + ', and I couldn\'t find a website for you.' : 'I also couldn\'t find a website for you.') + ' Without one it\'s much harder for AI to know what you do and where.']
       : lead0
-        ? ['I had a look at your website and one thing stood out: ' + lowerClause(lead0.explanation) + '.', lead0.whyItMayMatter].filter(Boolean)
+        ? [(missed
+          ? lookedWhy + ' and found ' + foundWhat + ' that could be holding you back. ' + (f.findings.length > 1 ? 'The main one is that ' : 'It\'s that ') + lowerClause(lead0.explanation) + '.'
+          : 'I had a look at your website and one thing stood out: ' + lowerClause(lead0.explanation) + '.'), lead0.whyItMayMatter].filter(Boolean)
         : [];
 
   /* ── B. the opening (the first beats, also what the tests read) ── */
@@ -763,9 +773,50 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     ? 'If they\'d rather see it first: "I\'ll WhatsApp you the report. It shows the exact search, what AI said and who it named."'
     : 'If they\'d rather see it first: "I\'ll run the check properly and send it over on WhatsApp."');
 
+  /* ── LINKEDIN AND EMAIL (Paul, 2026-09-30): the SAME facts as the call — the engine, the search said
+     plainly, that result's own competitors, the strongest finding in its own hedged words — written
+     for the channel. No second prompt, no second fact source, so they cannot drift from the call.
+     LinkedIn: very short, no link, a question at the end. Email: a little longer, the report link when
+     there is one, plain sign-off. Neither says the business's own name back to them. */
+  /* The contact's own first name when the lead has one; otherwise a plain "Hi," — never a guess. */
+  const nameWord = clean(lead.contact_name).split(/\s+/)[0] ?? '';
+  const firstName = /^[A-Za-z][A-Za-z'-]*$/.test(nameWord) ? nameWord : '';
+  const hi = firstName ? 'Hi ' + firstName + ',' : 'Hi,';
+  const lookedShort = siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
+    ? 'I had a look at why and could only find your ' + siteKind.label + ' profile, not a website of your own.'
+    : siteKind.source === 'none'
+      ? 'I had a look at why and couldn\'t find a website for you.'
+      : lead0 ? 'I had a look at why and found ' + foundWhat + ' on your website that could be holding you back.' : null;
+  const linkedin = evidence.kind === 'gap'
+    ? [hi, missLine, lookedShort, 'We specialise in AI visibility. Happy to explain what I\'d do if it\'s useful?'].filter(Boolean).join(' ')
+    : evidence.kind === 'named'
+      ? [hi, namedLine, 'We specialise in AI visibility. Happy to explain how to keep it that way if it\'s useful?'].join(' ')
+      : [hi, 'we check what ChatGPT and Google AI say when someone asks for ' + searchFor + '. Happy to run it for you and send over what it says?'].join(' ');
+  const emailParas: string[] = [hi];
+  if (evidence.kind === 'gap') {
+    emailParas.push(missLine);
+    if (siteLines.length) emailParas.push(siteLines.join(' '));
+    emailParas.push('We specialise in AI visibility for local businesses.' + (reportUrl ? ' The report shows the exact search, what AI said and who it named: ' + reportUrl : ''));
+    emailParas.push('Happy to explain what I\'d do to make you more likely to be the one AI recommends. Is it worth a quick call?');
+  } else if (evidence.kind === 'named') {
+    emailParas.push(namedLine);
+    if (siteLines.length) emailParas.push(siteLines.join(' '));
+    emailParas.push('We specialise in AI visibility for local businesses, and I\'d be happy to explain how to keep it that way. Is it worth a quick call?');
+  } else {
+    emailParas.push('We check what AI tools like ChatGPT and Google AI say when someone asks for ' + searchFor + ', and which businesses they name.');
+    if (siteLines.length) emailParas.push(siteLines.join(' '));
+    emailParas.push('Happy to run the check for you and send over what it says. Would that be useful?');
+  }
+  emailParas.push(caller + '\nFindable');
+  const email = {
+    subject: evidence.kind === 'none' ? 'What AI says when someone asks for ' + searchFor : 'Asked ' + engine + ' for ' + searchFor,
+    body: emailParas.join('\n\n'),
+  };
+
   return {
     site: { source: siteKind.source, label: siteKind.label },
     callScript,
+    messages: { linkedin, email },
     mode: convo.mode,
     context: {
       business,

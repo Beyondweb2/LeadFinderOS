@@ -275,7 +275,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
     'it names the first three competitors from THAT result, no more');
   ok(/I asked Google AI for a locksmith in Tunbridge Wells and it named/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
-  ok(/one thing stood out: your sitemap/.test(script) && /\bcan give them conflicting information\b/.test(script), 'it carries the strongest finding, hedged');
+  ok(/I had a look at why you weren't coming up and found (something|a few things) that could be holding you back\. (It's that|The main one is that) your sitemap/.test(script) && /\bcan give them conflicting information\b/.test(script) && !/that's why/i.test(script), 'it carries the strongest finding, hedged ("could be holding you back", never "that\'s why")');
   ok(/We specialise in AI visibility/.test(script), 'the Findable line is inside the script, not a separate block');
   ok(/Is now OK for a couple of minutes, or shall I ring you back\?/.test(script) && /I'll WhatsApp you the report/.test(script), 'it ends on a natural next step, with the report as the fallback');
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
@@ -313,7 +313,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   for (const t of ['AI opportunity', "What I'd talk about", 'Call script', 'Voice note', 'Questions they may ask', 'Audit evidence', 'Open report', 'Copy report link']) ok(ui.includes(t), 'panel shows: ' + t);
   for (const t of ['How to explain it', 'Transition to Findable', 'Offer / next step', 'letter="A"']) ok(!ui.includes(t), 'old block gone: ' + t);
   ok(/No strong owned-site technical issue found from the available evidence\./.test(ui), 'no strong site issue → one plain line, no padding');
-  ok(/tab === 'call'[\s\S]{0,400}: <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>/.test(ui) && /data-testid="voice-note-out-of-date"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened)');
+  ok(/\{tab === 'voice' && <VoiceNoteScriptBody leadId=\{leadId\} currentAuditId=\{p\.auditId\} \/>\}/.test(ui) && /\['linkedin', 'LinkedIn'\], \['email', 'Email'\]/.test(ui) && /data-testid="voice-note-out-of-date"/.test(readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8')), 'the voice-note script sits in the Voice note tab (loaded only when that tab is opened)');
   ok(/useHookVisibility\(leadId\)/.test(ui) && /score\.shape !== 'six'/.test(ui) && /Older early-stop check/.test(ui), 'audit evidence reads the Inbox card\'s scored results and labels an old early-stop check');
   ok(/<details key=\{o\.objection\}/.test(ui), 'each question is collapsed until opened');
   ok(!/onSend|doSend|send-whatsapp/.test(ui), 'the panel has no send action');

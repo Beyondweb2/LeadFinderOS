@@ -162,7 +162,6 @@ import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWor
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { TRADES } from '@/lib/trades';
-import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { ColdCallPlaybookSheet, COLD_CALL_PLAYBOOK_LABEL } from '@/components/ColdCallPlaybook';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
@@ -344,7 +343,6 @@ export function OutreachTable({
   const { isAdmin } = useSubscription();
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
   const { crawlByLeadId } = useLeadCrawls();
-  const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
   // Bulk AI-audit question-count + cost-confirm dialog. Count range mirrors the server's
   // HARD 3..5 clamp (default 3) — unified across wizard/bulk/auto-chain.
@@ -3306,9 +3304,6 @@ export function OutreachTable({
         initialTemplate={launchTemplate}
         shareLink={launchLink}
         onSent={handleDialogSent}
-        onAiOpener={isAdmin && whatsappDialogLead ? () => {
-          setAiOpenerLead(whatsappDialogLead);
-        } : undefined}
       />
 
       <HookAuditDialog lead={auditLead} onOpenChange={(open) => { if (!open) setAuditLead(null); }} />
@@ -3334,18 +3329,6 @@ export function OutreachTable({
         open={!!playbookLeadId}
         onOpenChange={(open) => { if (!open) setPlaybookLeadId(null); }}
       />
-
-      {/* Admin AI Opener Modal */}
-      {isAdmin && (
-        <AiOpenerModal
-          lead={aiOpenerLead}
-          open={!!aiOpenerLead}
-          onOpenChange={(open) => { if (!open) setAiOpenerLead(null); }}
-          onSelectMessage={(msg) => {
-            window.dispatchEvent(new CustomEvent('ai-opener-selected', { detail: { message: msg } }));
-          }}
-        />
-      )}
     </Card>
   );
 }
