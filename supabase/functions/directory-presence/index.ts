@@ -43,7 +43,7 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30h";
+const BUILD_ID = "directory-presence-2026-09-30i";
 const RUN_POLL_MS = 3_000;
 /** 100 s, up from the 60 s the retired check-directory-listings used: three of eight live searches timed out at 60 s
  *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
@@ -243,9 +243,16 @@ Deno.serve(async (req) => {
         if ((data ?? []).length < 1000) break;
       }
       if (!ids.length) return { evidence: [], tradeAuditTotals: { [keys[0]]: 0 } };
-      const { data, error } = await service.rpc("presence_trade_citation_hosts", { _audit_ids: ids });
-      if (error) throw new Error(`presence_trade_citation_hosts: ${error.message}`);
-      const rows = (data ?? []) as Array<{ host: string; citations: number; audits: number }>;
+      /* PAGED: PostgREST cuts every response at 1,000 rows, silently — locksmiths have 1,056 hosts in 2+
+         audits, and before paging an arbitrary half (Yell among them) never arrived. The function
+         orders by breadth with a unique tiebreak, so pages are stable. */
+      const rows: Array<{ host: string; citations: number; audits: number }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await service.rpc("presence_trade_citation_hosts", { _audit_ids: ids }).range(from, from + 999);
+        if (error) throw new Error(`presence_trade_citation_hosts: ${error.message}`);
+        rows.push(...((data ?? []) as typeof rows));
+        if ((data ?? []).length < 1000) break;
+      }
       return { evidence: rows.map((r) => ({ trade: keys[0], host: r.host, citations: r.citations, audits: r.audits })), tradeAuditTotals: { [keys[0]]: ids.length } };
     })().catch((e) => { notes.push(`trade evidence unavailable: ${reasonOf(e)}`); return null; });
     const places = (placesRes as { data: { phone?: string; website?: string; address?: string; category?: string; google_maps_uri?: string } | null }).data;
