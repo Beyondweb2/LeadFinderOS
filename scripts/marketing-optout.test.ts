@@ -53,7 +53,8 @@ console.log('\n── every sending path ──');
   const guard = swm.indexOf('optOutBlocksTemplate(templateName, await checkOptedOut(');
   ok(guard > 0 && guard < swm.indexOf('if (dryRun) {') && guard < swm.lastIndexOf('let payload: Record<string, unknown>;'), 'the Inbox sender refuses a marketing template to an opted-out number before the payload and before dry-run (Preview reports it)');
   ok(/error: "opted_out", reason: OPT_OUT_REFUSAL_REASON/.test(swm), '…with a readable reason');
-  ok(/const BUILD_ID = "2026-09-30b"/.test(swm), 'its build marker is bumped so the deploy can be proven');
+  /* At or after the opt-out release's marker (a later deploy bumps it again — 2026-10-01a, the hook pick). */
+  ok((swm.match(/const BUILD_ID = "([^"]+)"/)?.[1] ?? '') >= '2026-09-30b', 'its build marker is bumped so the deploy can be proven');
   for (const [file, pattern] of [
     ['supabase/functions/process-whatsapp-queue/index.ts', /checkSuppressed\(service, \{ phone: row\.phone/],
     ['supabase/functions/_shared/first-reply-audit.ts', /checkSuppressed\(input\.service/],
