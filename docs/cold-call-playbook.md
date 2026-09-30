@@ -64,3 +64,11 @@ the details are open, so the Inbox and the Call Script can never name different 
 `clean` may say "No strong website issues found in this check."; a never-crawled site says so.
 The details themselves now show each question with each engine as NAMED (green) / NOT NAMED (red),
 under the best missed search (question + engine + that answer's own ≤3 competitors + its answer).
+
+## House-style pass (2026-09-30)
+
+The call script now opens with the reason for ringing ("I'm ringing because I asked Google AI for a
+plumber in Rugby and it named A, B and C, but not you"), no "Have you got a minute?" first; the trade is
+singular with its article, the audit's "UK" and qualifiers are never said, Gemini is said as Google AI
+(`spokenEngine`, via `HOOK_ENGINE_LABELS`), a finding is two lines. 18 objections, each five sentences
+or fewer; "How much" still starts with `FINDABLE_OFFER_SUMMARY`. Record: `docs/sales-language.md`.
