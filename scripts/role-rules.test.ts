@@ -83,7 +83,7 @@ for (const fn of ADMIN_ONLY) ok(/requireAdmin\(req, /.test(read(`supabase/functi
 ok(/role', 'admin'/.test(read("supabase/functions/admin-users/index.ts")), "admin-users still checks the admin role");
 const ROLE_REQUIRED = [
   "send-whatsapp-message", "send-whatsapp-voice", "create-ai-audit", "voice-note-script", "warm-lead-reply", "prospect-preview",
-  "coverage", "market-view", "playbook-evidence", "enrich-business", "enrich-lead", "process-whatsapp-queue",
+  "coverage", "market-view", "enrich-business", "enrich-lead", "process-whatsapp-queue",
   "sales-performance", "social-profiles",
 ];
 for (const fn of ROLE_REQUIRED) ok(/resolveActor\(req, /.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} resolves the caller's role server-side`);

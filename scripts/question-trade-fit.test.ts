@@ -194,7 +194,6 @@ const CLIENT_FACING: Array<[string, string]> = [
   ['the comparison the client document is built from', 'src/lib/measurementCompare.ts'],
   ['audit report (prospect + client)', 'src/lib/aiAuditReportHtml.ts'],
   ['welcome pack', 'src/lib/welcomePackHtml.ts'],
-  ['client request form', 'src/lib/clientRequestDoc.ts'],
   ['before/after export', 'src/lib/measurementExport.ts'],
   ['free-check result email', 'supabase/functions/_shared/free-check-result.ts'],
 ];

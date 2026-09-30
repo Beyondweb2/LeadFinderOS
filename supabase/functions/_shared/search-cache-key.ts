@@ -11,7 +11,7 @@
 
 /** Keyword normalisation used in the cache identity: lowercase, collapse whitespace, and drop a
  *  simple trailing plural so "plumbers" and "plumber" share one cache entry.
- *  ⚠️ This is NOT the same function as buildPlaybook's norm(). norm() maps a trade to a canonical
+ *  ⚠️ This is NOT the same function as directoryPresence.ts's norm(). norm() maps a trade to a canonical
  *  bucket for the evidence fold ("plumbers" → "plumber", "locksmiths" → "locksmiths" unchanged);
  *  this one singularises anything. A caller that has a norm()'d trade CANNOT assume it equals the
  *  keyword that was searched — market-view resolves the real keyword from search_history instead
