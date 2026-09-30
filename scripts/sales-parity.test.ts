@@ -16,6 +16,7 @@ import { auditMapHasRunning, auditRowState } from "../src/lib/auditRowState.ts";
 import { countsAsFirstReply, effectiveFirstReplyMode, firstReplyGuard, modeForReply, shouldArmFirstReplyAutomation } from "../src/lib/firstReplyAutomation.ts";
 import { QUEUE_PAUSED_LINE, queuedLeadLine } from "../src/lib/queueLine.ts";
 import { leadPermissions } from "../src/lib/access.ts";
+import { senderBuildAtLeast } from './lib/sender-build.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -128,7 +129,7 @@ console.log("\n── the Inbox finds the real thread for a salesperson ──")
   const swm = read("supabase/functions/send-whatsapp-message/index.ts");
   ok(/\.update\(\{ contact_method: "whatsapp" \}\)\s*\n\s*\.eq\("id", resolvedLeadId\)\.is\("contact_method", null\)/.test(swm), "a live send tags an EMPTY contact method as WhatsApp (both roles), never overwriting one");
   // At least the build this pass shipped (2026-09-28a); later passes bump it again (2026-09-29a, abuse protection).
-  ok(((swm.match(/^const BUILD_ID = "([0-9-]+[a-z])";/m) ?? [])[1] ?? "") >= "2026-09-28a", "the sender's build marker is bumped");
+  ok(senderBuildAtLeast(swm, "2026-09-28a"), "the sender's build marker is bumped");
 }
 
 if (f) { console.error(`\n${f} FAILED`); process.exit(1); }
