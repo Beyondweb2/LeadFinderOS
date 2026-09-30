@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Bell, BellRing, CalendarClock, CheckCheck, FileCheck2, Flame, Megaphone, MessageCircleReply, MessageSquareHeart,
-  PoundSterling, Sparkles, Trash2, Trophy, Undo2, UserPlus, X,
+  ListChecks, PoundSterling, Sparkles, Trash2, Trophy, Undo2, UserPlus, X,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -33,6 +33,8 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
   feature_update: { icon: Megaphone, tone: 'purple' },
   quick_close_review: { icon: AlertTriangle, tone: 'amber' },
   quick_close_paid: { icon: Trophy, tone: 'green' },
+  team_update: { icon: Megaphone, tone: 'blue' },
+  team_task: { icon: ListChecks, tone: 'amber' },
 };
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };

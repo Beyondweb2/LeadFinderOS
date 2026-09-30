@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw, Send } from 'lucide-react';
 import { SEOHead } from '@/components/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,9 @@ import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
 import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traffic';
 import { BusinessSummaryPanel } from '@/components/admin/businessSummary';
+import { TeamComposer, type ComposerSeed } from '@/components/team/TeamComposer';
+import { TeamOversight } from '@/components/team/TeamOversight';
+import { useState } from 'react';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -63,6 +66,9 @@ const Dashboard = () => {
   const o = q.data;
   const firstName = (team.data ?? []).find((m) => m.user_id === user?.id)?.display_name?.split(' ')[0];
   const today = londonDay(Date.now());
+  /* The one Send to sales team composer (2026-10-01): the header button, a draft or clarification from the
+     team board panel, and Assign on a Needs your attention item all open it. */
+  const [compose, setCompose] = useState<ComposerSeed | null>(null);
 
   /* ⛔ Every item opens WHERE ITS ACTION IS DONE (2026-09-30, docs/sales-workflow-nav.md has the audit):
      a WhatsApp chase → that Inbox conversation; a client task → the hub at its stage; a list problem →
@@ -84,6 +90,7 @@ const Dashboard = () => {
           <p className="mt-0.5 text-sm text-muted-foreground">What needs you, what is working, what it costs and what it makes.</p>
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin && <Button size="sm" className="h-9 gap-1.5 text-xs" onClick={() => setCompose({})}><Send className="h-3.5 w-3.5" />Send to sales team</Button>}
           {o && <span className="text-xs text-muted-foreground">Updated {ago(o.generatedAt)}</span>}
           <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={() => void q.refetch()} disabled={q.isFetching}>
             <RefreshCw className={cn('h-3.5 w-3.5', q.isFetching && 'animate-spin')} />Refresh
@@ -123,6 +130,8 @@ const Dashboard = () => {
           <Section title="Now">
             <AttentionQueue items={o.attention} onOpen={openItem} triage={o.triage} period={o.period.label}
               sorter={o.jobs?.find((j) => j.job === 'conversation-triage') ?? null} waitingInInbox={o.triageWaitingInInbox}
+              delegated={o.delegated ?? null}
+              onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
               onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
               onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
             <SinceYesterday o={o} attention={o.attention.length} />
@@ -134,6 +143,7 @@ const Dashboard = () => {
           </Section>
 
           <Section title="Team">
+            <TeamOversight enabled={isAdmin} onCompose={setCompose} />
             <TeamComparison o={o} />
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <FunnelPanel o={o} />
@@ -182,6 +192,7 @@ const Dashboard = () => {
         </Section>
       </div>
 
+      <TeamComposer open={!!compose} onOpenChange={(v) => { if (!v) { setCompose(null); void q.refetch(); } }} seed={compose} />
       {o && <p className="text-[11px] text-muted-foreground">{o.exclusionNote} Figures are server totals ({o.ms} ms, {o.build}).</p>}
     </div>
   );

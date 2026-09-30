@@ -34,6 +34,7 @@ import { campaignKey, templateKey, visibleRows, toggleHidden, inactiveKeys, INAC
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Empty, KpiCard, Panel, TONE, gbp } from '@/components/salesDash/ui';
+import { TeamBoard } from '@/components/team/TeamBoard';
 import {
   ActivityFeed, FollowUpQueue, HealthPanel, LeadListSheet, MilestonesPanel, NextActions, PipelineStrip, RecapPanel,
   TargetsDialog, TargetsPanel, TodayStrip, TrendsPanel, WaitingPanel, WarmthPanel, WARMTH, FOLLOW_UP_GROUPS,
@@ -190,6 +191,10 @@ export default function SalesDashboard() {
           <Button size="sm" variant="outline" onClick={() => void q.refetch()}>Try again</Button>
         </div>
       )}
+
+      {/* The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. It loads on
+          its own, so a slow numbers read never hides a task. The admin's view of it is on the Admin dashboard. */}
+      {role === 'sales' && <TeamBoard />}
 
       {d && w && (
         <>

@@ -45,7 +45,9 @@ console.log('\n── the Inbox uses them, for both roles ──');
 console.log('\n── the star and the green badge ──');
 {
   const inbox = read('src/pages/Inbox.tsx');
-  ok(/!\(activeSales\.view\.state === 'interested' && active\.isPotentialWork\) && <SalesStatePill/.test(inbox), 'the green Interested pill is hidden only when it repeats the star — other states still show');
+  ok(!inbox.includes('<SalesStatePill') && inbox.includes('stage={activeSales.view}'), 'ONE status pill in the header (2026-10-01): no second sales-state pill beside the status control');
+  ok(inbox.includes('stage={listStageOf(c.leadId)}'), 'the Inbox list row reads the same stage for its one pill');
+  ok(inbox.includes("active.leadStatus === 'queued' && queueState?.paused"), 'no second "Queued" chip — only "Queue paused", which the pill cannot say');
   ok(/onClick=\{\(\) => void toggleStar\(active\)\}/.test(inbox) && /aria-pressed=\{!!active\.isPotentialWork\}/.test(inbox), 'the header star is the toggle');
   const qa = read('src/lib/leadQuickActions.ts');
   ok(/rpc\('lead_mark_interested', \{ _lead_id: leadId, _on: on \}\)/.test(qa) && !/from\('outreach_leads'\)\.update\(\{ is_potential_work/.test(qa), 'one path for both roles: lead_mark_interested (History records it); no direct admin write');
@@ -66,7 +68,7 @@ console.log('\n── assignment and transfer requests ──');
 {
   const owner = read('src/components/LeadOwnerControl.tsx');
   ok(/if \(r\.unchanged\) \{ toast\(\{ title: name \? `Already assigned to/.test(owner), 'picking the current owner says so (the server writes no History and no notice)');
-  ok(/const notified = !!to && to !== user\?\.id && team\.byId\.get\(to\)\?\.role === 'sales';/.test(owner), 'the confirmation only says "notified" when the database really notified someone');
+  ok(/const notified = r\.notified === true;/.test(owner) && /rpc\('assign_lead_with_brief'/.test(read('src/hooks/useSalesCrm.ts')), 'the confirmation only says "notified" when the SERVER read the notice back (assign_lead_with_brief, 2026-10-01)');
   ok(/role === 'sales' && ownerId === user\?\.id/.test(owner) && /rpc\('request_lead_transfer'/.test(owner), 'a salesperson can request a transfer of their own lead; only the admin can assign');
   const mig = read('supabase/migrations/20261001190000_sales_workflow_inbox.sql');
   ok(/if public\.my_role\(\) is distinct from 'sales' then return jsonb_build_object\('ok', false, 'error', 'sales_only'\)/.test(mig) && /perform public\._require_work\(_lead_id\);/.test(mig), 'request_lead_transfer: salespeople only, on a lead they may work');

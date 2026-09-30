@@ -2,7 +2,7 @@ import { bookOwnerId } from "./access.ts";
 import { loadEarnings } from "./earnings.ts";
 import {
   foldAdminOverview,
-  type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type Person, type TriageRow,
+  type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type DelegatedTask, type Person, type TriageRow,
 } from "../../../src/lib/adminMetrics.ts";
 import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
 import type { ClientExtras } from "../../../src/lib/clientHealth.ts";
@@ -237,6 +237,18 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     costAccounting = foldCostAccounting(inPeriod, recent.filter((r) => r.month >= firstMonth), exclusions.users, apify);
   } catch (err) { console.error("[admin-overview] cost accounting", err instanceof Error ? err.message : err); costAccounting = null; }
 
+  /* Sales Team Board (2026-10-01): open lead-assignment tasks — delegated follow-ups leave Paul's list.
+     A failed read is null (nothing is treated as delegated), never an empty list read as none. */
+  let delegatedTasks: DelegatedTask[] | null = null;
+  try {
+    const { data, error } = await service.from("team_post_recipients")
+      .select("post_id, user_id, task_status, team_posts!inner(lead_id, kind, status, published_at)")
+      .in("task_status", ["todo", "in_progress"]).eq("team_posts.kind", "lead_assignment").eq("team_posts.status", "published").limit(1000);
+    if (error) throw error;
+    // deno-lint-ignore no-explicit-any
+    delegatedTasks = ((data ?? []) as any[]).filter((r) => r.team_posts?.lead_id).map((r) => ({ post_id: r.post_id, user_id: r.user_id, task_status: r.task_status, lead_id: r.team_posts.lead_id, published_at: r.team_posts.published_at }));
+  } catch (err) { console.error("[admin-overview] delegated", err instanceof Error ? err.message : err); delegatedTasks = null; }
+
   const overview = foldAdminOverview({
     period, today, yesterday, week, month, nowMs,
     bookOwnerId: owner, people, exclusions,
@@ -247,7 +259,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
     commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
     cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-    triage, clientExtras, usage,
+    triage, clientExtras, usage, delegatedTasks,
   });
 
   return {

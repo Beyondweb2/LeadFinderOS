@@ -5,7 +5,8 @@ import { AlertTriangle, ArrowRight, Banknote, ExternalLink, CalendarCheck, Coins
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
-import type { AttentionGroup, AttentionItem, Cohort, TeamRow, Totals, TriageSummary } from '@/lib/adminMetrics';
+import type { AttentionGroup, AttentionItem, Cohort, DelegatedSummary, TeamRow, Totals, TriageSummary } from '@/lib/adminMetrics';
+import { attentionAssignable } from '@/lib/teamBoard';
 import { CALL_OUTCOME_COLUMNS } from '@/lib/adminMetrics';
 import { CONTACT_LOG_START } from '@/lib/salesPerformance';
 
@@ -49,7 +50,7 @@ const GROUP_META: Record<AttentionGroup, { label: string; tone: Tone }> = {
   urgent: { label: 'Urgent', tone: 'red' }, today: { label: 'Today', tone: 'amber' }, review: { label: 'Review', tone: 'purple' }, blocked: { label: 'Blocked', tone: 'grey' },
 };
 
-export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSuppress, sorter, waitingInInbox = 0 }: {
+export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSuppress, sorter, waitingInInbox = 0, onAssign, delegated }: {
   items: AttentionItem[]; onOpen: (i: AttentionItem) => void;
   triage: TriageSummary | null; period: string; onResolve: (triageId: string) => Promise<void>;
   /** Paul confirms an opt-out the rules could not be sure of. */
@@ -58,6 +59,11 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
   waitingInInbox?: number;
   /** The reply sorter's last run (admin_job_runs), when readable. */
   sorter?: { lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null } | null;
+  /** Delegate one lead-based follow-up to a salesperson (Sales Team Board, 2026-10-01). Only items that
+   *  pass attentionAssignable get the button — never urgent, money, client delivery or an aggregate. */
+  onAssign?: (i: AttentionItem) => void;
+  /** Follow-ups taken off this list because a salesperson holds them as a board task. */
+  delegated?: DelegatedSummary | null;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const groups = (Object.keys(GROUP_META) as AttentionGroup[]).map((g) => ({ g, rows: items.filter((i) => i.group === g) })).filter((x) => x.rows.length);
@@ -79,6 +85,12 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
         <p className={cn('mb-3 text-[11px]', sorter.lastStatus === 'error' ? TONE.red.text : 'text-muted-foreground')}>
           Replies are sorted automatically every 2 minutes — last run {sorter.lastFinishedAt ? ago(sorter.lastFinishedAt) : 'not yet'}{sorter.lastStatus === 'error' ? ` FAILED: ${sorter.lastError ?? 'unknown error'}` : ''}.
           {waitingInInbox > 0 && <> {num(waitingInInbox)} other repl{waitingInInbox === 1 ? 'y is' : 'ies are'} waiting in the <Link to="/inbox?filter=waiting" className="text-primary hover:underline">Inbox</Link> for whoever holds the lead (not live sales, so not listed here).</>}
+        </p>
+      )}
+      {delegated && delegated.count > 0 && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          {num(delegated.count)} follow-up{delegated.count === 1 ? ' is' : 's are'} with the team as board tasks ({delegated.items.slice(0, 3).map((d) => `${d.business} · ${d.owner}`).join(', ')}{delegated.count > 3 ? '…' : ''}) — not listed here while they are open.{' '}
+          <button type="button" className="text-primary hover:underline" onClick={() => document.getElementById('team-oversight')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>See the team board</button>
         </p>
       )}
       {!items.length ? <Empty>Nothing needs you right now.</Empty> : (
@@ -106,6 +118,13 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
                         className="flex shrink-0 items-center gap-1 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50">
                         Stripe<ExternalLink className="h-3 w-3" />
                       </a>
+                    )}
+                    {onAssign && attentionAssignable(i) && (
+                      <button type="button" title="Give this lead to a salesperson with your instructions (it lands on their Team board)"
+                        onClick={() => onAssign(i)}
+                        className="shrink-0 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50">
+                        Assign
+                      </button>
                     )}
                     {i.triageId && i.kind === 'reply_opt_out' && onSuppress && (
                       <button type="button" disabled={busy === i.triageId} title="Suppress this number from all automated outreach (recorded in History)"

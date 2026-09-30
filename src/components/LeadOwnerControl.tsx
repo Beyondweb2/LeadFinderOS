@@ -79,15 +79,16 @@ export function LeadOwnerControl({ leadId, onOpenDetail }: { leadId: string; onO
       <Select value={ownerId ?? '__none'} onValueChange={async (v) => {
         const to = v === '__none' ? null : v;
         if (to === ownerId) return;
-        const r = await actions.assign.mutateAsync({ leadId, to }) as { ok: boolean; error?: string; unchanged?: boolean };
+        const r = await actions.assign.mutateAsync({ leadId, to }) as { ok: boolean; error?: string; unchanged?: boolean; notified?: boolean; task?: boolean };
         if (!r.ok) { toast({ title: 'Not reassigned', description: refusalText(r.error), variant: 'destructive' }); return; }
         const name = to ? team.byId.get(to)?.display_name ?? 'them' : null;
         if (r.unchanged) { toast({ title: name ? `Already assigned to ${name}` : 'Already unassigned' }); return; }
         void qc.invalidateQueries({ queryKey: ['sales', 'owner', leadId] });
         notifyLeadChanged(leadId);
-        /* Mirrors trg_notify_lead_assigned: a salesperson other than you is told; you and the admin are not. */
-        const notified = !!to && to !== user?.id && team.byId.get(to)?.role === 'sales';
-        toast({ title: name ? `Assigned to ${name}` : 'Unassigned', description: name ? (notified ? 'They have been notified, and it is in their Inbox and Outreach now.' : 'No notice sent — the admin sees every lead.') : 'It has no owner now.' });
+        /* "Notified" only when the SERVER read the notice back (assign_lead_with_brief). A salesperson also
+           gets it as a task on their Team board; you and the admin get neither. */
+        const notified = r.notified === true;
+        toast({ title: name ? `Assigned to ${name}` : 'Unassigned', description: name ? (notified ? 'They have been notified; it is on their Team board and in their Inbox and Outreach now.' : r.task ? 'On their Team board and in their Inbox and Outreach. No notice was recorded.' : 'No notice sent — the admin sees every lead.') : 'It has no owner now.' });
       }}>
         <SelectTrigger className="h-7 w-36 text-xs" title="Assign this lead to someone (they are notified)" aria-label="Assign to"><span className="mr-1 text-muted-foreground">Assign:</span><SelectValue placeholder="Owner" /></SelectTrigger>
         <SelectContent>

@@ -128,6 +128,11 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   /* Abuse / cost protection (2026-09-29): the admin's security screen and its alert wording. */
   ["security panel (admin)", "src/components/SecurityPanel.tsx"],
   ["security alert wording (admin)", "src/lib/securityAlerts.ts"],
+  /* Sales Team Board (2026-10-01): Paul's words to the team, and the team's view of them. */
+  ["team board wording (operator)", "src/lib/teamBoard.ts"],
+  ["team board (salesperson)", "src/components/team/TeamBoard.tsx"],
+  ["send to sales team composer (admin)", "src/components/team/TeamComposer.tsx"],
+  ["sales team board oversight (admin)", "src/components/team/TeamOversight.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

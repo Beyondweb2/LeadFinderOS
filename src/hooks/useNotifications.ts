@@ -18,6 +18,8 @@ export interface AppNotification {
 }
 export const NOTIFICATIONS_KEY = (uid: string | undefined) => ['notifications', uid ?? null] as const;
 const LIMIT = 100;
+/** Kinds that change the Team Board (useTeamBoard's queries live under ['team-board']). */
+const TEAM_BOARD_KINDS: ReadonlySet<string> = new Set(['team_update', 'team_task', 'lead_assigned']);
 const POLL_MS = 120_000;
 
 export function useNotifications(onArrive?: (n: AppNotification) => void) {
@@ -53,6 +55,8 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
            you" announces the lead, and the Inbox (with its thread) and Outreach read it through the
            person's own access (leadSync, useInbox loadLead, useOutreach placeRow). */
         if ((p.eventType === 'INSERT' || p.eventType === 'UPDATE') && p.new?.kind === 'lead_assigned' && p.new.lead_id) notifyLeadChanged(p.new.lead_id);
+        /* The Team Board (2026-10-01) rides the same channel: a team post or an assignment re-reads it. */
+        if (p.new && TEAM_BOARD_KINDS.has(p.new.kind)) void qc.invalidateQueries({ queryKey: ['team-board'] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
