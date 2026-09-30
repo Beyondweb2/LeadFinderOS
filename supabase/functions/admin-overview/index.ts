@@ -6,6 +6,7 @@ import {
   type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type Person, type TriageRow,
 } from "../../../src/lib/adminMetrics.ts";
 import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
+import type { ClientExtras } from "../../../src/lib/clientHealth.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { UNRECORDED_SPEND, USD_TO_GBP_ESTIMATE } from "../../../src/lib/apiCostLabels.ts";
@@ -28,7 +29,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30d";
+const BUILD_ID = "admin-overview-2026-09-30e";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -53,7 +54,7 @@ async function allRows<T>(build: (from: number, to: number, count: boolean) => a
   return out.filter((r) => { const id = (r as { id?: string }).id; if (!id) return true; if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
-const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website";
+const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build";
 
 async function costRows(service: Service, p: ReportingPeriod): Promise<CostRow[]> {
   const { data, error } = await service.rpc("admin_api_cost", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString() });
@@ -122,6 +123,28 @@ Deno.serve(async (req) => {
       triage = triage.map((r) => ({ ...r, confidence: r.confidence == null ? null : Number(r.confidence) }));
     } catch (err) { console.error("[admin-overview] triage", err instanceof Error ? err.message : err); triage = null; }
 
+    /* Release 4 — paying clients' weekly checks, improvement items and directory issues. A failed read
+       leaves health off the rows (the panel says so), never a false "all fine". */
+    let clientExtras: ClientExtras | null = null;
+    try {
+      const paidIds = leads.filter((l) => Number(l.amount_paid ?? 0) > 0).map((l) => l.id);
+      if (paidIds.length) {
+        const [s, r, o, d] = await Promise.all([
+          service.from("weekly_check_sets").select("lead_id, questions, frozen_at, start_reason").in("lead_id", paidIds),
+          service.from("weekly_check_runs").select("lead_id, week_start, status, summary, cost_usd, estimate_usd, reason").in("lead_id", paidIds).order("week_start", { ascending: false }).limit(500),
+          service.from("client_opportunities").select("lead_id, status, implemented_at").in("lead_id", paidIds),
+          service.from("lead_directory_presence").select("lead_id").in("lead_id", paidIds).eq("status", "needs_attention"),
+        ]);
+        for (const x of [s, r, o, d]) if (x.error) throw new Error(x.error.message);
+        clientExtras = {
+          sets: (s.data ?? []) as ClientExtras["sets"],
+          runs: ((r.data ?? []) as ClientExtras["runs"]).map((x) => ({ ...x, week_start: String(x.week_start).slice(0, 10), cost_usd: x.cost_usd == null ? null : Number(x.cost_usd), estimate_usd: x.estimate_usd == null ? null : Number(x.estimate_usd) })),
+          opportunities: (o.data ?? []) as ClientExtras["opportunities"],
+          directoryIssues: (d.data ?? []) as ClientExtras["directoryIssues"],
+        };
+      } else clientExtras = { sets: [], runs: [], opportunities: [], directoryIssues: [] };
+    } catch (err) { console.error("[admin-overview] client extras", err instanceof Error ? err.message : err); clientExtras = null; }
+
     /* Background jobs: last run, status, error (admin_job_runs). Unreadable → null, shown as unknown. */
     let jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null = null;
     {
@@ -140,7 +163,7 @@ Deno.serve(async (req) => {
       onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
       commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
       cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-      triage,
+      triage, clientExtras,
     });
 
     return json({

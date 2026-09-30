@@ -204,6 +204,12 @@ verify_jwt = true
 [functions.conversation-triage]
 verify_jwt = false
 
+# weekly-visibility: the paid-client weekly AI visibility check (release 4). Callers: the cron
+# (x-cron-secret + x-internal-job, no JWT — hence false) and the admin's JWT, checked by the handler
+# (requireAdmin). Starts at most one single-run 'weekly_check' audit per client per week, capped.
+[functions.weekly-visibility]
+verify_jwt = false
+
 # Commission from the payment ledger (Sales Experience, 2026-09-28): signed-in callers only; role checked in the handler.
 [functions.sales-earnings]
 verify_jwt = true

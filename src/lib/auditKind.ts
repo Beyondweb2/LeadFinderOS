@@ -56,6 +56,13 @@ export const ORDINARY_AUDIT_PURPOSE = 'audit';
    ⚠️ `ai_audits.audit_purpose` is plain nullable text with NO check constraint (verified against
    the live database 2026-09-20), so this value needs no migration. */
 export const DISCOVERY_AUDIT_PURPOSE = 'discovery';
+/* THE WEEKLY VISIBILITY CHECK (Admin control centre, release 4, 2026-09-30). A small, frozen question
+   set run ONCE a week for a paying client whose improvements are live — directional monitoring for
+   Paul. ⛔ NEVER the baseline, never the four-week replay, never read by the guarantee: the pointer
+   triggers key on 'baseline' / 'measurement' / 'remeasure' only (read live 2026-09-30), and this value
+   is none of them. INTERNAL (a working document): isInternalMeasurement is true, so no report is ever
+   served or sent for it. Created only by fn weekly-visibility (create-ai-audit accepts it internally). */
+export const WEEKLY_CHECK_AUDIT_PURPOSE = 'weekly_check';
 
 /** The audit kinds a reader can meet. */
 export type AuditKind =
@@ -69,6 +76,8 @@ export type AuditKind =
    *  client's baseline — it exists to CHOOSE the baseline's questions, not to be them. Graded apart
    *  from 'ordinary' so no screen has to infer it from a question count. */
   | 'discovery'
+  /** The weekly visibility check: purpose 'weekly_check'. One run, a frozen set, internal only. */
+  | 'weekly_check'
   /** Any other RECORDED purpose ('audit', 'market', …): a hook, a wizard audit, a manual re-audit.
    *  Whatever its run count, it is neither a baseline nor a reason to hold one. */
   | 'ordinary'
@@ -125,6 +134,7 @@ export function auditKind(row: AuditKindRow): AuditKind {
     if (purpose === MEASUREMENT_AUDIT_PURPOSE || purpose === REMEASURE_AUDIT_PURPOSE) return 'measurement';
     if (purpose === FREE_CHECK_AUDIT_PURPOSE) return 'free_check';
     if (purpose === DISCOVERY_AUDIT_PURPOSE) return 'discovery';
+    if (purpose === WEEKLY_CHECK_AUDIT_PURPOSE) return 'weekly_check';
     return 'ordinary';
   }
 
@@ -223,7 +233,10 @@ export function freeCheckSendGate(auditPurpose: unknown, opts: { forced?: boolea
    documents respectively. */
 export function isInternalMeasurement(row: AuditKindRow | null | undefined): boolean {
   if (!row) return false;
-  return auditKind(row) === 'measurement';
+  const kind = auditKind(row);
+  /* The weekly check is Paul's monitoring (release 4) — an operator document like the full measure,
+     never a client's report. */
+  return kind === 'measurement' || kind === 'weekly_check';
 }
 
 /** The operator-facing NAME of a `measurement` / `remeasure` audit. The stored purpose value stays
@@ -302,6 +315,7 @@ export const DISCOVERY_LABEL = 'Discovery scan (chooses the baseline questions)'
 export const CLIENT_BASELINE_LABEL = 'Client baseline';
 export const FREE_CHECK_LABEL = 'Free check';
 export const ORDINARY_AUDIT_LABEL = 'Audit (not a client baseline)';
+export const WEEKLY_CHECK_LABEL = 'Weekly visibility check (internal, not the guarantee)';
 
 export function auditRoleLabel(row: AuditKindRow | null | undefined): string {
   if (isClientBaseline(row)) return CLIENT_BASELINE_LABEL;

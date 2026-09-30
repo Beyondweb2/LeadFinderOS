@@ -5,7 +5,6 @@ import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { AttentionGroup, AttentionItem, Cohort, TeamRow, Totals, TriageSummary } from '@/lib/adminMetrics';
 import { CALL_OUTCOME_COLUMNS } from '@/lib/adminMetrics';
-import { SERVICE_ROUTE_NAME } from '@/lib/findableOffer';
 import { CONTACT_LOG_START } from '@/lib/salesPerformance';
 
 /* ══ THE ADMIN CONTROL CENTRE'S SECTIONS (2026-09-30, docs/admin-control-centre.md) ════════════════
@@ -475,38 +474,6 @@ export function ContributionPanel({ o }: { o: O }) {
         <span className="text-lg text-muted-foreground">=</span>
         <Figure strong tone={k.value >= 0 ? 'green' : 'red'} label="Contribution before other costs" value={gbp(k.value)} />
       </div>
-    </Panel>
-  );
-}
-
-/* ── Clients (release 1: the facts; weekly visibility joins in release 4) ───────────────────────── */
-
-export function ClientsPanel({ o, onOpen }: { o: O; onOpen: (leadId: string) => void }) {
-  const live = o.clients.filter((c) => !c.refunded);
-  return (
-    <Panel collapseKey="admin.cc.clients" title="Paid clients" icon={Users} tone="green"
-      hint="One line each: route, whether setup has started, the official re-measure date, payment state."
-      summary={`${live.length} active client${live.length === 1 ? '' : 's'}`}>
-      {!o.clients.length ? <Empty>No paid clients yet.</Empty> : (
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead><tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-              <th className="py-2 pr-3 font-semibold">Client</th><th className="px-2 py-2 font-semibold">Route</th><th className="px-2 py-2 font-semibold">Baseline</th>
-              <th className="px-2 py-2 font-semibold">Official re-measure</th><th className="px-2 py-2 font-semibold">Payment</th><th className="px-2 py-2 font-semibold">Sold by</th>
-            </tr></thead>
-            <tbody>{o.clients.map((c) => (
-              <tr key={c.leadId} className={cn('border-b border-border/40', c.refunded && 'text-muted-foreground')}>
-                <td className="py-1.5 pr-3"><button type="button" className="text-left font-medium hover:underline" onClick={() => onOpen(c.leadId)}>{c.business}</button></td>
-                <td className="px-2 py-1.5 text-xs">{c.route ? SERVICE_ROUTE_NAME[c.route].replace('Findable ', '') : 'Not recorded'}</td>
-                <td className="px-2 py-1.5 text-xs">{c.baselineStarted ? 'Started' : <span className={TONE.amber.text}>Not started</span>}</td>
-                <td className="px-2 py-1.5 text-xs tabular-nums">{c.remeasured ? 'Done' : c.remeasureDue ?? '—'}</td>
-                <td className="px-2 py-1.5 text-xs">{c.payment}</td>
-                <td className="px-2 py-1.5 text-xs">{c.seller}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
     </Panel>
   );
 }

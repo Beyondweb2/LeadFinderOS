@@ -177,6 +177,59 @@ the model about the same messages (61 calls for 34 filings). The page prints the
   interested from replies" (17 of 448 — a reply includes "yes, it's us"), "few meetings from interested"
   (1 of 17), and "38 interested leads with no next step".
 
+## Weekly visibility check + paid client health (release 4)
+
+Paul's decisions (2026-09-30): a light fresh check once a week for PAID clients; Build starts once the
+new site is live, Optimise once the first real website/evidence changes are live (NOT when the baseline
+freezes); the set is frozen once chosen; ~$0.12/client/week, caps approved; completely separate from
+the official baseline, the guarantee and the four-week re-measure.
+
+| Piece | Where |
+|---|---|
+| Rules (set, start, fold, trend, caps) | `src/lib/weeklyCheck.ts` (tests `scripts/weekly-check.test.ts`) |
+| Health facts + blockers | `src/lib/clientHealth.ts` |
+| Job | fn `weekly-visibility` (cron `weekly-visibility-run`, hourly at :15; lease `admin_job_runs`) |
+| Tables | `weekly_check_sets` (one frozen set per client; a trigger refuses edits), `weekly_check_runs` (unique per client per London week) |
+| Audit purpose | `'weekly_check'` (`auditKind.ts`), accepted by `create-ai-audit` from INTERNAL callers only |
+| Panel | `src/components/admin/clientHealth.tsx` |
+
+**Method.** `WEEKLY_CHECK_QUESTIONS` (10): the Hook Audit's own questions first (≤ 3, via
+`hookQuestionsFor`), then the official baseline's ASKED set (run 1's queue, its approved order),
+de-duplicated. Chosen ONCE and frozen; fewer than 5 real questions → no set (never padded). ChatGPT +
+Gemini, ONE run a week. Per engine: named out of answered, per question named/absent, rivals named.
+**Trend** is a word, not a score: ↑ improving / ↓ slipping only when an engine moves by
+`WEEKLY_MOVE_MIN` (2) or more questions; otherwise "flat (within week-to-week noise)"; "mixed" when one
+engine rises and the other falls; "first week" until there are two. Movements list questions "now named"
+/ "no longer named"; "still absent" = neither engine named it.
+
+**Why it cannot touch the guarantee.** Its own purpose, which none of the three pointer triggers reads
+(`claim_baseline_pointer` = 'baseline', `claim_full_measure_pointer` = 'measurement',
+`claim_remeasure_pointer` = 'remeasure' — read live 2026-09-30); its own tables; `isInternalMeasurement`
+is true (no client report is ever served); `seoScanAllowed` false; never reuses or extends an old audit;
+single run so `advanceBaseline` never repeats it; `process-ai-audit-queue` never auto-publishes a public
+listing for it; the function never writes a lead row, an audit row directly, or any re-measure field.
+
+**Start.** Build: `website_build.production_url` AND (`qa.production_checked` OR `production_status =
+'verified'`). Optimise (and a legacy client with no route, who keeps their own site): a delivery
+milestone ticked (`directories` / `pages` / `gbp` / `website`) or a `client_opportunities` row with
+`implemented_at`. Bookkeeping ticks (baseline sent, re-measure) never count. On 2026-09-30 only RG
+qualified (Google profile + directories ticked); MCLocksmiths, Ronnie's and BS4 wait.
+
+**Spend.** Estimate `WEEKLY_USD_PER_QUESTION` ($0.014, the observed billed rate) × 10 = $0.14; caps
+`WEEKLY_CLIENT_CAP_USD` ($0.25/client/week) and `WEEKLY_TOTAL_CAP_USD` ($2/week, all clients). Also
+refused when the Apify account is ≥ 90% of its monthly cap or unreadable, when the spend can't be read,
+and under the emergency stop. Real cost is read back from `ai_audit_runs.actor_cost_usd`.
+
+**Client health** (no score): route, site live, baseline started, the weekly result vs last week with
+the trend word, official re-measure date, open / implemented improvement items, directory listings
+needing attention, payment state, and BLOCKERS as sentences (refunded, payment failed, baseline not
+started, re-measure overdue, new site not live, weekly check failed). A details row shows this week's
+per-question result and the rivals named (internal — never on a client surface).
+
+**Redeployed because `auditKind.ts` changed** (every function reaching it): create-ai-audit,
+findable-onboarding, paid-baseline, paid-client-hub, process-ai-audit-queue, render-audit-report,
+render-remeasure-results, render-welcome-pack, stripe-webhook, submissions.
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |
