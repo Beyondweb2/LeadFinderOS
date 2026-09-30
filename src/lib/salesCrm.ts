@@ -233,17 +233,18 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   daily_limit: 'over your daily limit',
 };
 
-/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260928210000) — the server refuses
+/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930120000) — the server refuses
    anything else, and scripts/contact-claim.test.ts pins the two together. Added 2026-09-28: left
    voicemail, meeting booked, then message_sent. An outcome records ACTIVITY only: it never writes the
    status or the next action (Next Action is human-set only). */
 /* `for`: which methods an outcome is offered for (contactMethods `kind`): 'call' = a phone call only,
-   'message' = anything that is not a call, 'any' = every method. The server accepts every outcome for
+   'message' = anything that is not a call, 'linkedin' = a LinkedIn message only, 'any' = every method. The server accepts every outcome for
    every method; this only keeps the buttons sensible ("No answer" to an email means nothing). */
 export const CALL_OUTCOMES = [
   { value: 'no_answer', label: 'No answer', for: 'call' },
   { value: 'left_voicemail', label: 'Left voicemail', for: 'call' },
   { value: 'message_sent', label: 'Sent, no reply yet', for: 'message' },
+  { value: 'connection_sent', label: 'Connection request sent', for: 'linkedin' },
   { value: 'spoke_to_owner', label: 'Spoke to owner', for: 'any' },
   { value: 'interested', label: 'Interested', for: 'any' },
   { value: 'call_back', label: 'Call back', for: 'any' },
@@ -257,7 +258,7 @@ export const CALL_OUTCOMES = [
  *  line): the dead ends red, the good news green, the rest quiet. */
 export const OUTCOME_TONE: Record<string, 'good' | 'bad' | 'neutral'> = {
   interested: 'good', meeting_booked: 'good', spoke_to_owner: 'neutral', call_back: 'neutral',
-  no_answer: 'neutral', left_voicemail: 'neutral', message_sent: 'neutral',
+  no_answer: 'neutral', left_voicemail: 'neutral', message_sent: 'neutral', connection_sent: 'neutral',
   not_interested: 'bad', wrong_number: 'bad', agency_controls_site: 'neutral',
 };
 
@@ -302,7 +303,23 @@ export function outcomeStatusEffect(outcome: string, lead: { status?: string | n
 /** The outcomes offered for one contact method. */
 export function outcomesFor(method: string) {
   const kind = CONTACT_METHODS.find((m) => m.value === method)?.kind ?? 'message';
-  return CALL_OUTCOMES.filter((o) => o.for === 'any' || (o.for === 'call' ? kind === 'call' : kind !== 'call'));
+  return CALL_OUTCOMES.filter((o) => o.for === 'any' || (o.for === 'linkedin' ? method === 'linkedin' : o.for === 'call' ? kind === 'call' : kind !== 'call'));
+}
+
+/** Days until the follow-up a social message pre-fills (Paul's example, 2026-09-30: "LinkedIn message
+ *  sent → Next action in 3 days"). */
+export const SOCIAL_FOLLOW_UP_DAYS = 3;
+
+/** THE ONE RULE for what a social outreach log suggests as the Next Action: a LinkedIn / Facebook /
+ *  Instagram message or connection request → "Follow up (other)" in SOCIAL_FOLLOW_UP_DAYS, with a note
+ *  naming the network. A SUGGESTION the popup pre-fills — never a write (Next Action is human-set only).
+ *  Anything else → null. */
+export function socialFollowUpPreset(channel: string, outcome: string): { nextAction: 'follow_up'; days: number; note: string } | null {
+  const m = CONTACT_METHODS.find((x) => x.value === channel);
+  if (!m?.social) return null;
+  if (outcome !== 'message_sent' && outcome !== 'connection_sent') return null;
+  const what = outcome === 'connection_sent' ? 'LinkedIn connection request' : m.label;
+  return { nextAction: 'follow_up', days: SOCIAL_FOLLOW_UP_DAYS, note: `Follow up on the ${what}` };
 }
 
 /** How the contact happened, as logged by hand — the one set (src/lib/contactMethods.ts). WhatsApp is
@@ -352,6 +369,7 @@ const EMAIL_SOURCE_WORDS: Record<string, string> = { website_crawl: 'their websi
 const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
   contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in', wrong_number: 'wrong number',
+  social: 'social profile', facebook_url: 'Facebook', instagram_url: 'Instagram', cleanup: 'why', original: 'was',
 };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the

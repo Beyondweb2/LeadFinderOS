@@ -1228,6 +1228,8 @@ export type Database = {
           instagram_method: string | null
           instagram_status: string | null
           instagram_url: string | null
+          linkedin_status: string | null
+          linkedin_url: string | null
           instantly_campaign_id: string | null
           instantly_lead_id: string | null
           instantly_pushed_at: string | null
@@ -1308,6 +1310,8 @@ export type Database = {
           instagram_method?: string | null
           instagram_status?: string | null
           instagram_url?: string | null
+          linkedin_status?: string | null
+          linkedin_url?: string | null
           instantly_campaign_id?: string | null
           instantly_lead_id?: string | null
           instantly_pushed_at?: string | null
@@ -1388,6 +1392,8 @@ export type Database = {
           instagram_method?: string | null
           instagram_status?: string | null
           instagram_url?: string | null
+          linkedin_status?: string | null
+          linkedin_url?: string | null
           instantly_campaign_id?: string | null
           instantly_lead_id?: string | null
           instantly_pushed_at?: string | null
