@@ -125,7 +125,7 @@ console.log("\n── Assign to a teammate (admin) ──");
 {
   const bulk = read("src/components/BulkAssignSelect.tsx");
   ok(/'assign_lead'/.test(bulk) && /perms\.assignOwner && \(\s*\n\s*<BulkAssignSelect/.test(read("src/components/OutreachTable.tsx")), "Outreach selection: Assign to… (admin only), through assign_lead");
-  ok(/they've been notified/.test(read("src/components/LeadOwnerControl.tsx")), "the popup's picker says the person was told");
+  ok(/They have been notified/.test(read("src/components/LeadOwnerControl.tsx")) && /No notice sent/.test(read("src/components/LeadOwnerControl.tsx")), "the popup's picker says whether the person was told (2026-09-30: only when they really were)");
 }
 
 console.log("\n── Find email ──");

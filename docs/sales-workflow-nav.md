@@ -84,3 +84,34 @@ August $49.43 → ≈ $14.00; July $23.33 → ≈ $0.78.
 **Apify:** its own account figure for the billing cycle (`apify_account_usage`, from Apify's API) is
 shown beside what we recorded — on 2026-09-30, $27.53 vs $24.23; the $3.30 gap is Unallocated (spend
 our log does not record, or another user of the account — not assumed either way).
+## Release C — Inbox: assignment, the star, the header, Next Action filters
+
+- **Assign** (`LeadOwnerControl`, the existing header control, admin only — Paul's decision). The live
+  `assign_lead` already refused a no-op (current owner → `unchanged`, no History, no notice); the page
+  now says "Already assigned to X". The confirmation says "notified" only when the database really
+  notified someone (`trg_notify_lead_assigned` never tells the person assigning, nor the admin/book
+  owner). The notice now names who assigned it: "Paul assigned you <Business>", linked to
+  `/inbox?lead=`. The lead record is moved, never copied: messages, notes, Next Action, star, meetings,
+  socials, suppression and History are the same rows; `sold_by_user_id` (commission) is untouched.
+- **Reaching the new owner at once:** the notification's realtime arrival announces the lead
+  (`notifyLeadChanged`) → the Inbox loads the lead AND its thread (`loadLead`) and Outreach places the row;
+  the deep link does the same if the list has not caught up. A rep who loses a lead has it removed from
+  their Inbox on the next re-read, and a stale link says so.
+- **Request transfer** (salespeople, on their own lead): SQL `request_lead_transfer` notifies every active
+  admin (kind `transfer_request`), one per lead per person per day, History `transfer_requested`. It
+  changes no ownership.
+- **The star is the one interest mark.** The green "Interested" pill is hidden only when it repeats the
+  star; meeting / won / not interested still show. The header star is the toggle for both roles through
+  `lead_mark_interested` (History "Starred / Unstarred"; the admin used to write the row directly with no
+  History). ⛔ SQL trigger `trg_outreach_leads_not_interested_clears_star`: a lead BECOMING not interested
+  loses its star, whoever writes it (the sales stage RPC did not clear it). Existing rows untouched — 2
+  starred not-interested leads remain as history.
+- **Header:** the phone number moved into More (with Copy).
+- **Next Action filters** (`src/lib/nextActionView.ts`, shared with Outreach): day — any / overdue / due
+  today / due tomorrow / next 7 days / later / set, no date / no next action; type — call / WhatsApp
+  follow-up / email / send information / meeting / other (from stored values only); sort — newest
+  message / most recent reply / next action most overdue first. "Waiting on them" joins "Waiting on us".
+  Remembered per person for the session; one Reset. Both roles. The open conversation always stays in
+  the list whatever the filters.
+- SQL: migration `20261001190000_sales_workflow_inbox.sql` (applied and read back; the star trigger was
+  proven in a rolled-back block).

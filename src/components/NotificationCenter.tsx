@@ -28,6 +28,7 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
   template_decided: { icon: FileCheck2, tone: 'grey' },
   follow_up_due: { icon: CalendarClock, tone: 'amber' },
   lead_assigned: { icon: UserPlus, tone: 'grey' },
+  transfer_request: { icon: UserPlus, tone: 'amber' },
   feedback_update: { icon: MessageSquareHeart, tone: 'purple' },
   feature_update: { icon: Megaphone, tone: 'purple' },
   quick_close_review: { icon: AlertTriangle, tone: 'amber' },

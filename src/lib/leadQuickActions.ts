@@ -14,13 +14,15 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 
 export type QuickResult = { ok: boolean; error?: string };
 
-/** Mark interested (the star). The pipeline status is left as it is. */
-export async function markLeadInterested(leadId: string, isAdmin: boolean): Promise<QuickResult> {
-  const error = isAdmin
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? (await (supabase as any).from('outreach_leads').update({ is_potential_work: true }).eq('id', leadId)).error?.message ?? null
-    : await salesPatchLead(leadId, { is_potential_work: true }).then((r) => (r.ok ? null : refusalText(r.error)));
-  if (error) return { ok: false, error };
+/** Mark (or, with on=false, remove) interested — the star. The pipeline status is left as it is.
+ *  ⛔ ONE PATH FOR BOTH ROLES (2026-09-30): lead_mark_interested checks the person may work the lead,
+ *  writes History ("Starred" / "Unstarred") and is a no-op when nothing changes. The admin used to write
+ *  the row directly, which left no History entry and could not be told apart from a stale cache. */
+export async function markLeadInterested(leadId: string, _isAdmin: boolean, on = true): Promise<QuickResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('lead_mark_interested', { _lead_id: leadId, _on: on });
+  const refused = error ? (error.message ?? 'Not saved') : data && data.ok === false ? refusalText(data.error) : null;
+  if (refused) return { ok: false, error: String(refused).includes('not_your_lead') ? refusalText('not_yours') : String(refused) };
   notifyLeadChanged(leadId);
   return { ok: true };
 }

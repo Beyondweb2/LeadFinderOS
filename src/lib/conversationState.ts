@@ -136,12 +136,15 @@ export const INBOX_QUICK_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'unread', label: 'Unread' },
   { value: 'waiting', label: 'Waiting on us' },
+  /* 2026-09-30: the other side of the same fact — we wrote last and they have not answered. */
+  { value: 'waiting_them', label: 'Waiting on them' },
 ] as const;
 export type InboxQuickFilter = typeof INBOX_QUICK_FILTERS[number]['value'];
 
-export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'>): boolean {
+export function passesQuickFilter(f: InboxQuickFilter | string | null | undefined, s: Pick<ConversationState, 'unread' | 'waitingSinceMs'> & { waitingOnThem?: boolean }): boolean {
   if (f === 'unread') return s.unread;
   if (f === 'waiting') return s.waitingSinceMs !== null;
+  if (f === 'waiting_them') return s.waitingOnThem === true;
   return true;
 }
 

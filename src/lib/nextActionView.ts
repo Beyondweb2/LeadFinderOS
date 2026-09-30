@@ -78,6 +78,77 @@ export function nextActionViewOf(rawAction: string | null | undefined, rawDate: 
   return { label, when, short: dm, bucket, note };
 }
 
+/* ══ NEXT ACTION FILTERS AND SORTS — ONE RULE FOR THE INBOX AND OUTREACH (2026-09-30) ═══════════════
+   Both screens, both roles, read the same stored values (next_action / next_action_date) through these,
+   so "Overdue" means the same thing everywhere. ⛔ Nothing is invented: an action with no date is
+   "No date set", never given one; "No Next Action" is 'none' or empty. A done action is one a person
+   cleared (to 'none'), so it is never still due. Days are London calendar days (londonToday). */
+export type NextActionWhen = 'all' | 'overdue' | 'today' | 'tomorrow' | 'next7' | 'later' | 'undated' | 'none';
+export const NEXT_ACTION_WHEN_OPTIONS: { value: NextActionWhen; label: string }[] = [
+  { value: 'all', label: 'Any next action' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Due today' },
+  { value: 'tomorrow', label: 'Due tomorrow' },
+  { value: 'next7', label: 'Next 7 days' },
+  { value: 'later', label: 'Later' },
+  { value: 'undated', label: 'Set, no date' },
+  { value: 'none', label: 'No next action' },
+];
+export type NextActionKind = 'all' | 'call' | 'whatsapp' | 'email' | 'send_info' | 'meeting' | 'other';
+export const NEXT_ACTION_KIND_OPTIONS: { value: NextActionKind; label: string }[] = [
+  { value: 'all', label: 'Any type' },
+  { value: 'call', label: 'Call' },
+  { value: 'whatsapp', label: 'WhatsApp follow-up' },
+  { value: 'email', label: 'Email' },
+  { value: 'send_info', label: 'Send information' },
+  { value: 'meeting', label: 'Meeting / callback' },
+  { value: 'other', label: 'Other' },
+];
+
+const hasAction = (a: string | null | undefined) => { const v = (a ?? '').trim(); return !!v && v !== 'none'; };
+
+/** The type group of a stored next_action value. */
+export function nextActionKindOf(action: string | null | undefined): Exclude<NextActionKind, 'all'> | null {
+  if (!hasAction(action)) return null;
+  const a = String(action).trim();
+  if (a === 'call') return 'call';
+  if (WHATSAPP_NEXT_ACTIONS.has(a)) return 'whatsapp';
+  if (a === 'email') return 'email';
+  if (a === 'send_info') return 'send_info';
+  if (a === 'meeting') return 'meeting';
+  return 'other';
+}
+
+/** Does a lead's next action pass the When + Type filters? */
+export function passesNextActionFilter(
+  lead: { next_action?: string | null; next_action_date?: string | null } | null | undefined,
+  when: NextActionWhen, kind: NextActionKind, today: string = londonToday(),
+): boolean {
+  const action = lead?.next_action;
+  if (when === 'none') return !hasAction(action);
+  if (when === 'all' && kind === 'all') return true;
+  if (!hasAction(action)) return false;
+  if (kind !== 'all' && nextActionKindOf(action) !== kind) return false;
+  if (when === 'all') return true;
+  const d = (lead?.next_action_date ?? '').slice(0, 10);
+  if (!d) return when === 'undated';
+  if (when === 'undated') return false;
+  const diff = dayDiff(today, d);
+  if (when === 'overdue') return diff < 0;
+  if (when === 'today') return diff === 0;
+  if (when === 'tomorrow') return diff === 1;
+  if (when === 'next7') return diff >= 0 && diff <= 7;
+  return diff > 7; // later
+}
+
+/** Sort key for "Next Action due soonest" (most overdue first): dated actions by date, then undated
+ *  actions, then leads with none. Ascending. */
+export function nextActionSortKey(lead: { next_action?: string | null; next_action_date?: string | null } | null | undefined): string {
+  if (!hasAction(lead?.next_action)) return '3';
+  const d = (lead?.next_action_date ?? '').slice(0, 10);
+  return d ? `1${d}` : '2';
+}
+
 /** One line for a title / tooltip: "Call · Tomorrow · ring after their website contract ends". */
 export function nextActionText(v: NextActionView): string {
   return [v.label, v.when, v.note].filter(Boolean).join(' · ');
