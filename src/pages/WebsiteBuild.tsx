@@ -27,7 +27,7 @@ import { buildPack, codeConfig, setupProblems, suggestCloudflareProject, suggest
 import { stagePrompts, type StagePrompt, type StagePromptId } from '@/lib/stagePrompts';
 import { applyRecon, parseReconText, safeUrl, type ReconParse } from '@/lib/recon';
 import { pageFamilyGroups } from '@/lib/manifestSummary';
-import { applyBuildResult, builtCoverage, configVersion, executionBlockers, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResultParse } from '@/lib/buildExecution';
+import { applyBuildResult, builtCoverage, configVersion, executionBlockers, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, siteGateResult, type BuildResultParse } from '@/lib/buildExecution';
 import { BUILD_EXEC_STATUS_LABELS, BUILD_QA_KEYS, BUILD_QA_LABELS, builtOrPlannedPaths, buildExecutionStatus, previewReadyProblems, standardEvidence, type BuildExecStatus, type BuildExecution } from '@/lib/websiteBuildState';
 import { standardProblems } from '@/lib/websiteBuildStandard';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, STRENGTH_CATEGORIES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITIONS, STRENGTH_DISPOSITION_LABELS, UPGRADE_VERDICT_LABELS, intentProblems, proposeIntents, strengthId, strengthProblems, upgradeProblems, type ContentIntent, type ExistingStrength, type IntentDecision, type QualityState, type StrengthCategory } from '@/lib/websiteQuality';
@@ -1102,7 +1102,12 @@ function BuildExecutionPanel({ state, update, mapping, input, execPrompt, onCopy
           {row('Redirects', `${res.result.redirects.kept ?? '?'} kept · ${res.result.redirects.redirected ?? '?'} redirected · ${res.result.redirects.retired ?? '?'} retired · ${res.result.redirects.unresolved.length} unresolved`)}
           {row('Cloudflare preview', <><ExtLink url={res.result.cloudflare.previewUrl}>{res.result.cloudflare.previewUrl || '—'}</ExtLink>{res.result.cloudflare.previewUrl && <span className="ml-1">· noindex {res.result.cloudflare.noindexConfirmed === true ? 'confirmed' : 'NOT confirmed'}</span>}</>)}
           {row('QA', <QaChips qa={res.result.qa} />)}
+          {row('Site quality gate', [['Build', res.result.siteGate], ['Preview', res.result.siteGatePreview]].map(([k, g]) => {
+            const r = g as typeof res.result.siteGate;
+            return (k as string) + ': ' + (!r.reported ? 'not run' : r.passed ? 'passed (' + r.checks.filter((c) => c.level === 'warn').length + ' warnings)' : 'FAILED');
+          }).join(' · '))}
         </dl>
+        {siteGateResult(state, res.result).errors.length > 0 && <div className="text-red-700 dark:text-red-300"><b>Site quality gate — not preview ready:</b><ul className="list-disc pl-4">{siteGateResult(state, res.result).errors.map((e, n) => <li key={n} className="break-words">{e}</li>)}</ul></div>}
         {res.result.seedHits.length > 0 && <p className="text-red-700 dark:text-red-300"><b>Seed-client values found:</b> {res.result.seedHits.join(', ')} — this cannot be preview ready.</p>}
         {res.result.errors.length > 0 && <div className="text-red-700 dark:text-red-300"><b>Errors ({res.result.errors.length}):</b><ul className="list-disc pl-4">{res.result.errors.slice(0, 10).map((e, n) => <li key={n} className="break-words">{e}</li>)}</ul></div>}
         {res.result.warnings.length > 0 && <details><summary className="cursor-pointer">Warnings ({res.result.warnings.length})</summary><ul className="list-disc pl-4">{res.result.warnings.map((w, n) => <li key={n} className="break-words">{w}</li>)}</ul></details>}
