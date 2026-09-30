@@ -34,6 +34,7 @@ import {
   DISCOVERY_MIN_RUNS,
   DISCOVERY_MAX_RUNS,
   GENERATOR_ABSOLUTE_MAX_QUESTIONS,
+  WEEKLY_CHECK_QUESTIONS,
 } from "../../../src/lib/auditQuestionCounts.ts";
 import {
   clampDiscoveryRuns, isValidDiscoveryQuestionCount, isValidDiscoveryRuns,
@@ -563,6 +564,10 @@ Deno.serve(async (req) => {
       : isDiscovery
         ? clampCount(body.question_count ?? body.questionCount,
             DISCOVERY_MIN_QUESTION_COUNT, DISCOVERY_MAX_QUESTION_COUNT, DISCOVERY_DEFAULT_QUESTION_COUNT)
+      /* The weekly check supplies its frozen set; its own ceiling (under the ordinary 5 it lost half
+         of RG's 10 on the first run, 2026-09-30). */
+      : isWeeklyCheck
+        ? clampCount(body.question_count ?? body.questionCount, 1, WEEKLY_CHECK_QUESTIONS, WEEKLY_CHECK_QUESTIONS)
       : clampCount(body.question_count ?? body.questionCount);
     // The provided-questions cap must match, or a baseline REPEAT run (which passes the first
     // run's questions verbatim so the three runs are like-for-like) would silently truncate
@@ -571,6 +576,7 @@ Deno.serve(async (req) => {
       ? BASELINE_MAX_QUESTION_COUNT
       : isMeasurement ? MEASUREMENT_MAX_QUESTION_COUNT
       : isDiscovery ? DISCOVERY_MAX_QUESTION_COUNT
+      : isWeeklyCheck ? WEEKLY_CHECK_QUESTIONS
       : MAX_QUESTION_COUNT;
     /* The repeat's inherited cap can only RAISE it — never lower an explicitly-declared purpose. */
     const MAX_QUESTIONS = Math.max(REQUESTED_MAX_QUESTIONS, storedCeiling);

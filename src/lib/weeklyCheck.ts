@@ -23,7 +23,9 @@ import { engineTallies } from './discoveryOpportunity.ts';
 import type { QueueRow } from './auditReport.ts';
 import { londonDay, mondayOf } from './reportingPeriod.ts';
 
-export const WEEKLY_CHECK_QUESTIONS = 10;
+/** The monitored set's size — defined once beside the other counts (create-ai-audit's ceiling). */
+export { WEEKLY_CHECK_QUESTIONS } from './auditQuestionCounts.ts';
+import { WEEKLY_CHECK_QUESTIONS } from './auditQuestionCounts.ts';
 export const WEEKLY_CHECK_HOOK_MAX = 3;
 /** Fewer questions than this is not worth monitoring — the set is refused, not padded. */
 export const WEEKLY_CHECK_MIN_QUESTIONS = 5;
@@ -137,7 +139,20 @@ export function compareWeeks(thisWeek: WeekSummary, lastWeek: WeekSummary | null
     if (anyNamed(q.named) && !anyNamed(b)) nowNamed.push(q.question);
     if (!anyNamed(q.named) && anyNamed(b)) noLongerNamed.push(q.question);
   }
-  const delta = { chatgpt: thisWeek.named.chatgpt - lastWeek.named.chatgpt, gemini: thisWeek.named.gemini - lastWeek.named.gemini };
+  /* ⛔ LIKE FOR LIKE: each engine's change is counted over the questions it answered in BOTH weeks, so a
+     week where fewer were asked (RG's first run queued 5 of 10) or an engine failed on a question can
+     never read as a movement. */
+  const delta = { chatgpt: 0, gemini: 0 };
+  for (const e of WEEKLY_ENGINES) {
+    let now = 0, then = 0;
+    for (const q of thisWeek.perQuestion) {
+      const b = before.get(q.question.toLowerCase());
+      if (!b || q.named[e] === null || b[e] === null) continue;
+      if (q.named[e]) now += 1;
+      if (b[e]) then += 1;
+    }
+    delta[e] = now - then;
+  }
   const up = WEEKLY_ENGINES.some((e) => delta[e] >= WEEKLY_MOVE_MIN);
   const down = WEEKLY_ENGINES.some((e) => delta[e] <= -WEEKLY_MOVE_MIN);
   const trend: WeeklyTrend = up && down ? 'mixed' : up ? 'improving' : down ? 'slipping' : 'flat';

@@ -31,7 +31,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "weekly-visibility-2026-09-30a";
+const BUILD_ID = "weekly-visibility-2026-09-30b";
 const FN = "weekly-visibility";
 const RUN_LEASE_SECONDS = 600;
 /** Refuse to start new checks when the Apify account is this full (directory-presence's rule). */
@@ -161,8 +161,12 @@ async function run(service: Service, url: string, secret: string, serviceKey: st
       const payload = await res.json().catch(() => ({}));
       const auditId = payload?.audit_id ?? payload?.audit?.id ?? payload?.id;
       if (!res.ok || !payload?.ok || typeof auditId !== "string") throw new Error(String(payload?.error ?? `status ${res.status}`));
-      await service.from("weekly_check_runs").update({ status: "started", audit_id: auditId }).eq("id", claim.id);
-      outcome[c.id] = "started";
+      /* Say so if the engine queued fewer than the frozen set (the first run lost 5 of 10 to a cap). */
+      const { data: aRun } = await service.from("ai_audit_runs").select("id").eq("audit_id", auditId).order("run_number").limit(1).maybeSingle();
+      const { count: queued } = aRun?.id ? await service.from("ai_audit_queue").select("id", { count: "exact", head: true }).eq("run_id", aRun.id) : { count: null };
+      const short = typeof queued === "number" && queued < questions.length ? `only ${queued} of ${questions.length} questions were queued` : null;
+      await service.from("weekly_check_runs").update({ status: "started", audit_id: auditId, reason: short }).eq("id", claim.id);
+      outcome[c.id] = short ? `started (${short})` : "started";
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await service.from("weekly_check_runs").update({ status: "failed", reason: msg.slice(0, 300) }).eq("id", claim.id);

@@ -79,6 +79,12 @@ console.log('\n── scoring a week, and the trend ──');
   ok(compareWeeks(small, w1).trend === 'flat', '+1 is within week-to-week noise → flat');
   ok(compareWeeks(w1, up).trend === 'slipping', `−${WEEKLY_MOVE_MIN} → slipping`);
   ok(compareWeeks(w1, w0).stillAbsent.includes('q4'), 'a question neither engine named is "still absent"');
+  // A short week (only 2 of the 4 asked) against a full one: no false movement.
+  const shortWeek = summariseWeek('2026-09-21', q, [row('q1', true, false), row('q3', true, true)] as never, { name: 'Biz', location: 'Town' });
+  const full = summariseWeek('2026-09-28', q, [row('q1', true, false), row('q2', true, false), row('q3', true, true), row('q4', true, false)] as never, { name: 'Biz', location: 'Town' });
+  const cmp = compareWeeks(full, shortWeek);
+  ok(cmp.delta.chatgpt === 0 && cmp.trend === 'flat', 'more questions asked this week is not "improving": deltas count only questions answered both weeks');
+  ok(shortWeek.answered.chatgpt === 2 && full.answered.chatgpt === 4, 'answered counts show how many were actually asked');
 }
 
 console.log('\n── cost caps ──');

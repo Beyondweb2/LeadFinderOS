@@ -123,6 +123,15 @@ export const DISCOVERY_MIN_RUNS = 1;
 export const DISCOVERY_MAX_RUNS = 3;
 
 /**
+ * WEEKLY VISIBILITY CHECK — a paying client's FROZEN set, asked once a week (Admin control centre,
+ * release 4, 2026-09-30; src/lib/weeklyCheck.ts). Its own ceiling because it is its own purpose: under
+ * the ordinary WIZARD_MAX_QUESTIONS (5) create-ai-audit queued only 5 of RG's 10 on the first run
+ * (measured 2026-09-30). The list is always supplied (never generated), so this is a cost ceiling and
+ * the size of the monitored set — nothing else.
+ */
+export const WEEKLY_CHECK_QUESTIONS = 10;
+
+/**
  * ⛔ THE GENERATOR'S ABSOLUTE CEILING — the most questions ONE model call may be asked for.
  *
  * WHY IT IS NAMED. create-ai-audit's generateQuestions re-clamped every call with the BASELINE
