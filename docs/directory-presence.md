@@ -40,7 +40,7 @@ listing anywhere. This is not a "submit to 100 directories" tool.
 Free, every run: the lead row · Google's cached record (`phone_cache`) · the stored crawl (socials,
 full-crawl profiles and credentials) · the homepage and up to two same-site contact/about pages,
 fetched now (links, schema `sameAs`, `tel:` links, schema telephone/postcode, visible text) · every
-citation in this lead's own audits · the trade citation fold for THIS trade: the trade's audits picked in the edge with the same `norm()` rule the fold keys on (`tradeKeys`), aggregated in the database by `presence_trade_citation_hosts(_audit_ids)` (migration `20260930130000_…`, read-only, EXECUTE revoked from public/anon/authenticated, ~4.5 s for the largest trade).
+citation in this lead's own audits · the trade citation fold for THIS trade: the trade's audits picked in the edge with the same `norm()` rule the fold keys on (`tradeKeys`), aggregated in the database by `presence_trade_citation_hosts(_audit_ids)` (migration `20260930130000_…`, read-only, EXECUTE revoked from public/anon/authenticated, ~4.5 s for the largest trade). **v2** (migration `20260930180000_…`): only hosts in ≥ `THIN_MIN_AUDITS` audits, ordered by breadth with a unique tiebreak, and the edge PAGES it — PostgREST cuts every response at 1,000 rows, and locksmiths had 2,066 hosts, so v1 silently lost an arbitrary half (Yell's 359 of 478 audits never reached RG Locksmiths' reasons). Found comparing the live run with the harness, 2026-09-30.
 
 Optional (`search: true`), the only spend: up to three organic searches — `"<name>" <town>`, the
 site's phone in quotes, `"<domain>" -site:<domain>` (`presenceQueries`). Refused under the
