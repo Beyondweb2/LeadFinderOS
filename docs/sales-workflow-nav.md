@@ -115,3 +115,19 @@ our log does not record, or another user of the account — not assumed either w
   the list whatever the filters.
 - SQL: migration `20261001190000_sales_workflow_inbox.sql` (applied and read back; the star trigger was
   proven in a rolled-back block).
+## Release D — Outreach filters
+
+- **Removed: the Product and Country controls.** They were FILTERS (browser-side), not sorts. The Country
+  one was broken (its "AUS" option matched no lead — leads store "Australia"), and a saved Product value
+  could hide leads with no "Filtered" pill. Both states are gone, and an old saved value is ignored on
+  restore. The stored data stays: `product` (the admin's bulk Set product) and `country` (WhatsApp number
+  format, the mobile check, duplicate checks, every sender).
+- **Added, both roles:** Next Action day + type filters (the shared rule). **Admin only:** an owner filter
+  (any / mine / unassigned / each active member) — a salesperson's list is their own leads already.
+- **Sorts:** "Next action: most overdue first" (was "Due date", which sorted cleared actions by a stale
+  date), "Most recent contact" (last WhatsApp sent, or the admin's last logged attempt). "Recent reply"
+  is an Inbox sort — no lead column stores it, and Outreach sorts over every lead.
+- The "N due" count used the browser's clock and counted cleared actions; it is now "N overdue" by the
+  shared rule, and a button that opens exactly that list.
+- Filters and sorts run over every loaded lead (Outreach loads the whole list progressively), never
+  only the visible page.

@@ -139,6 +139,9 @@ import { maySetStatus } from '@/lib/access';
 import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
+import { OwnerFilterSelect } from '@/components/OwnerFilterSelect';
+import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
+import { londonToday } from '@/lib/conversationState';
 import { BulkAssignSelect } from '@/components/BulkAssignSelect';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS as CRM_NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
@@ -258,7 +261,7 @@ const ITEMS_PER_PAGE_MOBILE = 10;
    window, so a mismatch would let the UI queue leads the drainer then silently de-queues. */
 const CONTACT_FOLLOWUP_MIN_DAYS = 3;
 
-type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked';
+type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked' | 'last_contact';
 type SortDirection = 'asc' | 'desc';
 
 // Cheap LISTING-level channel signals — derived for free from the stored `website`
@@ -395,11 +398,18 @@ export function OutreachTable({
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue | 'all'>('all');
   /* Product is HOW THE PAGE IS CONFIGURED, so it persists like the other filters rather than
      living in the URL (the app-wide rule: the URL is for what you are looking at). */
-  const [productFilter, setProductFilter] = useState<ProductValue | typeof PRODUCT_UNDECIDED | 'all'>('all');
+  /* ⛔ THE PRODUCT AND COUNTRY FILTERS ARE GONE (Paul, 2026-09-30: "I do not need these in the Outreach
+     workflow"). They were filters, not sorts. The stored values stay on every lead (product: the bulk
+     "Set product" and the pitch; country: WhatsApp number format and the mobile check), and a value an
+     old saved state still holds is ignored on restore, so it can never keep hiding leads unseen. Their
+     space holds the Next Action filters (the one rule, src/lib/nextActionView.ts) and, for the admin,
+     the owner filter. */
+  const [naWhen, setNaWhen] = useState<NextActionWhen>('all');
+  const [naKind, setNaKind] = useState<NextActionKind>('all');
+  const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [productBusy, setProductBusy] = useState(false);
   /* Off by default: it is a warning about a minority, not a lens Paul works through. */
   const [sharedPhoneOnly, setSharedPhoneOnly] = useState(false);
-  const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [trackedOnly, setTrackedOnly] = useState(false);
   // Contactability filters (AND-combined, stack with the others). Each matches the
   // SAME stored fields that drive the row icons, so the count is consistent.
@@ -609,11 +619,12 @@ export function OutreachTable({
     /* Normalised onto the filter list: a state saved before the no-WhatsApp options merged may hold
        'no_whatsapp_needs_sms', which is no longer an option's own value. Without this the Select
        would render blank while still filtering — the control disagreeing with the table. */
-    if (parsed.productFilter) setProductFilter(parsed.productFilter);
+    if (typeof parsed.naWhen === 'string' && NEXT_ACTION_WHEN_OPTIONS.some((o) => o.value === parsed.naWhen)) setNaWhen(parsed.naWhen as NextActionWhen);
+    if (typeof parsed.naKind === 'string' && NEXT_ACTION_KIND_OPTIONS.some((o) => o.value === parsed.naKind)) setNaKind(parsed.naKind as NextActionKind);
+    if (typeof parsed.ownerFilter === 'string') setOwnerFilter(parsed.ownerFilter);
     if (parsed.statusFilter) {
       setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as StatusFilterValue));
     }
-    if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (typeof parsed.trackedOnly === 'boolean') setTrackedOnly(parsed.trackedOnly);
     if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
     if (typeof parsed.hideNotInterested === 'boolean') setHideNotInterested(parsed.hideNotInterested);
@@ -654,8 +665,9 @@ export function OutreachTable({
       searchQuery,
       locationFilter,
       statusFilter,
-      productFilter,
-      countryFilter,
+      naWhen,
+      naKind,
+      ownerFilter,
       trackedOnly,
       hideNoWhatsApp,
       hideNotInterested,
@@ -671,7 +683,7 @@ export function OutreachTable({
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, productFilter, countryFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -1716,10 +1728,15 @@ export function OutreachTable({
        and it cannot be expressed as "one of the three products" because it is the absence of
        one. `productOf` returns null for undecided AND for an unrecognised value, so a value this
        build does not know about surfaces here instead of joining a pile silently. */
-    if (productFilter !== 'all') {
-      result = productFilter === PRODUCT_UNDECIDED
-        ? result.filter((lead) => productOf(lead) === null)
-        : result.filter((lead) => productOf(lead) === productFilter);
+    /* Next Action (both roles): the lead's own stored action and London day. */
+    if (naWhen !== 'all' || naKind !== 'all') {
+      const today = londonToday();
+      result = result.filter((lead) => passesNextActionFilter(lead, naWhen, naKind, today));
+    }
+    /* Owner (admin only — a salesperson's list is their own leads already). */
+    if (perms.assignOwner && ownerFilter !== 'all') {
+      result = ownerFilter === 'unassigned' ? result.filter((lead) => !lead.assigned_to_user_id)
+        : result.filter((lead) => lead.assigned_to_user_id === (ownerFilter === 'mine' ? user?.id : ownerFilter));
     }
 
     /* ⛔ "Already Visible" is HIDDEN FROM THE DEFAULT LIST — a lead AI already names (>=3 of 6),
@@ -1730,11 +1747,6 @@ export function OutreachTable({
        so this is a reveal, not a fetch. */
     if (statusFilter === 'all') {
       result = result.filter((lead) => lead.status !== 'already_visible');
-    }
-
-    // Filter by country
-    if (countryFilter !== 'all') {
-      result = result.filter((lead) => lead.country === countryFilter);
     }
 
     // Filter: interested-only toggle. Interested is the STAR (is_potential_work) — the status menu's
@@ -1775,10 +1787,16 @@ export function OutreachTable({
           comparison = a.status.localeCompare(b.status);
           break;
         case 'next_action_date':
-          const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
-          const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
-          comparison = dateA - dateB;
+          /* Most overdue first, then soonest, then set-with-no-date, then none — and a cleared action
+             ('none') never sorts as due by a stale date (nextActionSortKey). */
+          comparison = nextActionSortKey(a).localeCompare(nextActionSortKey(b));
           break;
+        case 'last_contact': {
+          /* When we last reached out: the last WhatsApp sent, or (admin rows) the last logged attempt. */
+          const lc = (l: OutreachLead) => Math.max(l.whatsapp_sent_at ? Date.parse(l.whatsapp_sent_at) : 0, l.last_outreach_attempt_at ? Date.parse(l.last_outreach_attempt_at) : 0);
+          comparison = lc(a) - lc(b);
+          break;
+        }
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
@@ -1792,7 +1810,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, perms.assignOwner, user?.id, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1900,10 +1918,10 @@ export function OutreachTable({
   // Sorting is consolidated into the single "Sort by" dropdown in the toolbar — the
   // per-column header sort buttons were removed (one place to sort).
 
-  // Count overdue items
-  const overdueCount = leads.filter(
-    (l) => l.next_action_date && new Date(l.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0))
-  ).length;
+  /* Overdue next actions — the shared rule (a cleared action is never due; London days). The count is a
+     button: it opens exactly that list. */
+  const overdueToday = londonToday();
+  const overdueCount = leads.filter((l) => !l.is_archived && passesNextActionFilter(l, 'overdue', 'all', overdueToday)).length;
 
   return (
     <Card className="bg-card/50 border-border/50">
@@ -1923,9 +1941,10 @@ export function OutreachTable({
                 </span>
               )}
               {!isArchiveView && overdueCount > 0 && (
-                <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-destructive">
-                  {overdueCount} due
-                </span>
+                <button type="button" onClick={() => { setNaWhen('overdue'); setNaKind('all'); setSortField('next_action_date'); setSortDirection('asc'); setCurrentPage(1); }}
+                  className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-destructive hover:underline" title="Show the leads whose next action is overdue">
+                  {overdueCount} overdue
+                </button>
               )}
             </CardTitle>
           </div>
@@ -2384,14 +2403,14 @@ export function OutreachTable({
                 visibly, with a one-click reset of ALL of them (the dropdown's own Clear only covers
                 its nine toggles). Clearing also bumps filterInputStamp so the uncontrolled inputs
                 visibly empty rather than keeping stale text over an unfiltered table. */}
-            {(searchQuery !== '' || locationFilter !== '' || statusFilter !== 'all' || countryFilter !== 'all'
+            {(searchQuery !== '' || locationFilter !== '' || statusFilter !== 'all' || naWhen !== 'all' || naKind !== 'all' || ownerFilter !== 'all'
               || trackedOnly || hasEmail || hasInstagram || hasFacebook || hasWhatsApp
               || hideNoWhatsApp || hideNotInterested || sigWebsite || sigNoWebsite || sigFacebook || sigInstagram) && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery(''); setLocationFilter('');
-                  setStatusFilter('all'); setCountryFilter('all');
+                  setStatusFilter('all'); setNaWhen('all'); setNaKind('all'); setOwnerFilter('all');
                   setTrackedOnly(false);
                   setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
                   setHideNoWhatsApp(false); setHideNotInterested(false);
@@ -2459,47 +2478,16 @@ export function OutreachTable({
                 ))}
               </SelectContent>
             </Select>
-            {/* ── PRODUCT: work one pile at a time ──────────────────────────────────────────
-                Beside Status rather than inside it, because they answer different questions:
-                status is where they are in the conversation, product is what the pitch should
-                be. Paul had one field doing both, which is why 421 leads reached report_sent
-                with no record of what to sell next. */}
-            <Select
-              value={productFilter}
-              onValueChange={(v) => {
-                setProductFilter(v as ProductValue | typeof PRODUCT_UNDECIDED | 'all');
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[120px] sm:w-[140px] bg-background h-8 text-xs">
-                <SelectValue placeholder="Product" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All products</SelectItem>
-                {/* The pile that matters most, and it is the ABSENCE of a product rather than one
-                    of them — so it is its own option, not a fourth value. */}
-                <SelectItem value={PRODUCT_UNDECIDED}>Undecided</SelectItem>
-                {PRODUCT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
+            {/* Next Action: when it is due, and what it is (both roles). */}
+            <Select value={naWhen} onValueChange={(v) => { setNaWhen(v as NextActionWhen); setCurrentPage(1); }}>
+              <SelectTrigger className={cn('w-[132px] sm:w-[150px] bg-background h-8 text-xs', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
+              <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
             </Select>
-            <Select
-              value={countryFilter}
-              onValueChange={(v) => {
-                setCountryFilter(v as Country | 'all');
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[90px] sm:w-[100px] bg-background h-8 text-xs">
-                <SelectValue placeholder="Country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="UK">🇬🇧 UK</SelectItem>
-                <SelectItem value="AUS">🇦🇺 AUS</SelectItem>
-              </SelectContent>
+            <Select value={naKind} onValueChange={(v) => { setNaKind(v as NextActionKind); setCurrentPage(1); }}>
+              <SelectTrigger className={cn('w-[128px] sm:w-[150px] bg-background h-8 text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
+              <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
             </Select>
+            {perms.assignOwner && <OwnerFilterSelect value={ownerFilter} onChange={(v) => { setOwnerFilter(v); setCurrentPage(1); }} selfId={user?.id} />}
             {/* Interested filter toggle — show only leads with status 'interested' */}
             <Button
               variant={trackedOnly ? 'default' : 'outline'}
@@ -2629,7 +2617,8 @@ export function OutreachTable({
                 <SelectItem value="tracked:asc">Tracked first</SelectItem>
                 <SelectItem value="created_at:desc">Newest added</SelectItem>
                 <SelectItem value="created_at:asc">Oldest added</SelectItem>
-                <SelectItem value="next_action_date:asc">Due date</SelectItem>
+                <SelectItem value="next_action_date:asc">Next action: most overdue first</SelectItem>
+                <SelectItem value="last_contact:desc">Most recent contact</SelectItem>
                 <SelectItem value="status:asc">Status</SelectItem>
                 <SelectItem value="business_name:asc">A → Z</SelectItem>
               </SelectContent>
