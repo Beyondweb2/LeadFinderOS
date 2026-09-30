@@ -176,7 +176,8 @@ Weak by the house rules (re-register at Meta to fix):
    commit's markers, and no worktree had edits to it. `planHookQuestions` now ranks every plain question
    ahead of any carrying `SEARCH_FILLER_WORDS` (reliable, trusted, reputable, trustworthy, highly/top rated,
    dependable); a filler question is asked only when there are not three plain ones. The generic top-ups
-   are "Who is the best X in T?", "Can you recommend a X in T?", "I need a X in T, who should I call?".
+   are "X in T", "Can you recommend a X in T?", "I need a X in T, who should I call?" ("Who is the best
+   X in T?" was dropped the same day, Paul: no superlatives).
    The model prompt (shared with baseline and discovery) is untouched; the card's pick
    (`hookMissScore`) is unchanged.
 5. **Meta templates**: `initial_contact` and `audit_followup_call` are not to be rewritten for style. For a
