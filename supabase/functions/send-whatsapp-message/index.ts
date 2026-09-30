@@ -79,7 +79,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts). */
-const BUILD_ID = "2026-09-30b";
+const BUILD_ID = "2026-10-01a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
