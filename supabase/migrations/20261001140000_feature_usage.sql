@@ -42,7 +42,9 @@ as $$
     union all select 'paid_baseline', null, a.created_at from ai_audits a where a.audit_purpose = 'baseline'
     union all select 'weekly_check', null, a.created_at from ai_audits a where a.audit_purpose = 'weekly_check'
     union all select 'lead_search', e.user_id, e.created_at from usage_events e where e.event_type = 'search'
-    union all select 'leads_added', a.actor_user_id, a.created_at from lead_activity a where a.kind = 'lead_added'
+    -- From the lead rows themselves: lead_activity 'lead_added' only exists since 2026-09-27, so it made
+    -- every earlier week read "unused" (found by the first AI briefing, 2026-09-30).
+    union all select 'leads_added', l.added_by_user_id, l.created_at from outreach_leads l
     union all select 'log_contact', a.actor_user_id, a.created_at from lead_activity a where a.kind in ('call_outcome', 'contact_logged')
     union all select 'next_action', a.actor_user_id, a.created_at from lead_activity a where a.kind = 'follow_up_set'
     union all select 'find_email', a.actor_user_id, a.created_at from lead_activity a where a.kind = 'details_set' and a.data ? 'email_source'
