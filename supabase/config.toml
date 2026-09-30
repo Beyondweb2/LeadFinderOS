@@ -192,6 +192,12 @@ verify_jwt = true
 [functions.sales-performance]
 verify_jwt = true
 
+# admin-overview: the Admin control centre's numbers (docs/admin-control-centre.md). SPA-only caller
+# with the admin's own JWT; the handler refuses anyone who is not the admin (requireAdmin). Reads only,
+# spends nothing, returns totals — never a message body, phone number or Stripe id.
+[functions.admin-overview]
+verify_jwt = true
+
 # Commission from the payment ledger (Sales Experience, 2026-09-28): signed-in callers only; role checked in the handler.
 [functions.sales-earnings]
 verify_jwt = true

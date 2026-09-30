@@ -146,13 +146,15 @@ console.log("\n── Find email ──");
 
 console.log("\n── the Admin dashboard ──");
 {
+  /* 2026-09-30: the Admin dashboard became the control centre (docs/admin-control-centre.md) — Paul's
+     later decision replaces the 2026-09-29 layout this block used to pin. */
   const dash = read("src/pages/Dashboard.tsx");
-  ok(/from '@\/components\/salesDash\/ui'/.test(dash) && /from '@\/components\/salesDash\/sections'/.test(dash), "built from the Sales dashboard's own surfaces");
-  ok(/person: 'all'/.test(dash), "the whole book's next actions and follow-ups (admin + team)");
-  for (const gone of ["TipBar", "AdminZone", "CampaignStatsSection", "ChannelPerformanceCard", "PipelineCard", "Quick Actions"]) ok(!dash.includes(gone), `removed: ${gone}`);
-  for (const kept of ["ClientDeliveryCard", "FreeCheckProgressCard", "SubmissionsCard", "NextActionsCard", "AuditFunnelCard"]) ok(dash.includes(`<${kept}`), `kept: ${kept}`);
-  ok(/\/admin\/api-usage/.test(dash), "API usage stays reachable (it was only linked from the removed Admin zone)");
-  ok(!/next_action:/.test(dash), "the dashboard writes no next action at all now");
+  ok(/from '@\/components\/salesDash\/ui'/.test(dash), "still drawn in the Sales dashboard's visual language");
+  ok(/useAdminOverview/.test(dash) && !/useDashboardMetrics/.test(dash), "numbers come server-folded (fn admin-overview), never the whole book in the browser");
+  for (const gone of ["TipBar", "AdminZone", "CampaignStatsSection", "ChannelPerformanceCard", "PipelineCard", "Quick Actions", "<NextActions ", "<FollowUpQueue", "<WaitingPanel", "<ActivityFeed", "<ClientDeliveryCard", "<NextActionsCard", "<AuditFunnelCard"]) ok(!dash.includes(gone), `removed: ${gone}`);
+  for (const kept of ["FreeCheckProgressCard", "SubmissionsCard", "AttentionQueue", "TeamComparison", "RevenuePanel"]) ok(dash.includes(`<${kept}`), `kept/added: ${kept}`);
+  ok(/\/admin\/api-usage/.test(dash), "API usage stays reachable (the cost panel's detail link)");
+  ok(!/next_action:/.test(dash) && !/supabase\.from\(/.test(dash), "the dashboard writes nothing from the browser");
 }
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);

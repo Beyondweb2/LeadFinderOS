@@ -1,199 +1,161 @@
-import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, BarChart3, CalendarClock, ClipboardCheck, FlaskConical, Inbox, Loader2, MessageCircleReply, PackageCheck, RefreshCw, Star, Users } from 'lucide-react';
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { SEOHead } from '@/components/SEOHead';
 import { Button } from '@/components/ui/button';
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
-import { useSubscription } from '@/hooks/useSubscription';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
-import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
-import { isPaidLead } from '@/lib/leadPayment';
-import { leadTarget, type LeadLink } from '@/lib/salesLinks';
-import type { FollowUpGroup, SalesWorkspace } from '@/lib/salesWorkspace';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import { useAdminOverview, type PeriodChoice } from '@/hooks/useAdminOverview';
+import { edgeErrorMessage } from '@/lib/edgeInvoke';
+import { leadLaunchState } from '@/lib/salesLinks';
+import { PERIOD_KEYS, PERIOD_LABEL, londonDay, type PeriodKey } from '@/lib/reportingPeriod';
+import type { AttentionItem } from '@/lib/adminMetrics';
 import { cn } from '@/lib/utils';
-import { KpiCard, Panel } from '@/components/salesDash/ui';
-import { ActivityFeed, FollowUpQueue, NextActions, WaitingPanel, FOLLOW_UP_GROUPS } from '@/components/salesDash/sections';
-import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
-import { ClientDeliveryCard } from '@/components/dashboard/ClientDeliveryCard';
+import { ago } from '@/components/salesDash/ui';
+import { DashboardSection } from '@/components/dashboard/DashboardSection';
 import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
-import { AuditFunnelCard } from '@/components/dashboard/AuditFunnelCard';
-import { DashboardSection } from '@/components/dashboard/DashboardSection';
+import {
+  AttentionQueue, CallsPanel, ChannelsPanel, ClientsPanel, CommissionPanel, ContributionPanel, CostPanel,
+  FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
+} from '@/components/admin/controlCentre';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   THE ADMIN DASHBOARD (rebuilt in the UI cleanup pass, 2026-09-29 — Paul: "cleaner, calmer, more
-   focused… I much prefer the design and clarity of the current Sales dashboard").
-   The same visual language as the Sales dashboard (src/components/salesDash/ui.tsx), its own content:
-     1. four numbers — paying clients, replies waiting, follow-ups due, interested;
-     2. the WHOLE BOOK's next best actions and follow-up queue (fn sales-performance, person 'all' —
-        the admin's own outreach and the team's, one list, so nothing waits unseen);
-     3. what only the admin can do: deliver to a paying client, chase an unpaid sign-up, a quote gone
-        quiet, leads with no trade (the derived tasks, lib/dashboardTasks.ts) — beside replies waiting;
-     4. the clients' delivery checklist, free checks in flight, questionnaire submissions;
-     5. team activity; the audit funnel folded away as reference.
-   ⛔ REMOVED 2026-09-29, each one a duplicate, a dead end or legacy (docs/ui-cleanup-pass.md):
-     the rotating tip bar (the old web-design pitch); channel performance and the 21-row pipeline
-     (the Sales dashboard's Channels and Pipeline are better, one click away); per-campaign funnels
-     (the Sales dashboard's Campaigns); the Admin zone (four links to routes that no longer exist,
-     multi-tenant user tables with a hard-delete, vanity totals — the Team page manages people); the
-     quick links (the sidebar has them); "Clear all stored tasks" (Next Actions are set and cleared
-     by a person on the lead, and the follow-up queue shows them).
+   THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
+   notification feed, not a pile of cards, not a list of every event"). docs/admin-control-centre.md.
+   ⛔ Every number is folded on the server (fn admin-overview, src/lib/adminMetrics.ts) — this page
+   never loads the book. The old page pulled every lead and every WhatsApp message into the browser
+   twice per visit.
+   ⛔ REMOVED 2026-09-30 (the audit is in the doc): the four headline tiles (replaced by Today and
+   Needs your attention); Next best actions, the follow-up queue and Waiting on a reply (salesperson
+   work lists — they stay on the Sales dashboard and Focus); Team activity (an event feed); the audit
+   funnel (replaced by the sales funnel); the Clients delivery card (the ticks live on the client hub);
+   the footer links. The "Needs you" tasks are rebuilt server-side inside Needs your attention, with
+   the refunded-client bug fixed and no browser write.
+   Order: what needs me → today → team → money → clients → the sign-up desk. Only the top two, revenue
+   and clients open by default; every section remembers Paul's open/closed choice.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-
-type Perf = { ok: true; workspace: SalesWorkspace };
-
-/** The derived tasks only the admin acts on. Replies and stored Next Actions are in the whole-book
- *  lists above (Waiting on a reply, the follow-up queue), so they are not repeated here. */
-const ADMIN_TASK_KINDS = new Set(['deliver', 'chase', 'quoted', 'fix_trades']);
 
 function greeting(now = new Date()) {
   const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Europe/London' }).format(now));
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
+const PICKER: PeriodKey[] = PERIOD_KEYS.filter((k) => k !== 'yesterday');
+/** A stored choice with an unknown period is ignored (null), so an old shape can never crash the page. */
+const validChoice = (v: unknown): PeriodChoice | null =>
+  !!v && typeof v === 'object' && (PERIOD_KEYS as readonly string[]).includes(String((v as PeriodChoice).key)) ? (v as PeriodChoice) : null;
+
 const Dashboard = () => {
-  const { isLoading: isSubscriptionLoading, isAdmin, role } = useSubscription();
-  const { metrics, isLoading, refetch } = useDashboardMetrics(isAdmin);
+  const { isLoading: roleLoading, isAdmin } = useSubscription();
   const { user } = useAuth();
   const team = useTeamDirectory();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const unread = useWhatsAppUnread();
-  const ws = useQuery({
-    queryKey: ['sales-performance', role, 'all', 'all', null],
-    enabled: !!role,
-    staleTime: 60_000,
-    queryFn: () => invokeEdge<Perf>('sales-performance', { period: 'all', person: 'all', targets: null }),
-  });
-  const w = ws.data?.workspace;
-  const [fuGroup, setFuGroup] = useState<FollowUpGroup | null>(null);
-  const fuDefault = useMemo<FollowUpGroup>(() => (w ? (FOLLOW_UP_GROUPS.find((g) => w.followUps[g.key].length > 0)?.key ?? 'overdue') : 'overdue'), [w]);
+  // HOW the page is configured (not what is being looked at): persisted per person on this device.
+  const [choice, setChoice] = usePersistedState<PeriodChoice>('admin.period', { key: '30d' }, { tier: 'local', scope: user?.id ?? null, validate: validChoice });
+  const q = useAdminOverview(choice, isAdmin);
+  const o = q.data;
+  const firstName = (team.data ?? []).find((m) => m.user_id === user?.id)?.display_name?.split(' ')[0];
+  const today = londonDay(Date.now());
 
-  const go = (link: LeadLink, leadId: string) => { const [path, state] = leadTarget(link, leadId); navigate(path, state ? { state } : undefined); };
-  const showGroup = (g: FollowUpGroup) => { setFuGroup(g); document.getElementById('follow-ups')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-
-  /* Dismiss a derived task = mark the lead closed (a DEAD status in dashboardTasks.ts, so the chase /
-     quoted rules stop firing for it). The card confirms first. */
-  const handleDismissTask = async (leadId: string): Promise<void> => {
-    const { error } = await supabase.from('outreach_leads').update({ status: 'closed' }).eq('id', leadId);
-    if (error) { toast({ title: 'Could not close the lead', description: error.message, variant: 'destructive' }); return; }
-    refetch();
+  const openItem = (i: AttentionItem) => {
+    if (i.open === 'client' && i.leadId) navigate(`/paid-clients/${i.leadId}`);
+    else if (i.open === 'lead' && i.leadId) navigate('/outreach', { state: leadLaunchState(i.leadId) });
+    else if (i.open === 'inbox') navigate('/inbox');
+    else if (i.open === 'signups') document.getElementById('signup-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else navigate('/outreach');
   };
 
-  const paid = useMemo(() => metrics.allLeads.filter((l) => isPaidLead(l)), [metrics.allLeads]);
-  const adminTasks = useMemo(() => metrics.dashTasks.filter((t) => ADMIN_TASK_KINDS.has(t.kind)), [metrics.dashTasks]);
-  const toDeliver = adminTasks.filter((t) => t.kind === 'deliver').length;
-  const firstName = (team.data ?? []).find((m) => m.user_id === user?.id)?.display_name?.split(' ')[0];
-
-  if (isLoading || isSubscriptionLoading) {
-    return (
-      <div className="flex items-center justify-center h-full py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const overdue = w?.followUps.overdue.length ?? 0;
-  const dueToday = w?.followUps.dueToday.length ?? 0;
-  const replied = w?.followUps.repliedUnanswered.length ?? 0;
-  const interested = w?.pipeline.find((p) => p.key === 'interested')?.count ?? 0;
+  if (roleLoading) return <div className="flex h-full items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 pb-6">
-      <SEOHead title="Dashboard | LeadFinder Pro" description="What needs you today, across the whole book." canonical="/" noindex />
+    <div className="mx-auto max-w-7xl space-y-6 pb-8">
+      <SEOHead title="Dashboard | LeadFinder Pro" description="The business at a glance: what needs you, what is working, what it costs, what it makes." canonical="/" noindex />
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">{greeting()}{firstName ? `, ${firstName}` : ''}</p>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">What needs you today, across the whole book — yours and the team's.</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">What needs you, what is working, what it costs and what it makes.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={() => navigate('/sales-dashboard')}>
-            <BarChart3 className="h-3.5 w-3.5" />Team numbers
-          </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={() => { void ws.refetch(); refetch(); }} disabled={ws.isFetching}>
-            <RefreshCw className={cn('h-3.5 w-3.5', ws.isFetching && 'animate-spin')} />Refresh
+        <div className="flex items-center gap-2">
+          {o && <span className="text-xs text-muted-foreground">Updated {ago(o.generatedAt)}</span>}
+          <Button variant="outline" size="sm" className="h-9 gap-1 text-xs" onClick={() => void q.refetch()} disabled={q.isFetching}>
+            <RefreshCw className={cn('h-3.5 w-3.5', q.isFetching && 'animate-spin')} />Refresh
           </Button>
         </div>
       </header>
 
-      {/* ── The four numbers. Money is the strongest surface. ── */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-4">
-        <div className="col-span-3 lg:col-span-1">
-          <KpiCard hero label="Paying clients" icon={PackageCheck} tone="green" value={paid.length}
-            sub={toDeliver ? `${toDeliver} waiting for delivery to start` : 'Every paid client has started'} onClick={() => navigate('/paid-clients')} />
+      {/* The one period for Team, Sales and Money. Today / yesterday always show beside it. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1 rounded-xl bg-muted/60 p-1" role="group" aria-label="Period">
+          {PICKER.map((k) => (
+            <button key={k} type="button" onClick={() => setChoice(k === 'custom' ? { key: 'custom', from: choice.from ?? today, to: choice.to ?? today } : { key: k })}
+              className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition', choice.key === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              aria-pressed={choice.key === k}>{PERIOD_LABEL[k]}</button>
+          ))}
         </div>
-        <KpiCard label="Replies waiting" icon={MessageCircleReply} tone="blue" value={w ? replied : '…'}
-          sub={unread.count ? `${unread.count} unread in your Inbox` : 'Replied, not yet answered'} onClick={() => navigate('/inbox')} />
-        <KpiCard label="Follow-ups due" icon={CalendarClock} tone={overdue ? 'red' : 'amber'} value={w ? overdue + dueToday : '…'}
-          sub={overdue ? `${overdue} overdue · ${dueToday} today` : `${dueToday} today`} onClick={() => w && showGroup(overdue ? 'overdue' : 'dueToday')} />
-        <KpiCard label="Interested" icon={Star} tone="green" value={w ? interested : '…'}
-          sub={w ? `${w.today.interested} today · ${w.today.replies} replies today` : 'Counting…'} onClick={() => navigate('/outreach')} />
+        {choice.key === 'custom' && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <Input type="date" className="h-8 w-[9.5rem] text-xs" max={today} value={choice.from ?? ''} onChange={(e) => setChoice({ ...choice, from: e.target.value })} aria-label="From" />
+            <span className="text-muted-foreground">to</span>
+            <Input type="date" className="h-8 w-[9.5rem] text-xs" max={today} value={choice.to ?? ''} onChange={(e) => setChoice({ ...choice, to: e.target.value })} aria-label="To" />
+          </div>
+        )}
+        {o && <span className="text-xs text-muted-foreground">{o.period.fromDay ? `${o.period.fromDay} → ${o.period.toDay}` : 'Everything recorded'} · UK time</span>}
       </div>
 
-      {ws.isError && (
+      {q.isError && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
-          <AlertTriangle className="h-4 w-4 text-destructive" />Could not load the whole-book lists: {edgeErrorMessage(ws.error)}
-          <Button size="sm" variant="outline" onClick={() => void ws.refetch()}>Try again</Button>
+          <AlertTriangle className="h-4 w-4 text-destructive" />Could not load the dashboard: {edgeErrorMessage(q.error)}
+          <Button size="sm" variant="outline" onClick={() => void q.refetch()}>Try again</Button>
         </div>
       )}
-      {ws.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Lining up what needs you…</p>}
+      {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Adding up the business…</p>}
 
-      {w && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-          <div className="min-w-0 lg:col-span-3">
-            <NextActions collapseKey="admin.next-actions" items={w.nextActions} go={go} onFocus={() => navigate('/focus')} title="Next best actions"
-              hint="Across the whole book, most urgent first — replies, due follow-ups, warm leads, Quick Close reviews. Tap to open." />
-          </div>
-          <div className="min-w-0 lg:col-span-2">
-            <FollowUpQueue collapseKey="admin.follow-ups" fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup}
-              hint="Next Actions as people set them, and the conversations that need one." />
-          </div>
-        </div>
+      {o && (
+        <>
+          <Section title="Now">
+            <AttentionQueue items={o.attention} onOpen={openItem} />
+            <SinceYesterday o={o} attention={o.attention.length} />
+          </Section>
+
+          <Section title="Team">
+            <TeamComparison o={o} />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <FunnelPanel o={o} />
+              <ChannelsPanel o={o} />
+            </div>
+            <CallsPanel o={o} />
+          </Section>
+
+          <Section title="Money">
+            <RevenuePanel o={o} />
+            <ContributionPanel o={o} />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <CommissionPanel o={o} />
+              <CostPanel o={o} onDetail={() => navigate('/admin/api-usage')} />
+            </div>
+          </Section>
+
+          <Section title="Clients">
+            <ClientsPanel o={o} onOpen={(id) => navigate(`/paid-clients/${id}`)} />
+          </Section>
+        </>
       )}
 
-      {/* What only the admin does, beside the replies nobody has answered. The derived cards keep
-          their own rules and buttons; the wrapper only gives them the Sales dashboard's surface. */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3 [&>section>div]:rounded-2xl [&>section>div]:border-border/60 [&>section>div]:shadow-sm">
-          {adminTasks.length > 0 ? <DashboardSection storageKey="admin-tasks" title="Needs you" defaultOpen collapsedHint={`${adminTasks.length} task${adminTasks.length === 1 ? '' : 's'}`}><NextActionsCard tasks={adminTasks} onDismiss={handleDismissTask} /></DashboardSection> : (
-            <Panel collapseKey="admin.needs-you" title="Needs you" icon={ClipboardCheck} tone="green" hint="Delivery to start, unpaid sign-ups, quotes gone quiet.">
-              <p className="text-xs text-muted-foreground">Nothing waiting on you: every paid client has started, and no sign-up or quote is going cold.</p>
-            </Panel>
-          )}
-        </div>
-        <div className="min-w-0 lg:col-span-2">{w && <WaitingPanel collapseKey="admin.waiting" waiting={w.waiting} go={go} title="Waiting on a reply" />}</div>
+      {/* The sign-up desk: the two working cards kept from the old page (their buttons act). Folded. */}
+      <div id="signup-desk">
+        <Section title="Sign-ups & free checks">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 [&>div>section>div]:rounded-2xl [&>div>section>div]:border-border/60 [&>div>section>div]:shadow-sm">
+            <div className="min-w-0"><DashboardSection storageKey="submissions" title="Sign-ups" defaultOpen={false}><SubmissionsCard /></DashboardSection></div>
+            <div className="min-w-0"><DashboardSection storageKey="free-checks" title="Free checks" defaultOpen={false}><FreeCheckProgressCard /></DashboardSection></div>
+          </div>
+        </Section>
       </div>
 
-      <Panel collapseKey="admin.clients" summary={`${paid.length} paying client${paid.length === 1 ? '' : 's'}`} title="Clients" icon={PackageCheck} tone="green" hint="What each paying client needs next: baseline, checklist, pages." className="[&_.rounded-lg.border]:border-border/60">
-        <ClientDeliveryCard leads={metrics.allLeads} onChanged={refetch} />
-      </Panel>
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 [&>div>section>div]:rounded-2xl [&>div>section>div]:border-border/60 [&>div>section>div]:shadow-sm">
-        {/* Open by default (2026-09-07: it answers "where has my test got to"); the shared collapse
-            since 2026-09-30 lets Paul fold it once he has looked. */}
-        <div className="min-w-0"><DashboardSection storageKey="free-checks" title="Free checks" defaultOpen><FreeCheckProgressCard /></DashboardSection></div>
-        <div className="min-w-0"><DashboardSection storageKey="submissions" title="Sign-ups" defaultOpen><SubmissionsCard /></DashboardSection></div>
-      </div>
-
-      {w && (
-        <ActivityFeed collapseKey="admin.activity" items={w.activity} go={go} title="Team activity" hint="What happened across the book in the last 14 days, and who did it." />
-      )}
-
-      <DashboardSection storageKey="audit-funnel" title="Audit funnel" defaultOpen={false} collapsedHint="contacted → pitched → paid, founder places">
-        <AuditFunnelCard funnel={metrics.auditFunnel} />
-      </DashboardSection>
-
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />Campaigns, templates, channels and conversion are on <button type="button" className="text-primary hover:underline" onClick={() => navigate('/sales-dashboard')}>Team numbers</button>.</span>
-        <span className="inline-flex items-center gap-1"><Inbox className="h-3.5 w-3.5" /><button type="button" className="text-primary hover:underline" onClick={() => navigate('/inbox')}>Inbox</button></span>
-        <span className="inline-flex items-center gap-1"><FlaskConical className="h-3.5 w-3.5" /><button type="button" className="text-primary hover:underline" onClick={() => navigate('/admin/api-usage')}>API usage</button></span>
-      </p>
+      {o && <p className="text-[11px] text-muted-foreground">{o.exclusionNote} Figures are server totals ({o.ms} ms, {o.build}).</p>}
     </div>
   );
 };
