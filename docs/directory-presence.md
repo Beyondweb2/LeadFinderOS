@@ -196,9 +196,21 @@ To integrate once that branch has merged:
 | SC Plumbing (Tamworth) | inconsistent-contact risk | gas emergency line on the site → excluded from matching |
 | Farid Driving School (Walsall) | no website | GBP only; three low/medium trade-evidenced sources |
 
-No inconsistency was flagged on any of the eight from free evidence. Every Google record agreed with
-its website where both were known. Inconsistencies mostly come from searched listings, which only the
-deployed function can run (no Apify token outside the edge).
+No inconsistency was flagged on any of the eight from free evidence (every Google record agreed with
+its website where both were known).
+
+**Searched, through the deployed function** (admin session minted by magic link, revoked after each
+batch; 19 runs, $0.026 billed by Apify): the searches found real listings nothing else held — AK
+Electrical's TrustMark entry and LinkedIn company page, Farid on drivingtests.co.uk, uklicence.com,
+drivingschoolstop.co.uk and ratingsplus.co.uk, Brodley on Nextdoor, Cylex and locally.co.uk, RG on
+locksmithcompare.co.uk. One real consistency finding: AK Electrical's planningsignal.co.uk contractor
+page (name + phone + website) shows postcode CA26 3AB against CA28 9BL held by us and Google —
+"possibly an old address". RG's details on a Houzz profile for "RG Carpentry and Building" → LIKELY,
+"possibly listed under another name". The live runs also produced every false positive this record's
+rules now prevent — category pages, Facebook group posts, Maps short links, /p/ page forms — and the
+version-3 re-judge withdrew them and restored the real ones on a free re-run. 71 rows across 5
+businesses after up to five checks each; 71 distinct (lead, source) pairs. Apify runs sometimes exceed
+the 100 s wait (several did); such a run is aborted and the check is marked partial.
 
 ## 11. Limitations / follow-ups
 
