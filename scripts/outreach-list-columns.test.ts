@@ -52,7 +52,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   instagram_method: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
   instagram_last_checked_at: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
   enrichment_source: { files: ["src/hooks/useOutreach.ts"], why: "addLead carryKeys" },
-  user_id: { files: ["src/hooks/useOutreach.ts", "src/hooks/useSalesCrm.ts", "src/hooks/useSubscription.tsx", "src/components/BulkAssignSelect.tsx"], why: "`.eq('user_id', …)` filters and team members' user_id — never a lead's" },
+  user_id: { files: ["src/hooks/useOutreach.ts", "src/hooks/useSalesCrm.ts", "src/hooks/useSubscription.tsx", "src/components/BulkAssignSelect.tsx", "src/components/OwnerFilterSelect.tsx"], why: "`.eq('user_id', …)` filters and team members' user_id — never a lead's (OwnerFilterSelect: the admin's owner filter lists team members, 2026-09-30)" },
   updated_at: { files: ["src/hooks/useOutreach.ts", "src/components/TemplatePicker.tsx", "src/hooks/useBulkJobs.ts"], why: "`.order('updated_at')` strings and other tables' rows" },
   website_build: { files: ["src/lib/fullCrawl.ts"], why: "the crawl request-source constant 'website_build'" },
   lead_source: { files: ["src/lib/salesPerformance.ts"], why: "the Sales Dashboard fold's own rows, read on the server by sales-performance; Outreach imports it only for LEAD_SOURCE_LABELS (2026-09-28)" },
