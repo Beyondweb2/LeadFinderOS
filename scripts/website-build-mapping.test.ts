@@ -21,7 +21,7 @@ import { MCL_TEMPLATE, templateById, CORE_BUILD_MODEL } from '../src/lib/website
 import { candidateFacts, decide, mergeFacts, type FactRow, type FactsContext } from '../src/lib/buildFacts.ts';
 import { masterPrompt } from '../src/lib/buildPack.ts';
 import { stagePrompts } from '../src/lib/stagePrompts.ts';
-import { applyRecon, isHighRiskFact, parseReconText, type ReconResult } from '../src/lib/recon.ts';
+import { applyRecon, availabilityConflict, isHighRiskFact, parseReconText, type ReconResult } from '../src/lib/recon.ts';
 import { autoAssign, computeMapping, scanSeedValues, scoreService, urlDecisions } from '../src/lib/templateMapping.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 
@@ -92,8 +92,12 @@ console.log('\n── A. RISK-BASED APPROVAL ──');
   ok(row(s, 'phone').status === 'verified' && row(s, 'phone').basis === 'source_site', 'phone (low-risk, verbatim, consistent) is auto-accepted — basis: the source website');
   ok(row(s, 'social_profiles').status === 'verified' && row(s, 'social_profiles').basis === 'source_site', 'a social profile link is auto-accepted');
   ok(row(s, 'website').status === 'verified' && row(s, 'website').basis === 'source_site', 'the website / domain is auto-accepted');
-  for (const k of ['opening_hours', 'insurance', 'dbs', 'prices', 'analytics_ids', 'ads_ids'])
-    ok(row(s, k)?.status === 'detected' && /always needs your approval/.test(row(s, k).notes), `${k} is a commercial / proof claim → NEEDS APPROVAL even though the site states it`);
+  // Paul 2026-09-30: a fact the client's own site states is approved source-site evidence by default.
+  for (const k of ['opening_hours', 'insurance', 'dbs'])
+    ok(row(s, k)?.status === 'verified' && row(s, k).basis === 'source_site', `${k} the site states consistently → accepted as SOURCE-SITE evidence, no routine approval`);
+  ok(row(s, 'prices')?.status === 'detected' && /binding offer that goes stale/.test(row(s, 'prices').notes), 'a price still needs Paul — a binding offer that goes stale');
+  for (const k of ['analytics_ids', 'ads_ids'])
+    ok(row(s, k)?.status === 'detected' && /tracking ID/.test(row(s, k).notes), `${k} is configuration, not a claim → still Paul's`);
   // Paul 2026-09-27: a rating / count the source shows confidently is source information, not a routine approval.
   ok(row(s, 'review_rating')?.status === 'verified' && row(s, 'review_rating').basis === 'source_site', 'a rating the site shows (high confidence, visible, consistent) → accepted as SOURCE-SITE information, no routine approval');
   ok(row(s, 'analytics_ids').value.includes('G-ABC1234') && row(s, 'analytics_ids').value.includes('GTM-XYZ9') && row(s, 'ads_ids').value === 'AW-123456', 'tracking IDs are captured as facts to approve');
@@ -113,13 +117,22 @@ console.log('\n── A. RISK-BASED APPROVAL ──');
   }
   ok(isHighRiskFact('business_name', ['Best Locksmiths Ltd']) && !isHighRiskFact('business_name', ['Harbour Locks Ltd']), 'a strong-claim word ("best") makes even a low-risk field need approval');
   ok(!isHighRiskFact('accreditations', ['NICEIC Approved Contractor']) && !isHighRiskFact('years_experience', ['Over 20 years']), 'source-site rule: a credential or years trading the site states is NOT held back for approval');
-  ok(isHighRiskFact('prices', ['£80 call-out']) && !isHighRiskFact('review_rating', ['4.9 from 120']) && isHighRiskFact('insurance', ['Fully insured']), 'prices and insurance still always need Paul; a confidently sourced rating does not');
-  ok(isHighRiskFact('accreditations', ['24/7 emergency call outs']) && isHighRiskFact('availability', ['24/7']) && isHighRiskFact('standout', ['The best electrician in Bristol']), '24/7 and superlatives need Paul whatever the field (the BS4 hours contradiction)');
+  ok(isHighRiskFact('prices', ['£80 call-out']) && !isHighRiskFact('review_rating', ['4.9 from 120']) && !isHighRiskFact('insurance', ['Fully insured']) && !isHighRiskFact('licences', ['Gas Safe 123456']), 'prices still need Paul; insurance, licences and a confidently sourced rating do not (Paul, 2026-09-30)');
+  ok(isHighRiskFact('standout', ['The best electrician in Bristol']) && isHighRiskFact('services', ['Cheapest boiler repairs']) && !isHighRiskFact('availability', ['24/7']), 'a superlative needs Paul whatever the field; 24/7 alone is judged against the stated hours, not held');
+  ok(availabilityConflict(['24/7 emergency call outs'], ['Mon–Fri 8am–6pm']) && !availabilityConflict(['24/7 emergency call outs'], []) && !availabilityConflict(['24/7'], ['Open 24 hours']), 'the BS4 contradiction: 24/7 against stated hours is a conflict; 24/7 alone, or hours that agree, is not');
+  {
+    const clashRecon = { ...RECON, facts: [...RECON.facts.filter((f: { field: string }) => f.field !== 'opening_hours'), { field: 'opening_hours', value: 'Mon–Fri 8am–6pm', sourceUrl: SITE + 'contact/', confidence: 'high', evidence: 'visible' }, { field: 'availability', value: '24/7 emergency call-outs', sourceUrl: SITE, confidence: 'high', evidence: 'visible' }] };
+    const pc = parseReconText(JSON.stringify(clashRecon)) as { result: ReconResult };
+    const b0 = parseWebsiteBuild(BASE);
+    const sc = applyRecon(b0, pc.result, rowsFor(b0), '2026-09-25T10:00:00.000Z').state;
+    ok(row(sc, 'opening_hours')?.status === 'detected' && row(sc, 'availability')?.status === 'detected' && sc.recon.review.some((x) => x.kind === 'conflict' && /round-the-clock/.test(x.detail)), 'a 24/7 claim the stated hours contradict → both held and raised as a CONFLICT (never silently chosen)');
+  }
   ok(isHighRiskFact('custom_anything', ['x']), 'an unrecognised key is high-risk (positive allowlist)');
   const svcOnly = parseWebsiteBuild({ ...BASE, route: 'faithful_rebuild' });
   const noOnb = ctx({ services_list: [] });
   const s2 = applyRecon(svcOnly, parsed.result, rowsFor(svcOnly, noOnb), '2026-09-25T10:00:00.000Z').state;
-  ok(rowsFor(s2, noOnb).find((r) => r.key === 'services')!.status === 'detected', 'with no verified services, the site\u2019s services never auto-verify — they need approval');
+  const sv = rowsFor(s2, noOnb).find((r) => r.key === 'services')!;
+  ok(sv.status === 'verified' && sv.basis === 'source_site', 'with no onboarding services, the services the site states are accepted as SOURCE-SITE evidence (Paul, 2026-09-30) — never called independently verified');
 }
 
 console.log('\n── B/D. THE FIELD MODEL AND AUTOMATIC MAPPING ──');
@@ -134,7 +147,8 @@ console.log('\n── B/D. THE FIELD MODEL AND AUTOMATIC MAPPING ──');
   const f = (id: string) => m.fields.find((x) => x.field.id === id)!;
   ok(f('business_name').status === 'ready' && f('business_name').rank === 1 && /verified client fact/.test(f('business_name').source), 'business name: rank 1, verified client fact');
   ok(f('phone').status === 'ready' && f('phone').rank === 3 && /source website/.test(f('phone').source), 'phone: rank 3, auto-accepted from the source website — and says so');
-  ok(f('hours').status === 'needs_approval' && f('hours').rank === 4 && f('hours').value === '24/7 emergency call-outs', 'hours: rank 4, source value needing approval');
+  ok(f('hours').status === 'ready' && f('hours').rank === 3 && f('hours').value === '24/7 emergency call-outs' && /source website/.test(f('hours').source), 'hours the site states (no contradicting hours) → rank 3, ready from the source website, and says so');
+  ok(f('prices').status === 'needs_approval' && f('prices').rank === 4, 'prices: rank 4, a source value still needing approval');
   ok(f('email').value === 'hello@harbourlocks.co.uk', 'the higher-confidence value wins (verified email, not the site\u2019s)');
   ok(f('domain').status === 'missing' && f('domain').required, 'domain comes from project details — missing until set');
   ok(f('address').required === false, 'address is conditional: not required until the business is set as premises');
@@ -213,8 +227,8 @@ console.log('\n── I/J. READINESS AND THE GENERATED CONFIG ──');
   const s = imported();
   const m = mapOf(s);
   ok(!m.readiness.ok && m.readiness.blockers.some((b) => /Domain is missing/.test(b)) && m.readiness.blockers.some((b) => /Mobile or premises is missing/.test(b)) && !m.readiness.blockers.some((b) => /Logo/.test(b)), 'missing REQUIRED data blocks (domain, mobile/premises) — a missing logo does not (Phase 4 wordmark)');
-  ok(!m.readiness.blockers.some((b) => /DBS|Insurance|Owner/.test(b)), 'missing / unapproved OPTIONAL proof never blocks');
-  ok(m.readiness.notes.some((n) => /DBS check is left out until approved/.test(n)), '…it is left out until approved, and says so');
+  ok(!m.readiness.blockers.some((b) => /DBS|Insurance|Owner|Prices/.test(b)), 'missing / unapproved OPTIONAL proof never blocks');
+  ok(m.readiness.notes.some((n) => /Prices is left out until approved/.test(n)), '…it is left out until approved, and says so');
   ok(m.readiness.ready > 0 && m.readiness.needsApproval > 0 && m.readiness.optionalMissing > 0, `counts: ready ${m.readiness.ready} · needs approval ${m.readiness.needsApproval} · missing required ${m.readiness.missingRequired} · optional missing ${m.readiness.optionalMissing}`);
   const ready = { ...s, canonical_domain: 'harbourlocks.co.uk', mapping: { ...s.mapping, fields: { mobile_or_premises: 'mobile', consent: 'banner' } },
     manifest: { ...s.manifest, assets: s.manifest.assets.map((a) => ({ ...a, approval: 'approved' as const })) } };
@@ -223,8 +237,9 @@ console.log('\n── I/J. READINESS AND THE GENERATED CONFIG ──');
   ok(m2.readiness.ok, `with the required data in place the template is READY TO BUILD (${m2.readiness.blockers.join('; ') || 'no blockers'})`);
   const c = m2.config;
   ok((c.business as Record<string, unknown>).name === 'Harbour Locks Ltd' && (c.business as Record<string, unknown>).phone === '07700 900123' && (c.business as Record<string, unknown>).domain === 'harbourlocks.co.uk' && (c.business as Record<string, unknown>).mode === 'mobile', 'config.business carries the ready values');
-  ok(!('hours' in (c.business as object)) && !('insurance' in c.proof) && !('prices' in c.pricing) && !('analytics' in c.tracking), 'needs-approval values are NOT in the config');
-  ok(m2.omitted.some((o) => /Opening hours — needs approval/.test(o)), '…they are listed as left out');
+  ok(!('prices' in c.pricing) && !('analytics' in c.tracking), 'needs-approval values (a price, a tracking ID) are NOT in the config');
+  ok('hours' in (c.business as object) && 'insurance' in c.proof, 'source-site facts (hours, insurance the site states) ARE in the config — no routine approval');
+  ok(m2.omitted.some((o) => /Prices — needs approval/.test(o)), '…the held ones are listed as left out');
   ok(c.services.map((x) => x.id).sort().join() === 'emergency-lockouts,lock-changes,upvc-door-mechanism' && c.services.find((x) => x.id === 'upvc-door-mechanism')!.evidence[0] === 'UPVC lock repairs', 'config.services = the included services, with their evidence');
   ok((c.locations as Record<string, unknown>).primary === 'Whitby' && JSON.stringify((c.locations as Record<string, unknown>).pages) === '["Whitby"]', 'config.locations: primary and pages');
   ok(Array.isArray((mapOf({ ...r2, facts: [...r2.facts.filter((x) => x.key !== 'insurance'), decide(row(r2, 'insurance'), 'verified')] }).config.proof as Record<string, unknown>).insurance), 'list values become arrays in the config');
@@ -239,7 +254,11 @@ console.log('\n── K. CONTAMINATION GUARD ──');
   const m = mapOf(seedPhone);
   ok(m.guard.hits.some((h) => h.value.value === '07395' && h.blocking) && !m.readiness.ok && m.readiness.blockers.some((b) => /07395/.test(b)), 'an MCL seed phone in the config BLOCKS readiness and names the value');
   const autoTown = scanSeedValues(JSON.stringify({ locations: { primary: 'Canterbury' } }), MCL_TEMPLATE, [{ key: 'primary_town', value: 'Canterbury', status: 'verified', basis: 'source_site' } as FactRow], 'Harbour Locks Ltd');
-  ok(autoTown.hits[0]?.blocking, 'a seed town that was only auto-accepted from a site blocks');
+  ok(autoTown.hits[0]?.blocking, 'a seed town auto-accepted with no source URL blocks (the evidence cannot be placed)');
+  const ownSite = scanSeedValues(JSON.stringify({ proof: { dbs: 'DBS checked' } }), MCL_TEMPLATE, [{ key: 'dbs', value: 'DBS checked', status: 'verified', basis: 'source_site', source_url: 'https://harbourlocks.co.uk/about/' } as FactRow], 'Harbour Locks Ltd');
+  ok(ownSite.hits.length === 1 && !ownSite.hits[0].blocking, 'a credential the CLIENT’s own site states is confirmed source-site evidence — not a seed leftover (Paul, 2026-09-30)');
+  const seedSite = scanSeedValues(JSON.stringify({ proof: { dbs: 'DBS checked' } }), MCL_TEMPLATE, [{ key: 'dbs', value: 'DBS checked', status: 'verified', basis: 'source_site', source_url: 'https://mc-locksmiths.com/about/' } as FactRow], 'Harbour Locks Ltd');
+  ok(seedSite.hits[0]?.blocking, '…but the same value read from the SEED client’s site still blocks');
   const confirmedTown = scanSeedValues(JSON.stringify({ locations: { primary: 'Canterbury' } }), MCL_TEMPLATE, [{ key: 'primary_town', value: 'Canterbury', status: 'verified', basis: 'client' } as FactRow], 'Harbour Locks Ltd');
   ok(confirmedTown.hits.length === 1 && !confirmedTown.hits[0].blocking, 'the same town CONFIRMED by the client is allowed (a real Canterbury business)');
   const word = scanSeedValues(JSON.stringify({ services: ['Emergency locksmith'] }), MCL_TEMPLATE, [], 'Harbour Locks Ltd');

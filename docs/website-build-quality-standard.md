@@ -39,7 +39,7 @@ AND perceived website quality.
    the widths compared (1440 and a phone width at least), and `stillStronger`. Not reported, not an
    upgrade, a missing width, or anything the old site still wins → not Preview Ready ("Preview is not
    visually complete"). No numerical visual score.
-5. **Source-site fact rule** (`recon.ts`, supersedes the same-day "every claim needs approval"
+5. **Source-site fact rule** — ⚠ superseded 2026-09-30 by Paul's broader rule (`docs/website-build-seo-gate.md` §4: every stated fact accepted; only conflicts, ambiguity, 24/7 vs hours, superlatives, prices, tracking IDs held). The 2026-09-25 version, for the record (`recon.ts`, supersedes the same-day "every claim needs approval"
    rule): a fact the client's own site states verbatim and consistently — services, areas,
    qualifications, accreditations, memberships, years trading, guarantees, contact details, address,
    payment methods, hours, descriptions — is accepted with basis `source_site`, never "verified".
