@@ -249,6 +249,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   /* Written by fn conversation-triage when a reply contains a clear opt-out phrase (Admin control centre,
      release 2): future automated outreach is suppressed. The body carries the words shown. */
   opted_out: 'Asked to stop',
+  /* request_lead_transfer (2026-09-30): the salesperson asked the admin to move the lead. */
+  transfer_requested: 'Transfer requested',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */
@@ -283,6 +285,7 @@ export function activityDetail(
     case 'call_booked': return d.at ? new Date(String(d.at)).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).replace(',', '') : 'Cancelled';
     case 'bulk_queued': return d.template ? String(d.template) : null;
     case 'archived_set': return d.archived ? 'Archived' : 'Restored';
+    case 'transfer_requested': return d.note ? String(d.note) : 'No reason given';
     case 'marked_interested': return d.on === false ? 'Unstarred' : 'Starred';
     case 'lead_added': return d.source ? `Source: ${String(d.source).replace(/_/g, ' ')}` : null;
     case 'lead_assigned':

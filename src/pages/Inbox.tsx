@@ -65,8 +65,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getQueueStatus, QUEUE_STATUS_KEY, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
 import { useQueueState } from '@/hooks/useQueueState';
 import { useMarkWhatsAppRead, useWhatsAppReads } from '@/hooks/useWhatsAppUnread';
-import { conversationState, INBOX_QUICK_FILTERS, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
+import { conversationState, INBOX_QUICK_FILTERS, londonToday, passesQuickFilter, formatWaiting, type ConversationState, type InboxQuickFilter } from '@/lib/conversationState';
 import { ConvStateChip } from '@/components/ConvStateChip';
+import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { Eye, Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks, Sparkles, FileText, Copy, Check, Link2, Star, MoreHorizontal, ArrowLeft, PauseCircle, XCircle, Timer } from 'lucide-react';
 import { isPaidLead } from '@/lib/leadPayment';
 import { REPORT_LINK_TEMPLATES } from '@/lib/templateAttribution';
@@ -483,6 +484,10 @@ const Inbox = () => {
   const [search, setSearch] = usePersistedState<string>('inbox-search', '', { tier: 'session', scope: user?.id });
   /* All / Unread / Waiting on us (both roles, 2026-09-28). A view control over the loaded list. */
   const [quickFilter, setQuickFilter] = usePersistedState<InboxQuickFilter>('inbox-quick-filter', 'all', { tier: 'session', scope: user?.id });
+  /* Next Action filters + sort (2026-09-30, both roles; the one rule is src/lib/nextActionView.ts). */
+  const [naWhen, setNaWhen] = usePersistedState<NextActionWhen>('inbox-na-when', 'all', { tier: 'session', scope: user?.id });
+  const [naKind, setNaKind] = usePersistedState<NextActionKind>('inbox-na-kind', 'all', { tier: 'session', scope: user?.id });
+  const [listSort, setListSort] = usePersistedState<'recent' | 'next_action' | 'recent_reply'>('inbox-sort', 'recent', { tier: 'session', scope: user?.id });
   /* ?filter=<quick filter> (2026-09-30): a dashboard count ("N replies waiting in the Inbox") opens the
      Inbox on that view. Applied once, then dropped from the URL — the choice is then the person's own. */
   const filterParam = searchParams.get('filter');
@@ -709,12 +714,22 @@ const Inbox = () => {
   const searchTerm = search.trim().toLowerCase();
   const filteredList = useMemo(() => {
     const searched = !searchTerm ? list : list.filter((c) => c.label.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
-    if (quickFilter === 'all') return searched;
-    const kept = searched.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, st); });
-    /* Waiting on us: the longest wait first — the reply that has waited most is the next one to answer. */
-    if (quickFilter === 'waiting') kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
+    /* Next Action: the lead's own stored action and day. A conversation with no lead has no next action. */
+    const today = londonToday();
+    const byNa = naWhen === 'all' && naKind === 'all' ? searched
+      : searched.filter((c) => passesNextActionFilter(c.leadId ? leadByIdForState.get(c.leadId) : null, naWhen, naKind, today));
+    const kept = quickFilter === 'all' ? [...byNa] : byNa.filter((c) => { const st = stateByKey.get(c.key); return !!st && passesQuickFilter(quickFilter, st); });
+    if (listSort === 'next_action') {
+      kept.sort((a, b) => nextActionSortKey(a.leadId ? leadByIdForState.get(a.leadId) : null).localeCompare(nextActionSortKey(b.leadId ? leadByIdForState.get(b.leadId) : null)));
+    } else if (listSort === 'recent_reply') {
+      kept.sort((a, b) => (b.lastInboundAt ?? '').localeCompare(a.lastInboundAt ?? ''));
+    } else if (quickFilter === 'waiting') {
+      /* Waiting on us: the longest wait first — the reply that has waited most is the next one to answer. */
+      kept.sort((a, b) => (stateByKey.get(a.key)?.waitingSinceMs ?? 0) - (stateByKey.get(b.key)?.waitingSinceMs ?? 0));
+    }
     return kept;
-  }, [list, searchTerm, quickFilter, stateByKey]);
+  }, [list, searchTerm, quickFilter, stateByKey, naWhen, naKind, listSort, leadByIdForState]);
+  const naFiltered = naWhen !== 'all' || naKind !== 'all' || listSort !== 'recent';
 
   /* ⚡ THE LIST DRAWS 150 ROWS AT A TIME (2026-09-28, measured). Every row carries a status dropdown, so
      with the whole book (2,201 conversations) ANY change to one lead — a status, a star, a next
@@ -722,7 +737,7 @@ const Inbox = () => {
      cover every conversation; "Show more" draws the next 150; the open conversation is always drawn. */
   const LIST_PAGE = 150;
   const [listLimit, setListLimit] = useState(LIST_PAGE);
-  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter]);
+  useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter, naWhen, naKind, listSort]);
   /* ⛔ THE OPEN CONVERSATION IS ALWAYS IN THE LIST (2026-09-30, Paul: "do not hide an explicitly
      deep-linked conversation merely because the current filters exclude it"). It is drawn at the top,
      marked as outside the filters, from the unfiltered list — the filters are left as they were. */
@@ -744,6 +759,19 @@ const Inbox = () => {
   // Set a conversation's lead status from the Inbox (two-way sync with Outreach).
   // Manual override — no forward-only guard — EXCEPT a confirm when moving a paying
   // customer AWAY from payment_received (mis-click protection).
+  /* The star toggle in the thread header — the same one path as the status pill's "Interested". */
+  const [starSaving, setStarSaving] = useState(false);
+  const toggleStar = async (c: WaConversation) => {
+    if (!c.leadId) return;
+    const on = !c.isPotentialWork;
+    setStarSaving(true);
+    try {
+      const r = await markLeadInterested(c.leadId, perms.editLeadRecord, on);
+      if (!r.ok) { toast({ title: on ? 'Could not mark interested' : 'Could not remove the star', description: r.error, variant: 'destructive' }); return; }
+      patchLeadPotentialWork(c.leadId, on);
+      setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: on } : s));
+    } finally { setStarSaving(false); }
+  };
   const handleSetStatus = async (c: WaConversation, status: PipelineStatus) => {
     if (!c.leadId || (status === c.leadStatus && (status !== 'interested' || c.isPotentialWork))) return;
     // “Interested” is an operator marker, not a pipeline stage. Preserve the current status and
@@ -1738,13 +1766,13 @@ const Inbox = () => {
       <div className="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[300px_1fr] md:grid-rows-[minmax(0,1fr)]">
         {/* Conversation list */}
         <Card className={cn('overflow-y-auto p-1.5 md:h-full md:max-h-none', active ? 'hidden md:block' : 'min-h-[50vh]')}>
-          <div className="mb-1.5 flex gap-1 px-0.5" role="tablist" aria-label="Show conversations">
+          <div className="mb-1.5 flex flex-wrap gap-1 px-0.5" role="tablist" aria-label="Show conversations">
             {INBOX_QUICK_FILTERS.map((f) => {
               const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : null;
               const on = quickFilter === f.value;
               return (
                 <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
+                  className={cn('flex h-8 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
                     on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
                   {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
                 </button>
@@ -1778,6 +1806,30 @@ const Inbox = () => {
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
               >
                 ✕
+              </button>
+            )}
+          </div>
+          {/* Next Action: when, what, and the order (both roles). One compact row; Reset puts all three back. */}
+          <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5">
+            <Select value={naWhen} onValueChange={(v) => setNaWhen(v as NextActionWhen)}>
+              <SelectTrigger className={cn('h-8 text-xs', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
+              <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={naKind} onValueChange={(v) => setNaKind(v as NextActionKind)}>
+              <SelectTrigger className={cn('h-8 text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
+              <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={listSort} onValueChange={(v) => setListSort(v as typeof listSort)}>
+              <SelectTrigger className={cn('col-span-2 h-8 text-xs', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="mr-1 text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent" className="text-xs">Newest message</SelectItem>
+                <SelectItem value="recent_reply" className="text-xs">Most recent reply from them</SelectItem>
+                <SelectItem value="next_action" className="text-xs">Next action: most overdue first</SelectItem>
+              </SelectContent>
+            </Select>
+            {naFiltered && (
+              <button type="button" onClick={() => { setNaWhen('all'); setNaKind('all'); setListSort('recent'); }} className="col-span-2 text-left text-[11px] font-medium text-primary hover:underline">
+                Reset next action filters · {filteredList.length} shown
               </button>
             )}
           </div>
@@ -2008,8 +2060,20 @@ const Inbox = () => {
                   </button>
                   <p className="flex min-w-0 items-center gap-1 text-sm font-semibold">
                     <span className="truncate">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</span>
-                    {!active.unassigned && active.isPotentialWork && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"><title>Interested</title></Star>}
                   </p>
+                  {/* ⛔ THE STAR IS THE ONE INTEREST MARK (2026-09-30, Paul: keep the star, drop the green badge
+                      that repeated it). It is also the toggle, for both roles, through lead_mark_interested
+                      (History records Starred / Unstarred). The Interested filter, metrics and stored state
+                      are unchanged. */}
+                  {!active.unassigned && active.leadId && (
+                    <button type="button" disabled={starSaving}
+                      onClick={() => void toggleStar(active)}
+                      title={active.isPotentialWork ? 'Interested — click to remove the star' : 'Mark as interested (star)'}
+                      aria-label={active.isPotentialWork ? 'Remove interested star' : 'Mark as interested'} aria-pressed={!!active.isPotentialWork}
+                      className="-ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50">
+                      <Star className={cn('h-4 w-4', active.isPotentialWork ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground/60')} />
+                    </button>
+                  )}
                   {win.open ? (
                     <span className="ml-auto flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
                       <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
@@ -2033,7 +2097,8 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
-                    {active.leadId && activeSales.view && <SalesStatePill view={activeSales.view} size="xs" />}
+                    {/* The sales state pill — hidden only when it would just repeat the star. */}
+                    {active.leadId && activeSales.view && !(activeSales.view.state === 'interested' && active.isPotentialWork) && <SalesStatePill view={activeSales.view} size="xs" />}
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
                     <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
@@ -2043,7 +2108,6 @@ const Inbox = () => {
                         <Timer className="h-3 w-3" />{queueState?.paused ? 'Queued · queue paused' : 'Queued'}
                       </span>
                     )}
-                    <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                     {/* No email on file → find one (our records first, then their website). */}
                     {activeLead && !activeLead.email && <FindEmailButton leadId={activeLead.id} website={activeLead.website} className="text-[11px]" />}
                     {/* The one Socials line (2026-09-30): the canonical profiles, confirmed vs likely. */}
@@ -2165,6 +2229,10 @@ const Inbox = () => {
                           <a href={`mailto:${activeLead.email}`} aria-label="Email the business"><Mail className="mr-2 h-4 w-4" /><span className="truncate">Email {activeLead.email}</span></a>
                         </DropdownMenuItem>
                       )}
+                      {/* The number moved here from the header line (2026-09-30: the header was crowded). */}
+                      <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(`+${active.phone}`); toast({ title: 'Number copied', description: `+${active.phone}` }); }} aria-label="Copy the number">
+                        <Copy className="mr-2 h-4 w-4" /><span className="tabular-nums">+{active.phone}</span><span className="ml-auto text-[10px] text-muted-foreground">Copy</span>
+                      </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" aria-label="Open in WhatsApp app"><MessageCircle className="mr-2 h-4 w-4" />Open in the WhatsApp app</a>
                       </DropdownMenuItem>
