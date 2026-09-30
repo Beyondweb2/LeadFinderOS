@@ -10,8 +10,8 @@ import type { UsageRow } from "../../../src/lib/adminIntelligence.ts";
 import { finaliseTotals, pagePath, periodWindows, resolvePerformanceState, sumTotals, totalsFromAggregate } from "../../../src/lib/searchPerformance.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
-import { UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
-import { FINDABLE_START_ISO, foldCostAccounting, type ApifyAccountCheck, type CostAccounting, type CostDetailRow } from "../../../src/lib/apiCostAccounting.ts";
+import { costProviderOf, UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
+import { FINDABLE_START_ISO, foldCostAccounting, fundingOf, isFindableCost, MIGRATION_BOUNDS, type ApifyAccountCheck, type CostAccounting, type CostDetailRow } from "../../../src/lib/apiCostAccounting.ts";
 
 
 // THE ADMIN CONTROL CENTRE'S DATA LOADER (moved verbatim from fn admin-overview, 2026-09-30, so the
@@ -47,10 +47,16 @@ async function allRows<T>(build: (from: number, to: number, count: boolean) => a
 
 const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build, stripe_subscription_id, stripe_customer_id";
 
-async function costRows(service: Service, p: ReportingPeriod): Promise<CostRow[]> {
-  const { data, error } = await service.rpc("admin_api_cost", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString() });
-  if (error) throw new Error(`admin_api_cost: ${error.message ?? String(error)}`);
-  return ((data ?? []) as CostRow[]).map((r) => ({ ...r, usd: Number(r.usd) || 0, calls: Number(r.calls) || 0 }));
+/** ⛔ FINDABLE-PAID ROWS ONLY (src/lib/apiCostAccounting.ts isFindableCost): usage from before each
+ *  provider's move to Paul's own account was paid by Move37 and never reaches a Findable total — the
+ *  operating cost, today / week / month, the contribution, the per-person figures and every trend all
+ *  read these rows. The rest is shown only in the cost panel's historical breakdown. */
+async function costRows(service: Service, p: ReportingPeriod, testUserIds: ReadonlySet<string>): Promise<CostRow[]> {
+  const { data, error } = await service.rpc("admin_api_cost_seg", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString(), _bounds: MIGRATION_BOUNDS });
+  if (error) throw new Error(`admin_api_cost_seg: ${error.message ?? String(error)}`);
+  return ((data ?? []) as (CostRow & { seg: number })[])
+    .map((r) => ({ ...r, seg: Number(r.seg), usd: Number(r.usd) || 0, calls: Number(r.calls) || 0 }))
+    .filter((r) => isFindableCost(r, testUserIds));
 }
 
 
@@ -91,7 +97,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     for (const s of e.bySeller) { commissionDueBySeller.set(s.sellerId, s.due); payoutsBySeller.set(s.sellerId, s.paidOut); }
   } catch (err) { commissionError = err instanceof Error ? err.message : String(err); console.error("[admin-overview] earnings", commissionError); }
 
-  const [cPeriod, cToday, cYesterday, cWeek, cMonth] = await Promise.all([period, today, yesterday, week, month].map((p) => costRows(service, p)));
+  const [cPeriod, cToday, cYesterday, cWeek, cMonth] = await Promise.all([period, today, yesterday, week, month].map((p) => costRows(service, p, exclusions.users)));
 
   /* Reply triage (release 2): the period's rows and the surface window's. A failed read blanks the
      reply part (the page says triage is unavailable) — never an empty list that reads as "all clear". */
@@ -207,34 +213,36 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     if (!error && data) latestSummary = data as Record<string, unknown>;
   }
 
-  /* API cost accuracy (2026-09-30, src/lib/apiCostAccounting.ts): the period's recorded usage by OWNER,
-     Google's free allowance by SKU for the last three London calendar months, and the Apify account's
-     own figure for its billing cycle beside what we recorded. Unreadable → null (the panel says so);
-     confirmed charges are never filled in without real billing data. */
+  /* API cost accuracy (2026-09-30, src/lib/apiCostAccounting.ts): recorded usage by OWNER (who paid, then
+     whose work) for the period and for all time, Google's free allowance by SKU for the last three London
+     calendar months on Findable's own billing account, and the Apify account's own figure for its billing
+     cycle beside what we recorded on that account. Unreadable → null (the panel says so); confirmed
+     charges are never filled in without real billing data. */
   let costAccounting: CostAccounting | null = null;
   try {
     const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
     const [y, m] = londonDay(nowMs).split("-").map(Number);
-    const firstMonth = `${new Date(Date.UTC(y, m - 3, 1)).toISOString().slice(0, 7)}`;
+    const recentMonths = [0, 1, 2].map((k) => new Date(Date.UTC(y, m - 1 - k, 1)).toISOString().slice(0, 7));
     const detail = async (from: string | null, to: string) => {
-      const { data, error } = await service.rpc("admin_api_cost_detail", { _from: from, _to: to, _findable_start: FINDABLE_START_ISO });
-      if (error) throw new Error(`admin_api_cost_detail: ${error.message}`);
-      return ((data ?? []) as CostDetailRow[]).map((r) => ({ ...r, usd: Number(r.usd) || 0, calls: Number(r.calls) || 0 }));
+      const { data, error } = await service.rpc("admin_api_cost_detail_seg", { _from: from, _to: to, _findable_start: FINDABLE_START_ISO, _bounds: MIGRATION_BOUNDS });
+      if (error) throw new Error(`admin_api_cost_detail_seg: ${error.message}`);
+      return ((data ?? []) as CostDetailRow[]).map((r) => ({ ...r, seg: Number(r.seg), usd: Number(r.usd) || 0, calls: Number(r.calls) || 0 }));
     };
-    const [inPeriod, recent, apifyRes] = await Promise.all([
+    const [inPeriod, allTime, apifyRes] = await Promise.all([
       detail(iso(period.fromMs), new Date(period.toMs).toISOString()),
-      detail(new Date(Date.UTC(y, m - 3, 1) - 86_400_000).toISOString(), new Date(nowMs).toISOString()),
+      detail(null, new Date(nowMs).toISOString()),
       service.from("apify_account_usage").select("captured_at, monthly_usage_usd, max_monthly_usage_usd, cycle_start, cycle_end").order("captured_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     let apify: ApifyAccountCheck | null = null;
     const a = apifyRes.data as { captured_at: string; monthly_usage_usd: number | string | null; max_monthly_usage_usd: number | string | null; cycle_start: string | null; cycle_end: string | null } | null;
     if (!apifyRes.error && a?.cycle_start && a.monthly_usage_usd != null) {
       const ours = await detail(a.cycle_start, a.captured_at);
-      const recorded = Math.round(ours.filter((r) => String(r.api_type ?? "").startsWith("apify")).reduce((s, r) => s + r.usd, 0) * 100) / 100;
+      // Only rows Apify billed (not Google / OpenAI calls routed through the runner) on THIS account.
+      const recorded = Math.round(ours.filter((r) => costProviderOf(r.api_type) === "Apify" && fundingOf(r.api_type, r.seg) === "findable").reduce((s, r) => s + r.usd, 0) * 100) / 100;
       const account = Math.round(Number(a.monthly_usage_usd) * 100) / 100;
       apify = { cycleStart: a.cycle_start, cycleEnd: a.cycle_end ?? "", accountUsd: account, capUsd: a.max_monthly_usage_usd == null ? null : Number(a.max_monthly_usage_usd), recordedUsd: recorded, notInOurLogUsd: Math.max(0, Math.round((account - recorded) * 100) / 100), capturedAt: a.captured_at };
     }
-    costAccounting = foldCostAccounting(inPeriod, recent.filter((r) => r.month >= firstMonth), exclusions.users, apify);
+    costAccounting = foldCostAccounting(inPeriod, allTime, recentMonths, exclusions.users, apify);
   } catch (err) { console.error("[admin-overview] cost accounting", err instanceof Error ? err.message : err); costAccounting = null; }
 
   /* Sales Team Board (2026-10-01): open lead-assignment tasks — delegated follow-ups leave Paul's list.

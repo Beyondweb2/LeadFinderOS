@@ -584,6 +584,9 @@ runs and queue rows go by CASCADE, every other reference by SET NULL, so the lea
 positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COLD.
 
 **Money and customers**
+- **API cost totals are Findable-PAID only** (`isFindableCost`, `src/lib/apiCostAccounting.ts`): usage before
+  each provider's own switch date (`PROVIDER_MIGRATIONS`) was paid by Move37 — history only, never a Findable
+  total. A new paid provider needs its date there or it reads Unallocated (`docs/api-cost-ownership.md`).
 - **`paid` means `amount_paid > 0`, everywhere** (`isPaidLead`); `refunded` is the one status that
   removes a lead from revenue and keeps the amount. The dashboard's paying-customer count adds a
   floor (`PAYING_FLOOR_GBP`, derived) and churn (positive match on `canceled`/`incomplete_expired`).
