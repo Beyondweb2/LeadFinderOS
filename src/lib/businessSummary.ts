@@ -31,7 +31,7 @@ export interface OverviewLike {
   niches: { label: string; messaged: number; replied: number; interested: number; paid: number; verdict: string }[];
   bottlenecks: { title: string; status: string; evidence: string }[];
   attention: { group: string; kind: string }[];
-  clients: { business: string; refunded: boolean; health?: { weekly: { trendLabel: string | null; thisWeek: { named: { chatgpt: number; gemini: number }; answered: { chatgpt: number; gemini: number } } | null }; blockers: string[] } }[];
+  clients: { business: string; refunded: boolean; health?: { weekly: { trendLabel: string | null; coverageLabel?: string | null; thisWeek: { named: { chatgpt: number; gemini: number }; answered: { chatgpt: number; gemini: number } } | null }; blockers: string[] } }[];
   features: { label: string; uses: number; previous: number | null; flags: string[] }[] | null;
   site: { sessions?: number; free_check_submitted?: number; checkout_sessions?: number; paid?: number; tracking_since?: string | null } | null;
   triage: { byBucket: Record<string, number>; suppressed: number } | null;
@@ -82,7 +82,7 @@ export function buildSummaryFacts(now: OverviewLike, before: OverviewLike | null
     replies_sorted: now.triage ? { needed_nobody: now.triage.byBucket.no_action ?? 0, for_a_salesperson: now.triage.byBucket.rep_action ?? 0, for_paul: (now.triage.byBucket.admin_action ?? 0) + (now.triage.byBucket.urgent_admin ?? 0), opt_outs_suppressed: now.triage.suppressed } : null,
     clients: now.clients.filter((c) => !c.refunded).map((c) => ({
       client: c.business,
-      weekly_ai_check: c.health?.weekly.thisWeek ? { chatgpt_named: c.health.weekly.thisWeek.named.chatgpt, chatgpt_asked: c.health.weekly.thisWeek.answered.chatgpt, gemini_named: c.health.weekly.thisWeek.named.gemini, gemini_asked: c.health.weekly.thisWeek.answered.gemini, trend: c.health.weekly.trendLabel } : 'not started yet — waiting for its improvements to go live (this is not a result)',
+      weekly_ai_check: c.health?.weekly.thisWeek ? { chatgpt_named: c.health.weekly.thisWeek.named.chatgpt, chatgpt_asked: c.health.weekly.thisWeek.answered.chatgpt, gemini_named: c.health.weekly.thisWeek.named.gemini, gemini_asked: c.health.weekly.thisWeek.answered.gemini, trend: c.health.weekly.trendLabel, coverage: c.health.weekly.coverageLabel ?? 'complete' } : 'not started yet — waiting for its improvements to go live (this is not a result)',
       blockers: c.health?.blockers ?? [],
     })),
     features: now.features ? {

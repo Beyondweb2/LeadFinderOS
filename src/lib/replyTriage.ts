@@ -140,12 +140,15 @@ export function triageByRules(text: string | null | undefined, ctx: TriageContex
       ? rule('media', ctx.isClient ? 'admin_action' : 'rep_action', 'media_no_text', 'Sent a photo, file or voice note with no words — someone needs to look or listen')
       : rule('irrelevant', 'no_action', 'empty', 'No words to act on');
   }
-  // 1. Opt-out — phrases only. A paying client's "stop" is Paul's to read, never auto-suppressed:
-  //    stopping outreach must not silently stop their service messages (results, onboarding).
+  // 1. Opt-out — phrases only. ⛔ A PAYING CLIENT'S "STOP" SUPPRESSES TOO (Paul, 2026-09-30: "being a
+  //    paying client must not override an explicit marketing opt-out"). It blocks marketing only —
+  //    service messages still go (src/lib/marketingConsent.ts: the payment confirmation is sent by the
+  //    webhook without a suppression check, the questionnaire chase is a SERVICE template, the results
+  //    go by email). It is ALSO urgent for Paul: a client saying stop may be cancelling the service.
   const opt = hit(OPT_OUT, t);
   if (opt) {
     return ctx.isClient
-      ? rule('opt_out', 'urgent_admin', 'opt_out_client', 'A paying client asked to stop — read it yourself; not suppressed automatically')
+      ? rule('opt_out', 'urgent_admin', 'opt_out_client', 'A paying client asked to stop — marketing messages are now suppressed; read it yourself in case they mean the service too', true)
       : rule('opt_out', 'no_action', 'opt_out', 'Asked to stop — future automated outreach is suppressed', true);
   }
   // 2. Things only the admin should handle.

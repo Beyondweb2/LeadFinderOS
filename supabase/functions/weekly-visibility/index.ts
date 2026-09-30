@@ -31,7 +31,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "weekly-visibility-2026-09-30b";
+const BUILD_ID = "weekly-visibility-2026-09-30c";
 const FN = "weekly-visibility";
 const RUN_LEASE_SECONDS = 600;
 /** Refuse to start new checks when the Apify account is this full (directory-presence's rule). */

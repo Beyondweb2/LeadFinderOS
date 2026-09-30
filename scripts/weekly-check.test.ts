@@ -4,11 +4,11 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from 'node:fs';
 import {
-  chooseWeeklySet, weeklyStart, summariseWeek, compareWeeks, weeklyAffordable, weekOf,
+  chooseWeeklySet, weeklyStart, summariseWeek, compareWeeks, weeklyAffordable, weekOf, weekCoverage, coverageLabel,
   WEEKLY_CHECK_QUESTIONS, WEEKLY_CLIENT_CAP_USD, WEEKLY_TOTAL_CAP_USD, WEEKLY_MOVE_MIN, type WeekSummary,
 } from '../src/lib/weeklyCheck.ts';
 import { auditKind, isInternalMeasurement, isClientBaseline, seoScanAllowed, freeCheckSendGate, WEEKLY_CHECK_AUDIT_PURPOSE } from '../src/lib/auditKind.ts';
-import { clientHealthOf } from '../src/lib/clientHealth.ts';
+import { clientHealthOf, WEEKLY_STOPPED_REFUNDED } from '../src/lib/clientHealth.ts';
 
 let fails = 0;
 const ok = (c: boolean, l: string) => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -88,6 +88,48 @@ console.log('\n── scoring a week, and the trend ──');
   const cmp = compareWeeks(full, shortWeek);
   ok(cmp.delta.chatgpt === 0 && cmp.trend === 'flat', 'more questions asked this week is not "improving": deltas count only questions answered both weeks');
   ok(shortWeek.answered.chatgpt === 2 && full.answered.chatgpt === 4, 'answered counts show how many were actually asked');
+  // Partial weeks are labelled with the real counts (RG's first week: 5 of 10).
+  const ten = Array.from({ length: 10 }, (_, i) => `t${i}`);
+  const rg = summariseWeek('2026-09-28', ten, ten.slice(0, 5).map((x, i) => row(x, i === 4, i === 4)) as never, { name: 'Biz', location: 'Town' });
+  const cov = weekCoverage(rg);
+  ok(cov.partial && cov.asked === 10 && cov.answered.chatgpt === 5 && cov.answered.gemini === 5, 'a 5-of-10 week is PARTIAL, with the real answered counts');
+  ok(coverageLabel(cov) === 'Partial — 5 of 10 questions answered', 'labelled "Partial — 5 of 10 questions answered" — never presented as ten');
+  ok(rg.named.chatgpt === 1 && rg.perQuestion.slice(5).every((p) => p.named.chatgpt === null && p.named.gemini === null), 'unanswered questions stay unknown (null), never counted as absent');
+  const allTen = summariseWeek('2026-10-05', ten, ten.map((x) => row(x, false, false)) as never, { name: 'Biz', location: 'Town' });
+  ok(coverageLabel(weekCoverage(allTen)) === null, 'a complete week carries no partial label');
+  const failed = summariseWeek('2026-10-05', ten, [] as never, { name: 'Biz', location: 'Town' });
+  ok(weekCoverage(failed).none && /^No answers came back \(0 of 10/.test(coverageLabel(weekCoverage(failed)) ?? ''), 'a week with no answers says so — it is not "named 0 of 10"');
+  ok(compareWeeks(failed, rg).trend === 'not_comparable' && compareWeeks(failed, rg).delta.chatgpt === null, 'a failed week against a partial one is "not comparable", never "flat"');
+  const next = summariseWeek('2026-10-05', ten, ten.map((x, i) => row(x, i === 4 || i === 7, i === 4)) as never, { name: 'Biz', location: 'Town' });
+  const vs = compareWeeks(next, rg);
+  ok(vs.delta.chatgpt === 0 && vs.trend === 'flat', 'full week vs RG partial: only the 5 shared questions compare (t7 newly named is not counted as a gain)');
+  ok(!vs.nowNamed.includes('t7'), '…and t7 is not listed as "now named": it was never answered the week before');
+  const panel = read('src/components/admin/clientHealth.tsx');
+  ok(!/answered\[e\.key\] \|\| w\.thisWeek!\.questions/.test(panel) && /'no answers'/.test(panel), 'the panel never falls back to the set size when an engine answered nothing');
+}
+
+console.log('\n── a refunded client (RG, 2026-09-30) ──');
+{
+  const fn = read('supabase/functions/weekly-visibility/index.ts');
+  ok(/select\("id, business_name,[^"]*\bstatus\b[^"]*"\)/.test(fn) && /filter\(\(l\) => isPaidLead\(l\) && !l\.is_archived && !l\.service_terminated_at/.test(fn),
+    'weekly-visibility reads the status and keeps only isPaidLead clients — a refunded client is never scheduled');
+  const baselineSrc = read('supabase/functions/_shared/audit-baseline.ts');
+  ok(/\.neq\("status", "refunded"\)/.test(baselineSrc), 'the official re-measure never fires for a refunded client either');
+  const ten = Array.from({ length: 10 }, (_, i) => `t${i}`);
+  const row = (question: string) => ({ id: question, run_id: 'r', question, status: 'done', result: { chatgpt: { named: false }, gemini: { named: false } } });
+  const summary = summariseWeek('2026-09-28', ten, ten.slice(0, 5).map(row) as never, { name: 'RG', location: 'Huntingdon' });
+  const extras = {
+    sets: [{ lead_id: 'RG', questions: ten, frozen_at: '2026-09-30T10:06:18Z', start_reason: 'First improvements live: directories, Google profile' }],
+    runs: [{ lead_id: 'RG', week_start: '2026-09-28', status: 'complete', summary, cost_usd: 0.0675, estimate_usd: 0.14, reason: 'only 5 of 10 questions were queued' }],
+    opportunities: [], directoryIssues: [],
+  };
+  const input = { leadId: 'RG', route: null, websiteBuild: null, checklist: { gbp: true, directories: true }, baselineStarted: true, remeasureDue: '2026-10-06', remeasured: false, payment: 'Refunded', refunded: true, todayDay: '2026-10-10' } as const;
+  const h = clientHealthOf(input, extras);
+  ok(h.weekly.state === 'stopped' && h.weekly.reason === WEEKLY_STOPPED_REFUNDED, 'a refunded client\'s weekly check reads "Stopped — refunded"');
+  ok(h.weekly.thisWeek === summary && h.weekly.coverageLabel === 'Partial — 5 of 10 questions answered', 'its past result is kept as history, still labelled Partial');
+  ok(!h.blockers.some((b) => /re-measure overdue|baseline not started/.test(b)), 'no delivery blocker is raised for a refunded client (the re-measure is not "overdue")');
+  const other = clientHealthOf({ ...input, leadId: 'X', refunded: false, payment: 'Paid' }, { ...extras, sets: extras.sets.map((s) => ({ ...s, lead_id: 'X' })), runs: extras.runs.map((r) => ({ ...r, lead_id: 'X' })) });
+  ok(other.weekly.state === 'has_results', 'an active client with the same history is unaffected');
 }
 
 console.log('\n── cost caps ──');

@@ -10,7 +10,7 @@ import type { UsageRow } from "../../../src/lib/adminIntelligence.ts";
 import { finaliseTotals, pagePath, periodWindows, resolvePerformanceState, sumTotals, totalsFromAggregate } from "../../../src/lib/searchPerformance.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
-import { UNRECORDED_SPEND, USD_TO_GBP_ESTIMATE } from "../../../src/lib/apiCostLabels.ts";
+import { UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
 
 
 // THE ADMIN CONTROL CENTRE'S DATA LOADER (moved verbatim from fn admin-overview, 2026-09-30, so the
@@ -223,7 +223,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     ...overview,
     exclusionNote: exclusionNote(exclusions, new Map(people.map((x) => [x.userId, x.name]))),
     exclusions: exclusions.rows.map((r) => ({ kind: r.kind, reason: r.reason })),
-    costNotes: { unrecorded: UNRECORDED_SPEND, usdToGbp: USD_TO_GBP_ESTIMATE },
+    costNotes: { unrecorded: UNRECORDED_SPEND },
     commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
     jobs, site, search, searchConfigured, latestSummary,
     generatedAt: new Date(nowMs).toISOString(),

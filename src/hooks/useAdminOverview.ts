@@ -9,7 +9,7 @@ export type AdminOverviewResponse = AdminOverview & {
   build: string;
   exclusionNote: string;
   exclusions: { kind: string; reason: string | null }[];
-  costNotes: { unrecorded: string[]; usdToGbp: number };
+  costNotes: { unrecorded: string[] };
   commissionError: string | null;
   /** The Findable funnel (SQL admin_site_funnel); null = unreadable. */
   site: SiteFunnel | null;

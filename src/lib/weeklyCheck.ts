@@ -116,7 +116,29 @@ export function summariseWeek(week: string, questions: readonly string[], rows: 
   return { week, questions: questions.length, named, answered, perQuestion, competitors: [...comp].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5) };
 }
 
-export type WeeklyTrend = 'first_week' | 'improving' | 'slipping' | 'flat' | 'mixed';
+/** How much of the frozen set a week actually answered, per engine. ⛔ A week is PARTIAL when any
+ *  engine answered fewer than the set holds — RG's first week answered 5 of 10. The page names the
+ *  real counts and never shows the set size as if it had been asked. */
+export interface WeekCoverage { asked: number; answered: Record<WeeklyEngine, number>; partial: boolean; none: boolean }
+export function weekCoverage(w: WeekSummary): WeekCoverage {
+  const answered = { chatgpt: w.answered.chatgpt ?? 0, gemini: w.answered.gemini ?? 0 };
+  return {
+    asked: w.questions, answered,
+    partial: WEEKLY_ENGINES.some((e) => answered[e] < w.questions),
+    none: WEEKLY_ENGINES.every((e) => answered[e] === 0),
+  };
+}
+/** "Partial — 5 of 10 questions answered" / "No answers came back" / null for a complete week. */
+export function coverageLabel(c: WeekCoverage): string | null {
+  if (c.none) return `No answers came back (0 of ${c.asked} questions)`;
+  if (!c.partial) return null;
+  const a = c.answered;
+  return a.chatgpt === a.gemini
+    ? `Partial — ${a.chatgpt} of ${c.asked} questions answered`
+    : `Partial — ChatGPT ${a.chatgpt}, Gemini ${a.gemini} of ${c.asked} questions answered`;
+}
+
+export type WeeklyTrend = 'first_week' | 'improving' | 'slipping' | 'flat' | 'mixed' | 'not_comparable';
 export interface WeekComparison {
   trend: WeeklyTrend;
   delta: Record<WeeklyEngine, number | null>;
@@ -133,28 +155,34 @@ export function compareWeeks(thisWeek: WeekSummary, lastWeek: WeekSummary | null
   if (!lastWeek) return { trend: 'first_week', delta: { chatgpt: null, gemini: null }, nowNamed: [], noLongerNamed: [], stillAbsent };
   const before = new Map(lastWeek.perQuestion.map((q) => [q.question.toLowerCase(), q.named]));
   const nowNamed: string[] = []; const noLongerNamed: string[] = [];
+  const answeredAny = (n: Record<WeeklyEngine, boolean | null>) => WEEKLY_ENGINES.some((e) => n[e] !== null);
   for (const q of thisWeek.perQuestion) {
     const b = before.get(q.question.toLowerCase());
-    if (!b) continue;
+    // ⛔ A question unanswered in EITHER week cannot have moved — "now named" needs a real "absent" before it.
+    if (!b || !answeredAny(b) || !answeredAny(q.named)) continue;
     if (anyNamed(q.named) && !anyNamed(b)) nowNamed.push(q.question);
     if (!anyNamed(q.named) && anyNamed(b)) noLongerNamed.push(q.question);
   }
   /* ⛔ LIKE FOR LIKE: each engine's change is counted over the questions it answered in BOTH weeks, so a
      week where fewer were asked (RG's first run queued 5 of 10) or an engine failed on a question can
      never read as a movement. */
-  const delta = { chatgpt: 0, gemini: 0 };
+  /* ⛔ AND NO SHARED QUESTION IS NO COMPARISON: an engine with nothing answered in both weeks gets a
+     null delta, never 0 — a 0 would read "flat" off no evidence at all. */
+  const delta: Record<WeeklyEngine, number | null> = { chatgpt: null, gemini: null };
   for (const e of WEEKLY_ENGINES) {
-    let now = 0, then = 0;
+    let now = 0, then = 0, shared = 0;
     for (const q of thisWeek.perQuestion) {
       const b = before.get(q.question.toLowerCase());
       if (!b || q.named[e] === null || b[e] === null) continue;
+      shared += 1;
       if (q.named[e]) now += 1;
       if (b[e]) then += 1;
     }
-    delta[e] = now - then;
+    delta[e] = shared ? now - then : null;
   }
-  const up = WEEKLY_ENGINES.some((e) => delta[e] >= WEEKLY_MOVE_MIN);
-  const down = WEEKLY_ENGINES.some((e) => delta[e] <= -WEEKLY_MOVE_MIN);
+  if (WEEKLY_ENGINES.every((e) => delta[e] === null)) return { trend: 'not_comparable', delta, nowNamed, noLongerNamed, stillAbsent };
+  const up = WEEKLY_ENGINES.some((e) => (delta[e] ?? 0) >= WEEKLY_MOVE_MIN);
+  const down = WEEKLY_ENGINES.some((e) => (delta[e] ?? 0) <= -WEEKLY_MOVE_MIN);
   const trend: WeeklyTrend = up && down ? 'mixed' : up ? 'improving' : down ? 'slipping' : 'flat';
   return { trend, delta, nowNamed, noLongerNamed, stillAbsent };
 }
@@ -165,6 +193,7 @@ export const WEEKLY_TREND_LABEL: Record<WeeklyTrend, string> = {
   slipping: '↓ slipping',
   flat: 'flat (within week-to-week noise)',
   mixed: 'mixed — one engine up, one down',
+  not_comparable: 'not comparable — no question was answered in both weeks',
 };
 
 /** Can this week's check be afforded? Estimates only; ⛔ an unknown spend is "no". */

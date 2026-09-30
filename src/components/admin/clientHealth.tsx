@@ -18,14 +18,19 @@ function Weekly({ c }: { c: ClientRow }) {
   const w = c.health?.weekly;
   if (!w) return <span className="text-xs text-muted-foreground">—</span>;
   if (!w.thisWeek) return <span className="text-xs text-muted-foreground">{w.reason}</span>;
+  /* ⛔ named / ANSWERED — never named / the set size. An engine that answered nothing reads "no
+     answers", not "0/10": questions that never ran are not questions it was absent on. */
+  const cell = (s: NonNullable<typeof w.thisWeek>, k: WeeklyEngine) => (s.answered[k] ? `${s.named[k]}/${s.answered[k]}` : 'no answers');
   return (
     <span className="block text-xs">
+      {w.state === 'stopped' && <span className="block font-medium text-muted-foreground">Stopped (refunded)</span>}
       {ENG.map((e) => (
         <span key={e.key} className="block whitespace-nowrap tabular-nums">
-          {e.label} <span className="font-semibold">{w.thisWeek!.named[e.key]}/{w.thisWeek!.answered[e.key] || w.thisWeek!.questions}</span>
-          {w.lastWeek && <span className="text-muted-foreground"> · last week {w.lastWeek.named[e.key]}/{w.lastWeek.answered[e.key] || w.lastWeek.questions}</span>}
+          {e.label} <span className="font-semibold">{cell(w.thisWeek!, e.key)}</span>
+          {w.lastWeek && <span className="text-muted-foreground"> · week of {w.lastWeek.week} {cell(w.lastWeek, e.key)}</span>}
         </span>
       ))}
+      {w.coverageLabel && <span className={cn('block font-medium', TONE.amber.text)}>{w.coverageLabel}</span>}
       {w.trendLabel && <span className={cn('block font-medium', w.comparison?.trend === 'improving' ? TONE.green.text : w.comparison?.trend === 'slipping' ? TONE.red.text : 'text-muted-foreground')}>{w.trendLabel}</span>}
     </span>
   );
@@ -37,6 +42,8 @@ function Detail({ c }: { c: ClientRow }) {
   const cmp = w.comparison;
   return (
     <div className="space-y-2 text-xs">
+      {w.state === 'stopped' && <p className="text-muted-foreground">{w.reason}</p>}
+      {w.coverageLabel && <p className={TONE.amber.text}>{w.coverageLabel}. A dash below is a question that was not answered that week — not a question they were absent on. Only questions answered in both weeks are ever compared.</p>}
       {cmp && (cmp.nowNamed.length > 0 || cmp.noLongerNamed.length > 0) && (
         <div>
           {cmp.nowNamed.map((q) => <p key={`+${q}`} className={TONE.green.text}>+ “{q}” now named</p>)}
@@ -48,7 +55,7 @@ function Detail({ c }: { c: ClientRow }) {
         <tbody>{w.thisWeek.perQuestion.map((q) => (
           <tr key={q.question} className="border-t border-border/40">
             <td className="py-1 pr-2">{q.question}</td>
-            {ENG.map((e) => <td key={e.key} className="px-2 py-1 text-center">{q.named[e.key] === null ? <span className="text-muted-foreground">—</span> : q.named[e.key] ? <span className={TONE.green.text}>named</span> : <span className="text-muted-foreground">absent</span>}</td>)}
+            {ENG.map((e) => <td key={e.key} className="px-2 py-1 text-center">{q.named[e.key] === null ? <span className="text-muted-foreground" title="Not answered this week">—</span> : q.named[e.key] ? <span className={TONE.green.text}>named</span> : <span className="text-muted-foreground">absent</span>}</td>)}
           </tr>
         ))}</tbody>
       </table>
@@ -86,7 +93,7 @@ export function ClientHealthPanel({ o, onOpen }: { o: O; onOpen: (leadId: string
                     <td className="px-2 py-1.5 text-xs">{h?.siteLive === null || h === undefined ? <span className="text-muted-foreground">n/a (own site)</span> : h.siteLive ? 'Live' : <span className={TONE.amber.text}>Not yet</span>}</td>
                     <td className="px-2 py-1.5 text-xs">{c.baselineStarted ? 'Started' : <span className={TONE.amber.text}>Not started</span>}</td>
                     <td className="px-2 py-1.5"><Weekly c={c} /></td>
-                    <td className="px-2 py-1.5 text-xs tabular-nums">{c.remeasured ? 'Done' : c.remeasureDue ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-xs tabular-nums">{c.remeasured ? 'Done' : c.refunded ? <span className="text-muted-foreground">Not running (refunded)</span> : c.remeasureDue ?? '—'}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums">{h ? `${h.openImprovements} open · ${h.implementedImprovements} done` : '—'}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums">{h ? h.directoryIssues : '—'}</td>
                     <td className="px-2 py-1.5 text-xs">{c.payment}</td>

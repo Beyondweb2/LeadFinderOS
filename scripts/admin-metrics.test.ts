@@ -143,7 +143,30 @@ const row = (o: ReturnType<typeof foldAdminOverview>, u: string) => o.team.find(
   ok(row(o, REP)?.revenue === 99 && row(o, REP)?.paid === 1 && row(o, REP)?.commissionInitial === 29.7, 'revenue and commission are attributed to the seller');
   ok(o.money.byRoute.build === 99, 'the Build route is read from the sign-up row');
   ok(o.money.cost.period.usd === 4, 'guard estimates are never summed as spend');
-  ok(o.money.contribution.value === Math.round((79 - 29.7 - 3) * 100) / 100, 'contribution = net revenue − commission − API spend (converted)');
+  const k = o.money.contribution as Record<string, unknown>;
+  ok(k.afterCommission === Math.round((79 - 29.7) * 100) / 100, 'revenue after commission = net revenue − commission, in pounds');
+  ok(k.apiUsd === 4, 'API spend stays in US dollars, as recorded');
+  ok(!('value' in k) && !('apiGbp' in k), 'no combined figure: dollars are never subtracted from pounds (no invented exchange rate)');
+  ok(o.money.commission.periodAdded === 29.7, 'commission is the ledger line at its stamped rate, unchanged');
+}
+
+/* ── 5b. A client refunded OUTSIDE the ledger (RG, 2026-09-30) ─────────────────────────────────── */
+{
+  const rg = lead({ business_name: 'RG', status: 'refunded', amount_paid: 19.99, sold_by_user_id: PAUL, payment_date: '2026-08-11', baseline_audit_id: 'F', remeasure_due_date: '2026-10-06' });
+  const ronnie = lead({ business_name: 'Ronnie', status: 'payment_received', amount_paid: 49.99, sold_by_user_id: PAUL, baseline_audit_id: 'R' });
+  const mcl = lead({ business_name: 'MCL', status: 'payment_received', amount_paid: 99, sold_by_user_id: PAUL, baseline_audit_id: 'M' });
+  const ledger = [{ id: 'm1', lead_id: mcl.id, kind: 'initial', status: 'succeeded', amount_gbp: 99, occurred_at: at(13), sold_by_user_id: PAUL }];
+  const o = foldAdminOverview(base({ leads: [rg, ronnie, mcl], ledger }));
+  ok(o.money.payingClients === 2, 'a refunded client is not an active paying client (the others still are)');
+  ok(o.money.period.net === 99 && o.money.period.refunds === 0, 'no refund row is invented for a refund the ledger never saw — revenue is the ledger alone');
+  ok(o.money.outsideLedger.count === 1 && o.money.outsideLedger.names[0] === 'Ronnie', 'the kept earlier payment stays in the outside-the-ledger note');
+  ok(o.money.outsideLedger.refunded.count === 1 && o.money.outsideLedger.refunded.names[0] === 'RG' && o.money.outsideLedger.refunded.amount === 19.99, 'the refunded one is named separately, never as money kept');
+  ok(o.attention.filter((x) => x.leadId === rg.id).length === 0, 'nothing in Needs your attention asks for work on the refunded client (no re-measure, no setup)');
+  const row = o.clients.find((c) => c.leadId === rg.id);
+  ok(!!row && row.refunded && row.payment === 'Refunded', 'the refunded client stays listed, as history, marked Refunded');
+  ok(o.clients.filter((c) => !c.refunded).length === 2, 'the active client count excludes the refunded client');
+  const twice = foldAdminOverview(base({ leads: [rg, ronnie, mcl], ledger }));
+  ok(JSON.stringify(twice.money) === JSON.stringify(o.money), 'folding twice gives the same money — reading never writes or duplicates a ledger entry');
 }
 
 /* ── 6. Needs your attention: deterministic, and the refund bug fixed ──────────────────────────── */

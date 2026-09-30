@@ -651,6 +651,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `CONTINUATION_TEMPLATES` or it is refused for its whole audience. The queue is template-blind on
   "already sent" — it structurally cannot send a second message to a lead; second messages go from
   the Inbox. `contact_check` fails CLOSED.
+- ⛔ **An explicit opt-out (`contact_suppressions.reason = 'opted_out'`) blocks every MARKETING send,
+  paying clients included** — the automated senders refuse any suppressed row; the Inbox refuses a
+  marketing template (`src/lib/marketingConsent.ts`; only `SERVICE_TEMPLATES` and free-text replies go).
+  Record a stop with `recordOptOut()` (upgrades a weaker reason in place), never "already suppressed → skip".
 - **A template parameter may not contain a newline, a tab or 4+ consecutive spaces (#132018) and may
   not exceed 1024 characters (#131009)** — either kills the WHOLE send. `forMeta()` collapses
   whitespace as a last resort; a multi-sentence variable is still ONE LINE, and a long one is

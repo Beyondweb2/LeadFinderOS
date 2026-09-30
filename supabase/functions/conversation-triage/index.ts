@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isInternalCall, refusalBody, requireAdmin } from "../_shared/access.ts";
-import { checkSuppressed, suppress } from "../_shared/suppression.ts";
+import { recordOptOut } from "../_shared/suppression.ts";
 import { callModel } from "../_shared/site-research.ts";
 import { logOpenAiUsage, openAiUsd } from "../_shared/openai-usage.ts";
 import { paidMode } from "../_shared/protection.ts";
@@ -30,7 +30,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "conversation-triage-2026-09-30b";
+const BUILD_ID = "conversation-triage-2026-09-30c";
 /** Longest a run may hold the lease (a crashed run frees it after this). */
 const RUN_LEASE_SECONDS = 300;
 /** Messages filed per run (the first runs work through the history, oldest first). */
@@ -135,24 +135,25 @@ async function run(service: Service): Promise<Record<string, unknown>> {
     // ⛔ The one approved side effect: a deterministic opt-out suppresses future automated outreach.
     if (d.suppress) {
       const phone = p.phone ?? lead?.phone ?? null;
-      const before = await checkSuppressed(service, { phone, leadId: p.lead_id });
-      if (before.suppressed && before.matchedOn !== "lookup_failed") actionTaken = "already_suppressed";
-      else {
-        const ok = await suppress(service, { phone, leadId: p.lead_id }, { reason: "opted_out", source: "whatsapp_optout_inbound" });
-        if (ok) {
-          actionTaken = "suppressed";
-          if (p.lead_id) {
-            const { error: hErr } = await service.from("lead_activity").insert({
-              lead_id: p.lead_id, actor_user_id: null, kind: "opted_out",
-              body: "Asked to stop on WhatsApp — future automated outreach is suppressed",
-              data: { message_id: p.id, source: "whatsapp_optout_inbound", rule: d.ruleId },
-            });
-            if (hErr) console.error("[conversation-triage] history write failed", hErr.message);
-          }
-        } else {
-          actionTaken = "suppression_failed";
-          d = { ...d, bucket: "urgent_admin", reason: "Asked to stop, but the suppression could not be saved — suppress this number by hand" };
+      /* recordOptOut, not "already suppressed → skip": a number suppressed for a weaker reason
+         (archived, a decline) is upgraded to opted_out, so the Inbox's template guard sees the stop. */
+      const outcome = await recordOptOut(service, { phone, leadId: p.lead_id }, "whatsapp_optout_inbound");
+      if (outcome === "already") actionTaken = "already_suppressed";
+      else if (outcome === "recorded") {
+        actionTaken = "suppressed";
+        if (p.lead_id) {
+          const { error: hErr } = await service.from("lead_activity").insert({
+            lead_id: p.lead_id, actor_user_id: null, kind: "opted_out",
+            body: isClient
+              ? "Asked to stop on WhatsApp (a paying client) — marketing messages are suppressed; service messages still go"
+              : "Asked to stop on WhatsApp — future automated outreach is suppressed",
+            data: { message_id: p.id, source: "whatsapp_optout_inbound", rule: d.ruleId, paying_client: isClient },
+          });
+          if (hErr) console.error("[conversation-triage] history write failed", hErr.message);
         }
+      } else {
+        actionTaken = "suppression_failed";
+        d = { ...d, bucket: "urgent_admin", reason: "Asked to stop, but the suppression could not be saved — suppress this number by hand" };
       }
     }
 
@@ -217,9 +218,9 @@ Deno.serve(async (req) => {
       const { data: row, error: rErr } = await service.from("conversation_triage").select("id, lead_id, phone, message_id").eq("id", id).maybeSingle();
       if (rErr || !row) return json({ ok: false, error: "not_found" }, 404);
       const r = row as { id: string; lead_id: string | null; phone: string | null; message_id: string };
-      const ok = await suppress(service, { phone: r.phone, leadId: r.lead_id }, { reason: "opted_out", source: "admin_confirmed_optout" });
-      if (!ok) return json({ ok: false, error: "suppression_failed", detail: "The suppression could not be saved — try again." }, 500);
-      if (r.lead_id) {
+      const outcome = await recordOptOut(service, { phone: r.phone, leadId: r.lead_id }, "admin_confirmed_optout");
+      if (outcome === "failed") return json({ ok: false, error: "suppression_failed", detail: "The suppression could not be saved — try again." }, 500);
+      if (r.lead_id && outcome === "recorded") {
         await service.from("lead_activity").insert({
           lead_id: r.lead_id, actor_user_id: actorId, kind: "opted_out",
           body: "Asked to stop on WhatsApp — confirmed by the admin; future automated outreach is suppressed",

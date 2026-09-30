@@ -26,7 +26,8 @@ import { resolveOnboardingFollowupVars } from "../_shared/onboarding-followup.ts
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
-import { checkWrongNumber } from "../_shared/suppression.ts";
+import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
+import { OPT_OUT_REFUSAL_REASON, optOutBlocksTemplate } from "../../../src/lib/marketingConsent.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
@@ -76,8 +77,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    (Before that, 2026-09-22a: the first build carrying initial_opener_v2 in WA_TEMPLATES.) */
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
-   gone; the capability reads any_approved_opener). */
-const BUILD_ID = "2026-09-30a";
+   gone; the capability reads any_approved_opener).
+   2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts). */
+const BUILD_ID = "2026-09-30b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -322,6 +324,13 @@ Deno.serve(async (req) => {
        to us) is not outreach and is not refused. The admin clears the mark on the lead. */
     if (templateName && await checkWrongNumber(service, "+" + to)) {
       return json({ ok: false, error: "wrong_number", reason: "This number is marked Wrong number — no templates or automated messages go to it. The admin can clear it on the lead." }, 200);
+    }
+    /* ⛔ AN EXPLICIT OPT-OUT: NO MARKETING TEMPLATE GOES TO IT (2026-09-30, Paul: "being a paying client
+       must not override an explicit marketing opt-out"). Every automated sender already refuses a
+       suppressed number; this is the manual door. Service templates (SERVICE_TEMPLATES) and a free-text
+       reply to their own message still go. Fails closed: a failed lookup refuses the template. */
+    if (templateName && optOutBlocksTemplate(templateName, await checkOptedOut(service, { phone: "+" + to, leadId: resolvedLeadId }))) {
+      return json({ ok: false, error: "opted_out", reason: OPT_OUT_REFUSAL_REASON }, 200);
     }
 
     // --- 24h customer-service window (from the operator's own inbound rows) ---

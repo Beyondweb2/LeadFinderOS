@@ -46,7 +46,7 @@ what it makes — "not a notification feed, not a pile of cards, not a list of e
 | Paid / revenue / refunds / disputes | `payment_ledger` only | succeeded initial/recurring; refund rows; chargeback rows (open = held, lost = gone) | `occurred_at` in period |
 | Commission | `_shared/earnings.ts` → `commission.ts` lines | the rate stamped when the sale landed; never recomputed | `occurredAt` in period; "due" is current |
 | API cost | `api_usage_log` via `admin_api_cost()` | charge rows only (`guard` estimates excluded), USD as recorded | `created_at` in period |
-| Contribution | the three above | net revenue − commission − API spend (USD at a fixed `USD_TO_GBP_ESTIMATE`). **Not profit** | period |
+| Money overview | the three above | net revenue − commission = **revenue after commission (GBP)**; API spend shown beside it in **USD**, never converted or subtracted (no dated rate on record). **Not profit** | period |
 | Follow-ups due | `outreach_leads.next_action(_date)` | set, not `none`, due ≤ today, lead not archived/client/won/not-interested; the legacy auto-written `send_draft` on a thread with inbound is skipped | current |
 | Cohort rates | the above | of the leads a person FIRST contacted in the period: how many have since replied / become interested / booked / paid, with the base shown. Below `RATE_MIN_BASE` (10) the page says "small sample" | first contact in period |
 | Funnel | the above | the leads ADDED in the period (all time = the book), how far each has got; a lead can skip a stage | created in period |
@@ -129,7 +129,18 @@ apostrophes, working-hours auto-replies, "the report you provide" falsely matchi
   every automated sender already refuses — and a History row (`lead_activity` kind `opted_out`, "Asked to
   stop"). Hand-typed Inbox replies are still possible (a person may answer "sorry, removed you").
 - **Phrases only.** The AI can never suppress: an AI opt-out is REVIEW.
-- **Never for a paying client** — their STOP is URGENT for Paul (suppressing would stop service messages).
+- **A paying client's STOP suppresses too** (integrity pass, 2026-09-30 — overturns the first rule,
+  which escalated without suppressing). It is ALSO urgent for Paul, in case they mean the service.
+  Suppression blocks marketing only: the payment confirmation (stripe-webhook) never checks it, the
+  questionnaire chase is a SERVICE template, and the four-week results go by email.
+- **`recordOptOut()`** (`_shared/suppression.ts`), not "already suppressed → skip": a number already
+  suppressed for a weaker reason (archived, a decline, Wrong number) has its reason UPGRADED to
+  `opted_out`, so it survives a revive (which deletes only `not_interested` rows) and the Inbox guard sees
+  it. The admin's Suppress button uses the same function.
+- **The Inbox's manual templates respect it** (`send-whatsapp-message`, build 2026-09-30b): a marketing
+  template to an opted-out number is refused (`opted_out`); `SERVICE_TEMPLATES`
+  (`src/lib/marketingConsent.ts`: `payment_recieved`, `questionnaire_followup`) and a free-text reply to
+  their own message still go. Before this, only Wrong number was refused there. Fails closed.
 - Wrong number stays its own flow; the lead's status is never changed by triage.
 - Found on the first pass: 3 opt-outs in history, 2 not yet suppressed ("Stop"; "scrub me off your list
   and stop bothering me") — the first-reply check only ever looked at a first reply.
@@ -348,3 +359,26 @@ totals. Cached 5 minutes in the browser; Refresh refetches.
 
 - **Release 1 (2026-09-30):** clock, exclusions, fold, fn `admin-overview`, SQL `metric_exclusions` +
   `admin_api_cost`, new page (Now / Team / Money / Clients / sign-up desk).
+
+## Integrity pass (2026-09-30, after RG's refund)
+
+- **RG refunded** (Paul set status `refunded` by hand, 11:26 UTC). Verified: `weekly-visibility` keeps
+  only `isPaidLead` clients (a refund removes him — the 11:15 run was his last), `fireDueRemeasures` has
+  `.neq("status","refunded")` (his 2026-10-06 re-measure will not fire), every attention item is gated on
+  `isPaidLead`, no subscription exists. His one weekly run was already complete (5 of 5 queued questions
+  done, $0.0675) — nothing queued, nothing to cancel. Frozen baseline `f64920ce` and all audits untouched.
+- **The refund is not in the ledger**: no `charge.refunded` reached stripe-webhook (it writes a ledger row
+  for every refund, matched or not), and RG's lead row has no Stripe ids — his £19.99 (2026-08-11)
+  predates the ledger. `refunded_at` / `refund_amount_gbp` are blank. Nothing was invented or written.
+- **Money overview no longer converts currencies**: the fixed `USD_TO_GBP_ESTIMATE` (0.75, no source, no
+  date) is deleted. It shows revenue − commission = revenue after commission (GBP) and API spend (USD)
+  beside it, never combined. The Revenue panel names refunded outside-the-ledger payments separately.
+- **Weekly check honesty**: `weekCoverage` / `coverageLabel` ("Partial — 5 of 10 questions answered",
+  "No answers came back"); the panel shows named/answered and never falls back to the set size; an
+  engine with no shared answered question has a null delta and the trend reads "not comparable";
+  "now named" needs the question answered in both weeks; a refunded client reads "Stopped — refunded".
+- **Correction**: RG's first weekly check named him on 1 of the 5 answered questions on BOTH engines
+  (the release-4 report said 0 of 5).
+- **Opt-outs**: see *Late opt-outs* above. One historic STOP (BdH Chartered Certified Accountants) sits on
+  a `not_interested` suppression and was filed "already suppressed" — upgrading it is a row rewrite, left
+  for Paul.
