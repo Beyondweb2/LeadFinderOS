@@ -82,7 +82,7 @@ export function buildSummaryFacts(now: OverviewLike, before: OverviewLike | null
     replies_sorted: now.triage ? { needed_nobody: now.triage.byBucket.no_action ?? 0, for_a_salesperson: now.triage.byBucket.rep_action ?? 0, for_paul: (now.triage.byBucket.admin_action ?? 0) + (now.triage.byBucket.urgent_admin ?? 0), opt_outs_suppressed: now.triage.suppressed } : null,
     clients: now.clients.filter((c) => !c.refunded).map((c) => ({
       client: c.business,
-      weekly_ai_check: c.health?.weekly.thisWeek ? { chatgpt_named: c.health.weekly.thisWeek.named.chatgpt, chatgpt_asked: c.health.weekly.thisWeek.answered.chatgpt, gemini_named: c.health.weekly.thisWeek.named.gemini, gemini_asked: c.health.weekly.thisWeek.answered.gemini, trend: c.health.weekly.trendLabel } : 'not started',
+      weekly_ai_check: c.health?.weekly.thisWeek ? { chatgpt_named: c.health.weekly.thisWeek.named.chatgpt, chatgpt_asked: c.health.weekly.thisWeek.answered.chatgpt, gemini_named: c.health.weekly.thisWeek.named.gemini, gemini_asked: c.health.weekly.thisWeek.answered.gemini, trend: c.health.weekly.trendLabel } : 'not started yet — waiting for its improvements to go live (this is not a result)',
       blockers: c.health?.blockers ?? [],
     })),
     features: now.features ? {
