@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import {
   assemblePresence, buildIdentity, claimedCredentials, compareDetails, extractSiteSignals, foldClientCitations,
   matchListing, mergePresence, normPhone, profileKey, normPostcode, operatorSetStatus, presenceQueries, presenceSummary,
-  MATCH_CONFIDENCES, PRESENCE_STATUSES, PRIORITIES,
+  MATCH_CONFIDENCES, PRESENCE_STATUSES, PRIORITIES, PRESENCE_ENGINE_VERSION,
   type BusinessIdentity, type CitationRow, type ListingCandidate, type PresenceFinding, type StoredPresenceRow,
 } from "../src/lib/directoryPresence.ts";
 import { isProfileUrl, sourceByKey, sourceForUrl, neverRecommendReason, PRESENCE_SOURCES } from "../src/lib/presenceSources.ts";
@@ -209,6 +209,22 @@ console.log("\n── rechecks: one row per source, absence never downgrades, th
   const nr = operatorSetStatus(row, "not_relevant", t1)!;
   ok(mergePresence("L", [nr], [listing("existing", "confirmed")], t2, "r")[0].status === "not_relevant", "operator's not-relevant stands whatever a check finds");
   ok(operatorSetStatus(row, "existing" as never, t1) === null, "the operator cannot set a check-only status");
+
+  /* A row an OLDER rule wrote (no engine_version = 1) is re-judged, not kept forever. */
+  const oldFalse = { ...row, id: "old", source_key: "bedrijvengids.cybo.com", status: "needs_attention", discovered_via: ["search"], evidence: {} } as StoredPresenceRow;
+  const noSearch = mergePresence("L", [oldFalse], [], t2, "r", { searched: false });
+  ok(noSearch[0].status === "needs_attention", "a search-found row from an older rule is NOT withdrawn by a check that did not search");
+  const withSearch = mergePresence("L", [oldFalse], [], t2, "r", { searched: true });
+  ok(withSearch[0].status === "not_relevant" && withSearch[0].previous_status === "needs_attention" && withSearch[0].status_source === "check" && /^Withdrawn/.test(withSearch[0].reason) && withSearch[0].id === "old",
+    "…but a check that re-ran the search and no longer finds it WITHDRAWS it (same row, reason stated, nothing deleted)");
+  const current = { ...oldFalse, evidence: { engine_version: PRESENCE_ENGINE_VERSION } } as StoredPresenceRow;
+  ok(mergePresence("L", [current], [], t2, "r", { searched: true })[0].status === "needs_attention", "a row the CURRENT rules wrote keeps absence-never-downgrades");
+  const opOld = { ...oldFalse, status: "added", status_source: "operator" } as StoredPresenceRow;
+  ok(mergePresence("L", [opOld], [], t2, "r", { searched: true })[0].status === "added", "an operator's row is never withdrawn by a rule change");
+}
+{
+  const { findings } = assemblePresence({ ...base, identity: brodley(), candidates: [{ url: "https://www.yell.com/biz/brodley-1/", via: "website", linkedFromSite: true }] });
+  ok(findings.every((x) => x.evidence.engine_version === PRESENCE_ENGINE_VERSION), "every finding is stamped with the rules version that wrote it");
 }
 
 console.log("\n── the hub's shape ──");

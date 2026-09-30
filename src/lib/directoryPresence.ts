@@ -43,6 +43,13 @@ export const PRESENCE_STATUSES: readonly PresenceStatus[] = ['existing', 'needs_
 export const OPERATOR_STATUSES: readonly PresenceStatus[] = ['added', 'verified', 'not_relevant'];
 
 export type Priority = 'high' | 'medium' | 'low';
+
+/** The matching rules' version, stamped on every row a check writes (evidence.engine_version). BUMP
+ *  IT whenever a change could withdraw an earlier finding — that is what lets a recheck re-judge rows
+ *  an older rule wrote instead of keeping them forever (mergePresence).
+ *  2 — 2026-09-30: name in title/URL on unknown hosts, Facebook group posts, profile keys, share-based
+ *      priorities, two-word rivals (all measured on the first live searches). */
+export const PRESENCE_ENGINE_VERSION = 2;
 export const PRIORITIES: readonly Priority[] = ['high', 'medium', 'low'];
 
 export type MatchSignal =
@@ -592,6 +599,8 @@ export interface PresenceEvidence {
   cost?: string;
   actor?: string;
   search_ran?: boolean;
+  /** Which matching rules wrote this (PRESENCE_ENGINE_VERSION). Absent = 1. */
+  engine_version?: number;
   possible_listing?: string;
 }
 
@@ -735,7 +744,7 @@ export function assemblePresence(inp: PresenceInputs): { findings: PresenceFindi
     if (m.confidence === 'unverified' && source.kind === 'other') continue; // an unknown host with a maybe: not worth a row
     const status: PresenceFinding['status'] = inconsistencies.length ? 'needs_attention' : 'existing';
     const cf = inp.citations.hosts.get(key);
-    const evidence: PresenceEvidence = { search_ran: inp.searched };
+    const evidence: PresenceEvidence = { search_ran: inp.searched, engine_version: PRESENCE_ENGINE_VERSION };
     if (cf) { evidence.client_questions = cf.questions.size; evidence.client_questions_total = inp.citations.questionsCounted; evidence.client_engines = [...cf.engines]; }
     const how = m.signals.includes('linked_from_site') ? 'the business’s own website links to it'
       : m.signals.includes('operator_recorded') ? 'recorded on the lead by hand'
@@ -819,7 +828,7 @@ export function assemblePresence(inp: PresenceInputs): { findings: PresenceFindi
     if (maybe) parts.push(`A possible listing was seen (${maybe.listing_url}) — check it before creating another.`);
     if (!inp.searched && !source.core) parts.push('Not yet searched for directly.');
 
-    const evidence: PresenceEvidence = { search_ran: inp.searched };
+    const evidence: PresenceEvidence = { search_ran: inp.searched, engine_version: PRESENCE_ENGINE_VERSION };
     if (q) { evidence.client_questions = q; evidence.client_questions_total = inp.citations.questionsCounted; evidence.client_engines = [...cf!.engines]; }
     if (others) evidence.competitor_profiles = others;
     if (named.length) evidence.competitors_named = named;
@@ -882,11 +891,20 @@ export interface StoredPresenceRow extends Omit<PresenceFinding, 'status'> {
  *    finds; `added` becomes `verified` only when a check finds the listing (confirmed or likely);
  *    a `verified` listing a check finds a problem with becomes `needs_attention`.
  * Sources the check did not look at are left exactly as they are.
+ * ⛔ …EXCEPT A ROW AN OLDER RULE WROTE. "Absence never downgrades" guards against search variance,
+ *    not against a rule being fixed: a row written under an earlier PRESENCE_ENGINE_VERSION, owned by
+ *    a check (never the operator), is re-judged when THIS check re-ran every kind of discovery that
+ *    found it (a search-found row is never withdrawn by a check that did not search). If the current
+ *    rules no longer find it, it is WITHDRAWN (not_relevant, reason stated) — never deleted.
  */
 export function mergePresence(
   leadId: string, stored: StoredPresenceRow[], findings: PresenceFinding[], now: string, runId: string | null,
+  opts: { searched: boolean } = { searched: false },
 ): StoredPresenceRow[] {
   const byKey = new Map(stored.map((r) => [r.source_key, r]));
+  const superseded = (r: StoredPresenceRow) => r.status_source === 'check'
+    && (Number(r.evidence?.engine_version ?? 1) || 1) < PRESENCE_ENGINE_VERSION
+    && (r.discovered_via ?? []).every((v) => v !== 'search' || opts.searched);
   const out: StoredPresenceRow[] = [];
   for (const f of findings) {
     const s = byKey.get(f.source_key);
@@ -908,13 +926,13 @@ export function mergePresence(
       if (seen) { status = f.status === 'needs_attention' ? 'needs_attention' : 'verified'; statusSource = 'check'; verifiedAt = status === 'verified' ? now : verifiedAt; }
     } else if (s.status === 'verified') {
       if (seen && f.status === 'needs_attention') { status = 'needs_attention'; statusSource = 'check'; }
-    } else if (['existing', 'needs_attention'].includes(s.status) && s.match_confidence && s.match_confidence !== 'unverified' && f.status === 'worth_adding') {
+    } else if (['existing', 'needs_attention'].includes(s.status) && s.match_confidence && s.match_confidence !== 'unverified' && f.status === 'worth_adding' && !superseded(s)) {
       /* ⛔ absence never downgrades: keep the listing, record that this check did not see it */
     } else {
       status = f.status; statusSource = 'check';
     }
     /* A kept listing keeps its listing fields when this check did not see it. */
-    const keepListing = !seen && s.match_confidence && s.match_confidence !== 'unverified' && ['existing', 'needs_attention', 'verified'].includes(status);
+    const keepListing = !seen && !superseded(s) && s.match_confidence && s.match_confidence !== 'unverified' && ['existing', 'needs_attention', 'verified'].includes(status);
     const base = keepListing
       ? { ...f, listing_url: s.listing_url, match_confidence: s.match_confidence, match_signals: s.match_signals, found_details: s.found_details, inconsistencies: s.inconsistencies, fields_compared: s.fields_compared, reason: s.reason, status: undefined }
       : { ...f, status: undefined };
@@ -937,6 +955,15 @@ export function mergePresence(
   const touched = new Set(findings.map((f) => f.source_key));
   for (const s of stored) {
     if (touched.has(s.source_key)) continue;
+    if (superseded(s) && ['existing', 'needs_attention', 'worth_adding'].includes(s.status)) {
+      out.push({
+        ...s, status: 'not_relevant', status_source: 'check', previous_status: s.status, status_changed_at: now,
+        priority: null, last_checked_at: now, check_count: (s.check_count ?? 0) + 1, last_run_id: runId,
+        evidence: { ...(s.evidence ?? {}), engine_version: PRESENCE_ENGINE_VERSION },
+        reason: `Withdrawn: the current rules no longer ${s.status === 'worth_adding' ? 'recommend this source' : 'count this as their listing'}. Was: ${s.reason}`,
+      });
+      continue;
+    }
     out.push({ ...s, last_checked_at: now, check_count: (s.check_count ?? 0) + 1, last_run_id: runId });
   }
   return out;
