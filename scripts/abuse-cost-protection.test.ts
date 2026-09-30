@@ -95,7 +95,7 @@ for (const fn of fnDirs) {
   ok(asks, `${fn}: spends on a provider for a signed-in caller → asks the guard`);
   if (asks) guarded.push(fn);
 }
-for (const fn of ["search-leads", "google-place-details", "enrich-business", "check-website", "extract-email", "extract-facebook", "scan-site-details", "create-ai-audit", "warm-lead-reply", "voice-note-script", "prospect-preview", "niche-sample", "send-whatsapp-message", "send-whatsapp-voice", "send-whatsapp-media", "bulk-jobs"]) {
+for (const fn of ["search-leads", "google-place-details", "enrich-business", "check-website", "extract-email", "extract-facebook", "scan-site-details", "create-ai-audit", "warm-lead-reply", "voice-note-script", "social-profiles", "prospect-preview", "niche-sample", "send-whatsapp-message", "send-whatsapp-voice", "send-whatsapp-media", "bulk-jobs"]) {
   ok(/guardAction\(service|guardAction\(supabase|guardAction\(serviceClient|guardAction\(guardService/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} calls guardAction`);
 }
 for (const fn of ["review-reply", "run-seo-scan", "apply-seo-paste", "directory-presence"]) {
@@ -107,9 +107,11 @@ console.log("\n── the guard's placement ──");
   const pd = read("supabase/functions/google-place-details/index.ts");
   ok(pd.indexOf("mayLookUpBusiness(") > 0 && pd.indexOf("mayLookUpBusiness(") < pd.indexOf("CACHE CHECK ──") && pd.indexOf("guardAction(") < pd.indexOf("CACHE CHECK ──"),
     "place details: the business check and the guard run BEFORE the cache (a cached phone is still a phone)");
-  for (const fn of ["enrich-business", "check-website"]) ok(/mayLookUpBusiness\(/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn}: a salesperson cannot look up a business that is someone else's`);
+  for (const fn of ["check-website"]) ok(/mayLookUpBusiness\(/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn}: a salesperson cannot look up a business that is someone else's`);
   const eb = read("supabase/functions/enrich-business/index.ts");
-  ok(/if \(force\) return json\(\{ success: false, error: "refresh_admin_only"/.test(eb), "enrich-business: the cache-busting re-run is admin-only");
+  /* 2026-09-30 (Paul): the paid Enrich is ADMIN-ONLY — stricter than the old per-business check and the
+     admin-only re-run it replaces. Sales has the free Find socials (social-profiles). */
+  ok(/if \(who\.actor\.role !== "admin"\) return json\(\{ success: false, error: "admin_only"/.test(eb) && eb.indexOf('error: "admin_only"') < eb.indexOf("runEnrichSource<"), "enrich-business: a salesperson is refused before anything is paid for");
   const ca = read("supabase/functions/create-ai-audit/index.ts");
   ok(ca.indexOf("already_running: true") < ca.indexOf('const action = !isSales ? "audit_manual"'), "create-ai-audit: the in-flight dedupe answers BEFORE the guard (a double-click is free and uncounted)");
   ok(ca.indexOf('const action = !isSales ? "audit_manual"') < ca.indexOf("if (preview) {") && ca.indexOf('const action = !isSales ? "audit_manual"') < ca.indexOf("resolveDerivedTown(service, leadId)"),

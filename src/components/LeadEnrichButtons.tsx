@@ -38,6 +38,9 @@ interface LeadEnrichButtonsProps {
   checkWebsiteAvailable?: boolean;
   /** Overflow mode only: website check in progress. */
   checkingWebsite?: boolean;
+  /** false = the caller draws the Facebook / Instagram links itself through the one Socials line
+   *  (SocialLinks — the Outreach row and card, 2026-09-30), so they are not drawn twice. */
+  socials?: boolean;
 }
 
 /**
@@ -57,6 +60,7 @@ export function LeadEnrichButtons({
   onCheckWebsite,
   checkWebsiteAvailable = false,
   checkingWebsite = false,
+  socials = true,
 }: LeadEnrichButtonsProps) {
   const { enrich: enrichAll, enriching, limitReached } = useEnrichBusiness(lead, onUpdate);
   const lt = lead.line_type; // HLR line-type: WhatsApp-capability proxy
@@ -81,8 +85,8 @@ export function LeadEnrichButtons({
        refused the same lead as "no email address" — the row and the push disagreeing about one
        column. The icon is the cheap half of that fix; the selection helper is the other. */
     (lead.email ?? '').trim() ? { key: 'email', Icon: Mail, href: `mailto:${(lead.email ?? '').trim()}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${(lead.email ?? '').trim()}`, external: false } : null,
-    lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: absoluteHref(lead.facebook_url), color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
-    lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: absoluteHref(lead.instagram_url), color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
+    socials && lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: absoluteHref(lead.facebook_url), color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
+    socials && lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: absoluteHref(lead.instagram_url), color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
     websiteItem,
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 

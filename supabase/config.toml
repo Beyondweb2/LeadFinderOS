@@ -180,6 +180,12 @@ verify_jwt = true
 [functions.voice-note-script]
 verify_jwt = true
 
+# social-profiles: Find socials / add / confirm / not them (2026-09-30). SPA-only caller with the operator's
+# JWT (admin or sales); the handler does resolveActor + leadAccess itself. Free: our records, then the
+# lead's own website. Never fetches LinkedIn, never spends money, never writes an email.
+[functions.social-profiles]
+verify_jwt = true
+
 # sales-performance: the Sales Dashboard's counts. SPA-only caller with the signed-in user's JWT; the
 # handler resolves the role itself (a salesperson always gets their own leads, whatever the body says).
 # Reads only, spends nothing, returns counts and the rep's own won business names — never an amount.

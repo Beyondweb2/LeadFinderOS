@@ -23,6 +23,7 @@ import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
+import { SocialLinks } from './SocialLinks';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
@@ -156,9 +157,11 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
 
           {/* Per-type contact enrichment (email / facebook / instagram) */}
           {/* Enrichment is admin work (perms.enrichLeads), as on the desktop row. */}
+          {/* The one Socials line (2026-09-30), both roles. */}
+          <SocialLinks lead={lead} size="xs" />
           {onUpdateLead && perms.enrichLeads && (
             <div className="pt-0.5">
-              <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
+              <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} socials={false} />
             </div>
           )}
 

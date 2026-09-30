@@ -18,6 +18,8 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const MIG = read("supabase/migrations/20260928210000_campaign_claim_contact.sql");
+/* lead_log_contact's NEWEST definition (2026-09-30 added Facebook, Instagram and connection_sent). */
+const LOG_MIG = read("supabase/migrations/20260930140000_social_profiles.sql");
 const quoted = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 
 console.log("── the one set ──");
@@ -30,11 +32,11 @@ console.log("── the one set ──");
   ok(new Set(values).size === values.length, "no method twice");
   ok(CONTACT_METHODS.filter((m) => m.recordedBy === "send").map((m) => m.value).join() === "whatsapp", "only WhatsApp is recorded by the send itself");
 
-  const allow = quoted(MIG.match(/_channel not in \(([^)]*)\)/)?.[1] ?? "");
+  const allow = quoted(LOG_MIG.match(/_channel not in \(([^)]*)\)/)?.[1] ?? "");
   ok(JSON.stringify([...allow].sort()) === JSON.stringify(LOGGED_CONTACT_METHODS.map((m) => m.value).sort()),
     `lead_log_contact's channel allowlist IS the logged set (${allow.join(", ")})`);
   ok(!allow.includes("whatsapp"), "…and WhatsApp stays refused by hand (the send already records it)");
-  const outs = quoted(MIG.match(/_outcome not in \(([^)]*)\)/)?.[1] ?? "");
+  const outs = quoted(LOG_MIG.match(/_outcome not in \(([^)]*)\)/)?.[1] ?? "");
   ok(JSON.stringify([...outs].sort()) === JSON.stringify(CALL_OUTCOMES.map((o) => o.value).sort()), "the outcome allowlist IS the outcome list");
   ok(JSON.stringify(CONTACT_CHANNEL_OPTIONS.map((c) => c.value)) === JSON.stringify(LOGGED_CONTACT_METHODS.map((m) => m.value)), "the loggable options are derived from the set");
 
@@ -84,8 +86,9 @@ console.log("\n── the workspace logs every method ──");
 {
   const crm = read("src/components/LeadCrmPanel.tsx");
   const ui = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
-  ok(/CONTACT_METHODS\.filter\(\(m\) => m\.primary\)/.test(ui) && /CONTACT_METHODS\.filter\(\(m\) => !m\.primary\)/.test(ui), "pills = the set's primary methods; the rest under More — every method reachable");
-  ok(CONTACT_METHODS.filter((m) => m.primary).length <= 5, "at most five pills (compact)");
+  ok(/CONTACT_METHODS\.filter\(\(m\) => m\.primary\)/.test(ui) && /CONTACT_METHODS\.filter\(\(m\) => !m\.primary && !m\.social\)/.test(ui) && /SOCIAL_CONTACT_METHODS\.map/.test(ui),
+    "pills = the set's primary methods + one Social pill (LinkedIn / Facebook / Instagram, 2026-09-30); the rest under More — every method reachable");
+  ok(CONTACT_METHODS.filter((m) => m.primary).length + 1 <= 5, "at most five pills, the Social pill included (compact)");
   ok(/outcomesFor\(channel\)/.test(ui), "the outcome buttons are the method's");
   ok(/recordedBy === 'send'/.test(ui) && /recorded automatically/.test(ui), "WhatsApp explains it is recorded by the send (no second record)");
   ok((ui.match(/'lead_log_contact'/g) ?? []).length === 1, "one write per tap: lead_log_contact, once");

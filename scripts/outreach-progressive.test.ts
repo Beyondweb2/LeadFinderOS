@@ -123,7 +123,8 @@ ok(/loadNotice\.tone === 'error' && \([\s\S]{0,200}retryLeadLoad\(\)[\s\S]{0,40}
 console.log("── Admin and Sales ──");
 ok(leadSourceFor("admin").table === "outreach_leads" && leadSourceFor("admin").listSelect.split(", ").length === OUTREACH_LIST_COLUMNS.length,
   `admin: outreach_leads, the ${OUTREACH_LIST_COLUMNS.length}-column list`);
-ok(OUTREACH_LIST_COLUMNS.length === 41, "admin list is still 41 columns");
+/* 41 → 45 on 2026-09-30: the canonical LinkedIn link + the three social statuses (the Socials line on every row). */
+ok(OUTREACH_LIST_COLUMNS.length === 45, "admin list is 45 columns");
 const sales = leadSourceFor("sales");
 ok(sales.table === "sales_leads", "sales: the safe sales_leads view (their own assigned prospects; the view decides)");
 const salesView = new Set<string>(SALES_VIEW_COLUMNS);
