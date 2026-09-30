@@ -107,7 +107,34 @@ or padded; fewer than three in every Google AI miss still refuses. Same order as
   cannot publish / assign / read oversight / write directly / touch another's task). Read-back after:
   0 posts, 0 fake users. Run: send the file as one query; results are in the error message.
 
+### Live on production (2026-10-01, main `eeb692cb`, leadfinderos-next)
+
+- **Deployed:** migration `20261001200000` (+ follow-up `200100`, completing a task marks its notice
+  read — found in this test), then 24 edge functions (every function reaching adminMetrics, teamBoard,
+  hookScore, leadState, admin-overview-load), each proven by a new-code marker in its deployed bundle;
+  send-whatsapp-message `x-swm-build: 2026-10-01a`. SPA chunks carry the new screens.
+- ⚠️ **A parallel session (api-cost-ownership) deployed admin-overview + business-summary 90 s after
+  this one, from a tree without this work.** Reconciled: its main `02398e48` merged in, both
+  redeployed from the combined tree, both markers verified; the session was told.
+- **Tested as the Test salesperson on the live site** (Paul's approved test account; "Paul SALES" test
+  lead; nothing sent to any business): an announcement, a task (due tomorrow, high) and an assignment
+  with instructions were published as Paul (all notified); the board showed them; Start → In progress,
+  Mark done → Completed ("Paul can see it is done"); Mark read cleared the bell item; the assignment's
+  notice named Paul and carried the instructions; Open conversation opened the lead in the Inbox with
+  "Owner: Test"; every status on Inbox and Outreach was ONE pill (no stage pill outside it); the board
+  at 390 / 820 / 1440 / 1920 px has no sideways scroll. From the rep's own session: publish, assign,
+  oversight, cancel → 403 `admin_only`; a direct insert → 403; only their own posts visible; the audit
+  trail invisible; anon refused. Reassigned back to Paul: owner Paul, status and Next Action unchanged,
+  0 messages, History 7 → 9, the rep's task "Cancelled · Lead moved to someone else", no task for Paul.
+  Signed out (`logout?scope=local`). The three TEST items stay on record (labelled TEST).
+- **Not done:** the admin screens were not clicked (no admin session here); their functions are covered
+  by the rolled-back SQL test and by the published-as-Paul calls above. Nobody has visually reviewed it.
+
 ## 6. Limits / open
+
+- ⚠️ **The "Test" account is sending real openers** (to real roofing businesses, 2026-09-30 evening) and
+  holds a real conversation. It is excluded from metrics and from "Everyone" as a test account — if a
+  real person uses it, Paul should give them their own account.
 
 - The only active salespeople are the two test accounts, so **Everyone reaches nobody** until a real
   salesperson joins; pick a test account by name to try it.
