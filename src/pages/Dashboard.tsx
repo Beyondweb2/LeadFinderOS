@@ -8,7 +8,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useAdminOverview, type PeriodChoice } from '@/hooks/useAdminOverview';
-import { edgeErrorMessage } from '@/lib/edgeInvoke';
+import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { leadLaunchState } from '@/lib/salesLinks';
 import { PERIOD_KEYS, PERIOD_LABEL, londonDay, type PeriodKey } from '@/lib/reportingPeriod';
 import type { AttentionItem } from '@/lib/adminMetrics';
@@ -63,7 +63,7 @@ const Dashboard = () => {
   const openItem = (i: AttentionItem) => {
     if (i.open === 'client' && i.leadId) navigate(`/paid-clients/${i.leadId}`);
     else if (i.open === 'lead' && i.leadId) navigate('/outreach', { state: leadLaunchState(i.leadId) });
-    else if (i.open === 'inbox') navigate('/inbox');
+    else if (i.open === 'inbox') navigate(i.leadId ? `/inbox?lead=${i.leadId}` : '/inbox');
     else if (i.open === 'signups') document.getElementById('signup-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else navigate('/outreach');
   };
@@ -117,7 +117,8 @@ const Dashboard = () => {
       {o && (
         <>
           <Section title="Now">
-            <AttentionQueue items={o.attention} onOpen={openItem} />
+            <AttentionQueue items={o.attention} onOpen={openItem} triage={o.triage} period={o.period.label}
+              onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
             <SinceYesterday o={o} attention={o.attention.length} />
           </Section>
 

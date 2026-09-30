@@ -37,6 +37,7 @@ import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotal
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
 import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
+import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -83,6 +84,12 @@ export interface AdminActivity { lead_id: string; actor_user_id: string | null; 
 export interface AdminSuppression { lead_id: string | null; reason: string | null; source: string | null; created_at: string; wrong_number_at: string | null; wrong_number_by: string | null }
 export interface AdminLedgerRow { id: string; lead_id: string | null; kind: string; status: string; amount_gbp: number; occurred_at: string; sold_by_user_id: string | null }
 export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null }
+/** conversation_triage (fn conversation-triage): one row per inbound message. */
+export interface TriageRow {
+  id: string; message_id: string; lead_id: string | null; message_at: string;
+  category: string; bucket: string; reason: string; confidence: number | null; method: string;
+  action_taken: string | null; resolved_at: string | null;
+}
 /** api_usage_log, already summed per (user, function, type) for one period by SQL admin_api_cost(). */
 export interface CostRow { user_id: string | null; function_name: string | null; api_type: string | null; usd: number; calls: number }
 export interface Person { userId: string; name: string; role: string | null; excluded: boolean }
@@ -174,6 +181,20 @@ export interface AttentionItem {
   why: string; owner: string | null; sinceIso: string | null; state: string; action: string;
   /** Where the row opens: a lead, the paid-client hub, the Inbox, or the sign-ups list. */
   open: 'lead' | 'client' | 'inbox' | 'signups' | 'outreach';
+  /** A reply-triage item: its row id (for "Mark handled") and how sure the filing was. */
+  triageId?: string;
+  confidence?: number;
+  method?: string;
+}
+export interface TriageSummary {
+  /** Replies sorted in the period, by who needed to act. */
+  byBucket: Record<TriageBucket, number>;
+  byCategory: { category: string; label: string; count: number }[];
+  /** Opt-outs suppressed automatically in the period, and any that failed. */
+  suppressed: number; suppressionFailed: number;
+  aiFiled: number;
+  /** Salesperson replies waiting (not on Paul's list unless escalated). */
+  repWaiting: number;
 }
 export interface ClientRow {
   leadId: string; business: string; route: ServiceRoute | null; paidAt: string | null;
@@ -198,6 +219,8 @@ export interface AdminInput {
   commissionDueBySeller: Map<string, number>;
   payoutsBySeller: Map<string, number>;
   cost: { period: CostRow[]; today: CostRow[]; yesterday: CostRow[]; week: CostRow[]; month: CostRow[] };
+  /** Reply triage rows (release 2). Absent = triage not running yet: no reply items, never "all clear". */
+  triage?: TriageRow[] | null;
 }
 
 export interface AdminOverview {
@@ -211,6 +234,8 @@ export interface AdminOverview {
   money: Money;
   today: SinceBlock; yesterday: SinceBlock;
   attention: AttentionItem[];
+  /** null = triage has not run (the page says so rather than implying no replies need anyone). */
+  triage: TriageSummary | null;
   clients: ClientRow[];
   inventory: { leads: number; active: number; archived: number; addedByTestAccounts: number };
 }
@@ -613,7 +638,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     period: p, team, totals, excludedActivity, funnel, channels,
     calls: { rows: [...callRows.values()].sort((a, b) => b.total - a.total), total: callTotal },
     money, today: todayBlock, yesterday: yesterdayBlock,
-    attention: attentionItems(input, facts, ledger, nameOf, todayDay),
+    attention: attentionItems(input, facts, ledger, nameOf, todayDay, msgsBy, actBy),
+    triage: triageSummary(input, p),
     clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf),
     inventory: {
       leads: input.leads.length,
@@ -624,10 +650,19 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   };
 }
 
-/* ── Needs your attention: the deterministic items (the reply triage joins in Release 2) ─────────── */
+/* ── Needs your attention ───────────────────────────────────────────────────────────────────────── */
 
-function attentionItems(input: AdminInput, facts: LeadFacts[], ledger: AdminLedgerRow[], nameOf: (u: string | null) => string, todayDay: string): AttentionItem[] {
+/** Kinds that mean a person acted on the lead (a Next Action, a booking, a logged contact, a state move). */
+const ACTED_KINDS: ReadonlySet<string> = new Set(['follow_up_set', 'call_booked', 'call_outcome', 'contact_logged', 'state_changed', 'marked_interested', 'stage_changed']);
+/** Categories that stay Paul's even when the lead has since moved on (a client, a complaint, money). */
+const NEVER_SETTLED: ReadonlySet<string> = new Set(['client_message', 'payment_issue', 'escalation', 'complaint', 'opt_out']);
+
+function attentionItems(
+  input: AdminInput, facts: LeadFacts[], ledger: AdminLedgerRow[], nameOf: (u: string | null) => string, todayDay: string,
+  msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>,
+): AttentionItem[] {
   const out: AttentionItem[] = [];
+  out.push(...triageAttention(input, facts, nameOf, msgsBy, actBy));
   const nowMs = input.nowMs;
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
   const factsById = new Map(facts.map((f) => [f.lead.id, f]));
@@ -699,6 +734,78 @@ function attentionItems(input: AdminInput, facts: LeadFacts[], ledger: AdminLedg
 
   const order: Record<AttentionGroup, number> = { urgent: 0, today: 1, review: 2, blocked: 3 };
   return out.sort((a, b) => order[a.group] - order[b.group] || (ms(a.sinceIso) || 0) - (ms(b.sinceIso) || 0));
+}
+
+/* ── Reply triage on Paul's list (release 2) ─────────────────────────────────────────────────────────
+   One item per lead at most — its newest still-open triaged reply. What reaches Paul:
+   - urgent_admin → URGENT; admin_action → TODAY; review → REVIEW (with the confidence);
+   - rep_action → ONLY a live sale nobody is working: a high-intent reply (or a question) on a lead Paul
+     holds or nobody holds; or a high-intent reply a salesperson has left for REP_ESCALATE_HOURS.
+   Everything else (no_action, a salesperson's ordinary conversation) never appears — the Inbox has it.
+   Open = not answered by a person since, no one acted on the lead since, the lead has not settled, and
+   not marked handled (replyTriage.ts triageIsOpen). */
+function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string, msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>): AttentionItem[] {
+  if (!input.triage?.length) return [];
+  const ex = input.exclusions;
+  const factsById = new Map(facts.map((f) => [f.lead.id, f]));
+  const newest = new Map<string, TriageRow>();
+  for (const r of input.triage) {
+    if (!r.lead_id || r.bucket === 'no_action') continue;
+    const prev = newest.get(r.lead_id);
+    if (!prev || ms(r.message_at) > ms(prev.message_at)) newest.set(r.lead_id, r);
+  }
+  const out: AttentionItem[] = [];
+  for (const [leadId, r] of newest) {
+    const f = factsById.get(leadId);
+    if (!f) continue; // an excluded (test) lead, or no longer in the book
+    const at = ms(r.message_at);
+    const msgs = msgsBy.get(leadId) ?? [];
+    const answeredAfter = msgs.some((m) => m.direction === 'outbound' && isRealSend(m.status) && !isTestMessage(m) && ms(m.created_at) > at && (!!m.sent_by_user_id || !m.template_name));
+    const actedAfter = (actBy.get(leadId) ?? []).some((a) => ACTED_KINDS.has(a.kind) && !!a.actor_user_id && ms(a.created_at) > at);
+    const st = salesStateOf({ status: f.lead.status, is_potential_work: f.lead.is_potential_work, amount_paid: f.lead.amount_paid, call_booked_at: f.lead.call_booked_at, whatsapp_sent_at: f.lead.whatsapp_sent_at }, input.nowMs);
+    const settled = !NEVER_SETTLED.has(r.category) && (st.state === 'client' || st.state === 'won' || st.state === 'not_interested');
+    if (!triageIsOpen({ messageAt: r.message_at, answeredAfter, actedAfter, settled, resolvedAt: r.resolved_at, nowMs: input.nowMs })) continue;
+    const cat = r.category as TriageCategory;
+    const label = TRIAGE_CATEGORY_LABEL[cat] ?? r.category;
+    const holderIsRep = !!f.holder && f.holder !== input.bookOwnerId && !isExcludedUser(ex, f.holder);
+    const hours = Math.floor((input.nowMs - at) / 3_600_000);
+    let group: AttentionGroup; let why: string; let action: string;
+    if (r.bucket === 'urgent_admin') { group = 'urgent'; why = `${label}: ${r.reason}`; action = 'Read it and reply yourself'; }
+    else if (r.bucket === 'admin_action') { group = 'today'; why = `${label}: ${r.reason}`; action = 'Reply in the Inbox'; }
+    else if (r.bucket === 'review') { group = 'review'; why = r.reason; action = 'Read the conversation and decide'; }
+    else if (r.bucket === 'rep_action') {
+      const hot = HIGH_INTENT.has(cat);
+      if (holderIsRep) {
+        if (!hot || hours < REP_ESCALATE_HOURS) continue;
+        group = 'today'; why = `${label} — ${nameOf(f.holder)} hasn't answered in ${hours} hours`; action = `Check in with ${nameOf(f.holder)}, or reply yourself`;
+      } else {
+        if (!hot && cat !== 'question') continue;
+        group = 'today'; why = hot ? `${label} — nobody has answered yet` : `Asked a question nobody has answered`; action = 'Reply in the Inbox';
+      }
+    } else continue;
+    out.push({
+      key: `triage:${r.id}`, group, kind: `reply_${r.category}`, leadId, business: f.lead.business_name ?? 'Lead',
+      why, owner: f.holder ? nameOf(f.holder) : 'Nobody', sinceIso: r.message_at, state: st.label, action, open: 'inbox',
+      triageId: r.id, confidence: r.confidence ?? undefined, method: r.method,
+    });
+  }
+  return out;
+}
+
+function triageSummary(input: AdminInput, p: ReportingPeriod): TriageSummary | null {
+  if (!input.triage) return null;
+  const inP2 = input.triage.filter((r) => inPeriod(r.message_at, p) && !(r.lead_id && input.exclusions.leads.has(r.lead_id)));
+  const byBucket: Record<TriageBucket, number> = { urgent_admin: 0, admin_action: 0, rep_action: 0, no_action: 0, review: 0 };
+  const cat = new Map<string, number>();
+  for (const r of inP2) { if (r.bucket in byBucket) byBucket[r.bucket as TriageBucket] += 1; cat.set(r.category, (cat.get(r.category) ?? 0) + 1); }
+  return {
+    byBucket,
+    byCategory: [...cat].map(([category, count]) => ({ category, label: TRIAGE_CATEGORY_LABEL[category as TriageCategory] ?? category, count })).sort((a, b) => b.count - a.count),
+    suppressed: inP2.filter((r) => r.action_taken === 'suppressed').length,
+    suppressionFailed: inP2.filter((r) => r.action_taken === 'suppression_failed').length,
+    aiFiled: inP2.filter((r) => r.method === 'ai').length,
+    repWaiting: inP2.filter((r) => r.bucket === 'rep_action').length,
+  };
 }
 
 function clientRows(leads: AdminLead[], route: (id: string) => ServiceRoute | null, nameOf: (u: string | null) => string): ClientRow[] {

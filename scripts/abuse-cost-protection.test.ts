@@ -74,6 +74,7 @@ const EXEMPT: Record<string, string> = {
   "backfill-lead-towns": "filters to leads the CALLER owns (user_id) — a salesperson owns none, so it spends nothing for them",
   "process-whatsapp-queue": "cron; the person modes are read-only/suppress; its paid audit-ahead honours paidMode()",
   "process-ai-audit-queue": "cron / admin; honours paidMode() per tick",
+  "conversation-triage": "cron / admin; the only paid call is the reply-sorting model, capped per run and per day, and it honours paidMode() (all_stop → no model call)",
   "clear-enrichment-cache": "deletes cache rows, spends nothing",
   "whatsapp-auto-replies": "cron; replies inside Meta's window, not paid API",
   "template-request": "one email to Paul per request; not paid API",

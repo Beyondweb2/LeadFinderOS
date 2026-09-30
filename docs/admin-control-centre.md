@@ -92,6 +92,52 @@ reply is the holder's; a sale is the ledger's `sold_by_user_id`, else the lead's
 The old card's "Dismiss" (a browser write of `status = closed`) is gone: the page writes nothing.
 Release 2 adds the reply triage items.
 
+## Reply triage (release 2)
+
+Paul: "A reply alone is NOT an admin task." Every inbound WhatsApp is filed once by fn
+`conversation-triage` (cron `conversation-triage-run`, every 2 minutes; table `conversation_triage`, one row
+per message; rules in `src/lib/replyTriage.ts`, tests `scripts/reply-triage.test.ts`).
+
+**Order of authority:** fixed-phrase rules first → the AI (`gpt-4o-mini`) only for a recent human message
+no rule recognised, the newest per lead → anything unsure goes to REVIEW. Each row stores category,
+bucket, reason, confidence, method (`rule`/`ai`/`skipped`), rule id, `rules_version`, model and
+`prompt_version`.
+
+| Bucket | Examples | On Paul's list? |
+|---|---|---|
+| urgent_admin | harassment / reporting / legal / police / scam / GDPR; complaint; a client's refund or STOP; a suppression that failed | URGENT |
+| admin_action | any other message from a paying client; a prospect's payment question | TODAY |
+| review | low-confidence AI (< `TRIAGE_MIN_CONFIDENCE` 0.7), an AI "opt-out", AI unavailable / capped | REVIEW |
+| rep_action | price, call, booking, interested, question, media, "confirmed it's them" | only a HIGH-INTENT reply (interested/price/call/booking) or a question on a lead Paul holds or nobody holds; or a high-intent reply a salesperson has left `REP_ESCALATE_HOURS` (24) |
+| no_action | no / not interested / already sorted / wrong person / automated / thanks / emoji / opt-out (suppressed) | never |
+
+**Open** is derived when the page loads, never stored: an item closes when a person replies after it
+(a human send or any free-form send), someone acts on the lead after it (Next Action, booking, logged
+contact, state move), the lead settles (client / won / not interested — except client, money, complaint
+and opt-out items), Paul presses **Handled**, or it is older than `TRIAGE_SURFACE_DAYS` (14).
+
+**Calibrated on all 1,843 real inbound messages (2026-09-30):** the opener asks "Is this <business>?", so
+"Yes" / "Yes it is" / "How can I help?" (737 messages) CONFIRM WHO THEY ARE — filed `confirmed_contact`,
+never interest. Real interest: 17 messages. Also found: negated interest ("i ain't interested"), curly
+apostrophes, working-hours auto-replies, "the report you provide" falsely matching "report you".
+
+### Late opt-outs (Paul's decision 3)
+
+- A clear opt-out phrase in ANY inbound reply (`isOptOut`: STOP as the whole message, unsubscribe,
+  stop messaging/contacting, don't contact/message me, remove me/my number, take me off, opt out, leave
+  me alone) → the shared `suppress()` (reason `opted_out`, source `whatsapp_optout_inbound`) — the row
+  every automated sender already refuses — and a History row (`lead_activity` kind `opted_out`, "Asked to
+  stop"). Hand-typed Inbox replies are still possible (a person may answer "sorry, removed you").
+- **Phrases only.** The AI can never suppress: an AI opt-out is REVIEW.
+- **Never for a paying client** — their STOP is URGENT for Paul (suppressing would stop service messages).
+- Wrong number stays its own flow; the lead's status is never changed by triage.
+- Found on the first pass: 3 opt-outs in history, 2 not yet suppressed ("Stop"; "scrub me off your list
+  and stop bothering me") — the first-reply check only ever looked at a first reply.
+
+**Spend:** at most `AI_MAX_PER_RUN` (40) model calls a run and `AI_DAILY_CAP_USD` ($0.50) a rolling day
+(fails closed if the spend can't be read), honours the emergency stop, logged to `api_usage_log`
+(`openai_reply_triage`). ~$0.0002 a call.
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |
