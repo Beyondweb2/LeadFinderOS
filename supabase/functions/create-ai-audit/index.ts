@@ -46,7 +46,7 @@ import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
 import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
-// OpenAI (gpt-4o-mini, tool-calling, mirrors admin-ai-opener), creates the audit +
+// OpenAI (gpt-4o-mini, tool-calling), creates the audit +
 // run + one queue row per question, and returns the questions + a cost estimate.
 // The actual multi-engine SERP runs happen later in process-ai-audit-queue.
 //

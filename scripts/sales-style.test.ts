@@ -23,6 +23,8 @@ import { selectFindings as selectCardFindings } from '../src/lib/prospectPreview
 import { eesHeadline, eesResearch } from './prospect-preview-fixtures.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { readFileSync } from 'node:fs';
+import { planHookQuestions } from '../src/lib/hookAudit.ts';
+import { topUpHookQuestions } from '../src/lib/hookScore.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => {
@@ -46,6 +48,12 @@ console.log('── 1. THE CHECK ──');
     ['Hi, how are you today?', /how are you today/],
     ['Have I caught you at a bad time?', /bad time/],
     ['Great news!', /exclamation/],
+    ["That's why your competitors are being recommended.", /as the cause/],
+    ['This is the reason you are not showing up.', /as the cause/],
+    ['AI skipped you because of your website.', /as the cause/],
+    ['Dear Sir, I am writing to introduce Findable.', /I am writing to|Dear Sir/],
+    ['Just reaching out to touch base.', /reach out|touch base/],
+    ['I look forward to hearing from you.', /corporate sign-off/],
   ];
   for (const [text, re] of bad) {
     const p = salesStyleProblems(text);
@@ -56,6 +64,8 @@ console.log('── 1. THE CHECK ──');
     'i asked google ai for an emergency locksmith in Dover.',
     'Who repairs car keys in Dover?',
     HOUSE_STYLE_EXAMPLE.replace(/\[[^\]]+\]/g, 'Rugby'),
+    "I had a look at why you weren't coming up and found a few things that could be holding you back.",
+    "It depends which route makes sense, which is why I'm asking about the website.",
   ];
   for (const text of good) ok(salesStyleProblems(text).length === 0, 'passes: "' + text.slice(0, 70) + '"');
   ok(salesStyleProblems('It named Premier Plumbing Ltd and Leading Edge Electrics.', ['Premier Plumbing Ltd', 'Leading Edge Electrics']).length === 0,
@@ -111,6 +121,18 @@ for (const t of TRADES) {
   ok(!/undefined|null|\{\{|\[[a-z ]+\]|NaN/.test(said), t.trade + ': no placeholder or missing value leaks into the words');
   ok(/Google AI|ChatGPT/.test(script) && !/\bGemini\b/.test(script), t.trade + ': the engine is said as the product says it');
 
+  // LinkedIn and email: the SAME facts, written for the channel.
+  const { linkedin, email } = p.messages;
+  const words = (x: string) => x.split(/\s+/).filter(Boolean).length;
+  ok(salesStyleProblems(linkedin + '\n' + email.subject + '\n' + email.body, t.rivals).length === 0, t.trade + ': LinkedIn + email pass the house style ' + JSON.stringify(salesStyleProblems(linkedin + ' ' + email.body, t.rivals)));
+  ok(t.rivals.slice(0, 3).every((r) => linkedin.includes(r) && email.body.includes(r)) && !linkedin.includes('Fourth Name') && !email.body.includes('Fourth Name'), t.trade + ': LinkedIn + email name exactly the call\'s three competitors');
+  ok(linkedin.includes('for ' + t.spoken + ' in ' + t.town) && email.subject === 'Asked ' + (t.engine === 'Gemini' ? 'Google AI' : t.engine) + ' for ' + t.spoken + ' in ' + t.town, t.trade + ': the same engine and plain search in LinkedIn and the email subject');
+  ok(words(linkedin) <= 70 && !/https?:\/\//.test(linkedin) && /\?$/.test(linkedin), t.trade + ': LinkedIn is short (' + words(linkedin) + ' words), no link, ends on a question');
+  ok(words(email.body) <= 170 && email.body.includes('https://findable.live/r/abc123') && /\nFindable$/.test(email.body), t.trade + ': the email is plain and a little longer (' + words(email.body) + ' words), with the real report link and a plain sign-off');
+  ok(!linkedin.includes(t.name) && !email.body.includes(t.name), t.trade + ': neither says the business\'s own name back to them');
+  ok(!/undefined|null|\{\{/.test(linkedin + email.body + email.subject), t.trade + ': no placeholder leaks into LinkedIn or email');
+  if (p.findings.length) ok(email.body.includes(p.findings[0].explanation.charAt(0).toLowerCase() + p.findings[0].explanation.slice(1).replace(/\.$/, '')), t.trade + ': the email uses the call\'s strongest finding in its own words');
+
   // The short voice note: the same facts, the right ownership question.
   const site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'> = t.website === null ? { mode: 'no_website', source: 'none', sourceLabel: null }
     : /facebook/.test(t.website) ? { mode: 'profile', source: 'social_profile', sourceLabel: 'Facebook' } : { mode: 'findings', source: 'own_site', sourceLabel: null };
@@ -165,6 +187,24 @@ console.log('── 5. THE VOICE-NOTE CHECK REFUSES FILLER ON THE SEARCH ──'
   const plain = old.replace('i was trying to find a reliable electrician for commercial work in Woking and asked Google AI', 'i asked Google AI for an electrician in Woking');
   ok(checkVoiceNoteScript(old, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.some((p) => /filler adjective on the search/.test(p)), 'the real "reliable electrician" line is now sent back');
   ok(checkVoiceNoteScript(plain, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.length === 0, 'the plain version passes every check');
+}
+
+console.log('── 6. THE HOOK ASKS GENUINE SEARCHES ──');
+{
+  const generated = [
+    'Can you recommend a reliable electrician in Addlestone UK?',
+    'trusted electrician for rewiring in Addlestone UK',
+    'highly rated electrician in Addlestone UK',
+    'Can you recommend an electrician in Addlestone UK?',
+    'emergency electrician in Addlestone UK',
+    'who is the best electrician in Addlestone UK',
+  ];
+  const plan = planHookQuestions(generated, { town: 'Addlestone' });
+  ok(plan.length === 3 && plan.every((q) => searchFillerCount(q) === 0), 'the plan takes the plain searches over "reliable / trusted / highly rated" ones: ' + JSON.stringify(plan));
+  const filler = planHookQuestions(['reliable plumber in Rugby UK', 'trusted plumber in Rugby UK'], { town: 'Rugby' });
+  ok(filler.length === 2, 'a set that is all filler still plans (never refuses to run; the words asked are stored as asked)');
+  const topped = topUpHookQuestions([], { trade: 'Electricians', place: 'Addlestone UK' });
+  ok(topped.length === 3 && topped.every((q) => searchFillerCount(q) === 0 && !/recommended local/i.test(q)), 'the fallback questions are plain: ' + JSON.stringify(topped));
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }

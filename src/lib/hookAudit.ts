@@ -39,6 +39,7 @@
 
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { OUTREACH_HOOK_QUESTIONS } from './auditQuestionCounts.ts';
+import { searchFillerCount } from './salesStyle.ts';
 import { HOOK_SCORE_QUESTIONS, hasAnswer, hookBreadthScore, isHookStateV2, rowsFromRunResults, scoreHookRun, type HookScoreContext, type HookStateV2 } from './hookScore.ts';
 
 /* One copy of each: the v2 score (hookScore.ts) owns them, this v1 module re-exports them. */
@@ -138,15 +139,20 @@ export function shouldDeepCrawl(runResults: unknown, ctx: HookScoreContext = {})
    plan rank wording with one function. */
 
 /** Order the generated questions broadest-first and cap at HOOK_MAX_QUESTIONS. Stable: ties keep
- *  the generator's order, so the same generated set always yields the same plan. */
+ *  the generator's order, so the same generated set always yields the same plan.
+ *  ⛔ A GENUINE SEARCH WINS (Paul, 2026-09-30). hookBreadthScore gives +2 to "best / good / top /
+ *  reliable / trusted / reputable"; nobody types "reliable" or "highly rated" into a search, so any
+ *  question carrying one (salesStyle.ts SEARCH_FILLER_WORDS) is ranked AFTER every plain question and
+ *  is asked only when there are not three plain ones. Planning only: the card's pick (hookMissScore) is unchanged, and a
+ *  question is never rewritten — what is asked is what is stored. */
 export function planHookQuestions(generated: readonly string[], ctx: { town: string }): string[] {
   const seen = new Set<string>();
   const unique = generated
     .map((q) => q.trim())
     .filter((q) => q && !seen.has(q.toLowerCase()) && (seen.add(q.toLowerCase()), true));
   return unique
-    .map((q, i) => ({ q, i, s: hookBreadthScore(q, ctx.town) }))
-    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((q, i) => ({ q, i, filler: searchFillerCount(q) > 0, s: hookBreadthScore(q, ctx.town) }))
+    .sort((a, b) => Number(a.filler) - Number(b.filler) || b.s - a.s || a.i - b.i)
     .slice(0, HOOK_MAX_QUESTIONS)
     .map((x) => x.q);
 }

@@ -96,9 +96,10 @@ function genericHookQuestions(trade: string, place: string): string[] {
   if (!t.ok || !where) return [];
   const noun = t.value.replace(/^an? /, '');
   return [
+    /* Plain, the way a person asks (Paul, 2026-09-30): no "reliable", no "recommended local". */
     `Who is the best ${noun} in ${where}?`,
-    `Can you recommend a reliable ${noun} in ${where}?`,
-    `Who is a recommended local ${noun} in ${where}?`,
+    `Can you recommend ${t.value} in ${where}?`,
+    `I need ${t.value} in ${where}, who should I call?`,
   ];
 }
 

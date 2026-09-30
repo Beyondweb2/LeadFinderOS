@@ -152,3 +152,34 @@ Weak by the house rules (re-register at Meta to fix):
   does not always follow LAYOUT (the text is fine either way).
 - The warm drafter could not be exercised live: no lead had an open 24-hour window after a hook
   (designed refusal `window_closed`). Its prompt is proven in the deployed body; its fallback in tests.
+
+## 8. Paul's decisions, second pass (2026-09-30)
+
+1. **"I had a look at why you weren't coming up and found something / a few things that could be
+   holding you back"** is now the wording (call script after a miss, LinkedIn, email, the voice-note
+   prompt and its no-finding lines). "A few things" only when there is more than one finding. The
+   conclusion stays hedged: `salesStyleProblems` now refuses a stated cause ("that's why your
+   competitors…", "this is the reason you…", "because of your website"); "which is why I'm asking"
+   still passes.
+2. **LinkedIn and email** — `buildColdCallPlaybook(...).messages`, built in the SAME function from the
+   SAME pieces as the call (engine, plain search, that result's first three competitors, the strongest
+   finding in its own words, the report link). No second prompt. LinkedIn: ~55 words, no link, ends on
+   a question. Email: ~110–135 words, subject "Asked Google AI for a plumber in Rugby", the report link,
+   signed with the caller's first name and "Findable". Contact first name only when the lead has one,
+   else "Hi,". Tabs "LinkedIn" / "Email" beside "Call script" / "Voice note"; copy only. The corporate
+   phrases ("I am writing to", "reach out", "touch base", "Dear Sir", "I look forward to hearing from
+   you") are in the check.
+3. **AI Generator removed**: `AiOpenerModal.tsx`, fn `admin-ai-opener` (source, config entry, deployed function),
+   the buttons in `SingleWhatsAppDialog` / `OutreachMobileCard` and the `OutreachTable` wiring. No data.
+4. **Hook questions** — safe once checked: `create-ai-audit` was deployed at 04:55:53 UTC from `f689a955`
+   (committed 04:55:55), nothing in its import closure changed on main since, the live body carries that
+   commit's markers, and no worktree had edits to it. `planHookQuestions` now ranks every plain question
+   ahead of any carrying `SEARCH_FILLER_WORDS` (reliable, trusted, reputable, trustworthy, highly/top rated,
+   dependable); a filler question is asked only when there are not three plain ones. The generic top-ups
+   are "Who is the best X in T?", "Can you recommend a X in T?", "I need a X in T, who should I call?".
+   The model prompt (shared with baseline and discovery) is untouched; the card's pick
+   (`hookMissScore`) is unchanged.
+5. **Meta templates**: `initial_contact` and `audit_followup_call` are not to be rewritten for style. For a
+   separate Meta update, tested A/B against the current body rather than replacing it: the "45% of
+   people" claim (`audit_followup`), the causal line in `ai_site_findings_v2`, lost work as fact in
+   `hook_followup`.
