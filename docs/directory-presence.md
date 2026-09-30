@@ -145,12 +145,16 @@ with becomes `needs_attention`. One run per lead at a time (`IN_FLIGHT_MS`).
 
 **Rule changes re-judge old rows** (`PRESENCE_ENGINE_VERSION`, stamped on every finding as
 `evidence.engine_version`; bump it with any change that could withdraw an earlier finding). "Absence
-never downgrades" guards against search variance, not against a fixed rule: a check-owned row written
-under an older version is re-judged when this check re-ran every kind of discovery that found it (a
-search-found row is never withdrawn by a check that did not search). If the current rules no longer find
-it, it becomes `not_relevant` (status_source `check`, reason "Withdrawn: …", previous status kept) —
-never deleted. Operator rows are never touched. Version 2 (2026-09-30) withdrew the first live run's
-false rows.
+never downgrades" guards against search variance, not against a fixed rule. A check-owned row written
+under an older version is re-judged against ITS OWN STORED EVIDENCE (`rejudgeStoredListing`: the URL,
+title and snippet it was found with, through the current matcher) — never by repeating a search.
+Rejected → `not_relevant` (status_source `check`, "Withdrawn: …", previous status kept). Accepted →
+kept, or RESTORED ("Restored by the current rules. …") if an older rule had withdrawn it. Site-, Google-
+and lead-record rows are re-discovered every run, so they are never re-judged from storage. An older
+recommendation the current rules no longer make is withdrawn only when the run's evidence loaded in
+full. Nothing is deleted; operator rows are never touched. History: version 2 withdrew by repeating the
+search, and a partial search (one query timed out) withdrew real listings — AK Electrical's Yell
+profile, Farid's drivingschoolstop page. Version 3 re-judges from stored evidence and restored them.
 
 `POST /functions/v1/directory-presence`:
 - `{action:"summary", lead_id}` → `{ok, summary}` — free.

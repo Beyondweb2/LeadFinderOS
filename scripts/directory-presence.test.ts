@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import {
   assemblePresence, buildIdentity, claimedCredentials, compareDetails, extractSiteSignals, foldClientCitations,
   matchListing, mergePresence, normPhone, profileKey, normPostcode, operatorSetStatus, presenceQueries, presenceSummary,
-  MATCH_CONFIDENCES, PRESENCE_STATUSES, PRIORITIES, PRESENCE_ENGINE_VERSION,
+  MATCH_CONFIDENCES, PRESENCE_STATUSES, PRIORITIES, PRESENCE_ENGINE_VERSION, rejudgeStoredListing,
   type BusinessIdentity, type CitationRow, type ListingCandidate, type PresenceFinding, type StoredPresenceRow,
 } from "../src/lib/directoryPresence.ts";
 import { isProfileUrl, sourceByKey, sourceForUrl, neverRecommendReason, PRESENCE_SOURCES } from "../src/lib/presenceSources.ts";
@@ -216,17 +216,31 @@ console.log("\n── rechecks: one row per source, absence never downgrades, th
   ok(mergePresence("L", [nr], [listing("existing", "confirmed")], t2, "r")[0].status === "not_relevant", "operator's not-relevant stands whatever a check finds");
   ok(operatorSetStatus(row, "existing" as never, t1) === null, "the operator cannot set a check-only status");
 
-  /* A row an OLDER rule wrote (no engine_version = 1) is re-judged, not kept forever. */
-  const oldFalse = { ...row, id: "old", source_key: "bedrijvengids.cybo.com", status: "needs_attention", discovered_via: ["search"], evidence: {} } as StoredPresenceRow;
-  const noSearch = mergePresence("L", [oldFalse], [], t2, "r", { searched: false });
-  ok(noSearch[0].status === "needs_attention", "a search-found row from an older rule is NOT withdrawn by a check that did not search");
-  const withSearch = mergePresence("L", [oldFalse], [], t2, "r", { searched: true });
-  ok(withSearch[0].status === "not_relevant" && withSearch[0].previous_status === "needs_attention" && withSearch[0].status_source === "check" && /^Withdrawn/.test(withSearch[0].reason) && withSearch[0].id === "old",
-    "…but a check that re-ran the search and no longer finds it WITHDRAWS it (same row, reason stated, nothing deleted)");
+  /* A row an OLDER rule wrote (no engine_version = 1) is re-judged against its OWN stored evidence. */
+  const bid = brodley();
+  const rj = (r: StoredPresenceRow) => rejudgeStoredListing(bid, r);
+  const oldFalse = { ...row, id: "old", source_key: "bedrijvengids.cybo.com", status: "needs_attention", discovered_via: ["search"], evidence: {},
+    listing_url: "https://bedrijvengids.cybo.com/GB/clacton-on-sea/slotenmakers",
+    found_details: { name: "Slotenmakers in Clacton-on-Sea", snippet: "Brodley Locksmiths brodley-locksmiths.com … Other Locks 07858 531315 CO15 3AA" } } as StoredPresenceRow;
+  const w = mergePresence("L", [oldFalse], [], t2, "r", { rejudge: rj });
+  ok(w[0].status === "not_relevant" && w[0].previous_status === "needs_attention" && w[0].status_source === "check" && /^Withdrawn/.test(w[0].reason) && w[0].id === "old",
+    "an older rule's category-page 'listing' is WITHDRAWN on its own evidence — same row, reason stated, nothing deleted");
+  const wrongly = { ...row, id: "yell", source_key: "yell.com", status: "not_relevant", previous_status: "existing", discovered_via: ["search"], evidence: { engine_version: 2 },
+    listing_url: "https://www.yell.com/biz/brodley-locksmiths-clacton-on-sea-10668362/",
+    found_details: { name: "Brodley Locksmiths - Clacton-on-Sea", snippet: "Locksmith in Clacton-on-Sea. Call 07700 900123" },
+    reason: "Withdrawn: the current rules no longer count this as their listing. Was: Confirmed: name + phone match." } as StoredPresenceRow;
+  const back = mergePresence("L", [wrongly], [], t2, "r", { rejudge: rj })[0];
+  ok(back.status === "existing" && back.match_confidence === "confirmed" && /^Restored by the current rules\. Confirmed/.test(back.reason) && back.evidence.engine_version === PRESENCE_ENGINE_VERSION,
+    "a real listing an older rule WITHDREW (after a partial search) is RESTORED from its own evidence — no search needed");
   const current = { ...oldFalse, evidence: { engine_version: PRESENCE_ENGINE_VERSION } } as StoredPresenceRow;
-  ok(mergePresence("L", [current], [], t2, "r", { searched: true })[0].status === "needs_attention", "a row the CURRENT rules wrote keeps absence-never-downgrades");
+  ok(mergePresence("L", [current], [], t2, "r", { rejudge: rj })[0].status === "needs_attention", "a row the CURRENT rules wrote keeps absence-never-downgrades");
   const opOld = { ...oldFalse, status: "added", status_source: "operator" } as StoredPresenceRow;
-  ok(mergePresence("L", [opOld], [], t2, "r", { searched: true })[0].status === "added", "an operator's row is never withdrawn by a rule change");
+  ok(mergePresence("L", [opOld], [], t2, "r", { rejudge: rj })[0].status === "added", "an operator's row is never withdrawn by a rule change");
+  const siteOld = { ...oldFalse, discovered_via: ["website"] } as StoredPresenceRow;
+  ok(rejudgeStoredListing(bid, siteOld) === null && mergePresence("L", [siteOld], [], t2, "r", { rejudge: rj })[0].status === "needs_attention", "a site-linked row is re-discovered every run, so it is never re-judged from storage");
+  const oldRec = { ...row, id: "rec", source_key: "192.com", status: "worth_adding", match_confidence: null, listing_url: null, discovered_via: ["trade_evidence"], evidence: {} } as StoredPresenceRow;
+  ok(mergePresence("L", [oldRec], [], t2, "r", { rejudge: rj, evidenceComplete: false })[0].status === "worth_adding", "an older recommendation is NOT withdrawn when this run's evidence did not load in full");
+  ok(mergePresence("L", [oldRec], [], t2, "r", { rejudge: rj, evidenceComplete: true })[0].status === "not_relevant", "…and is withdrawn when it did and the current rules no longer make it");
 }
 {
   const { findings } = assemblePresence({ ...base, identity: brodley(), candidates: [{ url: "https://www.yell.com/biz/brodley-1/", via: "website", linkedFromSite: true }] });
@@ -277,7 +291,7 @@ console.log("\n── one rule, one place ──");
   ok(/requireAdmin\(req, service\)/.test(fn) && /allStopRefusal\(service/.test(fn) && /USAGE_CRITICAL_PCT/.test(fn), "admin only; the search refuses under the emergency stop and at the Apify cap");
   ok(fn.indexOf("allStopRefusal(service") < fn.indexOf("startApifyRun("), "…and the gates run before any search starts");
   ok(!/\.insert\(\s*payload/.test(fn) && /onConflict: "lead_id,source_key"/.test(fn), "rows are UPSERTED on (lead, source) — a recheck cannot insert a duplicate");
-  ok(fn.includes('attempts.length > 0 && attempts.every((x) => x.state === "succeeded")'), "an older rule's row is withdrawn only after a COMPLETE search, never a partial one");
+  ok(fn.includes("rejudge: (row) => rejudgeStoredListing(identity, row), evidenceComplete"), "older rows are re-judged from their stored evidence, and old recommendations withdrawn only on complete evidence");
   ok(!/facebook\.com\/pages\/create|\.post\(|submit/i.test(fn.replace(/method: "POST"/g, "")), "discovery only: nothing in the function creates or submits a listing");
 }
 
