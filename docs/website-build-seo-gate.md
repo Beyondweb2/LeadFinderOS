@@ -119,16 +119,16 @@ upgrade; photo quality; Cloudflare rules that fire only for some IPs.
 
 ## 6. Still needs Paul
 
-- **The template source repo.** The template clones the superseded `MCLocksmiths` build; the live,
+- ✅ RESOLVED §8.1 — **The template source repo.** The template clones the superseded `MCLocksmiths` build; the live,
   cleaner site is `MCLocksmiths-New` (different file layout: `src/data/*`). Re-seeding the template
   from New is a profile rewrite and a product decision — not done. Until then, X1 + the gate catch the
   inherited noindex / rating schema / cloned services.
-- **mc-locksmiths.com**: `http://www.` answers 522 (Cloudflare can't serve plain-http www — likely a
+- PARTLY RESOLVED §8.4 (email fixed; 522 is a zone task, §9) — **mc-locksmiths.com**: `http://www.` answers 522 (Cloudflare can't serve plain-http www — likely a
   missing redirect rule / DNS record for www on http), and Email Address Obfuscation hides the email
   from crawlers. Both are Cloudflare settings on a zone we may not control — never changed from here.
-- **ABLM (Wix)**: unpublish or redirect `/copy-of-accountants-in-march`; one H1 on the home page; an
+- RECORDED §9 — **ABLM (Wix)**: unpublish or redirect `/copy-of-accountants-in-march`; one H1 on the home page; an
   H1 on `/faq`; make the schema `@id` and the http redirect use www; decide whether `llms.txt` stays.
-- **Page generator Q&A mode** uses the (baseline) question verbatim as the title, H1 and slug. The
+- ✅ RESOLVED §8.2 — **Page generator Q&A mode** uses the (baseline) question verbatim as the title, H1 and slug. The
   brief says never hardcode baseline questions into pages; changing Q&A mode's heading rule is a
   methodology choice for Paul, so it is reported, not changed. The service+town mode has no schema /
   canonical / breadcrumbs because Yoast / the host provides them on the client's site — the gate's
@@ -143,3 +143,68 @@ question owned or listed, gate absent / failed / lying / other domain / preview 
 retry, save round trip), `website-build-mapping.test.ts` (the new source-site rule, the 24/7 conflict,
 the seed guard's own-site vs seed-site evidence), `prospect-preview.test.ts` (no rating schema —
 proven to fail on the old code), `website-build-v1/v2/standard` updated for the profile and rule.
+
+## 8. Paul's decisions, 2026-09-30 (second pass) — what was done
+
+1. **Template source → `MCLocksmiths-New`, pinned** (`websiteTemplates.ts` v2.0). New is the clean-room
+   Findable build (its `DESIGN-PROVENANCE.md`: nothing from the disputed old site); the old repo also
+   derived from that site — a second reason to stop using it. Pinned to `a2db9748` (after the email fix
+   below) so a live MCL change never silently changes a new client's build. New fields:
+   `sourceKind` (`live_client_repo` now, `findable_template` the target), `sourcePinnedCommit`,
+   `inheritedHazards` (printed in X1: every `src/data` module, the DPOM script key, Morgan's reviews,
+   325 legacy URLs, photos / maps / brand, records, legal pages marked unbuilt, the three components
+   that hard-code MCL), `canonicalPlan` (extract `Beyondweb2/findable-local-trades-template` with a
+   fictitious sample business, then switch). Catalogue services carry the template's page `path`, so
+   the Site Intent Map names template owners instead of "". Seed values gain `Cornelius`, `dpom.co.uk`
+   and the DPOM key. The cache folder is per source (`mcl-local-trades--mclocksmiths-new`); setup
+   checks out the pin (`checkout --detach`), never `pull`. The service catalogue ids are unchanged
+   (they are stored in `mapping.services`).
+2. **Q&A headings** (`qaHeadings`, page-generator, both modes): the question is the target intent;
+   title / H1 / slug come from the genuine service + place + business ("who does rewiring in Bristol"
+   → H1 "House Rewiring in Bristol", title "House Rewiring Bristol | BS4 Electrical"). No approved
+   service named → the question's topic (asking words dropped, flagged for a look); a generic trade
+   question → the trade. Meta fallbacks no longer quote the question. The response carries
+   `headings.basis` / `note`.
+3. **Prices stay Paul's.** Already held by the recon rule; now also a build-prompt rule (never from
+   the old site's copy, tables, cards, schema or meta) and a gate check (`prices`): any £ figure not in
+   the Site Intent Map's verified `prices` FAILS (`£5m` insurance cover is not a price; no list = SKIP).
+4. **MCL live fixes.** Email: both `mailto` blocks (footer, /contact) wrapped in
+   `<!--email_off-->` — MCLocksmiths-New `a2db974`, pushed = deployed, verified live (no
+   `/cdn-cgi/l/email-protection`, plain `mailto:` present; live gate: that warning gone, everything
+   else PASS). **`http://www.` 522 NOT fixed — no access**: the `mc-locksmiths.com` zone is in neither
+   Cloudflare account this machine's login sees (wrangler scopes: `zone (read)` on Move37 / Paul's
+   account only). See the client tasks below.
+5. **One ownership rule** (`intentOwnership.ts`): the Site Intent Map (`siteIntentMap` now calls
+   `ownershipFor`), page-generator Q&A (`intent_owned` refusal before any spend; owners = the Website
+   Build plan + the page queue) and `plan_build` (a queued page the Website Build plan already owns is
+   HELD with the owner named; a page next to an existing one says so in its rationale). For a client
+   whose own site (WordPress / Wix) is not in a Website Build plan, the owners known are the queue only —
+   the live site is checked with the gate's `--url`.
+
+## 9. Client improvement tasks (no access from here — recorded, not done)
+
+**MC Locksmiths — whoever holds the `mc-locksmiths.com` Cloudflare zone** (not our account):
+- `http://www.mc-locksmiths.com/` answers **522** (`https://www.` and `http://` apex correctly 301 to
+  `https://mc-locksmiths.com/`). Fix either way: SSL/TLS → Edge Certificates → **Always Use HTTPS: On**;
+  or make the www redirect rule match `http.host eq "www.mc-locksmiths.com"` for BOTH schemes
+  (target `https://mc-locksmiths.com${path}`, 301, keep query). Then check:
+  `curl -sI http://www.mc-locksmiths.com/` → one 301 to `https://mc-locksmiths.com/`.
+- Optional: Scrape Shield → Email Address Obfuscation **Off** (the site no longer needs it off — the
+  address is wrapped — but any future email added without the wrapper would be hidden again).
+
+**ABLM (Wix — the client's own editor, no access from here):**
+1. Delete or unpublish `/copy-of-accountants-in-march` (a duplicate of `/accountants-in-march`, listed in
+   `pages-sitemap.xml`); if it was ever shared, 301 it to `/accountants-in-march` (Wix → SEO → URL
+   redirects).
+2. Home page: make "UK accountants for owner-managed businesses" the ONE H1; change the mission
+   paragraph's text style from Heading 1 to a paragraph style.
+3. `/faq`: give the page one H1 (e.g. "Frequently asked questions").
+4. Schema: the home page and /services custom-code JSON-LD uses `https://ablm.co.uk/#business`; the
+   site lives on `https://www.ablm.co.uk` — replace the pasted code with the current kit
+   (`C:\Users\paulj\ablm-site`, which already uses `https://www.ablm.co.uk/#business` and `url`).
+5. The town pages (`/accountants-in-march`, `-peterborough`, `-wisbech`, …) carry **no structured data
+   live** although the kit has it — paste each page's JSON-LD block into that page's custom code.
+6. `http://ablm.co.uk/` redirects to the apex, not www — Wix → Domains: set `www.ablm.co.uk` primary
+   and redirect the apex (one hop to `https://www.ablm.co.uk/`).
+7. Decide whether the published `llms.txt` stays (not a Findable default).
+After: `node scripts/site-quality-gate.mjs --url https://www.ablm.co.uk --domain www.ablm.co.uk`.
