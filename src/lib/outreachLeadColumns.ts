@@ -31,6 +31,8 @@ export const OUTREACH_LIST_COLUMNS = [
   'instantly_pushed_at',
   // web presence (signal filters, enrich / find-email targeting)
   'website', 'facebook_url', 'instagram_url', 'line_type', 'email_last_checked_at',
+  // the canonical social profiles + how sure (2026-09-30, the Socials line on every row)
+  'linkedin_url', 'facebook_status', 'instagram_status', 'linkedin_status',
   // WhatsApp queue + send state
   'whatsapp_status', 'whatsapp_template', 'whatsapp_sent_at', 'whatsapp_delivery_status',
   'whatsapp_message_id', 'queued_at', 'contact_followup_queued_at',
@@ -63,6 +65,8 @@ export const SALES_VIEW_COLUMNS = [
   'domain_control',
   // 2026-09-28 (migration 20260929000000): why the town is unconfirmed — the row's town-gate badge.
   'town_fetch_note',
+  // 2026-09-30 (migration 20260930140000): the LinkedIn link and how sure each profile is.
+  'linkedin_url', 'facebook_status', 'instagram_status', 'linkedin_status',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.

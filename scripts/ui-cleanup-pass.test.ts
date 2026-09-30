@@ -77,7 +77,7 @@ console.log("\n── the one rule for what an outcome also changes ──");
   for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back", "wrong_number", "agency_controls_site"]) ok(outcomeStatusEffect(o, lead) === null, `${o}: no status change (the record itself)`);
   const crm = read("src/components/LeadCrmPanel.tsx");
   ok(/outcome === 'agency_controls_site' && lead\.website_control !== 'agency_controls'/.test(crm) && /'lead_set_website_control', \{ _value: 'agency_controls'/.test(crm), "Agency controls site → Who controls the website = an agency (persisted, shown in the header)");
-  ok(/outcome === 'call_back'\) \{\s*\n\s*setPreset\('call'\)/.test(crm), "Call back → Call pre-selected in Next action (the person picks the day and saves)");
+  ok(/outcome === 'call_back'\) \{\s*\n\s*setPreset\(\{ nextAction: 'call' \}\)/.test(crm), "Call back → Call pre-selected in Next action (the person picks the day and saves)");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ logging an outcome still never saves a next action by itself");
   ok(/outcome === 'meeting_booked'\) \{ setAskWhen\(true\)/.test(crm) && /'lead_set_call_booked', \{ _at: v \}, 'Call booked', \{ call_booked_at: v \}/.test(crm), "Meeting booked → asks when, saved as the booked call");
@@ -132,7 +132,7 @@ console.log("\n── Find email ──");
   const btn = read("src/components/FindEmailButton.tsx");
   ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
   ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
-  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <div[^>]*><FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
     ok(re.test(read(p)), `${p}: beside the email option, only when there is none`);
   }
   const mig = read("supabase/migrations/20260929180000_lead_find_email.sql");

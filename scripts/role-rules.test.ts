@@ -84,7 +84,7 @@ ok(/role', 'admin'/.test(read("supabase/functions/admin-users/index.ts")), "admi
 const ROLE_REQUIRED = [
   "send-whatsapp-message", "send-whatsapp-voice", "create-ai-audit", "voice-note-script", "warm-lead-reply", "prospect-preview",
   "coverage", "market-view", "playbook-evidence", "enrich-business", "enrich-lead", "process-whatsapp-queue",
-  "sales-performance",
+  "sales-performance", "social-profiles",
 ];
 for (const fn of ROLE_REQUIRED) ok(/resolveActor\(req, /.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} resolves the caller's role server-side`);
 for (const fn of ["google-place-details", "check-website", "extract-email", "extract-facebook", "review-reply", "scan-site-details"]) {

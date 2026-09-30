@@ -41,6 +41,7 @@ import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
 import { FindEmailButton } from '@/components/FindEmailButton';
+import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -2000,6 +2001,8 @@ const Inbox = () => {
                     <span className="text-[11px] text-muted-foreground">+{active.phone}</span>
                     {/* No email on file → find one (our records first, then their website). */}
                     {activeLead && !activeLead.email && <FindEmailButton leadId={activeLead.id} website={activeLead.website} className="text-[11px]" />}
+                    {/* The one Socials line (2026-09-30): the canonical profiles, confirmed vs likely. */}
+                    {activeLead && <SocialLinks lead={activeLead} size="xs" />}
                   </div>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
                   {/* FULL LEAD DETAILS — opens the SAME rich dialog Outreach uses, as an overlay

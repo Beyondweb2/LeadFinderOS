@@ -27,8 +27,8 @@ import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { reviewedHookQuestions } from '@/lib/hookQuestionEdit';
 import { OUTREACH_AUDIT_MAP_ROOT } from '@/lib/outreachAuditMap';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
-import { CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
+import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText, socialFollowUpPreset } from '@/lib/salesCrm';
+import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
@@ -233,6 +233,7 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
 /** What a logged outcome also changed, in words for the confirmation line — or null for nothing. */
 export type OutcomeFollowOn = (outcome: string) => Promise<string | null>;
+type FollowUpPreset = { nextAction: string; date?: string; note?: string };
 
 export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string; onRemoved?: () => void; onOutcome?: OutcomeFollowOn }) {
   const crm = useLeadCrmRow(leadId);
@@ -240,7 +241,7 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
   const { role } = useSubscription();
   const lead = crm.data;
   const qc = useQueryClient();
-  const [preset, setPreset] = useState<string | null>(null);
+  const [preset, setPreset] = useState<FollowUpPreset | null>(null);
   const [askWhen, setAskWhen] = useState(false);
   const nextRef = useRef<HTMLElement>(null);
   if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
@@ -248,12 +249,21 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
   if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
 
   /* The follow-on of one outcome (see the header). Returns the words for what else changed. */
-  const followOn = async (outcome: string): Promise<string | null> => {
+  const followOn = async (outcome: string, channel: string): Promise<string | null> => {
     const said: string[] = [];
     if (outcome === 'call_back') {
-      setPreset('call');
+      setPreset({ nextAction: 'call' });
       requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
       said.push('Pick when to call back below, then Save next action');
+    }
+    /* ⛔ SOCIAL OUTREACH → THE ONE NEXT ACTION (2026-09-30): a LinkedIn / Facebook / Instagram message or
+       connection request pre-fills "Follow up" in socialFollowUpPreset's days. Pre-filled, never saved:
+       Next Action stays human-set — the person presses Save next action (or changes it). */
+    const social = socialFollowUpPreset(channel, outcome);
+    if (social) {
+      setPreset({ nextAction: social.nextAction, date: londonDayPlus(social.days), note: social.note });
+      requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+      said.push(`Follow-up in ${social.days} days is filled in below — press Save next action to keep it`);
     }
     if (outcome === 'meeting_booked') { setAskWhen(true); said.push('Add when it is below'); }
     if (outcome === 'agency_controls_site' && lead.website_control !== 'agency_controls') {
@@ -295,7 +305,7 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
 
       <section className={CARD} ref={nextRef}>
         <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ?? ''}`} lead={lead} preset={preset}
+        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset}
           onSave={async (a) => { const r = await save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
             { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note }); if (r.ok) setPreset(null); return r; }} />
       </section>
@@ -422,7 +432,7 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
 }
 
 /** One tap per outcome. The channel defaults to Call; the note is optional and saved with it. */
-function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowOn }) {
+function LogContact({ save, followOn }: { save: SaveFn; followOn: (outcome: string, channel: string) => Promise<string | null> }) {
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -433,9 +443,12 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowO
      More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
      offering a second record of the same message. */
   const primary = CONTACT_METHODS.filter((m) => m.primary);
-  const more = CONTACT_METHODS.filter((m) => !m.primary);
+  const more = CONTACT_METHODS.filter((m) => !m.primary && !m.social);
   const current = CONTACT_METHODS.find((m) => m.value === channel);
-  const inMore = !!current && !current.primary;
+  const inMore = !!current && !current.primary && !current.social;
+  /* Social outreach → platform → outcome: ONE Social pill; picking it shows LinkedIn / Facebook /
+     Instagram (LinkedIn first). Keeps the row at five pills. */
+  const inSocial = !!current?.social;
   return (
     <section className={cn(CARD, 'border-primary/30')} data-testid="log-contact">
       <div className="mb-2 flex items-center gap-1.5"><PhoneCall className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Log a contact</span></div>
@@ -443,6 +456,7 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowO
         {primary.map((c) => (
           <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
         ))}
+        <button type="button" role="radio" aria-checked={inSocial} className={chip(inSocial)} onClick={() => { if (!inSocial) setChannel(SOCIAL_CONTACT_METHODS[0].value); }} data-testid="log-social">Social</button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={cn(chip(inMore), 'inline-flex items-center gap-0.5')} aria-label="More contact methods">
@@ -454,6 +468,14 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowO
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {inSocial && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Which social network" data-testid="log-social-platform">
+          <span className="text-[11px] text-muted-foreground">On:</span>
+          {SOCIAL_CONTACT_METHODS.map((c) => (
+            <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
+          ))}
+        </div>
+      )}
       {current?.recordedBy === 'send' ? (
         <p className="rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
           WhatsApp messages you send from LeadFinderOS are recorded automatically, with their delivery status — there is nothing to log here.
@@ -472,7 +494,7 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: OutcomeFollowO
                 if (r.ok) {
                   setNote('');
                   setLast(`${label}: ${o.label}`);
-                  const more = await followOn(o.value);
+                  const more = await followOn(o.value, channel);
                   setLastMore(more);
                 }
               } finally { setBusy(null); }
@@ -506,13 +528,14 @@ function InternalNote({ save }: { save: SaveFn }) {
 function FollowUp({ lead, onSave, preset }: {
   lead: { next_action: string | null; next_action_date: string | null; next_action_note: string | null };
   onSave: (a: { nextAction: string; date: string | null; note: string | null }) => Promise<unknown>;
-  /** "Call back" was just logged: Call is pre-selected (not saved — the person picks the day and saves). */
-  preset?: string | null;
+  /** An outcome was just logged: "Call back" pre-selects Call; a social message pre-fills Follow up in N
+   *  days. Never saved — the person picks / checks the day and saves. */
+  preset?: FollowUpPreset | null;
 }) {
   const known = NEXT_ACTION_OPTIONS.some((o) => o.value === lead.next_action);
-  const [nextAction, setNextAction] = useState(preset ?? lead.next_action ?? 'none');
-  const [date, setDate] = useState(lead.next_action_date ?? '');
-  const [note, setNote] = useState(lead.next_action_note ?? '');
+  const [nextAction, setNextAction] = useState(preset?.nextAction ?? lead.next_action ?? 'none');
+  const [date, setDate] = useState(preset?.date ?? lead.next_action_date ?? '');
+  const [note, setNote] = useState(preset?.note ?? lead.next_action_note ?? '');
   const has = !!lead.next_action && lead.next_action !== 'none';
   const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
   return (

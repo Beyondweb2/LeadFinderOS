@@ -8,6 +8,12 @@
 //   • a low-confidence flag when the business can't be verified (no place ref or
 //     the matched name differs) — so we never silently attach wrong-company data.
 //
+// ⛔ ADMIN-ONLY (Paul, 2026-09-30): the paid lookup is the admin's. Sales has the FREE Find socials
+//    (fn social-profiles). Before paying, the free finder runs first (our records + their own site); a
+//    lead that already has a confirmed Facebook AND Instagram AND an email is not re-bought.
+// ⛔ Socials are saved ONLY through the one rule (_shared/social-find.ts saveGraded → lead_social_profiles;
+//    the database mirrors the canonical one onto the lead). A weak or low-confidence match is saved as
+//    "needs checking", never as fact. ⛔ An existing email is never overwritten.
 // Goes through the shared runner (enrichment_cache + $2/day cap + api_usage_log).
 // Auth mirrors enrich-lead. Honesty: missing = nothing; contacts auto-applied to
 // the lead ONLY when the match is high-confidence; line_type (about the lead's own
@@ -15,7 +21,9 @@
 // onto the lead. Re-hosting of CHOSEN images happens later (2B/2C).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mayLookUpBusiness, mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { findSocials, saveGraded, readRows, logCanonicalChanges, businessOf, SOCIAL_LEAD_COLUMNS, type SocialLead } from "../_shared/social-find.ts";
+import { gradeSocialCandidates, socialOutcomes, socialOutcomeSentence, type SocialCandidateInput } from "../../../src/lib/socialProfiles.ts";
 import { guardAction } from "../_shared/protection.ts";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
@@ -250,19 +258,26 @@ Deno.serve(async (req) => {
     if (!isInternal) {
       const who = await resolveActor(req, service);
       if (!who.ok) return json(refusalBody(who), who.status);
+      /* ⛔ PAID ENRICH IS ADMIN-ONLY (Paul, 2026-09-30). Sales uses the free Find socials. */
+      if (who.actor.role !== "admin") return json({ success: false, error: "admin_only", detail: "Enrich is for the admin. Use Find socials instead." }, 403);
       const may = await mayWriteLeadId(service, who.actor, leadId);
       if (may !== "ok") return json({ success: false, error: may }, may === "not_your_lead" ? 403 : 503);
-      /* ⛔ ABUSE / COST PROTECTION (2026-09-29). A synthetic lead id passes mayWriteLeadId by design (Find
-         Leads enriches search results), so for a salesperson the BUSINESS itself is checked too: one
-         already in the book under someone else is refused (its phone and photos are theirs to hide),
-         and the cache-busting re-run is the admin's — it pays Apify again for data we already hold. */
-      if (who.actor.role === "sales") {
-        const own = await mayLookUpBusiness(service, who.actor, { placeId, mapsUrl: googleMapsUrl });
-        if (own !== "ok") return json({ success: false, error: own }, own === "not_your_lead" ? 403 : 503);
-        if (force) return json({ success: false, error: "refresh_admin_only", detail: "A fresh re-run is for the admin." }, 403);
-      }
       const guard = await guardAction(service, who.actor.id, "enrich", { fn: "enrich-business", leadId: leadId || null, role: who.actor.role });
       if (!guard.ok) return json(guard.body, guard.status);
+    }
+
+    /* ⛔ OUR OWN DATA FIRST (2026-09-30): a real lead runs the free finder before anything is paid for. */
+    const { data: leadRow } = await service.from("outreach_leads").select(`${SOCIAL_LEAD_COLUMNS}, email`).eq("id", leadId).maybeSingle();
+    const socialLead = leadRow as (SocialLead & { email: string | null }) | null;
+    const leadHasEmail = !!String(socialLead?.email ?? "").trim();
+    if (socialLead && !socialImagesOnly) {
+      try {
+        const free = await findSocials(service, socialLead, userId ?? socialLead.user_id);
+        const o = socialOutcomes(free.rows);
+        if (!force && !fromGenerate && leadHasEmail && o[0].state === "confirmed" && o[1].state === "confirmed") {
+          return json({ success: true, skipped: "already_found", applied: false, cached: true, summary: socialOutcomeSentence(o), detail: "Already found from our own records and their website — nothing was bought." });
+        }
+      } catch (e) { console.warn("[enrich-business] free finder failed (continuing):", String((e as { message?: unknown })?.message ?? e)); }
     }
 
     const apifyToken = Deno.env.get("APIFY_TOKEN");
@@ -589,13 +604,36 @@ Deno.serve(async (req) => {
       // never overwrite an existing/manual value). Store-only, no reclassification.
       ...(!website && r.website ? { website: r.website } : {}),
     };
-    if (!r.match.lowConfidence) {
-      if (r.email) Object.assign(update, { email: r.email, email_status: "found", email_method: "apify", email_last_checked_at: now, enrichment_source: "apify" });
-      if (r.facebook) Object.assign(update, { facebook_url: r.facebook, facebook_status: "found", facebook_method: r.facebookMethod ?? "apify", facebook_last_checked_at: now });
-      if (r.instagram) Object.assign(update, { instagram_url: r.instagram, instagram_status: "found", instagram_method: r.instagramMethod ?? "apify", instagram_last_checked_at: now });
+    /* ⛔ AN EXISTING EMAIL IS NEVER OVERWRITTEN (2026-09-30): only a blank one is filled. */
+    if (!r.match.lowConfidence && r.email && socialLead && !leadHasEmail) {
+      Object.assign(update, { email: r.email, email_status: "found", email_method: "apify", email_last_checked_at: now, enrichment_source: "apify" });
     }
     if (Object.keys(update).length) {
       try { await service.from("outreach_leads").update(update).eq("id", leadId); } catch { /* non-blocking */ }
+    }
+    /* Socials through the one rule. A Maps-listing / own-site find is the listing's own link; a web
+       result already passed the old name + location check (locationMatch), so it is graded WITH its
+       town; a suggestion (a mismatch) or anything on a low-confidence match is saved as "needs checking"
+       — shown for review, never canonical. The value the lead already had (method 'manual' = the one the
+       browser sent in) is not a new find. */
+    if (socialLead) {
+      const cands: SocialCandidateInput[] = [];
+      const town = socialLead.derived_town || socialLead.search_location || "";
+      const push = (url: string | null, method: string | null) => {
+        if (!url || method === "manual") return;
+        if (r.match.lowConfidence) { cands.push({ url, source: "web_search", context: "" }); return; }
+        cands.push(method === "websearch" ? { url, source: "web_search", context: `${socialLead.business_name ?? ""} ${town}` } : { url, source: "google_listing" });
+      };
+      push(r.facebook, r.facebookMethod);
+      push(r.instagram, r.instagramMethod);
+      for (const s of [r.facebookSuggestion, r.instagramSuggestion]) if (s?.url) cands.push({ url: s.url, source: "web_search", context: "" });
+      if (cands.length) {
+        try {
+          const before = await readRows(service, socialLead.id);
+          await saveGraded(service, socialLead, gradeSocialCandidates(cands, businessOf(socialLead)).graded, userId);
+          await logCanonicalChanges(service, socialLead.id, userId, before, await readRows(service, socialLead.id));
+        } catch (e) { console.warn("[enrich-business] social save failed:", String((e as { message?: unknown })?.message ?? e)); }
+      }
     }
 
     return json({
@@ -603,6 +641,9 @@ Deno.serve(async (req) => {
       cached: outcome.cached,
       applied: !r.match.lowConfidence,
       ...r,
+      // true = a real lead: its socials were saved through the one rule, so the browser must NOT
+      // write facebook_url / instagram_url itself (a Find Leads search result has no row → false).
+      social_saved: !!socialLead,
       // Additive fields for the social_images_only "Pull social photos" caller (present
       // in every response, harmless to other callers): the FB + IG images scraped this
       // run, whether each profile was resolved, and the resolved URLs.
