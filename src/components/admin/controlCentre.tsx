@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, Banknote, CalendarCheck, Coins, Filter, Megaphone, PhoneCall, Receipt, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
-import type { AttentionGroup, AttentionItem, Cohort, TeamRow, Totals } from '@/lib/adminMetrics';
+import type { AttentionGroup, AttentionItem, Cohort, TeamRow, Totals, TriageSummary } from '@/lib/adminMetrics';
 import { CALL_OUTCOME_COLUMNS } from '@/lib/adminMetrics';
 import { SERVICE_ROUTE_NAME } from '@/lib/findableOffer';
 import { CONTACT_LOG_START } from '@/lib/salesPerformance';
@@ -48,13 +48,26 @@ const GROUP_META: Record<AttentionGroup, { label: string; tone: Tone }> = {
   urgent: { label: 'Urgent', tone: 'red' }, today: { label: 'Today', tone: 'amber' }, review: { label: 'Review', tone: 'purple' }, blocked: { label: 'Blocked', tone: 'grey' },
 };
 
-export function AttentionQueue({ items, onOpen }: { items: AttentionItem[]; onOpen: (i: AttentionItem) => void }) {
+export function AttentionQueue({ items, onOpen, triage, period, onResolve }: {
+  items: AttentionItem[]; onOpen: (i: AttentionItem) => void;
+  triage: TriageSummary | null; period: string; onResolve: (triageId: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
   const groups = (Object.keys(GROUP_META) as AttentionGroup[]).map((g) => ({ g, rows: items.filter((i) => i.group === g) })).filter((x) => x.rows.length);
   const urgent = items.filter((i) => i.group === 'urgent').length;
+  const b = triage?.byBucket;
+  const sorted = b ? b.urgent_admin + b.admin_action + b.rep_action + b.no_action + b.review : 0;
   return (
     <Panel collapseKey="admin.cc.attention" title="Needs your attention" icon={AlertTriangle} tone={urgent ? 'red' : 'amber'}
-      hint="Only what needs you. Replies a salesperson can handle are not here."
+      hint="Only what needs you. A reply alone is not a task: replies a salesperson can handle, or that need nobody, are not here."
       summary={items.length ? `${items.length} item${items.length === 1 ? '' : 's'}${urgent ? ` · ${urgent} urgent` : ''}` : 'Nothing needs you'}>
+      {!triage ? <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Reply sorting is unavailable just now, so replies are not included below — check the Inbox.</p>
+        : sorted > 0 && (
+          <p className="mb-3 text-xs text-muted-foreground">
+            {period}: {num(sorted)} repl{sorted === 1 ? 'y' : 'ies'} sorted — {num(b!.no_action)} needed nobody, {num(b!.rep_action)} for a salesperson, {num(b!.admin_action + b!.urgent_admin)} for you, {num(b!.review)} to review{triage.aiFiled ? ` (${num(triage.aiFiled)} read by AI)` : ''}.
+            {triage.suppressed > 0 && ` ${num(triage.suppressed)} opt-out${triage.suppressed === 1 ? '' : 's'} suppressed automatically.`}
+          </p>
+        )}
       {!items.length ? <Empty>Nothing needs you right now.</Empty> : (
         <div className="space-y-4">
           {groups.map(({ g, rows }) => (
@@ -62,19 +75,26 @@ export function AttentionQueue({ items, onOpen }: { items: AttentionItem[]; onOp
               <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide', TONE[GROUP_META[g].tone].text)}>{GROUP_META[g].label} · {rows.length}</p>
               <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
                 {rows.map((i) => (
-                  <li key={i.key}>
-                    <button type="button" onClick={() => onOpen(i)} className="flex w-full min-w-0 items-start gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  <li key={i.key} className="flex min-w-0 items-stretch">
+                    <button type="button" onClick={() => onOpen(i)} className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                       <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', TONE[GROUP_META[g].tone].dot)} />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-baseline gap-x-2">
                           <span className="truncate text-sm font-semibold">{i.business}</span>
                           <span className="text-[11px] text-muted-foreground">{i.state}{i.owner ? ` · ${i.owner}` : ''}{i.sinceIso ? ` · ${ago(i.sinceIso)}` : ''}</span>
                         </span>
-                        <span className="block text-xs text-muted-foreground">{i.why}</span>
+                        <span className="block text-xs text-muted-foreground">{i.why}{i.method === 'ai' && typeof i.confidence === 'number' ? ` (AI, ${Math.round(i.confidence * 100)}% sure)` : ''}</span>
                         <span className="mt-0.5 block text-xs font-medium text-primary">{i.action}</span>
                       </span>
                       <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </button>
+                    {i.triageId && (
+                      <button type="button" disabled={busy === i.triageId} title="Mark handled — it leaves this list"
+                        onClick={async () => { setBusy(i.triageId!); try { await onResolve(i.triageId!); } finally { setBusy(null); } }}
+                        className="shrink-0 border-l border-border/60 px-3 text-[11px] font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground disabled:opacity-50">
+                        {busy === i.triageId ? '…' : 'Handled'}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

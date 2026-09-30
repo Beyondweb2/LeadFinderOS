@@ -3,8 +3,9 @@ import { bookOwnerId, refusalBody, requireAdmin } from "../_shared/access.ts";
 import { loadEarnings } from "../_shared/earnings.ts";
 import {
   foldAdminOverview,
-  type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type Person,
+  type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type Person, type TriageRow,
 } from "../../../src/lib/adminMetrics.ts";
+import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { UNRECORDED_SPEND, USD_TO_GBP_ESTIMATE } from "../../../src/lib/apiCostLabels.ts";
@@ -27,7 +28,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30b";
+const BUILD_ID = "admin-overview-2026-09-30c";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -108,6 +109,19 @@ Deno.serve(async (req) => {
 
     const [cPeriod, cToday, cYesterday, cWeek, cMonth] = await Promise.all([period, today, yesterday, week, month].map((p) => costRows(service, p)));
 
+    /* Reply triage (release 2): the period's rows and the surface window's. A failed read blanks the
+       reply part (the page says triage is unavailable) — never an empty list that reads as "all clear". */
+    let triage: TriageRow[] | null = null;
+    try {
+      const floorMs = Math.min(period.fromMs ?? 0, nowMs - TRIAGE_SURFACE_DAYS * 86_400_000);
+      triage = await allRows<TriageRow>((a, b, c) => {
+        let q = service.from("conversation_triage").select("id, message_id, lead_id, message_at, category, bucket, reason, confidence, method, action_taken, resolved_at", c ? { count: "exact" } : undefined);
+        if (floorMs > 0) q = q.gte("message_at", new Date(floorMs).toISOString());
+        return q.order("id").range(a, b);
+      });
+      triage = triage.map((r) => ({ ...r, confidence: r.confidence == null ? null : Number(r.confidence) }));
+    } catch (err) { console.error("[admin-overview] triage", err instanceof Error ? err.message : err); triage = null; }
+
     const overview = foldAdminOverview({
       period, today, yesterday, week, month, nowMs,
       bookOwnerId: owner, people, exclusions,
@@ -118,6 +132,7 @@ Deno.serve(async (req) => {
       onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
       commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
       cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
+      triage,
     });
 
     return json({

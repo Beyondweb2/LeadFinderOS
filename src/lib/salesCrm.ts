@@ -245,6 +245,9 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   archived_set: 'Archive',
   crawl_run: 'Website crawl started',
   report_link: 'Report link sent',
+  /* Written by fn conversation-triage when a reply contains a clear opt-out phrase (Admin control centre,
+     release 2): future automated outreach is suppressed. The body carries the words shown. */
+  opted_out: 'Asked to stop',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */
@@ -294,6 +297,7 @@ export function activityDetail(
     case 'report_link': return d.channel ? `By ${contactMethodLabel(String(d.channel))}` : null;
     case 'website_control_set': return d.value ? String(d.value).replace(/_/g, ' ') : null;
     case 'crawl_run': return d.url ? String(d.url) : null;
+    case 'opted_out': return a.body ?? 'Future automated outreach is suppressed';
     default: return null;
   }
 }
