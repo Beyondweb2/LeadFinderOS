@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
@@ -53,9 +53,15 @@ export const HUB_POLL_MS = 15_000;
 const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
 /* Every hub stage folds away with the shared control (src/components/CollapsibleSection.tsx), remembered
    per person: collapse almost everything and the summary at the top still says where the client is. */
-const Stage = ({ title, k, summary, children }: { title: string; k: string; summary?: ReactNode; children: ReactNode }) => <Card><CardContent className="p-4">
-  <CollapsibleBlock persistKey={`hub.${k}`} title={title} titleClassName="text-base font-semibold" summary={summary}><div className="space-y-2 text-sm">{children}</div></CollapsibleBlock>
-</CardContent></Card>;
+/* ?section=<k> (2026-09-30): a dashboard item opens the hub AT the stage where its work is done — the
+   stage is opened (whatever was remembered) and scrolled into view. */
+const HubSection = createContext<string | null>(null);
+const Stage = ({ title, k, summary, children }: { title: string; k: string; summary?: ReactNode; children: ReactNode }) => {
+  const focused = useContext(HubSection) === k;
+  return <Card className={focused ? 'ring-2 ring-primary/50' : undefined}><CardContent className="p-4">
+    <CollapsibleBlock id={`hub-${k}`} forceOpen={focused} persistKey={`hub.${k}`} title={title} titleClassName="text-base font-semibold" summary={summary}><div className="space-y-2 text-sm">{children}</div></CollapsibleBlock>
+  </CardContent></Card>;
+};
 const values = (v: unknown) => Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v || '—');
 const copy = async (value: string) => { if (value) await navigator.clipboard.writeText(value); };
 const Spinner = ({ className = 'h-6 w-6' }: { className?: string }) => <Loader2 className={`${className} animate-spin text-primary`} />;
@@ -459,6 +465,8 @@ function ClientSummary({ hub, bs, remeasure, opps }: { hub: Hub; bs: string; rem
 
 export default function ClientHub() {
   const { leadId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const section = searchParams.get('section');
   const [hub, setHub] = useState<Hub | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -504,15 +512,23 @@ export default function ClientHub() {
   /* The Opportunity Backlog, read once per visit (not polled) — the summary strip and its stage share it. */
   const opps = useOpportunities(leadId, !!hub?.onboarding);
   const oppCounts = backlogCounts(opps.data?.opportunities ?? []);
+  /* Scroll the linked stage into view once the page is drawn ('payment' is the header card: the plan,
+     payments made and the next charge). */
+  const hubReady = !loading && !!hub;
+  useEffect(() => {
+    if (!hubReady || !section) return;
+    const id = window.setTimeout(() => document.getElementById(`hub-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+    return () => window.clearTimeout(id);
+  }, [hubReady, section]);
 
   if (loading) return <div className="flex justify-center py-16"><Spinner className="h-8 w-8"/></div>;
   const errorPanel = pageError && <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{pageError}</span></div><Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button></CardContent></Card>;
   if (!hub) return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>{errorPanel || <Card><CardContent className="p-6 text-sm text-muted-foreground">This client is not in your paid-client list.</CardContent></Card>}</div>;
   const { lead, onboarding, audit, pages } = hub; const rm = remeasureStatus(lead.remeasure_due_date, Date.now()); const reportUrl = audit ? `${REPORT_PUBLIC_ORIGIN}/report/${audit.id}` : '';
   const setupLabel = bs === 'needs_questions' ? 'Prepare Baseline' : bs === 'approved' ? 'Start baseline' : 'Continue baseline setup';
-  return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
+  return <HubSection.Provider value={section}><div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
-  <Card><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
+  <Card id="hub-payment" className={section === 'payment' ? 'ring-2 ring-primary/50' : undefined}><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
   <ClientSummary hub={hub} bs={bs} remeasure={`${lead.remeasure_due_date || 'after baseline'}${lead.remeasure_due_date ? ` · ${rm.label}` : ''}`} opps={opps.data ? oppCounts : null}/>
   {hub.handoff && <ClientHandoffCard handoff={hub.handoff} leadId={lead.id} onChanged={refresh}/>}
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
@@ -540,5 +556,5 @@ export default function ClientHub() {
     <div className="lg:col-span-2"><Stage k="opportunities" title="8. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
       {hub.onboarding ? <OpportunityBacklog leadId={lead.id} state={opps}/> : <p className="text-muted-foreground">Available once onboarding exists.</p>}
     </Stage></div>
-  </div></div>;
+  </div></div></HubSection.Provider>;
 }

@@ -9,7 +9,7 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useAdminOverview, type PeriodChoice } from '@/hooks/useAdminOverview';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
-import { leadLaunchState } from '@/lib/salesLinks';
+import { attentionPath, clientHubLink } from '@/lib/salesLinks';
 import { PERIOD_KEYS, PERIOD_LABEL, londonDay, type PeriodKey } from '@/lib/reportingPeriod';
 import type { AttentionItem } from '@/lib/adminMetrics';
 import { cn } from '@/lib/utils';
@@ -64,12 +64,12 @@ const Dashboard = () => {
   const firstName = (team.data ?? []).find((m) => m.user_id === user?.id)?.display_name?.split(' ')[0];
   const today = londonDay(Date.now());
 
+  /* ⛔ Every item opens WHERE ITS ACTION IS DONE (2026-09-30, docs/sales-workflow-nav.md has the audit):
+     a WhatsApp chase → that Inbox conversation; a client task → the hub at its stage; a list problem →
+     Outreach showing that list; a lead → its workspace. All are URLs, so Back and a refresh work. */
   const openItem = (i: AttentionItem) => {
-    if (i.open === 'client' && i.leadId) navigate(`/paid-clients/${i.leadId}`);
-    else if (i.open === 'lead' && i.leadId) navigate('/outreach', { state: leadLaunchState(i.leadId) });
-    else if (i.open === 'inbox') navigate(i.leadId ? `/inbox?lead=${i.leadId}` : '/inbox');
-    else if (i.open === 'signups') document.getElementById('signup-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else navigate('/outreach');
+    if (i.open === 'signups') document.getElementById('signup-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else navigate(attentionPath(i));
   };
 
   if (roleLoading) return <div className="flex h-full items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -158,7 +158,7 @@ const Dashboard = () => {
           </Section>
 
           <Section title="Clients">
-            <ClientHealthPanel o={o} onOpen={(id) => navigate(`/paid-clients/${id}`)} />
+            <ClientHealthPanel o={o} onOpen={(id, section) => navigate(clientHubLink(id, section))} />
           </Section>
 
           <Section title="Traffic">

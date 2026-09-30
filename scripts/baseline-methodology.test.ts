@@ -232,7 +232,7 @@ console.log('\n── COLLAPSIBLE SECTIONS: ONE PATTERN ──');
   const sales = read('src/pages/SalesDashboard.tsx') + read('src/components/salesDash/sections.tsx');
   ok(['sales.conversion', 'sales.campaigns', 'sales.templates', 'sales.pipeline', 'sales.trends'].every((k) => sales.includes(k)), '· the Sales dashboard sections collapse');
   const hub = read('src/pages/ClientHub.tsx');
-  ok(/<CollapsibleBlock persistKey=\{`hub\.\$\{k\}`\}/.test(hub) && (hub.match(/<Stage k="/g) ?? []).length >= 10, '· every Paid Client hub stage collapses, each with its own key');
+  ok(/<CollapsibleBlock id=\{`hub-\$\{k\}`\} forceOpen=\{focused\} persistKey=\{`hub\.\$\{k\}`\}/.test(hub) && (hub.match(/<Stage k="/g) ?? []).length >= 10, '· every Paid Client hub stage collapses, each with its own key');
   ok(/data-testid="client-summary"/.test(hub), '· the client summary stays visible above the collapsible stages');
   const disc = read('src/components/BaselineDiscovery.tsx');
   ok((disc.match(/defaultOpen=\{false\}/g) ?? []).length >= 3, '· after Discovery the long lists start collapsed (verdict groups, Advanced, each classifier group)');

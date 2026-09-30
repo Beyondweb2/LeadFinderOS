@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { notifyLeadChanged } from '@/lib/leadSync';
 
 /* The signed-in person's notifications (Sales Experience release 3; migration 20260929140000).
    Own rows only (RLS); written by the server (triggers + the ledger writer), never by the browser.
@@ -47,6 +48,11 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (p: { eventType: string; new: AppNotification }) => {
         void qc.invalidateQueries({ queryKey: key });
         if (p.eventType === 'INSERT' && p.new) arrive.current?.(p.new);
+        /* ⛔ AN ASSIGNMENT REACHES THE WORK QUEUES AT ONCE (2026-09-30). A salesperson never receives
+           outreach_leads realtime, but they do receive their own notifications — so "lead assigned to
+           you" announces the lead, and the Inbox (with its thread) and Outreach read it through the
+           person's own access (leadSync, useInbox loadLead, useOutreach placeRow). */
+        if ((p.eventType === 'INSERT' || p.eventType === 'UPDATE') && p.new?.kind === 'lead_assigned' && p.new.lead_id) notifyLeadChanged(p.new.lead_id);
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };

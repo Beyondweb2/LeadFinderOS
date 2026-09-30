@@ -121,6 +121,7 @@ import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
+import { isLiveLeadWithoutTrade, OUTREACH_PRESETS, type OutreachPreset } from '@/lib/leadTrade';
 import { archiveViewFor, datasetComplete, leadCountLabel, partialResultsSuffix, rowsForArchiveView, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
 import { auditMapHasRunning, auditRowState, fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_POLL_MS, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
@@ -231,6 +232,11 @@ interface OutreachTableProps {
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
   onLaunchConsumed?: () => void;
+  /** The lead's workspace closed (or a launched lead was not found) — the parent drops ?lead=. */
+  onDetailClosed?: () => void;
+  /** A list opened by a link (Outreach ?show=), shown as a removable pill. */
+  preset?: OutreachPreset | null;
+  onClearPreset?: () => void;
   /** Create a server-side bulk job (enrich / site_gen / audit) for the given lead ids.
    *  Runs in the bulk-jobs edge function — survives leaving the page. */
   onBulkJob?: (type: 'enrich' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
@@ -316,6 +322,9 @@ export function OutreachTable({
   showCampaignName,
   launchIntent,
   onLaunchConsumed,
+  onDetailClosed,
+  preset = null,
+  onClearPreset,
   onBulkJob,
   bulkJobActive = false,
   onAssignCampaign,
@@ -729,7 +738,17 @@ export function OutreachTable({
   useEffect(() => {
     if (!launchIntent) return;
     const lead = leads.find((l) => l.id === launchIntent.leadId);
-    if (!lead) return; // not loaded/filtered yet — rerun when leads change
+    if (!lead) {
+      /* ⛔ A STALE LINK SAYS SO (2026-09-30): once every lead has loaded and it is still not here, it was
+         removed, archived out of reach or reassigned away from this person — the list is read through
+         their own permissions, so nothing is exposed; the link just stops pretending. */
+      if (listComplete) {
+        toast({ title: 'That lead is not in your list', description: 'It may have been reassigned, removed or merged.' });
+        onLaunchConsumed?.();
+        onDetailClosed?.();
+      }
+      return; // not loaded yet — rerun when leads change
+    }
     setLaunchTemplate(launchIntent.templateContent ?? null);
     setLaunchLink(launchIntent.shareLink ?? null);
     if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
@@ -737,7 +756,7 @@ export function OutreachTable({
     else if (launchIntent.channel === 'open') setDetailLead(lead);
     onLaunchConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [launchIntent, leads]);
+  }, [launchIntent, leads, listComplete]);
 
   // Called when user clicks "Open App" in the WhatsApp dialog
   const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp') => {
@@ -1619,6 +1638,8 @@ export function OutreachTable({
     // (loadState only matters through listComplete, which is in the deps; the fallback object is new each render.)
     let result = visibleWhileLoading(loadState, [...leadsWithOptimistic], isArchiveView);
     result = rowsForArchiveView(result, archiveView);
+    // A list a link opened (?show=, e.g. the dashboard's "no trade stored" count) — the same rule as the count.
+    if (preset === 'no_trade') result = result.filter((lead) => isLiveLeadWithoutTrade(lead));
 
     // Filter by search
     if (searchQuery) {
@@ -1771,7 +1792,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, productFilter, sharedPhoneOnly, sharedPhoneIds, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -2351,6 +2372,12 @@ export function OutreachTable({
           )}
           {/* Filters row */}
           <div className="flex flex-wrap gap-2">
+            {preset && (
+              <button type="button" onClick={() => onClearPreset?.()} title="Opened from a link — click to show your usual list"
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 text-xs font-semibold text-primary hover:bg-primary/20">
+                <X className="h-3 w-3" />Showing: {OUTREACH_PRESETS[preset]}
+              </button>
+            )}
             {/* ⛔ THE FILTERED PILL — filters PERSIST across navigation (the tableState restore
                 above), which is the feature; the risk it creates is a remembered filter reading as
                 "my leads vanished" days later. So whenever ANY filter is non-default, say so
@@ -3340,7 +3367,7 @@ export function OutreachTable({
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog
         open={!!detailLead}
-        onOpenChange={(open) => { if (!open) setDetailLead(null); }}
+        onOpenChange={(open) => { if (!open) { setDetailLead(null); onDetailClosed?.(); } }}
         lead={detailLead}
         onStatusChange={onStatusChange}
         onNextActionChange={onNextActionChange}

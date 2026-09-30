@@ -37,6 +37,7 @@ import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotal
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
 import { costFeatureOf, costProviderOf, isChargeRow } from './apiCostLabels.ts';
+import { isLiveLeadWithoutTrade } from './leadTrade.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
 import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, foldTemplates, type Bottleneck, type FeatureRow, type NicheRow, type TemplatesBlock, type UsageRow } from './adminIntelligence.ts';
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
@@ -76,6 +77,9 @@ export interface AdminLead {
   /** Release 4 (client health / the weekly check's start rule). */
   delivery_checklist?: unknown;
   website_build?: unknown;
+  /** 2026-09-30: the Stripe link on a failed-payment item. */
+  stripe_subscription_id?: string | null;
+  stripe_customer_id?: string | null;
 }
 export interface AdminMessage {
   /** Release 3: ties a reply to its triage row (template "positive" replies). */
@@ -91,7 +95,22 @@ export interface AdminMessage {
 }
 export interface AdminActivity { lead_id: string; actor_user_id: string | null; kind: string; data: Record<string, unknown> | null; created_at: string }
 export interface AdminSuppression { lead_id: string | null; reason: string | null; source: string | null; created_at: string; wrong_number_at: string | null; wrong_number_by: string | null }
-export interface AdminLedgerRow { id: string; lead_id: string | null; kind: string; status: string; amount_gbp: number; occurred_at: string; sold_by_user_id: string | null }
+export interface AdminLedgerRow { id: string; lead_id: string | null; kind: string; status: string; amount_gbp: number; occurred_at: string; sold_by_user_id: string | null; stripe_object_id?: string | null; stripe_payment_intent_id?: string | null }
+
+/** Stripe's own dashboard page for an object, from its id prefix. Null for anything unrecognised —
+ *  a guessed link is worse than none. Ids only, never a secret. */
+const stripeLink = (label: string, ...ids: (string | null | undefined)[]) => { const url = stripeDashboardUrl(...ids); return url ? { external: { label, url } } : {}; };
+
+export function stripeDashboardUrl(...ids: (string | null | undefined)[]): string | null {
+  for (const raw of ids) {
+    const id = String(raw ?? '').trim();
+    if (!/^[a-z]+_[A-Za-z0-9]+$/.test(id)) continue;
+    const path = id.startsWith('du_') || id.startsWith('dp_') ? 'disputes' : id.startsWith('pi_') || id.startsWith('ch_') || id.startsWith('py_') ? 'payments'
+      : id.startsWith('sub_') ? 'subscriptions' : id.startsWith('cus_') ? 'customers' : id.startsWith('in_') ? 'invoices' : null;
+    if (path) return `https://dashboard.stripe.com/${path}/${id}`;
+  }
+  return null;
+}
 export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null }
 /** conversation_triage (fn conversation-triage): one row per inbound message. */
 export interface TriageRow {
@@ -192,8 +211,16 @@ export interface AttentionItem {
   key: string; group: AttentionGroup; kind: string;
   leadId: string | null; business: string;
   why: string; owner: string | null; sinceIso: string | null; state: string; action: string;
-  /** Where the row opens: a lead, the paid-client hub, the Inbox, or the sign-ups list. */
+  /** Where the row opens: a lead, the paid-client hub, the Inbox, or the sign-ups list.
+   *  ⛔ It follows where the action is DONE (2026-09-30): a chase on WhatsApp is the Inbox; a client
+   *  task is the hub AT its stage (`section`); a list problem is Outreach with that list (`show`). */
   open: 'lead' | 'client' | 'inbox' | 'signups' | 'outreach';
+  /** The hub stage to open (ClientHub ?section=): baseline, remeasure, payment… */
+  section?: string;
+  /** An Outreach list preset (Outreach ?show=): 'no_trade'. */
+  show?: string;
+  /** Where the money side is handled (Stripe's own dashboard), when the ids are on record. */
+  external?: { label: string; url: string };
   /** A reply-triage item: its row id (for "Mark handled") and how sure the filing was. */
   triageId?: string;
   confidence?: number;
@@ -745,7 +772,8 @@ function attentionItems(
     const l = leadById.get(r.lead_id);
     out.push({ key: `dispute:${r.id}`, group: 'urgent', kind: 'payment_dispute', leadId: r.lead_id, business: biz(r.lead_id),
       why: `A payment dispute of £${Number(r.amount_gbp).toFixed(2)} is open (${r.status.replace(/_/g, ' ')})`,
-      owner: nameOf(l?.sold_by_user_id ?? null), sinceIso: r.occurred_at, state: l ? stateOf(l) : 'Client', action: 'Respond to the dispute in Stripe', open: 'client' });
+      owner: nameOf(l?.sold_by_user_id ?? null), sinceIso: r.occurred_at, state: l ? stateOf(l) : 'Client', action: 'Respond to the dispute in Stripe', open: 'client', section: 'payment',
+      ...stripeLink('Open the dispute in Stripe', r.stripe_object_id, r.stripe_payment_intent_id) });
   }
   for (const f of facts) {
     const l = f.lead;
@@ -755,7 +783,8 @@ function attentionItems(
     if (paid && live && l.subscription_status === 'past_due') {
       out.push({ key: `past_due:${l.id}`, group: 'urgent', kind: 'payment_failed', leadId: l.id, business: l.business_name ?? 'Client',
         why: 'Their monthly payment failed and the subscription is past due', owner: nameOf(l.sold_by_user_id), sinceIso: null,
-        state: stateOf(l), action: 'Check the card with them before Stripe gives up', open: 'client' });
+        state: stateOf(l), action: 'Check the card with them before Stripe gives up', open: 'client', section: 'payment',
+        ...stripeLink('Open the subscription in Stripe', l.stripe_subscription_id, l.stripe_customer_id) });
     }
     // TODAY — paid, and setup has not started (no baseline). Refunded leads are not paid (isPaidLead).
     if (paid && live && !l.baseline_audit_id) {
@@ -763,13 +792,13 @@ function attentionItems(
       const days = since ? Math.floor((nowMs - ms(since)) / 86_400_000) : null;
       out.push({ key: `setup:${l.id}`, group: days !== null && days >= SETUP_PROMISE_DAYS ? 'urgent' : 'today', kind: 'setup_not_started', leadId: l.id, business: l.business_name ?? 'Client',
         why: days !== null && days >= SETUP_PROMISE_DAYS ? `Paid ${days} days ago and setup hasn't started — the promise is two working days` : 'Paid and setup has not started yet',
-        owner: nameOf(l.sold_by_user_id), sinceIso: since, state: stateOf(l), action: 'Start the baseline', open: 'client' });
+        owner: nameOf(l.sold_by_user_id), sinceIso: since, state: stateOf(l), action: 'Start the baseline', open: 'client', section: 'baseline' });
     }
     // TODAY — the four-week re-measure is past its date and has not run.
     if (paid && live && l.baseline_audit_id && l.remeasure_due_date && !l.remeasure_audit_id && l.remeasure_due_date.slice(0, 10) < todayDay) {
       out.push({ key: `remeasure:${l.id}`, group: 'today', kind: 'remeasure_overdue', leadId: l.id, business: l.business_name ?? 'Client',
         why: `The four-week re-measure was due ${l.remeasure_due_date.slice(0, 10)} and has not run`, owner: nameOf(l.sold_by_user_id),
-        sinceIso: `${l.remeasure_due_date.slice(0, 10)}T09:00:00Z`, state: stateOf(l), action: 'Open the client and run the re-measure', open: 'client' });
+        sinceIso: `${l.remeasure_due_date.slice(0, 10)}T09:00:00Z`, state: stateOf(l), action: 'Open the client and run the re-measure', open: 'client', section: 'remeasure' });
     }
     // TODAY — quoted and gone quiet (their court, not ours).
     if (!paid && !l.is_archived && l.status === 'price_given') {
@@ -779,7 +808,7 @@ function attentionItems(
       if (!waitingOnUs && d !== null && d >= QUOTE_QUIET_DAYS) {
         out.push({ key: `quoted:${l.id}`, group: 'today', kind: 'quote_quiet', leadId: l.id, business: l.business_name ?? 'Lead',
           why: `Quoted and quiet for ${d} days`, owner: nameOf(f.holder), sinceIso: new Date(clock!).toISOString(),
-          state: stateOf(l), action: 'Follow up on the quote', open: 'lead' });
+          state: stateOf(l), action: 'Follow up on the quote in the Inbox', open: 'inbox' });
       }
     }
   }
@@ -794,13 +823,12 @@ function attentionItems(
     if (d < SIGNUP_CHASE_DAYS) continue;
     out.push({ key: `signup:${leadId}`, group: 'today', kind: 'signup_unpaid', leadId, business: l.business_name ?? 'Lead',
       why: `Filled the sign-up ${d === 1 ? 'yesterday' : `${d} days ago`} and hasn't paid`, owner: nameOf(factsById.get(leadId)?.holder ?? null),
-      sinceIso: o.created_at, state: stateOf(l), action: 'Chase the sign-up', open: 'lead' });
+      sinceIso: o.created_at, state: stateOf(l), action: 'Chase the sign-up in the Inbox', open: 'inbox' });
   }
   // REVIEW — one line: live leads with no trade cannot be sold to.
-  const noTrade = facts.filter((f) => !f.lead.is_archived && !isPaidLead(f.lead) && !DEAD_STATUSES.has(String(f.lead.status))
-    && !['no_whatsapp', 'no_whatsapp_needs_sms', 'queued'].includes(String(f.lead.status)) && !((f.lead.search_keyword || f.lead.category || '').trim()));
+  const noTrade = facts.filter((f) => isLiveLeadWithoutTrade(f.lead));
   if (noTrade.length) out.push({ key: 'no_trade', group: 'review', kind: 'no_trade', leadId: null, business: `${noTrade.length} lead${noTrade.length === 1 ? '' : 's'}`,
-    why: 'No trade stored — checkout refuses them until it is set', owner: null, sinceIso: null, state: '—', action: 'Set the trade on each lead', open: 'outreach' });
+    why: 'No trade stored — checkout refuses them until it is set', owner: null, sinceIso: null, state: '—', action: 'Set the trade on each lead', open: 'outreach', show: 'no_trade' });
 
   const order: Record<AttentionGroup, number> = { urgent: 0, today: 1, review: 2, blocked: 3 };
   return out.sort((a, b) => order[a.group] - order[b.group] || (ms(a.sinceIso) || 0) - (ms(b.sinceIso) || 0));

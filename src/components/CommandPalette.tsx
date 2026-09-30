@@ -13,7 +13,7 @@ import { canOpenRoute } from '@/lib/access';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { FOCUS_VIEWS } from '@/lib/focusQueue';
 import { GO_SHORTCUTS, goTarget, isPaletteKey, isTypingTarget } from '@/lib/shortcuts';
-import { leadLaunchState, whatsAppLinkForLead } from '@/lib/salesLinks';
+import { outreachLeadLink, whatsAppLinkForLead } from '@/lib/salesLinks';
 import { writeCampaignFilter } from '@/lib/outreachPrefs';
 import { cn } from '@/lib/utils';
 
@@ -81,7 +81,7 @@ export function CommandPalette() {
     const out: Item[] = [];
     const leadItem = (id: string, name: string, hint: string | undefined, group: string): Item => ({
       id: `${group}:${id}`, group, label: name, hint, icon: group === 'Recent leads' ? Clock : Search,
-      run: close(() => navigate('/outreach', { state: leadLaunchState(id) })),
+      run: close(() => navigate(outreachLeadLink(id))),
       alt: [
         { label: 'WhatsApp', run: close(() => navigate(whatsAppLinkForLead(id))) },
         ...(canOpenRoute(role, '/focus') ? [{ label: 'Focus', run: close(() => navigate(`/focus?lead=${encodeURIComponent(id)}`)) }] : []),

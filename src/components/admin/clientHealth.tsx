@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { ClientRow } from '@/lib/adminMetrics';
+import { blockerSection } from '@/lib/clientHealth';
 import { SERVICE_ROUTE_NAME } from '@/lib/findableOffer';
 import { WEEKLY_CLIENT_CAP_USD, WEEKLY_MOVE_MIN, WEEKLY_TOTAL_CAP_USD, type WeeklyEngine } from '@/lib/weeklyCheck';
 
@@ -65,7 +66,7 @@ function Detail({ c }: { c: ClientRow }) {
   );
 }
 
-export function ClientHealthPanel({ o, onOpen }: { o: O; onOpen: (leadId: string) => void }) {
+export function ClientHealthPanel({ o, onOpen }: { o: O; onOpen: (leadId: string, section?: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const live = o.clients.filter((c) => !c.refunded);
   const blocked = live.filter((c) => (c.health?.blockers.length ?? 0) > 0).length;
@@ -97,7 +98,10 @@ export function ClientHealthPanel({ o, onOpen }: { o: O; onOpen: (leadId: string
                     <td className="px-2 py-1.5 text-xs tabular-nums">{h ? `${h.openImprovements} open · ${h.implementedImprovements} done` : '—'}</td>
                     <td className="px-2 py-1.5 text-xs tabular-nums">{h ? h.directoryIssues : '—'}</td>
                     <td className="px-2 py-1.5 text-xs">{c.payment}</td>
-                    <td className="px-2 py-1.5 text-xs">{h?.blockers.length ? h.blockers.map((b) => <span key={b} className={cn('block', TONE.red.text)}>{b}</span>) : <span className="text-muted-foreground">None</span>}</td>
+                    <td className="px-2 py-1.5 text-xs">{h?.blockers.length ? h.blockers.map((b) => (
+                      <button key={b} type="button" onClick={() => onOpen(c.leadId, blockerSection(b) ?? undefined)} title="Open the client at this stage"
+                        className={cn('block text-left hover:underline', TONE.red.text)}>{b}</button>
+                    )) : <span className="text-muted-foreground">None</span>}</td>
                   </tr>
                   {isOpen && <tr className="border-b border-border/40"><td /><td colSpan={10} className="py-2 pr-2"><Detail c={c} /></td></tr>}
                 </Fragment>

@@ -60,7 +60,7 @@ console.log("\n── conversation states ──");
   ok(isFollowUpDue("call", "2026-09-30", NOW) && !isFollowUpDue("call", "2026-10-02", NOW), "overdue is due; tomorrow is not");
   ok(formatWaiting(30_000) === "now" && formatWaiting(12 * 60_000) === "12m" && formatWaiting(2 * H) === "2h" && formatWaiting(3 * D) === "3d" && formatWaiting(NaN) === "now", "the timer reads now / 12m / 2h / 3d");
   ok(passesQuickFilter("unread", { unread: true, waitingSinceMs: null }) && !passesQuickFilter("waiting", { unread: true, waitingSinceMs: null }) && passesQuickFilter("all", { unread: false, waitingSinceMs: null }) && passesQuickFilter(undefined, { unread: false, waitingSinceMs: null }), "All / Unread / Waiting on us filters");
-  ok(whatsAppLinkForLead("abc-1") === "/inbox?lead=abc-1" && leadTarget("whatsapp", "x")[0] === "/inbox?lead=x" && leadTarget("lead", "x")[0] === "/outreach", "one deep link: WhatsApp → /inbox?lead=, lead → Outreach's launch");
+  ok(whatsAppLinkForLead("abc-1") === "/inbox?lead=abc-1" && leadTarget("whatsapp", "x")[0] === "/inbox?lead=x" && leadTarget("lead", "x")[0] === "/outreach?lead=x", "one deep link: WhatsApp → /inbox?lead=, lead → /outreach?lead= (a URL: survives refresh and Back)");
   const mig = read("supabase/migrations/20260929120000_whatsapp_unread.sql");
   ok(mig.includes(`timestamptz '${UNREAD_TRACKING_START.replace("T", " ").replace("Z", "+00")}'`), "the tracking start is the same instant in SQL and TS");
 }

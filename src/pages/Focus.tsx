@@ -12,7 +12,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { FOCUS_VIEWS, focusQueue, linkedInSearchUrl, type FocusView } from '@/lib/focusQueue';
-import { whatsAppLinkForLead, leadLaunchState } from '@/lib/salesLinks';
+import { whatsAppLinkForLead, outreachLeadLink } from '@/lib/salesLinks';
 import { isTypingTarget } from '@/lib/shortcuts';
 import { LEAD_CHANGED_EVENT } from '@/lib/leadSync';
 import type { SalesWorkspace } from '@/lib/salesWorkspace';
@@ -196,7 +196,7 @@ export default function Focus() {
                     {lead.phone && <span className="tabular-nums text-muted-foreground">{lead.phone}</span>}
                     {siteHref(lead.website) && <a href={siteHref(lead.website)!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><Globe className="h-3.5 w-3.5" />Website</a>}
                     {lead.google_maps_url && <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><MapPin className="h-3.5 w-3.5" />Maps</a>}
-                    <button type="button" onClick={() => navigate('/outreach', { state: leadLaunchState(lead.id) })} className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />Full workspace</button>
+                    <button type="button" onClick={() => navigate(outreachLeadLink(lead.id))} className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="h-3.5 w-3.5" />Full workspace</button>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
                     <QuickCloseButton leadId={lead.id} size="lg" />

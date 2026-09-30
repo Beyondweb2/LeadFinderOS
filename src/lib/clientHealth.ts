@@ -53,6 +53,17 @@ export interface ClientHealth {
   blockers: string[];
 }
 
+/** The hub stage (ClientHub ?section=) where a blocker is dealt with — the blocker sentences are
+ *  written in clientHealthOf below, so this reads them back by their fixed openings. Null = the hub top. */
+export function blockerSection(blocker: string): string | null {
+  if (blocker.startsWith('Official baseline')) return 'baseline';
+  if (blocker.startsWith('Official re-measure')) return 'remeasure';
+  if (blocker.startsWith('New site')) return 'build';
+  if (blocker.startsWith('Monthly payment') || blocker === 'Refunded') return 'payment';
+  if (blocker.startsWith('Weekly check')) return null;
+  return null;
+}
+
 const CLOSED_OPPORTUNITY: ReadonlySet<string> = new Set(['improved', 'no_change', 'not_pursuing']);
 
 export function clientHealthOf(i: ClientHealthInput, x: ClientExtras): ClientHealth {

@@ -13,7 +13,7 @@
    ⛔ A SHUT SECTION'S BODY IS UNMOUNTED, not hidden: cards run their own reads, and a hidden card
       would keep fetching for nobody.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,14 +42,18 @@ export function SectionToggle({ open, onToggle, label, className }: { open: bool
  * below. `summary` is shown beside the title when shut (so a closed section still says something).
  * `persistKey` omitted = not remembered (a list inside a dialog that should open fresh each time).
  */
-export function CollapsibleBlock({ persistKey, title, summary, actions, defaultOpen = true, children, className, headerClassName, titleClassName, as: Tag = 'section' }: {
+export function CollapsibleBlock({ persistKey, title, summary, actions, defaultOpen = true, children, className, headerClassName, titleClassName, as: Tag = 'section', forceOpen = false, id }: {
   persistKey?: string; title: ReactNode; summary?: ReactNode; actions?: ReactNode; defaultOpen?: boolean; children: ReactNode;
   className?: string; headerClassName?: string; titleClassName?: string; as?: 'section' | 'div';
+  /** A deep link names this block (e.g. ClientHub ?section=): open it, whatever was remembered. */
+  forceOpen?: boolean; id?: string;
 }) {
   const [open, setOpen] = useSectionOpenMaybe(persistKey, defaultOpen);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (forceOpen && !open) setOpen(true); }, [forceOpen]);
   const label = typeof title === 'string' ? title : 'section';
   return (
-    <Tag className={className}>
+    <Tag className={className} id={id}>
       <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-1', headerClassName)}>
         <SectionToggle open={open} onToggle={() => setOpen(!open)} label={label} className="-ml-1.5" />
         <button type="button" onClick={() => setOpen(!open)} className={cn('min-w-0 text-left font-medium', titleClassName)}>{title}</button>
