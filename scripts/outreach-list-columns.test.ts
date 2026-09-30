@@ -39,7 +39,7 @@ const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAudi
 const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   rating: { files: ["src/hooks/useOutreach.ts", "src/lib/auditReport.ts", "supabase/functions/_shared/place-details.ts", "src/lib/salesAddPayload.ts"], why: "written from Place Details; `lead.rating` in addLead is the SEARCH result; auditReport/place-details are other objects; salesAddPayload maps a SEARCH result + Place Details into the sales add" },
   review_count: { files: ["src/hooks/useOutreach.ts"], why: "written from Place Details; named in HAND_MIGRATED_LEAD_COLS" },
-  contact_name: { files: ["src/lib/leadRpc.ts", "src/lib/salesPatchPlan.ts"], why: "a PATCH key a salesperson's edit may carry, sent to lead_set_details — never read off a list row" },
+  contact_name: { files: ["src/lib/leadRpc.ts", "src/lib/salesPatchPlan.ts", "src/lib/coldCallPlaybook.ts"], why: "a PATCH key a salesperson's edit may carry, sent to lead_set_details — never read off a list row; coldCallPlaybook: the LinkedIn/email greeting reads the playbook's OWN lead row (useColdCallPlaybook LEAD_COLUMNS selects contact_name by id), never a list row (2026-09-30)" },
   next_action_note: { files: ["src/lib/leadRpc.ts", "src/lib/nextActionView.ts"], why: "nextActionView: the Next Action pill reads a note when the row carries one (the popup's CRM row, the Inbox, Focus) and shows none on a list row, which does not download it (2026-09-29); leadRpc: read from sales_leads by id before a follow-up write (so the note is not wiped) — not a list row" },
   whatsapp_checked_at: { files: ["src/lib/salesPatchPlan.ts"], why: "a server-written PATCH key the sales translator accepts as a no-op" },
   town_fetched_at: { files: ["src/hooks/useOutreach.ts"], why: "written from Place Details; named in HAND_MIGRATED_LEAD_COLS" },
@@ -55,7 +55,6 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   user_id: { files: ["src/hooks/useOutreach.ts", "src/hooks/useSalesCrm.ts", "src/hooks/useSubscription.tsx", "src/components/BulkAssignSelect.tsx"], why: "`.eq('user_id', …)` filters and team members' user_id — never a lead's" },
   updated_at: { files: ["src/hooks/useOutreach.ts", "src/components/TemplatePicker.tsx", "src/hooks/useBulkJobs.ts"], why: "`.order('updated_at')` strings and other tables' rows" },
   website_build: { files: ["src/lib/fullCrawl.ts"], why: "the crawl request-source constant 'website_build'" },
-  call_booked_at: { files: ["src/lib/salesCrm.ts"], why: "read off SALES rows (sales_leads view); Find Leads imports salesCrm only for refusalText" },
   lead_source: { files: ["src/lib/salesPerformance.ts"], why: "the Sales Dashboard fold's own rows, read on the server by sales-performance; Outreach imports it only for LEAD_SOURCE_LABELS (2026-09-28)" },
   sold_by_user_id: { files: ["src/lib/salesPerformance.ts"], why: "the same fold: who made the sale, read on the server by sales-performance (2026-09-28)" },
 };

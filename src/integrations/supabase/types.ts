@@ -2225,6 +2225,9 @@ export type Database = {
         | "send_follow_up"
         | "check_3_day_removal"
         | "2nd_follow_up"
+        | "email"
+        | "send_info"
+        | "meeting"
       site_status: "draft" | "published" | "archived"
     }
     CompositeTypes: {

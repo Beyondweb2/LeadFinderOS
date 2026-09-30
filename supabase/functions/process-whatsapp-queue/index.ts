@@ -24,6 +24,7 @@ import { buildsFromAudit } from "../../../src/lib/templateRouting.ts";
 import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, autoReplyEnvOn, autoReplyToggleOn, firstReplyMode, firstReplyTemplate, isDecline, isStaleAutoReply, modeSends, parseFirstReplyMode, phoneSuppressed, pitchEverSent } from "../_shared/auto-reply-rules.ts";
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
+import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -1228,7 +1229,7 @@ Deno.serve(async (req) => {
                 await service.from("outreach_leads")
                   .update({ status: "report_sent" })
                   .eq("id", row.lead_id)
-                  .not("status", "in", "(interested,price_given,payment_received,in_delivery,completed)");
+                  .not("status", "in", postgrestList(STRONG_STATUSES));
               } catch (e) {
                 console.error(`[auto-reply] report_sent status write failed for lead ${row.lead_id}:`, (e as Error).message);
               }

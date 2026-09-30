@@ -39,9 +39,6 @@ verify_jwt = false
 [functions.google-place-details]
 verify_jwt = false
 
-[functions.admin-ai-opener]
-verify_jwt = false
-
 [functions.stripe-webhook]
 verify_jwt = false
 

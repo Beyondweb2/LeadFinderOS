@@ -34,6 +34,7 @@ import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
 import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution.ts';
 import { onboardingLinkStatus } from './onboardingLinkStatus.ts';
+import { NOT_INTERESTED_STATUSES } from './leadState.ts';
 
 export interface PerfLead {
   id: string;
@@ -68,7 +69,9 @@ export const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set([
 ]);
 const INTERESTED_OUTCOMES: ReadonlySet<string> = new Set(['interested', 'meeting_booked']);
 const INTERESTED_STATUSES: ReadonlySet<string> = new Set(['interested', 'price_given', 'won_pending_onboarding']);
-const NOT_INTERESTED_STATUSES: ReadonlySet<string> = new Set(['not_interested', 'opted_out']);
+/* NOT INTERESTED is the lead state engine's set (src/lib/leadState.ts, 2026-09-30) — it now includes
+   'closed' (removed from the Inbox by the button), which salesStageOf always filed as not interested and
+   this fold alone did not: 3 leads on 2026-09-30. */
 const CONTACT_KINDS: ReadonlySet<string> = new Set(['call_outcome', 'contact_logged']);
 
 export interface FunnelCounts {

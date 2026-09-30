@@ -28,6 +28,7 @@ export const OUTREACH_LIST_COLUMNS = [
   // pipeline
   'status', 'previous_status', 'next_action', 'next_action_date', 'notes', 'is_potential_work',
   'amount_paid', 'product', 'contact_method', 'outreach_attempts', 'last_outreach_attempt_at',
+  'call_booked_at', // the row's Meeting line (lead state audit, 2026-09-30)
   'instantly_pushed_at',
   // web presence (signal filters, enrich / find-email targeting)
   'website', 'facebook_url', 'instagram_url', 'line_type', 'email_last_checked_at',

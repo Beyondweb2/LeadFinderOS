@@ -83,15 +83,10 @@ export function useSalesActions() {
   return {
     claim: m((a: { leadId: string }) => rpc('claim_lead', { _lead_id: a.leadId }), (a) => a.leadId),
     addLead: m((a: { lead: Record<string, unknown> }) => rpc('sales_add_lead', { _lead: a.lead }), () => undefined),
-    note: m((a: { leadId: string; body: string }) => rpc('lead_add_note', { _lead_id: a.leadId, _body: a.body }), (a) => a.leadId),
-    stage: m((a: { leadId: string; status: string }) => rpc('lead_set_stage', { _lead_id: a.leadId, _status: a.status }), (a) => a.leadId),
-    followUp: m((a: { leadId: string; nextAction: string; date: string | null; note: string | null }) =>
-      rpc('lead_set_follow_up', { _lead_id: a.leadId, _next_action: a.nextAction, _date: a.date, _note: a.note }), (a) => a.leadId),
-    callBooked: m((a: { leadId: string; at: string | null }) => rpc('lead_set_call_booked', { _lead_id: a.leadId, _at: a.at }), (a) => a.leadId),
-    call: m((a: { leadId: string; outcome: string; note: string | null }) =>
-      rpc('lead_record_call', { _lead_id: a.leadId, _outcome: a.outcome, _note: a.note }), (a) => a.leadId),
-    websiteControl: m((a: { leadId: string; value: string | null; note: string | null }) =>
-      rpc('lead_set_website_control', { _lead_id: a.leadId, _value: a.value, _note: a.note }), (a) => a.leadId),
+    /* REMOVED 2026-09-30 (lead state audit): note / stage / followUp / callBooked / call / websiteControl —
+       unused second write paths for a lead's state. The Work panel (LeadCrmPanel) and the one outcome
+       executor (src/lib/leadOutcome.ts) are the only writers; 'call' used lead_record_call, the pre-
+       lead_log_contact function. */
     /** Bulk initial outreach with THE TEMPLATE CHOSEN FOR THIS BATCH (no global selected opener). */
     queueOpener: m((a: { leadIds: string[]; template: string }) => salesQueueOpener(a.leadIds, a.template), () => undefined),
     /** Admin only — the server refuses anyone else. */

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, ChevronDown, Clock, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { leadPermissions } from '@/lib/access';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,11 +27,14 @@ import { OUTREACH_HOOK_QUESTIONS } from '@/lib/auditQuestionCounts';
 import { reviewedHookQuestions } from '@/lib/hookQuestionEdit';
 import { OUTREACH_AUDIT_MAP_ROOT } from '@/lib/outreachAuditMap';
 import { LINK_CHANNEL_LABEL } from '@/lib/onboardingLinkStatus';
-import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText, socialFollowUpPreset } from '@/lib/salesCrm';
+import { ACTIVITY_LABEL, NEXT_ACTION_OPTIONS, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, WEBSITE_CONTROL_OPTIONS, activityDetail, outcomesFor, refusalText, removeOutcomeText } from '@/lib/salesCrm';
 import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/lib/contactMethods';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
+import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { applyOutcome, recordStateChange } from '@/lib/leadOutcome';
+import { SalesStatePill } from '@/components/SalesStatePill';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE LEAD'S CRM — THREE PANELS, BOTH ROLES, BOTH PAGES (2026-09-27; split into the prospect
@@ -49,16 +52,20 @@ import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority
    and writes the activity row. After a yes, ONE notice (notifyLeadChanged): the Inbox, Outreach and
    these panels all re-read the same row. No local copy is edited in place.
    ⛔ An outcome is written as ACTIVITY (lead_log_contact never writes a status or a next action).
-   What else a tap does is done by the ordinary controls, in the open, and said in the confirmation
-   line (UI cleanup pass, 2026-09-29 — Paul: "one button = one real consequence"):
-     Interested / Meeting booked → the Interested star (the same write as the status menu's Interested);
-     Not interested → status Not interested (the same write as the status menu);
-     Agency controls site → "Who controls the website?" = an agency (lead_set_website_control);
-     Meeting booked → asks when, into "Call booked for" (lead_set_call_booked);
-     Call back → pre-selects Call in Next action and scrolls to it — the PERSON picks the day and
-       saves: Next Action stays human-set only (Paul, 2026-09-28).
-   The rest (no answer, voicemail, sent, spoke to owner, wrong number) are the record itself, shown as
-   "Last contact" at the top of the popup and in History.
+   What else a tap does is THE ONE RULE, src/lib/leadState.ts (outcomePlan / suggestNextAction),
+   carried out by src/lib/leadOutcome.ts for both roles and shown in the result line under the buttons
+   — the state before → after, and the Next Action it suggests (lead state audit, 2026-09-30; Paul:
+   "no toast-only actions"). In short:
+     No answer / Left voicemail / Sent / Spoke to owner → the record itself (the lead reads Contacted if
+       it was New) + a suggested Next Action pre-filled below;
+     Interested → the star; Meeting booked → the star + asks when (call_booked_at) and sets the Next
+       Action "Meeting" on that day in the same Save;
+     Call back → asks which day: the Next Action "Call" cannot be saved without one;
+     Not interested → status Not interested, the queue stopped, the Next Action cleared;
+     Wrong number → the number suppressed (contact_suppressions).
+   Suggestions are PRE-FILLED, never saved: Next Action stays human-set only (Paul, 2026-09-28).
+   ⛔ "Agency controls site" is an ATTRIBUTE, not an outcome: the "Agency runs their site" chip sets
+   website_control and logs no contact.
    ⛔ Reads come from the caller's OWN source (leadSourceFor): a salesperson reads the sales_leads
    view, so a lead that is not theirs simply returns nothing here.
    ⛔ Internal notes are activity rows and are NEVER sent to the lead.
@@ -68,7 +75,10 @@ import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id';
+/* status / is_potential_work / amount_paid / whatsapp_sent_at (2026-09-30): the facts the sales state
+   is read from (src/lib/leadState.ts), so the Work panel knows the state before and after a tap. Both
+   sources have them (the sales view's amount_paid is always null — a client is not in it at all). */
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -79,6 +89,7 @@ interface CrmRow {
   services_included: string[] | null; service_areas: string[] | null; address: string | null;
   campaign_id: string | null;
   domain_control: string | null;
+  status: string | null; is_potential_work: boolean | null; amount_paid: number | null; whatsapp_sent_at: string | null;
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
@@ -231,12 +242,17 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 }
 
 /* ── WORK: what a salesperson does after picking up the phone ─────────────────────────────────── */
-/** What a logged outcome also changed, in words for the confirmation line — or null for nothing. */
-export type OutcomeFollowOn = (outcome: string) => Promise<string | null>;
-type FollowUpPreset = { nextAction: string; date?: string; note?: string };
+/** What a logged outcome did, for the result line under the buttons. */
+export interface OutcomeResultLine { contact: string | null; state: SalesStateView; change: string | null; said: string[]; failed: string[]; suggestion: string | null }
+type FollowOn = (outcome: string, channel: string, logged: boolean) => Promise<OutcomeResultLine>;
+/** A Next Action the panel pre-fills after an outcome (never saved by itself). requireDate: Call back —
+ *  Save stays off until a day is picked. `why` names the outcome that suggested it. */
+type FollowUpPreset = { nextAction: string; date?: string; note?: string; requireDate?: boolean; why?: string };
 
-export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string; onRemoved?: () => void; onOutcome?: OutcomeFollowOn }) {
+export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
   const crm = useLeadCrmRow(leadId);
+  const activity = useLeadActivity(leadId);
+  const wrong = useWrongNumber(leadId);
   const save = useSave(leadId);
   const { role } = useSubscription();
   const lead = crm.data;
@@ -248,64 +264,84 @@ export function LeadWorkPanel({ leadId, onRemoved, onOutcome }: { leadId: string
   if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
   if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
 
-  /* The follow-on of one outcome (see the header). Returns the words for what else changed. */
-  const followOn = async (outcome: string, channel: string): Promise<string | null> => {
-    const said: string[] = [];
-    if (outcome === 'call_back') {
-      setPreset({ nextAction: 'call' });
-      requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-      said.push('Pick when to call back below, then Save next action');
+  const stateLead = () => {
+    const last = lastLoggedContactOf(activity.data);
+    return { ...lead, lastLogged: last ? { outcome: last.outcomeValue ?? '', at: last.at } : null, wrongNumber: wrong.data?.wrong ?? null };
+  };
+  const scrollToNext = () => requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+
+  /* The follow-on of one outcome (see the header): the ONE plan, carried out, then the suggestion
+     pre-filled. `logged` = lead_log_contact already recorded the contact (false for a WhatsApp
+     conversation's result — the messages are the record). */
+  const followOn: FollowOn = async (outcome, channel, logged) => {
+    const sl = stateLead();
+    const before = salesStateOf(sl);
+    const res = await applyOutcome(sl, outcome, before, logged);
+    if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
+    const sug = suggestNextAction(channel, outcome);
+    let suggestion: string | null = null;
+    if (res.plan.askMeeting) { setAskWhen(true); suggestion = 'Add when it is below — it also sets the Next Action “Meeting”'; }
+    else if (sug) {
+      setPreset({ nextAction: sug.nextAction, date: sug.days === null ? undefined : londonDayPlus(sug.days), note: sug.note, requireDate: sug.days === null && res.plan.askCallBackDay, why: outcomeLabel(outcome) });
+      scrollToNext();
+      const word = NEXT_ACTION_OPTIONS.find((o) => o.value === sug.nextAction)?.label ?? sug.nextAction;
+      suggestion = sug.days === null
+        ? (res.plan.askCallBackDay ? 'Pick the day to call back below, then Save' : `Next Action “${word}” is filled in below — pick a day and Save`)
+        : `Next Action “${word} · ${sug.days === 0 ? 'today' : sug.days === 1 ? 'tomorrow' : `in ${sug.days} days`}” is filled in below — Save to keep it`;
     }
-    /* ⛔ SOCIAL OUTREACH → THE ONE NEXT ACTION (2026-09-30): a LinkedIn / Facebook / Instagram message or
-       connection request pre-fills "Follow up" in socialFollowUpPreset's days. Pre-filled, never saved:
-       Next Action stays human-set — the person presses Save next action (or changes it). */
-    const social = socialFollowUpPreset(channel, outcome);
-    if (social) {
-      setPreset({ nextAction: social.nextAction, date: londonDayPlus(social.days), note: social.note });
-      requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-      said.push(`Follow-up in ${social.days} days is filled in below — press Save next action to keep it`);
-    }
-    if (outcome === 'meeting_booked') { setAskWhen(true); said.push('Add when it is below'); }
-    if (outcome === 'agency_controls_site' && lead.website_control !== 'agency_controls') {
-      const r = await save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency controls the website', { website_control: 'agency_controls' });
-      if (r.ok) said.push('Website control set to: an agency');
-    }
-    /* ⛔ WRONG NUMBER SUPPRESSES THE NUMBER (Paul, 2026-09-29): the one canonical row
-       (contact_suppressions, lead_mark_wrong_number) that every template and automated sender refuses
-       on. The lead and its history stay; the admin clears it from the popup header. */
-    if (outcome === 'wrong_number') {
-      const r = await leadRpc('lead_mark_wrong_number', { _lead_id: leadId });
-      if (r.ok) { said.push('Number suppressed: no templates, queue or automated WhatsApp to it'); void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) }); notifyLeadChanged(leadId); }
-      else said.push(`Not suppressed — ${refusalText(r.error)}`);
-    }
-    const more = onOutcome ? await onOutcome(outcome) : null;
-    if (more) said.unshift(more);
-    return said.length ? said.join(' · ') : null;
+    return { contact: null, state: res.after, change: stateChangeText(before, res.after), said: res.said, failed: res.failed, suggestion };
   };
 
+  /* The meeting: ONE Save writes the time (call_booked_at) and the Next Action "Meeting" on that day
+     — a person pressed Save with both shown, so the Next Action is still human-set. */
+  const saveMeeting = async (localValue: string) => {
+    const iso = localValue ? new Date(localValue).toISOString() : null;
+    if (!iso) return;
+    const before = salesStateOf(stateLead());
+    const r = await save('lead_set_call_booked', { _at: iso }, 'Meeting booked', { call_booked_at: iso });
+    if (!r.ok) return;
+    const day = new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+    const time = new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+    await save('lead_set_follow_up', { _next_action: 'meeting', _date: day, _note: `Meeting at ${time}` }, 'Meeting booked · Next Action set',
+      { next_action: 'meeting', next_action_date: day, next_action_note: `Meeting at ${time}` });
+    await recordStateChange(leadId, before, salesStateOf({ ...stateLead(), call_booked_at: iso }), 'meeting_booked');
+    notifyLeadChanged(leadId);
+    setAskWhen(false);
+  };
+
+  const agency = lead.website_control === 'agency_controls';
   return (
     <div className="space-y-3">
       <LogContact save={save} followOn={followOn} />
 
       {askWhen && (
-        <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-emerald-500/40')} data-testid="meeting-when">
-          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting?
+        <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
+          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (your local time)
             <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? toLocalInput(lead.call_booked_at) : ''} />
           </label>
           <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setAskWhen(false)}>Later</Button>
-          <Button size="sm" className="h-9 text-xs" onClick={async () => {
+          <Button size="sm" className="h-9 text-xs" data-testid="meeting-save" onClick={() => {
             const el = document.getElementById(`meeting-at-${lead.id}`) as HTMLInputElement | null;
-            const v = el?.value ? new Date(el.value).toISOString() : null;
-            if (!v) return;
-            const r = await save('lead_set_call_booked', { _at: v }, 'Call booked', { call_booked_at: v });
-            if (r.ok) setAskWhen(false);
-          }}>Save</Button>
+            void saveMeeting(el?.value ?? '');
+          }}>Save meeting</Button>
+          <p className="w-full text-[11px] text-muted-foreground">Shows as “Meeting booked” with the time, and sets the Next Action “Meeting” on that day.</p>
         </section>
       )}
 
-      <section className={CARD} ref={nextRef}>
+      {/* ⛔ AN ATTRIBUTE, NOT AN OUTCOME: who runs their site changes how it is sold, whatever the call's
+          outcome was. One tap here; the full choice stays under "Call booked · who controls the website". */}
+      <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="learned-agency">
+        <span className="text-xs text-muted-foreground">Learned on the call</span>
+        <button type="button" data-testid="agency-chip" aria-pressed={agency}
+          className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', agency ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-border/60 text-muted-foreground hover:bg-muted')}
+          onClick={() => void save('lead_set_website_control', { _value: agency ? 'unknown' : 'agency_controls', _note: lead.website_control_note }, agency ? 'Website control: unknown' : 'Saved: an agency runs their site', { website_control: agency ? 'unknown' : 'agency_controls' })}>
+          <Globe className="h-3 w-3" />{agency ? 'Agency runs their site ✓' : 'Agency runs their site'}
+        </button>
+      </section>
+
+      <section className={cn(CARD, preset && 'border-amber-500/50')} ref={nextRef}>
         <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset}
+        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
           onSave={async (a) => { const r = await save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
             { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note }); if (r.ok) setPreset(null); return r; }} />
       </section>
@@ -431,13 +467,36 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
   );
 }
 
+/** A WhatsApp conversation is recorded by its messages; what CAME of it is still the rep's to say.
+ *  These apply the same plan as the logged outcomes, without a second record of the messages. */
+const WHATSAPP_RESULT_OUTCOMES = ['interested', 'meeting_booked', 'call_back', 'not_interested'] as const;
+
 /** One tap per outcome. The channel defaults to Call; the note is optional and saved with it. */
-function LogContact({ save, followOn }: { save: SaveFn; followOn: (outcome: string, channel: string) => Promise<string | null> }) {
+function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  const [last, setLast] = useState<string | null>(null);
-  const [lastMore, setLastMore] = useState<string | null>(null);
+  const [result, setResult] = useState<OutcomeResultLine | null>(null);
+  const tap = async (outcome: string, logged: boolean) => {
+    setBusy(outcome);
+    try {
+      const label = contactMethodLabel(channel);
+      if (logged) {
+        const r = await save('lead_log_contact', { _channel: channel, _outcome: outcome, _note: note.trim() || null }, `${label} logged: ${outcomeLabel(outcome)}`);
+        if (!r.ok) return;
+        setNote('');
+      }
+      const res = await followOn(outcome, channel, logged);
+      setResult({ ...res, contact: `${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}` });
+    } finally { setBusy(null); }
+  };
+  const outcomeButton = (o: { value: string; label: string }, logged: boolean) => (
+    <Button key={o.value} type="button" size="sm" variant="outline" disabled={busy !== null} title={outcomeRule(o.value).does} data-testid={`outcome-${o.value}`}
+      className={cn('h-9 justify-start px-2.5 text-xs', (o.value === 'interested' || o.value === 'meeting_booked') && 'border-emerald-500/40', (o.value === 'not_interested' || o.value === 'wrong_number') && 'border-rose-500/30')}
+      onClick={() => void tap(o.value, logged)}>
+      {busy === o.value ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}{o.label}
+    </Button>
+  );
   const chip = (on: boolean) => cn('rounded-full border px-2.5 py-1 text-xs font-medium transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground hover:bg-muted');
   /* ⛔ EVERY METHOD OF THE ONE SET (src/lib/contactMethods.ts): the most used as pills, the rest under
      More. WhatsApp is a pill but is recorded by the send itself — selecting it explains that instead of
@@ -476,35 +535,35 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: (outcome: stri
           ))}
         </div>
       )}
-      {current?.recordedBy === 'send' ? (
-        <p className="rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
-          WhatsApp messages you send from LeadFinderOS are recorded automatically, with their delivery status — there is nothing to log here.
+      {current?.recordedBy === 'send' ? (<>
+        <p className="mb-2 rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground" data-testid="whatsapp-recorded-by-send">
+          WhatsApp messages are recorded automatically — nothing to log. What came of the conversation?
         </p>
-      ) : (<>
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid="whatsapp-result">
+          {WHATSAPP_RESULT_OUTCOMES.map((v) => outcomeButton({ value: v, label: outcomeLabel(v) }, false))}
+        </div>
+      </>) : (<>
       <Input value={note} onChange={(e) => setNote(e.target.value)} className="mb-2 h-9 text-xs" placeholder="Note (optional), saved with the outcome" />
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {outcomesFor(channel).map((o) => (
-          <Button key={o.value} type="button" size="sm" variant="outline" disabled={busy !== null}
-            className={cn('h-9 justify-start px-2.5 text-xs', (o.value === 'interested' || o.value === 'meeting_booked') && 'border-emerald-500/40', (o.value === 'not_interested' || o.value === 'wrong_number') && 'border-rose-500/30')}
-            onClick={async () => {
-              setBusy(o.value);
-              try {
-                const label = contactMethodLabel(channel);
-                const r = await save('lead_log_contact', { _channel: channel, _outcome: o.value, _note: note.trim() || null }, `${label} logged: ${o.label}`);
-                if (r.ok) {
-                  setNote('');
-                  setLast(`${label}: ${o.label}`);
-                  const more = await followOn(o.value, channel);
-                  setLastMore(more);
-                }
-              } finally { setBusy(null); }
-            }}>
-            {busy === o.value ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}{o.label}
-          </Button>
-        ))}
+        {offeredOutcomes(outcomesFor(channel)).map((o) => outcomeButton(o, true))}
       </div>
       </>)}
-      {last && <p className="mt-2 text-[11px] text-muted-foreground" data-testid="logged-line">Logged <span className="font-medium text-foreground">{last}</span> — shown as Last contact at the top and in History.{lastMore ? <> <span className="font-medium text-foreground">{lastMore}.</span></> : null}</p>}
+      {/* ⛔ THE VISIBLE RESULT (2026-09-30): what was recorded, the state it left the lead in (and the
+          change, when there was one), what else happened, and the Next Action waiting to be saved. */}
+      {result && (
+        <div className="mt-2.5 space-y-1 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]" data-testid="logged-line">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Check className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="font-semibold text-foreground">{result.contact}</span>
+            <span className="text-muted-foreground">→</span>
+            <SalesStatePill view={result.state} size="xs" />
+            {result.change && <span className="text-muted-foreground" data-testid="state-change">{result.change}</span>}
+          </div>
+          {result.said.length > 0 && <p className="text-muted-foreground">{result.said.join(' · ')}</p>}
+          {result.failed.length > 0 && <p className="text-destructive">{result.failed.join(' · ')}</p>}
+          {result.suggestion && <p className="font-medium text-amber-700 dark:text-amber-300" data-testid="suggestion">{result.suggestion}</p>}
+        </div>
+      )}
     </section>
   );
 }
@@ -525,21 +584,29 @@ function InternalNote({ save }: { save: SaveFn }) {
   );
 }
 
-function FollowUp({ lead, onSave, preset }: {
+function FollowUp({ lead, onSave, preset, onDismiss }: {
   lead: { next_action: string | null; next_action_date: string | null; next_action_note: string | null };
   onSave: (a: { nextAction: string; date: string | null; note: string | null }) => Promise<unknown>;
-  /** An outcome was just logged: "Call back" pre-selects Call; a social message pre-fills Follow up in N
-   *  days. Never saved — the person picks / checks the day and saves. */
+  /** An outcome was just logged: its suggested Next Action (leadState suggestNextAction), pre-filled —
+   *  never saved; the person checks it and presses Save. requireDate: Call back needs a day. */
   preset?: FollowUpPreset | null;
+  onDismiss?: () => void;
 }) {
   const known = NEXT_ACTION_OPTIONS.some((o) => o.value === lead.next_action);
   const [nextAction, setNextAction] = useState(preset?.nextAction ?? lead.next_action ?? 'none');
-  const [date, setDate] = useState(preset?.date ?? lead.next_action_date ?? '');
+  const [date, setDate] = useState(preset ? (preset.date ?? '') : (lead.next_action_date ?? ''));
   const [note, setNote] = useState(preset?.note ?? lead.next_action_note ?? '');
   const has = !!lead.next_action && lead.next_action !== 'none';
+  const needsDay = !!preset?.requireDate && !date;
   const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
   return (
     <div className="space-y-2" data-testid="next-action">
+      {preset && (
+        <p className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-200" data-testid="next-action-suggested">
+          <span>{preset.requireDate ? `${preset.why ?? 'Call back'}: pick the day, then Save.` : `Suggested after “${preset.why ?? 'the contact'}” — change anything, then Save to keep it.`}</span>
+          {onDismiss && <button type="button" className="shrink-0 underline underline-offset-2" onClick={onDismiss}>Not now</button>}
+        </p>
+      )}
       {has && (
         <p className="text-xs"><span className="text-muted-foreground">Now: </span>
           <span className="font-semibold">{NEXT_ACTION_OPTIONS.find((o) => o.value === lead.next_action)?.label ?? lead.next_action!.replace(/_/g, ' ')}</span>
@@ -566,7 +633,8 @@ function FollowUp({ lead, onSave, preset }: {
             <X className="h-3.5 w-3.5" />Clear
           </Button>
         )}
-        <Button size="sm" className="h-8 text-xs" onClick={() => void onSave({ nextAction, date: nextAction === 'none' ? null : (date || null), note: note.trim() || null })}>Save next action</Button>
+        <Button size="sm" className="h-8 text-xs" disabled={needsDay} title={needsDay ? 'Pick the day first' : undefined} data-testid="save-next-action"
+          onClick={() => void onSave({ nextAction, date: nextAction === 'none' ? null : (date || null), note: note.trim() || null })}>Save next action</Button>
       </div>
     </div>
   );
@@ -751,8 +819,29 @@ export function LeadHistoryPanel({ leadId, older }: { leadId: string; older?: Re
   const actorName = (id: string | null) => (id ? team.byId.get(id)?.display_name ?? 'Someone' : 'System');
   type Item = { key: string; at: string; actor: string | null; title: string; detail?: string | null; link?: boolean };
   const items: Item[] = [];
+  /* ⛔ THE STATE CHANGE SITS ON THE CONTACT THAT CAUSED IT (2026-09-30): "Phone call · Spoke to owner /
+     Status: Contacted → Interested". It joins the same person's NEAREST earlier contact row, only when
+     that row's outcome is the one the change names and it is under a minute old; otherwise it stands
+     alone (a WhatsApp conversation's result, a meeting saved later). The star / pipeline-status rows the
+     lead functions wrote for that change in the same minute are its mechanism and fold into it — the one
+     line says what happened. Only a real change was ever recorded (lead_log_state_change). */
+  const rows = [...(activity.data ?? [])].sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at));
+  const joined = new Set<string>();
+  const changeOf = new Map<string, string>();
+  const MECHANISM = new Set(['marked_interested', 'stage_changed']);
+  for (const [i, a] of rows.entries()) {
+    if (a.kind !== 'state_changed') continue;
+    const t = Date.parse(a.created_at);
+    const near = (c: typeof a) => c.actor_user_id === a.actor_user_id && t - Date.parse(c.created_at) <= 60_000 && t >= Date.parse(c.created_at);
+    for (const c of rows.slice(0, i)) if (MECHANISM.has(c.kind) && near(c)) joined.add(c.id);
+    const cause = rows.slice(0, i).reverse().find((c) => LOGGED_CONTACT_KINDS.has(c.kind) && c.actor_user_id === a.actor_user_id);
+    if (cause && near(cause) && !changeOf.has(cause.id) && cause.data?.outcome === a.data?.outcome) { changeOf.set(cause.id, stateChangedWords(a.data)); joined.add(a.id); }
+  }
   for (const a of activity.data ?? []) {
-    items.push({ key: a.id, at: a.created_at, actor: a.actor_user_id, title: ACTIVITY_LABEL[a.kind] ?? a.kind, detail: activityDetail(a, actorName) });
+    if (joined.has(a.id)) continue;
+    const base = a.kind === 'state_changed' ? stateChangedWords(a.data) : activityDetail(a, actorName);
+    const change = changeOf.get(a.id);
+    items.push({ key: a.id, at: a.created_at, actor: a.actor_user_id, title: ACTIVITY_LABEL[a.kind] ?? a.kind, detail: change ? [base, change].filter(Boolean).join('\n') : base });
   }
   (link.data?.events ?? []).forEach((e, i) => {
     items.push({ key: `link-${i}`, at: e.created_at, actor: e.actor_user_id, link: true, title: e.kind === 'sent' ? 'Sign-up link sent' : 'Sign-up link copied', detail: e.kind === 'sent' ? `${LINK_CHANNEL_LABEL[e.channel] ?? e.channel}${e.template_name ? ` (${e.template_name})` : ''}` : null });
