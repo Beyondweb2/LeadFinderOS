@@ -79,6 +79,12 @@ console.log("\n── false positives measured on live data (2026-09-30) ──"
   ok(profileKey("https://www.facebook.com/AKElectrical1/reviews/") === profileKey("https://www.facebook.com/AKElectrical1"), "facebook /Page and /Page/reviews/ are one profile");
   ok(profileKey("https://www.yell.com/biz/x-1/?utm_source=chatgpt.com") === profileKey("https://www.yell.com/biz/x-1/reviews"), "yell /biz/<id> with utm tags or /reviews is one profile");
   ok(profileKey("https://www.checkatrade.com/trades/a") !== profileKey("https://www.checkatrade.com/trades/b"), "two different trades ids stay two");
+  ok(profileKey("https://www.facebook.com/100092417073968/") === profileKey("https://www.facebook.com/p/Brodley-Locksmiths-and-Property-Services-100092417073968/"), "facebook /<id>/ and /p/<Name-id>/ are one page");
+  const hzCand: ListingCandidate = { url: "https://www.houzz.co.uk/professionals/joiners/bp-carpentry-1", title: "BP Carpentry and Building", text: "07700 900123", via: "search" };
+  const houzz = matchListing(brodley(), hzCand, src("houzz.co.uk"));
+  ok(houzz.confidence === "likely" && !houzz.signals.includes("name"), "their phone on a profile under another name → LIKELY, not confirmed");
+  const hz = assemblePresence({ ...base, identity: brodley(), candidates: [hzCand] }).findings.find((x) => x.source_key === "houzz.co.uk");
+  ok(!!hz && /possibly listed under another or older name/.test(hz.reason), "…and the reason says it may be listed under another name");
   const ronnie = buildIdentity({ lead: { business_name: "Ronnie's Shoe Repairs & Key Cutting", derived_town: "Halifax", search_keyword: "Shoe repairs" } });
   const timpson = sourceForUrl("https://www.timpson.co.uk/stores/halifax-sainsburys/shoe-repairs")!;
   ok(matchListing(ronnie, { url: "https://www.timpson.co.uk/stores/halifax-sainsburys/shoe-repairs", title: "Shoe Repairs Halifax Sainsbury's | Timpson", via: "citation" }, timpson.source).confidence === null,
@@ -268,6 +274,7 @@ console.log("\n── one rule, one place ──");
   ok(/requireAdmin\(req, service\)/.test(fn) && /allStopRefusal\(service/.test(fn) && /USAGE_CRITICAL_PCT/.test(fn), "admin only; the search refuses under the emergency stop and at the Apify cap");
   ok(fn.indexOf("allStopRefusal(service") < fn.indexOf("startApifyRun("), "…and the gates run before any search starts");
   ok(!/\.insert\(\s*payload/.test(fn) && /onConflict: "lead_id,source_key"/.test(fn), "rows are UPSERTED on (lead, source) — a recheck cannot insert a duplicate");
+  ok(fn.includes('attempts.length > 0 && attempts.every((x) => x.state === "succeeded")'), "an older rule's row is withdrawn only after a COMPLETE search, never a partial one");
   ok(!/facebook\.com\/pages\/create|\.post\(|submit/i.test(fn.replace(/method: "POST"/g, "")), "discovery only: nothing in the function creates or submits a listing");
 }
 

@@ -78,10 +78,13 @@ itself (the lead row was scraped from Google, so Google's record is compared wit
 only). Fields: phone ("possibly an old number"), website (with "the old domain" when the stored domain
 now redirects to the served one), address/postcode, name (Google's structured name only — page titles
 are too noisy), **duplicate** (two distinct profile ids on one source; `profileKey` treats
-`/Page` and `/Page/reviews/`, utm tags and Maps short links as the same profile — both were measured
-false duplicates), and **unconfirmed** (a possible listing a human must check before anyone creates a
-second one). A site-linked social handle that names something else (RG Locksmiths →
-`facebook.com/RGCarpentryAndBuilding`) is a NOTE in the reason, not an issue. `fields_compared` records
+`/Page` and `/Page/reviews/`, Facebook's `/<id>/` and `/p/<Name-id>/`, utm tags and Maps short links as
+the same profile — all measured false duplicates; a Facebook group post is never a profile), and
+**unconfirmed** (a possible listing a human must check before anyone creates a second one). A
+site-linked social handle that names something else (RG Locksmiths →
+`facebook.com/RGCarpentryAndBuilding`) is a NOTE in the reason, not an issue — as is a LIKELY listing
+carrying their phone or website but not their name (RG's details on a Houzz profile for "RG Carpentry
+and Building": "possibly listed under another or older name"). `fields_compared` records
 what was actually compared, so "no issues" is never read as "all fields agree".
 
 ## 5. Prioritising what is worth adding
@@ -158,7 +161,9 @@ false rows.
 worth_adding, in_progress, not_relevant}`, and the lists `already_on` (existing + verified, by
 confidence), `needs_attention` and `worth_adding` (by priority), `in_progress` (operator-added, not yet
 seen), `not_relevant`, `review`. Each item: label, kind, status, confidence, listing_url, priority,
-reason, issues, evidence, first/last checked/last seen, set_by_operator.
+reason, issues, evidence, first/last checked/last seen, set_by_operator, recognised (a source we hold a
+record for, as against a host seen only in a search — scraped aggregators; ALREADY ON lists recognised
+first).
 
 ## 9. Paid Client hub integration — NOT done, deliberately
 
@@ -169,7 +174,7 @@ To integrate once that branch has merged:
    (up to three searches) — opening the view must never spend.
 2. A panel in `src/pages/ClientHub.tsx` with three groups from the summary — ALREADY ON / NEEDS
    ATTENTION / WORTH ADDING — each count in its header, confidence and issues per row, the reason
-   verbatim, and per-row buttons for `set_status` (Mark added · Not relevant · Reset). Show "Never
+   verbatim, recognised sources above search-only hosts, and per-row buttons for `set_status` (Mark added · Not relevant · Reset). Show "Never
    checked" when `summary.checked` is false and "Not searched yet" when `searched` is false.
 3. Add the new screen to `OPERATOR_SCREENS` (it contains competitor names — operator copy, never sent
    to a client). No change to `paid-client-hub` is needed; the function is self-contained.

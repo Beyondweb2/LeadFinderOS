@@ -426,6 +426,12 @@ export function profileKey(url: string): string | null {
   if (/^(maps\.app\.goo\.gl|g\.page|goo\.gl)$/.test(host) || /^(maps\.)?google\./.test(host)) return null;
   const qid = /[?&]id=(\d+)/.exec(url)?.[1];
   if (qid) return `${host}?id=${qid}`;
+  /* Facebook serves one page as /100092417073968/ AND /p/Brodley-Locksmiths-…-100092417073968/ —
+     measured live as a false duplicate. The long numeric id is the page. */
+  if (host === 'facebook.com') {
+    const num = pathOfUrl(url).split('?')[0].split('/').filter(Boolean).map((x) => /(?:^|[-_])(\d{9,})$/.exec(x)?.[1]).find(Boolean);
+    if (num) return `facebook.com#${num}`;
+  }
   const segs = pathOfUrl(url).split('?')[0].split('#')[0].toLowerCase().split('/').filter(Boolean);
   const at = segs.findIndex((x) => PROFILE_PREFIXES.has(x));
   const keep = at >= 0 && at + 1 < segs.length ? segs.slice(0, at + 2) : segs.slice(0, 1);
@@ -752,6 +758,9 @@ export function assemblePresence(inp: PresenceInputs): { findings: PresenceFindi
       : [m.signals.includes('name') ? 'name' : '', m.signals.includes('phone') ? 'phone' : '', m.signals.includes('domain') ? 'website' : '', m.signals.includes('postcode') ? 'postcode' : '', m.signals.includes('town') ? 'town' : ''].filter(Boolean).join(' + ') + ' match';
     const reason = `${m.confidence === 'confirmed' ? 'Confirmed' : m.confidence === 'likely' ? 'Likely' : 'Unconfirmed'}: ${how}.`
       + (cf ? ` Cited in AI answers to ${cf.questions.size} of their ${inp.citations.questionsCounted} questions.` : '')
+      + (m.confidence === 'likely' && !m.signals.includes('name') && m.found.name
+        ? ` It shows their ${m.signals.includes('phone') ? 'phone' : 'website'} but not their name ("${String(m.found.name).slice(0, 80)}") — possibly listed under another or older name; worth checking.`
+        : '')
       + (handleMismatch(c.url, source, id) ? ` Its address (${pathOfUrl(c.url).split('?')[0]}) does not carry the business name — worth checking it is the current business.` : '');
     findings.push({
       source_key: key, source_label: source.label, source_kind: source.kind, status,
@@ -1001,6 +1010,9 @@ export interface PresenceItem {
   last_checked_at: string;
   last_seen_at: string | null;
   set_by_operator: boolean;
+  /** A source we hold a record for (catalogue or directoryFacts), as against a host seen only in a
+   *  search — scraped aggregators land there. The hub lists recognised ones first. */
+  recognised: boolean;
 }
 
 export interface PresenceSummary {
@@ -1027,6 +1039,7 @@ export function toItem(r: StoredPresenceRow): PresenceItem {
     issues: r.inconsistencies ?? [], evidence: r.evidence ?? {},
     first_seen_at: r.first_seen_at, last_checked_at: r.last_checked_at, last_seen_at: r.last_seen_at,
     set_by_operator: r.status_source === 'operator',
+    recognised: r.source_kind !== 'other',
   };
 }
 
@@ -1038,7 +1051,7 @@ export function presenceSummary(
   const items = rows.map(toItem);
   const byPrio = (a: PresenceItem, b: PresenceItem) => (PRIO_RANK[b.priority ?? 'low'] ?? 0) - (PRIO_RANK[a.priority ?? 'low'] ?? 0) || a.label.localeCompare(b.label);
   const byConf = (a: PresenceItem, b: PresenceItem) => (CONF_RANK[b.confidence ?? 'unverified'] - CONF_RANK[a.confidence ?? 'unverified']) || a.label.localeCompare(b.label);
-  const already_on = items.filter((i) => i.status === 'existing' || i.status === 'verified').sort(byConf);
+  const already_on = items.filter((i) => i.status === 'existing' || i.status === 'verified').sort((a, b) => Number(b.recognised) - Number(a.recognised) || byConf(a, b));
   const needs_attention = items.filter((i) => i.status === 'needs_attention').sort(byPrio);
   const worth_adding = items.filter((i) => i.status === 'worth_adding').sort(byPrio);
   const in_progress = items.filter((i) => i.status === 'added').sort(byPrio);
