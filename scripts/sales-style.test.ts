@@ -23,6 +23,8 @@ import { selectFindings as selectCardFindings } from '../src/lib/prospectPreview
 import { eesHeadline, eesResearch } from './prospect-preview-fixtures.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { readFileSync } from 'node:fs';
+import { planHookQuestions } from '../src/lib/hookAudit.ts';
+import { topUpHookQuestions } from '../src/lib/hookScore.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => {
@@ -185,6 +187,24 @@ console.log('── 5. THE VOICE-NOTE CHECK REFUSES FILLER ON THE SEARCH ──'
   const plain = old.replace('i was trying to find a reliable electrician for commercial work in Woking and asked Google AI', 'i asked Google AI for an electrician in Woking');
   ok(checkVoiceNoteScript(old, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.some((p) => /filler adjective on the search/.test(p)), 'the real "reliable electrician" line is now sent back');
   ok(checkVoiceNoteScript(plain, { evidence: ev, site, town: 'Woking', trade: 'Electricians', business: 'JG Electrics' }).problems.length === 0, 'the plain version passes every check');
+}
+
+console.log('── 6. THE HOOK ASKS GENUINE SEARCHES ──');
+{
+  const generated = [
+    'Can you recommend a reliable electrician in Addlestone UK?',
+    'trusted electrician for rewiring in Addlestone UK',
+    'highly rated electrician in Addlestone UK',
+    'Can you recommend an electrician in Addlestone UK?',
+    'emergency electrician in Addlestone UK',
+    'who is the best electrician in Addlestone UK',
+  ];
+  const plan = planHookQuestions(generated, { town: 'Addlestone' });
+  ok(plan.length === 3 && plan.every((q) => searchFillerCount(q) === 0), 'the plan takes the plain searches over "reliable / trusted / highly rated" ones: ' + JSON.stringify(plan));
+  const filler = planHookQuestions(['reliable plumber in Rugby UK', 'trusted plumber in Rugby UK'], { town: 'Rugby' });
+  ok(filler.length === 2, 'a set that is all filler still plans (never refuses to run; the words asked are stored as asked)');
+  const topped = topUpHookQuestions([], { trade: 'Electricians', place: 'Addlestone UK' });
+  ok(topped.length === 3 && topped.every((q) => searchFillerCount(q) === 0 && !/recommended local/i.test(q)), 'the fallback questions are plain: ' + JSON.stringify(topped));
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }
