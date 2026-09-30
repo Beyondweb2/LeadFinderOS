@@ -275,7 +275,7 @@ export default function Baseline() {
   const clientBaseline = isClientBaseline(audit);
   const roleLabel = auditRoleLabel(audit);
   const opportunities = audit.baseline_completed_at && !internalOnly
-    ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, { businessName: audit.business_name ?? '', location: audit.location_text ?? '', website: audit.website ?? '', isAggregatorUrl }) }))
+    ? view.questions.map((q) => ({ question: q.question, ...opportunityFor(q.question, queueRows, { businessName: audit.business_name ?? '', location: audit.location_text ?? '', website: audit.website ?? '', trade: audit.business_type ?? '', isAggregatorUrl }) }))
     : [];
   const opportunityCounts = opportunities.reduce((m, q) => { m[q.classification] = (m[q.classification] ?? 0) + 1; return m; }, {} as Record<string, number>);
   /* A full measure / day-28 replay: operator document, no client report offered, labelled as
@@ -432,7 +432,8 @@ export default function Baseline() {
                         const none = c.named === 0;
                         return (
                           <span key={e}>
-                            {e}{' '}
+                            {/* "named", always: a bare "0/3" read as measurements (Paul, 2026-09-30). */}
+                            {e} named{' '}
                             <span className={`font-bold ${all ? 'text-green-500' : none ? 'text-red-400' : 'text-amber-400'}`}>
                               {c.named}/{c.runs}
                             </span>

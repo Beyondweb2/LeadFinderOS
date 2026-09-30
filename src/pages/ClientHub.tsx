@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AuditQuestionEditor, cleanAuditQuestions } from '@/components/AuditQuestionEditor';
+import { cleanAuditQuestions } from '@/components/AuditQuestionEditor';
 import { useToast } from '@/hooks/use-toast';
 import { remeasureStatus } from '@/lib/deliveryCockpit';
 import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
@@ -23,7 +23,12 @@ import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
 import { ClientHandoffCard, type ClientHandoff } from '@/components/ClientHandoffCard';
-import { CoveragePanel, DISCOVERY_PLAN_RUNS, DiscoverySection, nearDuplicateCount, useDiscoveryPoll } from '@/components/BaselineDiscovery';
+import { DISCOVERY_PLAN_RUNS, DiscoverySection, HookAuditStep, nearDuplicateCount, RecommendationStep, useDiscoveryPoll } from '@/components/BaselineDiscovery';
+import { OfficialBaseline } from '@/components/OfficialBaseline';
+import { OpportunityBacklog, useOpportunities } from '@/components/OpportunityBacklog';
+import { CollapsibleBlock } from '@/components/CollapsibleSection';
+import { hookProtection } from '@/lib/baselineRecommendation';
+import { backlogCounts } from '@/lib/opportunityBacklog';
 import { discoveryPlan } from '@/lib/discoveryProgress';
 import { ManualOnboardingDialog } from '@/components/ManualOnboardingDialog';
 import { onboardingStatus } from '@/lib/manualOnboarding';
@@ -33,7 +38,9 @@ import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
-type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary; handoff?: ClientHandoff; contract?: ClientContract };
+type Hub = { lead: AnyRecord; onboarding: AnyRecord | null; onboarding_unpaid?: { id: string; status: string | null } | null; audit: AnyRecord | null; runs: AnyRecord[]; pages: AnyRecord[]; crawl: LeadCrawlSummary; handoff?: ClientHandoff; contract?: ClientContract;
+  /** The official baseline's named count (paid-client-hub, the report's ruler): answers naming the business. */
+  baseline_visibility?: { named: number; answered: number; expected: number } | null };
 
 /* THE ONE HUB POLLER. (The Prepare Baseline dialog has its own read-only Discovery poller while a
    Discovery job runs — useDiscoveryPoll in BaselineDiscovery.tsx.) The hub re-reads itself on this interval only while the baseline is `starting`
@@ -44,7 +51,11 @@ export const HUB_POLL_MS = 15_000;
 /* Through invokeEdge: a real session first, explicit Authorization, one refresh-and-retry on 401,
    never the anon key (src/lib/edgeInvoke.ts). */
 const call = (body: Record<string, unknown>) => invokeEdge<Record<string, any>>('paid-client-hub', body);
-const Stage = ({ title, children }: { title: string; children: ReactNode }) => <Card><CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{children}</CardContent></Card>;
+/* Every hub stage folds away with the shared control (src/components/CollapsibleSection.tsx), remembered
+   per person: collapse almost everything and the summary at the top still says where the client is. */
+const Stage = ({ title, k, summary, children }: { title: string; k: string; summary?: ReactNode; children: ReactNode }) => <Card><CardContent className="p-4">
+  <CollapsibleBlock persistKey={`hub.${k}`} title={title} titleClassName="text-base font-semibold" summary={summary}><div className="space-y-2 text-sm">{children}</div></CollapsibleBlock>
+</CardContent></Card>;
 const values = (v: unknown) => Array.isArray(v) ? v.filter(Boolean).join(', ') : String(v || '—');
 const copy = async (value: string) => { if (value) await navigator.clipboard.writeText(value); };
 const Spinner = ({ className = 'h-6 w-6' }: { className?: string }) => <Loader2 className={`${className} animate-spin text-primary`} />;
@@ -115,14 +126,14 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  /** Questions Paul added from Discovery this session — kept first by the balanced generator. */
-  const [added, setAdded] = useState<string[]>([]);
   const [acceptDuplicates, setAcceptDuplicates] = useState(false);
+  /** Hook Audit questions Paul replaced, with the reason (sent with the approval, kept on the row). */
+  const [hookReasons, setHookReasons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setBusy('load'); setError(null);
+    setBusy('load'); setError(null); setHookReasons({});
     invokePaidBaseline('get', leadId)
       .then((next) => { if (cancelled) return; setData(next); setLoaded(next); setQuestions(next.questions); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load baseline setup'); })
@@ -130,9 +141,11 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     return () => { cancelled = true; };
   }, [open, leadId, reloadKey]);
 
-  /* The approval carries Paul's explicit "approve anyway" when near-duplicates remain (the server
-     refuses them otherwise). */
-  const invoke = useCallback((action: string, extra: Record<string, unknown> = {}) => invokePaidBaseline(action, leadId, action === 'approve' && acceptDuplicates ? { ...extra, accept_duplicates: true } : extra), [leadId, acceptDuplicates]);
+  /* The approval carries Paul's explicit "approve anyway" when near-duplicates remain, and the reason
+     for every Hook Audit question he replaced (the server refuses either otherwise). */
+  const invoke = useCallback((action: string, extra: Record<string, unknown> = {}) => invokePaidBaseline(action, leadId, action === 'approve'
+    ? { ...extra, ...(acceptDuplicates ? { accept_duplicates: true } : {}), hook_replacements: Object.entries(hookReasons).map(([question, reason]) => ({ question, reason })) }
+    : extra), [leadId, acceptDuplicates, hookReasons]);
   const accept = (next: Baseline) => { setData(next); setLoaded(next); setQuestions(next.questions); };
   const fail = (title: string, message: string) => { setError(message); toast({ title, description: message, variant: 'destructive' }); };
 
@@ -180,9 +193,14 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     } catch (e) { fail('Could not start baseline', e instanceof Error ? e.message : 'Try again'); }
     finally { setBusy(null); }
   });
-  /* GENERATE = the balanced baseline from the Discovery pool (the server writes the pool first if
-     there is none), keeping the questions Paul added from Discovery. A draft, never a freeze. */
-  const generate = () => data && act('generate', 'generate', { ...contextOf(data), keep_current: added.length > 0, questions: added });
+  /* GENERATE = the RECOMMENDED baseline: the Hook Audit's questions locked in, the rest balanced from
+     the Discovery pool (the server writes the pool first if there is none). A draft, never a freeze. */
+  const generate = () => {
+    if (!data) return;
+    if (cleanAuditQuestions(questions).length && !window.confirm('Replace the draft on screen with the recommended baseline? Nothing is frozen until you approve.')) return;
+    setHookReasons({});
+    void act('generate', 'generate', contextOf(data));
+  };
   const generateDiscovery = () => data && act('discovery', 'discovery_generate');
   const runDiscovery = () => {
     if (!data?.discovery) return;
@@ -190,12 +208,20 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     const ok = window.confirm(`Run Discovery: ${plan.questions} questions × ${plan.engines} engines (ChatGPT and Gemini) × ${plan.runs} runs = ${plan.measurements} measurements, about ${data.discovery.estimate_usd.toFixed(2)}. It runs on the server — you can close this and come back. Nothing is frozen and the paid baseline does not start. Continue?`);
     if (ok) void act('discovery_run', 'discovery_run', { confirm_cost: true });
   };
-  const addFromDiscovery = (q: string) => { setQuestions((cur) => [...cur.filter((x) => x.trim()), q]); setAdded((cur) => (cur.includes(q) ? cur : [...cur, q])); };
+  /** Override the recommendation: put a Discovery question into the draft by hand. */
+  const addFromDiscovery = (q: string) => { setQuestions((cur) => [...cur.filter((x) => x.trim()), q]); };
+  /** Exceptional correction: an APPROVED set that has not started, reopened with a written reason. */
+  const reopen = () => {
+    const reason = window.prompt('Reopen the approved baseline for correction.\n\nOnly for a genuine factual or business error. The reason is kept in the baseline history. Why?');
+    if (reason === null) return;
+    void act('save', 'reopen_approved', { reason });
+  };
   const duplicates = data ? nearDuplicateCount(data, cleanAuditQuestions(questions)) : 0;
-  /* Discovery runs on the server; while it runs, re-read its stored progress (discovery block only). */
-  useDiscoveryPoll(leadId, open, data, !!busy, (discovery) => {
-    setData((cur) => (cur ? { ...cur, discovery } : cur));
-    setLoaded((cur) => (cur ? { ...cur, discovery } : cur));
+  /* Discovery runs on the server; while it runs, re-read its stored progress (discovery block and the
+     recommendation built from it — the draft on screen is untouched). */
+  useDiscoveryPoll(leadId, open, data, !!busy, (discovery, recommendation) => {
+    setData((cur) => (cur ? { ...cur, discovery, recommendation } : cur));
+    setLoaded((cur) => (cur ? { ...cur, discovery, recommendation } : cur));
   });
 
   const frozen = !!data && isFrozenBaselineStatus(data.status);
@@ -203,16 +229,22 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const count = cleanAuditQuestions(questions).length;
   const statusText = busy ? BUSY_TEXT[busy] : data ? paidBaselineStatusLabel(data.status) : '';
   const sources = (map: Record<string, string[]> | undefined, empty: string) => Object.entries(map ?? {}).map(([name, s]) => `${name} (${s.join(', ')})`).join(' · ') || empty;
+  const hook = data ? hookProtection(cleanAuditQuestions(questions), data.hook?.questions ?? [], Object.entries(hookReasons).map(([question, reason]) => ({ question, reason }))) : null;
+  const recQs = data?.recommendation?.questions.map((r) => r.question) ?? [];
+  const draftIsRecommendation = recQs.length > 0 && JSON.stringify(recQs) === JSON.stringify(cleanAuditQuestions(questions));
+  const contextMissing = !!data && (!data.location || !data.business_type || !data.services_list.length);
+  const step = !data ? 0 : started ? 5 : frozen ? 5 : count ? 4 : data.discovery?.pool.length ? 3 : 2;
 
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Prepare baseline</DialogTitle></DialogHeader>
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl overflow-y-auto p-4 sm:p-6"><DialogHeader><DialogTitle>Prepare baseline</DialogTitle></DialogHeader>
     {!data && busy === 'load' && <div className="flex justify-center py-12"><Spinner/></div>}
     {!data && busy !== 'load' && error && <div className="space-y-3 py-6"><div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>{error}</div><Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>Retry</Button></div>}
-    {data && <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm" aria-live="polite"><span className="font-medium">Status:</span><span>{statusText}</span>{busy && <Spinner className="h-4 w-4"/>}</div>
+    {data && <div className="space-y-3">
+      <ol className="flex flex-wrap gap-1 text-[11px]" aria-label="Baseline steps">{STEPS.map((s, i) => <li key={s} className={`rounded-full border px-2 py-0.5 ${i + 1 === step ? 'border-primary bg-primary/10 font-semibold text-primary' : i + 1 < step ? 'text-muted-foreground line-through decoration-muted-foreground/40' : 'text-muted-foreground'}`}>{i + 1}. {s}</li>)}</ol>
+      <div className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm" aria-live="polite"><span className="font-medium">Status:</span><span>{statusText}</span>{frozen && <span className="flex items-center gap-1 text-xs font-semibold uppercase text-emerald-600"><Lock className="h-3.5 w-3.5"/>Frozen</span>}{busy && <Spinner className="h-4 w-4"/>}</div>
       {error && <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
-      <p className="text-sm text-muted-foreground">Review context and questions before approval. Only the approved wording and order is queued and later replayed for remeasure.</p>
-      <section className="rounded-md border p-3"><h3 className="mb-3 font-medium">A. Client / business context</h3>
-        <p className="mb-3 text-xs text-muted-foreground">Prefilled from the client record, the onboarding answers{data.discovery_context ? `, the Discovery scan of ${data.discovery_context.created_at ? new Date(data.discovery_context.created_at).toLocaleDateString('en-GB') : 'this lead'}` : ''}{data.crawl_context_at ? ' and the website crawl' : ''}. Nothing is invented: a blank field has no verified source yet.</p>
+      <CollapsibleBlock as="section" className="rounded-md border p-3" defaultOpen={contextMissing} title="Client context"
+        summary={contextMissing ? 'incomplete — fill in before approving' : `${data.business_type} · ${data.location} · ${data.services_list.length} services · ${data.areas_list.length} areas`}>
+        <p className="mb-3 text-xs text-muted-foreground">From the client record and onboarding{data.discovery_context ? ', and an earlier Discovery scan' : ''}{data.crawl_context_at ? ' and the website crawl' : ''}. A blank field has no verified source yet.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label>Business</Label><Input value={data.business_name} disabled/></div>
           <div><Label>Specialism / category</Label><Input value={data.business_type} disabled={started || !!busy} onChange={(e) => setData({ ...data, business_type: e.target.value })}/></div>
@@ -221,39 +253,48 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
           <div className="sm:col-span-2"><Label>Services (comma separated)</Label><Input value={data.services} disabled={started || !!busy} onChange={(e) => setData({ ...data, services: e.target.value })}/><p className="mt-1 text-xs text-muted-foreground">{sources(data.context_sources?.service_sources, 'No service facts found yet — type them to record what the baseline measures')}</p></div>
           <div className="sm:col-span-2"><Label>Service areas (comma separated)</Label><Input value={data.areas_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, areas_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/><p className="mt-1 text-xs text-muted-foreground">{sources(data.context_sources?.area_sources, 'No service-area facts found yet')}</p></div>
           {!started && ((data.detected?.services.length ?? 0) > 0 || (data.detected?.areas.length ?? 0) > 0) && <div className="sm:col-span-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-            <p><b>Detected on the website — not included.</b> The baseline measures only approved services and towns. Add one here only if the client genuinely offers or serves it.</p>
+            <p><b>Detected on the website — not included.</b> Add one only if the client genuinely offers or serves it.</p>
             {(data.detected?.services.length ?? 0) > 0 && <p className="mt-1">Services: {data.detected!.services.join(', ')}</p>}
             {(data.detected?.areas.length ?? 0) > 0 && <p className="mt-1">Towns: {data.detected!.areas.join(', ')}</p>}
           </div>}
           <div className="sm:col-span-2"><Label>Services list (comma separated)</Label><Input value={data.services_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, services_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
         </div>
-        {data.crawl_context_at && <p className="mt-2 text-xs text-muted-foreground">Website context last refreshed {new Date(data.crawl_context_at).toLocaleString()}.</p>}
         {!started && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || !contextDirty} onClick={() => data && void act('save_context', 'save_context', contextOf(data))}><Save className="mr-1 h-4 w-4"/>Save client context</Button>}
-      </section>
+      </CollapsibleBlock>
+      <HookAuditStep data={data}/>
       <DiscoverySection data={data} questions={questions} busy={!!busy} frozen={frozen} onGenerate={() => void generateDiscovery()} onRun={runDiscovery} onAdd={addFromDiscovery}/>
-      <section className="rounded-md border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-medium">C. Question setup ({count})</h3><p className="text-sm text-muted-foreground">Edit, remove, add, paste, or regenerate before approval.</p></div>{frozen ? <span className="flex items-center gap-1 text-xs text-emerald-600"><Lock className="h-3.5 w-3.5"/>Frozen</span> : <div className="flex gap-2"><Button size="sm" variant={questions.length ? 'outline' : 'default'} disabled={!!busy} onClick={() => void generate()} title="20 questions balanced across the approved services, the home town and the approved areas, and intent types — from the Discovery pool, keeping any you added. Winnability is not used to choose.">
-            <RefreshCw className="mr-1 h-4 w-4"/>Generate balanced baseline{added.length ? ` (keeps ${added.length} added)` : ''}</Button></div>}</div>
-        <div className="mt-3"><AuditQuestionEditor questions={questions} onChange={setQuestions} disabled={frozen} busy={!!busy}/></div>
-        <CoveragePanel data={data} questions={cleanAuditQuestions(questions)}/>
-        {!frozen && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || count === 0} onClick={() => void act('save', 'save', { questions: cleanAuditQuestions(questions) })}><Save className="mr-1 h-4 w-4"/>Save draft</Button>}
-      </section>
-      <section className="rounded-md border border-primary/30 bg-primary/5 p-3"><h3 className="font-medium">D. Approval + start</h3><p className="mt-1 text-sm text-muted-foreground">Approval freezes the exact text and order. The server queues that frozen set × {BASELINE_RUNS}.</p>
+      {!frozen && <RecommendationStep data={data} busy={!!busy} frozen={frozen} draftIsRecommendation={draftIsRecommendation} onUse={generate}/>}
+      <OfficialBaseline data={data} questions={questions} onChange={setQuestions} frozen={frozen} busy={!!busy} hookReasons={hookReasons}
+        onHookReason={(q, reason) => setHookReasons((cur) => ({ ...cur, [q]: reason }))}/>
+      {!frozen && count > 0 && <div className="flex justify-end"><Button size="sm" variant="outline" disabled={!!busy || count === 0} onClick={() => void act('save', 'save', { questions: cleanAuditQuestions(questions) })}><Save className="mr-1 h-4 w-4"/>Save draft</Button></div>}
+      <section className="rounded-md border border-primary/30 bg-primary/5 p-3"><h3 className="font-medium">5. Freeze + run</h3>
         {!frozen && <>
-          <p className="mt-2 text-sm">{count === BASELINE_QUESTIONS ? `Exactly ${BASELINE_QUESTIONS} questions — ready to approve.` : `Approval needs exactly ${BASELINE_QUESTIONS} questions (currently ${count}).`}</p>
-          <p className="mt-1 text-xs text-muted-foreground">The refund is judged on all {BASELINE_QUESTIONS} approved questions — home town and approved areas — asked again, word for word, at re-measure.</p>
+          <p className="mt-1 text-sm">{count === BASELINE_QUESTIONS ? `Exactly ${BASELINE_QUESTIONS} questions — ready to approve.` : `Approval needs exactly ${BASELINE_QUESTIONS} questions (currently ${count}).`}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Approving freezes the exact wording and order, then runs them × {BASELINE_RUNS} on ChatGPT + Gemini. The re-measure asks the same {BASELINE_QUESTIONS}, word for word; the refund is judged on them.</p>
+          {hook && hook.unexplained.length > 0 && <div className="mt-2 space-y-1 rounded border border-amber-400/50 bg-amber-500/10 p-2 text-xs" role="alert">
+            <p className="font-medium">Hook Audit question{hook.unexplained.length === 1 ? '' : 's'} missing from the set. Put {hook.unexplained.length === 1 ? 'it' : 'them'} back, or say why {hook.unexplained.length === 1 ? 'it is' : 'each is'} wrong:</p>
+            {hook.unexplained.map((q) => <label key={q} className="block"><span className="block">“{q}”</span>
+              <Input className="mt-1 h-8" placeholder="Reason (a factual or business error)" value={hookReasons[q] ?? ''} onChange={(e) => setHookReasons((cur) => ({ ...cur, [q]: e.target.value }))}/></label>)}
+          </div>}
           {duplicates > 0 && <label className="mt-2 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300"><input type="checkbox" className="mt-1" checked={acceptDuplicates} onChange={(e) => setAcceptDuplicates(e.target.checked)}/>
             <span>{duplicates} near-duplicate pair{duplicates === 1 ? '' : 's'} flagged above. Approve anyway — I have checked they are genuinely different questions.</span></label>}
-          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS || (duplicates > 0 && !acceptDuplicates)} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve &amp; start baseline</Button>
+          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS || (duplicates > 0 && !acceptDuplicates) || !!hook?.unexplained.length} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve, freeze &amp; start baseline</Button>
         </>}
         {data.status === 'approved' && <>
-          <p className="mt-2 text-sm">The question set is frozen. Complete section A if anything is missing, then start.</p>
-          <Button className="mt-3" disabled={!!busy} onClick={() => void startOnly()}>{busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Start baseline</Button>
+          <p className="mt-2 text-sm">Frozen. Complete the client context if anything is missing, then start.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button disabled={!!busy} onClick={() => void startOnly()}>{busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Start baseline</Button>
+            <Button variant="ghost" size="sm" disabled={!!busy} onClick={reopen} title="Only for a genuine error. Needs a written reason; kept in the history.">Reopen for correction…</Button>
+          </div>
         </>}
-        {started && <p className="mt-2 text-sm">{paidBaselineStatusLabel(data.status)}. Close this dialog; the hub tracks the runs.</p>}
+        {started && <p className="mt-2 text-sm">{paidBaselineStatusLabel(data.status)}. The frozen {BASELINE_QUESTIONS} can no longer change — the re-measure repeats them exactly. The hub tracks the runs.</p>}
+        {(data.meta?.corrections?.length ?? 0) > 0 && <p className="mt-2 text-xs text-muted-foreground">Correction history: {data.meta!.corrections!.map((c) => `${new Date(c.at).toLocaleDateString('en-GB')} — ${c.reason}`).join(' · ')}</p>}
       </section>
     </div>}
   </DialogContent></Dialog>;
 }
+
+const STEPS = ['Hook Audit', 'Discovery', 'Recommendation', 'Review', 'Freeze + run'];
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    STAGE 2 — WELCOME PACK.
@@ -289,7 +330,7 @@ function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord |
   };
 
   const tone = ready.state === 'ready' ? 'text-emerald-600' : ready.state === 'error' ? 'text-destructive' : 'text-muted-foreground';
-  return <Stage title="2. Welcome Pack">
+  return <Stage k="welcome" title="2. Welcome Pack" summary={ready.state === 'ready' ? 'Ready' : ready.state === 'waiting' ? 'Waiting for baseline' : 'Error'}>
     <p className={`font-medium ${tone}`}>
       {ready.state === 'ready' ? 'Ready' : ready.state === 'waiting' ? 'Waiting for baseline' : 'Error'}
     </p>
@@ -319,7 +360,7 @@ function OnboardingStage({ onboarding, unpaid, onOpen }: { onboarding: AnyRecord
   const tone = st.state === 'complete' || st.state === 'completed_manually' ? 'text-emerald-600' : 'text-amber-700 dark:text-amber-300';
   const services = values(onboarding?.services_list) !== '—' ? values(onboarding?.services_list) : (onboarding?.services || '—');
   const areas = values(onboarding?.areas_list) !== '—' ? values(onboarding?.areas_list) : (onboarding?.areas_wanted || '—');
-  return <Stage title="Onboarding">
+  return <Stage k="onboarding" title="Onboarding" summary={st.label}>
     <p className={`flex items-center gap-1.5 font-medium ${tone}`}>{st.state === 'complete' || st.state === 'completed_manually' ? <CheckCircle2 className="h-4 w-4"/> : <AlertTriangle className="h-4 w-4"/>}{st.label}</p>
     {unpaid && !onboarding && <p className="text-xs text-muted-foreground">The client started onboarding (status “{unpaid.status}”) but it was never marked paid. The manual form adopts that record — nothing is duplicated.</p>}
     {onboarding && <div className="grid gap-2 text-xs sm:grid-cols-2">
@@ -373,7 +414,7 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
     ? BUILD_ROUTE_LABELS[build.route] + (template ? ' · ' + template.name : '') + (build.route === 'faithful_rebuild' && build.rebuild_style ? ' · ' + REBUILD_STYLE_LABELS[build.rebuild_style] : '')
     : 'Not chosen yet';
 
-  return <Stage title="4. Website Build">
+  return <Stage k="build" title="4. Website Build" summary={route}>
     <div className="grid gap-3 sm:grid-cols-2">
       {ro('Build route', route)}
       {ro('Live website', facts.website.value || '')}
@@ -395,6 +436,25 @@ function WebsiteBuildStage({ lead, onboarding, audit, pages }: {
       <Button asChild variant="outline" size="sm" className="mt-2"><Link to="/page-generator"><FileCode2 className="mr-1 h-4 w-4"/>Open page generator</Link></Button>
     </div>
   </Stage>;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE CLIENT AT A GLANCE (2026-09-30): the official baseline, how visible they were in it, the
+   re-measure date, and the ongoing work — before any section is opened. Every figure is read, never
+   stored: the baseline visibility is counted by paid-client-hub with the report's named ruler.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+function ClientSummary({ hub, bs, remeasure, opps }: { hub: Hub; bs: string; remeasure: string; opps: ReturnType<typeof backlogCounts> | null }) {
+  const v = hub.baseline_visibility;
+  const n = hub.onboarding?.baseline_questions?.length ?? 0;
+  const tile = (label: string, value: ReactNode, sub?: ReactNode) => <div className="rounded-md border px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><p className="text-lg font-semibold leading-tight">{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}</div>;
+  return <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="client-summary">
+    {tile('Official baseline', n ? `${n} questions` : '—', paidBaselineStatusLabel(bs))}
+    {tile('Baseline visibility', v ? `${v.named} / ${v.expected}` : '—', v ? `named${v.answered < v.expected ? ` · ${v.answered} answered` : ''}` : 'after the baseline completes')}
+    {tile('Remeasure', remeasure)}
+    {tile('Opportunities', opps ? opps.total : '…', 'in the backlog')}
+    {tile('Active improvements', opps ? opps.active : '…')}
+    {tile('Waiting for recheck', opps ? opps.waiting : '…')}
+  </div>;
 }
 
 export default function ClientHub() {
@@ -429,7 +489,7 @@ export default function ClientHub() {
   const poll = useCallback(async () => {
     try {
       const next = (await call({ action: 'get', lead_id: leadId, handoff: false })).client as Hub;
-      setHub((prev) => ({ ...next, handoff: prev?.handoff })); setPageError(null);
+      setHub((prev) => ({ ...next, handoff: prev?.handoff, baseline_visibility: next.baseline_visibility ?? prev?.baseline_visibility })); setPageError(null);
     } catch (e) { setPageError(describe(e, 'Could not refresh this client')); }
   }, [leadId]);
   const retry = () => { setPageError(null); setReloadKey((k) => k + 1); };
@@ -441,6 +501,9 @@ export default function ClientHub() {
   }, [bs, poll]);
   const runs = hub?.runs ?? [];
   const progress = useMemo(() => formatBaselineProgress(runs, BASELINE_RUNS), [runs]);
+  /* The Opportunity Backlog, read once per visit (not polled) — the summary strip and its stage share it. */
+  const opps = useOpportunities(leadId, !!hub?.onboarding);
+  const oppCounts = backlogCounts(opps.data?.opportunities ?? []);
 
   if (loading) return <div className="flex justify-center py-16"><Spinner className="h-8 w-8"/></div>;
   const errorPanel = pageError && <Card><CardContent className="space-y-3 p-6 text-sm"><div role="alert" className="flex items-start gap-2 text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{pageError}</span></div><Button size="sm" variant="outline" onClick={retry}><RefreshCw className="mr-1 h-4 w-4"/>Try again</Button></CardContent></Card>;
@@ -450,28 +513,32 @@ export default function ClientHub() {
   return <div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
   <Card><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
+  <ClientSummary hub={hub} bs={bs} remeasure={`${lead.remeasure_due_date || 'after baseline'}${lead.remeasure_due_date ? ` · ${rm.label}` : ''}`} opps={opps.data ? oppCounts : null}/>
   {hub.handoff && <ClientHandoffCard handoff={hub.handoff} leadId={lead.id} onChanged={refresh}/>}
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
   <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
   <div className="grid gap-4 lg:grid-cols-2">
     <OnboardingStage onboarding={onboarding} unpaid={hub.onboarding_unpaid} onOpen={() => setOnboardingOpen(true)}/>
-    <Stage title="Website evidence">
+    <Stage k="evidence" title="Website evidence">
       {/* The lead's ONE crawl row — the same one the Outreach and Inbox Crawl site buttons write. */}
       <LeadCrawlPanel leadId={lead.id} website={onboarding?.business_website || lead.website} summary={hub.crawl} from="paid_client" onDone={refresh}/>
     </Stage>
-    <Stage title="1. Baseline">
+    <Stage k="baseline" title="1. Official baseline" summary={paidBaselineStatusLabel(bs)}>
       <p className="flex items-center gap-2 font-medium">{paidBaselineStatusLabel(bs)}{(bs === 'starting' || bs === 'running') && <Spinner className="h-4 w-4"/>}</p>
       {(bs === 'needs_questions' || bs === 'needs_approval' || bs === 'failed') && <ReadinessList lead={lead} onboarding={onboarding} onFix={() => setOnboardingOpen(true)}/>}
       {(bs === 'needs_questions' || bs === 'needs_approval' || bs === 'approved' || bs === 'failed') && <Button disabled={!onboarding} title={onboarding ? undefined : 'Complete onboarding first — the baseline is built from it.'} onClick={() => setBaselineOpen(true)}><RefreshCw className="mr-1 h-4 w-4"/>{setupLabel}</Button>}
       {bs === 'starting' && <p className="text-muted-foreground">The server is creating the persisted queue for the approved set × {BASELINE_RUNS} runs. This page refreshes itself.</p>}
-      {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} questions × {BASELINE_RUNS} runs</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
+      {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} frozen questions × {BASELINE_RUNS} runs · ChatGPT + Gemini</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
     </Stage>
     <WelcomePackStage lead={lead} audit={audit}/>
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
-    <Stage title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
+    <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
-    <Stage title="5. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
-    <Stage title="6. Remeasure"><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>
-    <Stage title="7. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
+    <Stage k="reviews" title="5. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
+    <Stage k="remeasure" title="6. Remeasure" summary={lead.remeasure_due_date ? `due ${lead.remeasure_due_date}` : 'after baseline'}><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>
+    <Stage k="results" title="7. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
+    <div className="lg:col-span-2"><Stage k="opportunities" title="8. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
+      {hub.onboarding ? <OpportunityBacklog leadId={lead.id} state={opps}/> : <p className="text-muted-foreground">Available once onboarding exists.</p>}
+    </Stage></div>
   </div></div>;
 }

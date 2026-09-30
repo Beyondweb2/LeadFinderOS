@@ -17,9 +17,11 @@
      · the coverage of a set and the warnings Paul sees before freezing (coverageReport)
      · a balanced 20 from a candidate pool (buildBalancedBaseline)
 
-   ⛔ WINNABILITY NEVER CHOOSES THE BASELINE. Discovery's verdicts are shown to Paul as information;
-   buildBalancedBaseline does not read them. Picking the easiest questions would measure a flattering
-   set, not the business.
+   ⛔ BALANCE CHOOSES THE BASELINE, NEVER WINNABILITY ALONE. This module does not read Discovery's
+   verdicts. Since 2026-09-30 (Paul) the caller may pass a RANK that breaks ties between candidates
+   that balance the set equally — baselineRecommendation.ts uses it to prefer questions where the
+   business is not yet named. Balance is applied first, so a rank can never turn the 20 into the
+   easiest questions: picking those would measure a flattering set, not the business.
 
    IMPORTED BY AN EDGE FUNCTION (paid-baseline): relative imports with an explicit .ts only.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -171,6 +173,10 @@ export interface CoverageReport {
   warnings: string[];
 }
 
+/** The client's MAIN services are the ones they listed first (onboarding order is theirs). A baseline
+ *  missing one of these is missing a meaningful part of the business; the rest may sit in the backlog. */
+export const MAIN_SERVICE_COUNT = 3;
+
 export function coverageReport(questions: string[], ctx: MixContext, target = 20): CoverageReport {
   const qs = questions.map((q) => q.trim()).filter(Boolean);
   const mixes = qs.map((q) => classifyQuestion(q, ctx));
@@ -189,16 +195,22 @@ export function coverageReport(questions: string[], ctx: MixContext, target = 20
   const warnings: string[] = [];
   const primaryCount = byTown.get(ctx.primaryTown) ?? 0;
   const unusedAreas = ctx.areas.filter((a) => (byTown.get(a) ?? 0) === 0);
+  /* ⛔ REPRESENTATIVE, NOT EXHAUSTIVE (Paul, 2026-09-30). Twenty questions cannot hold one per town,
+     and a business with many areas was told "N areas not covered" on every draft — a warning that
+     can never be satisfied teaches the reader to ignore warnings. Warn only when a MEANINGFUL part
+     of the business is missing: the home area, a main service, every area but one, one service
+     taking over. Unused areas are returned (unusedAreas) for an information line, never a warning;
+     they stay in the Opportunity Backlog. */
   if (qs.length !== target) warnings.push(`${qs.length} of ${target} questions — the paid baseline is exactly ${target}.`);
-  if (ctx.areas.length && qs.length && primaryCount / qs.length > 0.6) {
-    warnings.push(`${primaryCount} of ${qs.length} questions target ${ctx.primaryTown}${unusedAreas.length ? ` while ${unusedAreas.length} other approved service area${unusedAreas.length === 1 ? ' is' : 's are'} unused (${unusedAreas.join(', ')})` : ''}.`);
-  } else if (unusedAreas.length && qs.length >= target) {
-    warnings.push(`Approved service area${unusedAreas.length === 1 ? '' : 's'} not covered: ${unusedAreas.join(', ')}.`);
+  if (qs.length && ctx.primaryTown && primaryCount === 0) warnings.push(`No question names ${ctx.primaryTown} — the home area must be in the baseline.`);
+  const townsUsed = [...byTown.entries()].filter(([, n]) => n > 0).map(([t]) => t);
+  if (ctx.areas.length && qs.length >= 5 && townsUsed.length <= 1) {
+    warnings.push(`Every question is about ${townsUsed[0] ?? 'one place'} — none of the ${ctx.areas.length} approved service area${ctx.areas.length === 1 ? ' is' : 's is'} represented.`);
   }
   const maxShare = Math.max(4, Math.ceil(qs.length * 0.25));
   for (const [s, n] of byService) if (n > maxShare) warnings.push(`"${s}" appears in ${n} of ${qs.length} questions — one service dominates.`);
-  const usedServices = [...byService.values()].filter((n) => n > 0).length;
-  if (ctx.services.length >= 4 && qs.length >= target && usedServices < Math.min(5, ctx.services.length)) warnings.push(`Only ${usedServices} of ${ctx.services.length} approved services are represented.`);
+  const missingMain = ctx.services.slice(0, MAIN_SERVICE_COUNT).filter((s) => !byService.get(s.label));
+  if (qs.length >= target && missingMain.length) warnings.push(`Main service${missingMain.length === 1 ? '' : 's'} not in the baseline: ${missingMain.map((s) => s.label).join(', ')}.`);
   if (duplicates.length) warnings.push(`${duplicates.length} near-duplicate pair${duplicates.length === 1 ? '' : 's'} — the same question in different words.`);
   return {
     total: qs.length,
@@ -211,7 +223,9 @@ export function coverageReport(questions: string[], ctx: MixContext, target = 20
 
 /* ── the balanced 20 ──────────────────────────────────────────────────────────────────────────── */
 
-export interface Candidate { question: string; source: 'manual' | 'discovery' | 'generated' }
+/** 'locked' = kept verbatim whatever else is true (the Hook Audit questions — baselineRecommendation.ts);
+ *  'manual' = Paul's own additions, kept first but still de-duplicated. */
+export interface Candidate { question: string; source: 'locked' | 'manual' | 'discovery' | 'generated' }
 
 /** Guidance for 20 (scaled for other targets): broad, service, service+area, emergency. */
 export function mixTargets(target = 20, hasAreas = true): Record<IntentType, number> {
@@ -226,7 +240,11 @@ export function mixTargets(target = 20, hasAreas = true): Record<IntentType, num
  * takes over; near-duplicates are never admitted; if a type runs short the remainder is filled from
  * whatever is left, still rotating. Deterministic. ⛔ Never reads winnability.
  */
-export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target = 20): string[] {
+/* ⚠️ opts.rank is a TIE-BREAK ONLY, after the balance score: among candidates that would balance the
+   set equally, the lower rank goes first. This module never knows what the rank means — the caller
+   decides (baselineRecommendation.ts prefers questions where the business is not yet named). Balance
+   always wins, so a rank cannot turn the baseline into a list of the easiest questions. */
+export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target = 20, opts: { rank?: (question: string) => number } = {}): string[] {
   const towns = [ctx.primaryTown, ...ctx.areas].filter(Boolean);
   const chosen: QuestionMix[] = [];
   const admit = (m: QuestionMix) => {
@@ -234,12 +252,15 @@ export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target
     chosen.push(m); return true;
   };
   const all = pool.map((c) => ({ c, m: classifyQuestion(c.question.trim(), ctx) })).filter((x) => x.m.question);
+  /* Locked questions go in first, verbatim, and are never refused as a near-duplicate of each other. */
+  for (const x of all) if (x.c.source === 'locked' && chosen.length < target && !chosen.some((c) => c.question === x.m.question)) chosen.push(x.m);
   for (const x of all) if (x.c.source === 'manual') admit(x.m);
   const counts = (pred: (m: QuestionMix) => boolean) => chosen.filter(pred).length;
   const serviceCap = Math.max(3, Math.ceil(target * 0.2));
   const townCap = (t: string | null) => (t && normTown(t) === normTown(ctx.primaryTown)) ? Math.ceil(target * 0.45) : Math.max(2, Math.ceil(target * 0.15));
   const goals = mixTargets(target, ctx.areas.length > 0);
-  const rest = all.filter((x) => x.c.source !== 'manual').map((x) => x.m);
+  const rest = all.filter((x) => x.c.source !== 'manual' && x.c.source !== 'locked').map((x) => x.m);
+  const rankOf = (q: string) => (opts.rank ? opts.rank(q) : 0);
   /* Fill one intent type by rotation: repeatedly take the candidate whose service and town are
      currently least used, respecting the caps. */
   const fill = (type: IntentType | null, goal: number, relax = false) => {
@@ -249,8 +270,8 @@ export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target
         .filter((m) => (!type || m.intent === type) && !chosen.includes(m))
         .filter((m) => relax || ((!m.service || counts((c) => c.service === m.service) < serviceCap) && counts((c) => c.town === m.town) < townCap(m.town)))
         .filter((m) => !chosen.some((c) => sameIntent(c.question, m.question, towns)))
-        .map((m, i) => ({ m, i, s: counts((c) => c.service === m.service) * 3 + counts((c) => c.town === m.town) }))
-        .sort((a, b) => a.s - b.s || a.i - b.i)[0];
+        .map((m, i) => ({ m, i, r: rankOf(m.question), s: counts((c) => c.service === m.service) * 3 + counts((c) => c.town === m.town) }))
+        .sort((a, b) => a.s - b.s || a.r - b.r || a.i - b.i)[0];
       if (!pick) return;
       admit(pick.m);
     }
@@ -258,7 +279,10 @@ export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target
   for (const t of ['emergency', 'location', 'broad', 'service'] as IntentType[]) fill(t, goals[t]);
   fill(null, target);
   fill(null, target, true);
-  // Present in a readable order: broad, service, location, emergency.
+  // Present in a readable order: locked (Hook Audit) first, then broad, service, location, emergency.
   const order: IntentType[] = ['broad', 'service', 'location', 'emergency'];
-  return [...chosen].sort((a, b) => order.indexOf(a.intent) - order.indexOf(b.intent)).map((m) => m.question);
+  const locked = new Set(all.filter((x) => x.c.source === 'locked').map((x) => x.m.question));
+  const head = chosen.filter((m) => locked.has(m.question));
+  const tail = chosen.filter((m) => !locked.has(m.question)).sort((a, b) => order.indexOf(a.intent) - order.indexOf(b.intent));
+  return [...head, ...tail].map((m) => m.question);
 }

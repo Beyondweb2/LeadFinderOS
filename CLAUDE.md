@@ -710,10 +710,19 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `manual-onboarding.test.ts` — change the customer copy and that test fails until this matches.
 - **The crawl never MERGES into what the baseline measures** — onboarding → verified build facts →
   lead → Discovery; crawl services/towns are `detected_*` suggestions only.
+- ⛔ **Official baseline = the Hook Audit's questions (locked, verbatim) + the rest from Discovery = exactly 20**
+  (Paul, 2026-09-30, `docs/baseline-workflow.md`, `src/lib/baselineRecommendation.ts`). A Hook question
+  leaves only with a written reason (server refuses `hook_question_removed`; kept on `baseline_meta`).
+  Every Discovery question gets RECOMMENDED / FUTURE OPPORTUNITY / NOT RECOMMENDED + a reason. The
+  opportunity is a TIE-BREAK after balance, never the selector. Not-chosen questions seed
+  `client_opportunities` (the Opportunity Backlog, service-role only) — ⛔ never read by the guarantee.
+  A frozen set reopens only via `reopen_approved` (approved + not started + reason). Counts are always
+  MEASUREMENTS (complete) and NAMED on separate lines — never a bare "3/3". Collapse = ONE pattern,
+  `src/components/CollapsibleSection.tsx`, per user.
 - **Paid baseline = Discovery → balanced 20 → approve** (`docs/discovery-balanced-baseline.md`).
   Discovery asks the generator once PER APPROVED TOWN (no lead id, or `pickAuditTown` overrides the
   town); the draft is `buildBalancedBaseline` (`src/lib/baselineMix.ts`), which spreads services, towns
-  and intent types and ⛔ **never reads winnability**. Near-duplicates are "same intent" by
+  and intent types and ⛔ **never reads winnability** (a caller-supplied rank may only break ties — 2026-09-30). Near-duplicates are "same intent" by
   `sameIntent` (meaning tokens + town), not by case/plural; approval refuses them unless
   `accept_duplicates`. The create-ai-audit baseline preview is still home-town-pinned — do not use it
   to draft a paid baseline.
@@ -894,6 +903,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
+| The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
 | The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
 | The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |

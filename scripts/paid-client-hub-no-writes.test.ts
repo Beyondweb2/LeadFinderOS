@@ -104,7 +104,7 @@ ok(/to="\/page-generator"/.test(clientHub), 'the page generator link is still in
   ok(stage.includes('/page-generator'), 'the page generator link renders inside WebsiteBuildStage');
   ok(stage.includes('/website-build'), 'alongside the link to the Website Build command centre');
 }
-ok(/<Stage title="4. Website Build">/.test(clientHub), 'Section 4 is titled Website Build (renumbered 2026-09-29 when the Action Plan step left)');
+ok(/<Stage k="build" title="4. Website Build"/.test(clientHub), 'Section 4 is titled Website Build (renumbered 2026-09-29 when the Action Plan step left)');
 
 console.log('\n── THE PROMPTS ARE NEVER STORED ──');
 const websiteBuild = read('src/pages/WebsiteBuild.tsx');

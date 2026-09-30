@@ -237,9 +237,11 @@ export function discoveryView(d: {
 
 /** "ChatGPT 2/3 · Gemini 1/3 · 1 failed" — the per-question line. */
 export const ENGINE_LABELS: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
+/* ⛔ "complete", always (Paul, 2026-09-30): these are MEASUREMENTS received, and a bare "3/3" beside a
+   naming verdict read as "named 3 of 3". The naming is its own line (baselineRecommendation namedLine). */
 export function questionProgressLine(q: Pick<QuestionProgress, 'engines' | 'failed' | 'state'>): string {
   if (q.state === 'not_started') return 'Not started';
-  const parts = q.engines.map((e) => `${ENGINE_LABELS[e.engine] ?? e.engine} ${e.done}/${e.total}`);
+  const parts = q.engines.map((e) => `${ENGINE_LABELS[e.engine] ?? e.engine} ${e.done}/${e.total} complete`);
   if (q.failed) parts.push(`${q.failed} failed`);
   return parts.join(' · ');
 }

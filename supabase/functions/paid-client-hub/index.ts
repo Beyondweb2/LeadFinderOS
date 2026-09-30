@@ -12,6 +12,39 @@ import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, 
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
 import { handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
+import { cellNamed } from "../../../src/lib/namedSignal.ts";
+
+/* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
+   over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
+   the freeze snapshot used), ChatGPT + Gemini, with the report's ruler (cellNamed + the business,
+   trade and town). expected = questions × runs × 2. Display only — it decides nothing. */
+const SUMMARY_ENGINES = ["chatgpt", "gemini"];
+// deno-lint-ignore no-explicit-any
+async function baselineVisibility(service: any, audit: Record<string, unknown>, runs: Array<Record<string, unknown>>) {
+  if (!audit?.baseline_completed_at) return null;
+  const target = Number(audit.baseline_target_runs ?? 3) || 3;
+  const frozen = runs.filter((r) => r.status === "complete" || r.status === "capped")
+    .sort((a, b) => Number(a.run_number) - Number(b.run_number)).slice(0, target);
+  const ids = frozen.map((r) => String(r.id));
+  if (!ids.length) return null;
+  const rows: Array<{ run_id: string; question: string; result: Record<string, unknown> | null }> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await service.from("ai_audit_queue").select("id,run_id,question,result").in("run_id", ids).order("id").range(from, from + 999);
+    if (error) throw error;
+    const batch = (data ?? []) as typeof rows;
+    rows.push(...batch);
+    if (batch.length < 1000) break;
+  }
+  const ctx = { businessName: text(audit.business_name), trade: text(audit.business_type) || null, town: text(audit.location_text) || null };
+  let named = 0, answered = 0;
+  for (const r of rows) for (const e of SUMMARY_ENGINES) {
+    const cell = (r.result ?? {})[e];
+    if (!cell || typeof cell !== "object") continue;
+    answered++;
+    if (cellNamed(cell as never, ctx)) named++;
+  }
+  return { named, answered, expected: rows.length * SUMMARY_ENGINES.length };
+}
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -282,6 +315,7 @@ Deno.serve(async (req) => {
       if (body.handoff === false) {
         return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob } });
       }
+      const visibility = audit ? await baselineVisibility(service, audit as Record<string, unknown>, runs) : null;
       /* What they bought: Findable Build / Optimise, payments made and remaining, the next charge. */
       const contract = clientContract({ lead: lead as Record<string, never>, onboarding: (onboarding ?? null) as Record<string, unknown> | null, ledger: (await ledgerFor(service, [leadId])).get(leadId) ?? [] });
       const L = lead as Record<string, unknown>;
@@ -310,7 +344,7 @@ Deno.serve(async (req) => {
         prospect_audit: ev.auditByLead.get(leadId) ?? null,
         activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
       };
-      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract } });
+      return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract, baseline_visibility: visibility } });
     }
 
     /* ══ END THE SERVICE: a client-side domain / authority / IP dispute (Paul, 2026-09-28) ══════════
