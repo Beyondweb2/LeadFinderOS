@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAdmin, isInternalCall, refusalBody } from "../_shared/access.ts";
 import { allStopRefusal } from "../_shared/protection.ts";
-import { startApifyRun, getApifyRun, getApifyRunItems } from "../_shared/enrichment/apify.ts";
+import { startApifyRun, getApifyRun, getApifyRunItems, abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { AI_SEARCH_ACTOR, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { USAGE_CRITICAL_PCT } from "../_shared/enrichment/apify-usage.ts";
 import { isPublicHttpUrl, readCapped } from "../_shared/site-research.ts";
@@ -9,9 +9,10 @@ import {
   assemblePresence, buildIdentity, claimedCredentials, extractSiteSignals, foldClientCitations, mergePresence,
   operatorSetStatus, presenceQueries, presenceSummary,
   type CitationRow, type ListingCandidate, type PresenceReviewItem, type PresenceStatus, type StoredPresenceRow,
-  type TradeEvidenceRow,
+  type TradeEvidenceRow, tradeKeys,
 } from "../../../src/lib/directoryPresence.ts";
 import { sourceByKey, sourceForUrl } from "../../../src/lib/presenceSources.ts";
+import { norm } from "../../../src/lib/buildPlaybook.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    directory-presence — WHERE IS THIS BUSINESS LISTED, DO THE LISTINGS AGREE, WHAT IS WORTH ADDING.
@@ -30,7 +31,7 @@ import { sourceByKey, sourceForUrl } from "../../../src/lib/presenceSources.ts";
    Admin only (requireAdmin), or an internal caller (CRON_SECRET) for future scheduled rechecks.
    Evidence gathered without spend: the lead row, Google's record (phone_cache), the stored crawl,
    the homepage + contact page fetched now, every citation in this lead's own audits, and the
-   trade-level citation fold (playbook-evidence).
+   trade-level citation fold for this trade (presence_trade_citation_hosts).
    docs/directory-presence.md is the record.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -43,9 +44,11 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30a";
+const BUILD_ID = "directory-presence-2026-09-30b";
 const RUN_POLL_MS = 3_000;
-const RUN_TIMEOUT_MS = 60_000;
+/** 100 s, up from the 60 s check-directory-listings used: three of eight live searches timed out at 60 s
+ *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
+const RUN_TIMEOUT_MS = 100_000;
 const PAGE_TIMEOUT_MS = 8_000;
 /** A run younger than this is treated as in flight: a second press returns it, never a second run. */
 const IN_FLIGHT_MS = 4 * 60_000;
@@ -82,7 +85,11 @@ function organicInput(query: string, countryCode: string): Record<string, unknow
 async function awaitRun(runId: string, token: string): Promise<{ items: unknown[]; billedUsd: number | null }> {
   const deadline = Date.now() + RUN_TIMEOUT_MS;
   for (;;) {
-    if (Date.now() > deadline) throw new Error(`Apify run ${runId} timed out after ${RUN_TIMEOUT_MS / 1000}s`);
+    if (Date.now() > deadline) {
+      /* Abort it: a run we have stopped waiting for would otherwise run on and bill for nothing. */
+      await abortApifyRun(runId, token).catch(() => {});
+      throw new Error(`Apify run ${runId} timed out after ${RUN_TIMEOUT_MS / 1000}s (aborted)`);
+    }
     await new Promise((r) => setTimeout(r, RUN_POLL_MS));
     const run = await getApifyRun(runId, token);
     if (run.status === "SUCCEEDED") return { items: await getApifyRunItems(runId, token), billedUsd: run.usageTotalUsd };
@@ -218,16 +225,30 @@ Deno.serve(async (req) => {
     const crawlP = service.from("lead_crawl_checks").select("result, full_evidence").eq("lead_id", leadId).maybeSingle();
     const homeP = ownSite ? fetchPage(ownSite) : Promise.resolve(null);
     const auditsP = service.from("ai_audits").select("id, business_type, created_at").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(200);
-    const evidenceP = fetch(`${supabaseUrl}/functions/v1/playbook-evidence`, {
-      method: "POST",
-      /* The admin's own sign-in passes playbook-evidence's gateway JWT check and its resolveActor; an
-         internal caller has none, so it sends CRON_SECRET (the handler's isInternalCall). */
-      headers: { Authorization: req.headers.get("Authorization") || `Bearer ${serviceKey}`, apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? serviceKey, "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "", "x-internal-job": "1" },
-      body: "{}",
-    }).then(async (r) => (r.ok ? await r.json() : Promise.reject(new Error(`playbook-evidence HTTP ${r.status}`))))
-      .catch((e) => { notes.push(`trade evidence unavailable: ${reasonOf(e)}`); return null; });
-
     const [placesRes, crawlRes, home, auditsRes] = await Promise.all([placesP, crawlP, homeP, auditsP]);
+
+    /* ── THE TRADE FOLD, SCOPED TO THIS TRADE ─────────────────────────────────────────────────────
+       NOT playbook-evidence: it folds the whole ai_audit_queue through PostgREST and dies on the 8 s
+       statement timeout ("canceling statement due to statement timeout", measured 2026-09-30). The
+       trade's audits are picked here with the SAME norm() rule the fold keys on (tradeKeys), and the
+       database aggregates only those (presence_trade_citation_hosts, service role only). */
+    const tradeRaw = String(auditsRes.data?.find((a: { business_type: string | null }) => a.business_type)?.business_type ?? lead.search_keyword ?? lead.category ?? "");
+    const keys = tradeKeys(tradeRaw);
+    const evidenceP = (async (): Promise<{ evidence: TradeEvidenceRow[]; tradeAuditTotals: Record<string, number> } | null> => {
+      if (!keys.length) return null;
+      const ids: string[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await service.from("ai_audits").select("id, business_type").order("id").range(from, from + 999);
+        if (error) throw new Error(`ai_audits: ${error.message}`);
+        for (const a of (data ?? []) as Array<{ id: string; business_type: string | null }>) if (keys.includes(norm(a.business_type))) ids.push(a.id);
+        if ((data ?? []).length < 1000) break;
+      }
+      if (!ids.length) return { evidence: [], tradeAuditTotals: { [keys[0]]: 0 } };
+      const { data, error } = await service.rpc("presence_trade_citation_hosts", { _audit_ids: ids });
+      if (error) throw new Error(`presence_trade_citation_hosts: ${error.message}`);
+      const rows = (data ?? []) as Array<{ host: string; citations: number; audits: number }>;
+      return { evidence: rows.map((r) => ({ trade: keys[0], host: r.host, citations: r.citations, audits: r.audits })), tradeAuditTotals: { [keys[0]]: ids.length } };
+    })().catch((e) => { notes.push(`trade evidence unavailable: ${reasonOf(e)}`); return null; });
     const places = (placesRes as { data: { phone?: string; website?: string; address?: string; category?: string; google_maps_uri?: string } | null }).data;
     if (places) sourcesUsed.push("places_cache");
 
