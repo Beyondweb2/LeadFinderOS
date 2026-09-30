@@ -36,6 +36,7 @@ export const SALES_STYLE_RULES = `HOW IT MUST SOUND (Findable's house style; it 
 - Use ONLY the facts you are given. If a detail is missing, write naturally around it. Never invent a name, a number, a service, a result, a reason or a compliment.
 - Never: "i came across your business", "hope this message finds you well", "trusted local business", "reputable", "leading", "premier", "high-quality", "unlock", "leverage", "revolutionise", "enhance your digital presence", "boost your online presence", "stand out in today's competitive landscape", "AI-powered", "game-changer", "cutting-edge", "seamless", "elevate", "don't hesitate", "great question".
 - No fake rapport ("how are you today?", "have i caught you at a bad time?"), no hype, no exclamation marks.
+- "i had a look at why you weren't coming up and found a few things that could be holding you back" is the natural way to bring in the website. Keep the conclusion hedged: never "that's why your competitors are being recommended", never say a website issue caused the AI result.
 - Vary it the way a person would: from what THIS search, THESE competitors and THIS site actually show, never by swapping in synonyms.
 THE STANDARD TO MATCH (its quality, not its words; do not copy it): "${HOUSE_STYLE_EXAMPLE}"
 Where this message's own SHAPE or rules differ from that example (how it ends, what it may offer, what it may claim), the SHAPE and rules win.`;
@@ -86,7 +87,18 @@ const FILLER: ReadonlyArray<[RegExp, string]> = [
   [/\bhigh[- ]quality (?:service|provider|work|solution)s?\b/, '"high-quality service"'],
   [/\btrusted (?:local )?(?:business|provider|company|firm|expert|partner)s?\b/, '"trusted local business"'],
   [/\bsolutions? provider\b|\bbespoke solutions?\b|\btailored solutions?\b/, '"solutions"'],
+  // Corporate email (Paul, 2026-09-30: "do not create corporate sales-email copy").
+  [/\bi am writing to\b|\bim writing to (you|reach)\b/, '"I am writing to"'],
+  [/\breach(?:ing)? out\b/, '"reach out"'],
+  [/\btouch base\b|\bcircle back\b|\bsynerg\w*/, '"touch base / circle back"'],
+  [/\bdear (?:sir|madam|business owner|owner)\b/, '"Dear Sir / Madam"'],
+  [/\bplease do not hesitate\b|\bat your earliest convenience\b|\bi look forward to hearing from you\b/, 'a corporate sign-off'],
 ];
+
+/* ⛔ THE CAUSE STAYS HEDGED (Paul, 2026-09-30). "I had a look at why you weren't coming up and found a
+   few things that could be holding you back" is fine; "that's why your competitors are being
+   recommended" claims a cause nobody measured. */
+const CAUSE_CLAIM = /\b(?:thats|that is|this is|these are|those are)(?: probably| likely| exactly)? (?:why|the reason)(?: that)? (?:you|your|the other|other|they|google|chatgpt|ai|competitors|those|these)\b|\bbecause of (?:your|the) (?:site|website)\b/;
 
 /**
  * The house-style floor. Returns one line per problem ("Uses …"), empty when clean.
@@ -100,6 +112,7 @@ export function salesStyleProblems(text: string, ignore: readonly string[] = [])
   const search = t.match(SEARCH_WITH_FILLER);
   if (search) out.push(`Puts a filler adjective on the search ("${search[0].slice(-40).trim()}"). Say the trade and the town plainly.`);
   for (const [re, label] of FILLER) if (re.test(t)) out.push(`Uses ${label}.`);
+  if (CAUSE_CLAIM.test(t)) out.push(`States a website issue as the cause ("${(t.match(CAUSE_CLAIM) ?? [''])[0]}"). Say it "could be holding you back".`);
   if (/!/.test(bare)) out.push('Uses an exclamation mark.');
   return out;
 }

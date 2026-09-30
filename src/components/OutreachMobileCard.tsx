@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, Settings2, Scissors, Flower2, Wrench, ClipboardList, ClipboardCheck } from 'lucide-react';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
@@ -53,7 +53,6 @@ interface OutreachMobileCardProps {
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
-  onAiOpener?: () => void;
   onGenerateSite?: (template: 'barber' | 'salon' | 'plumber', mode?: 'booking_only') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
@@ -86,7 +85,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   phoneFetchStatus,
   onRetryPhoneFetch,
   isWalkthroughContacted = false,
-  onAiOpener,
   onGenerateSite,
   isGeneratingSite = false,
   onManageSite,
@@ -328,17 +326,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       <Star className="h-3.5 w-3.5" />
                     </Button>
                   )
-                )}
-                {onAiOpener && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                    onClick={onAiOpener}
-                    title="Generate AI opener"
-                  >
-                    <PenLine className="h-3.5 w-3.5" />
-                  </Button>
                 )}
                 {onManageSite && (
                   <Button

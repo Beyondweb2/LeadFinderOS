@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
 import { generateWhatsAppUrl, fillTemplate, hasLinkToken } from '@/lib/leadUtils';
 import { siteLinkGuard } from '@/lib/whatsappTemplates';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -27,8 +27,6 @@ interface SingleWhatsAppDialogProps {
   lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null;
   /** Called when user clicks "Open WhatsApp" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'whatsapp') => void;
-  /** Admin-only: open AI opener modal for this lead */
-  onAiOpener?: () => void;
   /** Launch-pad: pre-fill this template content fresh on open (overrides saved/localStorage). */
   initialTemplate?: string | null;
   /** Launch-pad: the barber's /s/ link to substitute for {{link}}. If omitted, the
@@ -39,7 +37,7 @@ interface SingleWhatsAppDialogProps {
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
-export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpener, initialTemplate, shareLink }: SingleWhatsAppDialogProps) {
+export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, initialTemplate, shareLink }: SingleWhatsAppDialogProps) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
     if (!v) {
@@ -89,20 +87,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
      handles: a template needing {{link}} is refused rather than sent with a dead URL. */
   const resolvedLink = shareLink ?? null;
   const linkLoading = false;
-
-  // Listen for AI opener message selection
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const msg = (e as CustomEvent).detail?.message;
-      if (msg && open) {
-        setTemplate(msg);
-        setIsModified(true);
-        localStorage.setItem(STORAGE_KEY, msg);
-      }
-    };
-    window.addEventListener('ai-opener-selected', handler);
-    return () => window.removeEventListener('ai-opener-selected', handler);
-  }, [open]);
 
   // Check WhatsApp status when dialog opens — if 'no', show toast and close
   useEffect(() => {
@@ -223,17 +207,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
                     </Button>
                   )}
                   <AutoRotateToggle autoOn={autoOn} onToggle={toggleAuto} />
-                  {onAiOpener && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={onAiOpener}
-                      className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      AI Generator
-                    </Button>
-                  )}
                 </div>
               </div>
               <TemplatePicker 
