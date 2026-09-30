@@ -21,6 +21,7 @@ import {
   buildReplyPrompt, checkReply, fallbackReply, parseModelReply, latestInbound, REPLY_SYSTEM_PROMPT, FINDABLE_DETAILS_URL,
   type ThreadMessage, type SalesFacts,
 } from '../src/lib/warmReply.ts';
+import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 import { assembleResearch, extractPageFacts, type WarmLeadResearch, type AuditContext } from '../src/lib/warmLeadResearch.ts';
 import { serviceWindowState, WHATSAPP_SERVICE_WINDOW_MS } from '../src/lib/serviceWindow.ts';
 import { FINDABLE_OFFER_SUMMARY, FINDABLE_GUARANTEE, FINDABLE_SETUP_PRICE_GBP, FINDABLE_MONTHLY_GBP } from '../src/lib/findableOffer.ts';
@@ -180,7 +181,8 @@ ok(bad.problems.some((p) => /both routes/.test(p)), 'not offering both routes is
 
 // No model? The rule-built fallback has the same shape and carries no price.
 const fb = fallbackReply(ryli)!;
-ok(!!fb && /ai recommends when someone is looking for a plumber in Scunthorpe/.test(fb), 'fallback: leads from the AI search');
+ok(!!fb && /i asked ai for a plumber in Scunthorpe and it brought up other businesses, not you/.test(fb), 'fallback: leads from the AI search, said plainly');
+ok(salesStyleProblems(fb).length === 0 && checkReply(fb, ryli).problems.length === 0, 'fallback: passes the house style and every draft check');
 ok(!/£\s?\d|refund|guarantee|findable\.live/i.test(fb), 'fallback: no price, no guarantee, no pricing link');
 ok(/either on the site you've already got or we can build you a new one/.test(fb), 'fallback: both routes');
 ok(fb.trim().endsWith('are you currently with an agency or do you own/manage the website yourself?'), 'fallback: ends with the website question');

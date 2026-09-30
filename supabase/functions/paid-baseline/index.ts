@@ -16,8 +16,10 @@ import {
   paidBaselineRunState,
   requireUpdatedRow,
 } from "../../../src/lib/paidBaselineState.ts";
-import { buildBalancedBaseline, coverageReport, nearDuplicates, type Candidate } from "../../../src/lib/baselineMix.ts";
-import { discoveryState, generateDiscoveryPool, mixContext, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
+import { coverageReport, nearDuplicates } from "../../../src/lib/baselineMix.ts";
+import { backlogCandidates, describeDraft, hookProtection, recommendBaseline, type HookReplacement, type RecInput } from "../../../src/lib/baselineRecommendation.ts";
+import { normaliseOpportunity } from "../../../src/lib/opportunityBacklog.ts";
+import { discoveryState, generateDiscoveryPool, hookQuestionsFor, mixContext, opportunityCheckResults, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_USD_PER_QUESTION_RUN, type DiscoveryState, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +40,13 @@ function cleanList(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return [...new Set(raw.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
 }
+
+/** Recommendation inputs from the Discovery state: each pool question with its measurement. */
+const recInputsOf = (d: DiscoveryState): RecInput[] => d.pool.map((p) => ({ question: p.question, engines: p.opportunity?.engines ?? null, verdict: p.opportunity?.verdict ?? null }));
+
+/** The minimum an exceptional correction's reason must say (reopening an approved, not-yet-started set). */
+const CORRECTION_MIN_REASON = 10;
+const OPPORTUNITY_COLUMNS = "id,lead_id,question,service,area,intent,source,source_audit_id,visibility,competitors,evidence_gap,suggested_action,action_note,status,what_changed,implemented_at,recheck_due,recheck_audit_id,recheck_result,history,created_at,updated_at";
 
 const MISSING_FIELD_LABEL: Record<string, string> = {
   confirmed_location: "a confirmed primary location",
@@ -92,7 +101,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery, baseline_meta")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -108,7 +117,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, service_areas, website_build")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, service_areas, website_build, baseline_audit_id")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
@@ -151,9 +160,18 @@ Deno.serve(async (req) => {
       country: String(lead.country ?? ""), primaryTown: merged.primary_location, areas: merged.service_areas, services: merged.services,
     };
     const store = (row.baseline_discovery && typeof row.baseline_discovery === "object") ? row.baseline_discovery as DiscoveryStore : null;
-    const discovery = await discoveryState(service, store, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+    const biz = { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website, trade: merged.business_category };
+    const [discovery, hook] = await Promise.all([
+      discoveryState(service, store, String(row.lead_id), biz),
+      hookQuestionsFor(service, String(row.lead_id), (lead as { baseline_audit_id?: string | null }).baseline_audit_id ?? null, biz),
+    ]);
     const mixCtx = mixContext(discoveryInput);
     const coverage = coverageReport(questions, mixCtx, BASELINE_QUESTIONS);
+    /* THE RECOMMENDED OFFICIAL 20 (src/lib/baselineRecommendation.ts): the Hook Audit's questions
+       locked in, the rest balanced from Discovery, opportunity only as a tie-break. Read only —
+       computed on every read from the stored pool and answers, never stored. */
+    const recArgs = (d: DiscoveryState) => ({ hook: hook.questions, pool: recInputsOf(d), hookMeasures: hook.measures, ctx: mixCtx, trade: merged.business_category });
+    const recommendation = recommendBaseline({ ...recArgs(discovery), target: BASELINE_QUESTIONS });
     const details = {
       onboarding_id: row.id, lead_id: row.lead_id, business_name: merged.business_name,
       business_type: merged.business_category, location: merged.primary_location,
@@ -164,13 +182,108 @@ Deno.serve(async (req) => {
       crawl_context_source: selectedCrawl?.source ?? null,
       discovery_context: discoveryAudit?.id ? { audit_id: String(discoveryAudit.id), created_at: (discoveryAudit.created_at as string | null) ?? null } : null,
       status, questions, approved_at: row.baseline_approved_at || null,
-      discovery, coverage,
+      discovery, coverage, hook, recommendation,
+      meta: (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta : null,
       canonical_services: mixCtx.services.map((x) => x.label),
       ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
     };
     if (action === "get") return json({ ok: true, baseline: details });
 
-    if (["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve", "run", "save_context"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
+    if (["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve", "run", "save_context", "reopen_approved", "opportunities", "opportunity_save", "opportunity_check"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
+    const leadOwner = String((lead as { user_id?: string }).user_id ?? user.id);
+    const callEnvEarly = { url, secret: Deno.env.get("CRON_SECRET") ?? "", serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", userId: user.id };
+
+    /* ══ THE OPPORTUNITY BACKLOG / ONGOING IMPROVEMENTS (src/lib/opportunityBacklog.ts) ══════════════
+       Any baseline status: this is the work AFTER the baseline. ⛔ Never read by the guarantee — the
+       before/after is the baseline audit vs the day-28 replay, keyed by audit id. */
+    if (action === "opportunities") {
+      const { data: items, error } = await service.from("client_opportunities").select(OPPORTUNITY_COLUMNS).eq("lead_id", row.lead_id).order("created_at", { ascending: true });
+      if (error) throw error;
+      const list = (items ?? []) as Array<Record<string, unknown>>;
+      const checks = await opportunityCheckResults(service, list.map((i) => String(i.recheck_audit_id ?? "")), biz);
+      return json({ ok: true, baseline: details, opportunities: list, checks, check_usd_per_question: Math.round(DISCOVERY_RUNS * DISCOVERY_USD_PER_QUESTION_RUN * 1000) / 1000 });
+    }
+    if (action === "opportunity_save") {
+      const patch = normaliseOpportunity((body.item && typeof body.item === "object") ? body.item as Record<string, unknown> : {});
+      const id = typeof body.id === "string" ? body.id : "";
+      const now = new Date().toISOString();
+      if (!id) {
+        if (!patch.question) return json({ ok: false, error: "opportunity_question_required", detail: "Type the question or intent to track." }, 400);
+        const { data: made, error } = await service.from("client_opportunities").insert({
+          user_id: leadOwner, lead_id: row.lead_id, source: "manual", status: patch.status ?? "new", ...patch,
+          history: [{ at: now, by: user.id, status: patch.status ?? "new", note: "added by hand" }],
+        }).select(OPPORTUNITY_COLUMNS).maybeSingle();
+        if (error) {
+          if ((error as { code?: string }).code === "23505") return json({ ok: false, error: "opportunity_exists", detail: "That question is already in this client's backlog." }, 409);
+          throw error;
+        }
+        return json({ ok: true, baseline: details, item: made });
+      }
+      const { data: cur, error: curErr } = await service.from("client_opportunities").select("id,status,history").eq("id", id).eq("lead_id", row.lead_id).maybeSingle();
+      if (curErr) throw curErr;
+      if (!cur) return json({ ok: false, error: "opportunity_not_found" }, 404);
+      const history = Array.isArray(cur.history) ? cur.history as unknown[] : [];
+      const statusChanged = patch.status && patch.status !== cur.status;
+      const update: Record<string, unknown> = { ...patch, updated_at: now };
+      if (statusChanged) {
+        update.history = [...history, { at: now, by: user.id, from: cur.status, status: patch.status, note: patch.what_changed ?? null }].slice(-50);
+        if (patch.status === "implemented") update.implemented_at = now;
+      }
+      const { data: saved, error } = await service.from("client_opportunities").update(update).eq("id", id).eq("lead_id", row.lead_id).select(OPPORTUNITY_COLUMNS).maybeSingle();
+      if (error) throw error;
+      return json({ ok: true, baseline: details, item: saved });
+    }
+    /* A CHECK spends: the chosen questions × DISCOVERY_RUNS on both engines, priced on its button and
+       confirmed. It is an ordinary Discovery audit on this lead — never the baseline, never the replay. */
+    if (action === "opportunity_check") {
+      const ids = Array.isArray(body.ids) ? (body.ids as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 20) : [];
+      if (!ids.length) return json({ ok: false, error: "opportunity_ids_required", detail: "Choose at least one opportunity to check." }, 400);
+      if (body.confirm_cost !== true) return json({ ok: false, error: "confirm_cost_required", detail: "A check asks ChatGPT and Gemini — confirm the cost on the button." }, 400);
+      const { data: items, error } = await service.from("client_opportunities").select("id,question,status,history").eq("lead_id", row.lead_id).in("id", ids);
+      if (error) throw error;
+      const list = (items ?? []) as Array<{ id: string; question: string; status: string; history: unknown }>;
+      if (!list.length) return json({ ok: false, error: "opportunity_not_found" }, 404);
+      if (!discoveryInput.primaryTown || !discoveryInput.businessCategory) return json({ ok: false, error: "baseline_context_incomplete", detail: "A check needs a primary town and a business category." }, 422);
+      let auditId: string;
+      try {
+        auditId = await startDiscoveryRun({ ...discoveryInput, leadId: String(row.lead_id) }, list.map((i) => i.question), callEnvEarly);
+      } catch (e) {
+        return json({ ok: false, error: "opportunity_check_failed", detail: `The check did not start: ${errMsg(e)}. Nothing was measured — try again.` }, 502);
+      }
+      const now = new Date().toISOString();
+      for (const i of list) {
+        const history = Array.isArray(i.history) ? i.history as unknown[] : [];
+        await service.from("client_opportunities").update({
+          recheck_audit_id: auditId, updated_at: now,
+          history: [...history, { at: now, by: user.id, check_audit_id: auditId, note: "check started" }].slice(-50),
+        }).eq("id", i.id).eq("lead_id", row.lead_id);
+      }
+      return json({ ok: true, baseline: details, audit_id: auditId, checked: list.length });
+    }
+
+    /* ══ EXCEPTIONAL CORRECTION of an APPROVED set that has NOT started (Paul, 2026-09-30) ═══════════
+       Approval freezes. The only way back is this: an explicit action, a written reason, the history
+       kept on baseline_meta.corrections. ⛔ Once the measurement has begun (starting / running /
+       complete) the frozen set can never change — the day-28 replay repeats what was ASKED. */
+    if (action === "reopen_approved") {
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (status !== "approved") {
+        return json({ ok: false, error: "baseline_not_reopenable", detail: isStartedBaselineStatus(status)
+          ? "The baseline has started measuring. Its frozen questions can never change now — the re-measure repeats exactly what was asked."
+          : "Only an approved baseline that has not started can be reopened." }, 409);
+      }
+      if (reason.length < CORRECTION_MIN_REASON) return json({ ok: false, error: "correction_reason_required", detail: "Write why the approved questions must change (a factual or business error)." }, 400);
+      const now = new Date().toISOString();
+      const prior = (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta as Record<string, unknown> : {};
+      const corrections = Array.isArray(prior.corrections) ? prior.corrections as unknown[] : [];
+      const meta = { ...prior, corrections: [...corrections, { at: now, by: user.id, reason, questions_before: questions, approved_at_before: row.baseline_approved_at ?? null }] };
+      const { data: updated, error } = await service.from("onboarding_responses").update({
+        baseline_status: "needs_approval", baseline_meta: meta, updated_at: now,
+      }).eq("id", row.id).eq("status", "paid").eq("baseline_status", "approved").select("id").maybeSingle();
+      if (error) throw error;
+      requireUpdatedRow(updated, "baseline_state_changed");
+      return json({ ok: true, baseline: { ...details, status: "needs_approval", meta } });
+    }
     /* starting / running / complete: the measurement has begun (or is being claimed by another
        starter this second). Every mutation answers with the row as it is — including `run`, so the
        screen that lost the claim shows "Starting baseline" and polls, never a second start. */
@@ -204,7 +317,7 @@ Deno.serve(async (req) => {
     }
 
     let next = questions;
-    const callEnv = { url, secret: Deno.env.get("CRON_SECRET") ?? "", serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", userId: user.id };
+    const callEnv = callEnvEarly;
 
     /* ══ DISCOVERY — generate the pool (one question-writing call per approved town; no AI engine is
        asked). Replaces any earlier pool; never touches the baseline draft. ═════════════════════════ */
@@ -227,7 +340,7 @@ Deno.serve(async (req) => {
       }
       const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: fresh, updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid");
       if (e) throw e;
-      const state = await discoveryState(service, fresh, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+      const state = await discoveryState(service, fresh, String(row.lead_id), biz);
       return json({ ok: true, baseline: { ...details, discovery: state } });
     }
 
@@ -283,7 +396,7 @@ Deno.serve(async (req) => {
          of the lead after the pool, whose questions belong to the pool), so it cannot be started twice. */
       const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: nextStore }).eq("id", row.id).eq("status", "paid");
       if (e) throw e;
-      const state = await discoveryState(service, nextStore, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
+      const state = await discoveryState(service, nextStore, String(row.lead_id), biz);
       return json({ ok: true, baseline: { ...details, discovery: state } });
     }
 
@@ -301,27 +414,27 @@ Deno.serve(async (req) => {
         if (!poolStore.pool.length) return json({ ok: false, error: "question_generation_failed" }, 502);
         await service.from("onboarding_responses").update({ baseline_discovery: poolStore }).eq("id", row.id).eq("status", "paid");
       }
-      const keep = body.keep_current === true ? cleanQuestions(body.questions) : [];
-      const candidates: Candidate[] = [
-        ...keep.map((q) => ({ question: q, source: "manual" as const })),
-        ...poolStore.pool.map((p) => ({ question: p.question, source: "discovery" as const })),
-      ];
-      next = buildBalancedBaseline(candidates, mixCtx, BASELINE_QUESTIONS);
+      /* The RECOMMENDED baseline: the Hook Audit's questions locked in, the rest balanced from the
+         Discovery pool with its measurements (src/lib/baselineRecommendation.ts). A draft to review. */
+      const poolState = poolStore === store ? discovery : await discoveryState(service, poolStore, String(row.lead_id), biz);
+      const rec = recommendBaseline({ ...recArgs(poolState), target: BASELINE_QUESTIONS });
+      next = rec.questions.map((r) => r.question);
       if (next.length === 0) return json({ ok: false, error: "no_questions_generated" }, 422);
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString(),
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
       requireUpdatedRow(updated, "baseline_state_changed");
-      const state = poolStore === store ? discovery : await discoveryState(service, poolStore, String(row.lead_id), { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website });
-      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next, discovery: state, coverage: coverageReport(next, mixCtx, BASELINE_QUESTIONS) } });
+      return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next, discovery: poolState, recommendation: rec, coverage: coverageReport(next, mixCtx, BASELINE_QUESTIONS) } });
     }
 
     if (action === "save") {
       if (isFrozenBaselineStatus(status)) return json({ ok: false, error: "baseline_questions_locked" }, 409);
       next = cleanQuestions(body.questions);
       if (next.length === 0 || next.length > 40) return json({ ok: false, error: "questions_must_be_between_1_and_40" }, 400);
-      const { data: updated, error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
+      /* ⛔ The write carries the editable-status filter too: a save racing an approval must not
+         overwrite the frozen set and reset it to needs_approval. */
+      const { data: updated, error } = await service.from("onboarding_responses").update({ baseline_questions: next, baseline_status: "needs_approval", updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
       requireUpdatedRow(updated, "paid_onboarding_update_conflict");
       return json({ ok: true, baseline: { ...details, status: "needs_approval", questions: next, coverage: coverageReport(next, mixCtx, BASELINE_QUESTIONS) } });
@@ -363,12 +476,61 @@ Deno.serve(async (req) => {
           detail: `${dups.length} pair(s) ask the same thing in different words: ${dups.slice(0, 3).map(([a, b]) => `"${next[a]}" / "${next[b]}"`).join("; ")}. Replace them, or tick "approve anyway".`,
         }, 409);
       }
+      /* ⛔ THE HOOK AUDIT'S QUESTIONS ARE LOCKED IN (Paul, 2026-09-30). One may leave only with a
+         written reason (a factual / business error); the reason is kept on baseline_meta. */
+      const replacements: HookReplacement[] = Array.isArray(body.hook_replacements)
+        ? (body.hook_replacements as unknown[]).filter((r): r is HookReplacement => !!r && typeof r === "object" && typeof (r as HookReplacement).question === "string" && typeof (r as HookReplacement).reason === "string")
+        : [];
+      const hp = hookProtection(next, hook.questions, replacements);
+      if (hp.unexplained.length) {
+        return json({
+          ok: false, error: "hook_question_removed",
+          detail: `The Hook Audit question${hp.unexplained.length === 1 ? "" : "s"} ${hp.unexplained.map((q) => `"${q}"`).join(", ")} ${hp.unexplained.length === 1 ? "is" : "are"} not in the set. Keep ${hp.unexplained.length === 1 ? "it" : "them"}, or give a reason for replacing ${hp.unexplained.length === 1 ? "it" : "each"} (a factual or business error).`,
+        }, 409);
+      }
+      const now = new Date().toISOString();
+      const prior = (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta as Record<string, unknown> : {};
+      /* THE APPROVAL RECORD. It describes the frozen set; it never changes what is measured (that is
+         baseline_questions, exactly as before). */
+      const meta = {
+        version: 1, approved_at: now, approved_by: user.id,
+        hook_audit_id: hook.audit_id, hook_questions: hook.questions, hook_replacements: hp.explained,
+        sources: describeDraft(next, recArgs(discovery)).map((r) => ({ question: r.question, source: r.source })),
+        corrections: Array.isArray(prior.corrections) ? prior.corrections : [],
+      };
       const { data: updated, error } = await service.from("onboarding_responses").update({
-        baseline_questions: next, baseline_status: "approved", baseline_approved_at: new Date().toISOString(), baseline_approved_by: user.id, updated_at: new Date().toISOString(),
+        baseline_questions: next, baseline_status: "approved", baseline_approved_at: now, baseline_approved_by: user.id, baseline_meta: meta, updated_at: now,
       }).eq("id", row.id).eq("status", "paid").or(EDITABLE_BASELINE_STATUS_FILTER).select("id").maybeSingle();
       if (error) throw error;
       requireUpdatedRow(updated, "baseline_state_changed");
-      return json({ ok: true, baseline: { ...details, status: "approved", questions: next } });
+      /* THE DISCOVERY QUESTIONS THAT DID NOT ENTER THE 20 DO NOT DISAPPEAR: they seed the Opportunity
+         Backlog (never read by the guarantee). Additive only — an existing row is never touched. A
+         failure here never undoes the approval; it is reported. */
+      let backlogAdded = 0, backlogError: string | null = null;
+      try {
+        const cands = backlogCandidates(next, recInputsOf(discovery), mixCtx);
+        if (cands.length) {
+          const { data: existing } = await service.from("client_opportunities").select("question").eq("lead_id", row.lead_id);
+          const have = new Set(((existing ?? []) as Array<{ question: string }>).map((e) => e.question.trim().toLowerCase()));
+          const fresh = cands.filter((c) => !have.has(c.question.trim().toLowerCase()));
+          const byQ = new Map(discovery.pool.map((p) => [p.question.trim().toLowerCase(), p]));
+          if (fresh.length) {
+            const { error: insErr } = await service.from("client_opportunities").insert(fresh.map((c) => {
+              const p = byQ.get(c.question.trim().toLowerCase());
+              return {
+                user_id: leadOwner, lead_id: row.lead_id, question: c.question.trim(), service: c.service, area: c.town, intent: c.intent,
+                source: "discovery", source_audit_id: discovery.audit?.id ?? null,
+                visibility: c.engines ? { engines: c.engines } : null, competitors: p?.opportunity?.competitors ?? [],
+                evidence_gap: p?.opportunity?.reason ?? null, status: "new",
+                history: [{ at: now, by: user.id, status: "new", note: "from Discovery, not in the official baseline" }],
+              };
+            }));
+            if (insErr) throw insErr;
+            backlogAdded = fresh.length;
+          }
+        }
+      } catch (e) { backlogError = errMsg(e); console.error("[paid-baseline] backlog seed", backlogError); }
+      return json({ ok: true, baseline: { ...details, status: "approved", questions: next, meta }, backlog_added: backlogAdded, backlog_error: backlogError });
     }
 
     /* RUN. startPaidBaseline is the one starter for every caller (operator, backstop, webhook); it

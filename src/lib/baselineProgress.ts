@@ -32,6 +32,7 @@ export function formatBaselineProgress(runs: BaselineRunProgress[], targetRuns =
     if (!run) return `Run ${number}: waiting`;
     const total = Number(run.queue_total) || 0;
     const complete = Number(run.queue_complete) || 0;
-    return `Run ${number}: ${total ? `${complete}/${total}` : String(run.status || 'waiting')}`;
+    /* "measured", never a bare N/M: this counts answers received, not namings (Paul, 2026-09-30). */
+    return `Run ${number}: ${total ? `${complete}/${total} measured` : String(run.status || 'waiting')}`;
   }).join(' · ');
 }

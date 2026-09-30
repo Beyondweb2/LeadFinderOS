@@ -18,6 +18,7 @@ import { opportunityFor, type Opportunity } from "../../../src/lib/discoveryOppo
 import { isAggregatorUrl } from "./aggregators.ts";
 import type { QueueRow } from "../../../src/lib/auditReport.ts";
 import { discoveryProgress, poolMatchesJob, poolVersion, type DiscoveryProgress, type ProgressRow, type ProgressRun, type QuestionProgress } from "../../../src/lib/discoveryProgress.ts";
+import { engineTallies } from "../../../src/lib/discoveryOpportunity.ts";
 /** = src/lib/queueAuditStatus.ts RUN_USABLE (that module is not edge-safe). balanced-baseline.test.ts
  *  fails if the two ever differ. */
 export const DISCOVERY_RUN_USABLE = new Set(["complete", "capped"]);
@@ -151,7 +152,7 @@ export interface DiscoveryState {
 /** What the screen shows: the stored pool, and — if a Discovery audit exists for it — its progress
  *  and each question's opportunity. READ ONLY: it asks no engine and writes nothing, so opening,
  *  reopening or polling the screen can never start or repeat a measurement. */
-export async function discoveryState(service: Client, store: DiscoveryStore | null, leadId: string, biz: { name: string; location: string; website: string }): Promise<DiscoveryState> {
+export async function discoveryState(service: Client, store: DiscoveryStore | null, leadId: string, biz: { name: string; location: string; website: string; trade?: string }): Promise<DiscoveryState> {
   const pool: DiscoveryState["pool"] = (store?.pool ?? []).map((p) => ({ ...p }));
   const version = storePoolVersion(store);
   let auditId = store?.audit_id ?? null;
@@ -162,9 +163,14 @@ export async function discoveryState(service: Client, store: DiscoveryStore | nu
   /* The fallback for a start whose audit id was never written back: the newest Discovery audit of
      this lead created after the pool. Attached only if its questions belong to this pool (below). */
   if (!auditId && !mismatch && store?.generated_at) {
-    const { data: a } = await service.from("ai_audits").select("id").eq("lead_id", leadId).eq("audit_purpose", "discovery")
-      .gte("created_at", store.generated_at).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    auditId = (a?.id as string | undefined) ?? null;
+    /* ⛔ An OPPORTUNITY CHECK is also a Discovery audit on this lead (ongoing work after the baseline,
+       client_opportunities.recheck_audit_id). It is never this pool's job, even when its questions
+       came from the pool — excluded by id, not by guessing from its size. */
+    const { data: checks } = await service.from("client_opportunities").select("recheck_audit_id").eq("lead_id", leadId).not("recheck_audit_id", "is", null);
+    const checkIds = new Set(((checks ?? []) as Array<{ recheck_audit_id: string }>).map((c) => c.recheck_audit_id));
+    const { data: cands } = await service.from("ai_audits").select("id").eq("lead_id", leadId).eq("audit_purpose", "discovery")
+      .gte("created_at", store.generated_at).order("created_at", { ascending: false }).limit(10);
+    auditId = ((cands ?? []) as Array<{ id: string }>).map((c) => c.id).find((id) => !checkIds.has(id)) ?? null;
   }
   let audit: DiscoveryState["audit"] = null;
   if (auditId) {
@@ -207,7 +213,7 @@ export async function discoveryState(service: Client, store: DiscoveryStore | nu
         const qp = byQ.get(p.question.trim().toLowerCase());
         p.progress = qp ? { state: qp.state, engines: qp.engines, done: qp.done, failed: qp.failed, total: qp.total } : null;
         p.opportunity = hasAnswer.has(p.question.trim())
-          ? opportunityFor(p.question, answeredRows, { businessName: biz.name, location: biz.location, website: biz.website, isAggregatorUrl })
+          ? opportunityFor(p.question, answeredRows, { businessName: biz.name, location: biz.location, website: biz.website, trade: biz.trade, isAggregatorUrl })
           : null;
       }
     }
@@ -218,4 +224,77 @@ export async function discoveryState(service: Client, store: DiscoveryStore | nu
     starting: !audit && Number.isFinite(claimedMs) && Date.now() - claimedMs < DISCOVERY_CLAIM_STALE_MS,
     estimate_usd: Math.round(pool.length * DISCOVERY_RUNS * DISCOVERY_USD_PER_QUESTION_RUN * 100) / 100,
   };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   THE HOOK AUDIT'S QUESTIONS (2026-09-30). The official baseline keeps them, verbatim, so the journey
+   reads Hook Audit → baseline → re-measure on the same three questions.
+
+   WHICH AUDIT: the lead's FIRST ordinary audit — the check that got the prospect into the system.
+   Ordinary = purpose 'audit', or a legacy row with no purpose that is single-run and is not the
+   lead's baseline pointer (a pre-2026-09-12 baseline carries no purpose and must never be read as a
+   hook). Never a free check, Discovery, a measurement or a replay.
+   WHICH QUESTIONS: the hook's planned list when it recorded one (version 2 stores all three), else
+   the questions its first run actually asked. At most HOOK_QUESTION_LIMIT.
+   READ ONLY. Absent = no Hook Audit on record: the baseline is then 20 Discovery questions and the
+   screen says so — never an invented hook.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export const HOOK_QUESTION_LIMIT = 3;
+export interface HookQuestions {
+  audit_id: string | null; created_at: string | null; questions: string[];
+  /** The hook's own answers per question (one run, both engines) — "current naming" for the review. */
+  measures: Array<{ question: string; engines: ReturnType<typeof engineTallies> }>;
+}
+export async function hookQuestionsFor(service: Client, leadId: string, baselinePointer: string | null, biz: { name: string; location: string; trade?: string }): Promise<HookQuestions> {
+  const none: HookQuestions = { audit_id: null, created_at: null, questions: [], measures: [] };
+  const { data: audits } = await service.from("ai_audits").select("id,created_at,audit_purpose,baseline_target_runs")
+    .eq("lead_id", leadId).or("audit_purpose.is.null,audit_purpose.eq.audit").order("created_at", { ascending: true }).limit(20);
+  const hook = ((audits ?? []) as Array<{ id: string; created_at: string | null; audit_purpose: string | null; baseline_target_runs: number | null }>)
+    .find((a) => a.id !== baselinePointer && (a.audit_purpose === "audit" || !(Number(a.baseline_target_runs ?? 0) > 1)));
+  if (!hook) return none;
+  const { data: run } = await service.from("ai_audit_runs").select("id,results").eq("audit_id", hook.id).order("run_number", { ascending: true }).limit(1).maybeSingle();
+  if (!run?.id) return { ...none, audit_id: hook.id, created_at: hook.created_at };
+  const { data: qrows } = await service.from("ai_audit_queue").select("id,question,status,result,created_at").eq("run_id", run.id).order("created_at").order("id");
+  const rows = ((qrows ?? []) as Array<QueueRow & { created_at?: string }>);
+  const planned = (run.results as { hook?: { planned?: unknown } } | null)?.hook?.planned;
+  const fromPlan = Array.isArray(planned) ? (planned as unknown[]).filter((q): q is string => typeof q === "string" && !!q.trim()) : [];
+  const asked = rows.map((r) => r.question).filter((q) => typeof q === "string" && q.trim());
+  const questions = (fromPlan.length ? fromPlan : asked).map((q) => q.trim())
+    .filter((q, i, a) => a.findIndex((x) => x.toLowerCase() === q.toLowerCase()) === i).slice(0, HOOK_QUESTION_LIMIT);
+  const answered = rows.filter((r) => r.status === "done" && r.result && typeof r.result === "object");
+  const measures = questions.map((q) => ({ question: q, engines: engineTallies(q, answered, { businessName: biz.name, location: biz.location, trade: biz.trade }) }));
+  return { audit_id: hook.id, created_at: hook.created_at, questions, measures };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   OPPORTUNITY CHECKS — the ONGOING measurement (client_opportunities.recheck_audit_id). Each check is
+   an ordinary Discovery audit over the chosen opportunity questions. ⛔ Never the baseline, never the
+   replay, never read by the guarantee. READ ONLY here.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+export interface CheckResult { audit_id: string; created_at: string | null; complete: boolean; runs_target: number; by_question: Record<string, ReturnType<typeof engineTallies>> }
+export async function opportunityCheckResults(service: Client, auditIds: string[], biz: { name: string; location: string; trade?: string }): Promise<Record<string, CheckResult>> {
+  const out: Record<string, CheckResult> = {};
+  const ids = [...new Set(auditIds.filter(Boolean))].slice(0, 25);
+  if (!ids.length) return out;
+  const [{ data: audits }, { data: runs }] = await Promise.all([
+    service.from("ai_audits").select("id,created_at,baseline_target_runs,baseline_completed_at").in("id", ids),
+    service.from("ai_audit_runs").select("id,audit_id").in("audit_id", ids),
+  ]);
+  const runList = (runs ?? []) as Array<{ id: string; audit_id: string }>;
+  const rows: Array<QueueRow & { run_id: string }> = [];
+  const runIds = runList.map((r) => r.id);
+  for (let from = 0; runIds.length; from += 1000) {
+    const { data } = await service.from("ai_audit_queue").select("id,run_id,question,status,result").in("run_id", runIds).order("id").range(from, from + 999);
+    const batch = (data ?? []) as Array<QueueRow & { run_id: string }>;
+    rows.push(...batch);
+    if (batch.length < 1000) break;
+  }
+  const auditOfRun = new Map(runList.map((r) => [r.id, r.audit_id]));
+  for (const a of (audits ?? []) as Array<{ id: string; created_at: string | null; baseline_target_runs: number | null; baseline_completed_at: string | null }>) {
+    const own = rows.filter((r) => auditOfRun.get(r.run_id) === a.id && r.status === "done" && r.result && typeof r.result === "object");
+    const byQuestion: CheckResult["by_question"] = {};
+    for (const q of [...new Set(own.map((r) => r.question.trim()))]) byQuestion[q.toLowerCase()] = engineTallies(q, own, { businessName: biz.name, location: biz.location, trade: biz.trade });
+    out[a.id] = { audit_id: a.id, created_at: a.created_at, complete: !!a.baseline_completed_at, runs_target: Number(a.baseline_target_runs ?? DISCOVERY_RUNS) || DISCOVERY_RUNS, by_question: byQuestion };
+  }
+  return out;
 }

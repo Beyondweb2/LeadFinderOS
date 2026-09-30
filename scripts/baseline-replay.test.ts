@@ -96,13 +96,18 @@ ok(overridden.allow === false && overridden.reason === "questions_differ_from_ba
 console.log("\n── ANYTHING ELSE IS REFUSED ──");
 const drifted = j({ proposed: ["a brand new question", "and another"] });
 ok(drifted.allow === false && drifted.reason === "questions_differ_from_baseline", "a silently different set → refused");
-ok(drifted.allow === false && /exact ordered baseline array/.test(drifted.detail), "…and the refusal names the exact-order contract");
+ok(drifted.allow === false && /exact baseline questions/.test(drifted.detail), "…and the refusal names the exact-questions contract");
+/* 2026-09-30: the queue records no ask order (one bulk insert, one created_at per run), so the gate
+   compares the SET — exact text, each once — never positions two separate reads happened to return. */
+ok(j({ proposed: [...BASE].reverse() }).allow === true, "the same questions read back in a different order → allowed (no order is recorded)");
+ok(j({ proposed: [...BASE.slice(1), BASE[1]] }).allow === false, "one question repeated in place of another → refused (each exactly once)");
+ok(j({ proposed: BASE.map((q, i) => i === 0 ? q.toUpperCase() : q) }).allow === false, "a changed spelling → refused (exact text)");
 ok(j({ proposed: BASE.slice(0, 2) }).allow === false, "dropping a baseline question → refused");
 ok(j({ proposed: [...BASE, "extra"] }).allow === false, "adding one → refused");
 ok(j({ baselineAsked: null }).allow === false, "a multi-run re-measure with no baseline → refused");
 
 console.log("\n── EXACT TEXT AND ORDER ARE IDENTITY ──");
-ok(j({ proposed: [BASE[2], BASE[0], BASE[1]] }).allow === false, "reordered → refused");
+ok(j({ proposed: [BASE[2], BASE[0], BASE[1]] }).allow === true, "reordered → allowed: the queue records no ask order, the set is what is judged (2026-09-30)");
 ok(j({ proposed: BASE.map((q) => q.toUpperCase()) }).allow === false, "re-cased → refused");
 ok(j({ proposed: [BASE[0], `${BASE[1]}!`, BASE[2]] }).allow === false, "one changed character → refused");
 ok(j({ proposed: BASE.slice(0, -1) }).allow === false, "removed question → refused");

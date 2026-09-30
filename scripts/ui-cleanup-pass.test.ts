@@ -100,7 +100,7 @@ console.log("\n── Playbook ──");
   ok(!/to=\{`\/playbook\//.test(read("src/pages/ClientHub.tsx")) && !/title="[0-9]. Action Plan"/.test(read("src/pages/ClientHub.tsx")), "the paid-client hub's Action Plan step is gone");
   ok(!/\/playbook/.test(read("src/App.tsx").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")) && !has("src/pages/Playbook.tsx") && !has("src/hooks/usePlaybook.ts"), "no /playbook route, no page, no page hook");
   const hub = read("src/pages/ClientHub.tsx");
-  ok(["1. Baseline", "2. Welcome Pack", "3. Directories", "4. Website Build", "5. Review Replies", "6. Remeasure", "7. Results"].every((t) => hub.includes(`title="${t}"`)), "the hub's steps are numbered without a gap");
+  ok(["1. Official baseline", "2. Welcome Pack", "3. Directories", "4. Website Build", "5. Review Replies", "6. Remeasure", "7. Results", "8. Ongoing opportunities"].every((t) => hub.includes(`title="${t}"`)), "the hub's steps are numbered without a gap");
 }
 
 console.log("\n── Wrong number suppresses future outreach ──");

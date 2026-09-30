@@ -63,7 +63,8 @@ const rep = coverageReport(balanced, ctx, 20);
   ok(balanced.length === 20, '20 questions');
   ok(bristol <= 9, `2. Bristol holds ${bristol} of 20, not all of them`);
   const draftRep = coverageReport(DRAFT, ctx, 20);
-  ok(draftRep.warnings.some((w) => /^20 of 20 questions target Bristol while 6 other approved service areas are unused/.test(w)), '2. BS4\'s old draft is flagged: "20 of 20 questions target Bristol while 6 other approved service areas are unused…"');
+  ok(draftRep.warnings.some((w) => /^Every question is about Bristol — none of the 6 approved service areas is represented/.test(w)), '2. BS4\'s old all-Bristol draft is flagged: one geography only (representative rule, 2026-09-30)');
+  ok(!draftRep.warnings.some((w) => /not covered/.test(w)), '2. …and no "areas not covered" list: coverage is representative, not one question per town');
 }
 
 console.log('\n── 3/4. REWORDINGS COLLAPSE ──');
@@ -85,9 +86,9 @@ console.log('\n── 5/9. ADD TO BASELINE; THE DRAFT STAYS EDITABLE ──');
   const withMine = buildBalancedBaseline([{ question: mine, source: 'manual' }, ...pool], ctx, 20);
   ok(withMine[0] === mine || withMine.includes(mine), '5. a question Paul added from Discovery is kept by the balanced generator');
   const hub = read('src/pages/ClientHub.tsx');
-  ok(/const addFromDiscovery = \(q: string\) => \{ setQuestions\(/.test(hub) && /onAdd=\{addFromDiscovery\}/.test(hub), '5. "Add to baseline" appends to the draft on screen');
-  ok(/keep_current: added\.length > 0, questions: added/.test(hub), '5. …and the balanced generator is told to keep those');
-  ok(/<AuditQuestionEditor questions=\{questions\} onChange=\{setQuestions\} disabled=\{frozen\}/.test(hub), '9. the draft is edited, removed and added to until frozen');
+  ok(/const addFromDiscovery = \(q: string\) => \{ setQuestions\(/.test(hub) && /onAdd=\{addFromDiscovery\}/.test(hub), '5. overriding the recommendation ("Add") appends to the draft on screen');
+  const official = read('src/components/OfficialBaseline.tsx');
+  ok(/<OfficialBaseline data=\{data\} questions=\{questions\} onChange=\{setQuestions\} frozen=\{frozen\}/.test(hub) && /<AuditQuestionEditor questions=\{questions\} onChange=\{onChange\} disabled=\{frozen\}/.test(official), '9. the draft is edited, removed, added to and pasted until frozen');
   const pb = read('supabase/functions/paid-baseline/index.ts');
   ok(/baseline_questions: next, baseline_status: "needs_approval"/.test(pb.slice(pb.indexOf('if (action === "generate" || action === "balanced")'))), '9. the balanced generator writes a DRAFT (needs_approval), never an approval');
   ok(!/baseline_questions:|baseline_status:/.test(pb.slice(pb.indexOf('if (action === "discovery_generate")'), pb.indexOf('if (action === "generate" || action === "balanced")'))), '9. Discovery never writes the baseline draft or its status');
@@ -111,9 +112,11 @@ console.log('\n── 8. WINNABILITY INFORMS, IT DOES NOT CHOOSE ──');
   ok(!/discoveryOpportunity|classifyWinnability|opportunity/.test(mix.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), '8. the balanced generator has no access to winnability at all');
   const pb = read('supabase/functions/paid-baseline/index.ts');
   const genBlock = pb.slice(pb.indexOf('if (action === "generate" || action === "balanced")'), pb.indexOf('if (action === "save")'));
-  ok(!/opportunity/.test(genBlock), '8. paid-baseline builds the draft without reading opportunities');
+  /* Paul, 2026-09-30: the recommendation MAY favour opportunities — as a tie-break after balance, in
+     baselineRecommendation.ts (baseline-methodology.test.ts proves balance still decides). */
+  ok(/recommendBaseline\(/.test(genBlock) && !/classifyWinnability/.test(genBlock), '8. paid-baseline drafts through the recommendation, never the classifier directly');
   const ui = read('src/components/BaselineDiscovery.tsx');
-  ok(/OPPORTUNITY_GROUP_LABELS/.test(ui) && /They explain a question; they do not decide the baseline/.test(ui), '8. the screen shows Winnable / Possible / Already named / Weak as information');
+  ok(/OPPORTUNITY_GROUP_LABELS/.test(ui) && /the verdicts above decide/.test(ui), '8. Winnable / Possible / Already named / Weak are shown as information, under Advanced');
 }
 
 console.log('\n── 10/11. THE FROZEN BASELINE AND THE REPLAY ARE UNCHANGED ──');
@@ -128,7 +131,7 @@ console.log('\n── 10/11. THE FROZEN BASELINE AND THE REPLAY ARE UNCHANGED �
   const ab = read('supabase/functions/_shared/audit-baseline.ts');
   ok(/questions: plan\.questions,\s+\/\/ the baseline's ASKED set, verbatim/.test(ab), '11. the day-28 replay still posts the baseline\'s asked set verbatim');
   const frozen = ['rewiring in Bath UK', 'eicr in Bristol UK', 'emergency electrician in Keynsham UK'];
-  ok(judgeRemeasure({ proposed: frozen, baselineAsked: frozen, targetRuns: 3 }).allow === true && judgeRemeasure({ proposed: [frozen[1], frozen[0], frozen[2]], baselineAsked: frozen, targetRuns: 3 }).allow === false, '11. the replay gate still demands the exact frozen list in order — multi-town sets included');
+  ok(judgeRemeasure({ proposed: frozen, baselineAsked: frozen, targetRuns: 3 }).allow === true && judgeRemeasure({ proposed: [frozen[1], frozen[1], frozen[2]], baselineAsked: frozen, targetRuns: 3 }).allow === false, '11. the replay gate still demands the exact frozen questions, each once — multi-town sets included');
 }
 
 console.log('\n── 12. OPENING THE PAGE MEASURES NOTHING ──');
