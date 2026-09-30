@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { COST_BASIS, COST_OWNER_LABEL, COST_OWNER_RULE, type CostAccounting, type CostOwner } from '@/lib/apiCostAccounting';
+import { COST_BASIS, COST_OWNERS, COST_OWNER_LABEL, COST_OWNER_RULE, COST_PROJECT_LABEL, PROVIDER_MIGRATIONS, type CostAccounting, type CostProject } from '@/lib/apiCostAccounting';
 import { AlertTriangle, ArrowRight, Banknote, ExternalLink, CalendarCheck, Coins, Filter, Megaphone, PhoneCall, Receipt, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
@@ -443,6 +443,8 @@ export function CommissionPanel({ o }: { o: O }) {
   );
 }
 
+const switchedUtc = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+
 /** 2 · Google after its free monthly allowance — by SKU, by London calendar month. An estimate, never a bill. */
 function GoogleAllowance({ a }: { a: CostAccounting }) {
   if (!a.googleMonths.length) return null;
@@ -450,7 +452,8 @@ function GoogleAllowance({ a }: { a: CostAccounting }) {
     <div className="mt-4">
       <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">2 · Google Maps after its free monthly allowance (estimate)</p>
       <p className="mb-2 text-[11px] text-muted-foreground">
-        Google gives each SKU a number of free calls a month; only calls above it are billable, at list price. This is what the calls above the free allowance would cost —
+        Your own Google billing account only — calls from {switchedUtc(PROVIDER_MIGRATIONS['Google Maps'].switchedAt)} on. Calls made before that were on Move37's key and billing account, so they never used up your free calls and are not counted here.
+        {' '}Google gives each SKU a number of free calls a month; only calls above it are billable, at list price. This is what the calls above the free allowance would cost —
         <span className="font-medium text-foreground"> not a bill and not a confirmed future charge</span>: Google counts the allowance across every project on the billing account (usage outside LeadFinderOS is not visible here), and trial or promotional credits are not visible either.
       </p>
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -480,21 +483,78 @@ function GoogleAllowance({ a }: { a: CostAccounting }) {
   );
 }
 
+/** The historical breakdown — everything ever recorded, in the four buckets, reconciled to the total. */
+function CostHistory({ a }: { a: CostAccounting }) {
+  const t = a.allTime;
+  const sum = COST_OWNERS.reduce((s, k) => s + t.byOwner[k], 0);
+  const projects: CostProject[] = ['findable', 'testing', 'legacy', 'unallocated'];
+  return (
+    <details className="mt-4 rounded-xl border border-border/60 p-3">
+      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Historical breakdown · all recorded usage · {usd(t.totalUsd)} (estimates)
+      </summary>
+      <ul className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {COST_OWNERS.map((k) => (
+          <li key={k} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs">
+            <span className="min-w-0"><span className="font-medium">{COST_OWNER_LABEL[k]}</span><span className="block text-[10px] text-muted-foreground">{COST_OWNER_RULE[k]}</span></span>
+            <span className="shrink-0 tabular-nums">{usd(t.byOwner[k])}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        The four add up to every recorded dollar: {COST_OWNERS.map((k) => usd(t.byOwner[k])).join(' + ')} = {usd(Math.round(sum * 100) / 100)}. Nothing is deleted — the Move37 rows stay in the log for the record.
+      </p>
+      {t.byOwner.move37 > 0 && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground">Move37-funded, by whose work it was:</span>{' '}
+          {projects.filter((k) => t.move37ByProject[k] > 0).map((k) => `${COST_PROJECT_LABEL[k]} ${usd(t.move37ByProject[k])}`).join(' · ')}. Move37 paid for all of it, so none of it is a Findable expense.
+        </p>
+      )}
+      <div className="-mx-3 mt-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+        <table className="w-full min-w-[560px] text-xs">
+          <thead><tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+            <th className="py-1.5 pr-2 font-semibold">Provider · moved to your account</th><th className="px-2 py-1.5 text-right font-semibold">Move37-funded</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Findable</th><th className="px-2 py-1.5 text-right font-semibold">Testing</th><th className="px-2 py-1.5 text-right font-semibold">Unallocated</th>
+          </tr></thead>
+          <tbody>{a.byProvider.map((p) => (
+            <tr key={p.provider} className="border-b border-border/30 align-top">
+              <td className="py-1 pr-2"><span className="font-medium">{p.provider}</span> · {switchedUtc(p.switchedAt)}<span className="block text-[10px] text-muted-foreground">{p.evidence}</span></td>
+              <td className="px-2 py-1 text-right tabular-nums">{usd(p.move37Usd)}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{usd(p.findableUsd)}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{usd(p.testingUsd)}</td>
+              <td className="px-2 py-1 text-right tabular-nums">{usd(p.unallocatedUsd)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {a.apify && a.apify.notInOurLogUsd > 0 && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground">Also unallocated, provider-reported:</span> {usd(a.apify.notInOurLogUsd)} on your Apify account this cycle that our log does not record (see the Apify line above). It is not in the {usd(t.totalUsd)}, which is only what our code recorded.
+        </p>
+      )}
+    </details>
+  );
+}
+
 export function CostPanel({ o, onDetail }: { o: O; onDetail: () => void }) {
   const c = o.money.cost;
   const a = o.costAccounting;
   const top = (list: { key: string; usd: number }[]) => list.slice(0, 8);
-  const owners: CostOwner[] = ['findable', 'testing', 'legacy', 'unallocated'];
+  const pa = a?.period;
   return (
     <Panel collapseKey="admin.cc.cost" title="API & system costs" icon={Coins} tone="grey" defaultOpen={false}
-      hint="Recorded usage VALUE (US dollars, estimates) — not money charged. Confirmed charges need real billing data."
-      summary={`${usd(c.period.usd)} recorded usage value in ${o.period.label.toLowerCase()} · confirmed charges not available`}>
-      {/* ⛔ FOUR THINGS, NEVER ONE NUMBER (src/lib/apiCostAccounting.ts). */}
+      hint="Findable's own usage VALUE (US dollars, estimates) — not money charged. Usage Move37 paid for before each provider moved to your account is left out."
+      summary={`${usd(c.period.usd)} Findable usage value in ${o.period.label.toLowerCase()} · confirmed charges not available`}>
+      {/* ⛔ FOUR THINGS, NEVER ONE NUMBER (src/lib/apiCostAccounting.ts). Every figure in this card and in
+          the Money overview is Findable-paid only (isFindableCost) — the loader drops Move37-funded rows. */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="rounded-xl border border-border/60 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">1 · Recorded usage value · {o.period.label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">1 · Findable usage value · {o.period.label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{usd(c.period.usd)}</p>
-          <p className="text-[11px] text-muted-foreground">Today {usd(c.today)} · this week {usd(c.week)} · this month {usd(c.month)}. What our code logged when it spent — an estimate, not a bill.</p>
+          <p className="text-[11px] text-muted-foreground">
+            Today {usd(c.today)} · this week {usd(c.week)} · this month {usd(c.month)}. What our code logged when it spent on your own provider accounts — an estimate, not a bill.
+            {pa ? <> Includes {usd(pa.byOwner.testing)} Findable testing.{pa.byOwner.move37 > 0 ? <> Left out: {usd(pa.byOwner.move37)} Move37-funded usage in this period.</> : null}{pa.byOwner.unallocated > 0 ? <> Left out: {usd(pa.byOwner.unallocated)} unallocated.</> : null}</> : null}
+          </p>
         </div>
         <div className="rounded-xl border border-dashed border-border p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">3 · Confirmed charges</p>
@@ -504,27 +564,21 @@ export function CostPanel({ o, onDetail }: { o: O; onDetail: () => void }) {
       </div>
       {a ? (
         <>
-          <div className="mt-4">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Whose usage it was · {o.period.label}</p>
-            <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-              {owners.map((k) => (
-                <li key={k} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs">
-                  <span className="min-w-0"><span className="font-medium">{COST_OWNER_LABEL[k]}</span><span className="block text-[10px] text-muted-foreground">{COST_OWNER_RULE[k]}</span></span>
-                  <span className="shrink-0 tabular-nums">{usd(a.byOwner[k])}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">When each provider moved from Move37 to your own account:</span>{' '}
+            {a.migrations.map((m) => `${m.provider} ${switchedUtc(m.switchedAt)}`).join(' · ')}. Usage before a provider's move is Move37's, never Findable's.
+          </p>
           <GoogleAllowance a={a} />
           {a.apify && (
             <p className="mt-3 text-[11px] text-muted-foreground">
-              <span className="font-medium text-foreground">Apify account, billing cycle {a.apify.cycleStart.slice(0, 10)} → {a.apify.cycleEnd.slice(0, 10)}:</span> {usd(a.apify.accountUsd)}{a.apify.capUsd ? ` of its ${usd(a.apify.capUsd)} limit` : ''} (Apify's own account figure, read {ago(a.apify.capturedAt)}).
-              {' '}We recorded {usd(a.apify.recordedUsd)} of it; {usd(a.apify.notInOurLogUsd)} is <span className="font-medium">unallocated</span> — spend our log does not record (see below), or another user of the same Apify account. Not assumed either way.
+              <span className="font-medium text-foreground">Apify account, billing cycle {a.apify.cycleStart.slice(0, 10)} → {a.apify.cycleEnd.slice(0, 10)}:</span> {usd(a.apify.accountUsd)}{a.apify.capUsd ? ` of its ${usd(a.apify.capUsd)} limit` : ''} (Apify's own account figure — provider-reported usage, not an invoice — read {ago(a.apify.capturedAt)}).
+              {' '}We recorded {usd(a.apify.recordedUsd)} of it on this account (from the switch on {switchedUtc(PROVIDER_MIGRATIONS.Apify.switchedAt)}); {usd(a.apify.notInOurLogUsd)} is <span className="font-medium">unallocated</span> — spend our log does not record (see below). Not assumed either way.
             </p>
           )}
+          <CostHistory a={a} />
         </>
-      ) : <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">The ownership and allowance breakdown could not be read just now.</p>}
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recorded usage value by provider, feature and person · {o.period.label}</p>
+      ) : <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">The ownership, allowance and history breakdown could not be read just now.</p>}
+      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Findable usage value by provider, feature and person · {o.period.label}</p>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         {([['By provider', c.period.byProvider], ['By feature', c.period.byFeature], ['By person', c.period.byPerson]] as const).map(([title, list]) => (
           <div key={title} className="min-w-0">
@@ -554,7 +608,7 @@ export function ContributionPanel({ o }: { o: O }) {
   return (
     <Panel collapseKey="admin.cc.contribution" title="Money overview" icon={Receipt} tone="green"
       hint={`${o.period.label} · money in (pounds) and recorded API spend (US dollars), kept apart. This is not profit.`}
-      summary={`${gbp(k.afterCommission)} after commission · ${usd(k.apiUsd)} recorded API usage value`}>
+      summary={`${gbp(k.afterCommission)} after commission · ${usd(k.apiUsd)} Findable API usage value`}>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Figure strong tone="green" label="Revenue collected (net)" value={gbp(k.revenueNet)} />
         <span className="text-lg text-muted-foreground">−</span>
@@ -562,7 +616,7 @@ export function ContributionPanel({ o }: { o: O }) {
         <span className="text-lg text-muted-foreground">=</span>
         <Figure strong tone={k.afterCommission >= 0 ? 'green' : 'red'} label="Revenue after commission" value={gbp(k.afterCommission)} />
         <span className="mx-1 hidden h-10 w-px bg-border sm:block" aria-hidden />
-        <Figure label="Recorded API usage value (US dollars)" value={usd(k.apiUsd)} sub="an estimate — not converted or subtracted" />
+        <Figure label="Recorded API usage value (US dollars)" value={usd(k.apiUsd)} sub="Findable's own accounts only · an estimate — not converted or subtracted" />
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">API spend is billed in US dollars and revenue is in pounds, so the two are shown side by side rather than combined — there is no dated exchange rate on record to convert with. Neither figure includes hosting, software, tax, your time or unrecorded API spend.</p>
     </Panel>
