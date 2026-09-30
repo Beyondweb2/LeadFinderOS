@@ -23,7 +23,7 @@ ok(/admin_job_claim/.test(fn) && /isPaidLead\(l\) && !l\.is_archived && !l\.serv
 ok(/status: "not_configured"/.test(fn), 'no Google credential → "not configured", nothing touched');
 
 ok(resolvePerformanceState(null, 0) === 'not_connected' && resolvePerformanceState({ status: 'connected', gsc_property: 'sc-domain:x.co.uk' }, 0) === 'no_data', 'no connection → Not connected; connected with no rows → no data (never zero traffic)');
-const overview = read('supabase/functions/admin-overview/index.ts');
+const overview = read('supabase/functions/_shared/admin-overview-load.ts');
 ok(/\.\.\.\(state === "populated" \? \{/.test(overview) && /prevCovered \?/.test(overview), 'figures only when populated; "vs previous" only when stored data covers the previous window');
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');

@@ -301,6 +301,25 @@ each client's Search Console property; set the JSON key as the edge secret; add 
 `performance-sync` mode `properties`). The branch's MCL seed SQL is NOT safe to run as written (it writes
 the dropped column and lists 14 pages that now redirect).
 
+## AI business summary (release 6)
+
+fn `business-summary` (cron `business-summary-weekly`, Mondays 06:30 UTC: the last full London week vs
+the week before; or the admin's "Write one now": the last 7 days vs the 7 before, at most once an hour),
+rules in `src/lib/businessSummary.ts` (tests `scripts/business-summary.test.ts`), table
+`admin_summaries` (the exact facts given, the words, status, reason, model, prompt version, cost).
+
+- **One set of numbers.** The dashboard's reads and fold were moved verbatim into
+  `_shared/admin-overview-load.ts`; fn admin-overview and fn business-summary both call
+  `loadAdminOverview`, so the briefing cannot disagree with the page.
+- **It cannot invent a number.** The model (`gpt-4o`) sees only `facts` — totals, per-person lines,
+  templates, niches, flagged bottlenecks, attention counts, client weekly checks, feature flags, site
+  funnel — with every change pre-computed (`change_pct`). Every number in its draft must appear in the
+  facts (`validateNumbers`); otherwise one retry naming the bad numbers; still wrong → stored `rejected`
+  and NOT shown — the page shows the flagged checks instead (`fallbackLookAt`).
+- Advisory only: it writes one row and nothing else; honours the emergency stop; single-flight
+  (`admin_job_runs`); logged to `api_usage_log` as `openai_business_summary` (≈ $0.02–0.04 a briefing).
+- The panel "This week in plain English" sits in the top section, open by default.
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |

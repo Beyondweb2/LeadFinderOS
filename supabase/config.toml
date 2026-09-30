@@ -222,6 +222,12 @@ verify_jwt = false
 [functions.performance-sync]
 verify_jwt = false
 
+# business-summary: the admin-only AI business briefing (release 6). Callers: the cron (Mondays,
+# x-cron-secret + x-internal-job, no JWT — hence false) and the admin (requireAdmin) for an on-demand
+# refresh (at most once an hour). Grounded in the dashboard's own numbers; writes one admin_summaries row.
+[functions.business-summary]
+verify_jwt = false
+
 # Commission from the payment ledger (Sales Experience, 2026-09-28): signed-in callers only; role checked in the handler.
 [functions.sales-earnings]
 verify_jwt = true

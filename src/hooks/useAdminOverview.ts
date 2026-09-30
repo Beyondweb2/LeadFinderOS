@@ -17,6 +17,11 @@ export type AdminOverviewResponse = AdminOverview & {
   search: Record<string, SearchSummary> | null;
   /** Whether a Google service-account credential is set at all. */
   searchConfigured: boolean;
+  /** The latest AI business summary (fn business-summary); null = none yet or unreadable. */
+  latestSummary: {
+    id: string; created_at: string; kind: 'weekly' | 'on_demand'; period_label: string; period_from: string | null; period_to: string | null;
+    summary: string | null; look_at: string[] | null; status: 'ok' | 'rejected' | 'error'; reason: string | null; model: string | null;
+  } | null;
   /** Background jobs (admin_job_runs); null = unreadable. */
   jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null;
   generatedAt: string;

@@ -24,6 +24,7 @@ import {
 import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
 import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traffic';
+import { BusinessSummaryPanel } from '@/components/admin/businessSummary';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -125,6 +126,11 @@ const Dashboard = () => {
               onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
               onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
             <SinceYesterday o={o} attention={o.attention.length} />
+            <BusinessSummaryPanel o={o} onRefresh={async () => {
+              const r = await invokeEdge<{ ok: boolean; skipped?: string; status?: string; detail?: string }>('business-summary', {});
+              await q.refetch();
+              return r.skipped ?? r.detail ?? (r.status === 'rejected' ? 'The draft used a figure not in the data, so it was not shown.' : null);
+            }} />
           </Section>
 
           <Section title="Team">
