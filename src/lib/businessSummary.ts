@@ -72,7 +72,7 @@ export function buildSummaryFacts(now: OverviewLike, before: OverviewLike | null
     money: {
       revenue_net_gbp: money(now.money.period.net), revenue_net_gbp_before: b ? money(b.money.period.net) : null,
       refunds_gbp: money(now.money.period.refunds), commission_added_gbp: money(now.money.commission.periodAdded),
-      api_spend_usd: pair(money(now.money.cost.period.usd), money(b?.money.cost.period.usd ?? 0)), top_api_costs: topCost,
+      recorded_api_usage_value_usd_estimate_not_a_bill: pair(money(now.money.cost.period.usd), money(b?.money.cost.period.usd ?? 0)), top_api_costs: topCost,
       paying_clients: now.money.payingClients,
     },
     templates: now.templates.meta.filter((x) => x.leadsSent > 0).slice(0, 6).map((x) => ({ template: x.template, leads_sent: x.leadsSent, replies: x.replies, real_interest: x.positive, said_no: x.notInterested, flags: x.flags })),

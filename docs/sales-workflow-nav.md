@@ -49,3 +49,38 @@ data, legacy barber usage labelled "Legacy project · Not Findable", two SQL cha
 
 Not clickable, by design (read-only totals): funnel, channels, calls, revenue, commission, money
 overview, bottlenecks, templates, niches, feature usage, traffic.
+
+## Release B — API cost accuracy
+
+**Where every figure comes from:** only `api_usage_log`, written by LeadFinderOS's own edge functions
+when they spend. No provider billing is read anywhere. So **no other Move37 project's usage is in the
+dashboard figure** — nothing outside this app writes that table. What cannot be shown is the reverse:
+whether other projects share the same Google billing account, OpenAI organisation or Apify account.
+
+**The four things the Cost panel now keeps apart** (`src/lib/apiCostAccounting.ts`, SQL
+`admin_api_cost_detail`, migration `20261001180000`):
+1. **Recorded usage value** — an estimate. Google = calls × list price; OpenAI = measured tokens × list
+   price; Apify = the cost Apify reported per run.
+2. **Google after its free monthly allowance** — per SKU, per London month: calls above the free cap ×
+   the SKU's price. Still an estimate, never a bill: Google counts the cap across the whole billing
+   account, and trial / promotional credits are not visible.
+3. **Confirmed charges** — "Not available": no billing data is connected.
+4. **Whose usage** — Findable (incl. background jobs doing Findable work) · Findable testing /
+   development (the test accounts) · Legacy project · Not Findable (`generate-barber-site`, verified by
+   name) · Unallocated (lead finding before Findable's first audit on 2026-07-11, and the retired
+   contact-enrichment tools, which recorded no lead).
+
+**SKUs** (verified 2026-09-30 against developers.google.com/maps/billing-and-pricing/pricing; the SKU is
+set by the fields each caller asks for): Place Details Enterprise 1,000 free / $20 per 1,000
+(google-place-details — asks for the phone); Place Details Essentials 10,000 / $5 (place-town.ts);
+Text Search Enterprise 1,000 / $35 (search-leads, niche-sample — websiteUri); Text Search Pro 5,000 /
+$32 (place-resolve.ts); Geocoding 10,000 / $5.
+
+**Live, 2026-09-30:** 30 days — Findable $211.75, testing $2.97. All time — Findable $373.24, testing
+$2.97, legacy $1.08, unallocated $14.19 (total = every recorded dollar, $391.48). Google September:
+recorded $95.17, after the free allowance ≈ $45.66 (3,283 Place Details Enterprise vs 1,000 free);
+August $49.43 → ≈ $14.00; July $23.33 → ≈ $0.78.
+
+**Apify:** its own account figure for the billing cycle (`apify_account_usage`, from Apify's API) is
+shown beside what we recorded — on 2026-09-30, $27.53 vs $24.23; the $3.30 gap is Unallocated (spend
+our log does not record, or another user of the account — not assumed either way).

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { invokeEdge } from '@/lib/edgeInvoke';
 import type { AdminOverview } from '@/lib/adminMetrics';
+import type { CostAccounting } from '@/lib/apiCostAccounting';
 import type { PeriodKey } from '@/lib/reportingPeriod';
 
 /** What fn admin-overview returns: the fold plus the notes the page prints beside the numbers. */
@@ -10,6 +11,8 @@ export type AdminOverviewResponse = AdminOverview & {
   exclusionNote: string;
   exclusions: { kind: string; reason: string | null }[];
   costNotes: { unrecorded: string[] };
+  /** Recorded usage by owner, Google after its free allowance, the Apify account check (2026-09-30). Null = unreadable. */
+  costAccounting: CostAccounting | null;
   commissionError: string | null;
   /** The Findable funnel (SQL admin_site_funnel); null = unreadable. */
   site: SiteFunnel | null;

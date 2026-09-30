@@ -11,6 +11,7 @@ import { finaliseTotals, pagePath, periodWindows, resolvePerformanceState, sumTo
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
+import { FINDABLE_START_ISO, foldCostAccounting, type ApifyAccountCheck, type CostAccounting, type CostDetailRow } from "../../../src/lib/apiCostAccounting.ts";
 
 
 // THE ADMIN CONTROL CENTRE'S DATA LOADER (moved verbatim from fn admin-overview, 2026-09-30, so the
@@ -206,6 +207,36 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     if (!error && data) latestSummary = data as Record<string, unknown>;
   }
 
+  /* API cost accuracy (2026-09-30, src/lib/apiCostAccounting.ts): the period's recorded usage by OWNER,
+     Google's free allowance by SKU for the last three London calendar months, and the Apify account's
+     own figure for its billing cycle beside what we recorded. Unreadable → null (the panel says so);
+     confirmed charges are never filled in without real billing data. */
+  let costAccounting: CostAccounting | null = null;
+  try {
+    const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+    const [y, m] = londonDay(nowMs).split("-").map(Number);
+    const firstMonth = `${new Date(Date.UTC(y, m - 3, 1)).toISOString().slice(0, 7)}`;
+    const detail = async (from: string | null, to: string) => {
+      const { data, error } = await service.rpc("admin_api_cost_detail", { _from: from, _to: to, _findable_start: FINDABLE_START_ISO });
+      if (error) throw new Error(`admin_api_cost_detail: ${error.message}`);
+      return ((data ?? []) as CostDetailRow[]).map((r) => ({ ...r, usd: Number(r.usd) || 0, calls: Number(r.calls) || 0 }));
+    };
+    const [inPeriod, recent, apifyRes] = await Promise.all([
+      detail(iso(period.fromMs), new Date(period.toMs).toISOString()),
+      detail(new Date(Date.UTC(y, m - 3, 1) - 86_400_000).toISOString(), new Date(nowMs).toISOString()),
+      service.from("apify_account_usage").select("captured_at, monthly_usage_usd, max_monthly_usage_usd, cycle_start, cycle_end").order("captured_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    let apify: ApifyAccountCheck | null = null;
+    const a = apifyRes.data as { captured_at: string; monthly_usage_usd: number | string | null; max_monthly_usage_usd: number | string | null; cycle_start: string | null; cycle_end: string | null } | null;
+    if (!apifyRes.error && a?.cycle_start && a.monthly_usage_usd != null) {
+      const ours = await detail(a.cycle_start, a.captured_at);
+      const recorded = Math.round(ours.filter((r) => String(r.api_type ?? "").startsWith("apify")).reduce((s, r) => s + r.usd, 0) * 100) / 100;
+      const account = Math.round(Number(a.monthly_usage_usd) * 100) / 100;
+      apify = { cycleStart: a.cycle_start, cycleEnd: a.cycle_end ?? "", accountUsd: account, capUsd: a.max_monthly_usage_usd == null ? null : Number(a.max_monthly_usage_usd), recordedUsd: recorded, notInOurLogUsd: Math.max(0, Math.round((account - recorded) * 100) / 100), capturedAt: a.captured_at };
+    }
+    costAccounting = foldCostAccounting(inPeriod, recent.filter((r) => r.month >= firstMonth), exclusions.users, apify);
+  } catch (err) { console.error("[admin-overview] cost accounting", err instanceof Error ? err.message : err); costAccounting = null; }
+
   const overview = foldAdminOverview({
     period, today, yesterday, week, month, nowMs,
     bookOwnerId: owner, people, exclusions,
@@ -224,6 +255,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     exclusionNote: exclusionNote(exclusions, new Map(people.map((x) => [x.userId, x.name]))),
     exclusions: exclusions.rows.map((r) => ({ kind: r.kind, reason: r.reason })),
     costNotes: { unrecorded: UNRECORDED_SPEND },
+    costAccounting,
     commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
     jobs, site, search, searchConfigured, latestSummary,
     generatedAt: new Date(nowMs).toISOString(),
