@@ -163,3 +163,20 @@ Writers/readers per status, the 7 label maps and where they disagree (won had fo
 control that changes status: summarised above; the raw map is in this session's transcript. Key readers:
 `process-whatsapp-queue` eligibility, `sales_queue_opener` (not_contacted only), `sales_pool`,
 `hook-not-interested` PROTECTED, `dashboardTasks` DEAD/NOT_ACTIONABLE, `REPLIED_OR_BEYOND`.
+
+## 12. Paul's decisions (2026-09-30, follow-up — built and live)
+
+1. **A human revive lifts ONLY the Not interested block.** Trigger `trg_outreach_leads_revive_clears_not_interested`
+   (migration 20260930170000): status `not_interested` → `interested` (Interested / Meeting booked) or
+   `won_pending_onboarding` deletes the `contact_suppressions` row with `reason = 'not_interested'` and no
+   Wrong number mark, and writes a History line. Never touched: Wrong number, `replied_no` (their own
+   "no" reply), `closed`, `archived`, opt-outs. No automatic writer targets those two statuses, so a
+   reply or a weak contact (no answer, voicemail) cannot lift it. Tested live, rolled back: sales
+   revive → lifted; admin → Won → lifted; with a Wrong number mark / replied_no / → Replied / voicemail → kept.
+2. **Outreach rows carry the sales-state pill** (desktop and phone), compact, above the pipeline badge,
+   drawn only when the badge does not already say the same state (`stateShownByBadge`: same words, or
+   a Paid / In delivery / Completed / Refunded badge for Client). Wrong number per page comes from
+   `leads_wrong_numbers` (role-checked batch read). The last contact / meeting line stays underneath.
+   The phone badge for New said "Status"; it says "New" now. A lead with a logged call but no WhatsApp
+   opener reads "Contacted" (pill) over "New" (the WhatsApp pipeline badge) — both true.
+3. **Voice note stays off the Next Action list** — a contact format, not an objective.

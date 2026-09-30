@@ -358,6 +358,23 @@ export function stateChangedWords(data: Record<string, unknown> | null | undefin
   return `Status: ${w(data?.from)} → ${w(data?.to)}`;
 }
 
+/* ── 6b. ONE PILL, NOT TWO (Paul, 2026-09-30: "no duplicate pills if another visible badge already
+   represents the exact same state") ─────────────────────────────────────────────────────────────── */
+
+const CLIENT_BADGES: ReadonlySet<string> = new Set(['paid', 'in delivery', 'completed', 'refunded']);
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Does the pipeline badge beside it already say this state? Then the row draws only the badge.
+ *  Same words ("Contacted" / "Contacted", "Not interested" / "Not Interested"), or a client badge
+ *  (Paid / In delivery / Completed / Refunded) for Client. Anything else — "No WhatsApp" for a New lead,
+ *  "Report Sent" for an Interested one, "New" for a lead with a logged call — shows the pill. */
+export function stateShownByBadge(v: SalesStateView, badgeLabel: string | null | undefined): boolean {
+  const b = norm(badgeLabel);
+  if (!b) return false;
+  if (v.state === 'client') return CLIENT_BADGES.has(b);
+  return b === norm(v.label);
+}
+
 /* ── 7. QUEUE RULES (what the state means for the lists — read, never written) ────────────────── */
 
 /** Out of the normal outreach queues: said no, a client, won (the admin has it). */

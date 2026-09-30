@@ -153,9 +153,9 @@ await (async () => {
   const two = ['Who are the best electricians in Addlestone UK?', 'Who would you recommend for an EICR in Addlestone UK?'];
   const out = topUpHookQuestions(two, { trade: 'electricians', place: 'Addlestone UK' });
   ok(out.length === HOOK_SCORE_QUESTIONS && out[0] === two[0] && out[1] === two[1], 'C: topped up to three, the two planned kept in order');
-  ok(/^(Who is the best electrician|Can you recommend an electrician|I need an electrician) in Addlestone UK(\?|, who should I call\?)$/.test(out[2]), `C: the third is a generic trade + place question (${out[2]})`);
+  ok(/^(electrician in Addlestone UK|Can you recommend an electrician in Addlestone UK\?|I need an electrician in Addlestone UK, who should I call\?)$/.test(out[2]), `C: the third is a generic trade + place question (${out[2]})`);
   ok(!/eicr|rewire|repair|install|boiler/i.test(out[2]), 'C: no service is invented');
-  const one = topUpHookQuestions(['Who is the best electrician in Addlestone UK?'], { trade: 'electricians', place: 'Addlestone UK' });
+  const one = topUpHookQuestions(['electrician in Addlestone UK'], { trade: 'electricians', place: 'Addlestone UK' });
   ok(one.length === 3 && new Set(one.map((q) => q.toLowerCase())).size === 3, 'C: one question tops up to three distinct ones (a duplicate generic is skipped)');
   ok(topUpHookQuestions(Q, { trade: 'electricians', place: 'Addlestone' }).length === 3, 'C: a full plan is untouched');
 }

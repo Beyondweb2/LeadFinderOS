@@ -18,6 +18,7 @@ import { alertEmail, describeSecurityEvent, eventRestricted } from "../src/lib/s
 import { metaSignatureHex, validMetaSignature } from "../src/lib/metaSignature.ts";
 import { dataAccessRefusalMessage } from "../src/lib/dataAccessLog.ts";
 import { leadPermissions } from "../src/lib/access.ts";
+import { senderBuildAtLeast } from './lib/sender-build.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log(`  PASS ${m}`); else { f++; console.log(`  FAIL ${m}`); } };
@@ -123,7 +124,7 @@ console.log("\n── the guard's placement ──");
   ok(ns.indexOf('already_running: true, sample_id') > 0 && ns.indexOf('already_running: true, sample_id') < ns.indexOf('from("niche_samples").insert('), "Niche Check: a second start for a niche in flight returns the first, never a second sample");
   const sw = read("supabase/functions/send-whatsapp-message/index.ts");
   ok(sw.indexOf('"whatsapp_send"') > 0 && sw.indexOf('"whatsapp_send"') < sw.indexOf("THE DRY RUN STOPS HERE"), "send-whatsapp-message: a suspended salesperson's REAL send is refused (dry runs untouched)");
-  ok(/const BUILD_ID = "2026-09-29[a-z]";/.test(sw), "send-whatsapp-message BUILD_ID bumped (the deploy marker; later passes bump the letter)");
+  ok(senderBuildAtLeast(sw, "2026-09-29a"), "send-whatsapp-message BUILD_ID bumped (the deploy marker; at least the 2026-09-29 abuse pass)");
 }
 
 console.log("\n── the pause modes reach the background work ──");

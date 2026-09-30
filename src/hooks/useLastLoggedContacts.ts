@@ -40,3 +40,26 @@ export function useLastLoggedContacts(leadIds: readonly string[]) {
     },
   });
 }
+
+/** Which of these leads have their number marked Wrong number (leads_wrong_numbers — role-checked: a
+ *  salesperson only learns about leads they work). For the Outreach row's sales-state pill. */
+export function useWrongNumbers(leadIds: readonly string[]) {
+  const key = useMemo(() => [...new Set(leadIds)].sort(), [leadIds]);
+  const [bump, setBump] = useState(0);
+  useEffect(() => onLeadChanged((d) => { if (!d.optimistic && key.includes(d.leadId)) setBump((n) => n + 1); }), [key]);
+  return useQuery({
+    queryKey: ['wrong-numbers', key.join(','), bump],
+    enabled: key.length > 0,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const out = new Set<string>();
+      for (let i = 0; i < key.length; i += 500) {
+        const { data, error } = await sb.rpc('leads_wrong_numbers', { _lead_ids: key.slice(i, i + 500) });
+        if (error) throw error;
+        for (const id of (data ?? []) as string[]) out.add(id);
+      }
+      return out;
+    },
+  });
+}

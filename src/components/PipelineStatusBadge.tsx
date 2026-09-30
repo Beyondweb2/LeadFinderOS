@@ -10,7 +10,7 @@ interface PipelineStatusBadgeProps {
 const statusConfig: Record<string, { label: string; shortLabel: string; className: string }> = {
   not_contacted: {
     label: 'New',
-    shortLabel: 'Status',
+    shortLabel: 'New', // was 'Status' — a phone showed no 'New' at all (2026-09-30)
     className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   },
   queued: {
@@ -176,9 +176,16 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
 
 const defaultConfig = {
   label: 'New',
-  shortLabel: 'Status',
+  shortLabel: 'New',
   className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
 };
+
+/** The words this badge shows for a status — the Outreach row compares them with the sales-state pill so
+ *  the same state is never drawn twice (leadState.stateShownByBadge). */
+export function pipelineStatusLabel(status: string | null | undefined): string {
+  if (!status) return defaultConfig.label;
+  return statusConfig[status]?.label ?? String(status).replace(/_/g, ' ');
+}
 
 export function PipelineStatusBadge({ status, compact }: PipelineStatusBadgeProps) {
   /* No status → New. A status this map does not know shows AS ITSELF, never as "New" — an unknown value
