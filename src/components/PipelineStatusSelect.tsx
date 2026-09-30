@@ -1,25 +1,24 @@
 import { Select, SelectContent, SelectItem, SelectLabel, SelectGroup, SelectTrigger } from '@/components/ui/select';
 import { PipelineStatusBadge, pipelineStatusLabel } from './PipelineStatusBadge';
-import { SalesStatePill } from './SalesStatePill';
 import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
-import { oneStatusOf, type SalesStateView } from '@/lib/leadState';
+import type { SalesStateView } from '@/lib/leadState';
 
 /**
  * Editable pipeline-status control — the coloured PipelineStatusBadge as a Select
  * trigger over PIPELINE_STATUS_OPTIONS. Extracted from OutreachTable's inline block
  * so the Outreach row and the Inbox conversation list use the EXACT same control.
  *
- * ⛔ ONE STATUS PILL (2026-10-01). Given the lead's sales stage (`stage`), the trigger draws the ONE pill
- * oneStatusOf chooses — the stage (Interested, Replied, Meeting booked, Client, Opted out…) when it
- * outranks routine sending, else the pipeline badge (New, Queued, Contacted, WhatsApp failed…). Nothing
- * else is drawn beside it. The menu still sets the STORED PIPELINE STATUS, and says so at its top, with
- * the current value — picking from the pill can never write the stage.
+ * ⛔ ONE STATUS PILL (Paul, 2026-10-01): the row shows THIS pill and nothing else — the solid pipeline
+ * badge, in its own words and colours ("put the pills back to how they worked yesterday", "I like solid
+ * colour pills"). Interested is the gold STAR on the row, never a pill. No second sales-state pill is
+ * drawn beside it; the sales stage (`stage`) appears only in the tooltip. The menu sets the stored
+ * pipeline status and nothing else.
  *
  * Caller owns the onChange side-effects (optimistic clears, mark-interested, the
  * payment_received confirm, the write path) — this component is presentation only.
- * When `disabled`, renders a static pill (no dropdown) — e.g. an Unassigned Inbox
+ * When `disabled`, renders a static badge (no dropdown) — e.g. an Unassigned Inbox
  * conversation with no linked lead.
  */
 export function PipelineStatusSelect({
@@ -39,14 +38,13 @@ export function PipelineStatusSelect({
    *  dense Outreach table; pass a chromed className (e.g. from the Inbox) to get a
    *  proper bordered select-trigger with a chevron around the coloured badge. */
   triggerClassName?: string;
-  /** The lead's sales stage (leadState.salesStateOf). Absent → the pipeline badge, as before. */
+  /** The lead's sales stage (leadState.salesStateOf) — tooltip only. */
   stage?: SalesStateView | null;
 }) {
   /* The same list for both roles; a salesperson's options outside lead_set_stage's allowlist are
      shown disabled (the server refuses them anyway) — see src/lib/access.ts. */
   const perms = useLeadPermissions();
   if (disabled) return <OneStatusPill status={value} stage={stage} />;
-  const pipe = pipelineStatusLabel(value);
   return (
     <Select value={value ?? undefined} onValueChange={(v) => onValueChange(v as PipelineStatus)}>
       <SelectTrigger
@@ -59,7 +57,7 @@ export function PipelineStatusSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectLabel className="text-[11px] font-normal text-muted-foreground">Pipeline status · now {pipe}</SelectLabel>
+          <SelectLabel className="text-[11px] font-normal text-muted-foreground">Pipeline status · now {pipelineStatusLabel(value)}</SelectLabel>
           {PIPELINE_STATUS_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>
           ))}
@@ -71,19 +69,14 @@ export function PipelineStatusSelect({
 
 function titleOf(status: string | null | undefined, stage: SalesStateView | null | undefined): string {
   const pipe = pipelineStatusLabel(status);
-  const one = oneStatusOf(stage, status);
-  if (one.source === 'pipeline') return stage && stage.label !== pipe ? `Pipeline status: ${pipe} · Sales stage: ${stage.label}` : `Pipeline status: ${pipe}`;
-  return `Sales stage: ${one.view.label}${one.view.detail ? ` · ${one.view.detail}` : ''} · Pipeline status: ${pipe}`;
+  return stage && stage.label !== pipe ? `${pipe} · sales stage: ${stage.label}${stage.detail ? ` (${stage.detail})` : ''}` : pipe;
 }
 
 /** The ONE pill, read-only (a row without edit rights, the phone card, a disabled Inbox row). */
 export function OneStatusPill({ status, stage, compact }: { status: string | null | undefined; stage?: SalesStateView | null; compact?: boolean }) {
-  const one = oneStatusOf(stage, status);
   return (
-    <span className="inline-flex items-center gap-0.5" title={titleOf(status, stage)} data-testid="one-status" data-source={one.source}>
-      {one.source === 'stage'
-        ? <SalesStatePill view={one.view} size="xs" className="py-0.5" />
-        : <PipelineStatusBadge status={(status as PipelineStatus) ?? undefined} compact={compact} />}
+    <span className="inline-flex items-center" title={titleOf(status, stage)} data-testid="one-status">
+      <PipelineStatusBadge status={(status as PipelineStatus) ?? undefined} compact={compact} />
     </span>
   );
 }

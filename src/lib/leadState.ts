@@ -358,34 +358,11 @@ export function stateChangedWords(data: Record<string, unknown> | null | undefin
   return `Status: ${w(data?.from)} → ${w(data?.to)}`;
 }
 
-/* ── 6b. ONE STATUS PILL (Paul, 2026-10-01: "exactly ONE primary status pill" — supersedes the
-   2026-09-30 rule that drew the sales-state pill beside the pipeline badge whenever the words differed,
-   which gave "New · Opener queued" next to "Queued", and "Replied" next to "Replied") ───────────── */
-
-/** Stages worth more than routine sending activity: when the lead is at one of these, the pill says it
- *  and a queued / sent / failed message never downgrades it (Interested + a follow-up queued = Interested). */
-const STAGE_BEATS_SENDING: ReadonlySet<SalesState> = new Set(['client', 'won', 'not_interested', 'meeting_booked', 'interested', 'replied', 'wrong_number']);
-
-/** What the ONE pill shows. `source: 'stage'` → draw the sales stage (`view`); `source: 'pipeline'` →
- *  draw the stored pipeline status as its own badge (it is the more precise word for a lead that is not
- *  yet engaged: New, Queued, Contacted, WhatsApp failed, No WhatsApp, Report sent, You replied …).
- *  - A higher stage always wins (the set above). "Opted out" is named as itself.
- *  - New / contacted / other → the pipeline words — EXCEPT a lead the pipeline still calls New that a
- *    person has contacted (a logged call): that is Contacted (the action visibly changed the row).
- *  Queued is never Contacted, and a failed message is never Contacted: both come from the pipeline.
- *  ⛔ DISPLAY ONLY. The pill's menu still edits the stored pipeline status and nothing else; filters keep
- *  reading the stored fields. */
-export type OneStatus = { source: 'stage'; view: SalesStateView } | { source: 'pipeline' };
-export function oneStatusOf(v: SalesStateView | null | undefined, pipelineStatus: string | null | undefined): OneStatus {
-  if (!v) return { source: 'pipeline' };
-  const p = (pipelineStatus ?? '').trim();
-  if (STAGE_BEATS_SENDING.has(v.state)) {
-    if (v.state === 'not_interested' && p === 'opted_out') return { source: 'stage', view: { ...v, label: 'Opted out', detail: null } };
-    return { source: 'stage', view: v };
-  }
-  if (v.state === 'contacted' && (p === '' || p === 'not_contacted')) return { source: 'stage', view: v };
-  return { source: 'pipeline' };
-}
+/* ── 6b. ONE STATUS PILL (Paul, 2026-10-01) ─────────────────────────────────────────────────────────
+   A lead row shows ONE pill: the solid pipeline badge (PipelineStatusSelect / OneStatusPill), in its own
+   words and colours. Interested is the gold star, never a pill. The sales stage above is NOT drawn as a
+   second pill beside it (it was, 2026-09-30, via stateShownByBadge — removed); it appears in the pill's
+   tooltip, the lead popup and Focus Mode. ─────────────────────────────────────────────────────────── */
 
 /* ── 7. QUEUE RULES (what the state means for the lists — read, never written) ────────────────── */
 

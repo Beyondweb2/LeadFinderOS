@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Gift, Loader2, MessageSquarePlus, Sparkles } from 'lucide-react';
+import { ChevronDown, Gift, Loader2, MessageSquarePlus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,7 +12,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { FEEDBACK_KINDS, FEEDBACK_MAX, feedbackKindLabel, feedbackStatusLabel, type FeedbackKind } from '@/lib/feedback';
-import { whatsNewFor } from '@/lib/whatsNew';
+import { whatsNewFor, type WhatsNewEntry } from '@/lib/whatsNew';
 import { cn } from '@/lib/utils';
 
 /* ══ FEEDBACK + WHAT'S NEW — the always-there entry points (Sales Experience release 5) ═════════════
@@ -104,17 +104,56 @@ export function FeedbackAndNews() {
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
           <SheetHeader><SheetTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-violet-500" />What's new</SheetTitle><SheetDescription>Recent changes to LeadFinderOS.</SheetDescription></SheetHeader>
           <ol className="mt-4 space-y-3">
-            {news.map((e) => (
-              <li key={e.id} className="rounded-xl border border-border/60 p-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">{new Date(`${e.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</p>
-                <p className="mt-0.5 font-semibold">{e.title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{e.body}</p>
-              </li>
-            ))}
+            {news.map((e) => <NewsCard key={e.id} e={e} />)}
           </ol>
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/* One update. With a report (every entry from 2026-10-01) the card is a button: it opens to what was
+   added, changed and removed, and what that means — Paul: "make it clickable and it opens and gives full
+   report … keep it simple no fluff". Empty sections are not drawn. */
+const REPORT_SECTIONS = [
+  { key: 'added', label: 'Added' }, { key: 'changed', label: 'Changed' }, { key: 'removed', label: 'Removed' },
+] as const;
+function NewsCard({ e }: { e: WhatsNewEntry }) {
+  const [open, setOpen] = useState(false);
+  const r = e.report;
+  const head = (
+    <>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">{new Date(`${e.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</p>
+      <p className="mt-0.5 flex items-start justify-between gap-2 font-semibold">
+        <span>{e.title}</span>
+        {r && <ChevronDown className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} aria-hidden />}
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">{e.body}</p>
+    </>
+  );
+  return (
+    <li className="rounded-xl border border-border/60">
+      {r ? (
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="w-full rounded-xl p-3.5 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          {head}
+          {!open && <span className="mt-1.5 block text-xs font-medium text-primary">See what changed</span>}
+        </button>
+      ) : <div className="p-3.5">{head}</div>}
+      {r && open && (
+        <div className="space-y-3 border-t border-border/60 px-3.5 pb-3.5 pt-3 text-sm" data-testid="whats-new-report">
+          {REPORT_SECTIONS.filter((s) => r[s.key].length > 0).map((s) => (
+            <div key={s.key}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">{r[s.key].map((x) => <li key={x}>{x}</li>)}</ul>
+            </div>
+          ))}
+          <div className="rounded-lg bg-violet-500/10 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">What it means for you</p>
+            <p className="mt-0.5">{r.effect}</p>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

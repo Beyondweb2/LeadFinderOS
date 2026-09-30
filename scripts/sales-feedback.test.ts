@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { checkFeedback, feedbackEmail, FEEDBACK_KINDS, FEEDBACK_STATUSES, FEEDBACK_ERROR_TEXT } from "../src/lib/feedback.ts";
-import { WHATS_NEW, whatsNewFor } from "../src/lib/whatsNew.ts";
+import { WHATS_NEW, WHATS_NEW_REPORT_FROM, whatsNewFor } from "../src/lib/whatsNew.ts";
 import { canOpenRoute } from "../src/lib/access.ts";
 
 let f = 0;
@@ -47,6 +47,14 @@ console.log("\n── What's New ──");
 ok(WHATS_NEW.length > 0 && new Set(WHATS_NEW.map((e) => e.id)).size === WHATS_NEW.length, "entries have unique ids");
 ok(WHATS_NEW.every((e, i, a) => i === 0 || a[i - 1].date >= e.date), "newest first");
 ok(!whatsNewFor("admin").some((e) => e.audience === "sales") && whatsNewFor("sales").some((e) => e.id === "2026-09-28-earnings"), "each role sees its own entries");
+/* ⛔ Paul, 2026-10-01: every update carries a full report — what was added, changed, removed, and what it means. */
+for (const e of WHATS_NEW.filter((x) => x.date >= WHATS_NEW_REPORT_FROM)) {
+  const r = e.report;
+  ok(!!r && Array.isArray(r.added) && Array.isArray(r.changed) && Array.isArray(r.removed) && (r.added.length + r.changed.length + r.removed.length) > 0 && r.effect.trim().length > 20,
+    `${e.id}: has a report (added / changed / removed, and what it means)`);
+}
+const news = read("src/components/FeedbackAndNews.tsx");
+ok(/aria-expanded=\{open\}/.test(news) && /What it means for you/.test(news) && /data-testid="whats-new-report"/.test(news), "each What's New card opens to its report");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }
 console.log("\nALL PASS");

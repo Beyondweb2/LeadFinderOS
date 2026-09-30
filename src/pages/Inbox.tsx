@@ -2100,7 +2100,7 @@ const Inbox = () => {
                         : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
-                        control above draws the stage OR the pipeline status (leadState.oneStatusOf) — the separate
+                        control above is the one solid pipeline pill; interested is the star — the separate
                         sales-state pill that repeated it ("Replied" beside "Replied") is gone. */}
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
                     <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />

@@ -311,6 +311,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
       platform default TRUE = internal callers die silently the day a key rotates.
 - [ ] **Deploy order is a price guard:** when a price RISES deploy display before charge; when it
       FALLS, charge before display. Ask which way the gap embarrasses you.
+- [ ] ⛔ **Every deploy that changes what someone sees or what the app does adds a What's New entry**
+      (`src/lib/whatsNew.ts`, newest first, right `audience`) WITH its `report`: added / changed / removed
+      and one plain "what it means for you" line. No fluff. Paul, 2026-10-01; the test refuses an entry
+      without a report. The card opens to it (What's new, sidebar footer / phone More menu).
 - [ ] 🔴 **findable-site has NO CI.** `npm run deploy` (astro build + wrangler) is the only way it
       ships, and it ships the working tree. If `findable-site.pages.dev` is also stale, nothing was
       deployed — stop waiting for Cloudflare.
@@ -784,10 +788,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (`niche_result_slim`). A field the niche fold starts reading must be added to that SQL function AND
   backfilled first, or it reads as absent. Everything else reads `result`.
 - **The shell mounts once** (`<Route element={<AppLayout/>}>`); page-level caches must survive it.
-- ⛔ **ONE status pill per lead row** (Outreach desktop + phone, Inbox header + list, 2026-10-01): it is
-  `leadState.oneStatusOf(stage, pipelineStatus)` drawn by `PipelineStatusSelect` (`stage` prop) — a stage
-  that outranks sending, else the pipeline's word. Never draw a `SalesStatePill` beside the status
-  control; the menu edits the stored pipeline status only. The lead popup is the detail view (both).
+- ⛔ **ONE status pill per lead row** (Outreach desktop + phone, Inbox header + list, 2026-10-01): the SOLID
+  pipeline badge in its own words and colours (`PipelineStatusSelect` / `OneStatusPill`). **Interested is the
+  gold star, never a pill** (Paul). Never draw a `SalesStatePill` beside it; the stage is its tooltip only. The
+  lead popup is the detail view (both). Paul rejected a stage-substituting pill the same day — do not bring it back.
 
 **Sales Team Board** (`docs/sales-team-board.md`)
 - Admin → team messages/tasks live in `team_posts` / `team_post_recipients` / `team_post_events`; **no
