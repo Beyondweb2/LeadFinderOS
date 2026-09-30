@@ -23,7 +23,7 @@ listing anywhere. This is not a "submit to 100 directories" tool.
 |---|---|---|
 | Directory facts (what a host IS, who can action it, cost) | `src/lib/directoryFacts.ts` (64 hosts) | live, reused |
 | Host matching without substring traps | `src/lib/directoryHosts.ts` (`hostMatches`, `hostnameOf`) | reused |
-| Trade-level citation fold (host × trade × audits) | fn `playbook-evidence` | live, reused (internal call) |
+| Trade-level citation fold (host × trade × audits) | fn `playbook-evidence` | **broken**: folds the whole `ai_audit_queue` through PostgREST and answers 500 "canceling statement due to statement timeout" (measured 2026-09-30, 43 s). Not reused — replaced for this engine by `presence_trade_citation_hosts` |
 | Organic "is the business on X" search | fn `check-directory-listings` → `lead_directory_checks` (2 rows ever, 2026-08-14) | **orphaned** since the Playbook UI was removed (commit `8f321486`); nothing calls it |
 | Per-audit own citations | `src/lib/ownCitations.ts` | no importers; its `looksLikeOwnListing` was tried and rejected here (see §3) |
 | Site crawl: socials, directory brand names, full-crawl `profiles` (with URLs) and `credentials` | `lead_crawl_checks.result.siteInfo`, `.full_evidence.business` | reused as evidence |
@@ -40,12 +40,12 @@ listing anywhere. This is not a "submit to 100 directories" tool.
 Free, every run: the lead row · Google's cached record (`phone_cache`) · the stored crawl (socials,
 full-crawl profiles and credentials) · the homepage and up to two same-site contact/about pages,
 fetched now (links, schema `sameAs`, `tel:` links, schema telephone/postcode, visible text) · every
-citation in this lead's own audits · the trade citation fold (`playbook-evidence`).
+citation in this lead's own audits · the trade citation fold for THIS trade: the trade's audits picked in the edge with the same `norm()` rule the fold keys on (`tradeKeys`), aggregated in the database by `presence_trade_citation_hosts(_audit_ids)` (migration `20260930130000_…`, read-only, EXECUTE revoked from public/anon/authenticated, ~4.5 s for the largest trade).
 
 Optional (`search: true`), the only spend: up to three organic searches — `"<name>" <town>`, the
 site's phone in quotes, `"<domain>" -site:<domain>` (`presenceQueries`). Refused under the
 emergency stop (`allStopRefusal`) and at `USAGE_CRITICAL_PCT` of the Apify cap, before anything is
-written. Billed cost is stored on the run row.
+written. Billed cost is stored on the run row. Each search waits up to `RUN_TIMEOUT_MS` (100 s — three of eight live searches timed out at 60 s) and a run we stop waiting for is ABORTED so it stops billing.
 
 ## 3. Matching and confidence
 
@@ -188,6 +188,7 @@ deployed function can run (no Apify token outside the edge).
   check-first "no profile on record".
 - A search reads one page of organic results per query; a listing on page 2 is not seen (absence is
   never an answer, so nothing is downgraded by it).
+- `playbook-evidence` itself still times out; its only remaining caller is the orphaned `check-directory-listings`. Fixing or retiring both is a deep-clean decision.
 - `check-directory-listings` + `lead_directory_checks` and `client_listings` are superseded by this and
   unused; retiring them is a deep-clean decision for Paul.
 - Host lists overlap three ways (`siteInfo.ts` SOCIAL/DIRECTORIES, `fullCrawl.ts` THIRD_PARTY,

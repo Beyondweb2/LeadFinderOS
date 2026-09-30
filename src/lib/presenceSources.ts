@@ -62,7 +62,9 @@ export const PRESENCE_SOURCES: PresenceSource[] = [
     neverRecommend: 'Tested: no AI engine has ever cited Bing Places in our data, so it is not a lever we recommend.',
   },
   { key: 'facebook.com', label: 'Facebook', kind: 'social', hosts: ['facebook.com', 'fb.com', 'fb.me'],
-    profile: /^\/(?!sharer|share|plugins|dialog|login|help|policies|privacy|groups\/?$|watch|events\/?$|search|hashtag)(pages\/[^/]+\/\d+|profile\.php\?id=\d+|people\/[^/]+\/\d+|[a-z0-9.\-_]{3,})\/?/i },
+    /* A group post (/groups/<id>/posts/…) is somebody talking ABOUT the business, not its page —
+       measured live: two group posts were read as "a second Facebook profile". */
+    profile: /^\/(?!sharer|share|plugins|dialog|login|help|policies|privacy|groups\b|watch|events\b|search|hashtag|marketplace|photo|story\.php|permalink\.php|reel\b)(p\/[^/]+|pages\/[^/]+\/\d+|profile\.php\?id=\d+|people\/[^/]+\/\d+|[a-z0-9.\-_]{3,})\/?/i },
   { key: 'instagram.com', label: 'Instagram', kind: 'social', hosts: ['instagram.com', 'instagr.am'],
     profile: /^\/(?!p\/|reel\/|explore|accounts|stories)[a-z0-9._]{2,}\/?$/i },
   { key: 'linkedin.com', label: 'LinkedIn', kind: 'social', hosts: ['linkedin.com'],

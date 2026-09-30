@@ -83,6 +83,13 @@ console.log("\n── false positives measured on live data (2026-09-30) ──"
   const timpson = sourceForUrl("https://www.timpson.co.uk/stores/halifax-sainsburys/shoe-repairs")!;
   ok(matchListing(ronnie, { url: "https://www.timpson.co.uk/stores/halifax-sainsburys/shoe-repairs", title: "Shoe Repairs Halifax Sainsbury's | Timpson", via: "citation" }, timpson.source).confidence === null,
     "a competitor's store page at /shoe-repairs is NOT Ronnie's Shoe Repairs (two trade words in a URL are not a name)");
+  const cybo = sourceForUrl("https://bedrijvengids.cybo.com/GB/clacton-on-sea/slotenmakers")!;
+  ok(matchListing(brodley(), { url: "https://bedrijvengids.cybo.com/GB/clacton-on-sea/slotenmakers", title: "Slotenmakers in Clacton-on-Sea", text: "Brodley Locksmiths brodley-locksmiths.com … Other Locks 07858 531315 CO15 3AA", via: "search" }, cybo.source).confidence === null,
+    "a category page of many businesses (name only in the snippet, beside another firm's phone) is not a listing — no false 'old number'");
+  ok(matchListing(brodley(), { url: "https://locally.co.uk/business/brodley-locksmiths/", title: "Brodley Locksmiths - Clacton", text: "07825 494999", via: "search" }, sourceForUrl("https://locally.co.uk/business/brodley-locksmiths/")!.source).confidence !== null,
+    "…while a page titled with the name and carrying the phone still counts");
+  ok(!isProfileUrl("https://www.facebook.com/groups/littleclactonandweeley/posts/8001386139917880/", src("facebook.com")), "a Facebook GROUP post is not the business's page");
+  ok(isProfileUrl("https://www.facebook.com/p/Brodley-Locksmiths-100092417073968/", src("facebook.com")), "the /p/<Name-id>/ page form is a profile");
   const brod = sourceForUrl("https://www.checkatrade.com/trades/brodleylocksmithsandpropertyservices")!;
   ok(matchListing(brodley(), { url: "https://www.checkatrade.com/trades/brodleylocksmithsandpropertyservices", via: "citation" }, brod.source).signals.includes("name"), "…while the whole name joined in a slug still reads as the name");
 }
@@ -236,7 +243,12 @@ console.log("\n── one rule, one place ──");
   ok(!/\bdrop\b|\bdelete from\b|\btruncate\b/i.test(mig), "the migration is additive");
   ok(PRESENCE_SOURCES.filter((s) => s.credential).every((s) => CREDENTIALS.some((c) => c.name === s.credential)), "every credential a source names is in fullCrawl's CREDENTIALS (one ruler)");
   ok(!!neverRecommendReason(src("bing-places"), undefined), "Bing Places is never recommended (tested negative)");
+  const rpc = read("supabase/migrations/20260930130000_presence_trade_citation_hosts.sql");
+  ok(/revoke all on function public\.presence_trade_citation_hosts\(uuid\[\]\) from public, anon, authenticated;/.test(rpc) && /grant execute on function public\.presence_trade_citation_hosts\(uuid\[\]\) to service_role;/.test(rpc), "the trade aggregate is service-role only");
+  ok(/language sql stable/.test(rpc) && !/\b(insert|update|delete|drop|truncate)\b/i.test(rpc.replace(/--.*$/gm, "")), "…and read-only");
   const fn = read("supabase/functions/directory-presence/index.ts");
+  ok(!/functions\/v1\/playbook-evidence/.test(fn) && /rpc\("presence_trade_citation_hosts"/.test(fn) && /keys\.includes\(norm\(a\.business_type\)\)/.test(fn), "trade evidence: this trade's audits by the same norm() rule, aggregated in the database (playbook-evidence times out)");
+  ok(/abortApifyRun\(runId, token\)/.test(fn), "a search we stop waiting for is aborted, not left billing");
   ok(/requireAdmin\(req, service\)/.test(fn) && /allStopRefusal\(service/.test(fn) && /USAGE_CRITICAL_PCT/.test(fn), "admin only; the search refuses under the emergency stop and at the Apify cap");
   ok(fn.indexOf("allStopRefusal(service") < fn.indexOf("startApifyRun("), "…and the gates run before any search starts");
   ok(!/\.insert\(\s*payload/.test(fn) && /onConflict: "lead_id,source_key"/.test(fn), "rows are UPSERTED on (lead, source) — a recheck cannot insert a duplicate");
