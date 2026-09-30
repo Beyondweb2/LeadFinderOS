@@ -17,7 +17,7 @@ import { judgeRemeasure } from "../../../src/lib/baselineReplay.ts";
 import {
   measurementFlagFor,
   BASELINE_AUDIT_PURPOSE, MEASUREMENT_AUDIT_PURPOSE, REMEASURE_AUDIT_PURPOSE, DISCOVERY_AUDIT_PURPOSE,
-  FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE, seoScanAllowed,
+  FREE_CHECK_AUDIT_PURPOSE, ORDINARY_AUDIT_PURPOSE, WEEKLY_CHECK_AUDIT_PURPOSE, seoScanAllowed,
 } from "../../../src/lib/auditKind.ts";
 import { moneyQuestionShare, baselineMoneyQuestionShare, moneyQuestionDirective, moneyFallbackQuestions } from "../../../src/lib/moneyQuestions.ts";
 import type { AreaAllocation } from "../../../src/lib/baselineContract.ts";
@@ -489,6 +489,12 @@ Deno.serve(async (req) => {
        asks for the maximum would silently become a discovery audit. The purpose is the marker,
        exactly as it is for baseline, measurement, remeasure and free_check. */
     const isDiscovery: boolean = body.purpose === DISCOVERY_AUDIT_PURPOSE;
+    /* THE WEEKLY VISIBILITY CHECK — INTERNAL ONLY (fn weekly-visibility, Admin control centre release
+       4). A client's frozen set, asked once, recorded as 'weekly_check' so it is never a baseline, a
+       replay or a reusable ordinary audit, never buys an SEO scan (not in SEO_SCAN_PURPOSES) and is an
+       internal document (isInternalMeasurement). A browser cannot set it: without isInternal the value
+       falls to the ordinary purpose like any other unknown one. */
+    const isWeeklyCheck: boolean = isInternal && body.purpose === WEEKLY_CHECK_AUDIT_PURPOSE;
     /* ⛔ DISCOVERY'S TWO DIALS ARE VALIDATED, NOT CLAMPED — INDEPENDENTLY OF THE SCREEN (2026-09-21).
        A stated value outside the bounds is a request we cannot honour, and honouring three
        quarters of it silently is the fault that produced a 40-question discovery re-run of five
@@ -679,6 +685,7 @@ Deno.serve(async (req) => {
       : isMeasurement ? MEASUREMENT_AUDIT_PURPOSE
       : isFreeCheck ? FREE_CHECK_AUDIT_PURPOSE
       : isDiscovery ? DISCOVERY_AUDIT_PURPOSE
+      : isWeeklyCheck ? WEEKLY_CHECK_AUDIT_PURPOSE
       : ORDINARY_AUDIT_PURPOSE;
     const skipSeo: boolean = body.skip_seo === true || !seoScanAllowed(auditPurpose);
     /* ⛔ 2026-09-25: A HOOK IS NO LONGER ADAPTIVE. It plans three questions and queues ALL of them, each
@@ -800,7 +807,9 @@ Deno.serve(async (req) => {
        the old audit both broke the one-run rule and inherited a plan already spent on a gap. */
     /* !isDiscovery (2026-09-20): 40 questions bolted onto an old 3-question outreach audit is not
        a discovery scan, and the run it would join is already spent. Same reason as !isMeasurement. */
-    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isDiscovery && !isRemeasure && !freshAudit && !isHookAudit) {
+    /* !isWeeklyCheck (release 4): each week's check is its OWN audit — bolted onto an old outreach
+       audit it would be neither comparable week to week nor internal. */
+    if (!effectiveReuseId && leadId && !isBaseline && !isMeasurement && !isDiscovery && !isRemeasure && !isWeeklyCheck && !freshAudit && !isHookAudit) {
       const { data: candidates } = await service
         .from("ai_audits")
         .select("id, baseline_target_runs, created_at")

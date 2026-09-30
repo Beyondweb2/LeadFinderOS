@@ -112,6 +112,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["dashboard tasks (operator)", "src/lib/dashboardTasks.ts"],
   ["admin control centre (operator)", "src/components/admin/controlCentre.tsx"],
   ["admin control centre: sales intelligence (operator)", "src/components/admin/intelligence.tsx"],
+  ["admin control centre: paid client health (operator)", "src/components/admin/clientHealth.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
   /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */

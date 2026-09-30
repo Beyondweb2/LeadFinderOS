@@ -227,7 +227,7 @@ console.log('\n── COLLAPSIBLE SECTIONS: ONE PATTERN ──');
   ok(/useSectionOpen\(`dashboard\.section\.\$\{storageKey\}`, defaultOpen\)/.test(read('src/components/dashboard/DashboardSection.tsx')), '· DashboardSection uses the same hook');
   ok(/if \(collapseKey\) return <CollapsiblePanel/.test(read('src/components/salesDash/ui.tsx')), '· the dashboard Panel collapses through the same hook');
   /* 2026-09-30: the Admin dashboard is the control centre — its panels live in components/admin. */
-  const admin = read('src/pages/Dashboard.tsx') + read('src/components/admin/controlCentre.tsx');
+  const admin = read('src/pages/Dashboard.tsx') + read('src/components/admin/controlCentre.tsx') + read('src/components/admin/intelligence.tsx') + read('src/components/admin/clientHealth.tsx');
   ok(['admin.cc.attention', 'admin.cc.today', 'admin.cc.team', 'admin.cc.funnel', 'admin.cc.channels', 'admin.cc.calls', 'admin.cc.revenue', 'admin.cc.contribution', 'admin.cc.commission', 'admin.cc.cost', 'admin.cc.clients'].every((k) => admin.includes(`"${k}"`)) && /storageKey="free-checks"/.test(admin) && /storageKey="submissions"/.test(admin), '· every Admin dashboard section collapses');
   const sales = read('src/pages/SalesDashboard.tsx') + read('src/components/salesDash/sections.tsx');
   ok(['sales.conversion', 'sales.campaigns', 'sales.templates', 'sales.pipeline', 'sales.trends'].every((k) => sales.includes(k)), '· the Sales dashboard sections collapse');

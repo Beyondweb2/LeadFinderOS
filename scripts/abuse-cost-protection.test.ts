@@ -75,6 +75,7 @@ const EXEMPT: Record<string, string> = {
   "process-whatsapp-queue": "cron; the person modes are read-only/suppress; its paid audit-ahead honours paidMode()",
   "process-ai-audit-queue": "cron / admin; honours paidMode() per tick",
   "conversation-triage": "cron / admin; the only paid call is the reply-sorting model, capped per run and per day, and it honours paidMode() (all_stop → no model call)",
+  "weekly-visibility": "cron / admin; paying clients only, one capped single-run check per client per week, honours paidMode() (all_stop) and the Apify cap; create-ai-audit checks the emergency stop again",
   "clear-enrichment-cache": "deletes cache rows, spends nothing",
   "whatsapp-auto-replies": "cron; replies inside Meta's window, not paid API",
   "template-request": "one email to Paul per request; not paid API",

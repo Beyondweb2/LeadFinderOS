@@ -39,6 +39,7 @@ import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Ex
 import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
 import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldNiches, foldTemplates, type Bottleneck, type NicheRow, type TemplatesBlock } from './adminIntelligence.ts';
+import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -72,6 +73,9 @@ export interface AdminLead {
   remeasure_audit_id: string | null;
   /** Release 3 (niches: the website cohort). A blank is "no website on record", never "no website". */
   website?: string | null;
+  /** Release 4 (client health / the weekly check's start rule). */
+  delivery_checklist?: unknown;
+  website_build?: unknown;
 }
 export interface AdminMessage {
   /** Release 3: ties a reply to its triage row (template "positive" replies). */
@@ -205,6 +209,8 @@ export interface ClientRow {
   leadId: string; business: string; route: ServiceRoute | null; paidAt: string | null;
   baselineStarted: boolean; remeasureDue: string | null; remeasured: boolean;
   payment: string; refunded: boolean; seller: string | null;
+  /** Release 4: site live, weekly check, improvements, blockers. Absent = the extras were not read. */
+  health?: ClientHealth;
 }
 
 export interface AdminInput {
@@ -226,6 +232,8 @@ export interface AdminInput {
   cost: { period: CostRow[]; today: CostRow[]; yesterday: CostRow[]; week: CostRow[]; month: CostRow[] };
   /** Reply triage rows (release 2). Absent = triage not running yet: no reply items, never "all clear". */
   triage?: TriageRow[] | null;
+  /** Release 4: the weekly check, opportunities and directory issues for the paying clients. */
+  clientExtras?: ClientExtras | null;
 }
 
 export interface AdminOverview {
@@ -679,7 +687,15 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     attention: attentionItems(input, facts, ledger, nameOf, todayDay, ta.items),
     triage: triageSummary(input, p),
     triageWaitingInInbox: ta.waitingInInbox,
-    clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf),
+    clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf)
+      .map((c) => {
+        if (!input.clientExtras) return c;
+        const l = leadById.get(c.leadId);
+        return { ...c, health: clientHealthOf({
+          leadId: c.leadId, route: c.route, websiteBuild: (l?.website_build ?? null) as never, checklist: (l?.delivery_checklist ?? null) as Record<string, unknown> | null,
+          baselineStarted: c.baselineStarted, remeasureDue: c.remeasureDue, remeasured: c.remeasured, payment: c.payment, refunded: c.refunded, todayDay,
+        }, input.clientExtras) };
+      }),
     inventory: {
       leads: input.leads.length,
       active: input.leads.filter((l) => !l.is_archived).length,

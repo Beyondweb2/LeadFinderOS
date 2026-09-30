@@ -18,10 +18,11 @@ import { DashboardSection } from '@/components/dashboard/DashboardSection';
 import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
 import {
-  AttentionQueue, CallsPanel, ChannelsPanel, ClientsPanel, CommissionPanel, ContributionPanel, CostPanel,
+  AttentionQueue, CallsPanel, ChannelsPanel, CommissionPanel, ContributionPanel, CostPanel,
   FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
 } from '@/components/admin/controlCentre';
 import { BottlenecksPanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
+import { ClientHealthPanel } from '@/components/admin/clientHealth';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -150,7 +151,7 @@ const Dashboard = () => {
           </Section>
 
           <Section title="Clients">
-            <ClientsPanel o={o} onOpen={(id) => navigate(`/paid-clients/${id}`)} />
+            <ClientHealthPanel o={o} onOpen={(id) => navigate(`/paid-clients/${id}`)} />
           </Section>
         </>
       )}

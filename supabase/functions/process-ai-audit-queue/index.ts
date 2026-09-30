@@ -17,7 +17,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
 import { autoMarkHookLeadNotInterested, autoMarkSixOfSixNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
-import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
+import { seoScanAllowed, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
@@ -1511,7 +1511,15 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
          guard. The two other completion side effects (audit_reply, D2 completion send) are
          already safe because both require a lead_id. */
       const { data: auditRow } = await service
-        .from("ai_audits").select("is_market, business_name, lead_id").eq("id", job.auditId).maybeSingle();
+        .from("ai_audits").select("is_market, business_name, lead_id, audit_purpose").eq("id", job.auditId).maybeSingle();
+      /* ⛔ A WEEKLY VISIBILITY CHECK NEVER GETS A PUBLIC REPORT (release 4, 2026-09-30). It is Paul's
+         internal monitoring of a paying client — an "engaged" lead by the gate below — and a crawlable
+         listing built from a weekly directional check would be both public and misleading. Keyed on
+         the stored purpose, the one marker. Every other audit is unchanged. */
+      if ((auditRow as { audit_purpose?: string | null } | null)?.audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE) {
+        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: a weekly visibility check is internal.`);
+        continue;
+      }
       if (auditRow?.is_market === true) {
         console.log(`[process-ai-audit-queue] auto-report REFUSED for market audit ${job.auditId} ("${auditRow.business_name}"): market audits have no business and must never produce a public report.`);
         continue;
