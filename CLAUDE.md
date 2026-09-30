@@ -579,8 +579,7 @@ and "Re-run" are gone. `auditRepeatable` is a POSITIVE list of `audit` + `discov
 only, so nothing can re-claim it.** Delete cancels work in flight via the existing `cancelRun` first;
 runs and queue rows go by CASCADE, every other reference by SET NULL, so the lead survives.
 
-**Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `clientHeld`
-`heldValue()` is the only way the client sheet holds a value; `townVerdict` gates only on
+**Absence is never an answer** — `serveGate` flags, never blocks, on a skipped question; `townVerdict` gates only on
 `unverifiable`; `firstReplyMode` resolves anything unknown to `audit_only`; `seoScanAllowed()` is a
 positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COLD.
 
@@ -701,8 +700,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   Internal measurements (`isInternalMeasurement`) answer **403**; the per-question pages are
   operator-only; a mid-flight audit shows "still measuring" (`measuringState`), never a partial count;
   `hasWebsite` is tri-state from the lead's `website`/`place_id` — false is never inferred from blank.
-- **The leak boundary is structural**: `clientRequestDoc.ts` never imports the ranking. Operator copy
-  contains competitors — never send it.
+- **Operator copy contains competitors — never send it.** (The client request form and its structural
+  leak boundary went with the Playbook documents, retired 2026-09-30.)
 - **Client-facing copy is scanned** by `client-copy-claims.test.ts` (no eight weeks, no £49.99, no
   founder, no hedge, no Bing). Add every new renderer. Things no script can check and are hand-kept:
   the Stripe Payment Link, every Meta-registered body.
@@ -826,8 +825,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Admin dashboard (control centre) | `src/pages/Dashboard.tsx`, `src/components/admin/controlCentre.tsx`, `src/hooks/useAdminOverview.ts`, fn `admin-overview`, `src/lib/adminMetrics.ts` (every definition), `reportingPeriod.ts` (the ONE London-day clock), `metricExclusions.ts` + table `metric_exclusions`, `apiCostLabels.ts` + SQL `admin_api_cost` — `docs/admin-control-centre.md`. ⛔ Test accounts test1/Test are excluded from performance numbers by ROW, never by name; their leads stay in inventory |
 | Dashboard (older, now unrendered) | `src/hooks/useDashboardMetrics.ts` (still the `FOUNDER_PRICE_GBP` sync source), `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
-| Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
-| Directory / profile presence (discovery only) | `src/lib/directoryPresence.ts`, `presenceSources.ts`, fn `directory-presence`, tables `lead_directory_presence` (one row per lead × source) + `_runs` |
+| Directory / profile presence (discovery only) — THE one directory engine | `src/lib/directoryPresence.ts`, `presenceSources.ts`, `directoryFacts.ts` (64 hosts), fn `directory-presence`, SQL fn `presence_trade_citation_hosts`, tables `lead_directory_presence` (one row per lead × source) + `_runs`. Retired 2026-09-30: fns `check-directory-listings`, `playbook-evidence`, the Playbook libraries; tables `lead_directory_checks` / `client_listings` kept as history |
 | Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`, recon: `reconSchema.ts` (the JSON contract, `reconVersion`), `recon.ts` (prompt, safe import, merge), `manifestSummary.ts` (fenced per-route summaries — never the raw JSON in a prompt), mapping: `templateMapping.ts` (`computeMapping` — trade-agnostic; a template only DECLARES fields / catalogue / slots in `websiteTemplates.ts`; only `ready` values reach the config; recon risk rule `LOW_RISK_FACT_KEYS` is a positive allowlist), execution: `buildExecution.ts` (Build Execution prompt refused while blocked; PREVIEW READY is gated by `previewGateProblems` — pages.dev + noindex + clean seed scrub + passing checks, whatever Claude claims; a failed result never erases the last good build); column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |

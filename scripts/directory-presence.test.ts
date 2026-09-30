@@ -285,6 +285,10 @@ console.log("\n── one rule, one place ──");
   const fn = read("supabase/functions/directory-presence/index.ts");
   ok(!/functions\/v1\/playbook-evidence/.test(fn) && /rpc\("presence_trade_citation_hosts"/.test(fn) && /keys\.includes\(norm\(a\.business_type\)\)/.test(fn), "trade evidence: this trade's audits by the same norm() rule, aggregated in the database (playbook-evidence times out)");
   ok(/abortApifyRun\(runId, token\)/.test(fn), "a search we stop waiting for is aborted, not left billing");
+  ok(fn.includes('rpc("presence_trade_citation_hosts", { _audit_ids: ids }).range(from, from + 999)'), "the trade aggregate is PAGED (PostgREST cuts at 1,000 rows; locksmiths have 1,056 hosts)");
+  const v2 = read("supabase/migrations/20260930180000_presence_trade_citation_hosts_v2.sql");
+  ok(/having count\(distinct aid\) >= 2\s+order by count\(distinct aid\) desc, host/.test(v2), "…ordered by breadth with a unique tiebreak; hosts below THIN_MIN_AUDITS dropped at source");
+  ok(v2.includes("revoke all on function public.presence_trade_citation_hosts(uuid[]) from public, anon, authenticated;"), "…and still service-role only");
   ok(/from "\.\.\/_shared\/safe-fetch\.ts"/.test(fn) && !/_shared\/site-research\.ts/.test(fn), "the page fetch comes from the safe-fetch leaf, not site-research (whose closure is the whole report stack)");
   const leaf = read("supabase/functions/_shared/safe-fetch.ts");
   ok(!/^import /m.test(leaf), "safe-fetch.ts is a leaf: it imports nothing");
@@ -293,6 +297,32 @@ console.log("\n── one rule, one place ──");
   ok(!/\.insert\(\s*payload/.test(fn) && /onConflict: "lead_id,source_key"/.test(fn), "rows are UPSERTED on (lead, source) — a recheck cannot insert a duplicate");
   ok(fn.includes("rejudge: (row) => rejudgeStoredListing(identity, row), evidenceComplete"), "older rows are re-judged from their stored evidence, and old recommendations withdrawn only on complete evidence");
   ok(!/facebook\.com\/pages\/create|\.post\(|submit/i.test(fn.replace(/method: "POST"/g, "")), "discovery only: nothing in the function creates or submits a listing");
+}
+
+console.log("\n── ONE directory engine (legacy retired 2026-09-30) ──");
+{
+  const { existsSync, readdirSync, statSync } = await import("node:fs");
+  const RETIRED = [
+    "supabase/functions/check-directory-listings", "supabase/functions/playbook-evidence",
+    "src/lib/buildPlaybook.ts", "src/lib/directoryHosts.ts", "src/lib/ownCitations.ts", "src/lib/playbookDoc.ts",
+    "src/lib/playbookDocStyle.ts", "src/lib/clientRequestDoc.ts", "src/lib/clientRequestSelect.ts",
+    "src/lib/clientRequestAsks.ts", "src/lib/clientHeld.ts",
+  ];
+  for (const p of RETIRED) ok(!existsSync(new URL(`../${p}`, import.meta.url)), `retired: ${p} is gone`);
+  const cfg = read("supabase/config.toml");
+  ok(!/\[functions\.(check-directory-listings|playbook-evidence)\]/.test(cfg), "…and neither retired function has a config.toml entry");
+  const walk = (dir: string): string[] => readdirSync(new URL(`../${dir}`, import.meta.url)).flatMap((n) => {
+    const rel = `${dir}/${n}`;
+    if (n === "node_modules" || n.startsWith(".")) return [];
+    return statSync(new URL(`../${rel}`, import.meta.url)).isDirectory() ? walk(rel) : /\.(ts|tsx|mjs)$/.test(n) ? [rel] : [];
+  });
+  const code = [...walk("src"), ...walk("supabase/functions")];
+  const callers = code.filter((p) => /functions\/v1\/(check-directory-listings|playbook-evidence)|invoke\(\s*["'](check-directory-listings|playbook-evidence)["']/.test(read(p)));
+  ok(callers.length === 0, `nothing calls a retired function${callers.length ? ` — ${callers.join(", ")}` : ""}`);
+  /* "Is there only one of it": the directory facts feed exactly the one engine. A second module
+     importing them is a second directory engine starting to grow. */
+  const factUsers = code.filter((p) => !p.endsWith("directoryFacts.ts") && /from\s+["'][^"']*directoryFacts(\.ts)?["']/.test(read(p)));
+  ok(JSON.stringify(factUsers.sort()) === JSON.stringify(["src/lib/directoryPresence.ts", "src/lib/presenceSources.ts"]), `directoryFacts feeds only the presence engine (${factUsers.join(", ")})`);
 }
 
 console.log(f ? `\n${f} FAILURE(S)` : "\nall passed");

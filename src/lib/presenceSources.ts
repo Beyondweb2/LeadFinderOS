@@ -1,13 +1,26 @@
 /* RELATIVE imports with an explicit .ts — this file is reached by supabase/functions/directory-presence. */
 import { factFor, type DirectoryFact } from './directoryFacts.ts';
-import { hostMatches } from './directoryHosts.ts';
+
+/**
+ * Does `resultHost` belong to `targetHost`? Exact match, or a subdomain WITH the dot, so
+ * "business.yell.com" matches while "notyell.com" and "yell.com.evil.net" (registrable by anyone) do
+ * not. NEVER string.includes(): "bing" matched plum·BING· (99 false hits) and "acca" matched
+ * M·acca·-Gas. Moved here verbatim from the retired directoryHosts.ts (2026-09-30).
+ */
+export function hostMatches(resultHost: string, targetHost: string): boolean {
+  const r = (resultHost ?? '').trim().toLowerCase().replace(/^www\./, '');
+  const t = (targetHost ?? '').trim().toLowerCase().replace(/^www\./, '');
+  if (!r || !t) return false;
+  if (r === t) return true;
+  return r.endsWith(`.${t}`);
+}
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PRESENCE SOURCES — what each place a business can be listed IS, keyed by HOST, never by trade.
 
    ⛔ THE SAME RULE AS directoryFacts.ts: nothing here says "Checkatrade is for plumbers". Which
    sources matter for a business is decided by EVIDENCE (the citations in its own audits, the trade
-   fold in playbook-evidence) or by the business's OWN CLAIM (its site says "Gas Safe registered").
+   fold, presence_trade_citation_hosts) or by the business's OWN CLAIM (its site says "Gas Safe registered").
    This file answers only: given a URL on this host, is it a profile page, what kind of source is it,
    and is it ever something we would recommend.
 

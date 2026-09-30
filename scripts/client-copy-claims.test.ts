@@ -49,12 +49,9 @@ function renderedText(src: string): string {
 
 const RENDERERS: Array<[string, string]> = [
   ["welcome pack (paying client)", "src/lib/welcomePackHtml.ts"],
-  ["client request form (client)", "src/lib/clientRequestDoc.ts"],
-  ["client request asks (client)", "src/lib/clientRequestAsks.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
   ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
   ["four-week results words (client)", "src/lib/remeasureResults.ts"],
-  ["playbook document (operator, printed for delivery)", "src/lib/playbookDoc.ts"],
   ["free-check result email (prospect)", "supabase/functions/_shared/free-check-result.ts"],
   ["onboarding follow-up (prospect)", "supabase/functions/_shared/onboarding-followup.ts"],
   ["Stripe checkout line (payer)", "supabase/functions/findable-checkout/index.ts"],
@@ -156,9 +153,6 @@ ok(/four weeks|week four/.test(FINDABLE_GUARANTEE), "…and four weeks");
    guarantee's second sentence — one promise, one wording (2026-09-13). Cross-repo, the sync script
    locks it to findable-site's REFUND_CLAIM_SENTENCE, which /refunds renders. */
 ok(FINDABLE_GUARANTEE.endsWith(REMEASURE_CLAIM_SENTENCE), "the guarantee ends with REMEASURE_CLAIM_SENTENCE (the four-week results email's refund sentence)");
-const playbook = read("src/lib/playbookDoc.ts");
-ok(/\$\{FINDABLE_GUARANTEE\}/.test(playbook), "the playbook document renders FINDABLE_GUARANTEE");
-ok(!/No client has completed/.test(renderedText(playbook)), "…and no longer asserts how many clients have completed a cycle (a sentence that goes stale by itself)");
 
 console.log("\n── NO SENDABLE WHATSAPP TEMPLATE QUOTES A RETIRED PRICE OR A HEDGE ──");
 /* The sendable list is WA_TEMPLATE_REQS. A body is rendered with a neutral name so a stale claim

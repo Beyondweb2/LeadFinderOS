@@ -238,8 +238,8 @@ verify_jwt = false
 [functions.enrich-business]
 verify_jwt = false
 
-# The ten below are TRUE live, and every caller sends a real JWT: the app's supabase.functions.invoke
-# with the signed-in user's session, or (playbook-evidence) check-directory-listings with the service key.
+# The ones below are TRUE live, and every caller sends a real JWT: the app's supabase.functions.invoke
+# with the signed-in user's session. (check-directory-listings and playbook-evidence were retired 2026-09-30.)
 # Each handler also does its own role / admin check.
 [functions.apify-usage-status]
 verify_jwt = true
@@ -248,9 +248,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.backfill-lead-towns]
-verify_jwt = true
-
-[functions.check-directory-listings]
 verify_jwt = true
 
 [functions.check-website]
@@ -274,9 +271,6 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.niche-sample]
-verify_jwt = true
-
-[functions.playbook-evidence]
 verify_jwt = true
 
 [functions.submissions]

@@ -7,12 +7,11 @@ import { USAGE_CRITICAL_PCT } from "../_shared/enrichment/apify-usage.ts";
 import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import {
   assemblePresence, buildIdentity, claimedCredentials, extractSiteSignals, foldClientCitations, mergePresence,
-  operatorSetStatus, presenceQueries, presenceSummary, rejudgeStoredListing,
+  norm, operatorSetStatus, presenceQueries, presenceSummary, rejudgeStoredListing,
   type CitationRow, type ListingCandidate, type PresenceReviewItem, type PresenceStatus, type StoredPresenceRow,
   type TradeEvidenceRow, tradeKeys,
 } from "../../../src/lib/directoryPresence.ts";
 import { sourceByKey, sourceForUrl } from "../../../src/lib/presenceSources.ts";
-import { norm } from "../../../src/lib/buildPlaybook.ts";
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    directory-presence — WHERE IS THIS BUSINESS LISTED, DO THE LISTINGS AGREE, WHAT IS WORTH ADDING.
@@ -44,9 +43,9 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30g";
+const BUILD_ID = "directory-presence-2026-09-30i";
 const RUN_POLL_MS = 3_000;
-/** 100 s, up from the 60 s check-directory-listings used: three of eight live searches timed out at 60 s
+/** 100 s, up from the 60 s the retired check-directory-listings used: three of eight live searches timed out at 60 s
  *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
 const RUN_TIMEOUT_MS = 100_000;
 const PAGE_TIMEOUT_MS = 8_000;
@@ -77,7 +76,7 @@ async function fetchPage(url: string): Promise<{ html: string; finalUrl: string;
   }
 }
 
-/** The organic-only input check-directory-listings uses: no ChatGPT / Gemini add-ons, one page. */
+/** The organic-only input (as the retired check-directory-listings used): no ChatGPT / Gemini add-ons, one page. */
 function organicInput(query: string, countryCode: string): Record<string, unknown> {
   return { queries: query, countryCode: (countryCode || "gb").toLowerCase(), maxPagesPerQuery: 1, languageCode: "en" };
 }
@@ -228,7 +227,7 @@ Deno.serve(async (req) => {
     const [placesRes, crawlRes, home, auditsRes] = await Promise.all([placesP, crawlP, homeP, auditsP]);
 
     /* ── THE TRADE FOLD, SCOPED TO THIS TRADE ─────────────────────────────────────────────────────
-       NOT playbook-evidence: it folds the whole ai_audit_queue through PostgREST and dies on the 8 s
+       NOT playbook-evidence (retired 2026-09-30): it folded the whole ai_audit_queue through PostgREST and died on the 8 s
        statement timeout ("canceling statement due to statement timeout", measured 2026-09-30). The
        trade's audits are picked here with the SAME norm() rule the fold keys on (tradeKeys), and the
        database aggregates only those (presence_trade_citation_hosts, service role only). */
@@ -244,9 +243,16 @@ Deno.serve(async (req) => {
         if ((data ?? []).length < 1000) break;
       }
       if (!ids.length) return { evidence: [], tradeAuditTotals: { [keys[0]]: 0 } };
-      const { data, error } = await service.rpc("presence_trade_citation_hosts", { _audit_ids: ids });
-      if (error) throw new Error(`presence_trade_citation_hosts: ${error.message}`);
-      const rows = (data ?? []) as Array<{ host: string; citations: number; audits: number }>;
+      /* PAGED: PostgREST cuts every response at 1,000 rows, silently — locksmiths have 1,056 hosts in 2+
+         audits, and before paging an arbitrary half (Yell among them) never arrived. The function
+         orders by breadth with a unique tiebreak, so pages are stable. */
+      const rows: Array<{ host: string; citations: number; audits: number }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await service.rpc("presence_trade_citation_hosts", { _audit_ids: ids }).range(from, from + 999);
+        if (error) throw new Error(`presence_trade_citation_hosts: ${error.message}`);
+        rows.push(...((data ?? []) as typeof rows));
+        if ((data ?? []).length < 1000) break;
+      }
       return { evidence: rows.map((r) => ({ trade: keys[0], host: r.host, citations: r.citations, audits: r.audits })), tradeAuditTotals: { [keys[0]]: ids.length } };
     })().catch((e) => { notes.push(`trade evidence unavailable: ${reasonOf(e)}`); return null; });
     const places = (placesRes as { data: { phone?: string; website?: string; address?: string; category?: string; google_maps_uri?: string } | null }).data;

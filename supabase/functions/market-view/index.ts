@@ -52,7 +52,7 @@ import { nicheFoldResult } from "../_shared/niche-result.ts";
    Competitor names live in ai_audit_queue.result, jsonb, one row per question per run. The anon
    key cannot read most of it (RLS returns 200 with [], not an error — an empty trade would be
    indistinguishable from a blocked one), and the table is well past the 1000-row PostgREST
-   truncation point. Same reasoning, and the same paginated read, as playbook-evidence.
+   truncation point. Same reasoning, and the same paginated read, as the retired playbook-evidence (2026-09-30) used.
    ============================================================ */
 
 const corsHeaders = {
