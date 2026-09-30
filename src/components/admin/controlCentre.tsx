@@ -538,7 +538,8 @@ function CostHistory({ a }: { a: CostAccounting }) {
 
 export function CostPanel({ o, onDetail }: { o: O; onDetail: () => void }) {
   const c = o.money.cost;
-  const a = o.costAccounting;
+  // An older loader's shape (no allTime) reads as "could not be read", never a crash mid-deploy.
+  const a = o.costAccounting && 'allTime' in o.costAccounting && o.costAccounting.allTime ? o.costAccounting : null;
   const top = (list: { key: string; usd: number }[]) => list.slice(0, 8);
   const pa = a?.period;
   return (
