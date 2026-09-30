@@ -106,3 +106,10 @@ i'd change", which the quick check cannot back (it has no change plan). v3 (`VOI
 
 The Inbox AI visibility details were redesigned in the same change: see `docs/cold-call-playbook.md`
 for the shared website-issues selector (`selectFindings(…, max)` now returns a `status`).
+
+## Generator v4 — the house style (2026-09-30)
+
+`SALES_STYLE_RULES` (salesStyle.ts) in the prompt, `salesStyleProblems` in the checks (an adjective on
+the search is now sent back), one beat per line. The panel also shows a SHORT VERSION (`shortVoiceNote`,
+~20 s, three lines) derived by the function from the saved row on every `latest` / `generate` — never
+stored, no model call. Record: `docs/sales-language.md`.

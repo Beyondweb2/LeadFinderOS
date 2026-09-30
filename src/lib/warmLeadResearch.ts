@@ -427,7 +427,7 @@ export function contactFinding(pages: PageFacts[]): ResearchFinding | null {
     kind: 'contact_conflict',
     category: 'trust',
     title: 'Several different phone numbers',
-    detail: `The site lists ${found.size} different phone numbers. Inconsistent contact details are one of the things that can make a business harder to pin down as one clear entity.`,
+    detail: `The site lists ${found.size} different phone numbers. When the numbers don’t match, it’s harder for anyone, a customer or an AI tool, to be sure which one is really yours.`,
     evidence: list.slice(0, 4).map((x) => x.q),
     keyDetails: list.slice(0, 3).map((x) => x.q),
     pageUrl: list[0].url,
@@ -751,7 +751,7 @@ export function fullCrawlFindings(full: FullEvidenceInput | null, trade: string 
   const phones = new Set((full.business?.phones ?? []).map((p) => normPhone(p.value)).filter((n) => n.length >= 10 && n.length <= 11));
   if (phones.size >= 3) {
     add({ id: 'full:contact_conflict', kind: 'contact_conflict', category: 'trust', title: 'Several different phone numbers',
-      detail: `Across the site there are ${phones.size} different phone numbers. Inconsistent contact details can make a business harder to pin down as one clear entity.`,
+      detail: `Across the site there are ${phones.size} different phone numbers. When the numbers don’t match, it’s harder for anyone, a customer or an AI tool, to be sure which one is really yours.`,
       evidence: (full.business?.phones ?? []).slice(0, 4).map((p) => p.value), pageUrl: home, strength: 2 });
   }
   // The footer the crawl kept is page text: a "designed/hosted by" credit there is an ownership clue.
@@ -1065,7 +1065,8 @@ RULES — break none of them:
 - Look especially for: conflicting locations or local-vs-national claims; inconsistent opening hours or contact details; missing or weak pages for the trade's core services; content that belongs to a different trade or country (template leftovers); contradictory claims; weak or missing evidence (accreditations, reviews, real photos, named people); signs another company built, hosts or manages the site (ownership clues).
 - The OBSERVED FACTS block lists things already measured by code. Do not repeat them as findings; you may rely on them.
 - strength: 5 = serious fault that plainly hurts, 3 = clear sales point, 1 = trivia.
-- useful_questions: at most three questions the salesperson could genuinely ask this prospect, based on what you saw.`;
+- useful_questions: at most three questions the salesperson could genuinely ask this prospect, based on what you saw. Short and spoken, the way you would ask on the phone ("who looks after the website for you?", "do you still cover Ashford?"), never a consultant's question.
+- title and detail are read by a salesperson and may be said to the owner: plain English a tradesperson uses, no jargon ("entity", "signals", "schema", "structured data", "indexing"); if a technical word is unavoidable, explain it in the same sentence.`;
 
 export const RESEARCH_TOOL = {
   type: 'function',

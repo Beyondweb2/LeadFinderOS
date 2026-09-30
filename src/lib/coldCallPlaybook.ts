@@ -39,7 +39,8 @@ import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts'
 import { excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
 import { displayBusinessName } from './displayName.ts';
-import { pluraliseTrade } from './templateVars.ts';
+import { articleTrade, pluraliseTrade } from './templateVars.ts';
+import { HOOK_ENGINE_LABELS } from './hookScore.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
@@ -516,6 +517,39 @@ function tradePlural(audit: PlaybookAudit | null, lead: PlaybookLead): string | 
   return null;
 }
 
+/** "a plumber" — the trade the way a person says it (templateVars' vocabulary, the voice note's). */
+function tradeSpoken(audit: PlaybookAudit | null, lead: PlaybookLead): string | null {
+  for (const raw of [audit?.business_type, lead.category, lead.search_keyword]) {
+    const r = articleTrade(raw);
+    if (r.ok) return r.value;
+  }
+  return null;
+}
+
+/** The engine as it is said out loud. The report labels Gemini "Gemini"; the product says Google AI
+ *  (HOOK_ENGINE_LABELS), and so does every script. */
+export function spokenEngine(label: string | null | undefined): string {
+  let l = clean(label);
+  if (!l) return 'AI';
+  for (const [key, said] of Object.entries(HOOK_ENGINE_LABELS)) l = l.replace(new RegExp('\\b' + key + '\\b', 'gi'), said);
+  return l;
+}
+
+/** A town said aloud: the audit's "Rugby UK" disambiguation is for the engines, not for a person. */
+const spokenTown = (town: string | null): string | null => {
+  const t = clean(town).replace(/,?\s*\b(?:UK|United Kingdom)$/i, '').trim();
+  return t || null;
+};
+
+/* 🔴 THE HOUSE STYLE (Paul, 2026-09-30; src/lib/salesStyle.ts). The call sounds like someone who asked
+   AI for the trade in the town, saw who it named, looked at the site and is just saying so:
+     "I'm ringing because I asked Google AI for a plumber in Rugby and it named A, B and C, but not you.
+      I had a look at your website and one thing stood out: …. We specialise in AI visibility …"
+   ⛔ No "Have you got a minute?" before the reason for ringing, no "How are you today?" — the reason
+      IS the opener, and the rep asks for the time once they have said why.
+   ⛔ The search is said plainly ("a plumber in Rugby"), never the audit query's qualifiers.
+   The objections are short, spoken answers built from the same facts and the canonical offer; no
+   guarantee, discount or number that findableOffer.ts does not hold. */
 export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const { lead, reportAudit, report, nowMs } = input;
   const business = clean(reportAudit?.business_name) || clean(lead.business_name) || 'this business';
@@ -523,12 +557,16 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   const trade = tradePlural(reportAudit, lead);
   const callName = displayBusinessName(business, { town, style: 'identify' }) || business;
   const caller = callerFirstName(input.callerName);
-  const lookingAt = trade ? trade + (town ? ' in ' + town : '') : town ? 'businesses like yours in ' + town : 'businesses like yours';
+  const place = spokenTown(town);
+  const oneOf = tradeSpoken(reportAudit, lead);
+  /** "a plumber in Rugby" — what was asked for, said the way a person says it. */
+  const searchFor = oneOf ? oneOf + (place ? ' in ' + place : '') : place ? 'businesses like yours in ' + place : 'businesses like yours';
 
   const evidence = selectEvidence(report, business);
   const f = selectFindings(input);
   const siteKind = classifyLeadWebsite(lead.website);
   const convo = summariseConversation(input.messages, business);
+  const engine = spokenEngine(evidence.engine);
 
   const auditMs = reportAudit?.created_at ? new Date(reportAudit.created_at).getTime() : null;
   const auditStale = auditMs !== null && nowMs - auditMs > PLAYBOOK_AUDIT_STALE_DAYS * DAY_MS;
@@ -539,61 +577,62 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
   if (evidence.kind === 'none') warnings.push(input.auditRunning ? 'An audit is still running for this lead — its result is not in yet.' : 'No AI result is stored for this lead. The opening below does not claim one.');
   if (f.crawlStale && !f.findings.length) warnings.push('The website crawl is more than 30 days old.');
 
-  /* ── B. the opening ── */
-  const when = auditStale ? 'recently' : 'earlier';
   const top = evidence.competitors.slice(0, OPENING_COMPETITORS);
-  const aiFact = evidence.kind === 'gap'
-    ? (top.length
-      ? 'It mentioned ' + joinNames(top) + ', but your business didn\'t come up in that answer.'
-      : 'Your business didn\'t come up in the answer it gave.')
-    : evidence.kind === 'named'
-      ? 'It did mention you, which is good' + (f.findings.length ? ' — but I also had a look at your website and noticed something worth telling you about.' : ' — I wanted to run something by you about keeping it that way.')
-      : null;
+  /* "I asked Google AI for a plumber in Rugby" — or, for an old result, "When I checked, …". */
+  const asked = auditStale ? 'When I checked, I asked ' + engine + ' for ' + searchFor : 'I asked ' + engine + ' for ' + searchFor;
+  const missLine = top.length
+    ? asked + ' and it named ' + joinNames(top) + ', but not you.'
+    : asked + ' and your business didn\'t come up in the answer it gave.';
+  const namedLine = asked + ' and it did name you, which is good.';
+  /** Carry on a sentence with a line: its first letter lower-cased, but never the pronoun "I". */
+  const joinOn = (line: string) => (/^I\b/.test(line) ? line : line.charAt(0).toLowerCase() + line.slice(1));
 
+  /* The website, in one or two plain sentences: the strongest finding's own words (siteFindings.ts,
+     already hedged), a profile page, or no site at all. Nothing when there is nothing strong. */
+  const lead0 = f.findings[0] ?? null;
+  const lowerClause = (s: string) => s.charAt(0).toLowerCase() + s.slice(1).replace(/\.$/, '');
+  /* Two lines for a finding — what I saw, then why it matters — so it is said with a breath between. */
+  const siteLines: string[] = siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
+    ? ['I also looked for your website and could only find your ' + siteKind.label + ' profile. Without a site of your own there\'s a lot less for AI to go on about what you do and where.']
+    : siteKind.source === 'none'
+      ? ['I also couldn\'t find a website for you, and without one it\'s much harder for AI to know what you do and where.']
+      : lead0
+        ? ['I had a look at your website and one thing stood out: ' + lowerClause(lead0.explanation) + '.', lead0.whyItMayMatter].filter(Boolean)
+        : [];
+
+  /* ── B. the opening (the first beats, also what the tests read) ── */
   const opening: string[] = [];
   if (convo.mode === 'cold') {
-    opening.push('Hi, is that ' + callName + '?');
-    if (aiFact) {
-      opening.push('It\'s ' + caller + ' from Findable. I was looking at ' + lookingAt + ' ' + when + ', so I asked AI who it would recommend.');
-      opening.push(aiFact);
-    } else {
-      opening.push('It\'s ' + caller + ' from Findable. I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
-    }
-    opening.push('Have you got a minute? I\'ll explain why I\'m ringing.');
+    opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable.');
+    if (evidence.kind === 'gap') opening.push('I\'m ringing because ' + joinOn(missLine));
+    else if (evidence.kind === 'named') opening.push('I\'m ringing because ' + joinOn(namedLine));
+    else opening.push('I\'m ringing because we check what AI tools like ChatGPT and Google AI say when someone asks for ' + searchFor + ', and I wanted to see how you come up.');
   } else {
     const fu = convo.followUp!;
+    const repliedLast = !!fu.lastInbound && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '');
     opening.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.');
-    if (fu.lastInbound && convo.followUp && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '')) {
-      opening.push('Thanks for getting back to me, I thought it would be easier to explain on a quick call.');
-    } else if (fu.reportSentAt) {
-      opening.push('I sent over a short report on what AI says when someone asks for ' + lookingAt + ', so I thought it would be easier to talk you through it.');
-    } else {
-      opening.push('I thought it would be easier to explain on a quick call than over messages.');
-    }
-    if (evidence.kind === 'gap') {
-      opening.push(top.length
-        ? 'When I asked AI, it mentioned ' + joinNames(top) + ', but not you.'
-        : 'When I asked AI, your business didn\'t come up in the answer.');
-    }
-    opening.push('Have you got a minute?');
+    opening.push(repliedLast
+      ? 'Thanks for getting back to me. It\'s easier to explain on the phone.'
+      : fu.reportSentAt
+        ? 'I sent you the report on what AI says when someone asks for ' + searchFor + ', so I thought I\'d talk you through it.'
+        : 'I thought it\'d be quicker to explain on the phone.');
+    if (evidence.kind === 'gap') opening.push('Quick recap: ' + joinOn(missLine));
   }
 
-  /* ── E. how to explain it ── */
+  /* ── E. how to explain it (plain, short; the "what is AI visibility" answer reads from here) ── */
   const explain: string[] = [];
   if (evidence.kind === 'gap') {
-    explain.push('When someone asks ChatGPT or Google AI for ' + lookingAt + ', it gives them a short list of names rather than ten links. On the question I asked, you weren\'t on that list' + (top.length ? ' — ' + joinNames(top) + ' were.' : '.'));
+    explain.push('When someone asks ChatGPT or Google AI for ' + searchFor + ', they get a few names, not ten links. For the search I did, you weren\'t one of them' + (top.length ? '. ' + joinNames(top) + ' were.' : '.'));
   } else if (evidence.kind === 'named') {
-    explain.push('When someone asks AI for ' + lookingAt + ', it gives a short list of names. You were on it for the question I checked — the aim is to keep it that way across more of the questions people actually ask.');
+    explain.push('When someone asks ChatGPT or Google AI for ' + searchFor + ', they get a few names, not ten links. You were one of them for the search I did. The aim is to keep it that way across more of the searches people make.');
   }
-  if (f.findings.length) {
-    const lead0 = f.findings[0];
-    const clause = lead0.explanation.charAt(0).toLowerCase() + lead0.explanation.slice(1).replace(/\.$/, '');
-    explain.push('The main thing I noticed on your site is ' + clause + '. ' + lead0.whyItMayMatter + ' It could be contributing — it\'s not the only thing AI looks at.');
+  if (lead0) {
+    explain.push('The main thing I noticed on your site is ' + lowerClause(lead0.explanation) + '. ' + lead0.whyItMayMatter + ' It could be contributing, it\'s not the only thing AI looks at.');
   }
-  if (!explain.length) explain.push('Keep it simple: you look at what AI assistants say when people ask for ' + lookingAt + ', and you measure it before and after any work.');
+  if (!explain.length) explain.push('Keep it simple: we look at what AI tools say when people ask for ' + searchFor + ', and we measure it before and after any work.');
 
-  /* ── F. transition ── */
-  const transition = 'That\'s basically what I do. I help local businesses make the information on their site clearer for AI and search systems, then I measure the same questions again afterwards to see whether visibility improves.';
+  /* ── F. transition: who we are, in one breath ── */
+  const transition = 'We specialise in AI visibility for local businesses. We fix this sort of thing, then ask AI the same searches again afterwards so you can see whether it\'s worked.';
 
   /* ── G. offer / next step ── */
   const reportUrl = reportAudit
@@ -608,51 +647,77 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
      a switch-over before that, and never give legal advice about their agency agreement. */
   if (clean(lead.website)) nextSteps.push('If they can\'t get into their site, ask who owns and controls the domain before offering a new site. ' + SALES_DOMAIN_LINE + ' If an agency owns it, or they don\'t know, flag it to Paul and promise nothing.');
   else nextSteps.push('They have no website on file — talk about getting one built (they register the domain in their own business name).');
+  const build = totalPaymentsFor('build');
+  const optimise = totalPaymentsFor('optimise');
   const offer = {
     lines: [
       FINDABLE_OFFER_SUMMARY,
       FINDABLE_GUARANTEE,
     ],
     /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. */
-    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; nothing is charged after the " + totalPaymentsFor('build') + 'th payment. If they keep their own site (Findable Optimise): it stays theirs, and nothing is charged after the ' + totalPaymentsFor('optimise') + 'th payment. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
+    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; nothing is charged after the " + build + 'th payment. If they keep their own site (Findable Optimise): it stays theirs, and nothing is charged after the ' + optimise + 'th payment. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
     nextSteps,
   };
 
-  /* ── H. objections ── */
-  const findingShort = f.findings[0] ? f.findings[0].explanation.replace(/\.$/, '').toLowerCase() : null;
+  /* ── H. objections: short, spoken, true. Every figure is a findableOffer.ts constant. ── */
+  const findingShort = lead0 ? lowerClause(lead0.explanation) : null;
   const objections = [
     {
+      objection: 'What exactly do you do?',
+      answer: 'We make it more likely AI names you when someone asks for ' + searchFor + '. We check what it says now, fix what\'s on your site and the places AI reads, then ask the same searches again afterwards so you can see the difference.',
+    },
+    {
+      objection: 'I don\'t really understand AI visibility',
+      answer: 'It\'s simple really. When someone asks ChatGPT or Google AI for ' + searchFor + ', it names a few businesses. AI visibility is whether you\'re one of them.'
+        + (evidence.kind === 'gap' ? ' For the search I did, you weren\'t.' : evidence.kind === 'named' ? ' For the search I did, you were.' : ''),
+    },
+    {
+      objection: 'We already have an SEO company',
+      answer: 'That\'s fine, I\'m not trying to replace them. This is one specific thing: what AI says when someone asks for ' + searchFor + '. I can send over what I found so they can look at it too.',
+    },
+    {
       objection: 'I already have a website guy',
-      answer: 'That\'s fine — I\'m not trying to replace them. This is one specific thing: what AI says when someone asks for ' + lookingAt + '. I can send your web person exactly what I found so they can look at it.',
+      answer: 'That\'s fine. This is one specific thing, what AI says when someone asks for ' + searchFor + '. I can send your web person exactly what I found.',
     },
     {
       /* ⛔ Never legal advice, never "break your contract", never a promise to take over a domain. */
       objection: 'My agency controls the website / domain',
-      answer: SALES_DOMAIN_LINE + ' Your agreement with them is yours to check (notice periods, fees, who owns the site) — I can\'t advise on that, and we would never ask you to break it.',
+      answer: SALES_DOMAIN_LINE + ' Your agreement with them is yours to check. I can\'t advise on that, and we would never ask you to break it.',
     },
     {
       objection: 'My website is fine',
       answer: siteKind.source === 'directory_profile' || siteKind.source === 'social_profile'
-        ? 'The only page I could find for you is your ' + siteKind.label + ' profile, not a website of your own. That page belongs to ' + siteKind.label + ', not you, so there\'s a lot less for AI to go on about what you do and where you work.'
+        ? 'The only page I could find for you is your ' + siteKind.label + ' profile, not a site of your own. That page belongs to ' + siteKind.label + ', so there\'s a lot less for AI to go on about what you do and where.'
         : findingShort
-        ? 'It may well look fine to customers. This is about how clearly it reads to AI and search tools — for example, ' + findingShort + ". I can show you exactly where, and you can check it yourself."
-        : 'It may well be. What I\'m talking about is what AI answered when I asked — that\'s separate from how the site looks.',
+          ? 'It may look fine to customers. This is about how clearly it reads to AI. For example, ' + findingShort + '. I can show you where, and you can check it yourself.'
+          : 'It may well be. This is about what AI said when I asked, which is separate from how the site looks.',
+    },
+    {
+      objection: 'I don\'t want a new website',
+      answer: siteKind.source === 'own_site'
+        ? 'That\'s fine, you don\'t need one. If you can give us access, we can usually work on the site you\'ve already got. I\'d just check what it\'s built on first. That\'s Findable Optimise.'
+        : 'That\'s fine. It\'s your call. Without a site of your own, though, AI has a lot less to go on, so that\'s the part I\'d talk to you about.',
     },
     {
       objection: 'I already rank on Google',
-      answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Google AI instead of scrolling Google, they get a short list of names' + (evidence.kind === 'gap' ? ' — and on the question I asked, you weren\'t on it.' : '.'),
+      answer: 'That\'s good, and it\'s a different thing. When someone asks ChatGPT or Google AI instead of scrolling Google, they get a few names' + (evidence.kind === 'gap' ? ', and for the search I did, you weren\'t one of them.' : '.'),
     },
     {
       objection: 'Nobody uses AI for this',
-      answer: 'More people are starting to, but I can\'t tell you how many of your customers do. That\'s why I measure it — you see the before and after on the same questions rather than taking my word for it.',
+      answer: 'More people are starting to, but I can\'t tell you how many of your customers do. That\'s why we measure it. You see the before and after on the same searches rather than taking my word for it.',
+    },
+    {
+      objection: 'We\'re busy enough',
+      answer: 'Fair enough, that\'s a good place to be. Can I send you the report on WhatsApp so you\'ve got it for when it suits?',
     },
     {
       objection: 'I\'m too busy',
-      answer: 'No problem. Can I send you the report on WhatsApp and ring back when it suits you? What time is better?',
+      answer: 'No problem. Can I send you the report on WhatsApp and ring you back when it suits? What time\'s better?',
     },
     {
-      objection: 'How much is it?',
-      answer: FINDABLE_OFFER_SUMMARY + ' The £' + FINDABLE_SETUP_PRICE_GBP + ' covers measuring where you are now, doing the work, and re-measuring at four weeks. ' + offer.monthly,
+      objection: 'How do you know this works?',
+      /* ⛔ The measurement and the refund, stated plainly — no hedge beside the guarantee (CLAUDE.md §1). */
+      answer: 'You don\'t have to take my word for it. We measure how often AI names you before we start, then ask the same searches again after four weeks. If that number hasn\'t gone up, you email us within 14 days of your results and get your £' + FINDABLE_SETUP_PRICE_GBP + ' back.',
     },
     {
       objection: 'Can you guarantee I\'ll appear?',
@@ -661,46 +726,42 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       answer: "What I guarantee is the measurement, not a spot in the answer. We measure how often AI names you before we start and re-measure after four weeks on the same questions. If that number hasn't gone up, you email within 14 days of your results and get your £" + FINDABLE_SETUP_PRICE_GBP + ' back.',
     },
     {
+      objection: 'How much is it?',
+      /* ⛔ STARTS WITH THE CANONICAL SENTENCE (scripts/findable-offer-terms.test.ts), so the price said on
+         a call can never drift from the checkout. The tail is only what a caller asks next. */
+      answer: FINDABLE_OFFER_SUMMARY + ' If we build it, the site\'s yours at the end. Nothing\'s charged after the last payment.',
+    },
+    {
+      objection: 'Why is it monthly?',
+      answer: 'The £' + FINDABLE_SETUP_PRICE_GBP + ' covers the measurement, the first pages and the work to get you named. The monthly keeps you there: every month we build more pages so there are more ways for people to find you, and keep an eye on the technical side of your site so nothing slips.',
+    },
+    {
+      objection: 'Why twelve months?',
+      answer: 'Twelve is when we build you a new site (Findable Build). We build it, host it and look after it. Once the ' + build + ' payments are done, the site\'s yours and nothing more is charged.',
+    },
+    {
+      objection: 'Why six months?',
+      answer: 'Six is when you keep your own website (Findable Optimise). It stays yours and we work on it. That\'s ' + optimise + ' payments including the first, then it stops.',
+    },
+    {
       objection: 'Just send me the information',
       answer: reportUrl
-        ? 'Sure — I\'ll WhatsApp you the report. It shows the exact question, what AI answered and who it named. Can I give you a quick ring once you\'ve had a look?'
-        : 'Sure — I\'ll put together a short report and send it over. Can I give you a quick ring once you\'ve had a look?',
+        ? 'Sure, I\'ll WhatsApp you the report. It shows the exact search, what AI said and who it named. Can I give you a quick ring once you\'ve had a look?'
+        : 'Sure, I\'ll run the check and send it over. Can I give you a quick ring once you\'ve had a look?',
     },
   ];
 
   /* ── THE CALL SCRIPT: one read, built from the pieces above, nothing repeated ── */
-  const callScript: string[] = [];
-  const engine = evidence.engine ?? 'AI';
-  const namesLine = top.length ? 'It came back with ' + joinNames(top) + ', but you didn\'t come up.' : 'And you didn\'t come up in the answer it gave.';
-  if (convo.mode === 'cold') {
-    callScript.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable.');
-    if (evidence.kind === 'gap') callScript.push('I was looking for ' + lookingAt + ' ' + when + ' and asked ' + engine + ' who it would recommend. ' + namesLine);
-    else if (evidence.kind === 'named') callScript.push('I asked AI who it would recommend for ' + lookingAt + ' and it did mention you, which is good. I wanted to run something by you about keeping it that way.');
-    else callScript.push('I look at how clearly local businesses come across to AI assistants like ChatGPT and Google AI when someone asks for ' + lookingAt + '.');
-    callScript.push('Have you got a minute? I\'ll explain why I\'m ringing.');
-  } else {
-    const fu = convo.followUp!;
-    const repliedLast = !!fu.lastInbound && fu.lastInbound.at >= (fu.lastOutbound?.at ?? '');
-    callScript.push('Hi, is that ' + callName + '? It\'s ' + caller + ' from Findable, I messaged you on WhatsApp' + (fu.firstContactAt ? ' on ' + playbookDate(fu.firstContactAt) : '') + '.'
-      + (repliedLast ? ' Thanks for getting back to me, I thought it\'d be easier to explain on a quick call.'
-        : fu.reportSentAt ? ' I sent over a short report on what AI says when someone asks for ' + lookingAt + ', so I thought I\'d talk you through it.'
-          : ' I thought it\'d be easier to explain on a quick call.'));
-    if (evidence.kind === 'gap') callScript.push('When I asked ' + engine + ' who it would recommend for ' + lookingAt + ', ' + (top.length ? 'it came back with ' + joinNames(top) + ', but you didn\'t come up.' : 'you didn\'t come up in the answer.'));
-    callScript.push('Have you got a minute?');
-  }
-  if (evidence.kind === 'gap') callScript.push('When someone asks AI for ' + lookingAt + ', it gives them a short list of names rather than ten links, so that can mean customers going to someone else.');
-  if (siteKind.source === 'directory_profile' || siteKind.source === 'social_profile') {
-    callScript.push('I also had a look for your website and couldn\'t find one of your own, just your ' + siteKind.label + ' profile. Without your own site there\'s a lot less for AI to go on about what you do and where you work.');
-  } else if (siteKind.source === 'none') {
-    callScript.push('I also couldn\'t find a website for you, and without one it\'s much harder for AI to know what you do and where.');
-  } else if (f.findings.length) {
-    const lead0 = f.findings[0];
-    callScript.push('I had a look at your site too. The main thing I noticed is ' + lead0.explanation.charAt(0).toLowerCase() + lead0.explanation.slice(1).replace(/\.$/, '') + '. ' + lead0.whyItMayMatter + ' It could be contributing, it\'s not the only thing AI looks at.');
-  }
-  callScript.push(transition);
+  const callScript: string[] = [...opening];
+  callScript.push(...siteLines);
+  callScript.push(evidence.kind === 'none'
+    ? 'We specialise in AI visibility for local businesses. Can I run the check for you and send it over on WhatsApp? Then I\'ll give you a quick ring once you\'ve had a look.'
+    : evidence.kind === 'named'
+      ? 'We specialise in AI visibility, and I wanted to run something by you about keeping it that way. Is now OK for a couple of minutes, or shall I ring you back?'
+      : 'We specialise in AI visibility, and I\'m happy to explain what I\'d do to make you more likely to be the one AI recommends. Is now OK for a couple of minutes, or shall I ring you back?');
   callScript.push(reportUrl
-    ? 'Can I send you the report on WhatsApp? It shows the exact question, what AI answered and who it named. Then I\'ll give you a quick ring once you\'ve had a look.'
-    : 'Can I run the check properly and send it over, then give you a quick ring once you\'ve had a look?');
+    ? 'If they\'d rather see it first: "I\'ll WhatsApp you the report. It shows the exact search, what AI said and who it named."'
+    : 'If they\'d rather see it first: "I\'ll run the check properly and send it over on WhatsApp."');
 
   return {
     site: { source: siteKind.source, label: siteKind.label },

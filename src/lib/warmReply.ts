@@ -21,6 +21,7 @@
 /* ⛔ The offer constants (findableOffer.ts) are deliberately NOT imported: this stage carries no price
    (Paul, 2026-09-25). A later sales stage will use them; the canonical data is untouched. */
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
+import { SALES_STYLE_RULES, salesStyleProblems } from './salesStyle.ts';
 import {
   normaliseForMatch, MIN_QUOTE_CHARS, MIN_SALES_STRENGTH, rankFindings, findingScore,
   type AuditContext, type ResearchFinding, type WarmLeadResearch,
@@ -459,6 +460,9 @@ HOW PAUL WRITES ON WHATSAPP:
 - no headings, no bullet points, no bold, no emojis, no dashes of any kind (no "—" or "–"): use a comma or a new sentence.
 - never: "i'd love to", "great question", "thanks for getting back to me", "ai-powered", "solutions", "leverage", "boost", "online presence", "seamless", "unlock", "don't hesitate", fake urgency, exaggerated claims.
 - it should read like Paul checked THEIR business himself and found something worth fixing, not like a sales script.
+- say the search plainly ("i asked google ai for an electrician in addlestone"), never with an adjective on it and never read back word for word.
+
+${SALES_STYLE_RULES}
 
 NEVER:
 - invent a website problem. Use ONLY the findings you are given, and state them no more strongly than their detail does;
@@ -682,6 +686,10 @@ export function checkReply(reply: string, ctx: ReplyContext): ReplyCheck {
   }
   if (usesDash(text)) problems.push('It uses a dash (— or –). Paul writes with commas and full stops.');
   if (SALESY.test(text)) problems.push(`It uses sales-script wording ("${text.match(SALESY)![0]}").`);
+  /* The shared house style (salesStyle.ts). SALESY above already names the phrase when it caught one,
+     so a second line for the same fault is not added. Their own business name and the competitors are
+     not our words. */
+  else for (const p of salesStyleProblems(text, [...(ctx.audit?.competitors ?? []), ctx.businessName ?? ''])) problems.push(p);
   if (HEADING.test(text)) problems.push('It has a heading. WhatsApp messages from Paul have none.');
   if (LIST_LINE.test(text)) problems.push('It uses a bullet or numbered list.');
 
@@ -704,12 +712,14 @@ export function fallbackReply(ctx: ReplyContext): string | null {
   if (ctx.question.primary === 'not_interested') return null;
   const search = ctx.searchContext ?? 'your trade in your area';
   const paras: string[] = [];
-  paras.push(`i was checking what ai recommends when someone is looking for ${/^[aeiou]/i.test(search) ? 'an' : 'a'} ${search} and it brought up your competitors instead of you.`);
+  paras.push(ctx.searchContext
+    ? `i asked ai for ${/^[aeiou]/i.test(search) ? 'an' : 'a'} ${search} and it brought up other businesses, not you.`
+    : 'i asked ai for your trade in your area and it brought up other businesses, not you.');
   const f = ctx.selection.primary;
   if (f) {
     const details = sayableDetails(f).join(', ');
     const first = f.detail.split(/(?<=\.)\s/)[0].replace(/\.$/, '');
-    paras.push(`i checked your site to see why and one of the main issues is ${lowerFirst(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
+    paras.push(`i had a look at your site as well and one thing that stood out is ${lowerFirst(first)}${details && !first.includes(details) ? ` (${details})` : ''}.`);
   } else if (ctx.research && ctx.research.status !== 'failed' && ctx.research.status !== 'no_website') {
     paras.push(`your site itself isn't badly built, but ai still isn't linking you strongly enough with ${search} searches, while it is with those other businesses.`);
   }

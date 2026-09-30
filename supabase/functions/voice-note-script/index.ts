@@ -27,13 +27,27 @@ import { guardAction } from "../_shared/protection.ts";
 const VOICE_SCRIPT_EST_USD = 0.01;
 import { logOpenAiUsage, openAiUsd } from "../_shared/openai-usage.ts";
 import { runSiteResearch, callModel, leadTrade, leadTown, RESEARCH_LEAD_COLUMNS, type ResearchLead } from "../_shared/site-research.ts";
-import { scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
+import { hookEngineLabel, scoreHookRun, type HookScoreRow } from "../../../src/lib/hookScore.ts";
 import { assessCompetitorCleanliness, collectCompetitorNames, countAnsweredCells, isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import {
   selectVoiceNoteEvidence, selectVoiceNoteFindings, buildVoiceNotePrompt, parseVoiceNoteScript, checkVoiceNoteScript,
-  betterAttempt, findingRecord, classifyLeadWebsite, voiceNoteBasisIsCurrent, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
+  betterAttempt, findingRecord, classifyLeadWebsite, voiceNoteBasisIsCurrent, shortVoiceNote, VOICE_NOTE_SYSTEM_PROMPT, VOICE_NOTE_TOOL, VOICE_NOTE_MODEL, VOICE_NOTE_GENERATOR_VERSION,
   type VoiceNoteCheck, type VoiceNoteEvidence,
 } from "../../../src/lib/voiceNoteScript.ts";
+
+/* The 20-second version beside a saved script (2026-09-30): derived from THAT row's engine, competitors
+   and website kind, never stored, so it cannot disagree with the script it sits under. */
+// deno-lint-ignore no-explicit-any
+function withShort(row: any, trade: string | null, area: string | null) {
+  if (!row) return row;
+  const short = shortVoiceNote({
+    engineLabel: hookEngineLabel(String(row.hook_engine ?? "")),
+    competitors: Array.isArray(row.competitors) ? row.competitors : [],
+    trade, area,
+    site: { mode: row.site_mode, source: row.site_source ?? "own_site", sourceLabel: row.site_source_label ?? null },
+  });
+  return { ...row, short_script: short };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,7 +153,9 @@ async function handleLatest(service: Service, lead: ResearchLead) {
     { auditId: script.audit_id ?? null, questionIndex: script.hook_question_index ?? null, engine: script.hook_engine ?? null },
     current.ok ? { auditId: current.auditId, questionIndex: current.questionIndex, engine: current.engine } : null,
   ));
-  return json({ ok: true, script, versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
+  const trade = hook.ok ? hook.trade : (leadTrade(lead) || null);
+  const area = hook.ok ? hook.area : (leadTown(lead) || null);
+  return json({ ok: true, script: withShort(script, trade, area), versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
 }
 
 async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>) {
@@ -216,7 +232,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
   };
   const { data: saved, error: saveErr } = await service.from(TABLE).insert(row).select(ROW_COLUMNS).single();
   if (saveErr) throw saveErr;
-  return json({ ok: true, script: saved, ms: Date.now() - started });
+  return json({ ok: true, script: withShort(saved, hook.trade, hook.area), ms: Date.now() - started });
 }
 
 Deno.serve(async (req) => {
