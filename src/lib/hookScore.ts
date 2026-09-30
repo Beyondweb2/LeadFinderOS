@@ -33,6 +33,7 @@
 
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { articleTrade } from './templateVars.ts';
+import { RIVALS_REQUIRED } from './rivalHook.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
  *  runs on both. */
@@ -379,14 +380,20 @@ export function hookMissScore(r: Pick<HookResult, 'question' | 'competitors'>, c
  * fabricated. Ties keep question order.
  * ⛔ THE COMPETITORS TRAVEL WITH THE RESULT. They are the picked cell's own list, never another
  * question's and never another engine's.
+ * ⛔ A MISS THAT CAN FILL THE COMPETITOR TEMPLATE WINS (2026-10-01, Paul: "it should find 3 competitors
+ * and use them in the template"). Within an engine, a miss naming at least RIVALS_REQUIRED rivals ranks
+ * above one that cannot, then the score. DM Roofing: the emergency search (2 names) out-scored the
+ * roof-repair search (5 names) on the trade-word bonus, so the follow-up was refused with 5-name
+ * evidence in hand. The voice-note script already ranked this way (voiceNoteScript.ts). Nothing is
+ * padded or borrowed: fewer than three in every miss still refuses.
  */
 export function pickHookResult(misses: readonly HookResult[], ctx: { town: string; trade: string }): HookPick | null {
   for (const engine of HOOK_PICK_ENGINE_ORDER) {
     const pool = misses.filter((m) => m.engine === engine && m.status === 'not_named');
     if (!pool.length) continue;
     const best = pool
-      .map((m) => ({ m, s: hookMissScore(m, ctx) }))
-      .sort((a, b) => b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
+      .map((m) => ({ m, s: hookMissScore(m, ctx), full: m.competitors.length >= RIVALS_REQUIRED }))
+      .sort((a, b) => Number(b.full) - Number(a.full) || b.s - a.s || a.m.questionIndex - b.m.questionIndex)[0].m;
     return {
       questionIndex: best.questionIndex, question: best.question, engine: best.engine, label: best.label,
       competitors: [...best.competitors], answerExcerpt: best.answerExcerpt,
