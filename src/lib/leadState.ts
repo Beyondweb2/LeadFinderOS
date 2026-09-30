@@ -215,6 +215,8 @@ export interface OutcomePlan {
   status: 'not_interested' | 'interested' | null;
   /** Clear the Next Action to 'none' (the one automatic next-action write the rule allows). */
   clearNextAction: boolean;
+  /** Cancel the booked meeting (call_booked_at → null): Not interested means the meeting is off. */
+  clearMeeting: boolean;
   /** Suppress the number (lead_mark_wrong_number). */
   suppressNumber: boolean;
   /** Open the "when is it?" form (date + time) — the meeting. */
@@ -228,8 +230,8 @@ export interface OutcomePlan {
  *  already Not interested is not re-written. ⛔ Real life: Interested / Meeting booked on a lead that
  *  said no earlier moves it back to Interested (status 'interested' + the star) — EXCEPT an opted-out
  *  number (a WhatsApp STOP), whose status is the suppression's and is left alone. */
-export function outcomePlan(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown; next_action?: string | null }): OutcomePlan {
-  const plan: OutcomePlan = { star: false, status: null, clearNextAction: false, suppressNumber: false, askMeeting: false, askCallBackDay: false };
+export function outcomePlan(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown; next_action?: string | null; call_booked_at?: string | null }, nowMs: number = Date.now()): OutcomePlan {
+  const plan: OutcomePlan = { star: false, status: null, clearNextAction: false, clearMeeting: false, suppressNumber: false, askMeeting: false, askCallBackDay: false };
   const { effect } = outcomeRule(outcome);
   const status = (lead.status ?? '').trim();
   const stage = salesStageOf(status);
@@ -245,6 +247,9 @@ export function outcomePlan(outcome: string, lead: { status?: string | null; is_
   if (effect === 'not_interested') {
     if (!NOT_INTERESTED_STATUSES.has(status)) plan.status = 'not_interested';
     if (lead.next_action && lead.next_action !== 'none') plan.clearNextAction = true;
+    /* Found clicking through the Work panel (2026-09-30): a Not interested lead kept its meeting, so a
+       later yes jumped straight back to "Meeting booked" for a meeting that was off. */
+    if (meetingIsCurrent(lead.call_booked_at, nowMs)) plan.clearMeeting = true;
   }
   return plan;
 }

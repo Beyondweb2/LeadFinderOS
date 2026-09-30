@@ -85,7 +85,7 @@ Instagram / a Social pill). One event model: `lead_activity` rows `call_outcome`
 | Interested | any | ⭐ star (Not interested/Closed → back to Interested) | Send information · today |
 | Call back | any | record + asks the day | Call · **day required** before Save |
 | Meeting / call booked | any | ⭐ star + asks date/time | one Save writes the time AND Next Action Meeting |
-| Not interested | any | status not_interested, star off, queue stopped (suppress_lead), Next Action cleared | — |
+| Not interested | any | status not_interested, star off, queue stopped (suppress_lead), Next Action cleared, a current meeting cancelled | — |
 | Wrong number | call | number suppressed (templates, queue, automated WA) | — |
 | ~~Agency controls site~~ | — | **removed as a button**: an attribute → the "Agency runs their site" chip (`website_control`) | — |
 
@@ -96,6 +96,15 @@ Call back, Not interested) — the plan without a second record of the messages.
 Every tap shows a **result line** under the buttons: `✓ Call · Left voicemail → [Contacted] Status: New →
 Contacted`, what else happened, and the Next Action waiting to be saved. History records
 `state_changed` (only a real change) and shows it on the contact that caused it.
+
+## 4b. Verified by clicking through (2026-09-30)
+
+A throwaway harness rendered the REAL Work panel + state pill with an in-memory database (no network,
+deleted after). Every flow above behaved; it also found four things the unit tests could not, all
+fixed and now tested: Not interested kept the booked meeting (a later yes jumped to "Meeting booked"); a
+WhatsApp result's status change was pinned in History to an older call (now: the nearest contact with
+the same outcome only); one tap wrote 4–5 History lines (the star / pipeline rows now fold into the one
+"Status: X → Y" line); the meeting box claimed "UK time" but reads the browser's clock.
 
 ## 5. Last contact
 

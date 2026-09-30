@@ -79,6 +79,9 @@ console.log("\n── 2. the scenarios (Paul's list) ──");
   const ni = outcomePlan("not_interested", { ...interested, next_action: "call" });
   ok(ni.status === "not_interested" && ni.clearNextAction, "Not interested → status not_interested + the pending Next Action cleared");
   ok(!outcomePlan("not_interested", { ...newLead, next_action: "none" }).clearNextAction, "…nothing to clear → no clear");
+  ok(outcomePlan("not_interested", { ...interested, call_booked_at: at(20) }, NOW).clearMeeting, "Not interested cancels a current meeting (found clicking through: a later yes jumped back to Meeting booked)");
+  ok(!outcomePlan("not_interested", { ...interested, call_booked_at: at(-48) }, NOW).clearMeeting && !outcomePlan("left_voicemail", { ...interested, call_booked_at: at(20) }, NOW).clearMeeting, "…an old meeting is history, and no other outcome cancels one");
+  ok(/if \(plan\.clearMeeting\) await step\('lead_set_call_booked', \{ _at: null \}/.test(read("src/lib/leadOutcome.ts")), "…carried out through lead_set_call_booked");
   ok(st({ ...interested, status: "not_interested", is_potential_work: false }) === "not_interested", "…reads Not interested");
   const wn = outcomePlan("wrong_number", interested);
   ok(wn.suppressNumber && !wn.star && wn.status === null, "Wrong number → suppress the number, nothing else");
@@ -190,6 +193,11 @@ console.log("\n── 7. History says the state change, and only a real one ─�
   ok(!/update public\.outreach_leads/i.test(strip(sql)), "…it never writes the lead row");
   const crm = read("src/components/LeadCrmPanel.tsx");
   ok(/a\.kind !== 'state_changed'/.test(crm) && /<= 60_000/.test(crm), "History puts the change on the contact that caused it (same person, within a minute)");
+  ok(/cause\.data\?\.outcome === a\.data\?\.outcome/.test(crm) && /rows\.slice\(0, i\)\.reverse\(\)\.find/.test(crm), "…only the NEAREST contact, and only with the same outcome (a WhatsApp result was pinned to an older call)");
+  ok(/const MECHANISM = new Set\(\['marked_interested', 'stage_changed'\]\)/.test(crm), "…the star / pipeline rows of that change fold into its one line");
+  ok(activityDetail({ kind: "follow_up_set", data: { next_action: "none" } }, () => "") === "Next action cleared", "a cleared Next Action reads 'Next action cleared', not 'none'");
+  ok(!/\(UK time\)/.test(crm), "the meeting box does not claim UK time (it reads the browser's clock)");
+  ok(activityDetail({ kind: "call_booked", data: { at: null } }, () => "") === "Cancelled" && /14:30$/.test(activityDetail({ kind: "call_booked", data: { at: "2026-10-02T13:30:00Z" } }, () => "") ?? ""), "a meeting row says its London time, or Cancelled");
 }
 
 console.log("\n── 8. the executor: both roles, the ownership-checked functions, the queue stopped ──");

@@ -316,7 +316,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       {askWhen && (
         <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
-          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (UK time)
+          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (your local time)
             <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? toLocalInput(lead.call_booked_at) : ''} />
           </label>
           <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setAskWhen(false)}>Later</Button>
@@ -820,16 +820,22 @@ export function LeadHistoryPanel({ leadId, older }: { leadId: string; older?: Re
   type Item = { key: string; at: string; actor: string | null; title: string; detail?: string | null; link?: boolean };
   const items: Item[] = [];
   /* ⛔ THE STATE CHANGE SITS ON THE CONTACT THAT CAUSED IT (2026-09-30): "Phone call · Spoke to owner /
-     Status: Contacted → Interested". A state_changed row within a minute of the same person's contact
-     row joins it; any other stands alone. Only a real change was ever recorded (lead_log_state_change). */
+     Status: Contacted → Interested". It joins the same person's NEAREST earlier contact row, only when
+     that row's outcome is the one the change names and it is under a minute old; otherwise it stands
+     alone (a WhatsApp conversation's result, a meeting saved later). The star / pipeline-status rows the
+     lead functions wrote for that change in the same minute are its mechanism and fold into it — the one
+     line says what happened. Only a real change was ever recorded (lead_log_state_change). */
   const rows = [...(activity.data ?? [])].sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at));
   const joined = new Set<string>();
   const changeOf = new Map<string, string>();
-  for (const a of rows) {
+  const MECHANISM = new Set(['marked_interested', 'stage_changed']);
+  for (const [i, a] of rows.entries()) {
     if (a.kind !== 'state_changed') continue;
-    const cause = [...rows].reverse().find((c) => LOGGED_CONTACT_KINDS.has(c.kind) && c.actor_user_id === a.actor_user_id
-      && Date.parse(c.created_at) <= Date.parse(a.created_at) && Date.parse(a.created_at) - Date.parse(c.created_at) <= 60_000 && !changeOf.has(c.id));
-    if (cause) { changeOf.set(cause.id, stateChangedWords(a.data)); joined.add(a.id); }
+    const t = Date.parse(a.created_at);
+    const near = (c: typeof a) => c.actor_user_id === a.actor_user_id && t - Date.parse(c.created_at) <= 60_000 && t >= Date.parse(c.created_at);
+    for (const c of rows.slice(0, i)) if (MECHANISM.has(c.kind) && near(c)) joined.add(c.id);
+    const cause = rows.slice(0, i).reverse().find((c) => LOGGED_CONTACT_KINDS.has(c.kind) && c.actor_user_id === a.actor_user_id);
+    if (cause && near(cause) && !changeOf.has(cause.id) && cause.data?.outcome === a.data?.outcome) { changeOf.set(cause.id, stateChangedWords(a.data)); joined.add(a.id); }
   }
   for (const a of activity.data ?? []) {
     if (joined.has(a.id)) continue;

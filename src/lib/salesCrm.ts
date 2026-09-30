@@ -273,7 +273,10 @@ export function activityDetail(
     /* leadState.stateChangedWords is the full-label version the lead History uses; this one is the same
        words for the states that have no qualifier (scripts/lead-state.test.ts compares them). */
     case 'state_changed': { const w = (v: unknown) => { const t = String(v ?? '—').replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); }; return `Status: ${w(d.from)} → ${w(d.to)}`; }
-    case 'follow_up_set': return `${String(d.next_action ?? '').replace(/_/g, ' ')}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
+    case 'follow_up_set': if (!d.next_action || d.next_action === 'none') return 'Next action cleared';
+      return `${String(d.next_action ?? '').replace(/_/g, ' ')}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
+    /* The meeting's time in London, or "Cancelled" when it was cleared (Not interested cancels it). */
+    case 'call_booked': return d.at ? new Date(String(d.at)).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).replace(',', '') : 'Cancelled';
     case 'bulk_queued': return d.template ? String(d.template) : null;
     case 'archived_set': return d.archived ? 'Archived' : 'Restored';
     case 'marked_interested': return d.on === false ? 'Unstarred' : 'Starred';

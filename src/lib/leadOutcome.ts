@@ -27,6 +27,7 @@ export function stateAfterPlan(lead: OutcomeLead, plan: OutcomePlan, outcome: st
     ...lead,
     status: plan.status ?? lead.status,
     is_potential_work: plan.status === 'not_interested' ? false : plan.star ? true : lead.is_potential_work,
+    call_booked_at: plan.clearMeeting ? null : lead.call_booked_at,
     lastLogged: logged ? { outcome, at: new Date(nowMs).toISOString() } : lead.lastLogged,
     wrongNumber: plan.suppressNumber ? true : lead.wrongNumber,
   }, nowMs);
@@ -62,10 +63,11 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
     }
   }
   if (plan.clearNextAction) await step('lead_set_follow_up', { _next_action: 'none', _date: null, _note: null }, 'Next action cleared');
+  if (plan.clearMeeting) await step('lead_set_call_booked', { _at: null }, 'Meeting cancelled');
   if (plan.suppressNumber) await step('lead_mark_wrong_number', {}, 'Number blocked: no templates, queue or automated WhatsApp');
   /* A refused write means the plan did not fully happen: the reading is then the contact alone, and no
      state change is claimed in History. */
-  const after = failed.length ? stateAfterPlan(lead, { ...plan, star: false, status: null, suppressNumber: false }, outcome, logged) : stateAfterPlan(lead, plan, outcome, logged);
+  const after = failed.length ? stateAfterPlan(lead, { ...plan, star: false, status: null, suppressNumber: false, clearMeeting: false }, outcome, logged) : stateAfterPlan(lead, plan, outcome, logged);
   if (!(await recordStateChange(lead.id, before, after, outcome))) failed.push('Not done: adding the status change to History');
   notifyLeadChanged(lead.id);
   return { plan, said, failed, after };
