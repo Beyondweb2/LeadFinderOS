@@ -64,12 +64,12 @@ let queue = [
   ...Array.from({ length: 12 }, () => ({ run_id: 'run-2', status: 'pending' })),
   ...Array.from({ length: 20 }, () => ({ run_id: 'run-3', status: 'pending' })),
 ];
-check('running state reconstructs from persisted rows', formatBaselineProgress(attachPersistedQueueProgress(persistedRuns, queue), 3) === 'Run 1: 20/20 · Run 2: 8/20 · Run 3: 0/20');
+check('running state reconstructs from persisted rows', formatBaselineProgress(attachPersistedQueueProgress(persistedRuns, queue), 3) === 'Run 1: 20/20 measured · Run 2: 8/20 measured · Run 3: 0/20 measured');
 
 queue = [1, 2, 3].flatMap((run) => Array.from({ length: 20 }, () => ({ run_id: `run-${run}`, status: 'done' })));
 const completedProgress = formatBaselineProgress(attachPersistedQueueProgress(persistedRuns.map((run) => ({ ...run, status: 'complete' })), queue), 3);
 state.status = 'complete';
-check('three completed runs reconstruct as complete', completedProgress === 'Run 1: 20/20 · Run 2: 20/20 · Run 3: 20/20' && state.status === 'complete');
+check('three completed runs reconstruct as complete', completedProgress === 'Run 1: 20/20 measured · Run 2: 20/20 measured · Run 3: 20/20 measured' && state.status === 'complete');
 
 // Remeasure exact replay.
 const replay = planReplay({ pointer: 'baseline-1', auditExists: true, askedQuestions: runQuestions[0] });

@@ -9,12 +9,12 @@ import { Panel, gbp } from './ui';
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 const dm = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-export function WeeklyTierTracker({ lines, todayIso = new Date().toISOString() }: { lines: CommissionLine[] | undefined; todayIso?: string }) {
+export function WeeklyTierTracker({ lines, todayIso = new Date().toISOString() , collapseKey = 'sales.weekly-tier' }: { lines: CommissionLine[] | undefined; todayIso?: string; collapseKey?: string }) {
   if (!lines) return null;
   const t = weeklyTracker(lines, todayIso);
   const bands = WEEKLY_TIERS.map((b, i) => ({ ...b, from: i === 0 ? 1 : WEEKLY_TIERS[i - 1].upTo + 1 }));
   return (
-    <Panel title="This week's tier" icon={CalendarRange} tone="green" hint={`Monday ${dm(t.weekStart)} – Sunday ${dm(t.weekEnd)}. Resets every Monday. Each client keeps the rate of their own place in the week.`}>
+    <Panel collapseKey={collapseKey} title="This week's tier" icon={CalendarRange} tone="green" hint={`Monday ${dm(t.weekStart)} – Sunday ${dm(t.weekEnd)}. Resets every Monday. Each client keeps the rate of their own place in the week.`}>
       <div className="flex flex-wrap items-end justify-between gap-3" data-testid="weekly-tier-tracker">
         <div>
           <p className="text-2xl font-bold tabular-nums">{t.clients} <span className="text-sm font-medium text-muted-foreground">client{t.clients === 1 ? '' : 's'} this week</span></p>

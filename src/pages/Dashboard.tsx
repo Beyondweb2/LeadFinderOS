@@ -147,11 +147,11 @@ const Dashboard = () => {
       {w && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
           <div className="min-w-0 lg:col-span-3">
-            <NextActions items={w.nextActions} go={go} onFocus={() => navigate('/focus')} title="Next best actions"
+            <NextActions collapseKey="admin.next-actions" items={w.nextActions} go={go} onFocus={() => navigate('/focus')} title="Next best actions"
               hint="Across the whole book, most urgent first — replies, due follow-ups, warm leads, Quick Close reviews. Tap to open." />
           </div>
           <div className="min-w-0 lg:col-span-2">
-            <FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup}
+            <FollowUpQueue collapseKey="admin.follow-ups" fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup}
               hint="Next Actions as people set them, and the conversations that need one." />
           </div>
         </div>
@@ -160,28 +160,29 @@ const Dashboard = () => {
       {/* What only the admin does, beside the replies nobody has answered. The derived cards keep
           their own rules and buttons; the wrapper only gives them the Sales dashboard's surface. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3 [&>div]:rounded-2xl [&>div]:border-border/60 [&>div]:shadow-sm">
-          {adminTasks.length > 0 ? <NextActionsCard tasks={adminTasks} onDismiss={handleDismissTask} /> : (
-            <Panel title="Needs you" icon={ClipboardCheck} tone="green" hint="Delivery to start, unpaid sign-ups, quotes gone quiet.">
+        <div className="min-w-0 lg:col-span-3 [&>section>div]:rounded-2xl [&>section>div]:border-border/60 [&>section>div]:shadow-sm">
+          {adminTasks.length > 0 ? <DashboardSection storageKey="admin-tasks" title="Needs you" defaultOpen collapsedHint={`${adminTasks.length} task${adminTasks.length === 1 ? '' : 's'}`}><NextActionsCard tasks={adminTasks} onDismiss={handleDismissTask} /></DashboardSection> : (
+            <Panel collapseKey="admin.needs-you" title="Needs you" icon={ClipboardCheck} tone="green" hint="Delivery to start, unpaid sign-ups, quotes gone quiet.">
               <p className="text-xs text-muted-foreground">Nothing waiting on you: every paid client has started, and no sign-up or quote is going cold.</p>
             </Panel>
           )}
         </div>
-        <div className="min-w-0 lg:col-span-2">{w && <WaitingPanel waiting={w.waiting} go={go} title="Waiting on a reply" />}</div>
+        <div className="min-w-0 lg:col-span-2">{w && <WaitingPanel collapseKey="admin.waiting" waiting={w.waiting} go={go} title="Waiting on a reply" />}</div>
       </div>
 
-      <Panel title="Clients" icon={PackageCheck} tone="green" hint="What each paying client needs next: baseline, checklist, pages." className="[&_.rounded-lg.border]:border-border/60">
+      <Panel collapseKey="admin.clients" summary={`${paid.length} paying client${paid.length === 1 ? '' : 's'}`} title="Clients" icon={PackageCheck} tone="green" hint="What each paying client needs next: baseline, checklist, pages." className="[&_.rounded-lg.border]:border-border/60">
         <ClientDeliveryCard leads={metrics.allLeads} onChanged={refetch} />
       </Panel>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 [&>div>div]:rounded-2xl [&>div>div]:border-border/60 [&>div>div]:shadow-sm">
-        {/* ⛔ NOT BEHIND A TOGGLE (2026-09-07): it answers "where has my test got to". */}
-        <div className="min-w-0"><FreeCheckProgressCard /></div>
-        <div className="min-w-0"><SubmissionsCard /></div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 [&>div>section>div]:rounded-2xl [&>div>section>div]:border-border/60 [&>div>section>div]:shadow-sm">
+        {/* Open by default (2026-09-07: it answers "where has my test got to"); the shared collapse
+            since 2026-09-30 lets Paul fold it once he has looked. */}
+        <div className="min-w-0"><DashboardSection storageKey="free-checks" title="Free checks" defaultOpen><FreeCheckProgressCard /></DashboardSection></div>
+        <div className="min-w-0"><DashboardSection storageKey="submissions" title="Sign-ups" defaultOpen><SubmissionsCard /></DashboardSection></div>
       </div>
 
       {w && (
-        <ActivityFeed items={w.activity} go={go} title="Team activity" hint="What happened across the book in the last 14 days, and who did it." />
+        <ActivityFeed collapseKey="admin.activity" items={w.activity} go={go} title="Team activity" hint="What happened across the book in the last 14 days, and who did it." />
       )}
 
       <DashboardSection storageKey="audit-funnel" title="Audit funnel" defaultOpen={false} collapsedHint="contacted → pitched → paid, founder places">

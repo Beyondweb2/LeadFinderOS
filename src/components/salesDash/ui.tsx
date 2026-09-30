@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { SectionToggle, useSectionOpen } from '@/components/CollapsibleSection';
 
 /* ══ THE SALES DASHBOARD'S DESIGN TOKENS (Sales Experience, 2026-09-28) ═════════════════════════════
    One place for the colour system, so a visual correction after Paul's review is one edit here:
@@ -18,23 +19,47 @@ export const TONE: Record<Tone, { text: string; soft: string; ring: string; icon
 
 type Icon = ComponentType<{ className?: string }>;
 
-/** A dashboard surface: rounded, soft border, a clear title row. */
-export function Panel({ title, icon: I, tone = 'grey', hint, action, children, className, id }: {
+/** A dashboard surface: rounded, soft border, a clear title row. With `collapseKey` it gets the
+ *  shared collapse control (src/components/CollapsibleSection.tsx): the body folds away, the title and
+ *  `summary` (or the hint) stay. */
+export function Panel({ title, icon: I, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary }: {
   title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string;
+  /** Stable key — makes the panel collapsible and remembers it per person. Never derived from the title. */
+  collapseKey?: string; defaultOpen?: boolean; summary?: ReactNode;
 }) {
+  if (collapseKey) return <CollapsiblePanel {...{ title, icon: I, tone, hint, action, children, className, id, collapseKey, defaultOpen, summary }} />;
   return (
     <section id={id} className={cn('min-w-0 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', className)}>
-      <header className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {I && <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE[tone].icon)}><I className="h-4 w-4" /></span>}
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-tight tracking-tight">{title}</h2>
-            {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-          </div>
-        </div>
-        {action && <div className="shrink-0">{action}</div>}
-      </header>
+      <PanelHeader title={title} icon={I} tone={tone} hint={hint} action={action} />
       {children}
+    </section>
+  );
+}
+
+function PanelHeader({ title, icon: I, tone, hint, action, toggle, shut }: { title: string; icon?: Icon; tone: Tone; hint?: ReactNode; action?: ReactNode; toggle?: ReactNode; shut?: boolean }) {
+  return (
+    <header className={cn('flex items-start justify-between gap-3', shut ? 'mb-0' : 'mb-3')}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {I && <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE[tone].icon)}><I className="h-4 w-4" /></span>}
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold leading-tight tracking-tight">{title}</h2>
+          {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        </div>
+      </div>
+      {(action || toggle) && <div className="flex shrink-0 items-center gap-1">{!shut && action}{toggle}</div>}
+    </header>
+  );
+}
+
+function CollapsiblePanel({ title, icon, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary }: {
+  title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string; collapseKey: string; defaultOpen?: boolean; summary?: ReactNode;
+}) {
+  const [open, setOpen] = useSectionOpen(collapseKey, defaultOpen);
+  return (
+    <section id={id} className={cn('min-w-0 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', !open && 'py-3 sm:py-3', className)}>
+      <PanelHeader title={title} icon={icon} tone={tone} hint={open ? hint : (summary ?? hint)} action={action} shut={!open}
+        toggle={<SectionToggle open={open} onToggle={() => setOpen(!open)} label={title} />} />
+      {open && children}
     </section>
   );
 }
