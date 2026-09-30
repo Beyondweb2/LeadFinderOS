@@ -24,6 +24,7 @@ import { WHATSAPP_TEMPLATES } from '../src/types/outreach.ts';
 import { getTemplateSendability } from '../src/lib/whatsappTemplates.ts';
 import { isColdOutreachTemplate } from '../src/lib/coldOutreach.ts';
 import { TEMPLATE_ENGINE_CLAIM_WAIVED, templateEngineConflict } from '../src/lib/rivalHook.ts';
+import { senderBuildAtLeast } from './lib/sender-build.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
@@ -62,7 +63,7 @@ ok(uiRefs.length === 0, `no "Initial outreach template" control in any screen ($
 console.log('\n── the send path ──');
 const sender = read('supabase/functions/send-whatsapp-message/index.ts');
 ok(!/opener_not_selected|openerRefusal/.test(strip(sender)), 'send-whatsapp-message has no "not the selected opener" refusal');
-ok((sender.match(/BUILD_ID = "(\d{4}-\d{2}-\d{2}[a-z])"/)?.[1] ?? '') >= '2026-09-27c' && /"any_approved_opener"/.test(sender) && !/"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
+ok(senderBuildAtLeast(sender, '2026-09-27c') && /"any_approved_opener"/.test(sender) && !/"selected_opener"/.test(sender), 'the sender build marker was bumped with the change');
 ok(/templateAwaitingApproval/.test(read('supabase/functions/_shared/whatsapp-send.ts')), 'the Meta approval gate is still on the send side');
 
 console.log('\n── the old setter is refused and writes nothing ──');
