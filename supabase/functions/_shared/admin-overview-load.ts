@@ -44,7 +44,7 @@ async function allRows<T>(build: (from: number, to: number, count: boolean) => a
   return out.filter((r) => { const id = (r as { id?: string }).id; if (!id) return true; if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
-const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build";
+const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build, stripe_subscription_id, stripe_customer_id";
 
 async function costRows(service: Service, p: ReportingPeriod): Promise<CostRow[]> {
   const { data, error } = await service.rpc("admin_api_cost", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString() });
@@ -70,7 +70,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     allRows<AdminMessage & { id: string }>((a, b, c) => service.from("whatsapp_messages").select("id, lead_id, direction, status, created_at, body, sent_by_user_id, template_name, test_mode", c ? { count: "exact" } : undefined).eq("direction", "inbound").not("lead_id", "is", null).order("id").range(a, b)),
     allRows<AdminActivity & { id: string }>((a, b, c) => service.from("lead_activity").select("id, lead_id, actor_user_id, kind, data, created_at", c ? { count: "exact" } : undefined).order("id").range(a, b)),
     allRows<AdminSuppression & { id: string }>((a, b, c) => service.from("contact_suppressions").select("id, lead_id, reason, source, created_at, wrong_number_at, wrong_number_by", c ? { count: "exact" } : undefined).order("id").range(a, b)),
-    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id").order("occurred_at").limit(10000),
+    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id, stripe_object_id, stripe_payment_intent_id").order("occurred_at").limit(10000),
     service.from("onboarding_responses").select("id, lead_id, status, created_at, plan_tier, website_addon, contact_email").order("created_at").limit(5000),
   ]);
   for (const r of [teamRes, rolesRes, exRes, ledgerRes, onboardingRes]) if (r.error) throw new Error(r.error.message ?? String(r.error));

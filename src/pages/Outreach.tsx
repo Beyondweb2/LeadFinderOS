@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
 import { WhatsAppQueuePanel } from '@/components/WhatsAppQueuePanel';
 
@@ -21,6 +21,7 @@ import type { ContactMethod, PipelineStatus } from '@/types/outreach';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { datasetComplete, leadLoadNotice } from '@/lib/outreachLoad';
+import { isOutreachPreset } from '@/lib/leadTrade';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
 import { getQueueStatus, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
 import { useQueueState } from '@/hooks/useQueueState';
@@ -106,9 +107,32 @@ const Outreach = () => {
   // (cleared from history so a refresh/back won't reopen the composer).
   const location = useLocation();
   type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null };
+  /* ⛔ /outreach?lead=<id> (salesLinks.ts outreachLeadLink, 2026-09-30) is the addressable form: it
+     stays in the URL while the lead's workspace is open, so a refresh reopens it and Back returns to
+     where the click came from; closing the workspace removes it. Router state is still read for an
+     old in-flight history entry. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlLead = searchParams.get('lead');
   const [launchIntent, setLaunchIntent] = useState<LaunchIntent | null>(
-    ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
+    urlLead ? { leadId: urlLead, channel: 'open' } : ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
   );
+  useEffect(() => {
+    if (urlLead && launchIntent?.leadId !== urlLead) { setCampaignFilter(null); setLaunchIntent({ leadId: urlLead, channel: 'open' }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlLead]);
+  /* ?show=<preset> — a list a link opened (the dashboard's "no trade stored"). It stays in the URL (a
+     refresh keeps it) until its pill is cleared. */
+  const showParam = searchParams.get('show');
+  const preset = isOutreachPreset(showParam) ? showParam : null;
+  const clearPreset = useCallback(() => {
+    const next = new URLSearchParams(searchParams); next.delete('show');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const clearUrlLead = useCallback(() => {
+    if (!searchParams.get('lead')) return;
+    const next = new URLSearchParams(searchParams); next.delete('lead');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   // A launch (e.g. from Manage) wins over the restored campaign so the launched
   // lead is never hidden; we DON'T persist this temporary All view.
   const hadInitialLaunchRef = useRef(launchIntent != null);
@@ -389,6 +413,9 @@ const Outreach = () => {
         showCampaignName={campaignFilter === null}
         launchIntent={launchIntent}
         onLaunchConsumed={() => setLaunchIntent(null)}
+        onDetailClosed={clearUrlLead}
+        preset={preset}
+        onClearPreset={clearPreset}
         onBulkJob={perms.bulkAudits ? createJob : undefined}
         bulkJobActive={!!activeJob || creatingJob}
       />}

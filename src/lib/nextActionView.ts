@@ -26,6 +26,11 @@ export const NEXT_ACTION_LABEL: Record<string, string> = {
   remove_if_no_reply: 'Close if no reply',
 };
 
+/** ⛔ THE ONE LIST of Next Action types done IN a WhatsApp conversation (the Inbox). Everything else —
+ *  a call, an email, sending information, a meeting, the generic "follow up" — is done from the lead's
+ *  workspace. Read by the Sales workspace fold, the dashboard links and the filters. */
+export const WHATSAPP_NEXT_ACTIONS: ReadonlySet<string> = new Set(['send_follow_up', 'send_voice_note', 'send_initial_text', '2nd_follow_up', 'send_draft']);
+
 export interface NextActionView {
   /** "Call", "WhatsApp follow-up"… */
   label: string;

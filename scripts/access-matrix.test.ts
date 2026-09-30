@@ -47,7 +47,7 @@ ok(canOpenRoute("admin", "/review-replies"), "…and still open to the admin");
 ok(/<Route path="\/sales" element=\{<Navigate to="\/outreach" replace \/>\} \/>/.test(app), "/sales redirects to /outreach");
 ok(/<Route path="\/sales\/lead\/:leadId" element=\{<LegacySalesLeadRedirect \/>\} \/>/.test(app), "/sales/lead/:id goes through the legacy redirect");
 const legacy = readFileSync(new URL("../src/components/LegacySalesLeadRedirect.tsx", import.meta.url), "utf8");
-ok(/<Navigate to="\/outreach" replace state=\{\{ launch: \{ leadId, channel: 'open' \} \}\} \/>/.test(legacy), "…which opens THAT lead in Outreach (the launch intent)");
+ok(/<Navigate to=\{outreachLeadLink\(leadId\)\} replace \/>/.test(legacy), "…which opens THAT lead in Outreach (/outreach?lead=, 2026-09-30)");
 ok(!/\bSalesHome\b|\bSalesLead\b|pages\/Sales(Home|Lead)\b/.test(app), "the separate My Leads pages are not routed any more");
 ok(/<Route path="\/sales-dashboard" element=\{<SalesDashboard \/>\} \/>/.test(app) && canOpenRoute("sales", "/sales-dashboard"), "the Sales Dashboard is routed and open to sales (their own numbers, scoped by the server)");
 ok(!canOpenRoute("sales", "/sales/lead"), "a malformed legacy path is refused (no id)");

@@ -150,7 +150,7 @@ export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next A
         <ul className="max-h-80 space-y-1 overflow-y-auto pr-1">
           {rows.map((l) => (
             <li key={l.id}>
-              <button type="button" onClick={() => go(g.link, l.id)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <button type="button" onClick={() => go(l.link ?? g.link, l.id)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 <span className={cn('h-2 w-2 shrink-0 rounded-full', TONE[g.tone].dot)} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{l.name}</span>{l.detail && <span className="block truncate text-[11px] text-muted-foreground">{l.detail}</span>}</span>
                 <span className="shrink-0 text-[11px] text-muted-foreground">{ago(l.at)}</span>

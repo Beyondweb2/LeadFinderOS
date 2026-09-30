@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, WEEKLY_TIERS, type CommissionLine } from '@/lib/commission';
 import { WeeklyTierTracker } from '@/components/salesDash/WeeklyTracker';
-import { leadLaunchState } from '@/lib/salesLinks';
+import { outreachLeadLink } from '@/lib/salesLinks';
 import { cn } from '@/lib/utils';
 import { Empty, KpiCard, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
@@ -117,7 +117,7 @@ export default function Earnings() {
               <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {d.clients.map((c) => (
                   <li key={c.leadId}>
-                    <button type="button" onClick={() => navigate('/outreach', { state: leadLaunchState(c.leadId) })} disabled={!isAdmin}
+                    <button type="button" onClick={() => navigate(outreachLeadLink(c.leadId))} disabled={!isAdmin}
                       className={cn('flex w-full flex-col gap-2 rounded-xl border border-border/60 p-3.5 text-left', isAdmin && 'hover:border-primary/40')}>
                       <span className="truncate text-sm font-semibold" title={c.business}>{c.business}</span>
                       <span className="grid grid-cols-3 gap-1 text-center">

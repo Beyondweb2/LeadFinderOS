@@ -393,7 +393,7 @@ function PreviewLinkedText({ text }: { text: string }) {
 }
 
 const Inbox = () => {
-  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, patchLeadStatus, patchLeadPotentialWork } = useInbox();
+  const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox();
   const { toast } = useToast();
   // Only for invalidating the AiAudit page's audit-book cache when startAudit fires one from
   // here — Inbox itself is not on React Query (see useInbox.ts).
@@ -483,6 +483,15 @@ const Inbox = () => {
   const [search, setSearch] = usePersistedState<string>('inbox-search', '', { tier: 'session', scope: user?.id });
   /* All / Unread / Waiting on us (both roles, 2026-09-28). A view control over the loaded list. */
   const [quickFilter, setQuickFilter] = usePersistedState<InboxQuickFilter>('inbox-quick-filter', 'all', { tier: 'session', scope: user?.id });
+  /* ?filter=<quick filter> (2026-09-30): a dashboard count ("N replies waiting in the Inbox") opens the
+     Inbox on that view. Applied once, then dropped from the URL — the choice is then the person's own. */
+  const filterParam = searchParams.get('filter');
+  useEffect(() => {
+    if (!filterParam) return;
+    if (INBOX_QUICK_FILTERS.some((f) => f.value === filterParam)) setQuickFilter(filterParam as InboxQuickFilter);
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('filter'); return next; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterParam]);
   const { reads, loaded: readsLoaded } = useWhatsAppReads();
   const markRead = useMarkWhatsAppRead();
   /* The waiting timers tick once a minute; nothing is re-read. */
@@ -714,12 +723,17 @@ const Inbox = () => {
   const LIST_PAGE = 150;
   const [listLimit, setListLimit] = useState(LIST_PAGE);
   useEffect(() => { setListLimit(LIST_PAGE); }, [searchTerm, campaignFilter, quickFilter]);
+  /* ⛔ THE OPEN CONVERSATION IS ALWAYS IN THE LIST (2026-09-30, Paul: "do not hide an explicitly
+     deep-linked conversation merely because the current filters exclude it"). It is drawn at the top,
+     marked as outside the filters, from the unfiltered list — the filters are left as they were. */
   const shownList = useMemo(() => {
     const head = filteredList.slice(0, listLimit);
     if (!activeKey || head.some((c) => c.key === activeKey)) return head;
-    const act = filteredList.find((c) => c.key === activeKey);
+    const act = filteredList.find((c) => c.key === activeKey)
+      ?? conversations.find((c) => c.key === activeKey) ?? (synthetic?.key === activeKey ? synthetic : undefined);
     return act ? [act, ...head] : head;
-  }, [filteredList, listLimit, activeKey]);
+  }, [filteredList, listLimit, activeKey, conversations, synthetic]);
+  const activeOutsideFilters = !!activeKey && !filteredList.some((c) => c.key === activeKey) && shownList.some((c) => c.key === activeKey);
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
@@ -1516,12 +1530,22 @@ const Inbox = () => {
      thread (by number, whoever sent the messages) or starts one. */
   const leadParam = searchParams.get('lead');
   const leadParamDone = useRef<string | null>(null);
+  const leadParamLoading = useRef<string | null>(null);
   useEffect(() => {
     if (!leadParam || isLoading || leadParamDone.current === leadParam) return;
-    leadParamDone.current = leadParam;
     const lead = leads.find((l) => l.id === leadParam);
-    if (lead) startFromLead(lead);
-    else toast({ title: 'Conversation not found', description: 'That lead is not in your WhatsApp list — it may be archived, reassigned, or have no phone.', variant: 'destructive' });
+    if (lead) { leadParamDone.current = leadParam; startFromLead(lead); return; }
+    /* ⛔ NOT IN THE LIST YET IS NOT "NOT FOUND" (2026-09-30). The link most often comes from the "assigned
+       to you" notification, which lands before this person's list knows the lead. Load that one lead
+       and its thread through their own access (useInbox loadLead); the effect runs again when it
+       arrives. Only a lead they genuinely cannot read — or one with no usable phone — says so. */
+    if (leadParamLoading.current === leadParam) return;
+    leadParamLoading.current = leadParam;
+    void loadLead(leadParam).then((fresh) => {
+      if (fresh && fresh.phone?.trim() && !fresh.is_archived) return; // the list now holds it → reruns
+      leadParamDone.current = leadParam;
+      toast({ title: 'Conversation not found', description: fresh ? 'That lead is archived or has no phone to message.' : 'That lead is not in your list — it may have been reassigned or removed.', variant: 'destructive' });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadParam, leads, isLoading]);
   useEffect(() => {
@@ -1897,6 +1921,7 @@ const Inbox = () => {
                 activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50',
                 stateByKey.get(c.key)?.unread && activeKey !== c.key && 'bg-blue-500/[0.06]')}>
               {stateByKey.get(c.key)?.unread && <span className="absolute left-0.5 top-3.5 h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />}
+              {activeOutsideFilters && activeKey === c.key && <span className="text-[10px] font-medium text-primary">Opened · outside your current filters</span>}
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 truncate text-sm font-medium">
                   {hookDueMode && c.leadId && (
@@ -1960,7 +1985,15 @@ const Inbox = () => {
           {!active ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <MessageSquare className="mb-2 h-7 w-7 opacity-30" />
-              <p className="text-sm">Select a conversation</p>
+              {/* A linked (?c=) conversation that is not here once the Inbox has loaded: reassigned away,
+                  archived or removed. Said plainly, never a blank pane. */}
+              {activeKey && !isLoading ? (
+                <>
+                  <p className="text-sm font-medium text-foreground">This conversation is no longer in your Inbox</p>
+                  <p className="mt-1 max-w-xs text-center text-xs">It may have been reassigned to someone else, archived or removed.</p>
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setActiveKey(null)}>Back to the list</Button>
+                </>
+              ) : <p className="text-sm">Select a conversation</p>}
             </div>
           ) : (
             <>

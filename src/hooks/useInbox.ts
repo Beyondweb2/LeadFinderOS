@@ -335,10 +335,40 @@ export function useInbox() {
   const patchOneLead = useCallback(async (leadId: string | undefined | null) => {
     if (!leadId) return;
     const fresh = await fetchOneInboxLead(leadId, leadTable);
-    if (!fresh) return;
+    if (!fresh) {
+      /* A salesperson's view answering NO ROW means the lead is no longer theirs (reassigned): drop it,
+         as useOutreach does. The admin's read of outreach_leads never loses a lead this way. */
+      if (leadTable === 'sales_leads') queryClient.setQueryData<InboxData>(queryKey, (current) => current
+        ? { ...current, leads: current.leads.filter((l) => l.id !== leadId) } : current);
+      return;
+    }
     pendingLeadPatchesRef.current.delete(leadId);
     queryClient.setQueryData<InboxData>(queryKey, (current) => current
       ? { ...current, leads: patchInboxLead(current.leads, fresh) } : current);
+  }, [queryClient, queryKey, leadTable]);
+
+  /* ⛔ LOAD ONE NEWLY AUTHORISED LEAD, WITH ITS WHOLE THREAD (2026-09-30, Paul: "if that notification
+     arrives before the lead list refreshes, load the newly authorised lead directly"). A salesperson's
+     session never receives outreach_leads realtime, so a lead assigned to them a minute ago is not in
+     this cache and its messages were never read. Both are read here through the person's OWN access —
+     the lead from their lead source (sales_leads for a rep), the messages under RLS — so nothing is
+     exposed that a full reload would not show. A lead they can no longer read (reassigned away) is
+     REMOVED from the cache, so its thread stops pretending to be theirs. Returns the lead, or null. */
+  const loadLead = useCallback(async (leadId: string): Promise<(LeadLite & { is_archived?: boolean }) | null> => {
+    const fresh = await fetchOneInboxLead(leadId, leadTable);
+    if (!fresh) {
+      queryClient.setQueryData<InboxData>(queryKey, (current) => current
+        ? { ...current, leads: current.leads.filter((l) => l.id !== leadId) } : current);
+      return null;
+    }
+    const msgs = await fetchAllRows<WaMessage>('Inbox (one lead)', (from, to) =>
+      sb.from('whatsapp_messages').select('*').eq('lead_id', leadId)
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)).catch(() => null);
+    pendingLeadPatchesRef.current.delete(leadId);
+    queryClient.setQueryData<InboxData>(queryKey, (current) => current
+      ? { ...current, leads: patchInboxLead(current.leads, fresh), messages: msgs ? mergeInboxMessages(current.messages, msgs.rows) : current.messages }
+      : current);
+    return fresh;
   }, [queryClient, queryKey, leadTable]);
 
   /* ⚡ THE FIRST CONNECT DOES NOT RELOAD EVERYTHING AGAIN (2026-09-27). The subscription usually
@@ -463,8 +493,12 @@ export function useInbox() {
       queryClient.setQueryData<InboxData>(queryKey, (current) => current
         ? { ...current, leads: current.leads.map((l) => (l.id === leadId ? { ...l, ...patch } as LeadLite : l)) } : current);
     }
-    if (!optimistic) void patchOneLead(leadId); // re-read only once the server has answered
-  }), [patchOneLead, queryClient, queryKey]);
+    if (optimistic) return; // re-read only once the server has answered
+    /* A lead this cache has never held — just assigned to this person (the lead_assigned notification
+       announces it, useNotifications) — is loaded WITH its thread; one already here is re-read. */
+    const known = queryClient.getQueryData<InboxData>(queryKey)?.leads.some((l) => l.id === leadId);
+    void (known ? patchOneLead(leadId) : loadLead(leadId));
+  }), [patchOneLead, loadLead, queryClient, queryKey]);
 
   const messages = query.data?.messages ?? NO_MESSAGES;
   const leads = query.data?.leads ?? NO_LEADS;
@@ -853,5 +887,5 @@ export function useInbox() {
       prev ? { ...prev, leads: prev.leads.map((l) => (l.id === leadId ? { ...l, is_potential_work: value } : l)) } : prev);
   }, [queryClient, queryKey]);
 
-  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, send, sendVoice, sendMedia, preview, patchLeadStatus, patchLeadPotentialWork };
+  return { user, messages, leads, conversations, messagesForKey, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, refetch: fetchAll, loadLead, send, sendVoice, sendMedia, preview, patchLeadStatus, patchLeadPotentialWork };
 }

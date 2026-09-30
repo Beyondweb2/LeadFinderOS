@@ -17,6 +17,7 @@ import { conversationState, londonToday } from './conversationState.ts';
 import { NEXT_ACTION_OPTIONS } from './salesCrm.ts';
 import type { QuickCloseState } from './quickClose.ts';
 import { meetingWhen } from './leadState.ts';
+import { WHATSAPP_NEXT_ACTIONS } from './nextActionView.ts';
 
 export const WARM_DAYS = 7;
 export const NEEDS_FOLLOW_UP_DAYS = 3;
@@ -54,7 +55,9 @@ export interface WorkspaceLead {
 export interface WorkspaceAudit { lead_id: string; completed_at: string }
 
 export type Warmth = 'warm' | 'needs_follow_up' | 'going_cold';
-export interface PipeLead { id: string; name: string; at: string | null; warmth: Warmth | null; detail?: string }
+export interface PipeLead { id: string; name: string; at: string | null; warmth: Warmth | null; detail?: string;
+  /** Where THIS row is worked, when it differs by lead (a due follow-up: its action type decides). */
+  link?: ActionLink }
 export type Tone = 'green' | 'blue' | 'amber' | 'purple' | 'red' | 'grey';
 export type ActionLink = 'whatsapp' | 'lead';
 export interface NextAction { kind: string; leadId: string; name: string; title: string; detail: string; at: string | null; tone: Tone; link: ActionLink }
@@ -144,7 +147,7 @@ export const nextActionWord = (a: string | null | undefined) => {
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 /** Next Actions done on WhatsApp open the thread; the rest open the lead. */
-const WHATSAPP_ACTIONS: ReadonlySet<string> = new Set(['send_follow_up', 'send_voice_note', 'send_initial_text', '2nd_follow_up', 'send_draft']);
+const WHATSAPP_ACTIONS = WHATSAPP_NEXT_ACTIONS;
 
 export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
   const now = input.nowMs;
@@ -208,7 +211,7 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     const naDate = na ? lead?.next_action_date ?? null : null;
     if (na && naDate && naDate <= today) {
       todayC.followUpsDue += 1;
-      const item = { ...pl, detail: `${nextActionWord(na)}${lead?.next_action_note ? ` — ${lead.next_action_note}` : ''}` };
+      const item: PipeLead = { ...pl, detail: `${nextActionWord(na)}${lead?.next_action_note ? ` — ${lead.next_action_note}` : ''}`, link: WHATSAPP_ACTIONS.has(na) ? 'whatsapp' : 'lead' };
       (naDate < today ? followUps.overdue : followUps.dueToday).push(item);
       actions.push({ kind: naDate < today ? 'follow_up_overdue' : 'follow_up_due', leadId: f.lead.id, name,
         title: naDate < today ? 'Follow-up overdue' : 'Follow-up due today', detail: item.detail!,

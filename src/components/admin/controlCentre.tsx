@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, ArrowRight, Banknote, CalendarCheck, Coins, Filter, Megaphone, PhoneCall, Receipt, Users, Wallet } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, Banknote, ExternalLink, CalendarCheck, Coins, Filter, Megaphone, PhoneCall, Receipt, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
@@ -76,7 +77,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
       {sorter && (
         <p className={cn('mb-3 text-[11px]', sorter.lastStatus === 'error' ? TONE.red.text : 'text-muted-foreground')}>
           Replies are sorted automatically every 2 minutes — last run {sorter.lastFinishedAt ? ago(sorter.lastFinishedAt) : 'not yet'}{sorter.lastStatus === 'error' ? ` FAILED: ${sorter.lastError ?? 'unknown error'}` : ''}.
-          {waitingInInbox > 0 && ` ${num(waitingInInbox)} other repl${waitingInInbox === 1 ? 'y is' : 'ies are'} waiting in the Inbox for whoever holds the lead (not live sales, so not listed here).`}
+          {waitingInInbox > 0 && <> {num(waitingInInbox)} other repl{waitingInInbox === 1 ? 'y is' : 'ies are'} waiting in the <Link to="/inbox?filter=waiting" className="text-primary hover:underline">Inbox</Link> for whoever holds the lead (not live sales, so not listed here).</>}
         </p>
       )}
       {!items.length ? <Empty>Nothing needs you right now.</Empty> : (
@@ -99,6 +100,12 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
                       </span>
                       <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </button>
+                    {i.external && (
+                      <a href={i.external.url} target="_blank" rel="noreferrer" title={i.external.label}
+                        className="flex shrink-0 items-center gap-1 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50">
+                        Stripe<ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                     {i.triageId && i.kind === 'reply_opt_out' && onSuppress && (
                       <button type="button" disabled={busy === i.triageId} title="Suppress this number from all automated outreach (recorded in History)"
                         onClick={async () => {
@@ -206,7 +213,14 @@ export function TeamComparison({ o }: { o: O }) {
           <thead>
             <tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="sticky left-0 z-10 bg-card py-2 pr-3 font-semibold">&nbsp;</th>
-              {people.map((p) => <th key={p.userId} className="px-2 py-2 text-right font-semibold normal-case tracking-normal text-foreground">{p.name}</th>)}
+              {people.map((p) => (
+                <th key={p.userId} className="px-2 py-2 text-right font-semibold normal-case tracking-normal text-foreground">
+                  {/* Their own Sales dashboard view: their leads, follow-ups and actions. */}
+                  {p.userId && p.userId !== 'unknown'
+                    ? <Link to={`/sales-dashboard?person=${encodeURIComponent(p.userId)}`} className="hover:text-primary hover:underline" title={`Open ${p.name}'s sales dashboard`}>{p.name}</Link>
+                    : p.name}
+                </th>
+              ))}
               {people.length > 1 && <th className="px-2 py-2 text-right font-semibold normal-case tracking-normal">Total</th>}
             </tr>
           </thead>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, ArrowRight, Filter, Info, Loader2, Megaphone, MessageCircleReply, PhoneCall, PoundSterling, Radio,
@@ -102,7 +102,11 @@ export default function SalesDashboard() {
   const navigate = useNavigate();
   const isAdmin = role === 'admin';
   const [period, setPeriod] = useState<string>('all');
-  const [person, setPerson] = useState<string>(isAdmin ? 'all' : 'me');
+  /* ?person=<userId> (2026-09-30): the admin dashboard's Team comparison opens one salesperson's view
+     here. Admin only — a salesperson's page is always their own, whatever the URL says. */
+  const [searchParams] = useSearchParams();
+  const linkedPerson = searchParams.get('person');
+  const [person, setPerson] = useState<string>(isAdmin ? (linkedPerson ? (linkedPerson === user?.id ? 'me' : linkedPerson) : 'all') : 'me');
   const mine = useMyTargets();
   const viewingSelf = !isAdmin || person === 'me';
   const q = useQuery({
