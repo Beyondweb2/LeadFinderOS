@@ -212,7 +212,7 @@ console.log("── Next Action stays human-set ──");
   ok(/'lead_log_contact'/.test(logUi) && !/lead_set_follow_up/.test(logUi), "logging an outcome never schedules a follow-up");
   /* The outcome and channel allowlists were extended 2026-09-28 (20260928210000, the one contact-method
      set): these two read the NEWEST definition; the checks above still read the original migration. */
-  const newest = read("supabase/migrations/20260930130000_social_profiles.sql"); // lead_log_contact's newest (Facebook, Instagram, connection_sent)
+  const newest = read("supabase/migrations/20260930140000_social_profiles.sql"); // lead_log_contact's newest (Facebook, Instagram, connection_sent)
   const outcomes = newest.match(/_outcome not in \(([^)]*)\)/)?.[1].replace(/\s+/g, " ") ?? "";
   ok(CALL_OUTCOMES.every((o) => outcomes.includes(`'${o.value}'`)) && (outcomes.match(/'/g) ?? []).length / 2 === CALL_OUTCOMES.length, "the outcome list is lead_log_contact's allowlist, exactly");
   const channels = newest.match(/_channel not in \('call'[^)]*\)/)?.[0] ?? "";

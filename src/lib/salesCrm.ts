@@ -233,7 +233,7 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   daily_limit: 'over your daily limit',
 };
 
-/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930130000) — the server refuses
+/* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260930140000) — the server refuses
    anything else, and scripts/contact-claim.test.ts pins the two together. Added 2026-09-28: left
    voicemail, meeting booked, then message_sent. An outcome records ACTIVITY only: it never writes the
    status or the next action (Next Action is human-set only). */

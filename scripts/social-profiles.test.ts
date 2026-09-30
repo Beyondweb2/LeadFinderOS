@@ -139,7 +139,7 @@ ok(s === "Facebook confirmed · No Instagram found · LinkedIn uncertain — che
 ok(socialOutcomes([{ ...rows[0], confidence: "likely" }])[0].state === "likely", "Likely stays Likely in the summary, never Confirmed");
 
 console.log("\n── the SQL pick (one place) and the migration ──");
-const mig = read("supabase/migrations/20260930130000_social_profiles.sql");
+const mig = read("supabase/migrations/20260930140000_social_profiles.sql");
 ok(/source = 'manual' or confirmed_by is not null/.test(mig), "a person's choice is picked first");
 ok(/confidence = 'confirmed'[\s\S]*if v_n = 1[\s\S]*confidence = 'likely'[\s\S]*if v_n = 1/.test(mig), "then exactly one confirmed, then exactly one likely — two = review");
 ok(!/confidence = 'unverified'/.test(mig.slice(mig.indexOf("_social_profiles_sync"), mig.indexOf("_social_profiles_after_change"))), "unverified is never picked");
