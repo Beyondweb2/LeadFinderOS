@@ -123,7 +123,7 @@ console.log('\n── C/D/E. THE BUILD EXECUTION PROMPT ──');
   ok(p.text.includes('https://github.com/Beyondweb2/HarbourLocks.git') && /git remote -v/.test(p.text) && /STOP and report/.test(p.text), 'one destination repository, verified with git remote -v before writing');
   ok(/Never write to: the template repository, the MCL \/ any other client's production repository, the Findable website repository/.test(p.text), 'other clients\u2019 and the Findable repositories are forbidden');
   ok(/gh repo create/.test(p.text) && /STOP and report the operator action/.test(p.text), 'no GitHub CLI → stop with the exact operator action');
-  const intoTemplate = executionPrompt(input(ready({ ...BASE, repo_name: 'MCLocksmiths' })));
+  const intoTemplate = executionPrompt(input(ready({ ...BASE, repo_name: 'MCLocksmiths-New' })));
   ok(intoTemplate.blockedBy.some((b) => /TEMPLATE\u2019s own repository/.test(b)) && /NOT READY TO BUILD/.test(intoTemplate.text) && !/X1\. DESTINATION/.test(intoTemplate.text), 'a destination that IS the template repository refuses the prompt outright');
   for (const w of ['Do NOT invent missing claims', 'Selected services ONLY', 'Location pages ONLY for: Whitby', 'Use the template architecture', 'REAL config / content layer', 'build.unsupportedFields', 'Never scatter a client detail into a component'])
     ok(p.text.includes(w), `  config / architecture rule: "${w}"`);
@@ -325,7 +325,8 @@ console.log('\n── THE SITE QUALITY GATE + THE SITE INTENT MAP (2026-09-30) �
   const p = executionPrompt(input(s)).text;
   ok(/X6b\. SITE INTENT MAP/.test(p) && /X9b\. THE FINDABLE SITE QUALITY GATE/.test(p), 'the build prompt carries the intent map (X6b) and the gate (X9b)');
   ok(p.includes(SITE_GATE_FETCH) && p.includes('qa/findable-expect.json') && p.includes('quality.siteGate'), '…with the one fetch command, the expect file and the report key');
-  ok(/INHERITED HAZARDS/.test(p) && /pages\.dev\/\*/.test(p) && /AggregateRating/.test(p), 'a template build is told the template repository noindexes every host and carries rating schema');
+  ok(/INHERITED HAZARDS/.test(p) && /dpomSentinelScriptUrl/.test(p) && /never a "\/\*" noindex/.test(p) && /LIVE CLIENT'S SITE/.test(p), 'a template build is told the seed is a live client\'s site and given every inherited hazard');
+  ok(p.includes('checkout --detach ' + MCL_TEMPLATE.sourcePinnedCommit) && p.includes('mcl-local-trades--mclocksmiths-new'), 'the build copies the PINNED commit into a per-source cache, never the moving branch');
   ok(/#business/.test(p) && /trade SUBTYPE/.test(p) && /BreadcrumbList on every page below home/.test(p) && /home → every service page/.test(p), 'X6 names the entity @id, the subtype, breadcrumbs and the internal-link pattern');
   ok(/QA label, NOT copy/.test(p), 'baseline questions are QA labels, never copy');
   const json = p.slice(p.indexOf('Save this as qa/findable-expect.json'));

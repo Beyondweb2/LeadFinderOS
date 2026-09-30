@@ -37,6 +37,7 @@ import { computeMapping, type Mapping } from './templateMapping.ts';
 import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
 import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
+import { templateCacheName } from './websiteTemplates.ts';
 import { EMPTY_SITE_GATE, GATE_QA_OVERRIDES, readSiteGateReport, siteGateLines, siteGateProblems, siteIntentMap, siteIntentMapLines, type SiteGateReport } from './siteGate.ts';
 
 /* ── assets to download (shared with the standalone Asset Download prompt) ──────────────────── */
@@ -229,8 +230,12 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     'LeadFinderOS config fingerprint: ' + ver + ' (quote it in your final report).',
     ...H('X1. DESTINATION — a SEPARATE client project (check before you write anything)'),
     '- Local folder: ' + path + '   Repository: ' + remote + '   Branch: main',
-    ...(t ? ['- The template ' + t.name + ' lives at ' + t.sourceRepoUrl + '. It is READ-ONLY: clone it to ' + winPath(path.replace(/\\[^\\]+$/, '')) + '\\_templates\\' + t.id + ' (or "git pull --ff-only" there), then copy it into the client folder WITHOUT its .git folder. Never commit, push or open a branch in the template repository.'] : []),
-    ...(t ? ['- ⛔ INHERITED HAZARDS — the template repository is a finished client site, not a clean kit. Before building, check and fix in the CLIENT copy: public/_headers must send X-Robots-Tag noindex ONLY for https://:project.pages.dev/* and https://:branch.:project.pages.dev/* (a "/*" noindex rule would hide the production site from search); remove any AggregateRating / Review structured data; and rewrite any service or location pages that share their wording (the gate fails near-duplicates). The site quality gate (X9b) fails all three.'] : []),
+    ...(t ? [
+      '- The template ' + t.name + ' v' + t.version + ' lives at ' + t.sourceRepoUrl + ', PINNED to commit ' + t.sourcePinnedCommit + '. It is READ-ONLY: clone it to ' + winPath(path.replace(/\\[^\\]+$/, '')) + '\\_templates\\' + templateCacheName(t) + ' (or "git fetch origin" there), run "git checkout --detach ' + t.sourcePinnedCommit + '" — never the moving branch — then copy it into the client folder WITHOUT its .git folder. Never commit, push or open a branch in the template repository.',
+      ...(t.sourceKind === 'live_client_repo' ? ['- ⛔ This template is a LIVE CLIENT\'S SITE (' + t.sourceClient + '), not a clean kit. Nothing of theirs may reach this build: no fact, review, price, photo, logo, script key, legacy URL or record. Copy the STRUCTURE (layouts, components, design tokens, schema and check scripts), never the content.'] : []),
+      '- ⛔ INHERITED HAZARDS — fix each in the CLIENT copy before building (the seed scrub in X4 and the site quality gate in X9b check them):',
+      ...t.inheritedHazards.map((h) => '    · ' + h),
+    ] : []),
     '- ⛔ Never write to: the template repository, the MCL / any other client\'s production repository, the Findable website repository, or LeadFinderOS.',
     '- Before the first commit run "git remote -v" in ' + path + '. It must show exactly ' + remote + '. If the folder already exists with a different remote, or its git history belongs to another project, STOP and report.',
     '- If ' + remote + ' does not exist yet: create it (private, empty) with "gh repo create" if the GitHub CLI is installed and signed in. If it is not, STOP and report the operator action: "Create an EMPTY private repository ' + (s.repo_name || MARK.repo) + ' under ' + (s.github_owner || MARK.owner) + ' at https://github.com/new, then re-run".',
