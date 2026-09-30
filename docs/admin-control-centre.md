@@ -64,6 +64,15 @@ reply is the holder's; a sale is the ledger's `sold_by_user_id`, else the lead's
 - Their activity is dropped from every performance and attribution number and tallied apart
   (`excludedActivity`). **The businesses they added are not hidden:** inventory and the funnel of leads
   added still count them.
+- **Emails mark SUBMISSIONS, never leads** (measured 2026-09-30): Paul's address sits on real
+  businesses' rows he tested the sign-up on (Go-To Plumbing, JG Electrics, Philsan, Peterborough Pro…)
+  — their WhatsApp conversations are real. So an `email` row (exact, or a whole domain written
+  `@move37.fun`) only makes a sign-up / free check / site visit internal (`isInternalEmail`). Seeded:
+  `@move37.fun`, the data account `pauljsales455@outlook.com`.
+- **Whole-lead exclusions** only on clear evidence (migration `20261001100100`): "Paul SALES" (invalid
+  phone), "White Sparks Electrical" (four test sign-ups, no phone), "4seas" and "sinners and saints"
+  (Paul's email, Thai test numbers), "richard" (internal address, no phone). Effect on the live data:
+  Needs your attention fell from 8 items to 5 — the three removed were Paul's own test sign-ups.
 - Always excluded as well: WhatsApp rows with `test_mode = true` or status `simulated`.
 - The page prints the exclusion line under the team table and at the foot of the page.
 - Nothing is deleted. To exclude a QA lead, insert a `lead` row — do not delete the lead.

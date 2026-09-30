@@ -3,7 +3,7 @@
    Run: npx tsx scripts/admin-metrics.test.ts
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { foldAdminOverview, CHANNEL_MIN_ATTEMPTS, type AdminInput, type AdminLead, type AdminMessage, type AdminActivity } from '../src/lib/adminMetrics.ts';
-import { buildExclusions, NO_EXCLUSIONS } from '../src/lib/metricExclusions.ts';
+import { buildExclusions, isInternalEmail, NO_EXCLUSIONS } from '../src/lib/metricExclusions.ts';
 import { resolvePeriod, londonMidnightMs, londonDay, inPeriod, previousPeriod, addDays, mondayOf } from '../src/lib/reportingPeriod.ts';
 import { costProviderOf, costFeatureOf } from '../src/lib/apiCostLabels.ts';
 
@@ -191,6 +191,26 @@ const row = (o: ReturnType<typeof foldAdminOverview>, u: string) => o.team.find(
   const o = foldAdminOverview(base({ leads: [a], messages: [send(a, at(1))], exclusions: buildExclusions([{ kind: 'lead', value: a.id, reason: 'QA lead' }]) }));
   ok(o.totals.whatsappSent === 0 && o.inventory.leads === 1, "an excluded lead's activity leaves the numbers; the lead stays in inventory");
   ok(NO_EXCLUSIONS.users.size === 0, 'the empty exclusion set excludes nobody');
+}
+
+/* ── 8b. An internal email marks a SUBMISSION as internal, never a whole lead ──────────────────── */
+{
+  // A real business Paul tested the sign-up on: his address on the lead AND on the sign-up row.
+  const real = lead({ assigned_to_user_id: REP, email: 'paul@move37.fun', status: 'interested' });
+  const other = lead({ status: 'interested' });
+  const ex = buildExclusions([{ kind: 'email', value: '@move37.fun', reason: 'Paul\'s domain' }]);
+  ok(isInternalEmail(ex, 'Paul@Move37.fun') && isInternalEmail(ex, 'rich@move37.fun') && !isInternalEmail(ex, 'owner@plumber.co.uk'), 'a domain exclusion matches every address on it, case-insensitively');
+  const o = foldAdminOverview(base({
+    leads: [real, other], exclusions: ex,
+    messages: [send(real, at(3)), reply(real, at(2))],
+    onboarding: [
+      { lead_id: real.id, status: 'submitted', created_at: at(3), plan_tier: 'keep', website_addon: null, contact_email: 'paul@move37.fun' },
+      { lead_id: other.id, status: 'submitted', created_at: at(3), plan_tier: 'keep', website_addon: null, contact_email: 'owner@plumber.co.uk' },
+    ],
+  }));
+  ok(row(o, REP)?.replies === 1, "the real business's WhatsApp reply still counts — the lead is not excluded by Paul's email on it");
+  ok(!o.attention.some((a) => a.leadId === real.id && a.kind === 'signup_unpaid'), "Paul's own test sign-up is never a chase item");
+  ok(o.attention.some((a) => a.leadId === other.id && a.kind === 'signup_unpaid'), "a prospect's unpaid sign-up still is");
 }
 
 /* ── 9. Cost labels ────────────────────────────────────────────────────────────────────────────── */

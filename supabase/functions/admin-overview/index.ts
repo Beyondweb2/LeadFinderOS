@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       allRows<AdminActivity & { id: string }>((a, b, c) => service.from("lead_activity").select("id, lead_id, actor_user_id, kind, data, created_at", c ? { count: "exact" } : undefined).order("id").range(a, b)),
       allRows<AdminSuppression & { id: string }>((a, b, c) => service.from("contact_suppressions").select("id, lead_id, reason, source, created_at, wrong_number_at, wrong_number_by", c ? { count: "exact" } : undefined).order("id").range(a, b)),
       service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, sold_by_user_id").order("occurred_at").limit(10000),
-      service.from("onboarding_responses").select("id, lead_id, status, created_at, plan_tier, website_addon").order("created_at").limit(5000),
+      service.from("onboarding_responses").select("id, lead_id, status, created_at, plan_tier, website_addon, contact_email").order("created_at").limit(5000),
     ]);
     for (const r of [teamRes, rolesRes, exRes, ledgerRes, onboardingRes]) if (r.error) throw new Error(r.error.message ?? String(r.error));
 

@@ -35,7 +35,7 @@ import { salesStateOf, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './le
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotals } from './commission.ts';
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
-import { isExcludedLead, isExcludedUser, isTestMessage, type Exclusions } from './metricExclusions.ts';
+import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
 import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -82,7 +82,7 @@ export interface AdminMessage {
 export interface AdminActivity { lead_id: string; actor_user_id: string | null; kind: string; data: Record<string, unknown> | null; created_at: string }
 export interface AdminSuppression { lead_id: string | null; reason: string | null; source: string | null; created_at: string; wrong_number_at: string | null; wrong_number_by: string | null }
 export interface AdminLedgerRow { id: string; lead_id: string | null; kind: string; status: string; amount_gbp: number; occurred_at: string; sold_by_user_id: string | null }
-export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null }
+export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null }
 /** api_usage_log, already summed per (user, function, type) for one period by SQL admin_api_cost(). */
 export interface CostRow { user_id: string | null; function_name: string | null; api_type: string | null; usd: number; calls: number }
 export interface Person { userId: string; name: string; role: string | null; excluded: boolean }
@@ -683,7 +683,8 @@ function attentionItems(input: AdminInput, facts: LeadFacts[], ledger: AdminLedg
   for (const o of input.onboarding) { if (!o.lead_id) continue; const prev = newestSignup.get(o.lead_id); if (!prev || ms(o.created_at) > ms(prev.created_at)) newestSignup.set(o.lead_id, o); }
   for (const [leadId, o] of newestSignup) {
     const l = leadById.get(leadId); if (!l || l.is_archived || isPaidLead(l) || DEAD_STATUSES.has(String(l.status)) || o.status === 'paid') continue;
-    if (isExcludedLead(input.exclusions, l)) continue;
+    // A sign-up Paul (or the team) filled in to test the flow is not a prospect waiting to pay.
+    if (isExcludedLead(input.exclusions, l) || isInternalEmail(input.exclusions, o.contact_email)) continue;
     const d = Math.floor((nowMs - ms(o.created_at)) / 86_400_000);
     if (d < SIGNUP_CHASE_DAYS) continue;
     out.push({ key: `signup:${leadId}`, group: 'today', kind: 'signup_unpaid', leadId, business: l.business_name ?? 'Lead',

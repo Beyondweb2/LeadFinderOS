@@ -6,6 +6,7 @@ import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { AttentionGroup, AttentionItem, Cohort, TeamRow, Totals } from '@/lib/adminMetrics';
 import { CALL_OUTCOME_COLUMNS } from '@/lib/adminMetrics';
 import { SERVICE_ROUTE_NAME } from '@/lib/findableOffer';
+import { CONTACT_LOG_START } from '@/lib/salesPerformance';
 
 /* ══ THE ADMIN CONTROL CENTRE'S SECTIONS (2026-09-30, docs/admin-control-centre.md) ════════════════
    Presentational only: every number arrives folded from fn admin-overview. Nothing here computes a
@@ -188,7 +189,7 @@ export function TeamComparison({ o }: { o: O }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">{o.exclusionNote} A queue send is credited to whoever holds the lead; a reply to whoever holds it when it arrives. Calls are logged outcomes only.</p>
+      <p className="mt-3 text-[11px] text-muted-foreground">{o.exclusionNote} A queue send is credited to whoever holds the lead; a reply to whoever holds it when it arrives. Calls are logged outcomes only. Interested, meetings and logged contacts are dated only from {CONTACT_LOG_START}, when logging began — earlier interest shows in the funnel and the cohort rates, never in a period count.</p>
     </Panel>
   );
 }

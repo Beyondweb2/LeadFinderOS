@@ -44,14 +44,27 @@ export const NO_EXCLUSIONS: Exclusions = buildExclusions([]);
 /** Is this person's activity internal/test? A null actor is automation — never excluded by identity. */
 export const isExcludedUser = (ex: Exclusions, userId: string | null | undefined): boolean => !!userId && ex.users.has(userId);
 
-/** Is this lead a test lead (by id, phone or email)? The lead still exists — this only keeps its
- *  activity out of performance numbers. */
-export function isExcludedLead(ex: Exclusions, lead: { id: string; phone?: string | null; email?: string | null }): boolean {
+/** Is this lead a test lead (by id or phone)? The lead still exists — this only keeps its activity out
+ *  of performance numbers.
+ *  ⛔ NOT BY EMAIL (measured 2026-09-30): Paul's own address sits on REAL businesses' lead rows (Go-To
+ *  Plumbing, JG Electrics, Philsan…) because he filled their sign-up while testing the flow — their
+ *  WhatsApp conversations are real. An internal email marks a SUBMISSION as internal (isInternalEmail),
+ *  never a whole lead. */
+export function isExcludedLead(ex: Exclusions, lead: { id: string; phone?: string | null }): boolean {
   if (ex.leads.has(lead.id)) return true;
   const p = phoneKey(lead.phone);
-  if (p && ex.phones.has(p)) return true;
-  const e = String(lead.email ?? '').trim().toLowerCase();
-  return !!e && ex.emails.has(e);
+  return !!p && ex.phones.has(p);
+}
+
+/** Is this address internal (Paul / the team / a test)? An exclusion value starting with "@" is a whole
+ *  domain ("@move37.fun"); anything else is one exact address. Used for sign-up / free-check
+ *  submissions and site analytics — the places where "who filled this in" is the question. */
+export function isInternalEmail(ex: Exclusions, email: string | null | undefined): boolean {
+  const e = String(email ?? '').trim().toLowerCase();
+  if (!e) return false;
+  if (ex.emails.has(e)) return true;
+  const at = e.lastIndexOf('@');
+  return at > 0 && ex.emails.has(e.slice(at));
 }
 
 /** Was this WhatsApp row a real message from a real person? test_mode / simulated rows never were. */
@@ -64,8 +77,9 @@ export function exclusionNote(ex: Exclusions, teamNames: Map<string, string>): s
   const users = [...ex.users].map((u) => teamNames.get(u) ?? 'a test account');
   const parts: string[] = [];
   if (users.length) parts.push(`${users.length} test account${users.length === 1 ? '' : 's'} (${users.join(', ')})`);
-  const other = ex.leads.size + ex.phones.size + ex.emails.size;
-  if (other) parts.push(`${other} test lead${other === 1 ? '' : 's'}/number${other === 1 ? '' : 's'}`);
+  const other = ex.leads.size + ex.phones.size;
+  if (other) parts.push(`${other} test lead${other === 1 ? '' : 's'}`);
+  if (ex.emails.size) parts.push('sign-ups made with internal email addresses');
   parts.push('test-mode messages');
   return `Internal/test activity excluded: ${parts.join(', ')}.`;
 }
