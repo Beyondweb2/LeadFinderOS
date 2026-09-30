@@ -19,7 +19,10 @@ console.log('── separate from the guarantee ──');
   const row = { audit_purpose: WEEKLY_CHECK_AUDIT_PURPOSE, baseline_target_runs: 1 };
   ok(auditKind(row) === 'weekly_check', "'weekly_check' is its own kind");
   ok(!['baseline', 'measurement', 'remeasure'].includes(WEEKLY_CHECK_AUDIT_PURPOSE), 'the pointer triggers (baseline / measurement / remeasure, read live) can never claim it');
-  ok(isInternalMeasurement(row), 'it is internal — no client report is served for it');
+  ok(isInternalMeasurement(row), 'it is internal to the operator app');
+  const renderer = read('supabase/functions/render-audit-report/index.ts');
+  ok(/audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE\) \{\s*console\.log\(`\[render-audit-report\] REFUSED weekly check/.test(renderer),
+    'the public renderer refuses it explicitly (measurement audits are served publicly since 15634d49, so nothing is inherited)');
   ok(!isClientBaseline(row), 'it is never the client baseline');
   ok(!seoScanAllowed(WEEKLY_CHECK_AUDIT_PURPOSE), 'it buys no SEO scan');
   ok(!freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE).send && !freeCheckSendGate(WEEKLY_CHECK_AUDIT_PURPOSE, { forced: true }).send, 'nothing is ever sent for it, even forced');

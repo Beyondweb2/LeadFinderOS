@@ -697,7 +697,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   Client safety is an explicit COLUMN ALLOWLIST, not a remembered omission (`docs/welcome-pack-and-
   website-build.md`).
 - **Every report renders live** from `render-audit-report` at `findable.live/report/<auditId>`.
-  Internal measurements (`isInternalMeasurement`) answer **403**; the per-question pages are
+  ⚠️ Measurement audits ARE served as client reports since 15634d49 (Paul, 2026-09-18) — the old
+  "internal measurements answer 403" rule is gone. Refused: market audits and the **weekly check**
+  (`audit_purpose = 'weekly_check'`, explicit in the renderer); the per-question pages are
   operator-only; a mid-flight audit shows "still measuring" (`measuringState`), never a partial count;
   `hasWebsite` is tri-state from the lead's `website`/`place_id` — false is never inferred from blank.
 - **Operator copy contains competitors — never send it.** (The client request form and its structural
