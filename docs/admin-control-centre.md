@@ -230,6 +230,43 @@ per-question result and the rivals named (internal — never on a client surface
 findable-onboarding, paid-baseline, paid-client-hub, process-ai-audit-queue, render-audit-report,
 render-remeasure-results, render-welcome-pack, stripe-webhook, submissions.
 
+## Feature usage (release 5)
+
+Counted from what each feature already records — SQL `admin_feature_usage(from, to)` sums a UNION of
+the real rows (audits by purpose, Find Leads searches, leads added, logged contacts, Next Actions, Find
+email, socials a PERSON found — the 2026-09-30 backfill has no actor and is excluded, Paid Enrich
+charges, voice-note scripts, AI reply drafts, Quick Close events, Niche Checks, directory runs,
+backlog items, report / sign-up links sent, prospect previews, generated pages, mockups, replies
+marked handled). Four features wrote nothing, so they log ONE useful action (table `feature_events`,
+RPC `log_feature_event`, `src/lib/featureUsage.ts`; at most one per person/feature/lead/London day):
+the call script SHOWN for a lead, a LinkedIn / email script COPIED (`ColdCallPlaybook.tsx`), Focus Mode
+opened (`Focus.tsx`). Never a click count, time on page or quota. Flags (`adminIntelligence.ts`):
+unused; dropped sharply (≤ 50% of the previous period, from ≥ 10); costly for its use ($5+ on ≤ 5
+uses); "tracking began 30 Sep" for the four new ones (not judged). Both "costly" and "unused" also
+feed the bottleneck list.
+
+## Findable site traffic (release 5)
+
+Paul's decision: first-party, cookie-free, no names, no raw IP, no fingerprinting, admin/test
+excluded, meaningful events only, landing page / referrer / UTM.
+
+- findable-site `src/lib/analytics.ts` (+ `BaseLayout.astro` visit, `FreeCheck.tsx` first focus,
+  `OnboardingFlow.tsx` open + checkout redirect) → LeadFinderOS fn `site-analytics` (public,
+  `verify_jwt = false`, origin allowlist, 4 events, fields capped, bots dropped, ≤ 60 events per
+  session-hour, always 204) → table `site_analytics_events`.
+- A row: event, a RANDOM per-tab session id (sessionStorage — gone with the tab), path, referring HOST
+  only, UTM tags, mobile/tablet/desktop from window width, internal flag. Never IP, user agent, name
+  or email. Nothing is sent under Do Not Track / Global Privacy Control or on `?preview=1`.
+- Internal: referrer from LeadFinderOS, or a browser marked once with `https://findable.live/?internal=1`
+  (clear with `?internal=0`); stored flagged and counted apart. Submissions with internal emails are
+  excluded server-side.
+- The funnel (SQL `admin_site_funnel`): visitors (sessions) → started the free check (browser) →
+  submitted it (`onboarding_responses`) → its audit finished (`ai_audits` free_check, a completed run)
+  → opened onboarding (browser) → sign-up forms filled → reached checkout (`checkout_session_created`
+  server rows) → paid (ledger); plus checkout refusals, landing pages, referrers, campaigns, top pages.
+  Browser steps say "not tracked yet" until the first event exists — never a zero that means "unknown".
+- The privacy page's "Cookies and tracking" section lists exactly these fields.
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |

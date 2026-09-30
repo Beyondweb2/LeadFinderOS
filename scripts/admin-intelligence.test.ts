@@ -2,7 +2,7 @@
    SALES INTELLIGENCE (release 3) — templates, niches, bottlenecks: factual, sampled, never a score.
    Run: npx tsx scripts/admin-intelligence.test.ts
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { foldTemplates, foldNiches, findBottlenecks, nicheOf, TEMPLATE_MIN_LEADS, NICHE_MIN_MESSAGED, BOTTLENECK_THRESHOLDS, type IntelFact, type IntelMessage } from '../src/lib/adminIntelligence.ts';
+import { foldTemplates, foldNiches, findBottlenecks, foldFeatureUsage, nicheOf, TEMPLATE_MIN_LEADS, NICHE_MIN_MESSAGED, BOTTLENECK_THRESHOLDS, type IntelFact, type IntelMessage } from '../src/lib/adminIntelligence.ts';
 import { resolvePeriod } from '../src/lib/reportingPeriod.ts';
 
 let fails = 0;
@@ -74,6 +74,25 @@ console.log('\n── bottlenecks ──');
   ok(s('interested_no_next_action').status === 'flag' && /4 leads/.test(s('interested_no_next_action').evidence), 'interested with no next step says how many');
   ok(b.every((x) => x.evidence.length > 10), 'every check carries the numbers it used');
   ok(!b.some((x) => /score/i.test(x.title + x.evidence)), 'no scores anywhere');
+}
+
+console.log('\n── feature usage ──');
+{
+  const T = 'test-user', P = 'paul';
+  const now = [
+    { feature: 'hook_audit', user_id: null, uses: 3 }, { feature: 'voice_note', user_id: P, uses: 2 }, { feature: 'voice_note', user_id: T, uses: 9 },
+    { feature: 'niche_check', user_id: P, uses: 1 }, { feature: 'call_script', user_id: P, uses: 4 },
+  ];
+  const previous = [{ feature: 'hook_audit', user_id: null, uses: 40 }, { feature: 'voice_note', user_id: P, uses: 2 }];
+  const f = foldFeatureUsage({ now, previous, costByFeature: [{ key: 'Niche Check', usd: 7 }], nameOf: (u) => (u === P ? 'Paul' : 'x'), isExcludedUser: (u) => u === T, periodFromDay: '2026-09-01' });
+  const row = (k: string) => f.find((r) => r.key === k)!;
+  ok(row('voice_note').uses === 2 && row('voice_note').people.some((p) => p.name === 'Internal/test' && p.uses === 9), "a test account's uses are shown apart, never in the total");
+  ok(row('hook_audit').flags.includes('dropped'), '3 uses after 40 → dropped sharply');
+  ok(row('niche_check').flags.includes('costly_low_use'), '$7 on 1 use → costly for its use');
+  ok(row('call_script').flags.includes('new_tracking') && !row('call_script').flags.includes('unused'), 'a newly tracked feature is labelled as new tracking, not judged');
+  ok(row('discovery').uses === 0 && row('discovery').flags.includes('unused'), 'a tracked feature with no use is flagged unused');
+  const b = findBottlenecks({ contacted: 0, replied: 0, interested: 0, meetings: 0, sales: 0, signupStarts: 0, signupsPaid: 0, apiUsd: 0, revenue: 0, interestedWithoutNextAction: 0, deadTemplates: [], periodLabel: '30 days', costlyFeatures: null, unusedFeatures: null });
+  ok(b.find((x) => x.key === 'costly_low_use')?.status === 'not_enough_data', 'usage unreadable → the cost check says so, never "fine"');
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');

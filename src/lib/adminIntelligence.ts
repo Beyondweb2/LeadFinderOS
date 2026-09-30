@@ -205,6 +205,75 @@ export function foldNiches(input: { period: ReportingPeriod; facts: IntelFact[];
   return { rows, bookReplyRate: book };
 }
 
+/* ── Feature usage (release 5) ─────────────────────────────────────────────────────────────────────
+   Counted from the rows each feature already writes (SQL admin_feature_usage); four features that write
+   nothing log one USEFUL action (featureUsage.ts). No clicks, no time-on-page, no quotas. */
+
+export interface UsageRow { feature: string; user_id: string | null; uses: number }
+/** key → what Paul calls it, and the cost-ledger feature label it spends under (apiCostLabels.ts). */
+export const FEATURES: readonly { key: string; label: string; cost?: string; trackedSince?: string }[] = [
+  { key: 'lead_search', label: 'Find Leads search', cost: 'Find Leads search' },
+  { key: 'leads_added', label: 'Leads added to the CRM' },
+  { key: 'hook_audit', label: 'Hook Audit', cost: 'AI visibility audits' },
+  { key: 'discovery', label: 'Discovery' },
+  { key: 'paid_baseline', label: 'Paid baseline' },
+  { key: 'weekly_check', label: 'Weekly visibility check' },
+  { key: 'find_socials', label: 'Find socials', cost: 'Find socials' },
+  { key: 'paid_enrich', label: 'Paid Enrich', cost: 'Paid Enrich' },
+  { key: 'find_email', label: 'Find email', cost: 'Find email' },
+  { key: 'voice_note', label: 'Voice-note script', cost: 'Voice-note scripts' },
+  { key: 'reply_draft', label: 'AI reply draft', cost: 'Reply drafts & research' },
+  { key: 'call_script', label: 'Call script', trackedSince: '2026-09-30' },
+  { key: 'linkedin_script', label: 'LinkedIn script (copied)', trackedSince: '2026-09-30' },
+  { key: 'email_script', label: 'Email script (copied)', trackedSince: '2026-09-30' },
+  { key: 'focus_mode', label: 'Focus Mode', trackedSince: '2026-09-30' },
+  { key: 'log_contact', label: 'Log Contact' },
+  { key: 'next_action', label: 'Next Action set' },
+  { key: 'quick_close', label: 'Quick Close' },
+  { key: 'report_link', label: 'Report link sent' },
+  { key: 'signup_link', label: 'Sign-up link sent' },
+  { key: 'niche_check', label: 'Niche Check', cost: 'Niche Check' },
+  { key: 'directories', label: 'Directories check' },
+  { key: 'opportunity_backlog', label: 'Opportunity Backlog item' },
+  { key: 'prospect_preview', label: 'Prospect preview' },
+  { key: 'page_generator', label: 'Page generator', cost: 'Page generator' },
+  { key: 'mockups', label: 'Website mockups' },
+  { key: 'reply_handled', label: 'Reply marked handled (admin)' },
+];
+/** "Dropped sharply" = this period at or under this share of the previous one, from at least MIN uses. */
+export const USAGE_DROP_SHARE = 0.5;
+export const USAGE_DROP_MIN_PREVIOUS = 10;
+/** "Costly for its use" = at least this much spend (USD) on at most this many uses in the period. */
+export const USAGE_COSTLY_USD = 5;
+export const USAGE_COSTLY_MAX_USES = 5;
+
+export type UsageFlag = 'unused' | 'dropped' | 'costly_low_use' | 'new_tracking';
+export interface FeatureRow { key: string; label: string; uses: number; previous: number | null; people: { name: string; uses: number }[]; costUsd: number | null; flags: UsageFlag[]; trackedSince: string | null }
+
+export function foldFeatureUsage(x: {
+  now: UsageRow[]; previous: UsageRow[] | null;
+  costByFeature: { key: string; usd: number }[];
+  nameOf: (u: string | null) => string;
+  isExcludedUser: (u: string | null) => boolean;
+  periodFromDay: string | null;
+}): FeatureRow[] {
+  const sum = (rows: UsageRow[], f: string) => rows.filter((r) => r.feature === f && !x.isExcludedUser(r.user_id)).reduce((s, r) => s + Number(r.uses || 0), 0);
+  return FEATURES.map((f) => {
+    const uses = sum(x.now, f.key);
+    const previous = x.previous ? sum(x.previous, f.key) : null;
+    const byPerson = new Map<string, number>();
+    for (const r of x.now) if (r.feature === f.key) { const n = x.isExcludedUser(r.user_id) ? 'Internal/test' : r.user_id ? x.nameOf(r.user_id) : 'Automation'; byPerson.set(n, (byPerson.get(n) ?? 0) + Number(r.uses || 0)); }
+    const costUsd = f.cost ? (x.costByFeature.find((c) => c.key === f.cost)?.usd ?? 0) : null;
+    const flags: UsageFlag[] = [];
+    const newTracking = !!f.trackedSince && (!x.periodFromDay || x.periodFromDay < f.trackedSince);
+    if (newTracking) flags.push('new_tracking');
+    if (uses === 0 && !newTracking) flags.push('unused');
+    if (previous !== null && previous >= USAGE_DROP_MIN_PREVIOUS && uses <= previous * USAGE_DROP_SHARE) flags.push('dropped');
+    if (costUsd !== null && costUsd >= USAGE_COSTLY_USD && uses <= USAGE_COSTLY_MAX_USES) flags.push('costly_low_use');
+    return { key: f.key, label: f.label, uses, previous, people: [...byPerson].map(([name, n]) => ({ name, uses: n })).sort((a, b) => b.uses - a.uses), costUsd, flags, trackedSince: f.trackedSince ?? null };
+  });
+}
+
 /* ── Bottlenecks: deterministic, each with the numbers it used ─────────────────────────────────── */
 
 export const BOTTLENECK_THRESHOLDS = {
@@ -224,6 +293,9 @@ export function findBottlenecks(x: {
   interestedWithoutNextAction: number;
   deadTemplates: string[];
   periodLabel: string;
+  /** Release 5 — null when usage could not be read (the checks then say not enough data). */
+  costlyFeatures?: string[] | null;
+  unusedFeatures?: string[] | null;
 }): Bottleneck[] {
   const T = BOTTLENECK_THRESHOLDS;
   const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '—');
@@ -246,5 +318,11 @@ export function findBottlenecks(x: {
     `${x.interestedWithoutNextAction} lead${x.interestedWithoutNextAction === 1 ? ' is' : 's are'} interested now with no Next Action set`);
   check('dead_templates', 'Templates sent a lot with no replies', 'A message that is not landing', true, x.deadTemplates.length > 0,
     x.deadTemplates.length ? `${x.deadTemplates.join(', ')} — ${T.templateDeadSends}+ leads sent, 0 replies` : `No template has ${T.templateDeadSends}+ leads sent with 0 replies`);
+  const costly = x.costlyFeatures ?? null;
+  check('costly_low_use', 'Expensive feature, little use', 'A cost without the use to justify it', costly !== null, !!costly?.length,
+    costly === null ? 'Feature usage could not be read' : costly.length ? costly.join('; ') : `No feature spent $${USAGE_COSTLY_USD}+ on ${USAGE_COSTLY_MAX_USES} or fewer uses`);
+  const unused = x.unusedFeatures ?? null;
+  check('unused_features', 'Features nobody used', 'Unneeded complexity, or nobody knows it is there', unused !== null, !!unused?.length,
+    unused === null ? 'Feature usage could not be read' : unused.length ? `${unused.join(', ')} — no use in ${x.periodLabel.toLowerCase()}` : 'Every tracked feature was used');
   return out;
 }

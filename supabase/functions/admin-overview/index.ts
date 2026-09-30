@@ -7,8 +7,9 @@ import {
 } from "../../../src/lib/adminMetrics.ts";
 import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
 import type { ClientExtras } from "../../../src/lib/clientHealth.ts";
+import type { UsageRow } from "../../../src/lib/adminIntelligence.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
-import { londonDay, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
+import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { UNRECORDED_SPEND, USD_TO_GBP_ESTIMATE } from "../../../src/lib/apiCostLabels.ts";
 
 // admin-overview — the Admin control centre's numbers (2026-09-30, docs/admin-control-centre.md).
@@ -29,7 +30,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30e";
+const BUILD_ID = "admin-overview-2026-09-30f";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -145,6 +146,29 @@ Deno.serve(async (req) => {
       } else clientExtras = { sets: [], runs: [], opportunities: [], directoryIssues: [] };
     } catch (err) { console.error("[admin-overview] client extras", err instanceof Error ? err.message : err); clientExtras = null; }
 
+    /* Release 5 — feature uses in the period and the same length before it (SQL admin_feature_usage).
+       Unreadable → null (the panel says so; never "nothing was used"). */
+    let usage: { now: UsageRow[]; previous: UsageRow[] | null } | null = null;
+    try {
+      const call = async (p: ReportingPeriod) => {
+        const { data, error } = await service.rpc("admin_feature_usage", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString() });
+        if (error) throw new Error(error.message);
+        return ((data ?? []) as UsageRow[]).map((r) => ({ ...r, uses: Number(r.uses) || 0 }));
+      };
+      const prev = previousPeriod(period, nowMs);
+      const [now, before] = await Promise.all([call(period), prev ? call(prev) : Promise.resolve(null)]);
+      usage = { now, previous: before };
+    } catch (err) { console.error("[admin-overview] usage", err instanceof Error ? err.message : err); usage = null; }
+
+    /* Release 5 — the Findable funnel (first-party site events + the server's own facts), summed in
+       SQL admin_site_funnel. Unreadable → null (the panel says so). */
+    let site: Record<string, unknown> | null = null;
+    {
+      const { data, error } = await service.rpc("admin_site_funnel", { _from: period.fromMs === null ? null : new Date(period.fromMs).toISOString(), _to: new Date(period.toMs).toISOString() });
+      if (!error && data && typeof data === "object") site = data as Record<string, unknown>;
+      else if (error) console.error("[admin-overview] site funnel", error.message);
+    }
+
     /* Background jobs: last run, status, error (admin_job_runs). Unreadable → null, shown as unknown. */
     let jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null = null;
     {
@@ -163,7 +187,7 @@ Deno.serve(async (req) => {
       onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
       commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
       cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-      triage, clientExtras,
+      triage, clientExtras, usage,
     });
 
     return json({
@@ -172,7 +196,7 @@ Deno.serve(async (req) => {
       exclusions: exclusions.rows.map((r) => ({ kind: r.kind, reason: r.reason })),
       costNotes: { unrecorded: UNRECORDED_SPEND, usdToGbp: USD_TO_GBP_ESTIMATE },
       commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
-      jobs,
+      jobs, site,
       generatedAt: new Date(nowMs).toISOString(), ms: Date.now() - started,
     });
   } catch (e) {
