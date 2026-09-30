@@ -37,6 +37,7 @@ import { computeMapping, type Mapping } from './templateMapping.ts';
 import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
 import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
+import { EMPTY_SITE_GATE, GATE_QA_OVERRIDES, readSiteGateReport, siteGateLines, siteGateProblems, siteIntentMap, siteIntentMapLines, type SiteGateReport } from './siteGate.ts';
 
 /* ── assets to download (shared with the standalone Asset Download prompt) ──────────────────── */
 
@@ -126,6 +127,8 @@ export const BUILD_RESULT_SCHEMA_LINES: string[] = [
   '  "qa": { "buildPassed": true, "seedContaminationPassed": true, "linksPassed": true, "responsivePassed": true, "schemaPassed": true },',
   '  "quality": {',
   '    "oldVsNew": { "verdict": "upgrade", "widths": [1440, 390], "stillStronger": [], "notes": "" },',
+  '    "siteGate": { "siteGateVersion": 1, "…": "the WHOLE of qa/site-gate.json, unedited" },',
+  '    "siteGatePreview": { "siteGateVersion": 1, "…": "the WHOLE of qa/site-gate-preview.json, unedited" },',
   STANDARD_RESULT_SCHEMA_LINE,
   '  },',
   '  "seedHits": [],',
@@ -146,6 +149,8 @@ export const BUILD_RESULT_RULES: string[] = [
   '  status may be "preview_ready" only with verdict "upgrade" and an empty stillStronger (no old site: leave verdict "").',
   ...STANDARD_RESULT_RULES,
   '  status may be "preview_ready" only when quality.standard meets X5c (LeadFinderOS re-checks it and says why not).',
+  '- quality.siteGate / quality.siteGatePreview: the gate\'s own JSON files, pasted whole. status may be "preview_ready" only when both',
+  '  passed. LeadFinderOS reads the gate over your qa values: a failed gate check makes the matching qa value false and is an error.',
 ];
 
 /* ── blockers ─────────────────────────────────────────────────────────────────────────────────── */
@@ -225,6 +230,7 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     ...H('X1. DESTINATION — a SEPARATE client project (check before you write anything)'),
     '- Local folder: ' + path + '   Repository: ' + remote + '   Branch: main',
     ...(t ? ['- The template ' + t.name + ' lives at ' + t.sourceRepoUrl + '. It is READ-ONLY: clone it to ' + winPath(path.replace(/\\[^\\]+$/, '')) + '\\_templates\\' + t.id + ' (or "git pull --ff-only" there), then copy it into the client folder WITHOUT its .git folder. Never commit, push or open a branch in the template repository.'] : []),
+    ...(t ? ['- ⛔ INHERITED HAZARDS — the template repository is a finished client site, not a clean kit. Before building, check and fix in the CLIENT copy: public/_headers must send X-Robots-Tag noindex ONLY for https://:project.pages.dev/* and https://:branch.:project.pages.dev/* (a "/*" noindex rule would hide the production site from search); remove any AggregateRating / Review structured data; and rewrite any service or location pages that share their wording (the gate fails near-duplicates). The site quality gate (X9b) fails all three.'] : []),
     '- ⛔ Never write to: the template repository, the MCL / any other client\'s production repository, the Findable website repository, or LeadFinderOS.',
     '- Before the first commit run "git remote -v" in ' + path + '. It must show exactly ' + remote + '. If the folder already exists with a different remote, or its git history belongs to another project, STOP and report.',
     '- If ' + remote + ' does not exist yet: create it (private, empty) with "gh repo create" if the GitHub CLI is installed and signed in. If it is not, STOP and report the operator action: "Create an EMPTY private repository ' + (s.repo_name || MARK.repo) + ' under ' + (s.github_owner || MARK.owner) + ' at https://github.com/new, then re-run".',
@@ -282,8 +288,13 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- No form (phone / WhatsApp / email only) is allowed only when the old site had no working form. Never a mailto or text/plain post dressed as a form.',
     ...H('X6. SEO / AI VISIBILITY'),
     '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
-    '- Clear internal linking; BreadcrumbList where the template has breadcrumbs; Organization / LocalBusiness schema from the config (service relationships only for built service pages); entity and contact details identical everywhere.',
-    '- Do NOT add: llms.txt, hidden AI text, prompt pages, fake citations, review / rating schema, mass FAQs, schema stuffing.',
+    '- Titles and meta descriptions: unique per page, specific (service · place · business), about 60 / 155 characters, never stuffed. Exactly ONE H1 per page naming what the page is for; headings in order (H2 then H3, no skipped level).',
+    '- Internal links (by need, never a link farm): home → every service page (or the services hub) and the areas hub; services hub → each service; each service page → the areas it genuinely serves (and those location pages) + contact; each location page → the services offered there + contact; breadcrumbs on every page below home; no orphan, nothing deeper than three clicks; link to final URLs (trailing slash), never to a redirect.',
+    '- Structured data (JSON-LD, only verified facts, matching what the page shows): ONE business entity with a stable @id of https://' + s.canonical_domain + '/#business, typed with the schema.org trade SUBTYPE where one exists (Electrician, Locksmith, Plumber, HVACBusiness, RoofingContractor, AccountingService …; plain LocalBusiness only when none fits), with name, url, telephone, email, address (only if customers visit / it is public) and areaServed; sameAs only for verified profiles. Every other page refers to it by @id — never a second business. A BreadcrumbList on every page below home. Service nodes only for BUILT service pages, with provider → the business @id and areaServed where genuine.',
+    '- Entity and contact details identical everywhere — page copy, header, footer, tel: / mailto: links and schema.',
+    '- Do NOT add: llms.txt, hidden AI text, prompt pages, fake citations, review / rating schema (show genuine reviews as visible content only — never AggregateRating / Review markup), mass FAQs or FAQ schema on every page, schema stuffing.',
+    ...H('X6b. SITE INTENT MAP — which page owns which intent'),
+    ...siteIntentMapLines(siteIntentMap(i, m), i),
     ...H('X7. GITHUB'),
     '- Commit the initial client build ("Initial ' + (i.businessName || 'client') + ' build' + (t ? ' from ' + t.name + ' v' + t.version : '') + '"), push main to ' + remote + ', record the commit hash.',
     '- Safe git only: never force push, reset, rebase, amend or clean.',
@@ -300,6 +311,8 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '- BUILD STANDARD (X5c): at 390 and 375 check the hero is one first screen (photo behind the copy, readable, call button visible), the areas map labels are legible, reviews and credentials are visible, tap targets are 44px+ and the form works; then fill quality.standard with what you BUILT.',
     ...(i.existingSiteUrl ? ['- The OLD site for the comparison: ' + i.existingSiteUrl + ' (read-only — never submit its forms).'] : []),
     '- Targeted checks on the built client site only — do not run large unrelated test suites.',
+    ...H('X9b. THE FINDABLE SITE QUALITY GATE — the automated check LeadFinderOS trusts over your own'),
+    ...siteGateLines(cfg.outputDir, s.canonical_domain, stablePreviewUrl(s)),
     ...H('X10. OLD URL COVERAGE — on the REAL build'),
     ...(sourcePaths.length ? [
       'For each source path below, check the BUILT site: it exists (KEPT), public/_redirects sends it with ONE 301 to a page that exists (REDIRECTED), it is deliberately gone (RETIRED), or nothing (UNRESOLVED). Flag: a redirect target that does not exist, chains, loops, redirects to an unrelated page, and important pages nothing links to.',
@@ -329,6 +342,9 @@ export interface BuildResult {
   upgrade: UpgradeReview;
   /** The build standard (quality.standard). Optional in the contract: an old result reads as not reported. */
   standard: StandardReport;
+  /** The site quality gate on the build output (quality.siteGate) and on the preview (quality.siteGatePreview). */
+  siteGate: SiteGateReport;
+  siteGatePreview: SiteGateReport;
 }
 export interface BuildResultSummary { dropped: string[]; ignoredKeys: string[]; notes: string[] }
 export type BuildResultParse = { ok: true; result: BuildResult; summary: BuildResultSummary } | { ok: false; error: string };
@@ -378,6 +394,8 @@ export function parseBuildResult(input: string): BuildResultParse {
     qa, seedHits: list(o.seedHits, 100, 300, 'seed hit(s)'), warnings: list(o.warnings, 100, 500, 'warning(s)'), errors: list(o.errors, 100, 500, 'error(s)'),
     upgrade: isObj(o.quality) && isObj(o.quality.oldVsNew) ? readUpgradeReview(o.quality.oldVsNew) : EMPTY_UPGRADE,
     standard: isObj(o.quality) && isObj(o.quality.standard) ? readStandardReport(o.quality.standard) : EMPTY_STANDARD,
+    siteGate: isObj(o.quality) ? readSiteGateReport(o.quality.siteGate) : EMPTY_SITE_GATE,
+    siteGatePreview: isObj(o.quality) ? readSiteGateReport(o.quality.siteGatePreview) : EMPTY_SITE_GATE,
   };
   const rawVerdict = isObj(o.quality) && isObj(o.quality.oldVsNew) ? clean(o.quality.oldVsNew.verdict, 30) : '';
   if (rawVerdict && !(UPGRADE_VERDICTS as readonly string[]).includes(rawVerdict)) dropped.push('quality.oldVsNew.verdict "' + rawVerdict + '" is not upgrade / not_upgrade');
@@ -411,6 +429,27 @@ export function projectConflicts(s: WebsiteBuildState, r: BuildResult): ProjectC
 }
 
 /**
+ * The site quality gate's verdict, applied to an imported result: its problems become ERRORS (so the
+ * existing gate — previewGateProblems — refuses Preview Ready), a failed gate check turns the matching
+ * self-reported qa value false, and its warnings are carried. Stored in the existing errors / warnings /
+ * qa keys, so the saved shape (paid-client-hub's allowlist) does not change.
+ * ⛔ A result claiming preview_ready / needs_attention with NO gate report is an error: not run ≠ passed.
+ */
+export function siteGateResult(s: WebsiteBuildState, r: BuildResult): { errors: string[]; warnings: string[]; qa: BuildResult['qa'] } {
+  const qa = { ...r.qa };
+  if (r.status === 'failed') return { errors: [], warnings: [], qa };
+  const deployed = r.status === 'preview_ready' || r.status === 'needs_attention';
+  const errors = [
+    ...(deployed || r.siteGate.reported ? siteGateProblems(r.siteGate, s.canonical_domain) : []),
+    ...(r.status === 'preview_ready' || r.siteGatePreview.reported ? siteGateProblems(r.siteGatePreview, s.canonical_domain, { preview: true }) : []),
+  ];
+  for (const rep of [r.siteGate, r.siteGatePreview]) for (const c of rep.checks) if (c.level === 'fail' && GATE_QA_OVERRIDES[c.id]) qa[GATE_QA_OVERRIDES[c.id]] = false;
+  const warned = [...r.siteGate.checks, ...r.siteGatePreview.checks].filter((c) => c.level === 'warn');
+  const warnings = warned.length ? ['Site gate warnings to read: ' + [...new Set(warned.map((c) => c.label))].join('; ')] : [];
+  return { errors, warnings, qa };
+}
+
+/**
  * Merge a parsed build result. Pure. Facts, mapping, route, page plan, redirects and QA ticks are
  * untouched. Empty project fields are filled; a CONFLICTING value is kept unless acceptConflicts.
  * A failed result records its errors and keeps the previous preview / commit as they were.
@@ -436,6 +475,7 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     ? { commit_hash: prev.commit_hash, repository_url: prev.repository_url, preview_url: prev.preview_url, result_status: prev.result_status, imported_at: prev.result_imported_at }
     : prev.previous;
   const keepPrev = (a: string, b: string) => (failed ? (a || b) : (a || b));
+  const gate = siteGateResult(s, r);
   const be: BuildExecution = {
     ...EMPTY_BUILD_EXECUTION,
     started_at: prev.started_at || opts.now, completed_at: opts.now,
@@ -449,7 +489,7 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     output_dir: r.local.outputDirectory || prev.output_dir,
     commit_hash: r.repository.commitHash || (failed ? prev.commit_hash : ''),
     result_imported_at: opts.now, result_status: r.status,
-    warnings: [...r.warnings, ...kept].slice(0, 100), errors: r.errors.slice(0, 100), qa: r.qa,
+    warnings: [...r.warnings, ...kept, ...gate.warnings].slice(0, 100), errors: [...gate.errors, ...r.errors].slice(0, 100), qa: gate.qa,
     pages: r.build.pages, services: r.build.services, locations: r.build.locations, assets: r.build.assets,
     redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, standard: r.standard ?? EMPTY_STANDARD, previous,
   };
@@ -519,6 +559,7 @@ export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: strin
     ...(b.upgrade.still_stronger.length ? ['', 'WHERE THE OLD SITE STILL LOOKS STRONGER (fix each, then compare old and new again):', ...b.upgrade.still_stronger.map((x) => '- ' + x)] : []),
     ...(b.upgrade.verdict === 'not_upgrade' || gate.some((g) => /upgrade|old site|strength|Content completeness/i.test(g)) ? ['', 'THE QUALITY STANDARD (unchanged):', ...QUALITY_STANDARD_LINES.map((l) => '- ' + l), ...UPGRADE_QA_LINES] : []),
     ...(standardProblems(b.standard, standardEvidence(s)).length ? ['', 'THE BUILD STANDARD (unchanged — fix what the gate names, then report quality.standard again):', ...BUILD_STANDARD_LINES.map((l) => '- ' + l)] : []),
+    ...(b.errors.some((e) => /site gate|site quality gate/i.test(e)) ? ['', 'THE SITE QUALITY GATE (fix the SITE until it passes — never the gate):', ...siteGateLines(b.output_dir || codeConfig(s, i.template).outputDir, s.canonical_domain, stablePreviewUrl(s))] : []),
     ...(b.redirects.unresolved.length ? ['', 'UNRESOLVED OLD URLs (ask Paul — do not invent a target): ' + b.redirects.unresolved.slice(0, 50).join('  ')] : []),
     ...(b.warnings.length ? ['', 'Warnings from last time (fix only if they are part of the above): ' + b.warnings.slice(0, 15).join(' | ')] : []),
     ...(isTemplateRoute(s) ? ['', 'CURRENT CLIENT CONFIG (unchanged rules: only this data, nothing invented):', '```json', JSON.stringify(m.config, null, 2), '```'] : []),
@@ -555,6 +596,8 @@ export function reviewPrompt(i: BuildPackInput): { text: string; blockedBy: stri
     ] : ['- Pages: the approved architecture only; facts: approved only.']),
     '- Visual quality and mobile quality (1440, 1024, 768, 390, iPhone SE): no overflow, clean spacing, readable, working CTAs and menus.',
     '- Page completeness (no placeholder text), internal linking, canonical / sitemap / robots / schema basics, preview noindex.',
+    '- Re-run the site quality gate on the build output and on the preview (X9b of the build prompt) and include both reports:',
+    ...siteGateLines(b.output_dir || codeConfig(s, i.template).outputDir, s.canonical_domain, preview || stablePreviewUrl(s)),
     '',
     'End with the build-result JSON (status preview_ready only if everything passes):', ...BUILD_RESULT_SCHEMA_LINES, '', ...BUILD_RESULT_RULES,
   ];

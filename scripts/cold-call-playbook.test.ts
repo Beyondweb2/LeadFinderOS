@@ -23,6 +23,7 @@ import { resolveSiteFindingsDetailed } from '../src/lib/siteFindings.ts';
 import { CRAWL_CHECK_VERSION, type CrawlSignals } from '../src/lib/crawlCheck.ts';
 import { SITE_EVIDENCE_VERSION, type SiteEvidence } from '../src/lib/siteEvidence.ts';
 import { FINDABLE_OFFER_SUMMARY, termMonthsFor } from '../src/lib/findableOffer.ts';
+import { salesStyleProblems } from '../src/lib/salesStyle.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => {
@@ -89,7 +90,7 @@ console.log('── 1. NOT NAMED + REAL COMPETITORS ──');
     'the opening names the first three REAL competitors from the stored answer');
   ok(!opening.includes('S.J. Osborne'), 'and only three — the fourth stays in the evidence box');
   ok(p.evidence.competitors.length === 4, 'the evidence box lists them all (up to the cap)');
-  ok(/didn't come up in that answer/.test(opening), 'says the business did not come up — the AI result leads');
+  ok(/it named .*, but not you\./.test(opening), 'says the business did not come up — the AI result leads');
   ok(!/build (you )?(a )?websites?/i.test(opening), 'the opening does NOT lead with "I build websites"');
   ok(p.evidence.question === 'locksmith for businesses in Tunbridge Wells UK' && p.evidence.engine === 'Gemini' && p.evidence.named === false,
     'the exact question, the engine and the result are shown');
@@ -234,7 +235,10 @@ console.log('── 10. OFFER AND CLAIMS ──');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
   const objections = p.objections.map((o) => o.objection);
-  for (const o of ['I already have a website guy', 'My website is fine', 'I already rank on Google', 'Nobody uses AI for this', "I'm too busy", 'How much is it?', "Can you guarantee I'll appear?", 'Just send me the information']) {
+  for (const o of ['I already have a website guy', 'My website is fine', 'I already rank on Google', 'Nobody uses AI for this', "I'm too busy", 'How much is it?', "Can you guarantee I'll appear?", 'Just send me the information',
+    // The house-style pass (Paul, 2026-09-30): the objections a salesperson actually hears.
+    'We already have an SEO company', "We're busy enough", 'How do you know this works?', 'What exactly do you do?', "I don't really understand AI visibility",
+    "I don't want a new website", 'My agency controls the website / domain', 'Why is it monthly?', 'Why six months?', 'Why twelve months?']) {
     ok(objections.includes(o), 'objection covered: ' + o);
   }
 }
@@ -270,11 +274,11 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(p.callScript.length >= 4 && /^Hi, is that /.test(p.callScript[0]), 'the call script is one read that opens by checking who picked up');
   ok(script.includes('LockRite Locksmiths Tunbridge Wells') && script.includes('LockFit Tunbridge Wells') && script.includes('TN Locksmith') && !script.includes('S.J. Osborne'),
     'it names the first three competitors from THAT result, no more');
-  ok(/asked Gemini who it would recommend/.test(script), 'it names the engine that was actually asked');
-  ok(/The main thing I noticed is your sitemap/.test(script) && /could be contributing/.test(script), 'it carries the strongest finding, hedged');
-  ok(script.includes(p.transition), 'the Findable line is inside the script, not a separate block');
-  ok(/Can I send you the report on WhatsApp/.test(script), 'it ends on a natural next step');
-  ok((script.match(/didn't come up/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
+  ok(/I asked Google AI for a locksmith in Tunbridge Wells and it named/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
+  ok(/one thing stood out: your sitemap/.test(script) && /\bcan give them conflicting information\b/.test(script), 'it carries the strongest finding, hedged');
+  ok(/We specialise in AI visibility/.test(script), 'the Findable line is inside the script, not a separate block');
+  ok(/Is now OK for a couple of minutes, or shall I ring you back\?/.test(script) && /I'll WhatsApp you the report/.test(script), 'it ends on a natural next step, with the report as the fallback');
+  ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
 
   // Follow-up: picks up where it left off.
   const msgs: PlaybookMessage[] = [
@@ -282,7 +286,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     { id: 'm2', created_at: new Date(NOW - 2 * DAY).toISOString(), direction: 'inbound', body: 'Yeah go on then', message_type: 'text', template_name: null, status: 'received' },
   ];
   const fu = buildColdCallPlaybook(base({ messages: msgs }));
-  ok(fu.mode === 'follow_up' && /I messaged you on WhatsApp/.test(fu.callScript[0]) && /Thanks for getting back to me/.test(fu.callScript[0]), 'follow-up: the script refers to the WhatsApp and their reply');
+  ok(fu.mode === 'follow_up' && /I messaged you on WhatsApp/.test(fu.callScript[0]) && /Thanks for getting back to me/.test(fu.callScript[1]), 'follow-up: the script refers to the WhatsApp and their reply');
 
   // A directory profile is not their website.
   const prof = buildColdCallPlaybook(base({
@@ -294,12 +298,15 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(prof.site.source === 'directory_profile' && prof.site.label === 'TradeHQ', 'a TradeHQ website is classified as a directory profile');
   ok(prof.findings.length === 0 && /only a TradeHQ profile/.test(prof.findingsNote ?? ''), 'its crawl is never offered as website findings');
   const ps = prof.callScript.join(' ');
-  ok(/just your TradeHQ profile/.test(ps) && !/your site|your website is/i.test(ps.replace(/website of your own|one of your own/g, '')), 'the script says "just your TradeHQ profile", never "your site"');
+  ok(/could only find your TradeHQ profile/.test(ps) && !/your site|your website is/i.test(ps.replace(/website of your own|one of your own/g, '')), 'the script says "just your TradeHQ profile", never "your site"');
   ok(/belongs to TradeHQ/.test(prof.objections.find((o) => o.objection === 'My website is fine')?.answer ?? ''), '"My website is fine" answers truthfully for a profile');
   ok(ps.includes('Able Group (Shrewsbury Service)') && /asked Google AI/.test(ps), 'the profile lead keeps its exact engine and competitors');
 
   // "How much" carries the build terms, so the default screen needs no offer block.
-  ok((p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '').includes(p.offer.monthly), '"How much is it?" carries the full commercial terms');
+  const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
+  ok(howMuch.startsWith(FINDABLE_OFFER_SUMMARY) && /the site's yours at the end/.test(howMuch) && /Nothing's charged after the last payment\./.test(howMuch)
+    && howMuch.split(/(?<=[.?!])\s+/).length <= 3,
+    '"How much is it?" is the canonical offer sentence plus two short spoken lines (ownership, nothing after the last payment)');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');
@@ -312,6 +319,31 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
   ok(!/onSend|doSend|send-whatsapp/.test(ui), 'the panel has no send action');
   const vn = readFileSync(new URL('../src/components/VoiceNoteScriptButton.tsx', import.meta.url), 'utf8');
   ok(/export function VoiceNoteScriptBody/.test(vn) && /<VoiceNoteScriptBody leadId=\{leadId\} \/>/.test(vn), 'the voice-note dialog and the playbook share one body');
+}
+
+console.log('── 13. HOUSE STYLE (Paul, 2026-09-30) ──');
+{
+  const cases = [
+    base({ leadCrawl: crawl(THIN, 1, SITEMAP_EVIDENCE) }),
+    base({ report: gapReport([]) }),
+    base({ report: null }),
+    base({ lead: { id: 'lead-n', business_name: 'No Site Locks', phone: '07700 900999', website: null, category: 'Locksmith', derived_town: 'Tunbridge Wells', status: 'new' }, leadCrawl: null }),
+    base({ reportAudit: { id: 'aud-old', short_code: 'oldold', created_at: new Date(NOW - 60 * DAY).toISOString(), business_name: 'Acme Locksmiths Tunbridge Wells', business_type: 'Locksmiths', location_text: 'Tunbridge Wells UK' } }),
+    base({ messages: [{ id: 'm1', created_at: new Date(NOW - 3 * DAY).toISOString(), direction: 'outbound', body: 'Hi', message_type: 'text', template_name: null, status: 'read' }] }),
+  ];
+  const rivals = ['LockRite Locksmiths Tunbridge Wells', 'LockFit Tunbridge Wells', 'TN Locksmith', 'S.J. Osborne & Son'];
+  for (const [i, input] of cases.entries()) {
+    const p = buildColdCallPlaybook(input);
+    const said = p.callScript.join(' ') + ' ' + p.objections.map((o) => o.answer).join(' ');
+    const problems = salesStyleProblems(said, rivals);
+    ok(problems.length === 0, 'case ' + (i + 1) + ': no filler, no fake rapport' + (problems.length ? ' — ' + problems.join(' ') : ''));
+    ok(!/Have you got a minute|How are you|caught you at a bad time|I came across/i.test(said), 'case ' + (i + 1) + ': no permission-asking before the reason for ringing');
+    ok(!/\bUK\b/.test(p.callScript.join(' ')) && !/for businesses in/.test(p.callScript.join(' ')), 'case ' + (i + 1) + ': the search is said as trade + town, never the audit query (no "UK", no qualifiers)');
+    ok(p.mode === 'follow_up' || /^I'm ringing because /.test(p.callScript[1] ?? ''), 'case ' + (i + 1) + ': the reason for ringing comes straight after the name');
+    ok(p.objections.every((o) => o.answer.split(/(?<=[.?!])\s+/).length <= 5), 'case ' + (i + 1) + ': every objection answer is five sentences or fewer');
+    ok(!/\bi asked\b/.test(p.callScript.join(' ')), 'case ' + (i + 1) + ': "I" is never lower-cased mid-sentence');
+    ok(p.callScript.every((l) => l.length <= 320), 'case ' + (i + 1) + ': no line of the script runs past ~50 words');
+  }
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }

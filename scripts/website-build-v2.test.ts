@@ -131,7 +131,7 @@ console.log('\n── STAGES CHANGE WITH THE ROUTE ──');
 console.log('\n── THE MCL TEMPLATE STILL LOADS ──');
 {
   ok(WEBSITE_TEMPLATES.length === 1 && templateById('mcl-local-trades') === MCL_TEMPLATE, 'the registry still holds exactly the MCL template, found by id');
-  ok(MCL_TEMPLATE.version === '1.0' && MCL_TEMPLATE.trade === 'Locksmith', 'it carries a version and a trade');
+  ok(MCL_TEMPLATE.version === '1.1' && MCL_TEMPLATE.trade === 'Locksmith' && MCL_TEMPLATE.serverFunctions.length === 0 && MCL_TEMPLATE.clientContentFiles.some((f) => f.startsWith('public/_headers')), 'it carries a version and a trade; v1.1 records the retired lead endpoint and the inherited blanket noindex');
   ok(templatePageTypes(MCL_TEMPLATE).includes('service') && MCL_TEMPLATE.optionalSections.length > 0 && MCL_TEMPLATE.imageRequirements.some((x) => x.id === 'logo' && x.required), 'page types, optional sections and image requirements');
   const old = ['Morgan', 'MC Locksmiths', 'MCLocksmiths', 'mc-locksmiths', 'Canterbury', 'Kent', 'Whitstable', 'Herne Bay', '07395', '07848', '447395351094', '447848426374', 'morganbusiness1', 'Walden Court', 'CT2 7JQ', 'DBS', 'NCFE', 'City & Guilds', 'Hiscox', 'Public Liability', 'APECS', 'Checkatrade', 'MyBuilder', 'MyJobQuote', 'MPL', 'Yale', 'Chubb', 'Mul-T-Lock', 'locksmith', '24/7', '15-30 minutes', '£65', '£75'];
   ok(JSON.stringify(MCL_TEMPLATE.leftoverNeedles) === JSON.stringify(old), 'the leftover list is DERIVED from the forbidden seed values and equals the V1 list exactly');

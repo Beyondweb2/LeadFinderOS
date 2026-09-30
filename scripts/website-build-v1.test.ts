@@ -234,7 +234,7 @@ console.log('\n── BUILD PACK ──');
   const ready = pack({ ...READY, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' });
   const pv = ready.find((p) => p.id === 'preview')!, pr = ready.find((p) => p.id === 'production')!;
   ok(pv.blockedBy.length === 0 && pv.text.includes('npx wrangler pages deploy dist --project-name sc-plumbing-gas --branch preview'), 'preview deploys to the recorded project on the preview branch');
-  ok(pv.text.includes('https://preview.sc-plumbing-gas.pages.dev') && pv.text.includes('RESEND_API_KEY'), 'preview names the expected URL and the form secrets');
+  ok(pv.text.includes('https://preview.sc-plumbing-gas.pages.dev') && !pv.text.includes('RESEND_API_KEY'), 'preview names the expected URL — and no form secrets: the template ships no server function since 2026-09-23 (forms post to site-enquiry)');
   ok(pr.blockedBy.length === 0 && pr.text.includes('--project-name sc-plumbing-gas --branch main') && pr.text.includes('git status'), 'production is generated once everything is recorded');
   ok(pack({ ...READY, cloudflare_project: 'Bad Name!' }).find((p) => p.id === 'preview')!.blockedBy.some((b) => /lowercase/.test(b)), 'a malformed project name is refused');
   ok(ready.find((p) => p.id === 'master')!.text.includes('--project-name sc-plumbing-gas --branch preview'), 'with a project, Claude is told the exact preview command');

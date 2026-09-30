@@ -1144,7 +1144,11 @@ Deno.serve(async (req) => {
            raced the first stops here, and the partial unique index stops it at the database if it
            got past. Not frozen → the before side is still being measured. Then like-for-like. */
         if (!pointer) return await refuse("no_baseline_recorded", "No baseline is recorded for this client, so there is nothing to replay. Set the baseline pointer to the audit that should be the before side.");
-        if (alreadyReplayed) return await refuse("already_remeasured", `This client's day-28 replay already exists (${alreadyReplayed}). One replay per baseline, ever.`, { remeasure_audit_id: alreadyReplayed });
+        /* A REPEAT RUN OF THAT SAME REPLAY is not a second replay: runs 2 and 3 of the pointer's own
+           audit (explicit audit_id = the pointer, stored purpose remeasure) pass this gate and are still
+           judged like-for-like below. Anything else with a replay on record is refused. */
+        const ownRepeat = !!reuseAuditId && reuseAuditId === alreadyReplayed && storedPurpose === REMEASURE_AUDIT_PURPOSE;
+        if (alreadyReplayed && !ownRepeat) return await refuse("already_remeasured", `This client's day-28 replay already exists (${alreadyReplayed}). One replay per baseline, ever.`, { remeasure_audit_id: alreadyReplayed });
         if (!pointerFrozen) return await refuse("baseline_not_frozen", "This client's baseline has not finished measuring; the replay waits for a frozen before side.");
         if (!providedQuestions?.length) return await refuse("remeasure_requires_questions", "A replay must carry the baseline's asked questions verbatim; none were supplied.");
         const verdict = judgeRemeasure({

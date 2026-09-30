@@ -64,15 +64,15 @@ console.log('\n── 4. PER-QUESTION PROGRESS ──');
   rows.push({ run_id: 'r2', question: Q[1], status: 'running', result: null, updated_at: at(11) });
   const p = prog(rows.filter((r) => !(r.run_id === 'r2' && r.question === Q[1] && r.status === 'pending')), runsOf(2));
   const q1 = p.by_question[0], q2 = p.by_question[1], q9 = p.by_question[8];
-  ok(q1.state === 'running' && questionProgressLine(q1) === 'ChatGPT 2/3 · Gemini 2/3', `4. running: "${questionProgressLine(q1)}"`);
-  ok(q2.state === 'running' && questionProgressLine(q2) === 'ChatGPT 1/3 · Gemini 1/3', `4. running: "${questionProgressLine(q2)}"`);
+  ok(q1.state === 'running' && questionProgressLine(q1) === 'ChatGPT 2/3 complete · Gemini 2/3 complete', `4. running: "${questionProgressLine(q1)}"`);
+  ok(q2.state === 'running' && questionProgressLine(q2) === 'ChatGPT 1/3 complete · Gemini 1/3 complete', `4. running: "${questionProgressLine(q2)}"`);
   ok(q9.state === 'not_started' && questionProgressLine(q9) === 'Not started', '4. not started');
   const full = prog([...rowsFor('r1', 49), ...rowsFor('r2', 49), ...rowsFor('r3', 49)], runsOf(3, 'complete'), { completedAt: at(30) });
-  ok(full.by_question.every((q) => q.state === 'complete') && questionProgressLine(full.by_question[0]) === 'ChatGPT 3/3 · Gemini 3/3', '4. complete: "ChatGPT 3/3 · Gemini 3/3"');
+  ok(full.by_question.every((q) => q.state === 'complete') && questionProgressLine(full.by_question[0]) === 'ChatGPT 3/3 complete · Gemini 3/3 complete', '4. complete: "ChatGPT 3/3 complete · Gemini 3/3 complete"');
   ok(full.questions_complete === 49 && full.done === 294 && full.status === 'complete', '10. a finished job reaches 294 / 294 and 49 / 49');
   const issue = [...rowsFor('r1', 49), ...rowsFor('r2', 49), ...rowsFor('r3', 49).map((r, i) => (i === 0 ? { ...r, result: { chatgpt: answer() } } : r))];
   const pi = prog(issue, runsOf(3, 'complete'), { completedAt: at(30) });
-  ok(pi.by_question[0].state === 'complete_with_issue' && questionProgressLine(pi.by_question[0]) === 'ChatGPT 3/3 · Gemini 2/3 · 1 failed', `4. issue: "${questionProgressLine(pi.by_question[0])}"`);
+  ok(pi.by_question[0].state === 'complete_with_issue' && questionProgressLine(pi.by_question[0]) === 'ChatGPT 3/3 complete · Gemini 2/3 complete · 1 failed', `4. issue: "${questionProgressLine(pi.by_question[0])}"`);
   ok(pi.status === 'complete_with_failures' && pi.failed === 1 && pi.done === 293, '4. the job is "complete with failures": 293 done, 1 failed');
 }
 
@@ -86,7 +86,7 @@ console.log('\n── 8. PARTIAL RESULTS ARE LABELLED PARTIAL ──');
   const done = discoveryView({ poolSize: 49, audit: { complete: true, progress: { status: 'complete' } } }, 'Run');
   ok(running.provisional && !done.provisional, '8. …and the label goes once the job is complete');
   ok(!/Discovery running \(\$\{d\.audit!\.runs_done\}/.test(ui), '8. the old "Discovery running (0/3 runs)" headline is gone');
-  ok(/measurements · \{p\.percent\}%/.test(ui) && /<Progress value=\{p\.percent\}/.test(ui), '8. the header shows measurements, a percentage and a progress bar');
+  ok(/measurements complete · \{p\.percent\}%/.test(ui) && /<Progress value=\{p\.percent\}/.test(ui), '8. the header shows measurements, a percentage and a progress bar');
 }
 
 console.log('\n── 9. FAILURES NEVER ERASE SUCCESSFUL RUNS ──');
@@ -129,7 +129,7 @@ console.log('\n── 5/6/13. THE JOB IS SERVER-SIDE; CLOSING, RELOADING AND REO
   ok(/if \(!open \|\| !live\) return;/.test(hook) && /window\.clearInterval\(id\)/.test(hook), '5. closing the dialog stops the POLL (clearInterval) — nothing cancels the job');
   const hub = read('src/pages/ClientHub.tsx');
   ok(!/cancel|stop_discovery|abort/i.test(hub.slice(hub.indexOf('function BaselineSetupDialog'), hub.indexOf('function BaselineSetupDialog') + 12000).replace(/cancelled/g, '')), '5. the dialog has no cancel/stop path for Discovery');
-  ok(/useDiscoveryPoll\(leadId, open, data, !!busy, \(discovery\) => \{\n\s+setData\(\(cur\) => \(cur \? \{ \.\.\.cur, discovery \} : cur\)\);/.test(hub), '6. a poll replaces ONLY the discovery block — the draft on screen is untouched');
+  ok(/useDiscoveryPoll\(leadId, open, data, !!busy, \(discovery, recommendation\) => \{\n\s+setData\(\(cur\) => \(cur \? \{ \.\.\.cur, discovery, recommendation \} : cur\)\);/.test(hub), '6. a poll replaces ONLY the discovery block and the recommendation built from it — the draft on screen is untouched');
   ok(hub.split('setInterval(').length === 2, 'the hub still owns exactly one poller of its own');
   const v = discoveryView({ poolSize: 49, audit: { complete: false, progress: { status: 'running' } } }, 'Run');
   const fin = discoveryView({ poolSize: 49, audit: { complete: true, progress: { status: 'complete' } } }, 'Run');

@@ -688,6 +688,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Client-facing copy is scanned** by `client-copy-claims.test.ts` (no eight weeks, no £49.99, no
   founder, no hedge, no Bing). Add every new renderer. Things no script can check and are hand-kept:
   the Stripe Payment Link, every Meta-registered body.
+- **Sales words have ONE style source: `src/lib/salesStyle.ts`** (Paul, 2026-09-30). A new model
+  prompt that writes to a prospect includes `SALES_STYLE_RULES` verbatim; new generated or scripted
+  sales copy is checked with `salesStyleProblems` (pass the inserted names as `ignore`) and added to
+  `scripts/sales-style.test.ts`. Say the search as trade + town ("a plumber in Rugby"), never the audit
+  query or an adjective on it. Record: `docs/sales-language.md`.
 - **Page generator**: anti-stuffing is CODE (phrase/town/noun-spam caps, measured); "based here" only on
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
@@ -711,10 +716,19 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `manual-onboarding.test.ts` — change the customer copy and that test fails until this matches.
 - **The crawl never MERGES into what the baseline measures** — onboarding → verified build facts →
   lead → Discovery; crawl services/towns are `detected_*` suggestions only.
+- ⛔ **Official baseline = the Hook Audit's questions (locked, verbatim) + the rest from Discovery = exactly 20**
+  (Paul, 2026-09-30, `docs/baseline-workflow.md`, `src/lib/baselineRecommendation.ts`). A Hook question
+  leaves only with a written reason (server refuses `hook_question_removed`; kept on `baseline_meta`).
+  Every Discovery question gets RECOMMENDED / FUTURE OPPORTUNITY / NOT RECOMMENDED + a reason. The
+  opportunity is a TIE-BREAK after balance, never the selector. Not-chosen questions seed
+  `client_opportunities` (the Opportunity Backlog, service-role only) — ⛔ never read by the guarantee.
+  A frozen set reopens only via `reopen_approved` (approved + not started + reason). Counts are always
+  MEASUREMENTS (complete) and NAMED on separate lines — never a bare "3/3". Collapse = ONE pattern,
+  `src/components/CollapsibleSection.tsx`, per user.
 - **Paid baseline = Discovery → balanced 20 → approve** (`docs/discovery-balanced-baseline.md`).
   Discovery asks the generator once PER APPROVED TOWN (no lead id, or `pickAuditTown` overrides the
   town); the draft is `buildBalancedBaseline` (`src/lib/baselineMix.ts`), which spreads services, towns
-  and intent types and ⛔ **never reads winnability**. Near-duplicates are "same intent" by
+  and intent types and ⛔ **never reads winnability** (a caller-supplied rank may only break ties — 2026-09-30). Near-duplicates are "same intent" by
   `sameIntent` (meaning tokens + town), not by case/plural; approval refuses them unless
   `accept_duplicates`. The create-ai-audit baseline preview is still home-town-pinned — do not use it
   to draft a paid baseline.
@@ -727,6 +741,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 **Website Build**
 - ⛔ **Preview Ready = technical AND perceived quality** (`websiteQuality.ts`, 2026-09-25): read it through `previewReadyProblems`, never `previewGateProblems` alone (a test fails if the page or the retry prompt does). An existing-site rebuild is not Preview Ready until every old-site strength is decided (preserve / modernise / improve, or removed WITH a reason), every content intent is assessed, and the build reports old vs new at 1440 + a phone width as `upgrade` with nothing the old site still wins. Recon reads strengths from the RENDERED page (BS4: a JS reviews widget was invisible to an HTML read).
 - ⛔ **…AND the build standard** (`websiteBuildStandard.ts`, 2026-09-27 — what MCL + BS4 were rescued for by hand): image roles (**Areas hub → the MAP by default**; fallback a genuine local image, then a job photo only if it shows the locality, each with a reason — never an unrelated one; a map is never a hero background; phone crop keeps labels legible; never drawn / pinned), the mobile hero photo BEHIND the copy (one first screen), **genuine reviews AND the confidently sourced rating / count shown by default** (rating with a snapshot date; held only for conflict / identity / unsourced — not a routine Paul approval), a real form through fn `site-enquiry` (a mailto form always fails; a working old form never becomes none; proven by a test-mode submission), credentials prominent, no repeated photos, photographic strength preserved (judged — never a photo quota). The build reports `quality.standard`; `standardProblems` × `standardEvidence(state)` gate it inside `previewReadyProblems`. Principles, not a clone — never name a reference client in the rules.
+- ⛔ **…AND the Site Quality Gate** (`scripts/site-quality-gate.mjs` + `src/lib/siteGate.ts`, 2026-09-30, `docs/website-build-seo-gate.md`): the build's own `qa.*` is a CLAIM; the gate reads the real output (robots / sitemap / canonicals / noindex incl. `_headers` scope / links / orphans / titles / H1s / cloned pages / schema / identity / intent ownership) and its failures are imported as ERRORS that also turn the matching `qa.*` false. Not run = an error. Stored in the existing `errors` / `warnings` / `qa` keys — keep it that way (no `paid-client-hub` redeploy). The X6b **Site Intent Map** gives every service / location / content intent / frozen baseline question ONE owning page; a baseline question is a QA label, never a title / H1 (the gate fails a verbatim one). Never weaken a check to pass a build. The gate fetches from LeadFinderOS **main** — a change to it is live for every build once merged.
+- ⛔ **Current-site facts (Paul, 2026-09-30, `recon.ts` `SOURCE_SITE_FACT_KEYS`)**: anything the client's own site states is approved source-site evidence by default — services, hours, credentials, licences, insurance, awards, FAQs, history, contact details… Paul decides only conflicts, ambiguity, 24/7 vs stated hours (`availabilityConflict`), superlatives, prices, tracking IDs and unknown keys. Never re-add a routine approval for a stated fact.
+- ⛔ **The MCL template seeds the SUPERSEDED `Beyondweb2/MCLocksmiths`** (blanket `/*` noindex in `_headers`, `aggregateRating` in Layout, near-duplicate service pages). X1 + the gate catch all three; re-seeding from `MCLocksmiths-New` is Paul's call. No Findable surface emits rating / review schema (Prospect Preview removed it).
 
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
@@ -896,6 +913,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
+| The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
 | Any WhatsApp template, sender, greeting name, the Inbox list, the reply rule | `docs/whatsapp-templates.md` (§6g, §16, §29, §30–30e, §32) |
 | The client report, wrong-town history, partial results, the name that scores itself | `docs/reports.md` (§6b, §22, §27) |
 | The manual audit wizard, the market model, how a national/hybrid question set is built | `docs/market-model-audits.md` |

@@ -13,7 +13,7 @@ const queue = [
 ];
 const firstLoad = attachPersistedQueueProgress(runs, queue);
 const afterReturn = attachPersistedQueueProgress(JSON.parse(JSON.stringify(runs)), JSON.parse(JSON.stringify(queue)));
-const expected = 'Run 1: 20/20 · Run 2: 8/20 · Run 3: waiting';
+const expected = 'Run 1: 20/20 measured · Run 2: 8/20 measured · Run 3: waiting';
 const root = resolve(import.meta.dirname, '..');
 const edge = readFileSync(resolve(root, 'supabase/functions/paid-client-hub/index.ts'), 'utf8');
 const hub = readFileSync(resolve(root, 'src/pages/ClientHub.tsx'), 'utf8');

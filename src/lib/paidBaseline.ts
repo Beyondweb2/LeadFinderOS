@@ -1,6 +1,8 @@
 import { EdgeFunctionError, invokeEdge } from '@/lib/edgeInvoke';
 import type { PaidBaselineStatus } from './paidBaselineState';
 import type { DiscoveryProgress, QuestionProgress } from './discoveryProgress';
+import type { EngineTally } from './discoveryOpportunity';
+import type { HookReplacement, Recommendation } from './baselineRecommendation';
 
 export type PaidBaseline = {
   onboarding_id: string;
@@ -22,7 +24,7 @@ export type PaidBaseline = {
     pool_version?: string | null;
     pool: Array<{
       question: string; town: string | null; service: string | null; intent: string;
-      opportunity?: { classification: 'named' | 'winnable' | 'possible' | 'low'; reason: string; fragmentation: string; namedRuns: number; runs: number } | null;
+      opportunity?: { classification: 'named' | 'winnable' | 'possible' | 'low'; verdict?: string; reason: string; fragmentation: string; namedRuns: number; runs: number; engines?: EngineTally[]; competitors?: string[] } | null;
       /** This question's measurements in the pool's Discovery job (src/lib/discoveryProgress.ts). */
       progress?: Omit<QuestionProgress, 'question'> | null;
     }>;
@@ -35,6 +37,12 @@ export type PaidBaseline = {
     starting?: boolean;
     estimate_usd: number;
   };
+  /** The Hook Audit's own questions (locked into the official baseline) and what that one run found. */
+  hook?: { audit_id: string | null; created_at: string | null; questions: string[]; measures: Array<{ question: string; engines: EngineTally[] }> };
+  /** The recommended official 20 (src/lib/baselineRecommendation.ts), computed on every read. */
+  recommendation?: Recommendation;
+  /** The approval record: Hook questions, any replaced with a reason, corrections history. */
+  meta?: { approved_at?: string; hook_questions?: string[]; hook_replacements?: HookReplacement[]; corrections?: Array<{ at: string; reason: string }>; sources?: Array<{ question: string; source: string }> } | null;
   /** The approved services with duplicates merged — the service axis of the coverage summary. */
   canonical_services?: string[];
   /** What the latest crawl saw that no approved source lists — suggestions only, never measured. */
@@ -77,7 +85,25 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   discovery_running: 'Discovery is still measuring the current questions. Wait for it to finish, then regenerate.',
   discovery_already_run: 'Discovery has already measured these questions. Regenerate the Discovery questions to measure again.',
   discovery_start_failed: 'Discovery did not start. Nothing was measured — try again.',
+  hook_question_removed: 'A Hook Audit question is missing from the set. Keep it, or give a reason for replacing it.',
+  baseline_not_reopenable: 'Only an approved baseline that has not started can be reopened.',
+  correction_reason_required: 'Write why the approved questions must change.',
+  opportunity_question_required: 'Type the question or intent to track.',
+  opportunity_exists: 'That question is already in this client\'s backlog.',
+  opportunity_not_found: 'That opportunity no longer exists. Reload and try again.',
+  opportunity_ids_required: 'Choose at least one opportunity to check.',
+  opportunity_check_failed: 'The check did not start. Nothing was measured — try again.',
 };
+
+/** The whole response (the opportunity actions answer with more than the baseline). */
+export async function invokePaidBaselineRaw<T extends Record<string, unknown>>(action: string, leadId: string, extra: Record<string, unknown> = {}): Promise<T & { baseline: PaidBaseline }> {
+  try {
+    return await invokeEdge<T & { baseline: PaidBaseline }>('paid-baseline', { action, lead_id: leadId, ...extra });
+  } catch (e) {
+    if (e instanceof EdgeFunctionError) throw new Error(e.detail || (e.code && (FRIENDLY_ERRORS[e.code] ?? e.code)) || 'Could not update the baseline');
+    throw e instanceof Error ? e : new Error('Could not update the baseline');
+  }
+}
 
 /** One client-side request shape and one useful error path for every paid-baseline entry point. */
 export async function invokePaidBaseline(

@@ -22,8 +22,7 @@
    control on it would make it ignorable in one click.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { ReactNode } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { usePersistedState } from '@/hooks/usePersistedState';
+import { SectionToggle, useSectionOpen } from '@/components/CollapsibleSection';
 
 interface DashboardSectionProps {
   /** Stable storage key. Never derive this from the title — see the header. */
@@ -37,22 +36,19 @@ interface DashboardSectionProps {
 }
 
 export function DashboardSection({ storageKey, title, defaultOpen, collapsedHint, children }: DashboardSectionProps) {
-  const [open, setOpen] = usePersistedState<boolean>(
-    `dashboard.section.${storageKey}`,
-    defaultOpen,
-    { tier: 'local' },
-  );
+  /* The ONE collapse pattern (src/components/CollapsibleSection.tsx), remembered per person since
+     2026-09-30 — it was per browser. */
+  const [open, setOpen] = useSectionOpen(`dashboard.section.${storageKey}`, defaultOpen);
 
   return (
     <section>
-      <h2 className="mb-2 sm:mb-3">
+      <h2 className="mb-2 flex items-center gap-1 sm:mb-3">
+        <SectionToggle open={open} onToggle={() => setOpen(!open)} label={title} className="-ml-1.5 h-6 w-6" />
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
         >
-          {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
           <span>{title}</span>
           {/* ⚠️ A COLLAPSED SECTION STILL SAYS SOMETHING. A row of bare headings gives no reason to
               open any of them, which turns "collapsed by default" into "gone". */}
