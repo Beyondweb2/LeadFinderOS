@@ -91,7 +91,7 @@ export function buildSummaryFacts(now: OverviewLike, before: OverviewLike | null
       costly_for_use: now.features.filter((f) => f.flags.includes('costly_low_use')).map((f) => f.label),
       most_used: [...now.features].sort((a, x) => x.uses - a.uses).slice(0, 5).map((f) => ({ feature: f.label, uses: f.uses })),
     } : null,
-    website: now.site?.tracking_since ? { visitors: now.site.sessions ?? 0, free_checks: now.site.free_check_submitted ?? 0, reached_checkout: now.site.checkout_sessions ?? 0, paid: now.site.paid ?? 0 } : 'visitor tracking only started on 30 Sep',
+    website: now.site?.tracking_since ? { visitors: now.site.sessions ?? 0, free_checks: now.site.free_check_submitted ?? 0, reached_checkout: now.site.checkout_sessions ?? 0, paid: now.site.paid ?? 0 } : 'NOT TRACKED in this period — visitor tracking began on 30 Sep, so there is no website data (this is not zero visits; do not describe it as no activity)',
   };
 }
 export type SummaryFacts = ReturnType<typeof buildSummaryFacts>;
