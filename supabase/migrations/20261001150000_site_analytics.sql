@@ -60,9 +60,21 @@ as $$
          and exists (select 1 from onb where onb.lead_id = a.lead_id and onb.source = 'free_check')
          and exists (select 1 from ai_audit_runs r where r.audit_id = a.id and r.status in ('complete', 'capped'))),
     'signup_forms', (select count(*) from onb where coalesce(source, 'signup') <> 'free_check'),
+    /* A checkout counts only when tied to a real prospect: a lead that is not excluded and carries no
+       internal email (on the lead or its sign-up). Measured 2026-09-30: of 21 sessions in 30 days, 17 had
+       no lead (price testing) and 3 were on a lead with Paul's own address — 1 was a real prospect. The
+       unattributed ones are reported apart, never hidden. */
     'checkout_sessions', (select count(*) from client_error_reports c
+       join outreach_leads l on l.id = (c.context->>'lead_id')::uuid
        where c.error_id = 'checkout_session_created' and (_from is null or c.created_at >= _from) and c.created_at < _to
-         and coalesce((c.context->>'lead_id')::uuid, '00000000-0000-0000-0000-000000000000'::uuid) not in (select v from ex_leads)),
+         and l.id not in (select v from ex_leads)
+         and not exists (select 1 from int_emails i where lower(coalesce(l.email, '')) = i.v or (i.v like '@%' and lower(coalesce(l.email, '')) like '%' || i.v))
+         and not exists (select 1 from onboarding_responses o, int_emails i where o.lead_id = l.id
+               and (lower(coalesce(o.contact_email, '')) = i.v or (i.v like '@%' and lower(coalesce(o.contact_email, '')) like '%' || i.v)))),
+    'checkout_sessions_unattributed', (select count(*) from client_error_reports c
+       where c.error_id = 'checkout_session_created' and (_from is null or c.created_at >= _from) and c.created_at < _to
+         and (coalesce(c.context->>'lead_id', '') = ''
+              or not exists (select 1 from outreach_leads l where l.id::text = c.context->>'lead_id'))),
     'checkout_refused', (select count(*) from client_error_reports c
        where c.error_id like 'checkout_refused%' and (_from is null or c.created_at >= _from) and c.created_at < _to),
     'paid', (select count(*) from payment_ledger p where p.kind = 'initial' and p.status = 'succeeded'

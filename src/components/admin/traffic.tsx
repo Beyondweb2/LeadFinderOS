@@ -62,6 +62,7 @@ export function FindableFunnelPanel({ o }: { o: O }) {
         })}
       </div>
       {s.checkout_refused > 0 && <p className="mt-2 text-xs text-muted-foreground">Checkout refused {num(s.checkout_refused)} time{s.checkout_refused === 1 ? '' : 's'} in this period (a blocked route, no trade, already paid…) — each refusal is a stuck customer.</p>}
+      {(s.checkout_sessions_unattributed ?? 0) > 0 && <p className="mt-1 text-xs text-muted-foreground">Not counted: {num(s.checkout_sessions_unattributed)} checkout session{s.checkout_sessions_unattributed === 1 ? '' : 's'} with no surviving lead (test or price-check sessions) and any on leads carrying your own email.</p>}
       {tracked && (
         <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <List title="Landing pages" rows={s.landing_pages} />

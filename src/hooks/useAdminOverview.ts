@@ -28,7 +28,7 @@ export interface SiteFunnel {
   sessions: number; page_views: number; internal_sessions: number;
   free_check_started: number; onboarding_started: number; checkout_started_browser: number;
   free_check_submitted: number; free_check_completed: number; signup_forms: number;
-  checkout_sessions: number; checkout_refused: number; paid: number;
+  checkout_sessions: number; checkout_sessions_unattributed?: number; checkout_refused: number; paid: number;
   landing_pages: Bucket[]; referrers: Bucket[]; campaigns: Bucket[]; devices: Bucket[]; top_pages: Bucket[];
 }
 
