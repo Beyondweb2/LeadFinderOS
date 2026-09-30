@@ -824,6 +824,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
 | Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, `LeadCrmPanel`, `AvailableToClaim`, `src/lib/leadRpc.ts` + `salesPatchPlan.ts`, pages `Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400` + `140000`, view `sales_leads`, tables `team_members`/`lead_activity` |
+| Admin dashboard rules (2026-09-30) | ⛔ Every admin number comes from `_shared/admin-overview-load.ts` → `src/lib/adminMetrics.ts` (the dashboard AND the AI briefing — never a second fold). ⛔ Reply triage (`replyTriage.ts`): opt-out suppression is PHRASES ONLY, never the model, never a paying client; the model only files. ⛔ `audit_purpose = 'weekly_check'` is monitoring, never the guarantee — no pointer trigger reads it and `render-audit-report` refuses it. ⛔ findable.live analytics send only the fields the privacy page lists (`findable-site/src/lib/analytics.ts`); change both or neither. ⛔ The AI briefing is stored only when every number in it is in its facts (`validateNumbers`). |
 | Admin dashboard (control centre) | `src/pages/Dashboard.tsx`, `src/components/admin/controlCentre.tsx`, `src/hooks/useAdminOverview.ts`, fn `admin-overview`, `src/lib/adminMetrics.ts` (every definition), `reportingPeriod.ts` (the ONE London-day clock), `metricExclusions.ts` + table `metric_exclusions`, `apiCostLabels.ts` + SQL `admin_api_cost` — `docs/admin-control-centre.md`. ⛔ Test accounts test1/Test are excluded from performance numbers by ROW, never by name; their leads stay in inventory |
 | Dashboard (older, now unrendered) | `src/hooks/useDashboardMetrics.ts` (still the `FOUNDER_PRICE_GBP` sync source), `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
@@ -858,7 +859,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the two AI-Audit ones are the only audit-keyed ones — keep at least one.
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
   `whatsapp-queue-run`, `whatsapp-auto-replies-run`, `notify-onboarding-submit-run` (1 min each),
-  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), and `instantly-poll-run` (dead product — Paul unschedules it). The
+  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), and `instantly-poll-run` (dead product — Paul unschedules it).
+  Admin control centre (2026-09-30): `conversation-triage-run` (2 min), `weekly-visibility-run` (hourly :15),
+  `performance-sync-run` (05:00), `business-summary-weekly` (Mon 06:30); each records last run / status in
+  `admin_job_runs`. The
   `bulk_jobs.job_type` CHECK constraint is DB-only too. A rebuild from migrations loses them.
 
 ---
