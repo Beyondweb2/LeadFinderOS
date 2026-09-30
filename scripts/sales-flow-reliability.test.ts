@@ -204,7 +204,7 @@ console.log("\n── campaign on a lead ──");
   ok(/<LeadCampaign lead=\{lead\} save=\{save\} \/>/.test(panel), "the shared lead workspace shows the campaign control (both roles)");
   ok(/save\('lead_set_campaign', \{ _campaign_id: id \}/.test(panel) && /\{ campaign_id: id \}\)/.test(panel), "it saves through lead_set_campaign and tells Outreach / the Inbox (campaign_id patch)");
   ok(/CampaignPicker mode="assign" hideCreate value=\{lead\.campaign_id\}/.test(panel), "pick only — no New / Manage campaigns inside the workspace");
-  ok(/campaign_id'?;/.test(panel.match(/const CRM_COLUMNS = '[^']+'/)?.[0] + ";") , "the workspace reads the lead's current campaign");
+  ok(/\bcampaign_id\b/.test(panel.match(/const CRM_COLUMNS = '[^']+'/)?.[0] ?? ""), "the workspace reads the lead's current campaign");
   const index = read("src/pages/Index.tsx");
   ok((index.match(/hideCreate=\{viewerRole !== 'admin'\}/g) ?? []).length === 2, "Find Leads: Sales cannot create or manage campaigns from either picker");
   const perf = read("src/lib/salesPerformance.ts");

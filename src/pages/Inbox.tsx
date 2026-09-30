@@ -40,6 +40,9 @@ import { updateLeadStatus } from '@/lib/leadStatus';
 import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from '@/types/outreach';
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
+import { SalesStatePill } from '@/components/SalesStatePill';
+import { useLeadSalesState } from '@/hooks/useLeadSalesState';
+import { INTERESTED_STATUSES } from '@/lib/leadState';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
@@ -649,6 +652,12 @@ const Inbox = () => {
          paying is precisely the one who must not vanish while Paul is filtering the list.
          Same convention as `unassigned` directly beside it: a bucket that must always be
          visible is exempted, not relied on to happen to match. */
+      /* ⛔ "Interested" IS THE STAR (lead state audit, 2026-09-30): the filter matched status 'interested'
+         only — a value nothing has written since the star replaced it — so it missed every starred lead.
+         It now reads Interested the way leadState.salesStateOf does: the star, or an interested / quoted
+         status. */
+      : statusFilter === 'interested'
+        ? byCampaign.filter((c) => c.isPotentialWork || INTERESTED_STATUSES.has(c.leadStatus ?? '') || c.unassigned || c.isPaid)
       : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant
@@ -821,6 +830,8 @@ const Inbox = () => {
   // from the conversation's lead where possible, then inserted (editable, not auto-sent).
   const textTemplates = useMemo(() => templates.filter((t) => t.template_type === 'text'), [templates]);
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
+  // The canonical sales state for the open thread's lead (the same reading Focus Mode and the popup draw).
+  const activeSales = useLeadSalesState(active?.leadId ?? '');
   const activeBusinessName = activeLead?.business_name;
   /* ⛔ INSERTING A QUICK REPLY WRITES THE DRAFT AND REMOUNTS THE COMPOSER. The composer holds its
      own text (see InboxComposer — that is what fixed the typing lag), so the parent can no longer
@@ -1989,6 +2000,7 @@ const Inbox = () => {
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                         : <PipelineStatusSelect value={active.leadStatus} onValueChange={(status) => handleSetStatus(active, status)} />
                     )}
+                    {active.leadId && activeSales.view && <SalesStatePill view={activeSales.view} size="xs" />}
                     {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
                     <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />

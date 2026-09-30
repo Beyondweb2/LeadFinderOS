@@ -78,8 +78,8 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
     "src/lib/demoLeads.ts": "in-memory demo rows, never written to the database",
     "src/lib/salesPatchPlan.ts": "a salesperson's manual edit → lead_set_follow_up",
     "src/lib/leadRpc.ts": "runs that plan (lead_set_follow_up)",
-    "src/hooks/useSalesCrm.ts": "the manual follow-up mutation",
-    "src/components/LeadCrmPanel.tsx": "the manual Next action control",
+    "src/components/LeadCrmPanel.tsx": "the manual Next action control (and the meeting's one Save: time + 'Meeting')",
+    "src/lib/leadOutcome.ts": "Not interested clears the Next Action — 'none' only",
   };
   const files = walk("src").filter((p) => !p.startsWith("src/integrations/") && !p.startsWith("src/types/"));
   const writers = files.filter((p) => WRITE.test(strip(read(p))));
@@ -93,6 +93,8 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
   ok([...dash.matchAll(/next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "the Dashboard only clears");
   const editor = strip(read("src/components/NextActionEditor.tsx"));
   ok(/const shouldAutoSave = hasAction && hasDate && \(actionPicked \|\| datePicked\);/.test(editor), "the table's editor saves only after the person picked an action or a date");
+  const outcome = strip(read("src/lib/leadOutcome.ts"));
+  ok([...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].length === 1 && [...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "a logged outcome only ever CLEARS the next action (leadOutcome writes 'none', once)");
   const dialog = strip(read("src/components/LeadDetailDialog.tsx"));
   ok([...dialog.matchAll(/onNextActionChange\(lead\.id, '([a-z_]+)'/g)].every((m) => m[1] === "none"), "the lead dialog's only automatic next-action call clears it (paid / lost)");
 }

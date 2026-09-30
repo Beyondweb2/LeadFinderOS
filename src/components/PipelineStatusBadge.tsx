@@ -165,6 +165,13 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Closed',
     className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
+  /* ⛔ It was missing, so a WON lead rendered as "New" (lead state audit, 2026-09-30). The words are the
+     status menu's (PIPELINE_STATUS_OPTIONS) and the sales state's (leadState SALES_STATE_LABEL.won). */
+  won_pending_onboarding: {
+    label: 'Won · awaiting onboarding',
+    shortLabel: 'Won',
+    className: 'bg-emerald-600 text-white border-transparent font-semibold whitespace-nowrap',
+  },
 };
 
 const defaultConfig = {
@@ -174,7 +181,12 @@ const defaultConfig = {
 };
 
 export function PipelineStatusBadge({ status, compact }: PipelineStatusBadgeProps) {
-  const config = status ? (statusConfig[status] ?? defaultConfig) : defaultConfig;
+  /* No status → New. A status this map does not know shows AS ITSELF, never as "New" — an unknown value
+     read as the empty one is the absent-falls-through trap. */
+  const unknown = status && !statusConfig[status]
+    ? { label: String(status).replace(/_/g, ' '), shortLabel: String(status).replace(/_/g, ' '), className: 'bg-muted text-foreground border-transparent font-semibold' }
+    : null;
+  const config = status ? (statusConfig[status] ?? unknown ?? defaultConfig) : defaultConfig;
   const isInterested = status === 'interested';
 
   return (
