@@ -31,7 +31,8 @@
         so i asked Google AI who it recommended"). Never the audit query's qualifiers ("who can come
         today") — they are the tell of a machine-worded search.
      2. "it came up with X, Y and Z, but you didn't come up."
-     3. "i had a look at what might be holding you back, and …" + ONE genuine finding. Never "this is why".
+     3. "i had a look at why you weren't coming up and found something that could be holding you back" +
+        ONE genuine finding (Paul, 2026-09-30: the natural wording, conclusion hedged). Never "this is why".
      4. "i actually specialise in AI visibility for local businesses."
      5. THE CTA ESTABLISHES WHO CONTROLS THE WEBSITE (voiceNoteCtaKind) — it decides whether Findable can
         optimise the site, work with the provider, or rebuild it. Never "i can send you the audit and show
@@ -268,7 +269,7 @@ export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts f
 THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
 1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Google AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
 2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
-3. THE FINDING: "i had a look at what might be holding you back, and" + the ONE website point you are given, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence.
+3. THE FINDING: "i had a look at why you weren't coming up and found something that could be holding you back:" (or "a few things that could be holding you back" ONLY when you are given two website points) + the website point, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence. The conclusion stays hedged: "could be holding you back", never "this is why".
 4. POSITIONING, one short sentence: "i actually specialise in AI visibility for local businesses." Do not explain the service.
 5. THE QUESTION (the CTA line you are given): a simple question about who owns and controls their website. It ends the note. Nothing after it.
 
@@ -290,7 +291,7 @@ EVIDENCE RULES, which override everything:
 - If there are no website points, follow the NO WEBSITE POINTS instruction in spirit, with a natural variation.
 - SERVICES: never name a specific service or job type (rewiring, fuse boards, boiler repairs, lock changes...) unless it is listed under SERVICES THEY OFFER or is in the search itself. Otherwise say "the work you do" or "your main services".
 - If the WEBSITE on record is a profile page (see WEBSITE SOURCE), it is NOT their website: never call it "your website" or "your site", never say you looked through their site, and never ask whether they own their website.
-- CAUSATION: never say a website issue is why the AI engine left them out, and never say you looked into why the engine recommended the others. Never "this is why", "that's why", "the reason you're not showing", "i looked into why". Say "what might be holding you back".
+- CAUSATION: never say a website issue is why the AI engine left them out, and never say you looked into why the engine recommended the others. Never "this is why", "that's why", "that's why your competitors are being recommended", "the reason you're not showing", "i looked into why google recommended them". "i had a look at why you weren't coming up" is fine; what you found only "could be holding you back".
 - LOST WORK: do not add a sentence about lost customers. If one slips in it must be a possibility ("that can mean"), never a fact.
 
 OUTPUT: only the script text Paul will read. No heading, no bullet points, no notes, no quotation marks around it.`;
@@ -323,10 +324,10 @@ export interface VoiceNotePromptInput {
 }
 
 const NO_POINT_LINES: Record<Exclude<VoiceNoteSiteMode, 'findings'>, string> = {
-  clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say, briefly, something like: "i had a look at what might be holding you back, and nothing\'s obviously broken on the site, but there\'s a few things i\'d tighten up around how clearly it tells AI what you do and where." Do not claim any specific fault.',
-  unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say, briefly, something like: "i had a look at what might be holding you back, and there\'s a few things i\'d tighten up around how clearly you come across to AI." Do not claim any specific fault.',
-  profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally: "i had a look at what might be holding you back, and i couldn\'t find a website of your own, just your {LABEL} profile." Never call the profile their website. Do not claim anything else.',
-  no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally: "i had a look at what might be holding you back, and i couldn\'t find a website for you." Do not claim anything else.',
+  clean: 'NO WEBSITE POINTS: the site was checked and nothing obviously broken was found. Say, briefly, something like: "i had a look at why you weren\'t coming up, and nothing\'s obviously broken on the site, but there\'s a few things i\'d tighten up around how clearly it tells AI what you do and where." Do not claim any specific fault.',
+  unread: 'NO WEBSITE POINTS: the site could not be read properly today, so say nothing specific about it. Say, briefly, something like: "i had a look at why you weren\'t coming up, and there\'s a few things i\'d tighten up around how clearly you come across to AI." Do not claim any specific fault.',
+  profile: 'NO WEBSITE POINTS: the only web page on record is their {LABEL} profile, not a website of their own. Say, naturally: "i had a look at why you weren\'t coming up, and i couldn\'t find a website of your own, just your {LABEL} profile." Never call the profile their website. Do not claim anything else.',
+  no_website: 'NO WEBSITE POINTS: there is no website on record for this business. Say, naturally: "i had a look at why you weren\'t coming up, and i couldn\'t find a website for you." Do not claim anything else.',
 };
 
 /* ─────────────────────────────── the CTA: who controls the website ─────────────────────────────── */

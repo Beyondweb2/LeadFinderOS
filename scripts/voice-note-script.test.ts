@@ -262,7 +262,7 @@ ok(classifyLeadWebsite('').source === 'none' && classifyLeadWebsite(null).source
   const pw = buildVoiceNotePrompt({ business: 'JG Electrics', trade: 'Electricians', area: 'Woking', website: 'x', evidence: EV, site: onlyWeak });
   ok(onlyWeak.findings.length === 1 && pw.includes('OBSERVATION ONLY') && !pw.includes('Weak Evidence of Qualifications'), 'no concrete finding → the interpretive one goes in as observation, without its verdict title');
   ok(/OBSERVATION, NOT JUDGEMENT/.test(VOICE_NOTE_SYSTEM_PROMPT) && /never read it word for word/.test(VOICE_NOTE_SYSTEM_PROMPT) && /Never say the business's own name/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the four tone rules');
-  ok(/i had a look at what might be holding you back/.test(VOICE_NOTE_SYSTEM_PROMPT) && /i actually specialise in AI visibility for local businesses/.test(VOICE_NOTE_SYSTEM_PROMPT) && /who owns and controls their website/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the five-beat shape');
+  ok(/i had a look at why you weren't coming up and found something that could be holding you back/.test(VOICE_NOTE_SYSTEM_PROMPT) && /i actually specialise in AI visibility for local businesses/.test(VOICE_NOTE_SYSTEM_PROMPT) && /who owns and controls their website/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the prompt carries the five-beat shape');
   ok(/Do not offer to send the audit/.test(VOICE_NOTE_SYSTEM_PROMPT) && !/happy to explain what i'd change/.test(VOICE_NOTE_SYSTEM_PROMPT), 'the old change-plan ending is gone from the prompt and forbidden');
   ok(/business: hook\.business/.test(read('supabase/functions/voice-note-script/index.ts')), 'the function passes the business name to the checks');
 }

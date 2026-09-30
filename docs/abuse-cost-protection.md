@@ -51,7 +51,7 @@ one number they are told (it is a row count, not money).
 | `whatsapp_send` | no | send-whatsapp-message (real sends, not dry runs), send-whatsapp-voice, send-whatsapp-media | Sales only: suspension. WhatsApp is not paid API — the pause modes never touch it. |
 | `whatsapp_queue` | no | sales_queue_opener (SQL) | Suspension. |
 
-Emergency stop only (`allStopRefusal`): review-reply, admin-ai-opener, run-seo-scan, apply-seo-paste.
+Emergency stop only (`allStopRefusal`): review-reply, run-seo-scan, apply-seo-paste. (admin-ai-opener was on this list until it was deleted, 2026-09-30.)
 Background: `process-ai-audit-queue` (all_stop → no new Apify start, no SEO scan, polling continues so
 nothing strands past `MAX_RUN_AGE_MS`; prospecting_paused → only the baseline-priority set starts),
 `process-whatsapp-queue` (audit-ahead only when running; a suspended rep's queued leads are HELD, fail

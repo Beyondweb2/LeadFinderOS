@@ -168,8 +168,9 @@ Counts measured 2026-09-16.
 listing — the inventory measured these on 09-15.
 
 **`AiOpenerModal.tsx` (142) + `admin-ai-opener` fn (184):** inventory says almost certainly dead
-(its prompt pitches website building to web designers). **Paul has not decided — put it in the step-5
-list as DECIDE with that one sentence.** Mounted from `OutreachTable.tsx` (`aiOpenerLead`,
+(its prompt pitches website building to web designers). **DECIDED AND DONE 2026-09-30 (Paul: "a dead feature
+from the old product"): component, fn source, config entry, buttons and props removed; the deployed
+function deleted. No table belonged to it.** (Was: DECIDE in the step-5 list.) Mounted from `OutreachTable.tsx` (`aiOpenerLead`,
 `setAiOpenerLead`, the `onAiOpener` prop on `SingleWhatsAppDialog`).
 
 **i18n — remove the library, inline the strings:**

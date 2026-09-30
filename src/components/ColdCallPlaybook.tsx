@@ -133,19 +133,33 @@ function TalkAbout({ p }: { p: ColdCallPlaybook }) {
   );
 }
 
+type ScriptTab = 'call' | 'voice' | 'linkedin' | 'email';
+
 function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId: string; initial?: 'call' | 'voice' }) {
-  const [tab, setTab] = useState<'call' | 'voice'>(initial);
+  const [tab, setTab] = useState<ScriptTab>(initial);
   const tabClass = (on: boolean) => cn('rounded-md px-3 py-1 text-sm font-semibold transition-colors', on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted');
+  const tabs: Array<[ScriptTab, string]> = [['call', 'Call script'], ['voice', 'Voice note'], ['linkedin', 'LinkedIn'], ['email', 'Email']];
+  /* LinkedIn and Email are the SAME facts as the call script (coldCallPlaybook.ts `messages`), for copying
+     into those apps by hand. Nothing here sends. */
   return (
     <section className="rounded-lg border border-primary/40 bg-primary/5 p-3" data-testid="playbook-scripts">
-      <div className="mb-2 flex items-center gap-1" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'call'} className={tabClass(tab === 'call')} onClick={() => setTab('call')}>Call script</button>
-        <button type="button" role="tab" aria-selected={tab === 'voice'} className={tabClass(tab === 'voice')} onClick={() => setTab('voice')}>Voice note</button>
+      <div className="mb-2 flex flex-wrap items-center gap-1" role="tablist">
+        {tabs.map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} className={tabClass(tab === key)} onClick={() => setTab(key)}>{label}</button>
+        ))}
         {tab === 'call' && <span className="ml-auto"><CopyButton text={p.callScript.join('\n\n')} label="Copy" /></span>}
+        {tab === 'linkedin' && <span className="ml-auto"><CopyButton text={p.messages.linkedin} label="Copy" /></span>}
+        {tab === 'email' && <span className="ml-auto flex gap-1"><CopyButton text={p.messages.email.subject} label="Copy subject" /><CopyButton text={p.messages.email.body} label="Copy email" /></span>}
       </div>
-      {tab === 'call'
-        ? <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>
-        : <VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} />}
+      {tab === 'call' && <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>}
+      {tab === 'voice' && <VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} />}
+      {tab === 'linkedin' && <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed" data-testid="playbook-linkedin">{p.messages.linkedin}</p>}
+      {tab === 'email' && (
+        <div className="space-y-2" data-testid="playbook-email">
+          <p className="text-sm"><span className="text-muted-foreground">Subject: </span><span className="font-medium">{p.messages.email.subject}</span></p>
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{p.messages.email.body}</p>
+        </div>
+      )}
     </section>
   );
 }
