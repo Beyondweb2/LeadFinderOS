@@ -30,7 +30,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "conversation-triage-2026-09-30a";
+const BUILD_ID = "conversation-triage-2026-09-30b";
+/** Longest a run may hold the lease (a crashed run frees it after this). */
+const RUN_LEASE_SECONDS = 300;
 /** Messages filed per run (the first runs work through the history, oldest first). */
 const MAX_PER_RUN = 400;
 /** Model calls per run, and the rolling-day spend cap for this function. */
@@ -182,13 +184,49 @@ Deno.serve(async (req) => {
       actorId = who.actor.id;
     }
     const action = String(body.action ?? "run");
-    if (action === "run") return json({ ok: true, build: BUILD_ID, ...(await run(service)) });
+    if (action === "run") {
+      /* ONE run at a time (admin_job_runs lease): two overlapping runs once asked the model about the same
+         messages twice. A run that finds the lease taken does nothing and says so. */
+      const { data: claimed, error: cErr } = await service.rpc("admin_job_claim", { _job: FN, _lease_seconds: RUN_LEASE_SECONDS });
+      if (cErr) throw new Error(`lease: ${cErr.message}`);
+      if (claimed !== true) return json({ ok: true, build: BUILD_ID, skipped: "another run is in progress" });
+      try {
+        const result = await run(service);
+        await service.rpc("admin_job_finish", { _job: FN, _status: "ok", _result: result, _error: null });
+        return json({ ok: true, build: BUILD_ID, ...result });
+      } catch (e) {
+        await service.rpc("admin_job_finish", { _job: FN, _status: "error", _result: null, _error: (e instanceof Error ? e.message : String(e)).slice(0, 500) });
+        throw e;
+      }
+    }
     if (action === "resolve") {
       if (!actorId) return json({ ok: false, error: "admin_only" }, 403);
       const id = String(body.id ?? "");
       if (!UUID_RE.test(id)) return json({ ok: false, error: "bad_id" }, 400);
       const { error } = await service.from("conversation_triage").update({ resolved_at: new Date().toISOString(), resolved_by: actorId }).eq("id", id).is("resolved_at", null);
       if (error) return json({ ok: false, error: "write_failed", detail: error.message }, 500);
+      return json({ ok: true });
+    }
+    /* The admin confirms an opt-out the rules could not be sure of (an AI "they asked to stop" in
+       REVIEW): the same shared suppress(), a History row saying Paul confirmed it, and the item closes.
+       A person's decision — never the model's. */
+    if (action === "suppress") {
+      if (!actorId) return json({ ok: false, error: "admin_only" }, 403);
+      const id = String(body.id ?? "");
+      if (!UUID_RE.test(id)) return json({ ok: false, error: "bad_id" }, 400);
+      const { data: row, error: rErr } = await service.from("conversation_triage").select("id, lead_id, phone, message_id").eq("id", id).maybeSingle();
+      if (rErr || !row) return json({ ok: false, error: "not_found" }, 404);
+      const r = row as { id: string; lead_id: string | null; phone: string | null; message_id: string };
+      const ok = await suppress(service, { phone: r.phone, leadId: r.lead_id }, { reason: "opted_out", source: "admin_confirmed_optout" });
+      if (!ok) return json({ ok: false, error: "suppression_failed", detail: "The suppression could not be saved — try again." }, 500);
+      if (r.lead_id) {
+        await service.from("lead_activity").insert({
+          lead_id: r.lead_id, actor_user_id: actorId, kind: "opted_out",
+          body: "Asked to stop on WhatsApp — confirmed by the admin; future automated outreach is suppressed",
+          data: { message_id: r.message_id, source: "admin_confirmed_optout" },
+        });
+      }
+      await service.from("conversation_triage").update({ resolved_at: new Date().toISOString(), resolved_by: actorId, action_taken: "suppressed_by_admin" }).eq("id", r.id);
       return json({ ok: true });
     }
     return json({ ok: false, error: "unknown_action" }, 400);

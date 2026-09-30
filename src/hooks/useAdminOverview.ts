@@ -11,6 +11,8 @@ export type AdminOverviewResponse = AdminOverview & {
   exclusions: { kind: string; reason: string | null }[];
   costNotes: { unrecorded: string[]; usdToGbp: number };
   commissionError: string | null;
+  /** Background jobs (admin_job_runs); null = unreadable. */
+  jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null;
   generatedAt: string;
   ms: number;
 };

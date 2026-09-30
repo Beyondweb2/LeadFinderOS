@@ -38,6 +38,7 @@ import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts'
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
 import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
+import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldNiches, foldTemplates, type Bottleneck, type NicheRow, type TemplatesBlock } from './adminIntelligence.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -69,8 +70,12 @@ export interface AdminLead {
   baseline_audit_id: string | null;
   remeasure_due_date: string | null;
   remeasure_audit_id: string | null;
+  /** Release 3 (niches: the website cohort). A blank is "no website on record", never "no website". */
+  website?: string | null;
 }
 export interface AdminMessage {
+  /** Release 3: ties a reply to its triage row (template "positive" replies). */
+  id?: string;
   lead_id: string;
   direction: string | null;
   status: string | null;
@@ -230,12 +235,20 @@ export interface AdminOverview {
   excludedActivity: { whatsappSent: number; calls: number; contacts: number; apiCostUsd: number };
   funnel: Funnel;
   channels: ChannelRow[];
+  templates: TemplatesBlock;
+  niches: NicheRow[];
+  nicheBookReplyRate: number | null;
+  bottlenecks: Bottleneck[];
+  /** Prospect sign-ups (internal / test submissions excluded) started in the period, and how many paid. */
+  signups: { started: number; paid: number };
   calls: { rows: CallRow[]; total: CallRow };
   money: Money;
   today: SinceBlock; yesterday: SinceBlock;
   attention: AttentionItem[];
   /** null = triage has not run (the page says so rather than implying no replies need anyone). */
   triage: TriageSummary | null;
+  /** Open replies waiting for whoever holds them that are not on Paul's list. */
+  triageWaitingInInbox: number;
   clients: ClientRow[];
   inventory: { leads: number; active: number; archived: number; addedByTestAccounts: number };
 }
@@ -634,12 +647,38 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const todayBlock = since(input.today, input.cost.today);
   const yesterdayBlock = since(input.yesterday, input.cost.yesterday);
 
+  const ta = triageAttention(input, facts, nameOf, msgsBy, actBy);
+
+  /* Release 3 — templates, niches, bottlenecks, over the same facts. */
+  const triageByMessage = new Map((input.triage ?? []).map((r) => [r.message_id, r.category]));
+  const templates = foldTemplates({ period: p, facts, msgsBy, triageByMessage, paidAtOf });
+  const niches = foldNiches({ period: p, facts, paidAtOf });
+  const prospectSignups = input.onboarding.filter((o) => inPeriod(o.created_at, p) && !isInternalEmail(ex, o.contact_email)
+    && !(o.lead_id && leadById.get(o.lead_id) && isExcludedLead(ex, leadById.get(o.lead_id)!)));
+  const signupLeads = new Set(prospectSignups.map((o) => o.lead_id ?? `row:${o.created_at}`));
+  const paidSignupLeads = new Set(prospectSignups.filter((o) => o.status === 'paid' || (o.lead_id && isPaidLead(leadById.get(o.lead_id)))).map((o) => o.lead_id ?? `row:${o.created_at}`));
+  const interestedNoNext = facts.filter((f) => {
+    const st = salesStateOf({ status: f.lead.status, is_potential_work: f.lead.is_potential_work, amount_paid: f.lead.amount_paid, call_booked_at: f.lead.call_booked_at, whatsapp_sent_at: f.lead.whatsapp_sent_at }, input.nowMs).state;
+    return (st === 'interested' || st === 'meeting_booked') && !f.lead.is_archived && (!f.lead.next_action || f.lead.next_action === 'none');
+  }).length;
+  const bottlenecks = findBottlenecks({
+    contacted: totals.cohort.contacted, replied: totals.cohort.replied, interested: totals.cohort.interested, meetings: totals.cohort.meeting, sales: totals.cohort.paid,
+    signupStarts: signupLeads.size, signupsPaid: paidSignupLeads.size,
+    apiUsd: money.cost.period.usd, revenue: money.period.net,
+    interestedWithoutNextAction: interestedNoNext,
+    deadTemplates: templates.meta.filter((r) => r.leadsSent >= BOTTLENECK_THRESHOLDS.templateDeadSends && r.replies === 0).map((r) => r.template),
+    periodLabel: p.label,
+  });
+
   return {
     period: p, team, totals, excludedActivity, funnel, channels,
+    templates, niches: niches.rows, nicheBookReplyRate: niches.bookReplyRate, bottlenecks,
+    signups: { started: signupLeads.size, paid: paidSignupLeads.size },
     calls: { rows: [...callRows.values()].sort((a, b) => b.total - a.total), total: callTotal },
     money, today: todayBlock, yesterday: yesterdayBlock,
-    attention: attentionItems(input, facts, ledger, nameOf, todayDay, msgsBy, actBy),
+    attention: attentionItems(input, facts, ledger, nameOf, todayDay, ta.items),
     triage: triageSummary(input, p),
+    triageWaitingInInbox: ta.waitingInInbox,
     clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf),
     inventory: {
       leads: input.leads.length,
@@ -659,10 +698,10 @@ const NEVER_SETTLED: ReadonlySet<string> = new Set(['client_message', 'payment_i
 
 function attentionItems(
   input: AdminInput, facts: LeadFacts[], ledger: AdminLedgerRow[], nameOf: (u: string | null) => string, todayDay: string,
-  msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>,
+  triageItems: AttentionItem[],
 ): AttentionItem[] {
   const out: AttentionItem[] = [];
-  out.push(...triageAttention(input, facts, nameOf, msgsBy, actBy));
+  out.push(...triageItems);
   const nowMs = input.nowMs;
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
   const factsById = new Map(facts.map((f) => [f.lead.id, f]));
@@ -744,8 +783,10 @@ function attentionItems(
    Everything else (no_action, a salesperson's ordinary conversation) never appears — the Inbox has it.
    Open = not answered by a person since, no one acted on the lead since, the lead has not settled, and
    not marked handled (replyTriage.ts triageIsOpen). */
-function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string, msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>): AttentionItem[] {
-  if (!input.triage?.length) return [];
+/** The items for Paul's list, and the open replies NOT put on it (a salesperson's, or not a live sale). */
+function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string, msgsBy: Map<string, AdminMessage[]>, actBy: Map<string, AdminActivity[]>): { items: AttentionItem[]; waitingInInbox: number } {
+  const counts = { waitingInInbox: 0 };
+  if (!input.triage?.length) return { items: [], waitingInInbox: 0 };
   const ex = input.exclusions;
   const factsById = new Map(facts.map((f) => [f.lead.id, f]));
   const newest = new Map<string, TriageRow>();
@@ -774,13 +815,16 @@ function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: stri
     else if (r.bucket === 'admin_action') { group = 'today'; why = `${label}: ${r.reason}`; action = 'Reply in the Inbox'; }
     else if (r.bucket === 'review') { group = 'review'; why = r.reason; action = 'Read the conversation and decide'; }
     else if (r.bucket === 'rep_action') {
+      /* ⛔ Only a LIVE SALE reaches Paul (measured 2026-09-30: surfacing every open question put 37
+         "who's asking?"-style replies on the list — salesperson work, the noise the brief forbids).
+         Everything else open is counted into one "waiting in the Inbox" line. */
       const hot = HIGH_INTENT.has(cat);
+      if (!hot) { counts.waitingInInbox += 1; continue; }
       if (holderIsRep) {
-        if (!hot || hours < REP_ESCALATE_HOURS) continue;
+        if (hours < REP_ESCALATE_HOURS) { counts.waitingInInbox += 1; continue; }
         group = 'today'; why = `${label} — ${nameOf(f.holder)} hasn't answered in ${hours} hours`; action = `Check in with ${nameOf(f.holder)}, or reply yourself`;
       } else {
-        if (!hot && cat !== 'question') continue;
-        group = 'today'; why = hot ? `${label} — nobody has answered yet` : `Asked a question nobody has answered`; action = 'Reply in the Inbox';
+        group = 'today'; why = `${label} — nobody has answered yet`; action = 'Reply in the Inbox';
       }
     } else continue;
     out.push({
@@ -789,7 +833,7 @@ function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: stri
       triageId: r.id, confidence: r.confidence ?? undefined, method: r.method,
     });
   }
-  return out;
+  return { items: out, waitingInInbox: counts.waitingInInbox };
 }
 
 function triageSummary(input: AdminInput, p: ReportingPeriod): TriageSummary | null {

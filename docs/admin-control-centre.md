@@ -138,6 +138,45 @@ apostrophes, working-hours auto-replies, "the report you provide" falsely matchi
 (fails closed if the spend can't be read), honours the emergency stop, logged to `api_usage_log`
 (`openai_reply_triage`). ~$0.0002 a call.
 
+### What reaches the list (tightened in release 3)
+
+Measured on live data: surfacing every open question put 37 "who's asking?"-style replies on the list.
+Now only a LIVE SALE (interested / price / call / booking) nobody is working reaches Paul; every other
+open reply is one line, "N other replies are waiting in the Inbox". An AI "they asked to stop" (e.g. "No.
+Bugger off!") sits in REVIEW with a **Suppress** button — Paul's decision, the shared `suppress()`
+(source `admin_confirmed_optout`), a History row naming him, and the item closes. On 2026-09-30 the list
+went from 45 items to 13.
+
+Runs are single-flight: `admin_job_runs` (lease + last run / status / result / error), claimed by
+`admin_job_claim` before work and released by `admin_job_finish`. Two overlapping runs had once asked
+the model about the same messages (61 calls for 34 filings). The page prints the sorter's last run.
+
+## Sales intelligence (release 3)
+
+`src/lib/adminIntelligence.ts` (tests `scripts/admin-intelligence.test.ts`), panels in
+`src/components/admin/intelligence.tsx`. No scores, no winner rankings; every label prints its threshold.
+
+- **Templates:** registered Meta templates (a send with a template name) are kept apart from free-form
+  sends (typed in the Inbox, or an AI draft sent). Per template, for sends in the period: sends, leads
+  sent, delivered, replied (last-touch, `creditRepliesToSends` — the one rule; "contested" shown), real
+  interest (credited replies the sorter filed as a live sale or question), and what FOLLOWED on those
+  leads: interested, meetings, paid, said no, opted out. Flags: tiny sample < `TEMPLATE_MIN_LEADS` (30);
+  high reply ≥ 1.5× the overall rate; weak ≤ 0.5×; no replies; high rejection ≥ 40% of ≥ 10 replies.
+  Message cost: **not recorded** (Meta charges are not captured) — said so, never £0. Live, 30 days:
+  `audit_followup_call` 93 replies of which 48 said no (high rejection); `initial_contact` 404 of 918.
+- **Niches:** the canonical trade of the search keyword (`canonicalTrade`, so plumbers = plumber). For
+  leads first messaged in the period: messaged, replied, interested, meetings, paid, and the website
+  cohort ("no website on record" = blank field, never "no website"). Contactable = has a phone and not
+  marked no-WhatsApp (`whatsapp_status` is "unknown" on every lead — useless). Labels: Needs more data
+  under `NICHE_MIN_MESSAGED` (30); Promising data = reply rate ≥ the book's and ≥ 1 interested; Weak
+  response so far ≤ 0.5× the book's; otherwise In line with the book. Cost per niche: not attributable.
+- **Bottlenecks:** fixed checks, each with the numbers it used and "not enough data" below its minimum
+  (`BOTTLENECK_THRESHOLDS`): contacts → replies, replies → interested, interested → meetings, meetings →
+  sales, prospect sign-ups → paid (test sign-ups excluded), spend with nothing collected, interested
+  leads with no Next Action, templates with 40+ leads and 0 replies. Live, 30 days: flagged "few
+  interested from replies" (17 of 448 — a reply includes "yes, it's us"), "few meetings from interested"
+  (1 of 17), and "38 interested leads with no next step".
+
 ## What was removed from the old page (audit, 2026-09-30)
 
 | Old block | Verdict | Why |

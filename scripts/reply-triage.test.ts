@@ -97,8 +97,8 @@ console.log('\n── what reaches Paul\'s list ──');
     category, bucket, reason: 'r', confidence: 1, method: 'rule', action_taken: null, resolved_at: null, ...o,
   });
   const noThanks = L({}), paulPrice = L({}), repPriceFresh = L({ assigned_to_user_id: REP }), repPriceStale = L({ assigned_to_user_id: REP }),
-    repQuestion = L({ assigned_to_user_id: REP }), answered = L({}), urgent = L({}), review = L({}), handled = L({}), confirmed = L({});
-  const leads = [noThanks, paulPrice, repPriceFresh, repPriceStale, repQuestion, answered, urgent, review, handled, confirmed];
+    repQuestion = L({ assigned_to_user_id: REP }), answered = L({}), urgent = L({}), review = L({}), handled = L({}), confirmed = L({}), paulQuestion = L({});
+  const leads = [noThanks, paulPrice, repPriceFresh, repPriceStale, repQuestion, answered, urgent, review, handled, confirmed, paulQuestion];
   const p = (k: string) => resolvePeriod(k, NOW);
   const input: AdminInput = {
     period: p('7d'), today: p('today'), yesterday: p('yesterday'), week: p('week'), month: p('mtd'), nowMs: NOW, bookOwnerId: PAUL,
@@ -111,7 +111,7 @@ console.log('\n── what reaches Paul\'s list ──');
       T(noThanks, 'not_interested', 'no_action', 3), T(paulPrice, 'price', 'rep_action', 3), T(repPriceFresh, 'price', 'rep_action', 3),
       T(repPriceStale, 'price', 'rep_action', REP_ESCALATE_HOURS + 2), T(repQuestion, 'question', 'rep_action', 48), T(answered, 'price', 'rep_action', 3),
       T(urgent, 'escalation', 'urgent_admin', 2), T(review, 'unclear', 'review', 2, { method: 'ai', confidence: 0.4 }), T(handled, 'price', 'rep_action', 3, { resolved_at: new Date(NOW).toISOString() }),
-      T(confirmed, 'confirmed_contact', 'rep_action', 3),
+      T(confirmed, 'confirmed_contact', 'rep_action', 3), T(paulQuestion, 'question', 'rep_action', 3),
     ],
   };
   const o = foldAdminOverview(input);
@@ -126,7 +126,9 @@ console.log('\n── what reaches Paul\'s list ──');
   ok(o.attention.find((a) => a.leadId === review.id)?.group === 'review', 'a low-confidence AI filing is on the list as REVIEW — it does not disappear');
   ok(!on(handled), 'marked handled → gone');
   ok(!on(confirmed), '"Yes it is" (confirming the opener) never reaches the list');
-  ok(o.triage?.byBucket.no_action === 1 && o.triage?.byBucket.rep_action === 7, 'the summary counts the sorting');
+  ok(!on(paulQuestion), "an ordinary question — even on Paul's own lead — is salesperson work, not on the list (measured: 37 of them flooded it)");
+  ok(o.triageWaitingInInbox === 4, 'the open replies not listed are counted into one Inbox line (fresh rep price, rep question, confirmation, Paul question)');
+  ok(o.triage?.byBucket.no_action === 1 && o.triage?.byBucket.rep_action === 8, 'the summary counts the sorting');
   const o2 = foldAdminOverview({ ...input, triage: null });
   ok(o2.triage === null, 'triage unavailable is reported as unavailable, never as "nothing needs you"');
 }
@@ -140,6 +142,7 @@ console.log('\n── the History kind exists in the migration and has a label �
   ok(!/from\("outreach_leads"\)\.update/.test(fn) && !/payment_ledger/.test(fn), 'the triage function never writes a lead or money');
   ok(/\(await paidMode\(service\)\) === "all_stop"/.test(fn) && /AI_DAILY_CAP_USD/.test(fn) && /AI_MAX_PER_RUN/.test(fn), 'the model call honours the emergency stop, a per-run cap and a daily cap');
   ok(/reason: "opted_out", source: "whatsapp_optout_inbound"/.test(fn) && /if \(d\.suppress\)/.test(fn), 'only a rule decision (d.suppress) can suppress, through the shared suppress()');
+  ok(/admin_job_claim/.test(fn) && /if \(claimed !== true\) return/.test(fn) && /admin_job_finish/.test(fn), 'one run at a time: the lease is claimed first and released with the outcome');
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');

@@ -21,6 +21,7 @@ import {
   AttentionQueue, CallsPanel, ChannelsPanel, ClientsPanel, CommissionPanel, ContributionPanel, CostPanel,
   FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
 } from '@/components/admin/controlCentre';
+import { BottlenecksPanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -118,6 +119,8 @@ const Dashboard = () => {
         <>
           <Section title="Now">
             <AttentionQueue items={o.attention} onOpen={openItem} triage={o.triage} period={o.period.label}
+              sorter={o.jobs?.find((j) => j.job === 'conversation-triage') ?? null} waitingInInbox={o.triageWaitingInInbox}
+              onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
               onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
             <SinceYesterday o={o} attention={o.attention.length} />
           </Section>
@@ -129,6 +132,12 @@ const Dashboard = () => {
               <ChannelsPanel o={o} />
             </div>
             <CallsPanel o={o} />
+          </Section>
+
+          <Section title="Sales intelligence">
+            <BottlenecksPanel o={o} />
+            <TemplatesPanel o={o} />
+            <NichesPanel o={o} />
           </Section>
 
           <Section title="Money">
