@@ -6,6 +6,7 @@ import { buildPagePlan, stuffingCheck, enforceNaturalness, enforceCatchmentHones
 import { classifyWinnability, unwrapCitationUrl, SCORED_ENGINES, DISPLAY_ENGINES, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
+import { qaHeadings, ownershipFor, ownedFromWebsiteBuild, ownedFromQueue } from "../../../src/lib/intentOwnership.ts";
 import { qaModeFor, renderGuarded, confirmCount, confirmReason, confirmMark, type QaMode } from "../../../src/lib/qaAnswerGuard.ts";
 import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
@@ -417,12 +418,16 @@ Deno.serve(async (req) => {
            classifyWinnability can skip own-site citations. */
         let towns: string[] = [];
         let ownWebsite = "";
+        let planServices: string[] = [];
+        let planHome = "";
         if (qaAudit.lead_id) {
           const { data: obTown } = await service.from("onboarding_responses")
-            .select("confirmed_location, areas_list").eq("lead_id", qaAudit.lead_id)
+            .select("confirmed_location, areas_list, services_list").eq("lead_id", qaAudit.lead_id)
             .order("created_at", { ascending: false }).limit(1).maybeSingle();
-          const o = obTown as { confirmed_location: string | null; areas_list: string[] | null } | null;
+          const o = obTown as { confirmed_location: string | null; areas_list: string[] | null; services_list?: string[] | null } | null;
           towns = [...new Set([(o?.confirmed_location ?? "").trim(), ...(Array.isArray(o?.areas_list) ? o!.areas_list : []).map((a) => String(a ?? "").trim())].filter(Boolean))];
+          planServices = (Array.isArray(o?.services_list) ? o!.services_list : []).map((x) => String(x ?? "").trim()).filter(Boolean);
+          planHome = (o?.confirmed_location ?? "").trim();
           const { data: leadW } = await service.from("outreach_leads").select("website").eq("id", qaAudit.lead_id).maybeSingle();
           ownWebsite = String((leadW as { website?: string } | null)?.website ?? "");
         }
@@ -575,6 +580,26 @@ Deno.serve(async (req) => {
           p.topSources = topSources(p.questions.flatMap((q) => domainsByQ.get(q) ?? []));
         }
 
+        /* THE SITE INTENT MAP (intentOwnership.ts, Paul 2026-09-30): before a page is proposed, ask
+           whether a page the client's site already has (the Website Build plan) owns this intent. An
+           owned intent is HELD with the owner named — improve that page, never add a second one —
+           and a page that sits next to an existing one says so. The same rule the build uses. */
+        if (qaAudit.lead_id) {
+          const { data: planLead } = await service.from("outreach_leads").select("website_build").eq("id", qaAudit.lead_id).maybeSingle();
+          const sitePages = ownedFromWebsiteBuild((planLead as { website_build?: unknown } | null)?.website_build);
+          if (sitePages.length) {
+            for (const p of pages) {
+              const h = qaHeadings({ question: p.primaryQuestion, services: planServices, towns, homeTown: planHome, businessName: qaAudit.business_name ?? "", businessType: qaAudit.business_type ?? "" });
+              const o = ownershipFor({ service: h.service || undefined, town: h.town || undefined, question: p.primaryQuestion, generic: h.basis === "trade" }, sitePages, { services: planServices, towns, homeTown: planHome });
+              if (o.decision === "improve_existing" && o.owner) {
+                if (p.status !== "held") { p.status = "held"; p.heldReason = "Already owned by " + (o.owner.label || o.owner.page) + " (" + o.owner.page + ") on the client's site — improve that page instead of adding another."; }
+              } else if (o.competing.length) {
+                p.rationale = [p.rationale, "Sits next to " + o.competing.map((c) => c.page).join(", ") + ": link them and keep this page genuinely different."].filter(Boolean).join(" · ");
+              }
+            }
+          }
+        }
+
         if (dryRun) return json({ ok: true, dryRun: true, partitionOk, problems, townSplits, pages, questionCount: qaQuestions.length });
 
         // Persist: rebuild REPLACES this client's plan (the UI's confirm says so).
@@ -642,9 +667,36 @@ Deno.serve(async (req) => {
       /* The client's own "must never claim" answer binds Q&A pages too (both modes passed "" until
          2026-09-30, so a Q&A page could say what the client had forbidden). Newest questionnaire row. */
       const { data: qaOb } = qaAudit.lead_id
-        ? await service.from("onboarding_responses").select("must_not_say").eq("lead_id", qaAudit.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle()
+        ? await service.from("onboarding_responses").select("must_not_say, services_list, areas_list, confirmed_location").eq("lead_id", qaAudit.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle()
         : { data: null };
-      const qaMustNotSay = String((qaOb as { must_not_say?: string | null } | null)?.must_not_say ?? "").trim();
+      const qaObRow = (qaOb ?? null) as { must_not_say?: string | null; services_list?: string[] | null; areas_list?: string[] | null; confirmed_location?: string | null } | null;
+      const qaMustNotSay = String(qaObRow?.must_not_say ?? "").trim();
+
+      /* ── THE QUESTION IS THE TARGET INTENT, NEVER THE HEADING (Paul, 2026-09-30) ──────────────
+         The title / H1 / slug come from the genuine service, place and business (qaHeadings). And
+         before anything is spent, the ONE ownership rule (intentOwnership.ts — the same one the
+         Website Build's Site Intent Map uses): if another page already owns this intent, the answer
+         is "improve that page", not a second one. */
+      const qaServices = (Array.isArray(qaObRow?.services_list) ? qaObRow!.services_list : []).map((x) => String(x ?? "").trim()).filter(Boolean);
+      const qaHome = String(qaObRow?.confirmed_location ?? "").trim();
+      const qaTowns = [...new Set([qaHome, ...(Array.isArray(qaObRow?.areas_list) ? qaObRow!.areas_list : []).map((x) => String(x ?? "").trim())].filter(Boolean))];
+      const heads = qaHeadings({ question, services: qaServices, towns: qaTowns, homeTown: qaHome, businessName: qaAudit.business_name ?? "", businessType: qaAudit.business_type ?? "" });
+      if (qaAudit.lead_id) {
+        const [{ data: qaLead }, { data: qaQueue }] = await Promise.all([
+          service.from("outreach_leads").select("website_build").eq("id", qaAudit.lead_id).maybeSingle(),
+          service.from("client_pages").select("id, slug, job, primary_question, service, town, status").eq("lead_id", qaAudit.lead_id).eq("user_id", userId),
+        ]);
+        const owned = [
+          ...ownedFromWebsiteBuild((qaLead as { website_build?: unknown } | null)?.website_build),
+          ...ownedFromQueue(((qaQueue ?? []) as Array<Record<string, string | null>>), { services: qaServices, towns: qaTowns }),
+        ];
+        const own = ownershipFor({ service: heads.service || undefined, town: heads.town || undefined, question, generic: heads.basis === "trade" }, owned, { services: qaServices, towns: qaTowns, homeTown: qaHome });
+        /* Regenerating the planned page FOR this very question is not a second page. */
+        const isThisPage = own.owner?.kind === "qa" && !!own.owner.question && own.owner.question.trim().toLowerCase() === question.toLowerCase();
+        if (own.decision === "improve_existing" && own.owner && !isThisPage) {
+          return json({ ok: false, error: "intent_owned", owner: own.owner, detail: own.reasons.join(" ") }, 200);
+        }
+      }
 
       /* ── ADVICE MODE — drafted answers, guarded sentence by sentence on the way out. ───────── */
       if (qaMode === "advice") {
@@ -722,19 +774,18 @@ Deno.serve(async (req) => {
         }
         parts.push(`<h2>Speak to the team</h2><p>For advice specific to your situation, get in touch${qaContactUrl ? ` — <a href="${escHtml(qaContactUrl)}">get in touch here</a>` : ""}.</p>`);
 
-        const aTitle = question.length <= 60 ? question : (() => {
-          let t = ""; for (const w of question.split(/\s+/)) { if (`${t} ${w}`.trim().length > 60) break; t = `${t} ${w}`.trim(); } return t || question.slice(0, 60);
-        })();
+        const aTitle = heads.title;
         /* The meta description is guarded like everything else, then capped. */
-        const aMeta = (renderGuarded(str(parsed.meta)) || `${qaAudit.business_name} answers "${question}".`).slice(0, 200);
-        const aSlug = question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+        const aMeta = (renderGuarded(str(parsed.meta)) || `${heads.h1} — ${qaAudit.business_name}.`).slice(0, 200);
+        const aSlug = heads.slug;
 
         return json({
           ok: true,
           page: {
             key: `qa:${aSlug}`, question, queries: [question], slug: aSlug,
-            title: aTitle, meta_description: aMeta, h1: question, body_html: parts.join("\n"), draft: true,
+            title: aTitle, meta_description: aMeta, h1: heads.h1, body_html: parts.join("\n"), draft: true,
           },
+          headings: { basis: heads.basis, service: heads.service, town: heads.town, note: heads.note },
           qa: {
             mode: "advice", subQuestionCount: aSubs.length, pointCount: aPoints.length,
             confirmCount: totalConfirms, sourceCount: aSources.length,
@@ -811,18 +862,17 @@ Deno.serve(async (req) => {
       body_parts.push(`<p><em>Reviewed by ${escHtml(ci("name of the qualified expert who checked this, and the date"))}</em></p>`);
       body_parts.push(`<h2>Speak to the team</h2><p>For advice specific to your situation, get in touch${qaContactUrl ? ` — <a href="${escHtml(qaContactUrl)}">book a consultation</a>` : ""}.</p>`);
 
-      const title = question.length <= 60 ? question : (() => {
-        let t = ""; for (const w of question.split(/\s+/)) { if (`${t} ${w}`.trim().length > 60) break; t = `${t} ${w}`.trim(); } return t || question.slice(0, 60);
-      })();
-      const metaSafe = (factFree(qa.meta) || `${qaAudit.business_name} answers "${question}". ${ci("one-line verified summary")}`).slice(0, 200);
-      const slug = question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70);
+      const title = heads.title;
+      const metaSafe = (factFree(qa.meta) || `${heads.h1} — ${qaAudit.business_name}. ${ci("one-line verified summary")}`).slice(0, 200);
+      const slug = heads.slug;
 
       return json({
         ok: true,
         page: {
           key: `qa:${slug}`, question, queries: [question], slug,
-          title, meta_description: metaSafe, h1: question, body_html: body_parts.join("\n"), draft: true,
+          title, meta_description: metaSafe, h1: heads.h1, body_html: body_parts.join("\n"), draft: true,
         },
+        headings: { basis: heads.basis, service: heads.service, town: heads.town, note: heads.note },
         qa: { mode: "structured", subQuestionCount: subs.length, factSlotCount: slots.length, introFromModel: !!factFree(qa.intro) },
       });
     }

@@ -432,6 +432,23 @@ export function auditSite(site, opts) {
     result('placeholders', 'content', 'No placeholder copy; no default llms.txt', fails, warns);
   }
 
+  /* ── C1 prices: only approved ones (Paul, 2026-09-30 — a price from the old site is never carried
+        over just because it was public; it goes stale and binds the client) ── */
+  if (Array.isArray(expect?.prices)) {
+    const money = (v) => { const m = String(v).replace(/,/g, '').match(/£\s?(\d+(?:\.\d{1,2})?)/); return m ? String(Number(m[1])) : ''; };
+    const approved = new Set(expect.prices.map(money).filter(Boolean));
+    const fails = [];
+    for (const [p, x] of parsed) {
+      if (is404(p)) continue;
+      const hay = x.mainText + ' ' + x.titles.join(' ') + ' ' + x.description.join(' ') + ' ' + x.jsonld.join(' ');
+      for (const m of hay.replace(/,(?=\d{3}\b)/g, '').matchAll(/£\s?(\d+(?:\.\d{1,2})?)(?!\d)\s*(m\b|million|k\b|bn|billion)?/gi)) {
+        if (m[2]) continue; /* £5m public liability cover is insurance, not a price */
+        if (!approved.has(String(Number(m[1])))) fails.push(p + ': £' + m[1] + ' is not an approved price');
+      }
+    }
+    result('prices', 'content', 'Every price shown is one Paul approved', fails);
+  } else add('prices', 'content', 'Every price shown is one Paul approved', 'skip', ['No prices list in --expect: prices were not checked.']);
+
   /* ── E1 structured data ── */
   const bizIds = new Set();
   {

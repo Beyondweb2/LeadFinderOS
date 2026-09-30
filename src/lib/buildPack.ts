@@ -27,6 +27,7 @@ import {
   QA_ITEMS, REBUILD_STYLE_LABELS,
 } from './websiteBuildState.ts';
 import type { WebsiteTemplate } from './websiteTemplates.ts';
+import { templateCacheName } from './websiteTemplates.ts';
 import type { FactRow } from './buildFacts.ts';
 import { CLAIM_VERDICT_LABELS, isPublishable, mapTemplateClaims } from './buildFacts.ts';
 import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
@@ -217,11 +218,12 @@ function setupCommands(i: BuildPackInput): PackItem {
     '',
   ];
   if (isTemplateRoute(s) && t) {
-    const cache = parent + '\\_templates\\' + t.id;
+    const cache = parent + '\\_templates\\' + templateCacheName(t);
     lines.push(
-      '# -- 2. Get the latest copy of the ' + t.name + ' (kept in one folder, reused per client) --',
+      '# -- 2. Get the ' + t.name + ' v' + t.version + ' at its PINNED commit (kept in one folder per source, reused per client) --',
       'New-Item -ItemType Directory -Force -Path ' + q(parent + '\\_templates') + ' | Out-Null',
-      'if (Test-Path ' + q(cache) + ') { git -C ' + q(cache) + ' pull --ff-only } else { git clone --branch ' + t.sourceBranch + ' ' + t.sourceRepoUrl + ' ' + q(cache) + ' }',
+      'if (Test-Path ' + q(cache) + ') { git -C ' + q(cache) + ' fetch origin } else { git clone ' + t.sourceRepoUrl + ' ' + q(cache) + ' }',
+      'git -C ' + q(cache) + ' checkout --detach ' + t.sourcePinnedCommit + '      # never the moving branch: ' + (t.sourceKind === 'live_client_repo' ? 'this is a live client\'s site' : 'the pinned release'),
       '',
       '# -- 3. Copy it into the new client folder WITHOUT the template\'s git history --',
       '#    (stops and says so if the folder already exists, so nothing is overwritten)',
@@ -527,6 +529,7 @@ function contentRules(i: BuildPackInput): string[] {
     '  doorway or cloned town pages · hundreds of thin FAQs · hidden text · schema stuffing · fake',
     '  citations · an automatic llms.txt',
     'If a fact is not in VERIFIED FACTS, it does not go on the site — it goes on your list for Paul.',
+    '⛔ PRICES (Paul, 2026-09-30): a price appears ONLY when it is a VERIFIED fact in section D. Never carry a price from the current site — not in preserved copy, a table, a card, schema or a meta description — just because it is publicly stated there: prices go stale and bind the client. Remove it and list it for Paul. The site quality gate fails any £ figure that is not an approved price.',
     ...(i.mustNotSay ? ['', '⛔ THE CLIENT HAS SAID WE MUST NOT SAY: ' + i.mustNotSay, 'This applies to every page, heading, meta description and schema field.'] : []),
   ];
 }

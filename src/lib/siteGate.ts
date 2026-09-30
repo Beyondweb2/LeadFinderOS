@@ -25,6 +25,7 @@ const isTemplateRoute = (s: { route: string }) => s.route === 'template_rebuild'
 import type { Mapping } from './templateMapping.ts';
 import { isPublishable } from './buildFacts.ts';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS } from './websiteQuality.ts';
+import { findNamed, mentions, ownershipFor, type OwnedPage } from './intentOwnership.ts';
 
 export const SITE_GATE_VERSION = 1;
 /** Where the gate lives, for the client repository to fetch (LeadFinderOS main is the one copy). */
@@ -58,6 +59,8 @@ export interface SiteIntentMap {
   whatsapp: string;
   email: string;
   forbidHosts: string[];
+  /** The VERIFIED prices only (Paul approves every price). The gate fails any other £ figure. */
+  prices: string[];
   services: Array<{ name: string; page: string }>;
   locations: Array<{ name: string; page: string }>;
   intents: SiteIntent[];
@@ -67,23 +70,16 @@ export interface SiteIntentMap {
 
 const fact = (i: BuildPackInput, key: string) => { const r = i.facts.find((f) => f.key === key); return r && isPublishable(r) ? r.value.trim() : ''; };
 const hostOf = (u: string) => { try { return new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u).hostname.toLowerCase(); } catch { return ''; } };
-/** Loose containment for matching a question to a service / town: word stems, never a substring of a word. */
-const tokens = (s: string) => s.toLowerCase().replace(/&/g, ' and ').match(/[a-z0-9]+/g)?.map((w) => w.replace(/(ies)$/, 'y').replace(/(es|s)$/, '')) ?? [];
-const STOP = new Set(['and', 'the', 'a', 'of', 'for', 'in', 'to', 'service', 'servic', 'repair', 'install', 'installation', 'local']);
-function mentions(text: string, name: string): boolean {
-  const t = tokens(text), n = tokens(name).filter((w) => !STOP.has(w));
-  if (!n.length) return false;
-  for (let k = 0; k + n.length <= t.length; k++) if (n.every((w, j) => t[k + j] === w)) return true;
-  return n.length > 1 && n.every((w) => t.includes(w));
-}
-
-/** The approved decisions as the gate's --expect file. Pure. */
+/** The approved decisions as the gate's --expect file. Pure. Ownership is intentOwnership.ts — the
+ *  same rule the page generator and the page-plan queue use. */
 export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
   const s = i.state;
   const domain = (s.canonical_domain || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const live = s.pages.filter((p) => p.action === 'keep' || p.action === 'create');
+  const catalogue = i.template?.serviceCatalogue ?? [];
+  /* A template service's page: the plan's page for it, else the path the template builds for it. */
   const services: Array<{ name: string; page: string }> = isTemplateRoute(s)
-    ? m.config.services.map((x) => ({ name: x.name, page: live.find((p) => p.family === 'service' && mentions(p.title, x.name))?.path ?? '' }))
+    ? m.config.services.map((x) => ({ name: x.name, page: live.find((p) => p.family === 'service' && mentions(p.title, x.name))?.path ?? catalogue.find((c) => c.id === x.id)?.path ?? '' }))
     : live.filter((p) => p.family === 'service').map((p) => ({ name: p.title, page: p.path }));
   const townPages = isTemplateRoute(s) ? ((m.config.locations.pages as string[] | undefined) ?? []) : [];
   const locations: Array<{ name: string; page: string }> = isTemplateRoute(s)
@@ -91,6 +87,7 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
     : live.filter((p) => p.family === 'location').map((p) => ({ name: p.title, page: p.path }));
   const home = live.find((p) => p.family === 'homepage')?.path || '/';
   const primary = fact(i, 'primary_town') || String((m.config.locations as Record<string, unknown>).primary ?? '');
+  const served = [...(((m.config.locations as Record<string, unknown>).served as string[] | undefined) ?? []), ...fact(i, 'service_areas').split(/\s*[,;|]\s*/).filter(Boolean), ...locations.map((x) => bareTown(x.name, primary))];
 
   const intents: SiteIntent[] = [
     ...services.map((x) => ({ intent: x.name, page: x.page, service: x.name, source: 'service' as const })),
@@ -99,18 +96,21 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
       .map((k) => ({ intent: CONTENT_INTENT_LABELS[k], page: s.quality.intents[k]!.page, source: 'content' as const })),
   ];
 
-  /* The frozen baseline questions, each on the ONE page that should genuinely answer it:
-     a location page when it names a town that has one, else the page of the service it names, else
-     the home page when it names the home town or no town. Anything else is Paul's decision. */
+  /* The frozen baseline questions, each on the ONE page that already owns it (ownershipFor). A
+     question no planned page owns — a new service-in-town page, an unapproved service or place — is
+     Paul's decision, never a page the builder adds on its own. */
+  const owned: OwnedPage[] = [
+    ...services.map((x) => ({ page: x.page, label: x.name, kind: 'service' as const, service: x.name, source: 'page plan' })),
+    ...locations.map((x) => ({ page: x.page, label: x.name, kind: 'location' as const, town: bareTown(x.name, primary), source: 'page plan' })),
+    { page: home, label: 'Home page', kind: 'home' as const, source: 'page plan' },
+  ];
+  const ctx = { services: services.map((x) => x.name), towns: served, homeTown: primary };
   const unowned: string[] = [];
   for (const q of i.evidence.frozenQuestions ?? []) {
-    const svc = services.find((x) => mentions(q, x.name));
-    const loc = locations.find((x) => mentions(q, bareTown(x.name, primary)));
-    const namesPrimary = !!primary && mentions(q, primary);
-    const namesOtherTown = !loc && !namesPrimary && mentionsAnyServedTown(q, m, primary);
-    if (loc) intents.push({ intent: 'Baseline: ' + q, page: loc.page, town: bareTown(loc.name, primary), source: 'baseline', question: q });
-    else if (svc && !namesOtherTown) intents.push({ intent: 'Baseline: ' + q, page: svc.page, service: svc.name, source: 'baseline', question: q });
-    else if (!svc && !namesOtherTown) intents.push({ intent: 'Baseline: ' + q, page: home, ...(namesPrimary ? { town: primary } : {}), source: 'baseline', question: q });
+    const service = findNamed(q, ctx.services);
+    const town = findNamed(q, [...served, ...(primary ? [primary] : [])]);
+    const o = ownershipFor({ service: service || undefined, town: town || undefined, question: q, generic: !service }, owned, ctx);
+    if (o.decision === 'improve_existing' && o.owner) intents.push({ intent: 'Baseline: ' + q, page: o.owner.page, ...(o.owner.kind === 'service' ? { service: o.owner.service } : {}), ...(o.owner.kind === 'location' ? { town: o.owner.town } : {}), source: 'baseline', question: q });
     else unowned.push(q);
   }
 
@@ -123,7 +123,7 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
     siteIntentMapVersion: 1, domain,
     businessName: fact(i, 'business_name') || i.businessName,
     phone: fact(i, 'phone'), whatsapp: fact(i, 'whatsapp_number'), email: fact(i, 'email'),
-    forbidHosts: [...new Set(forbidHosts)], services, locations, intents, unowned,
+    forbidHosts: [...new Set(forbidHosts)], prices: fact(i, 'prices') ? fact(i, 'prices').split(/\s*[,;|]\s*/).filter(Boolean) : [], services, locations, intents, unowned,
   };
 }
 /** "Electrician in Bath" / "Bath" → "Bath": a location page's title names the trade too. */
@@ -131,10 +131,6 @@ function bareTown(title: string, primary: string): string {
   const m = title.match(/\bin\s+(.+)$/i);
   const t = (m ? m[1] : title).replace(/\s*[|–—-].*$/, '').trim();
   return t || primary;
-}
-function mentionsAnyServedTown(q: string, m: Mapping, primary: string): boolean {
-  const served = ((m.config.locations as Record<string, unknown>).served as string[] | undefined) ?? [];
-  return served.some((t) => t && t !== primary && mentions(q, t));
 }
 
 /** The map as prompt lines (X6b). The JSON is what Claude saves as the gate's --expect file. */
