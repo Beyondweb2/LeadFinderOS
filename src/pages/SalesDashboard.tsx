@@ -231,28 +231,28 @@ export default function SalesDashboard() {
           {viewingSelf && <MilestonesPanel items={w.milestones} />}
           <TrendsPanel trends={w.trends} />
 
-          <Panel title="Conversion" icon={Filter} tone="blue" hint="From contacted to won. The small grey figure is the rate.">
+          <Panel collapseKey="sales.conversion" title="Conversion" icon={Filter} tone="blue" hint="From contacted to won. The small grey figure is the rate.">
             <Funnel f={d.funnel} />
             <Focus d={d} templates={templates} />
           </Panel>
 
-          <Panel title="Campaigns" icon={Megaphone} tone="blue" hint="Which campaign is working. Tap one to open its leads in Outreach." action={<ManageRows kind="campaigns" all={d.campaigns.map((r) => ({ key: campaignKey(r), label: r.name, lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.campaigns} onChange={(next) => prefs.setHidden({ ...prefs.hidden, campaigns: next })} />}>
+          <Panel collapseKey="sales.campaigns" title="Campaigns" icon={Megaphone} tone="blue" hint="Which campaign is working. Tap one to open its leads in Outreach." action={<ManageRows kind="campaigns" all={d.campaigns.map((r) => ({ key: campaignKey(r), label: r.name, lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.campaigns} onChange={(next) => prefs.setHidden({ ...prefs.hidden, campaigns: next })} />}>
             <CampaignCards rows={campaigns} onOpen={(id) => { writeCampaignFilter(user?.id, id); navigate('/outreach'); }} />
           </Panel>
-          <Panel title="Templates" icon={MessageCircleReply} tone="blue" hint="Which message gets replies. A reply counts for the last template sent before it; “Unclear” means two different templates went out before they replied. Interested, link and won count the people whose reply that template earned." action={<ManageRows kind="templates" all={d.templates.map((r) => ({ key: templateKey(r), label: templateLabel(r.template), lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.templates} onChange={(next) => prefs.setHidden({ ...prefs.hidden, templates: next })} />}>
+          <Panel collapseKey="sales.templates" title="Templates" icon={MessageCircleReply} tone="blue" hint="Which message gets replies. A reply counts for the last template sent before it; “Unclear” means two different templates went out before they replied. Interested, link and won count the people whose reply that template earned." action={<ManageRows kind="templates" all={d.templates.map((r) => ({ key: templateKey(r), label: templateLabel(r.template), lastActivityAt: r.lastActivityAt }))} hidden={prefs.hidden.templates} onChange={(next) => prefs.setHidden({ ...prefs.hidden, templates: next })} />}>
             <TemplateTable rows={templates} />
           </Panel>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Panel title="Channels" icon={Radio} tone="blue" hint="A lead counts once per channel. Calls, LinkedIn, email and in person come from what you logged on the lead.">
+            <Panel collapseKey="sales.channels" title="Channels" icon={Radio} tone="blue" hint="A lead counts once per channel. Calls, LinkedIn, email and in person come from what you logged on the lead.">
               <ChannelBars rows={d.channels} />
             </Panel>
-            <Panel title="Where leads came from" icon={Sprout} tone="green" hint="App search, or where you found a lead you added by hand.">
+            <Panel collapseKey="sales.sources" title="Where leads came from" icon={Sprout} tone="green" hint="App search, or where you found a lead you added by hand.">
               <SimpleTable head={['Source', 'Leads', 'Contacted', 'Replied', 'Interested', 'Won']}
                 rows={d.sources.map((s) => [leadSourceLabel(s.source), s.leads, s.contacted, s.responded, s.interested, s.won])} empty="No leads yet." />
             </Panel>
           </div>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Panel title="Calls" icon={PhoneCall} tone="grey" hint={`Logged call outcomes${period === 'all' ? '' : ' in this period'}.`}>
+            <Panel collapseKey="sales.calls" title="Calls" icon={PhoneCall} tone="grey" hint={`Logged call outcomes${period === 'all' ? '' : ' in this period'}.`}>
               <p className="mb-2 text-3xl font-bold tabular-nums">{d.calls.total}</p>
               <div className="flex flex-wrap gap-1.5">
                 {CALL_OUTCOMES.filter((o) => d.calls.byOutcome[o.value]).map((o) => (
@@ -261,7 +261,7 @@ export default function SalesDashboard() {
                 {d.calls.total === 0 && <span className="text-xs text-muted-foreground">No calls logged yet. Log one from the lead's Work tab.</span>}
               </div>
             </Panel>
-            <Panel title="Won" icon={Trophy} tone="green" hint="Leads that became paying clients.">
+            <Panel collapseKey="sales.won" title="Won" icon={Trophy} tone="green" hint="Leads that became paying clients.">
               {d.won.length === 0 ? <Empty icon={Trophy}>None yet — your first client will be listed here.</Empty> : (
                 <ul className="space-y-1.5 text-sm">{d.won.map((x, i) => <li key={i} className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2"><Trophy className="h-4 w-4 text-emerald-600" /><span className="font-medium">{x.name}</span><span className="text-xs text-muted-foreground">· {x.campaign}</span></li>)}</ul>
               )}

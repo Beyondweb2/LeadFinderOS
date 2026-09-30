@@ -39,10 +39,10 @@ export function TodayStrip({ t, unread, earnedToday, onUnread, onFollowUps }: {
 /* ── Pipeline ───────────────────────────────────────────────────────────────────────────────────── */
 const STAGE_TONE: Record<StageKey, Tone> = { new: 'grey', contacted: 'grey', replied: 'blue', interested: 'green', signup_sent: 'amber', paid: 'green' };
 
-export function PipelineStrip({ pipeline, notInterested, onOpen }: { pipeline: SalesWorkspace['pipeline']; notInterested: number; onOpen: (k: StageKey) => void }) {
+export function PipelineStrip({ pipeline, notInterested, onOpen , collapseKey = 'sales.pipeline' }: { pipeline: SalesWorkspace['pipeline']; notInterested: number; onOpen: (k: StageKey) => void; collapseKey?: string }) {
   const max = Math.max(1, ...pipeline.map((p) => p.count));
   return (
-    <Panel title="Pipeline" icon={TrendingUp} tone="blue" hint={`Where each of your leads is now. Tap a stage to see its leads.${notInterested ? ` ${notInterested} not interested are left out.` : ''}`}>
+    <Panel collapseKey={collapseKey} title="Pipeline" icon={TrendingUp} tone="blue" hint={`Where each of your leads is now. Tap a stage to see its leads.${notInterested ? ` ${notInterested} not interested are left out.` : ''}`}>
       <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {pipeline.map((p, i) => (
           <li key={p.key} className="relative">
@@ -93,9 +93,9 @@ const ACTION_ICON: Record<string, typeof Clock> = {
   interested_untouched: Star, signup_unopened: Send, audit_ready: Sparkles, going_cold: Snowflake,
   quick_close_finish: PoundSterling, quick_close_link: PoundSterling, quick_close_review: AlertTriangle,
 };
-export function NextActions({ items, go, onFocus, title = "Your next best actions", hint = "The most useful thing to do for each lead, most urgent first. Tap to open it." }: { items: NextAction[]; go: Go; onFocus?: () => void; title?: string; hint?: string }) {
+export function NextActions({ items, go, onFocus, title = "Your next best actions", hint = "The most useful thing to do for each lead, most urgent first. Tap to open it." , collapseKey = 'sales.next-actions' }: { items: NextAction[]; go: Go; onFocus?: () => void; title?: string; hint?: string; collapseKey?: string }) {
   return (
-    <Panel title={title} icon={Target} tone="blue" hint={hint}
+    <Panel collapseKey={collapseKey} title={title} icon={Target} tone="blue" hint={hint}
       action={onFocus && items.length > 0 ? <Button size="sm" className="h-8 gap-1 text-xs" onClick={onFocus}><Target className="h-3.5 w-3.5" />Focus Mode</Button> : undefined}>
       {items.length === 0 ? <Empty icon={CheckCircle2}>Nothing waiting on you right now. New replies, due follow-ups and warm leads will show here.</Empty> : (
         <ul className="space-y-1.5">
@@ -132,11 +132,11 @@ export const FOLLOW_UP_GROUPS: { key: FollowUpGroup; label: string; tone: Tone; 
   { key: 'signupSent', label: 'Signup sent', tone: 'amber', link: 'whatsapp' },
   { key: 'goingCold', label: 'Going cold', tone: 'grey', link: 'whatsapp' },
 ];
-export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next Actions are shown as you set them — never changed for you." }: { fu: SalesWorkspace['followUps']; go: Go; group: FollowUpGroup; setGroup: (g: FollowUpGroup) => void; hint?: string }) {
+export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next Actions are shown as you set them — never changed for you." , collapseKey = 'sales.follow-ups' }: { fu: SalesWorkspace['followUps']; go: Go; group: FollowUpGroup; setGroup: (g: FollowUpGroup) => void; hint?: string; collapseKey?: string }) {
   const g = FOLLOW_UP_GROUPS.find((x) => x.key === group) ?? FOLLOW_UP_GROUPS[0];
   const rows = fu[g.key];
   return (
-    <Panel id="follow-ups" title="Follow-up queue" icon={CalendarCheck} tone="amber" hint={hint}>
+    <Panel collapseKey={collapseKey} id="follow-ups" title="Follow-up queue" icon={CalendarCheck} tone="amber" hint={hint}>
       <div className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
         {FOLLOW_UP_GROUPS.map((x) => (
           <button key={x.key} type="button" role="tab" aria-selected={x.key === g.key} onClick={() => setGroup(x.key)}
@@ -164,11 +164,11 @@ export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next A
 }
 
 /* ── Response timers ────────────────────────────────────────────────────────────────────────────── */
-export function WaitingPanel({ waiting, go, title = "Waiting on you" }: { waiting: SalesWorkspace['waiting']; go: Go; title?: string }) {
+export function WaitingPanel({ waiting, go, title = "Waiting on you" , collapseKey = 'sales.waiting' }: { waiting: SalesWorkspace['waiting']; go: Go; title?: string; collapseKey?: string }) {
   const [, tick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => tick((n) => n + 1), 60_000); return () => window.clearInterval(id); }, []);
   return (
-    <Panel title={title} icon={Clock} tone="blue" hint="Replies in the last 14 days that nothing has answered yet, longest wait first.">
+    <Panel collapseKey={collapseKey} title={title} icon={Clock} tone="blue" hint="Replies in the last 14 days that nothing has answered yet, longest wait first.">
       {waiting.length === 0 ? <Empty icon={CheckCircle2}>Every reply has an answer.</Empty> : (
         <ul className="space-y-1">
           {waiting.map((w) => {
@@ -196,9 +196,9 @@ export const WARMTH: Record<Warmth, { label: string; tone: Tone; icon: typeof Fl
   needs_follow_up: { label: 'Needs follow-up', tone: 'amber', icon: CalendarClock, rule: 'A reply waiting on you, a due Next Action, or you messaged last 3+ days ago' },
   going_cold: { label: 'Going cold', tone: 'grey', icon: Snowflake, rule: 'Engaged before, no contact either way for 14+ days' },
 };
-export function WarmthPanel({ warmth, onOpen }: { warmth: SalesWorkspace['warmth']; onOpen: (w: Warmth) => void }) {
+export function WarmthPanel({ warmth, onOpen , collapseKey = 'sales.warmth' }: { warmth: SalesWorkspace['warmth']; onOpen: (w: Warmth) => void; collapseKey?: string }) {
   return (
-    <Panel title="Lead temperature" icon={ThermometerSun} tone="green" hint="Leads that have engaged, by plain rules — no scores.">
+    <Panel collapseKey={collapseKey} title="Lead temperature" icon={ThermometerSun} tone="green" hint="Leads that have engaged, by plain rules — no scores.">
       <ul className="space-y-1.5">
         {(Object.keys(WARMTH) as Warmth[]).map((k) => {
           const W = WARMTH[k];
@@ -218,9 +218,9 @@ export function WarmthPanel({ warmth, onOpen }: { warmth: SalesWorkspace['warmth
 }
 
 /* ── Pipeline health ────────────────────────────────────────────────────────────────────────────── */
-export function HealthPanel({ health, onGroup }: { health: HealthWarning[]; onGroup: (g: FollowUpGroup) => void }) {
+export function HealthPanel({ health, onGroup , collapseKey = 'sales.health' }: { health: HealthWarning[]; onGroup: (g: FollowUpGroup) => void; collapseKey?: string }) {
   return (
-    <Panel title="Pipeline health" icon={HeartPulse} tone={health.some((h) => h.tone === 'red') ? 'red' : health.length ? 'amber' : 'green'} hint="Plain observations from your own numbers.">
+    <Panel collapseKey={collapseKey} title="Pipeline health" icon={HeartPulse} tone={health.some((h) => h.tone === 'red') ? 'red' : health.length ? 'amber' : 'green'} hint="Plain observations from your own numbers.">
       {health.length === 0 ? <Empty icon={CheckCircle2}>Nothing stands out. Keep going.</Empty> : (
         <ul className="space-y-1.5">
           {health.map((h) => (
@@ -241,9 +241,9 @@ const FEED_ICON: Record<string, typeof Clock> = {
   reply: MessageCircleReply, interested: Star, signup_sent: Send, signup_opened: Flame, payment: Trophy, audit: Sparkles,
   follow_up: CalendarClock, assigned: UserPlus, contact: PhoneCall, commission: PoundSterling,
 };
-export function ActivityFeed({ items, go, title = "Activity", hint = "What happened on your leads in the last 14 days." }: { items: FeedItem[]; go: Go; title?: string; hint?: string }) {
+export function ActivityFeed({ items, go, title = "Activity", hint = "What happened on your leads in the last 14 days." , collapseKey = 'sales.activity' }: { items: FeedItem[]; go: Go; title?: string; hint?: string; collapseKey?: string }) {
   return (
-    <Panel title={title} icon={Users} tone="blue" hint={hint}>
+    <Panel collapseKey={collapseKey} title={title} icon={Users} tone="blue" hint={hint}>
       {items.length === 0 ? <Empty>No activity in the last 14 days yet.</Empty> : (
         <ol className="relative max-h-96 space-y-0.5 overflow-y-auto pr-1">
           {items.map((it, i) => {
@@ -265,7 +265,7 @@ export function ActivityFeed({ items, go, title = "Activity", hint = "What happe
 }
 
 /* ── Daily recap ────────────────────────────────────────────────────────────────────────────────── */
-export function RecapPanel({ r, earnedToday }: { r: SalesWorkspace['recap']; earnedToday: number | null }) {
+export function RecapPanel({ r, earnedToday , collapseKey = 'sales.recap' }: { r: SalesWorkspace['recap']; earnedToday: number | null; collapseKey?: string }) {
   const rows: [string, React.ReactNode, Tone][] = [
     ['Contacted', r.contacted, 'grey'], ['Replies', r.replies, 'blue'], ['Interested', r.interested, 'green'],
     ['Clients won', r.won, 'green'], ['Earned', earnedToday === null ? '—' : gbp(earnedToday), 'green'],
@@ -273,7 +273,7 @@ export function RecapPanel({ r, earnedToday }: { r: SalesWorkspace['recap']; ear
   ];
   const nothing = !r.contacted && !r.replies && !r.interested && !r.won && !r.followUpsCompleted && !r.followUpsRemaining;
   return (
-    <Panel title="Today’s recap" icon={CalendarCheck} tone="grey" hint={new Date(`${r.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}>
+    <Panel collapseKey={collapseKey} title="Today’s recap" icon={CalendarCheck} tone="grey" hint={new Date(`${r.day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}>
       {nothing && <p className="mb-2 text-xs text-muted-foreground">A quiet day so far — everything below is zero.</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
         {rows.map(([k, v, tone]) => (
@@ -287,9 +287,9 @@ export function RecapPanel({ r, earnedToday }: { r: SalesWorkspace['recap']; ear
 }
 
 /* ── Personal targets ───────────────────────────────────────────────────────────────────────────── */
-export function TargetsPanel({ targets, canEdit, onEdit }: { targets: SalesWorkspace['targets']; canEdit: boolean; onEdit: () => void }) {
+export function TargetsPanel({ targets, canEdit, onEdit , collapseKey = 'sales.targets' }: { targets: SalesWorkspace['targets']; canEdit: boolean; onEdit: () => void; collapseKey?: string }) {
   return (
-    <Panel title="Your targets" icon={Target} tone="green" hint={targets ? `This ${targets.period}, since ${new Date(`${targets.since}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}. Private to you.` : 'Optional, private to you.'}
+    <Panel collapseKey={collapseKey} title="Your targets" icon={Target} tone="green" hint={targets ? `This ${targets.period}, since ${new Date(`${targets.since}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}. Private to you.` : 'Optional, private to you.'}
       action={canEdit ? <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onEdit}>{targets ? 'Edit' : 'Set targets'}</Button> : undefined}>
       {!targets || targets.rows.length === 0 ? <Empty>No targets set. {canEdit ? 'Set one if it helps — it is only for you.' : ''}</Empty> : (
         <ul className="space-y-2.5">
@@ -349,10 +349,10 @@ export function TargetsDialog({ open, onOpenChange, initial, onSave, saving }: {
 }
 
 /* ── Milestones ─────────────────────────────────────────────────────────────────────────────────── */
-export function MilestonesPanel({ items }: { items: Milestone[] }) {
+export function MilestonesPanel({ items , collapseKey = 'sales.milestones' }: { items: Milestone[]; collapseKey?: string }) {
   const done = items.filter((m) => m.achieved).length;
   return (
-    <Panel title="Milestones" icon={Award} tone="purple" hint={`${done} of ${items.length} reached. Private to you.`}>
+    <Panel collapseKey={collapseKey} title="Milestones" icon={Award} tone="purple" hint={`${done} of ${items.length} reached. Private to you.`}>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         {items.map((m) => (
           <li key={m.key} className={cn('flex flex-col items-start gap-1 rounded-xl border p-3', m.achieved ? 'border-violet-500/30 bg-violet-500/10' : 'border-border/60')}>
@@ -370,13 +370,13 @@ export function MilestonesPanel({ items }: { items: Milestone[] }) {
 }
 
 /* ── Trends ─────────────────────────────────────────────────────────────────────────────────────── */
-export function TrendsPanel({ trends }: { trends: SalesWorkspace['trends'] }) {
+export function TrendsPanel({ trends , collapseKey = 'sales.trends' }: { trends: SalesWorkspace['trends']; collapseKey?: string }) {
   const series: { key: 'contacted' | 'replies' | 'interested' | 'won'; label: string; tone: Tone }[] = [
     { key: 'contacted', label: 'Contacted', tone: 'grey' }, { key: 'replies', label: 'Replied', tone: 'blue' },
     { key: 'interested', label: 'Interested', tone: 'green' }, { key: 'won', label: 'Won', tone: 'green' },
   ];
   return (
-    <Panel title="Trends" icon={TrendingUp} tone="blue" hint="Leads per week, last 8 weeks.">
+    <Panel collapseKey={collapseKey} title="Trends" icon={TrendingUp} tone="blue" hint="Leads per week, last 8 weeks.">
       {!trends.enough ? <Empty icon={TrendingUp}>{trends.reason}</Empty> : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {series.map((s) => {

@@ -404,6 +404,12 @@ export async function advanceBaseline(service: Client, auditId: string, source =
         // skips re-runs too, but sending the town the audit already has removes the dependency
         // on that branch entirely.
         location_text: audit.location_text ?? undefined,
+        /* 🔴 A DAY-28 REPLAY'S RUNS 2 AND 3 (fixed 2026-09-30). create-ai-audit refuses any remeasure
+           without a lead ("remeasure_requires_lead"), and this repeat carried none — so every replay
+           would have stalled at run 1 and been re-posted on every tick, forever. No replay had fired
+           yet when it was found (RG is the first, 2026-10-06). The lead is sent for a remeasure ONLY;
+           every other repeat is byte-identical to before. */
+        ...(repeatPurpose === "remeasure" && audit.lead_id ? { lead_id: audit.lead_id } : {}),
       }),
     });
     const rawBody = await res.text();

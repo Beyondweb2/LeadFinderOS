@@ -213,19 +213,33 @@ export function judgeRemeasure(req: RemeasureRequest): RemeasureVerdict {
         + 'be like-for-like with. Record the baseline pointer first.',
     };
   }
+  /* 🔴 THE SAME QUESTIONS, EXACT TEXT, SAME COUNT — COMPARED AS A SET (2026-09-30). This compared
+     position by position, but no stored column records the order a run asked in: every queue row of
+     a run comes from ONE bulk insert with the same created_at (read back live: 1 distinct timestamp
+     per run on every paid baseline), so "ORDER BY created_at" returns ties in whatever order the
+     database finds them — and the two sides of this check are two separate reads. A replay's own
+     runs 2 and 3 read a different set of rows again. Position was never a property we could
+     guarantee, and it does not change what is measured (each question is its own queue row, asked
+     independently). What must match is exactly what is judged: the same questions, word for word,
+     each once, no more, no fewer. The approved ORDER is kept where it is recorded:
+     onboarding_responses.baseline_questions. */
   const proposed = [...req.proposed];
-  const firstMismatch = baseline.findIndex((question, index) => proposed[index] !== question);
+  const sortedBaseline = [...baseline].sort();
+  const sortedProposed = [...proposed].sort();
+  const firstMismatch = sortedBaseline.findIndex((question, index) => sortedProposed[index] !== question);
   if (baseline.length === proposed.length && firstMismatch === -1) {
     return {
       allow: true, countsAsMeasurement: true, reason: 'matches_baseline',
-      detail: `Like-for-like: all ${baseline.length} baseline questions in the original order, with exact text.`,
+      detail: `Like-for-like: all ${baseline.length} baseline questions, with exact text, each once.`,
     };
   }
-  const position = firstMismatch >= 0 ? firstMismatch + 1 : Math.min(baseline.length, proposed.length) + 1;
+  const missing = baseline.filter((q) => !proposed.includes(q));
+  const extra = proposed.filter((q) => !baseline.includes(q));
   return {
     allow: false, reason: 'questions_differ_from_baseline',
-    detail: `Refused: the remeasure must replay the exact ordered baseline array. `
-      + `Expected ${baseline.length} question(s), received ${proposed.length}; first difference is at position ${position}. `
-      + `A changed set requires a new baseline cycle, not an override.`,
+    detail: `Refused: the remeasure must replay the exact baseline questions. `
+      + `Expected ${baseline.length} question(s), received ${proposed.length}`
+      + (missing.length ? `; missing "${missing[0]}"` : '') + (extra.length ? `; not in the baseline "${extra[0]}"` : '')
+      + `. A changed set requires a new baseline cycle, not an override.`,
   };
 }
