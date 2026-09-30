@@ -13,7 +13,9 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 export const SUMMARY_MODEL = 'gpt-4o';
-export const SUMMARY_PROMPT_VERSION = 'business-summary-v1';
+/** v2 (2026-09-30): the first live briefing said "dropped, leading to…" and "no features were used" —
+ *  a claimed cause and a false generalisation; both are now forbidden in words. */
+export const SUMMARY_PROMPT_VERSION = 'business-summary-v2';
 /** An on-demand refresh is refused if the last summary is younger than this. */
 export const SUMMARY_MIN_INTERVAL_MINUTES = 60;
 export const SUMMARY_MAX_LOOK_AT = 6;
@@ -131,7 +133,8 @@ export function summaryPrompt(facts: SummaryFacts, retryNote: string | null): { 
     system: [
       'You write a short weekly business briefing for Paul, who runs a small UK agency selling AI-visibility services to local trades via WhatsApp outreach.',
       'Use ONLY the numbers in FACTS, exactly as written. Never calculate, estimate, round differently or add a number that is not in FACTS. Percent changes are given as change_pct — use those or none.',
-      'Plain English, no jargon, no hype, no scores. Say when a sample is small. Say "followed" or "after", never "caused", unless FACTS says so.',
+      'Plain English, no jargon, no hype, no scores. Say when a sample is small.',
+      'Never claim a cause: no "leading to", "because", "due to", "drove" or "caused" — put two facts side by side instead. Never generalise from a list: name the items (for example, name the unused features; never say "no features were used" unless most_used is empty).',
       `Return "summary" (at most ${SUMMARY_MAX_WORDS} words: what changed, what is working, what is not, and costs vs money in) and "look_at" (at most ${SUMMARY_MAX_LOOK_AT} short, specific things Paul should look at next, each grounded in FACTS).`,
       ...(retryNote ? [retryNote] : []),
     ].join(' '),
