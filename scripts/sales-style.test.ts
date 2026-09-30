@@ -204,7 +204,7 @@ console.log('── 6. THE HOOK ASKS GENUINE SEARCHES ──');
   const filler = planHookQuestions(['reliable plumber in Rugby UK', 'trusted plumber in Rugby UK'], { town: 'Rugby' });
   ok(filler.length === 2, 'a set that is all filler still plans (never refuses to run; the words asked are stored as asked)');
   const topped = topUpHookQuestions([], { trade: 'Electricians', place: 'Addlestone UK' });
-  ok(topped.length === 3 && topped.every((q) => searchFillerCount(q) === 0 && !/recommended local/i.test(q)), 'the fallback questions are plain: ' + JSON.stringify(topped));
+  ok(topped.length === 3 && topped.every((q) => searchFillerCount(q) === 0 && !/recommended local|\bbest\b|\btop\b/i.test(q)) && topped[0] === 'electrician in Addlestone UK', 'the fallback questions are plain: ' + JSON.stringify(topped));
 }
 
 if (f > 0) { console.log('\n' + f + ' FAILURE' + (f === 1 ? '' : 'S')); process.exit(1); }

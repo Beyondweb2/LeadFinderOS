@@ -394,6 +394,8 @@ const PageGenerator = () => {
       if (error) throw new Error(error.message);
       if (!res?.ok) {
         if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [key]: { kind: 'no_credits' } })); return; }
+        /* The Site Intent Map said another page already owns this intent — nothing was generated or spent. */
+        if (res?.error === 'intent_owned') throw new Error('not a new page. ' + (res.detail || 'Another page already owns this intent — improve that page instead.'));
         throw new Error(res?.error ?? 'generation failed');
       }
       const done: CachedPage = { page: res.page, draft: true, generatedAt: Date.now() };

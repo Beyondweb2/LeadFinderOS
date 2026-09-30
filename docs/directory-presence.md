@@ -78,10 +78,13 @@ itself (the lead row was scraped from Google, so Google's record is compared wit
 only). Fields: phone ("possibly an old number"), website (with "the old domain" when the stored domain
 now redirects to the served one), address/postcode, name (Google's structured name only — page titles
 are too noisy), **duplicate** (two distinct profile ids on one source; `profileKey` treats
-`/Page` and `/Page/reviews/`, utm tags and Maps short links as the same profile — both were measured
-false duplicates), and **unconfirmed** (a possible listing a human must check before anyone creates a
-second one). A site-linked social handle that names something else (RG Locksmiths →
-`facebook.com/RGCarpentryAndBuilding`) is a NOTE in the reason, not an issue. `fields_compared` records
+`/Page` and `/Page/reviews/`, Facebook's `/<id>/` and `/p/<Name-id>/`, utm tags and Maps short links as
+the same profile — all measured false duplicates; a Facebook group post is never a profile), and
+**unconfirmed** (a possible listing a human must check before anyone creates a second one). A
+site-linked social handle that names something else (RG Locksmiths →
+`facebook.com/RGCarpentryAndBuilding`) is a NOTE in the reason, not an issue — as is a LIKELY listing
+carrying their phone or website but not their name (RG's details on a Houzz profile for "RG Carpentry
+and Building": "possibly listed under another or older name"). `fields_compared` records
 what was actually compared, so "no issues" is never read as "all fields agree".
 
 ## 5. Prioritising what is worth adding
@@ -158,7 +161,9 @@ false rows.
 worth_adding, in_progress, not_relevant}`, and the lists `already_on` (existing + verified, by
 confidence), `needs_attention` and `worth_adding` (by priority), `in_progress` (operator-added, not yet
 seen), `not_relevant`, `review`. Each item: label, kind, status, confidence, listing_url, priority,
-reason, issues, evidence, first/last checked/last seen, set_by_operator.
+reason, issues, evidence, first/last checked/last seen, set_by_operator, recognised (a source we hold a
+record for, as against a host seen only in a search — scraped aggregators; ALREADY ON lists recognised
+first).
 
 ## 9. Paid Client hub integration — NOT done, deliberately
 
@@ -169,7 +174,7 @@ To integrate once that branch has merged:
    (up to three searches) — opening the view must never spend.
 2. A panel in `src/pages/ClientHub.tsx` with three groups from the summary — ALREADY ON / NEEDS
    ATTENTION / WORTH ADDING — each count in its header, confidence and issues per row, the reason
-   verbatim, and per-row buttons for `set_status` (Mark added · Not relevant · Reset). Show "Never
+   verbatim, recognised sources above search-only hosts, and per-row buttons for `set_status` (Mark added · Not relevant · Reset). Show "Never
    checked" when `summary.checked` is false and "Not searched yet" when `searched` is false.
 3. Add the new screen to `OPERATOR_SCREENS` (it contains competitor names — operator copy, never sent
    to a client). No change to `paid-client-hub` is needed; the function is self-contained.
@@ -200,6 +205,19 @@ deployed function can run (no Apify token outside the edge).
 - `playbook-evidence` itself still times out; its only remaining caller is the orphaned `check-directory-listings`. Fixing or retiring both is a deep-clean decision.
 - `check-directory-listings` + `lead_directory_checks` and `client_listings` are superseded by this and
   unused; retiring them is a deep-clean decision for Paul.
+- `_shared/safe-fetch.ts` holds the same SSRF guard + capped reader as `_shared/site-research.ts`
+  (two copies). It exists so this function does not import site-research, whose closure is the whole
+  report/hook stack (hookScore, auditReport, salesStyle…) — that had made directory-presence one of the
+  functions to redeploy whenever those change. Switching site-research onto the leaf means redeploying
+  warm-lead-reply and voice-note-script (other sessions' functions) — owed, not done. The function's
+  closure is now 20 files: `directoryPresence`, `presenceSources`, `directoryFacts`, `directoryHosts`,
+  `buildPlaybook`, `nameMatch`, `fullCrawl` (+ `crawlCheck`, `crawlUrl`), `competitorCleaning`,
+  `knownEntities`, `protectionLimits`, `roleRules`, and `_shared/` `access`, `operator-auth`,
+  `protection`, `safe-fetch`, `enrichment/apify`, `ai-search`, `apify-usage`.
+- The Social Profiles work (`src/lib/socialProfiles.ts`, fn `social-profiles`, merged by another session
+  the same day) finds Facebook/Instagram with confidence grading. This engine reads the lead's
+  `facebook_url`/`instagram_url` and treats `*_method = 'manual'` as operator-recorded; a later pass
+  could read social-profiles' confidence too.
 - Host lists overlap three ways (`siteInfo.ts` SOCIAL/DIRECTORIES, `fullCrawl.ts` THIRD_PARTY,
   `presenceSources.ts`): consolidating onto `presenceSources` is owed, not done here (those feed live
   crawl output another session reads).
