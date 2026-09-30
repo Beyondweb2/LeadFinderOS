@@ -48,9 +48,15 @@ const GROUP_META: Record<AttentionGroup, { label: string; tone: Tone }> = {
   urgent: { label: 'Urgent', tone: 'red' }, today: { label: 'Today', tone: 'amber' }, review: { label: 'Review', tone: 'purple' }, blocked: { label: 'Blocked', tone: 'grey' },
 };
 
-export function AttentionQueue({ items, onOpen, triage, period, onResolve }: {
+export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSuppress, sorter, waitingInInbox = 0 }: {
   items: AttentionItem[]; onOpen: (i: AttentionItem) => void;
   triage: TriageSummary | null; period: string; onResolve: (triageId: string) => Promise<void>;
+  /** Paul confirms an opt-out the rules could not be sure of. */
+  onSuppress?: (triageId: string) => Promise<void>;
+  /** Open replies waiting for whoever holds them, not on this list. */
+  waitingInInbox?: number;
+  /** The reply sorter's last run (admin_job_runs), when readable. */
+  sorter?: { lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null } | null;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const groups = (Object.keys(GROUP_META) as AttentionGroup[]).map((g) => ({ g, rows: items.filter((i) => i.group === g) })).filter((x) => x.rows.length);
@@ -68,6 +74,12 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve }: {
             {triage.suppressed > 0 && ` ${num(triage.suppressed)} opt-out${triage.suppressed === 1 ? '' : 's'} suppressed automatically.`}
           </p>
         )}
+      {sorter && (
+        <p className={cn('mb-3 text-[11px]', sorter.lastStatus === 'error' ? TONE.red.text : 'text-muted-foreground')}>
+          Replies are sorted automatically every 2 minutes — last run {sorter.lastFinishedAt ? ago(sorter.lastFinishedAt) : 'not yet'}{sorter.lastStatus === 'error' ? ` FAILED: ${sorter.lastError ?? 'unknown error'}` : ''}.
+          {waitingInInbox > 0 && ` ${num(waitingInInbox)} other repl${waitingInInbox === 1 ? 'y is' : 'ies are'} waiting in the Inbox for whoever holds the lead (not live sales, so not listed here).`}
+        </p>
+      )}
       {!items.length ? <Empty>Nothing needs you right now.</Empty> : (
         <div className="space-y-4">
           {groups.map(({ g, rows }) => (
@@ -88,6 +100,16 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve }: {
                       </span>
                       <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </button>
+                    {i.triageId && i.kind === 'reply_opt_out' && onSuppress && (
+                      <button type="button" disabled={busy === i.triageId} title="Suppress this number from all automated outreach (recorded in History)"
+                        onClick={async () => {
+                          if (!window.confirm(`Suppress ${i.business} from all automated outreach? It is recorded in their History.`)) return;
+                          setBusy(i.triageId!); try { await onSuppress(i.triageId!); } finally { setBusy(null); }
+                        }}
+                        className="shrink-0 border-l border-border/60 px-3 text-[11px] font-medium text-red-700 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300">
+                        Suppress
+                      </button>
+                    )}
                     {i.triageId && (
                       <button type="button" disabled={busy === i.triageId} title="Mark handled — it leaves this list"
                         onClick={async () => { setBusy(i.triageId!); try { await onResolve(i.triageId!); } finally { setBusy(null); } }}

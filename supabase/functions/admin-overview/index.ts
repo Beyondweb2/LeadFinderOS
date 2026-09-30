@@ -28,7 +28,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30c";
+const BUILD_ID = "admin-overview-2026-09-30d";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -53,7 +53,7 @@ async function allRows<T>(build: (from: number, to: number, count: boolean) => a
   return out.filter((r) => { const id = (r as { id?: string }).id; if (!id) return true; if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
-const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id";
+const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, next_action, next_action_date, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website";
 
 async function costRows(service: Service, p: ReportingPeriod): Promise<CostRow[]> {
   const { data, error } = await service.rpc("admin_api_cost", { _from: p.fromMs === null ? null : new Date(p.fromMs).toISOString(), _to: new Date(p.toMs).toISOString() });
@@ -122,6 +122,14 @@ Deno.serve(async (req) => {
       triage = triage.map((r) => ({ ...r, confidence: r.confidence == null ? null : Number(r.confidence) }));
     } catch (err) { console.error("[admin-overview] triage", err instanceof Error ? err.message : err); triage = null; }
 
+    /* Background jobs: last run, status, error (admin_job_runs). Unreadable → null, shown as unknown. */
+    let jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null = null;
+    {
+      const { data, error } = await service.from("admin_job_runs").select("job, last_started_at, last_finished_at, last_status, last_error, runs");
+      if (!error) jobs = ((data ?? []) as { job: string; last_started_at: string | null; last_finished_at: string | null; last_status: string | null; last_error: string | null; runs: number }[])
+        .map((j) => ({ job: j.job, lastStartedAt: j.last_started_at, lastFinishedAt: j.last_finished_at, lastStatus: j.last_status, lastError: j.last_error, runs: j.runs }));
+    }
+
     const overview = foldAdminOverview({
       period, today, yesterday, week, month, nowMs,
       bookOwnerId: owner, people, exclusions,
@@ -141,6 +149,7 @@ Deno.serve(async (req) => {
       exclusions: exclusions.rows.map((r) => ({ kind: r.kind, reason: r.reason })),
       costNotes: { unrecorded: UNRECORDED_SPEND, usdToGbp: USD_TO_GBP_ESTIMATE },
       commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
+      jobs,
       generatedAt: new Date(nowMs).toISOString(), ms: Date.now() - started,
     });
   } catch (e) {
