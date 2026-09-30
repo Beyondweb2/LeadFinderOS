@@ -1899,7 +1899,7 @@ export function OutreachTable({
   /* THE ROW'S SALES STATE (Paul, 2026-09-30: "actions visibly change the lead wherever the rep is
      working") — the same reading as Focus Mode and the popup (leadState.salesStateOf), from the row, its
      last logged contact and the Wrong number mark. ⛔ ONE PILL (2026-10-01): it is handed to the status
-     control, which draws EITHER the stage OR the pipeline badge (leadState.oneStatusOf) — never both. */
+     control, which draws the ONE solid pipeline pill and uses the stage only for its tooltip. */
   const rowSalesState = (lead: OutreachLead): SalesStateView => {
     const lc = lastLogged.data?.get(lead.id);
     return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });

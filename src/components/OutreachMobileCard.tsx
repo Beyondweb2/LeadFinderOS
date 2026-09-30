@@ -34,7 +34,7 @@ import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTION
 interface OutreachMobileCardProps {
   lead: OutreachLead;
   /** The lead's sales state (leadState.salesStateOf), from the table (rowSalesState). The card draws ONE
-   *  status pill from it and the pipeline status (leadState.oneStatusOf, 2026-10-01). */
+   *  status pill (the pipeline badge; the stage only in its tooltip, 2026-10-01). */
   salesState?: SalesStateView | null;
   /** Muted campaign-name sub-line under the business name — passed only in the
    *  "All campaigns" view when the lead has a campaign; null/undefined hides it. */

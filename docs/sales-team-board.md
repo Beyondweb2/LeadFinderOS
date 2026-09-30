@@ -78,16 +78,16 @@ Assign, the composer's Lead assignment, and the Inbox / lead-popup owner picker 
 
 ## 4. One status pill (Outreach rows, phone cards, Inbox header and list)
 
-`leadState.oneStatusOf(stage, pipelineStatus)` — supersedes `stateShownByBadge` (2026-09-30, which drew
-the stage pill BESIDE the pipeline badge whenever the words differed: "New · Opener queued" + "Queued",
-"Replied" + "Replied"). A stage that outranks sending (client, won, not interested / **Opted out**,
-meeting booked, interested, replied, wrong number) is the pill; otherwise the pipeline's own word (New,
-Queued, Contacted, WhatsApp failed, No WhatsApp, Report sent, You replied…), except a New lead with a
-logged contact → Contacted. Queued is never Contacted; a failed message is never Contacted.
-`PipelineStatusSelect` draws it (`stage` prop) and its menu is headed "Pipeline status · now X" — picking
-there writes the stored pipeline status only. Tooltip: "Sales stage: … · Pipeline status: …". The Inbox
-header's separate "Queued" chip now appears only as "Queue paused". Filters are unchanged (stored
-fields). The lead popup keeps both on purpose — it is the detail view.
+**As shipped after Paul's review (same day):** the one pill is **yesterday's solid pipeline badge** — its own
+words and colours (Replied solid green, Queued, Contacted, Not Interested, Paid…). **Interested is only the
+gold star**, never a pill. What was removed is the SECOND pill: the sales-state pill drawn beside the badge
+(`stateShownByBadge`, 2026-09-30 — "New · Opener queued" + "Queued", "Replied" + "Replied"). The stage now
+appears only in the pill's tooltip, the popup and Focus. The Inbox header's extra "Queued" chip shows only
+as "Queue paused". Filters unchanged. The lead popup keeps both on purpose — it is the detail view.
+
+⛔ **Tried and rejected (Paul, 2026-10-01):** a pill that SUBSTITUTED the stage ("Interested", "Replied" in the
+pale sales-state colours) for the pipeline word — "put the pills back to how they worked yesterday", "I like
+solid colour pills", "interested was supposed to just add a gold star". Do not bring it back.
 
 **Hook pick (DM Roofing):** `pickHookResult` now ranks, within an engine, a miss naming ≥
 `RIVALS_REQUIRED` rivals above one that cannot (then the score). The emergency search (2 names) had
@@ -132,9 +132,13 @@ or padded; fewer than three in every Google AI miss still refuses. Same order as
 
 ## 6. Limits / open
 
-- ⚠️ **The "Test" account is sending real openers** (to real roofing businesses, 2026-09-30 evening) and
-  holds a real conversation. It is excluded from metrics and from "Everyone" as a test account — if a
-  real person uses it, Paul should give them their own account.
+- **The "Test" account's real work moved to Paul (2026-10-01, Paul: "it was meant to be done under admin
+  (paul account) move them over").** All 82 leads it held (added under it since 27 Sep; 49 WhatsApp
+  messages, 7 replied) were moved to Paul with `assign_lead` as admin, one at a time, all-or-nothing:
+  0 left on Test, 82 `lead_assigned` History rows (from Test → Paul), no notices, no sends, statuses /
+  Next Actions / messages untouched. NOT rewritten (historical rows, left for Paul to decide):
+  `added_by_user_id` on those 82 (the dashboard still counts them as "added by test accounts") and the 99
+  `lead_activity` rows the Test account logged (its calls/contacts stay out of performance numbers).
 
 - The only active salespeople are the two test accounts, so **Everyone reaches nobody** until a real
   salesperson joins; pick a test account by name to try it.
