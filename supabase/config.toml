@@ -53,6 +53,11 @@ verify_jwt = false
 [functions.crawl-check]
 verify_jwt = false
 
+# Directory + public-profile presence audit (read-only discovery). Handler-side requireAdmin, or
+# CRON_SECRET for a future scheduled recheck — so the gateway must not demand a JWT.
+[functions.directory-presence]
+verify_jwt = false
+
 # Internal only (CRON_SECRET): drains exhaustive manual crawl jobs. Called by its own chain and the
 # one-minute backstop cron invoke_crawl_worker.
 [functions.crawl-worker]
