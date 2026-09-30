@@ -9,7 +9,10 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, existsSync } from "node:fs";
 import { nextActionView, nextActionViewOf, nextActionText } from "../src/lib/nextActionView.ts";
-import { lastLoggedContact, outcomeStatusEffect, CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail } from "../src/lib/salesCrm.ts";
+import { CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail } from "../src/lib/salesCrm.ts";
+/* The Last contact reading and the outcome rule moved to the lead state engine (2026-09-30); the full
+   behaviour is scripts/lead-state.test.ts — these keep this pass's promises pinned. */
+import { lastLoggedContactOf as lastLoggedContact, outcomePlan } from "../src/lib/leadState.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -61,27 +64,25 @@ console.log("\n── an outcome you log stays visible ──");
     { kind: "contact_logged", body: " owner away till Friday ", data: { outcome: "wrong_number", channel: "email" }, created_at: "2026-09-29T09:00:00Z", actor_user_id: "b" },
   ];
   const last = lastLoggedContact(rows)!;
-  ok(last.outcome === "wrong_number" && last.tone === "bad" && last.actorId === "b" && last.note === "owner away till Friday", "the newest LOGGED contact wins (a note is not a contact); wrong number reads red");
+  ok(last.outcomeValue === "wrong_number" && last.tone === "bad" && last.actorId === "b" && last.note === "owner away till Friday", "the newest LOGGED contact wins (a note is not a contact); wrong number reads red");
   ok(lastLoggedContact([]) === null && lastLoggedContact(null) === null, "nothing logged → no line");
-  ok(CALL_OUTCOMES.every((o) => lastLoggedContact([{ kind: "call_outcome", data: { outcome: o.value, channel: "call" }, created_at: "2026-09-29T00:00:00Z" }])!.outcomeLabel === o.label), "every outcome button has its words on the Last contact line");
-  ok(/<LeadStateStrip/.test(read("src/components/LeadDetailDialog.tsx")) && /data-testid="last-contact"/.test(read("src/components/LeadStateStrip.tsx")), "the popup shows Last contact on every tab");
+  ok(CALL_OUTCOMES.every((o) => lastLoggedContact([{ kind: "call_outcome", data: { outcome: o.value, channel: "call" }, created_at: "2026-09-29T00:00:00Z" }])!.outcome === o.label), "every outcome button has its words on the Last contact line");
+  ok(/<LeadStateStrip/.test(read("src/components/LeadDetailDialog.tsx")) && /<LastContactLine/.test(read("src/components/LeadStateStrip.tsx")) && /data-testid="last-contact"/.test(read("src/components/SalesStatePill.tsx")), "the popup shows Last contact on every tab");
 }
 
-console.log("\n── the one rule for what an outcome also changes ──");
+console.log("\n── the one rule for what an outcome also changes (now src/lib/leadState.ts outcomePlan) ──");
 {
   const lead = { status: "replied", is_potential_work: false, amount_paid: null };
-  ok(outcomeStatusEffect("interested", lead) === "interested" && outcomeStatusEffect("meeting_booked", lead) === "interested", "Interested / Meeting booked → the Interested star");
-  ok(outcomeStatusEffect("interested", { ...lead, is_potential_work: true }) === null, "…not twice");
-  ok(outcomeStatusEffect("not_interested", lead) === "not_interested" && outcomeStatusEffect("not_interested", { ...lead, status: "not_interested" }) === null, "Not interested → status Not interested, once");
-  ok(outcomeStatusEffect("interested", { ...lead, amount_paid: 99 }) === null && outcomeStatusEffect("not_interested", { ...lead, status: "payment_received" }) === null && outcomeStatusEffect("not_interested", { ...lead, status: "won_pending_onboarding" }) === null, "a client or a won lead is never touched");
-  for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back", "wrong_number", "agency_controls_site"]) ok(outcomeStatusEffect(o, lead) === null, `${o}: no status change (the record itself)`);
+  ok(outcomePlan("interested", lead).star && outcomePlan("meeting_booked", lead).star, "Interested / Meeting booked → the Interested star");
+  ok(!outcomePlan("interested", { ...lead, is_potential_work: true }).star, "…not twice");
+  ok(outcomePlan("not_interested", lead).status === "not_interested" && outcomePlan("not_interested", { ...lead, status: "not_interested" }).status === null, "Not interested → status Not interested, once");
+  const none = (p: ReturnType<typeof outcomePlan>) => !p.star && p.status === null && !p.clearNextAction;
+  ok(none(outcomePlan("interested", { ...lead, amount_paid: 99 })) && none(outcomePlan("not_interested", { ...lead, status: "payment_received" })) && none(outcomePlan("not_interested", { ...lead, status: "won_pending_onboarding" })), "a client or a won lead is never touched");
+  for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back", "wrong_number", "agency_controls_site"]) ok(!outcomePlan(o, lead).star && outcomePlan(o, lead).status === null, `${o}: no status change (the record itself)`);
   const crm = read("src/components/LeadCrmPanel.tsx");
-  ok(/outcome === 'agency_controls_site' && lead\.website_control !== 'agency_controls'/.test(crm) && /'lead_set_website_control', \{ _value: 'agency_controls'/.test(crm), "Agency controls site → Who controls the website = an agency (persisted, shown in the header)");
-  ok(/outcome === 'call_back'\) \{\s*\n\s*setPreset\('call'\)/.test(crm), "Call back → Call pre-selected in Next action (the person picks the day and saves)");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ logging an outcome still never saves a next action by itself");
-  ok(/outcome === 'meeting_booked'\) \{ setAskWhen\(true\)/.test(crm) && /'lead_set_call_booked', \{ _at: v \}, 'Call booked', \{ call_booked_at: v \}/.test(crm), "Meeting booked → asks when, saved as the booked call");
-  ok(/outcomeStatusEffect\(outcome, lead\)/.test(read("src/components/LeadDetailDialog.tsx")) && /outcomeStatusEffect\(outcome, lead\)/.test(read("src/pages/Focus.tsx")), "the popup and Focus Mode share the one rule");
+  ok(/applyOutcome\(/.test(crm) && !/onOutcome/.test(read("src/components/LeadDetailDialog.tsx")) && !/onOutcome/.test(read("src/pages/Focus.tsx")), "the popup and Focus Mode share the one rule — the Work panel carries it out for both");
 }
 
 console.log("\n── no hover template preview ──");
@@ -117,7 +118,7 @@ console.log("\n── Wrong number suppresses future outreach ──");
   const q = read("supabase/functions/process-whatsapp-queue/index.ts");
   ok(/if \(mainSupp\.suppressed && mainSupp\.wrongNumber\)/.test(q) && q.indexOf("mainSupp.suppressed && mainSupp.wrongNumber") < q.indexOf('status: "opted_out", whatsapp_delivery_status: "suppressed"'), "the queue refuses it without relabelling the lead opted_out");
   for (const lane of ["sendSupp", "hSupp", "cSupp", "mainSupp"]) ok(new RegExp(`const ${lane} = await checkSuppressed\\(`).test(q), `queue lane ${lane} checks the same table`);
-  ok(/'lead_mark_wrong_number'/.test(read("src/components/LeadCrmPanel.tsx")) && /'lead_clear_wrong_number'/.test(read("src/components/LeadStateStrip.tsx")) && /canClear && <button/.test(read("src/components/LeadStateStrip.tsx")), "the button marks it; the header shows it and only the admin gets Clear");
+  ok(/'lead_mark_wrong_number'/.test(read("src/lib/leadOutcome.ts")) && /'lead_clear_wrong_number'/.test(read("src/components/LeadStateStrip.tsx")) && /canClear && <button/.test(read("src/components/LeadStateStrip.tsx")), "the button marks it; the header shows it and only the admin gets Clear");
 }
 
 console.log("\n── Assign to a teammate (admin) ──");

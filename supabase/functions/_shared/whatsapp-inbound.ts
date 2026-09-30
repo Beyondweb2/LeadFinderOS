@@ -1,6 +1,7 @@
 import { toWhatsAppNumber } from "./whatsapp-send.ts";
 import { armFirstReplyAuditIntent } from "./first-reply-audit.ts";
 import { countsAsFirstReply } from "../../../src/lib/firstReplyAutomation.ts";
+import { INBOUND_NO_DOWNGRADE, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
@@ -20,9 +21,9 @@ import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
 // prospect is re-engaging, so it should flip to 'replied' (which also un-hides the
 // conversation in the Inbox, where not_interested is hidden by default). report_sent
 // is deliberately NOT protected either — a reply to the pitch flips it to 'replied'.
-// price_given and beyond (interested / paid / in_delivery / completed) ARE protected:
-// an inbound must never wipe quote/deal state.
-const NO_DOWNGRADE = "(payment_received,replied,interested,price_given,in_delivery,completed)";
+// price_given and beyond (interested / won / paid / in_delivery / completed / refunded) ARE protected:
+// an inbound must never wipe quote/deal state. ⛔ The ONE list: src/lib/strongStatuses.ts.
+const NO_DOWNGRADE = postgrestList(INBOUND_NO_DOWNGRADE);
 
 /** Best text/body for an inbound message. Text → the text body; a template QUICK-REPLY BUTTON
  *  or an INTERACTIVE reply → the button/list LABEL (so "Yes please" is stored and treated as a

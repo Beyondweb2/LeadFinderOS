@@ -47,30 +47,10 @@ export function salesStageOf(status: string | null | undefined): SalesStage {
   return STAGE_OF_STATUS[s] ?? 'other';
 }
 
-export const SALES_STAGE_LABEL: Record<SalesStage, string> = {
-  new: 'New',
-  queued: 'Queued',
-  contacted: 'Contacted',
-  replied: 'Replied',
-  interested: 'Interested',
-  awaiting_decision: 'Awaiting decision',
-  won: 'Won · awaiting admin',
-  not_interested: 'Not interested',
-  client: 'Client',
-  other: 'Other',
-};
-
 /** The stages a salesperson may SET (the server's lead_set_stage allowlist — keep them equal;
  *  scripts/sales-crm.test.ts asserts it against the migration). */
 export const SALES_SETTABLE_STATUSES = ['interested', 'price_given', 'not_interested', 'won_pending_onboarding'] as const;
 export type SalesSettableStatus = typeof SALES_SETTABLE_STATUSES[number];
-export const SALES_SETTABLE_LABEL: Record<SalesSettableStatus, string> = {
-  interested: 'Interested',
-  price_given: 'Awaiting decision (price given)',
-  not_interested: 'Not interested',
-  won_pending_onboarding: 'Won — hand to admin',
-};
-
 /** Follow-up bucket from next_action_date (a DATE, compared as London calendar days). */
 export type FollowUpBucket = 'overdue' | 'today' | 'upcoming' | 'none';
 
@@ -86,56 +66,6 @@ export function followUpBucket(date: string | null | undefined, today: string): 
   if (d < today) return 'overdue';
   if (d === today) return 'today';
   return 'upcoming';
-}
-
-export interface SalesLeadRow {
-  id: string;
-  business_name: string | null;
-  status: string | null;
-  next_action: string | null;
-  next_action_date: string | null;
-  next_action_note: string | null;
-  call_booked_at: string | null;
-  whatsapp_sent_at: string | null;
-  updated_at: string | null;
-  created_at: string | null;
-  is_archived: boolean | null;
-}
-
-/** Needs attention = the three things a rep must act on today. */
-export function needsAttention(l: SalesLeadRow, today: string, nowMs: number): { reply: boolean; followUp: boolean; call: boolean } {
-  const reply = salesStageOf(l.status) === 'replied';
-  const b = followUpBucket(l.next_action_date, today);
-  const followUp = b === 'overdue' || b === 'today';
-  const callAt = l.call_booked_at ? new Date(l.call_booked_at).getTime() : NaN;
-  const call = Number.isFinite(callAt) && callAt >= nowMs - 12 * 3600_000 && callAt <= nowMs + 36 * 3600_000;
-  return { reply, followUp, call };
-}
-
-export type MyLeadsFilter = 'attention' | 'replies' | 'followups' | 'calls' | 'interested' | 'new' | 'all';
-export const MY_LEADS_FILTER_LABEL: Record<MyLeadsFilter, string> = {
-  attention: 'Needs attention',
-  replies: 'Replies',
-  followups: 'Follow-ups due',
-  calls: 'Calls booked',
-  interested: 'Interested',
-  new: 'Not contacted yet',
-  all: 'All my leads',
-};
-
-export function matchesFilter(l: SalesLeadRow, f: MyLeadsFilter, today: string, nowMs: number): boolean {
-  if (l.is_archived) return f === 'all';
-  const a = needsAttention(l, today, nowMs);
-  const stage = salesStageOf(l.status);
-  switch (f) {
-    case 'attention': return a.reply || a.followUp || a.call;
-    case 'replies': return a.reply;
-    case 'followups': return followUpBucket(l.next_action_date, today) !== 'none';
-    case 'calls': return !!l.call_booked_at;
-    case 'interested': return stage === 'interested' || stage === 'awaiting_decision';
-    case 'new': return stage === 'new';
-    case 'all': return true;
-  }
 }
 
 /** Owner initials for the avatar fallback: "Paul Smith" → "PS", "Sumi" → "SU", "" → "?". */
@@ -236,7 +166,8 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
 /* ⛔ THE OUTCOME LIST IS lead_log_contact's ALLOWLIST (newest: migration 20260928210000) — the server refuses
    anything else, and scripts/contact-claim.test.ts pins the two together. Added 2026-09-28: left
    voicemail, meeting booked, then message_sent. An outcome records ACTIVITY only: it never writes the
-   status or the next action (Next Action is human-set only). */
+   status or the next action (Next Action is human-set only). What a tap ALSO does is src/lib/leadState.ts
+   (outcomeRule — every value here has one; agency_controls_site is kept for old rows, no longer offered). */
 /* `for`: which methods an outcome is offered for (contactMethods `kind`): 'call' = a phone call only,
    'message' = anything that is not a call, 'any' = every method. The server accepts every outcome for
    every method; this only keeps the buttons sensible ("No answer" to an email means nothing). */
@@ -253,51 +184,8 @@ export const CALL_OUTCOMES = [
   { value: 'agency_controls_site', label: 'Agency controls site', for: 'any' },
 ] as const;
 
-/** How each outcome reads when it is the LAST thing logged on a lead (the popup's "Last contact"
- *  line): the dead ends red, the good news green, the rest quiet. */
-export const OUTCOME_TONE: Record<string, 'good' | 'bad' | 'neutral'> = {
-  interested: 'good', meeting_booked: 'good', spoke_to_owner: 'neutral', call_back: 'neutral',
-  no_answer: 'neutral', left_voicemail: 'neutral', message_sent: 'neutral',
-  not_interested: 'bad', wrong_number: 'bad', agency_controls_site: 'neutral',
-};
-
-export interface LastContact { outcome: string; outcomeLabel: string; channelLabel: string | null; at: string; actorId: string | null; note: string | null; tone: 'good' | 'bad' | 'neutral' }
-
-/** The newest logged contact (lead_log_contact's call_outcome / contact_logged rows) — derived from
- *  the activity timeline, never stored. `rows` may be in any order. */
-type ActivityRow = { kind: string; body?: string | null; data?: Record<string, unknown> | null; created_at: string; actor_user_id?: string | null };
-export function lastLoggedContact(rows: ReadonlyArray<ActivityRow> | null | undefined): LastContact | null {
-  let best: ActivityRow | null = null;
-  for (const r of rows ?? []) {
-    if (r.kind !== 'call_outcome' && r.kind !== 'contact_logged') continue;
-    if (!best || Date.parse(r.created_at) > Date.parse(best.created_at)) best = r;
-  }
-  if (!best) return null;
-  const outcome = String(best.data?.outcome ?? '');
-  const ch = best.data?.channel ? String(best.data.channel) : null;
-  return {
-    outcome,
-    outcomeLabel: CALL_OUTCOMES.find((o) => o.value === outcome)?.label ?? (outcome.replace(/_/g, ' ') || 'Contact'),
-    channelLabel: ch ? contactMethodLabel(ch) : null,
-    at: best.created_at,
-    actorId: best.actor_user_id ?? null,
-    note: (best.body ?? '').trim() || null,
-    tone: OUTCOME_TONE[outcome] ?? 'neutral',
-  };
-}
-
-/** THE ONE RULE for what a logged outcome also does to the lead's state (UI cleanup pass, 2026-09-29),
- *  shared by the lead popup and Focus Mode: Interested / Meeting booked → the Interested star (unless
- *  already starred); Not interested → status not_interested (unless already). A client, a won lead or
- *  an unknown outcome → nothing. The write itself is the ordinary status control's. */
-export function outcomeStatusEffect(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown }): 'interested' | 'not_interested' | null {
-  const stage = salesStageOf(lead.status);
-  const paid = Number(lead.amount_paid ?? 0);
-  if ((Number.isFinite(paid) && paid > 0) || stage === 'won' || stage === 'client') return null;
-  if ((outcome === 'interested' || outcome === 'meeting_booked') && !lead.is_potential_work) return 'interested';
-  if (outcome === 'not_interested' && stage !== 'not_interested') return 'not_interested';
-  return null;
-}
+/* The Last contact reading (lastLoggedContactOf), each outcome's rule (outcomeRule / outcomePlan) and the
+   outcome → Next Action suggestion live in src/lib/leadState.ts (lead state audit, 2026-09-30). */
 
 /** The outcomes offered for one contact method. */
 export function outcomesFor(method: string) {
@@ -317,11 +205,18 @@ export const WEBSITE_CONTROL_OPTIONS = [
   { value: 'unknown', label: 'Unknown' },
 ] as const;
 
+/* THE NEXT ACTION CHOICES (lead state audit, 2026-09-30): "what do I do next with this lead?" — one per
+   way of doing it, plus Follow up for anything else (LinkedIn, Facebook, Instagram, in person — the
+   note says which). Voice note is gone as a choice (a WhatsApp follow-up; never used); older stored
+   values still read through nextActionView's labels. Email / Send information / Meeting: migration
+   20260930150000. */
 export const NEXT_ACTION_OPTIONS = [
   { value: 'call', label: 'Call' },
   { value: 'send_follow_up', label: 'WhatsApp follow-up' },
-  { value: 'send_voice_note', label: 'Send voice note' },
+  { value: 'email', label: 'Email' },
   { value: 'follow_up', label: 'Follow up (other)' },
+  { value: 'send_info', label: 'Send information' },
+  { value: 'meeting', label: 'Meeting' },
   { value: 'none', label: 'Nothing planned' },
 ] as const;
 
@@ -331,7 +226,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   lead_assigned: 'Lead assigned',
   lead_unassigned: 'Lead unassigned',
   note: 'Internal note',
-  stage_changed: 'Stage changed',
+  stage_changed: 'Pipeline status changed',
+  state_changed: 'Status changed',
   follow_up_set: 'Follow-up set',
   call_booked: 'Call booked',
   call_outcome: 'Call',
@@ -367,7 +263,10 @@ export function activityDetail(
     case 'note': return a.body ?? null;
     case 'call_outcome':
     case 'contact_logged': return `${a.kind === 'contact_logged' && channel ? channel + ': ' : ''}${outcome}${a.body ? ` — ${a.body}` : ''}`;
-    case 'stage_changed': return `${String(d.from ?? '—')} → ${String(d.to ?? '—')}`;
+    case 'stage_changed': return `${String(d.from ?? '—').replace(/_/g, ' ')} → ${String(d.to ?? '—').replace(/_/g, ' ')}`;
+    /* leadState.stateChangedWords is the full-label version the lead History uses; this one is the same
+       words for the states that have no qualifier (scripts/lead-state.test.ts compares them). */
+    case 'state_changed': { const w = (v: unknown) => { const t = String(v ?? '—').replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); }; return `Status: ${w(d.from)} → ${w(d.to)}`; }
     case 'follow_up_set': return `${String(d.next_action ?? '').replace(/_/g, ' ')}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
     case 'bulk_queued': return d.template ? String(d.template) : null;
     case 'archived_set': return d.archived ? 'Archived' : 'Restored';

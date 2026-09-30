@@ -27,6 +27,7 @@ import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapsho
 import { canWorkLead, isClientLead, refusalBody, resolveActor } from "../_shared/access.ts";
 import { guardAction } from "../_shared/protection.ts";
 import { checkWrongNumber } from "../_shared/suppression.ts";
+import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -770,7 +771,7 @@ Deno.serve(async (req) => {
           await service.from("outreach_leads")
             .update({ status: "report_sent" })
             .eq("id", resolvedLeadId)
-            .not("status", "in", "(interested,price_given,payment_received,in_delivery,completed)");
+            .not("status", "in", postgrestList(STRONG_STATUSES));
         } catch (e) {
           console.error(`[send-whatsapp-message] report_sent status write failed for lead ${resolvedLeadId}:`, (e as Error).message);
         }

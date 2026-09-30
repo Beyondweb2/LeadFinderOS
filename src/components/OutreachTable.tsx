@@ -166,6 +166,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
+import { useLastLoggedContacts } from '@/hooks/useLastLoggedContacts';
+import { contactAgo, meetingIsCurrent, meetingWhen } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1830,6 +1832,10 @@ export function OutreachTable({
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  /* The newest logged contact for the rows on this page only (lead state audit, 2026-09-30) — the
+     "Call · Left voicemail · 2h ago" line under the pipeline pill. Read per page, never the whole book. */
+  const pageLeadIds = useMemo(() => paginatedLeads.map((l) => l.id), [paginatedLeads]);
+  const lastLogged = useLastLoggedContacts(pageLeadIds);
 
   // Always point walkthrough Step 5 to a visible, actionable track button
   const walkthroughTrackLeadId = (
@@ -2798,6 +2804,15 @@ export function OutreachTable({
                             ) : (
                               <PipelineStatusBadge status={lead.status as PipelineStatus} />
                             )}
+                            {/* ONE SMALL LINE, ONLY WHEN THERE IS SOMETHING TO SAY: a current meeting (the
+                                sales state's Meeting booked — leadState.meetingIsCurrent), else the last
+                                logged contact. The same words as the popup and Focus Mode. */}
+                            {meetingIsCurrent(lead.call_booked_at, Date.now()) ? (
+                              <div className="mt-1 whitespace-nowrap text-[10px] font-semibold text-blue-600 dark:text-blue-400" data-testid="row-meeting">Meeting · {meetingWhen(lead.call_booked_at!)}</div>
+                            ) : (() => {
+                              const lc = lastLogged.data?.get(lead.id);
+                              return lc ? <div className="mt-1 max-w-[170px] truncate text-[10px] text-muted-foreground" data-testid="row-last-contact" title={lc.note ?? undefined}>{lc.method} · <span className={lc.tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : lc.tone === 'bad' ? 'text-red-600 dark:text-red-400' : ''}>{lc.outcome}</span> · {contactAgo(lc.at)}</div> : null;
+                            })()}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <NextActionEditor

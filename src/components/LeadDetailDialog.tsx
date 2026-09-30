@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, Loader2, PhoneCall, Mic, Star } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin, Loader2, PhoneCall, Mic } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
@@ -50,8 +50,8 @@ import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
-import { isClientLead } from '@/lib/roleRules';
-import { outcomeStatusEffect } from '@/lib/salesCrm';
+import { SalesStatePill } from '@/components/SalesStatePill';
+import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 
@@ -253,6 +253,8 @@ function LeadDetailBody({
      call playbook, voice-note script, sign-up link — and not the admin's record editing, client
      delivery, payment or private-note sections, whose data the safe view never sends them anyway. */
   const perms = useLeadPermissions();
+  // The sales state at the top — the same reading Focus Mode, Outreach and the Inbox draw.
+  const salesState = useLeadSalesState(isDemoLead(lead.id) ? '' : lead.id);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   /* ── PAYMENT. Lives here because the Paid Clients page (its previous and only home) is gone, and
         without an editor there would be no way to correct an amount that arrived wrong. ── */
@@ -349,16 +351,6 @@ function LeadDetailBody({
     onClose();
   };
 
-  /* WHAT A LOGGED OUTCOME ALSO CHANGES ON THE LEAD (UI cleanup pass, 2026-09-29): the same writes the
-     status menu makes, so Outreach, the Inbox and the dashboards all agree. A client, a won lead or a
-     lead already in that state is left alone. Returns the words for the Work tab's confirmation. */
-  const handleOutcome = async (outcome: string): Promise<string | null> => {
-    const effect = isClientLead(lead) ? null : outcomeStatusEffect(outcome, lead);
-    if (!effect) return null;
-    await onStatusChange(lead.id, effect as LeadStatus);
-    if (effect === 'interested') return 'Marked Interested ⭐';
-    return perms.removeFromMyLeads ? 'Status set to Not interested (it leaves your working list)' : 'Status set to Not interested';
-  };
   return (
     <>
       {/* ── Header: name + glanceable pills (does not scroll) ── */}
@@ -407,25 +399,25 @@ function LeadDetailBody({
         <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
 
         {/* ── WHERE THIS LEAD STANDS (UI cleanup pass, 2026-09-29) ─────────────────────────────────────
-            Line 1: status (the SAME list as the Outreach row), the Interested star, the channel.
+            Line 1: the SALES STATE (SalesStatePill — the one reading, src/lib/leadState.ts: New /
+            Contacted / Replied / Interested / Meeting booked · time / Won / Client / Not interested /
+            Wrong number), then the WhatsApp pipeline status it is read from (the SAME list as the
+            Outreach row — the queue's own stage: Queued, No WhatsApp, 2nd attempt…) and the channel.
+            The separate Interested ⭐ chip is gone: the state says Interested.
             The state strip: owner, next action, call booked, agency — and the last contact logged, so
             what was recorded on the Work tab is visible on every tab and after reopening.
             Last line: how to reach them, and the tools (scripts, crawl, welcome pack, site check).
             ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          {salesState.view && <SalesStatePill view={salesState.view} />}
           <Select value={PIPELINE_STATUS_OPTIONS.some((o) => o.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="Status">
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="WhatsApp pipeline status" title="WhatsApp pipeline status">
               <PipelineStatusBadge status={lead.status as PipelineStatus} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
               {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
-          {lead.is_potential_work && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300" title="Marked interested (the star)">
-              <Star className="h-3 w-3 fill-current" />Interested
-            </span>
-          )}
           {/* Contact method — same component + dropdown as the Outreach table */}
           {perms.editLeadRecord ? (
           <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
@@ -496,7 +488,7 @@ function LeadDetailBody({
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
           <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} onOutcome={handleOutcome} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}

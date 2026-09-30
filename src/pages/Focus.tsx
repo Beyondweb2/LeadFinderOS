@@ -3,24 +3,23 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, ChevronDown, ExternalLink, Globe, Linkedin, Loader2, Mail, MapPin, MessageCircle, Phone, Sparkles,
-  Star, ThumbsDown, Target, X,
+  Target, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useLeadPermissions } from '@/hooks/useLeadPermissions';
-import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { FOCUS_VIEWS, focusQueue, linkedInSearchUrl, type FocusView } from '@/lib/focusQueue';
 import { whatsAppLinkForLead, leadLaunchState } from '@/lib/salesLinks';
-import { markLeadInterested, setLeadPipelineStatus } from '@/lib/leadQuickActions';
 import { isTypingTarget } from '@/lib/shortcuts';
 import { LEAD_CHANGED_EVENT } from '@/lib/leadSync';
 import type { SalesWorkspace } from '@/lib/salesWorkspace';
 import { LeadHookPanel, LeadWorkPanel, useLeadCrmRow } from '@/components/LeadCrmPanel';
-import { outcomeStatusEffect } from '@/lib/salesCrm';
+import { useLeadSalesState } from '@/hooks/useLeadSalesState';
+import { LastContactLine, SalesStatePill } from '@/components/SalesStatePill';
+import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { NextActionPill } from '@/components/NextActionPill';
@@ -32,7 +31,12 @@ import { cn } from '@/lib/utils';
    FOCUS MODE (Sales Experience release 4, 2026-09-28): one lead at a time, in the order the dashboard
    ranks them (or a saved view — src/lib/focusQueue.ts). Everything a salesperson needs to work the lead
    without leaving: who, where, the audit, the latest messages, optional talking points, WhatsApp / call /
-   LinkedIn / email, log the contact, set the Next Action, notes, interested / not interested, next lead.
+   LinkedIn / email, log the contact, set the Next Action, notes, next lead.
+   ⛔ AT A GLANCE (lead state audit, 2026-09-30): the sales state (SalesStatePill — the one reading,
+   src/lib/leadState.ts), the Last contact (logged or WhatsApp), the Next Action, then the actions. A
+   logged outcome changes them on this card at once. The separate Interested / Not interested buttons
+   are gone: they were the same writes as the Log Contact outcomes, which also record the contact (and,
+   for a WhatsApp conversation, "What came of it?").
    ⛔ It reuses the lead workspace's own panels (LeadWorkPanel, LeadHookPanel) and the one quick-action
    path (leadQuickActions) — no second CRM. ⛔ Nothing is forced: the script is folded away, and any
    channel works. Shortcuts: → / n next, ← / p previous — none of them sends or changes anything.
@@ -53,10 +57,7 @@ const siteHref = (w: string | null) => (w ? (/^https?:\/\//i.test(w) ? w : `http
 
 export default function Focus() {
   const { role } = useSubscription();
-  const perms = useLeadPermissions();
-  const isAdmin = role === 'admin';
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const view = (params.get('view') ?? 'next') as FocusView;
   const startLead = params.get('lead');
@@ -75,7 +76,6 @@ export default function Focus() {
   const [idx, setIdx] = useState(0);
   useEffect(() => { setIdx(startLead ? Math.max(0, queue.findIndex((i) => i.leadId === startLead)) : 0); }, [view, startLead, queue.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const item = queue[idx];
-  const [done, setDone] = useState<Set<string>>(new Set());
   const go = (d: number) => setIdx((i) => Math.min(Math.max(0, i + d), Math.max(0, queue.length - 1)));
 
   useEffect(() => {
@@ -116,30 +116,11 @@ export default function Focus() {
   const lead = leadQ.data;
   const crm = useLeadCrmRow(item?.leadId ?? '');
   const town = lead?.derived_town || lead?.search_location || null;
-  const [busy, setBusy] = useState<string | null>(null);
-  const quick = async (kind: 'interested' | 'not_interested') => {
-    if (!lead) return;
-    setBusy(kind);
-    const r = kind === 'interested' ? await markLeadInterested(lead.id, perms.editLeadRecord) : await setLeadPipelineStatus(lead.id, 'not_interested', perms.editLeadRecord);
-    setBusy(null);
-    if (!r.ok) { toast({ title: 'Not saved', description: r.error, variant: 'destructive' }); return; }
-    toast({ title: kind === 'interested' ? 'Marked interested' : 'Marked not interested', description: kind === 'not_interested' ? 'No more automatic messages to them.' : undefined });
-    setDone((s) => new Set(s).add(lead.id));
-    if (kind === 'not_interested') go(1);
-  };
-
-  /* A logged outcome's effect on the lead — the one rule (outcomeStatusEffect), the same writes as the
-     Interested / Not interested buttons above. It never moves to the next lead by itself. */
-  const onOutcome = async (outcome: string): Promise<string | null> => {
-    if (!lead) return null;
-    const effect = outcomeStatusEffect(outcome, lead);
-    if (!effect) return null;
-    const r = effect === 'interested' ? await markLeadInterested(lead.id, perms.editLeadRecord) : await setLeadPipelineStatus(lead.id, 'not_interested', perms.editLeadRecord);
-    if (!r.ok) { toast({ title: 'Outcome logged, status not changed', description: r.error, variant: 'destructive' }); return null; }
-    setDone((s) => new Set(s).add(lead.id));
-    void leadQ.refetch();
-    return effect === 'interested' ? 'Marked Interested ⭐' : 'Status set to Not interested';
-  };
+  /* The newest WhatsApp message either way (the thread below) — Last contact reads it beside the
+     logged contacts, so "WhatsApp · Replied · 20m ago" shows when that is the newest touch. */
+  const newestWa = (msgQ.data ?? []).filter((m) => m.status !== 'failed').slice(-1)[0];
+  const st = useLeadSalesState(item?.leadId ?? '', newestWa ? { direction: newestWa.direction === 'inbound' ? 'inbound' : 'outbound', at: newestWa.created_at } : null);
+  const team = useTeamDirectory();
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-6">
@@ -183,13 +164,16 @@ export default function Focus() {
                   </div>
                   <h2 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight">
                     <span className="min-w-0 truncate" title={lead.business_name ?? ''}>{lead.business_name ?? 'Unnamed business'}</span>
-                    {(lead.is_potential_work || done.has(lead.id)) && <Star className="h-5 w-5 shrink-0 fill-amber-400 text-amber-500" aria-label="Interested" />}
                   </h2>
+                  {/* WHERE IT STANDS: the state, the last contact — updated the moment an outcome is logged. */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="focus-state">
+                    {st.view && <SalesStatePill view={st.view} />}
+                    <LastContactLine v={st.lastContact} actorName={st.lastContact?.actorId ? team.byId.get(st.lastContact.actorId)?.display_name ?? null : null} />
+                  </div>
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                     {(lead.category || lead.search_keyword) && <span>{lead.category || lead.search_keyword}</span>}
                     {town && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{town}</span>}
                     {lead.contact_name && <span>Contact: <span className="font-medium text-foreground">{lead.contact_name}</span></span>}
-                    {lead.status && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">{lead.status.replace(/_/g, ' ')}</span>}
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <ContactButton href={whatsAppLinkForLead(lead.id)} internal onNav={navigate} icon={MessageCircle} label="WhatsApp" tone="bg-blue-500 text-white hover:bg-blue-600" disabled={!lead.phone} />
@@ -207,12 +191,6 @@ export default function Focus() {
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
                     <QuickCloseButton leadId={lead.id} size="lg" />
-                    <Button size="sm" variant="outline" className="gap-1.5 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300" onClick={() => void quick('interested')} disabled={busy !== null || !!lead.is_potential_work}>
-                      {busy === 'interested' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}Interested
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={() => void quick('not_interested')} disabled={busy !== null || lead.status === 'not_interested'}>
-                      {busy === 'not_interested' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsDown className="h-4 w-4" />}Not interested
-                    </Button>
                   </div>
                 </>
               )}
@@ -244,7 +222,7 @@ export default function Focus() {
           </div>
 
           <div className="min-w-0 space-y-4 lg:col-span-2">
-            <LeadWorkPanel key={item.leadId} leadId={item.leadId} onOutcome={onOutcome} />
+            <LeadWorkPanel key={item.leadId} leadId={item.leadId} />
             <Button className="w-full gap-1" onClick={() => go(1)} disabled={idx >= queue.length - 1}>Next lead<ArrowRight className="h-4 w-4" /></Button>
             <p className="text-center text-[11px] text-muted-foreground">Shortcuts: → or N next · ← or P previous</p>
           </div>

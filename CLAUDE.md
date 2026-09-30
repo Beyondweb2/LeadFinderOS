@@ -60,8 +60,16 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   through `src/lib/nextActionView.ts` + `NextActionPill` (red overdue / amber today / grey later) and
   offers the popup's four choices (`NEXT_ACTION_OPTIONS`, salesCrm). No device-local custom labels.
   ⛔ **No hover template preview, anywhere** — one line under the picker, full wording only on Preview.
-  ⛔ **A logged outcome's follow-on is `outcomeStatusEffect`** (star / not interested) + the Work panel's
-  agency / call-booked / call-back prompts; `lead_log_contact` itself still writes activity only.
+  ⛔ **The sales state is DERIVED, never stored** (`salesStateOf`, `src/lib/leadState.ts`, 2026-09-30,
+  `docs/lead-state-model.md`): New / Contacted / Replied / Interested / Meeting booked / Won / Client / Not
+  interested / Wrong number, read from the pipeline `status` + star + `call_booked_at` + paid + newest
+  logged contact + Wrong number. `outreach_leads.status` stays the WhatsApp pipeline — never rewrite it
+  into sales words. Every screen draws it with `SalesStatePill`; "Follow-up" is a Next Action, not a state.
+  ⛔ **A logged outcome's follow-on is `outcomePlan` / `suggestNextAction`** (leadState), carried out ONLY
+  by `src/lib/leadOutcome.ts` for both roles; `lead_log_contact` itself still writes activity only; a
+  state change is recorded by `lead_log_state_change`. Every outcome in `CALL_OUTCOMES` needs a rule.
+  ⛔ **No automatic write may overwrite a deal:** the inbound `replied` and both `report_sent` writers use
+  `STRONG_STATUSES` (`src/lib/strongStatuses.ts`) — never a hand-typed status list.
   ⛔ **No selected opener** — both approved openers are ordinary choices; the batch's chosen template is
   what is stored and sent (`docs/whatsapp-templates.md`, last section).
   ⛔ **Abuse / API-cost protection (2026-09-29, `docs/abuse-cost-protection.md`)**: every paid or data-heavy
@@ -925,6 +933,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
 | Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
+| Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
