@@ -281,11 +281,20 @@ export function matchListing(id: BusinessIdentity, c: ListingCandidate, source: 
   if (nameSeen) signals.push('name');
   if (id.town && townIn(nameHay, id.town)) signals.push('town');
 
+  /* ⛔ A PAGE ABOUT MANY BUSINESSES IS NOT THIS BUSINESS'S LISTING. On a host with no known profile
+     shape, a found page must carry the name in its TITLE or URL, not only in the snippet. Measured
+     live: a Cybo category page of Clacton locksmiths showed Brodley's website beside ANOTHER
+     locksmith's phone and postcode, and read as "old number, old address" — a manufactured problem.
+     Pages the business's own site links to are exempt: it chose them. */
+  const foundByLooking = c.via === 'search' || c.via === 'citation';
+  const nameInHead = !!id.name && (nameMatches(`${c.title ?? ''} \n ${urlWords(c.url)}`, id.name, { trade: id.trade, town: id.town }) || slugCarriesName(c.url, id.name));
+  const aboutThisOne = !foundByLooking || !!source.profile || nameInHead;
+
   const has = (s: MatchSignal) => signals.includes(s);
   const hardId = has('phone') || has('domain') || (has('postcode') && nameSeen);
   let confidence: MatchConfidence | null = null;
   if (has('place_id')) confidence = 'confirmed';
-  else if (!profile) confidence = null;
+  else if (!profile || !aboutThisOne) confidence = null;
   else if (has('linked_from_site') || has('operator_recorded')) confidence = 'confirmed';
   else if (nameSeen && hardId) confidence = 'confirmed';
   else if (has('phone') && has('domain')) confidence = 'confirmed';
