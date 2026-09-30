@@ -38,6 +38,8 @@ interface ScriptRow {
   operator_note: string | null;
   generator_version: number | null;
   generated_at: string;
+  /** The 20-second version (shortVoiceNote), derived by the function from this row. Never stored. */
+  short_script?: string | null;
 }
 /** What a Regenerate would use today (the function's loadHookEvidence), or why it cannot write one. */
 type CurrentBasis =
@@ -109,6 +111,12 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
     try { await navigator.clipboard.writeText(row.script); setCopied(true); setTimeout(() => setCopied(false), 1500); }
     catch { setError('Could not copy. Select the text and copy it by hand.'); }
   }, [row]);
+  const [copiedShort, setCopiedShort] = useState(false);
+  const copyShort = useCallback(async () => {
+    if (!row?.short_script) return;
+    try { await navigator.clipboard.writeText(row.short_script); setCopiedShort(true); setTimeout(() => setCopiedShort(false), 1500); }
+    catch { setError('Could not copy. Select the text and copy it by hand.'); }
+  }, [row]);
 
   const basis = row?.research_basis;
   const outOfDate = !!row && (stale || (!!currentAuditId && !!row.audit_id && row.audit_id !== currentAuditId));
@@ -156,7 +164,9 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                 )}
                 {!outOfDate && oldStyle && (
                   <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-old-style">
-                    Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.
+                    {(row.generator_version ?? 0) < 3
+                      ? 'Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.'
+                      : 'Written before the plain-English style update. Regenerate for the newer wording.'}
                   </p>
                 )}
                 {row.problems.length > 0 && (
@@ -181,6 +191,18 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                   </div>
                 </div>
                 {row.warnings.length > 0 && <p className="text-[11px] text-muted-foreground">{row.warnings.join(' ')}</p>}
+                {row.short_script && !outOfDate && (
+                  <div className="space-y-1.5 rounded-md border border-border p-3" data-testid="voice-note-short">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Short version · about 20s</p>
+                      <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 px-2 text-xs" onClick={copyShort}>
+                        {copiedShort ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedShort ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{row.short_script}</p>
+                    <p className="text-[11px] text-muted-foreground">Same search and competitors, no website point. For a quick first note.</p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5 border-t border-border pt-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Based on</p>

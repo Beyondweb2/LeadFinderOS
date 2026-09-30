@@ -687,6 +687,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Client-facing copy is scanned** by `client-copy-claims.test.ts` (no eight weeks, no £49.99, no
   founder, no hedge, no Bing). Add every new renderer. Things no script can check and are hand-kept:
   the Stripe Payment Link, every Meta-registered body.
+- **Sales words have ONE style source: `src/lib/salesStyle.ts`** (Paul, 2026-09-30). A new model
+  prompt that writes to a prospect includes `SALES_STYLE_RULES` verbatim; new generated or scripted
+  sales copy is checked with `salesStyleProblems` (pass the inserted names as `ignore`) and added to
+  `scripts/sales-style.test.ts`. Say the search as trade + town ("a plumber in Rugby"), never the audit
+  query or an adjective on it. Record: `docs/sales-language.md`.
 - **Page generator**: anti-stuffing is CODE (phrase/town/noun-spam caps, measured); "based here" only on
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
