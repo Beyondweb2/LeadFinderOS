@@ -89,7 +89,8 @@ export function useSalesActions() {
        lead_log_contact function. */
     /** Bulk initial outreach with THE TEMPLATE CHOSEN FOR THIS BATCH (no global selected opener). */
     queueOpener: m((a: { leadIds: string[]; template: string }) => salesQueueOpener(a.leadIds, a.template), () => undefined),
-    /** Admin only — the server refuses anyone else. */
-    assign: m((a: { leadId: string; to: string | null }) => rpc('assign_lead', { _lead_id: a.leadId, _to_user_id: a.to }), (a) => a.leadId),
+    /** Admin only — the server refuses anyone else. ONE lead: assign_lead_with_brief (2026-10-01) = assign_lead
+     *  + one Team board task for a salesperson (no note from this picker). Bulk moves stay on assign_lead. */
+    assign: m((a: { leadId: string; to: string | null }) => rpc('assign_lead_with_brief', { _lead_id: a.leadId, _to_user_id: a.to, _note: null, _due: null, _reason: null, _client_key: null }), (a) => a.leadId),
   };
 }

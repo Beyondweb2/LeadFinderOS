@@ -358,21 +358,33 @@ export function stateChangedWords(data: Record<string, unknown> | null | undefin
   return `Status: ${w(data?.from)} → ${w(data?.to)}`;
 }
 
-/* ── 6b. ONE PILL, NOT TWO (Paul, 2026-09-30: "no duplicate pills if another visible badge already
-   represents the exact same state") ─────────────────────────────────────────────────────────────── */
+/* ── 6b. ONE STATUS PILL (Paul, 2026-10-01: "exactly ONE primary status pill" — supersedes the
+   2026-09-30 rule that drew the sales-state pill beside the pipeline badge whenever the words differed,
+   which gave "New · Opener queued" next to "Queued", and "Replied" next to "Replied") ───────────── */
 
-const CLIENT_BADGES: ReadonlySet<string> = new Set(['paid', 'in delivery', 'completed', 'refunded']);
-const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+/** Stages worth more than routine sending activity: when the lead is at one of these, the pill says it
+ *  and a queued / sent / failed message never downgrades it (Interested + a follow-up queued = Interested). */
+const STAGE_BEATS_SENDING: ReadonlySet<SalesState> = new Set(['client', 'won', 'not_interested', 'meeting_booked', 'interested', 'replied', 'wrong_number']);
 
-/** Does the pipeline badge beside it already say this state? Then the row draws only the badge.
- *  Same words ("Contacted" / "Contacted", "Not interested" / "Not Interested"), or a client badge
- *  (Paid / In delivery / Completed / Refunded) for Client. Anything else — "No WhatsApp" for a New lead,
- *  "Report Sent" for an Interested one, "New" for a lead with a logged call — shows the pill. */
-export function stateShownByBadge(v: SalesStateView, badgeLabel: string | null | undefined): boolean {
-  const b = norm(badgeLabel);
-  if (!b) return false;
-  if (v.state === 'client') return CLIENT_BADGES.has(b);
-  return b === norm(v.label);
+/** What the ONE pill shows. `source: 'stage'` → draw the sales stage (`view`); `source: 'pipeline'` →
+ *  draw the stored pipeline status as its own badge (it is the more precise word for a lead that is not
+ *  yet engaged: New, Queued, Contacted, WhatsApp failed, No WhatsApp, Report sent, You replied …).
+ *  - A higher stage always wins (the set above). "Opted out" is named as itself.
+ *  - New / contacted / other → the pipeline words — EXCEPT a lead the pipeline still calls New that a
+ *    person has contacted (a logged call): that is Contacted (the action visibly changed the row).
+ *  Queued is never Contacted, and a failed message is never Contacted: both come from the pipeline.
+ *  ⛔ DISPLAY ONLY. The pill's menu still edits the stored pipeline status and nothing else; filters keep
+ *  reading the stored fields. */
+export type OneStatus = { source: 'stage'; view: SalesStateView } | { source: 'pipeline' };
+export function oneStatusOf(v: SalesStateView | null | undefined, pipelineStatus: string | null | undefined): OneStatus {
+  if (!v) return { source: 'pipeline' };
+  const p = (pipelineStatus ?? '').trim();
+  if (STAGE_BEATS_SENDING.has(v.state)) {
+    if (v.state === 'not_interested' && p === 'opted_out') return { source: 'stage', view: { ...v, label: 'Opted out', detail: null } };
+    return { source: 'stage', view: v };
+  }
+  if (v.state === 'contacted' && (p === '' || p === 'not_contacted')) return { source: 'stage', view: v };
+  return { source: 'pipeline' };
 }
 
 /* ── 7. QUEUE RULES (what the state means for the lists — read, never written) ────────────────── */

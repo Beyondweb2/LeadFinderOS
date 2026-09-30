@@ -13,7 +13,7 @@ import path from "node:path";
 import {
   MEETING_KEEP_AFTER_MS, NOT_INTERESTED_STATUSES, OUTCOME_RULE_VALUES, SALES_STATES, SALES_STATE_LABEL, SALES_STATE_TONE,
   contactAgo, isEngaged, isOutOfOutreach, lastContactOf, lastContactText, lastLoggedByLead, lastLoggedContactOf,
-  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, stateShownByBadge, suggestNextAction,
+  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, oneStatusOf, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction,
 } from "../src/lib/leadState.ts";
 import { CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail, outcomesFor, salesStageOf } from "../src/lib/salesCrm.ts";
 import { INBOUND_NO_DOWNGRADE, STRONG_STATUSES, postgrestList } from "../src/lib/strongStatuses.ts";
@@ -223,7 +223,7 @@ console.log("\n── 9. one reading on every screen ──");
   const strip2 = read("src/components/LeadStateStrip.tsx");
   ok(!/Call booked ·/.test(strip2) && /<LastContactLine/.test(strip2), "the strip no longer draws the meeting twice; Last contact is the shared line");
   const inbox = read("src/pages/Inbox.tsx");
-  ok(/<SalesStatePill view=\{activeSales\.view\}/.test(inbox), "the Inbox thread header shows the state");
+  ok(inbox.includes('<PipelineStatusSelect value={active.leadStatus} stage={activeSales.view}') && !inbox.includes('<SalesStatePill'), "the Inbox thread header shows the state as its ONE status pill");
   ok(/statusFilter === 'interested'\s*\n?\s*\? byCampaign\.filter\(\(c\) => c\.isPotentialWork \|\| INTERESTED_STATUSES\.has/.test(inbox), "⛔ the Inbox Interested filter reads the star (it matched a status nothing writes)");
   const table = read("src/components/OutreachTable.tsx");
   ok(/useLastLoggedContacts\(pageLeadIds\)/.test(table) && /data-testid="row-last-contact"/.test(table) && /data-testid="row-meeting"/.test(table), "Outreach rows: one small line — a current meeting, else the last logged contact (this page's rows only)");
@@ -285,17 +285,29 @@ console.log("\n── 12. Paul's decisions, 2026-09-30 (follow-up) ──");
   for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back"]) ok(outcomePlan(o, { status: "not_interested" }).status === null, `${o} on a Not interested lead writes no status → the block stays`);
   ok(outcomePlan("interested", { status: "not_interested" }).status === "interested" && outcomePlan("meeting_booked", { status: "not_interested" }).status === "interested", "Interested / Meeting booked on it → status interested → the block is lifted");
   ok(/said\.push\('Not interested block lifted \(any other block stays\)'\)/.test(read("src/lib/leadOutcome.ts")), "the result line says the block was lifted");
-  // 2. The sales-state pill on Outreach rows — one pill, never two.
+  // 2. ONE status pill (Paul, 2026-10-01 — supersedes "the pill beside the badge when the words differ").
   const v = (s: Parameters<typeof salesStateOf>[0]) => salesStateOf(s, NOW);
-  ok(stateShownByBadge(v({ status: "initial_contact" }), "Contacted") && stateShownByBadge(v({ status: "replied" }), "Replied") && stateShownByBadge(v({ status: "not_interested" }), "Not Interested"), "the badge already says Contacted / Replied / Not interested → no second pill");
-  ok(stateShownByBadge(v({ status: "payment_received", amount_paid: 99 }), "Paid") && stateShownByBadge(v({ status: "won_pending_onboarding" }), "Won · awaiting onboarding"), "Paid is Client; Won is Won → no second pill");
-  ok(!stateShownByBadge(v({ status: "not_contacted", lastLogged: logged("left_voicemail") }), "New"), "a New badge with a logged voicemail → the Contacted pill shows (the action visibly changed the row)");
-  ok(!stateShownByBadge(v({ status: "report_sent", is_potential_work: true }), "Report Sent"), "starred on Report Sent → Interested pill");
-  ok(!stateShownByBadge(v({ status: "initial_contact", call_booked_at: at(5) }), "Contacted"), "a booked meeting → Meeting booked pill");
-  ok(!stateShownByBadge(v({ status: "initial_contact", wrongNumber: true }), "Contacted"), "a wrong number → Wrong number pill");
-  ok(!stateShownByBadge(v({ status: "no_whatsapp_needs_sms" }), "No WhatsApp"), "No WhatsApp badge on a New lead → the New pill shows");
+  const one = (s: Parameters<typeof salesStateOf>[0]) => { const o = oneStatusOf(v(s), s.status); return o.source === "stage" ? o.view.label : `pipeline:${s.status}`; };
+  ok(one({ status: "not_contacted" }) === "pipeline:not_contacted", "never contacted, nothing queued → the pipeline's New");
+  ok(one({ status: "queued" }) === "pipeline:queued", "an opener queued → Queued (not 'New · Opener queued' beside 'Queued')");
+  ok(one({ status: "initial_contact", whatsapp_sent_at: at(-60) }) === "pipeline:initial_contact", "sent → Contacted (the pipeline's word)");
+  ok(one({ status: "whatsapp_failed" }) === "pipeline:whatsapp_failed" && one({ status: "whatsapp_failed", whatsapp_sent_at: at(-60) }) === "pipeline:whatsapp_failed", "⛔ a failed message is never Contacted");
+  ok(one({ status: "replied" }) === "Replied" && one({ status: "awaiting_reply" }) === "pipeline:awaiting_reply", "replied → Replied; You replied stays the pipeline's word");
+  ok(one({ status: "queued", is_potential_work: true }) === "Interested" && one({ status: "initial_contact", is_potential_work: true }) === "Interested", "⛔ Interested + a follow-up queued → Interested (sending never downgrades a stage)");
+  ok(one({ status: "queued", call_booked_at: at(5) }) === "Meeting booked", "Meeting booked + a reminder queued → Meeting booked");
+  ok(one({ status: "not_interested" }) === "Not interested" && one({ status: "opted_out" }) === "Opted out", "not interested / opted out named as themselves");
+  ok(one({ status: "queued", amount_paid: 99 }) === "Client" && one({ status: "payment_received", amount_paid: 99 }) === "Client", "a client + a pending message → Client");
+  ok(one({ status: "won_pending_onboarding" }) === v({ status: "won_pending_onboarding" }).label, "won → Won");
+  ok(one({ status: "not_contacted", lastLogged: logged("left_voicemail") }) === "Contacted", "a New lead with a logged voicemail → Contacted (the action visibly changed the row)");
+  ok(one({ status: "initial_contact", wrongNumber: true }) === "Wrong number", "a wrong number → Wrong number");
+  ok(one({ status: "no_whatsapp_needs_sms" }) === "pipeline:no_whatsapp_needs_sms", "No WhatsApp stays the pipeline's own word");
+  ok(oneStatusOf(null, "queued").source === "pipeline", "no stage known → the pipeline badge, never a guess");
   const table = read("src/components/OutreachTable.tsx");
-  ok(/stateShownByBadge\(v, pipelineStatusLabel\(lead\.status\)\) \? null : v/.test(table) && /<SalesStatePill view=\{v\} size="xs"/.test(table) && /salesState=\{rowSalesState\(lead\)\}/.test(table), "Outreach desktop row and phone card draw the pill through the one rule");
+  const card = read("src/components/OutreachMobileCard.tsx");
+  const sel = read("src/components/PipelineStatusSelect.tsx");
+  ok(table.includes('stage={rowSalesState(lead)}') && table.includes('<OneStatusPill status={lead.status} stage={rowSalesState(lead)} />') && !table.includes('<SalesStatePill') && table.includes('salesState={rowSalesState(lead)}'), "Outreach desktop row: ONE pill through the status control, no second pill");
+  ok(!card.includes('<SalesStatePill') && card.split('<OneStatusPill').length - 1 === 2, "Outreach phone card: ONE pill (editable or read-only)");
+  ok(sel.includes('oneStatusOf(stage, status)') && sel.includes('Pipeline status · now'), "the pill's menu says it sets the pipeline status — picking there can never write the stage");
   ok(/useWrongNumbers\(pageLeadIds\)/.test(table) && /data-testid="row-last-contact"/.test(table), "…with the Wrong number mark for the page, and the Last contact line kept underneath");
   const wn = read("supabase/migrations/20260930170100_leads_wrong_numbers.sql");
   ok(/public\.can_work_lead\(l\.id\)/.test(wn) && /revoke all on function public\.leads_wrong_numbers\(uuid\[\]\) from public, anon/.test(wn), "the batch Wrong number read is role-checked and not for anon");

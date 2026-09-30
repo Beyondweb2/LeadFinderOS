@@ -784,6 +784,20 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   (`niche_result_slim`). A field the niche fold starts reading must be added to that SQL function AND
   backfilled first, or it reads as absent. Everything else reads `result`.
 - **The shell mounts once** (`<Route element={<AppLayout/>}>`); page-level caches must survive it.
+- ⛔ **ONE status pill per lead row** (Outreach desktop + phone, Inbox header + list, 2026-10-01): it is
+  `leadState.oneStatusOf(stage, pipelineStatus)` drawn by `PipelineStatusSelect` (`stage` prop) — a stage
+  that outranks sending, else the pipeline's word. Never draw a `SalesStatePill` beside the status
+  control; the menu edits the stored pipeline status only. The lead popup is the detail view (both).
+
+**Sales Team Board** (`docs/sales-team-board.md`)
+- Admin → team messages/tasks live in `team_posts` / `team_post_recipients` / `team_post_events`; **no
+  write grants** — every write is a role-checked function. Recipients are a frozen snapshot; "Everyone"
+  is computed server-side and leaves out `metric_exclusions` test accounts.
+- ⛔ **One lead = `assign_lead_with_brief`** (assign_lead + one board task; the ONE notice is
+  `trg_notify_lead_assigned`'s). Bulk stays on `assign_lead`. A board task never stores a second date
+  for a lead — it shows the lead's Next Action; completing it touches nothing on the lead.
+- A moved lead cancels the previous holder's open lead tasks (trigger) — any new assignment path gets
+  this for free; never delete a task row.
 
 **Facts about a client**
 - **One ranked resolver, `src/lib/clientFacts.ts`:** onboarding > client record > baseline >
@@ -831,6 +845,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
 | Multi-user / roles | `src/lib/roleRules.ts`, `src/lib/access.ts` (matrix), `src/components/RequireAccess.tsx`, `_shared/access.ts`, `src/lib/salesCrm.ts`, `src/hooks/useSalesCrm.ts`, `LeadCrmPanel`, `AvailableToClaim`, `src/lib/leadRpc.ts` + `salesPatchPlan.ts`, pages `Team`/`SetPassword`, fn `admin-users` (team actions), migrations `20260927100000…100400` + `140000`, view `sales_leads`, tables `team_members`/`lead_activity` |
+| Sales Team Board | `src/lib/teamBoard.ts`, `src/hooks/useTeamBoard.ts`, `src/components/team/` (TeamBoard, TeamComposer, TeamOversight), `adminMetrics.delegation`, migration `20261001200000`, test `supabase/tests/sales-team-board.sql` |
 | Admin dashboard rules (2026-09-30) | ⛔ Every admin number comes from `_shared/admin-overview-load.ts` → `src/lib/adminMetrics.ts` (the dashboard AND the AI briefing — never a second fold). ⛔ Reply triage (`replyTriage.ts`): opt-out suppression is PHRASES ONLY, never the model, never a paying client; the model only files. ⛔ `audit_purpose = 'weekly_check'` is monitoring, never the guarantee — no pointer trigger reads it and `render-audit-report` refuses it. ⛔ findable.live analytics send only the fields the privacy page lists (`findable-site/src/lib/analytics.ts`); change both or neither. ⛔ The AI briefing is stored only when every number in it is in its facts (`validateNumbers`). |
 | Admin dashboard (control centre) | `src/pages/Dashboard.tsx`, `src/components/admin/controlCentre.tsx`, `src/hooks/useAdminOverview.ts`, fn `admin-overview`, `src/lib/adminMetrics.ts` (every definition), `reportingPeriod.ts` (the ONE London-day clock), `metricExclusions.ts` + table `metric_exclusions`, `apiCostLabels.ts` + SQL `admin_api_cost` — `docs/admin-control-centre.md`. ⛔ Test accounts test1/Test are excluded from performance numbers by ROW, never by name; their leads stay in inventory |
 | Dashboard (older, now unrendered) | `src/hooks/useDashboardMetrics.ts` (still the `FOUNDER_PRICE_GBP` sync source), `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |

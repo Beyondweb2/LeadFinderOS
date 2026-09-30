@@ -41,6 +41,7 @@ import { isLiveLeadWithoutTrade } from './leadTrade.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
 import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, foldTemplates, type Bottleneck, type FeatureRow, type NicheRow, type TemplatesBlock, type UsageRow } from './adminIntelligence.ts';
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
+import { attentionAssignable } from './teamBoard.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -267,7 +268,13 @@ export interface AdminInput {
   clientExtras?: ClientExtras | null;
   /** Release 5: feature uses in the period and the one before (SQL admin_feature_usage). */
   usage?: { now: UsageRow[]; previous: UsageRow[] | null } | null;
+  /** Sales Team Board (2026-10-01): OPEN lead-assignment tasks. Absent/null = not read → nothing is
+   *  treated as delegated (the list shows everything, as before). */
+  delegatedTasks?: DelegatedTask[] | null;
 }
+/** One open lead-assignment task on the Team board: the lead, who holds the task, its state. */
+export interface DelegatedTask { post_id: string; lead_id: string; user_id: string; task_status: string; published_at: string }
+export interface DelegatedSummary { count: number; items: { leadId: string; business: string; owner: string; status: string; why: string; kind: string }[] }
 
 export interface AdminOverview {
   period: ReportingPeriod;
@@ -288,6 +295,9 @@ export interface AdminOverview {
   money: Money;
   today: SinceBlock; yesterday: SinceBlock;
   attention: AttentionItem[];
+  /** Ordinary follow-ups taken off Paul's list because a salesperson holds them as a board task.
+   *  null = the board was not read (nothing was taken off). */
+  delegated: DelegatedSummary | null;
   /** null = triage has not run (the page says so rather than implying no replies need anyone). */
   triage: TriageSummary | null;
   /** Open replies waiting for whoever holds them that are not on Paul's list. */
@@ -726,7 +736,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     features,
     calls: { rows: [...callRows.values()].sort((a, b) => b.total - a.total), total: callTotal },
     money, today: todayBlock, yesterday: yesterdayBlock,
-    attention: attentionItems(input, facts, ledger, nameOf, todayDay, ta.items),
+    ...delegation(attentionItems(input, facts, ledger, nameOf, todayDay, ta.items), input, facts, nameOf),
     triage: triageSummary(input, p),
     triageWaitingInInbox: ta.waitingInInbox,
     clients: clientRows(paidLeads.concat(realLeads.filter((l) => String(l.status) === 'refunded' && (Number(l.amount_paid) || 0) > 0)), route, nameOf)
@@ -832,6 +842,26 @@ function attentionItems(
 
   const order: Record<AttentionGroup, number> = { urgent: 0, today: 1, review: 2, blocked: 3 };
   return out.sort((a, b) => order[a.group] - order[b.group] || (ms(a.sinceIso) || 0) - (ms(b.sinceIso) || 0));
+}
+
+/* ── Delegated work leaves Paul's list (Sales Team Board, 2026-10-01) ─────────────────────────────
+   An ordinary follow-up (attentionAssignable: never urgent, never money or client delivery, never an
+   aggregate) whose lead is held by a salesperson who has it as an OPEN board task is theirs now: it
+   leaves Needs your attention and is counted in one "delegated" line that opens the team board. The
+   moment the task is done or cancelled, or the lead moves, the item comes back if it is still true. */
+function delegation(items: AttentionItem[], input: AdminInput, facts: LeadFacts[], nameOf: (u: string | null) => string): { attention: AttentionItem[]; delegated: DelegatedSummary | null } {
+  if (!input.delegatedTasks) return { attention: items, delegated: null };
+  const holderOf = new Map(facts.map((f) => [f.lead.id, f.holder]));
+  const open = new Map<string, DelegatedTask>();
+  for (const t of input.delegatedTasks) if ((t.task_status === 'todo' || t.task_status === 'in_progress') && t.user_id !== input.bookOwnerId) open.set(`${t.lead_id}:${t.user_id}`, t);
+  const kept: AttentionItem[] = []; const moved: DelegatedSummary['items'] = [];
+  for (const i of items) {
+    const holder = i.leadId ? holderOf.get(i.leadId) ?? null : null;
+    const t = i.leadId && holder ? open.get(`${i.leadId}:${holder}`) : undefined;
+    if (t && attentionAssignable(i)) moved.push({ leadId: i.leadId!, business: i.business, owner: nameOf(holder), status: t.task_status, why: i.why, kind: i.kind });
+    else kept.push(i);
+  }
+  return { attention: kept, delegated: { count: moved.length, items: moved } };
 }
 
 /* ── Reply triage on Paul's list (release 2) ─────────────────────────────────────────────────────────

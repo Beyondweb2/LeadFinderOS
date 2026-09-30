@@ -150,6 +150,21 @@ ok(JSON.stringify(state.engines) === JSON.stringify(['chatgpt', 'gemini']), 'bot
   ], { town: TOWN, trade: TRADE });
   ok(priceVsBroad?.questionIndex === 1, 'J: commercial recommendation intent outranks a price question');
   ok(pickHookResult([], { town: TOWN, trade: TRADE }) === null, 'J: no misses → no hook');
+  /* DM Roofing, 2026-10-01: the emergency search (2 names, trade word) out-scored roof repair (5 names),
+     so audit_followup_call was refused with five real rivals in hand. A miss that can fill the
+     3-competitor template now wins inside its engine; nothing is borrowed from another cell. */
+  const dm = pickHookResult([
+    { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'gemini', label: 'Google AI', status: 'not_named', competitors: ['R1', 'R2', 'R3', 'R4', 'R5'], answerExcerpt: '' },
+    { questionIndex: 2, question: 'emergency roofer who can come out today in Manchester UK', engine: 'gemini', label: 'Google AI', status: 'not_named', competitors: ['E1', 'E2'], answerExcerpt: '' },
+    { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['C1', 'C2', 'C3'], answerExcerpt: '' },
+  ], { town: 'Manchester', trade: 'roofer' });
+  ok(dm?.engine === 'gemini' && dm.questionIndex === 0 && dm.competitors.join() === 'R1,R2,R3,R4,R5', 'J: a Google AI miss with 3+ rivals beats a higher-scored one with 2 (DM Roofing) — its own names only');
+  const thin = pickHookResult([
+    { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'gemini', label: 'Google AI', status: 'not_named', competitors: ['R1'], answerExcerpt: '' },
+    { questionIndex: 2, question: 'emergency roofer who can come out today in Manchester UK', engine: 'gemini', label: 'Google AI', status: 'not_named', competitors: ['E1', 'E2'], answerExcerpt: '' },
+    { questionIndex: 0, question: 'roof repair services in Manchester UK', engine: 'chatgpt', label: 'ChatGPT', status: 'not_named', competitors: ['C1', 'C2', 'C3'], answerExcerpt: '' },
+  ], { town: 'Manchester', trade: 'roofer' });
+  ok(thin?.engine === 'gemini' && thin.competitors.length < 3, 'J: Google AI still comes first — no switch of engine and no padding when no Google AI miss has three (the send is then refused)');
 }
 /* K. One matcher */
 {
