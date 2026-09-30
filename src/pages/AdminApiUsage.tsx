@@ -94,6 +94,10 @@ export default function AdminApiUsage() {
           <RefreshCw className="h-4 w-4 mr-2" /> Refresh
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Everything the code recorded, as the spend guard sees it — including usage Move37 paid for before each provider moved to your own account.
+        Findable's own cost figures are on the Admin dashboard (API &amp; system costs).
+      </p>
 
       {/* Security & usage (2026-09-29): who spent what, warnings, restrictions, the paid-action control. */}
       <SecurityPanel />
