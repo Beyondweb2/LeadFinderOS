@@ -2,7 +2,7 @@
    ⛔ Every screen that asks HOW someone was contacted reads this list: the workspace's "Log a contact"
    pills, the History wording, the Sales dashboard's channel table, and the "sent another way" pickers
    for sign-up and report links. The database mirrors it and a test holds them together:
-     - lead_log_contact's channel allowlist  = LOGGED_CONTACT_METHODS (migration 20260930120000)
+     - lead_log_contact's channel allowlist  = LOGGED_CONTACT_METHODS (migration 20260930130000)
      - the link-event channel CHECK          ⊇ LINK_SEND_METHODS
      - lead_contact_attempt_at (the claim rule) counts EVERY logged contact and every link SENT, so any
        method here that is logged or sent makes a lead unclaimable — nothing can be selectable here and

@@ -19,7 +19,7 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const MIG = read("supabase/migrations/20260928210000_campaign_claim_contact.sql");
 /* lead_log_contact's NEWEST definition (2026-09-30 added Facebook, Instagram and connection_sent). */
-const LOG_MIG = read("supabase/migrations/20260930120000_social_profiles.sql");
+const LOG_MIG = read("supabase/migrations/20260930130000_social_profiles.sql");
 const quoted = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 
 console.log("── the one set ──");

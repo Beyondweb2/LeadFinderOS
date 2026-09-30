@@ -65,7 +65,7 @@ export const SALES_VIEW_COLUMNS = [
   'domain_control',
   // 2026-09-28 (migration 20260929000000): why the town is unconfirmed — the row's town-gate badge.
   'town_fetch_note',
-  // 2026-09-30 (migration 20260930120000): the LinkedIn link and how sure each profile is.
+  // 2026-09-30 (migration 20260930130000): the LinkedIn link and how sure each profile is.
   'linkedin_url', 'facebook_status', 'instagram_status', 'linkedin_status',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);

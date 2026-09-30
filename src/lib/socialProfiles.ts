@@ -7,7 +7,7 @@
      - the SPA's Socials line and review panel (labels, badges, the Search LinkedIn link)
      - scripts/social-profiles.test.ts (the fixture sample)
    The canonical pick (which profile goes on the lead) is ONE SQL function, _social_profiles_sync
-   (migration 20260930120000) — this file grades, the database picks. Never a second copy of either.
+   (migration 20260930130000) — this file grades, the database picks. Never a second copy of either.
 
    ⛔ FALSE POSITIVES ARE WORSE THAN NO RESULT. A link is REJECTED (never stored) when it is not a
       profile: a share / intent button, a post / video / reel, a bare homepage, an admin page, a

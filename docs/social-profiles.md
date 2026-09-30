@@ -46,7 +46,7 @@ LinkedIn / Facebook / Instagram. Approved decisions (not to be re-asked):
 | The finder + the upsert rule | `supabase/functions/_shared/social-find.ts` (records → own site → grade → `saveGraded`) |
 | Find / add / confirm / reject | fn `social-profiles` (both roles, `resolveActor` + `leadAccess`, `guardAction('site_scrape')`) |
 | Paid lookup | fn `enrich-business` — admin-only, free finder first, socials only through `saveGraded` |
-| Storage + the canonical pick | table `lead_social_profiles`, `_social_profiles_sync` (trigger) → `facebook_url/_status/_method`, `instagram_*`, new `linkedin_url` / `linkedin_status` on `outreach_leads`; appended to `sales_leads` (migration `20260930120000`) |
+| Storage + the canonical pick | table `lead_social_profiles`, `_social_profiles_sync` (trigger) → `facebook_url/_status/_method`, `instagram_*`, new `linkedin_url` / `linkedin_status` on `outreach_leads`; appended to `sales_leads` (migration `20260930130000`) |
 | UI | `src/components/SocialLinks.tsx` — `SocialLinks` (the one line), `SocialProfilesPanel` (review), `FindSocialsButton`, `findSocialsForLeads` (admin bulk) |
 | Logging | `contactMethods.ts` (`facebook`, `instagram` + `social: true` group), `salesCrm.ts` (`connection_sent`, `socialFollowUpPreset`, `SOCIAL_FOLLOW_UP_DAYS`), `LeadCrmPanel` LogContact / FollowUp |
 | Tests | `scripts/social-profiles.test.ts` (the fixture sample + wiring); `contact-claim`, `sales-readiness`, `sales-shared-workflow`, `self-sourced-handoff`, `outreach-progressive`, `ui-cleanup-pass`, `role-rules`, `abuse-cost-protection` updated |
