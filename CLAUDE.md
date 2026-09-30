@@ -505,6 +505,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   run withholds rival names from the client report (`competitorCleaning.ts`); RG's frozen baseline
   `f64920ce` stays suppressed by the junk rule — do not re-extract evidence.
 - **`classifySource` grades any `.org` as authority** — known report-accuracy bug, not yet fixed.
+- **A directory listing is CONFIRMED only by an identifier** (a link from their own site, the place id, their phone/domain, name + postcode) — never by a name; an inconsistency needs a confirmed listing; nothing is "worth adding" without positive evidence; absence never downgrades (`directoryPresence.ts`, `docs/directory-presence.md`). Discovery only — nothing creates a listing.
 
 **Derived, never stored** — `serveGate`, `townVerdict`, `nameIsJudgeable`, `needsQ2`, the free-check
 progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`. A stored verdict freezes
@@ -789,6 +790,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Dashboard | `src/hooks/useDashboardMetrics.ts`, `useCampaignStats.ts`, `src/lib/templateAttribution.ts`, `armComparison.ts`, `realSend.ts`, `leadPayment.ts`, `dashboardTasks.ts`, `deliveryCockpit.ts` |
 | Coverage / niche | `src/pages/Coverage.tsx`, `NichePanel.tsx`, `src/lib/nicheView.ts`, `coverageState.ts` (`foundAddedByPair`), `websiteStatusClass.ts`, fns `coverage`, `market-view` |
 | Playbook (evidence, not LLM) | `src/lib/buildPlaybook.ts`, `directoryFacts.ts` (64 entries), `playbookDoc.ts`, `clientRequestDoc.ts`, fn `playbook-evidence` |
+| Directory / profile presence (discovery only) | `src/lib/directoryPresence.ts`, `presenceSources.ts`, fn `directory-presence`, tables `lead_directory_presence` (one row per lead × source) + `_runs` |
 | Website Build (command centre, V2) | `src/pages/WebsiteBuild.tsx`, `src/lib/websiteBuildState.ts` (the ONE shape rule, browser + `paid-client-hub`; `version: 2`, V1 rows read through), `buildRoutes.ts` (routes + stage checklists — stored check keys, never rename), `websiteTemplates.ts` (MCL profile + forbidden seed values, hand-kept), `buildFacts.ts`, `buildArchitecture.ts`, `buildPack.ts`, `stagePrompts.ts`, recon: `reconSchema.ts` (the JSON contract, `reconVersion`), `recon.ts` (prompt, safe import, merge), `manifestSummary.ts` (fenced per-route summaries — never the raw JSON in a prompt), mapping: `templateMapping.ts` (`computeMapping` — trade-agnostic; a template only DECLARES fields / catalogue / slots in `websiteTemplates.ts`; only `ready` values reach the config; recon risk rule `LOW_RISK_FACT_KEYS` is a positive allowlist), execution: `buildExecution.ts` (Build Execution prompt refused while blocked; PREVIEW READY is gated by `previewGateProblems` — pages.dev + noindex + clean seed scrub + passing checks, whatever Claude claims; a failed result never erases the last good build); column `outreach_leads.website_build`. ⛔ Redeploy `paid-client-hub` BEFORE the SPA when the shape changes — the old server drops unknown keys on save |
 | Client-site enquiry forms | fn `site-enquiry`, `_shared/site-enquiry.ts` (`CLIENT_SITES` — recipient never from the request; only the production origin delivers, preview/localhost = test mode), table `site_enquiries` |
 | Page generator | `src/lib/pagePlan.ts`, `pagePlanQueue.ts`, `qaAnswerGuard.ts`, fn `page-generator`, tables `client_pages`/`client_page_questions` |
@@ -915,6 +917,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | India (or any non-UK country): search bias, lead country, +91 phones, local send hours, audit wording, the measured Places quality, INR/Coverage designs | `docs/india-readiness.md` |
 | Abuse / cost protection: the guard, thresholds, suspension, pause / emergency stop, exports, alerts | `docs/abuse-cost-protection.md` |
 | Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
+| Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,

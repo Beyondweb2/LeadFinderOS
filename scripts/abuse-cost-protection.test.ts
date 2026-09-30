@@ -98,7 +98,7 @@ for (const fn of fnDirs) {
 for (const fn of ["search-leads", "google-place-details", "enrich-business", "check-website", "extract-email", "extract-facebook", "scan-site-details", "create-ai-audit", "warm-lead-reply", "voice-note-script", "prospect-preview", "niche-sample", "send-whatsapp-message", "send-whatsapp-voice", "send-whatsapp-media", "bulk-jobs"]) {
   ok(/guardAction\(service|guardAction\(supabase|guardAction\(serviceClient|guardAction\(guardService/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} calls guardAction`);
 }
-for (const fn of ["review-reply", "admin-ai-opener", "run-seo-scan", "apply-seo-paste"]) {
+for (const fn of ["review-reply", "admin-ai-opener", "run-seo-scan", "apply-seo-paste", "directory-presence"]) {
   ok(/allStopRefusal\(/.test(read(`supabase/functions/${fn}/index.ts`)), `${fn} (admin tool) refuses under the emergency stop`);
 }
 
