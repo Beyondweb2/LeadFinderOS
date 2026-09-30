@@ -130,3 +130,25 @@ Weak by the house rules (re-register at Meta to fix):
   Sales UI. Easy to add from the same evidence (the call script's pieces) if Paul wants it.
 - `admin-ai-opener` (the "AI Generator") left in place; it belongs to the deleted product and should go
   in the deep clean.
+
+## 7. Live (2026-09-30)
+
+- Merged to main `4b7600db` (after bringing in `e69be33c`, the baseline-workflow merge; only CLAUDE.md
+  and docs/INDEX.md overlapped, auto-merged). Gate: typecheck 9 = baseline; 238/243 suites — the four
+  known-stale (coverage-lead-counts, report-attribution, verdict, site-origin) + onboarding-audit-fields
+  (the known findable-site mismatch).
+- Redeployed `voice-note-script`, `warm-lead-reply`, `prospect-preview` (every function reaching the
+  changed modules; none had any other commit in its closure since its last deploy). Proved by the
+  deployed bodies: `shortVoiceNote`, "HOW IT MUST SOUND", the new fallback line, "which one is really
+  yours". `create-ai-audit` NOT redeployed.
+- SPA: leadfinderos-next serves the new call script, objections and short version (LeadCrmPanel chunk);
+  the baseline-workflow marker ("Opportunity Backlog") is still live.
+- Real v4 voice notes, generated through the live function as the data account (magic-link session,
+  revoked 204): JG Electrics (Woking, own site), Firebeard Electrical (Shrewsbury, TradeHQ profile),
+  Steve The Plumber (Cambridge). All three: no problems, no warnings, 91–102 words; the search said as
+  "an electrician in Woking" / "a plumber in Cambridge" although the audit questions were "local
+  electricians for rewiring houses in Woking UK" and "plumber in Cambridge UK who actually turns up".
+  Short versions returned on generate and on `latest`. Two of three used one line per beat; the model
+  does not always follow LAYOUT (the text is fine either way).
+- The warm drafter could not be exercised live: no lead had an open 24-hour window after a hook
+  (designed refusal `window_closed`). Its prompt is proven in the deployed body; its fallback in tests.
