@@ -18,7 +18,7 @@ import {
 import { buildExecutionStatus, parseWebsiteBuild, previewReadyProblems, standardEvidence } from '../src/lib/websiteBuildState.ts';
 import { CORE_ASSET_SLOTS, MCL_TEMPLATE } from '../src/lib/websiteTemplates.ts';
 import { mapAssets } from '../src/lib/templateMapping.ts';
-import { isHighRiskFact } from '../src/lib/recon.ts';
+import { availabilityConflict, isHighRiskFact } from '../src/lib/recon.ts';
 
 let failures = 0;
 function ok(cond: boolean, msg: string) { console.log(`${cond ? 'PASS' : 'FAIL'} ${msg}`); if (!cond) failures++; }
@@ -151,7 +151,7 @@ const GOOD: StandardReport = readStandardReport({ heroImage: 'genuine', mobileHe
   const bs4Now = readStandardReport({ heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'shown', rating: 'shown', ratingAsOf: 'September 2026', form: 'site_enquiry', formTest: 'passed', credentialsProminent: true, photosUsed: 14, photographyPreserved: true, repeatedImages: [] });
   ok(standardProblems(bs4Now, bs4).length === 0, 'F: BS4 today passes the build standard');
   ok(has(standardProblems({ ...bs4Now, areasVisual: 'other' }, bs4), /unrelated to the locality/) && has(standardProblems({ ...bs4Now, areasVisual: 'job_photo' }, bs4), /gives no reason/), 'F: BS4 /areas/ as it was this morning (an EV-charger photo saying nothing about Bristol, no reason) would now be caught');
-  ok(isHighRiskFact('availability', ['24/7 emergency call-outs']) && isHighRiskFact('opening_hours', ['Open 24/7']), 'F: BS4\'s unsupported 24/7 still needs Paul, whatever field it sits in (the source-site fact rule)');
+  ok(availabilityConflict(['24/7 emergency call-outs'], ['Mon–Fri 8am–5pm']) && isHighRiskFact('standout', ['Bristol\'s leading electrician']), 'F: BS4\'s 24/7 against its own stated hours is a CONFLICT for Paul, and a superlative is still his (the source-site fact rule, 2026-09-30)');
 
   /* MCL Locksmiths (template rebuild). Genuine van photos, Google reviews (214), a coverage map,
      phone / WhatsApp only (the old site's "forms" were mailto compose — not a working form),

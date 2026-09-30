@@ -23,6 +23,7 @@ import { autoAssign, computeMapping, urlDecisions } from '../src/lib/templateMap
 import { redirectMatcher } from '../src/lib/buildArchitecture.ts';
 import { applyBuildResult, builtCoverage, sameDomainRebuild, configVersion, executionPrompt, parseBuildResult, projectConflicts, retryPrompt, reviewPrompt, type BuildResult } from '../src/lib/buildExecution.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
+import { EMPTY_SITE_GATE, SITE_GATE_FETCH, readSiteGateReport, siteGateProblems, siteIntentMap } from '../src/lib/siteGate.ts';
 
 let failures = 0;
 function ok(cond: boolean, msg: string) {
@@ -86,6 +87,8 @@ const OK_RESULT = {
   quality: {
     oldVsNew: { verdict: 'upgrade', widths: [1440, 390], stillStronger: [], notes: '' },
     standard: { heroImage: 'genuine', mobileHero: 'integrated', areasVisual: 'map', reviews: 'none_available', rating: 'none_available', form: 'none', formTest: 'not_run', credentialsProminent: true, photosUsed: 1, photographyPreserved: true, repeatedImages: [] },
+    siteGate: { siteGateVersion: 1, domain: 'harbourlocks.co.uk', mode: 'dist', preview: false, pages: 5, passed: true, checks: [{ id: 'links', label: 'Every internal link resolves', level: 'pass', details: [] }, { id: 'titles', label: 'One unique title per page', level: 'warn', details: ['/: title is 72 characters'] }] },
+    siteGatePreview: { siteGateVersion: 1, domain: 'harbourlocks.co.uk', mode: 'url', preview: true, pages: 5, passed: true, checks: [{ id: 'noindex', label: 'Preview is noindexed', level: 'pass', details: [] }] },
   },
   seedHits: [], warnings: ['Link the Pages project to GitHub in the dashboard (operator step).'], errors: [],
 };
@@ -182,7 +185,7 @@ console.log('\n── IMPORT: SUCCESS, NOINDEX, CONTAMINATION, FAILURE, CONFLICT
   const { state: ok1 } = importInto(s, OK_RESULT);
   ok(buildExecutionStatus(ok1, true) === 'preview_ready' && previewGateProblems(ok1.build_execution).length === 0, 'a clean, noindexed pages.dev result → PREVIEW READY');
   ok(ok1.preview_url === 'https://preview.harbour-locks.pages.dev' && ok1.preview_status === 'deployed' && ok1.preview_noindex_confirmed && ok1.latest_commit === 'a1b2c3d4e5f6' && ok1.repo_url === 'https://github.com/Beyondweb2/HarbourLocks', 'project fields are filled: repo, commit, preview URL, preview status, noindex');
-  ok(ok1.build_execution.deployment_id === 'dep-123' && ok1.build_execution.redirects.unresolved.join() === '/old-offers/' && ok1.build_execution.warnings.length === 1, 'the build record keeps deployment, redirect status and warnings');
+  ok(ok1.build_execution.deployment_id === 'dep-123' && ok1.build_execution.redirects.unresolved.join() === '/old-offers/' && ok1.build_execution.warnings.length === 2 && /Site gate warnings/.test(ok1.build_execution.warnings[1]), 'the build record keeps deployment, redirect status and warnings (Claude\'s, then the gate\'s)');
   ok(JSON.stringify(ok1.facts) === JSON.stringify(s.facts) && JSON.stringify(ok1.mapping) === JSON.stringify(s.mapping) && ok1.route === s.route && ok1.pages.length === 1 && ok1.redirects.length === 1 && ok1.qa.visual_qa, 'import preserves facts, mapping, route, page plan, redirects and QA');
   const noNoindex = importInto(s, { ...OK_RESULT, cloudflare: { ...OK_RESULT.cloudflare, noindexConfirmed: false } }).state;
   ok(buildExecutionStatus(noNoindex, true) === 'needs_attention' && previewGateProblems(noNoindex.build_execution).includes('Preview noindex not confirmed') && !noNoindex.preview_noindex_confirmed, 'claimed preview_ready WITHOUT noindex → NEEDS ATTENTION');
@@ -314,6 +317,52 @@ console.log('\n── STATUS, ROUND TRIP, COMPATIBILITY ──');
   ok(v1.route === 'template_rebuild' && v1.build_execution.result_imported_at === '' && buildExecutionStatus(v1, false) === 'not_started', 'a V1 row opens with an empty build record');
   const p3 = parseWebsiteBuild({ version: 2, route: 'template_rebuild', mapping: { services: { 'lock-changes': true } }, recon: { imported_at: 'x', services: [{ name: 'Lock changes' }] } });
   ok(p3.mapping.services['lock-changes'] === true && p3.recon.services.length === 1 && p3.build_execution.previous === null, 'a Phase 3 row keeps its mapping and candidates and gains an empty build record');
+}
+
+console.log('\n── THE SITE QUALITY GATE + THE SITE INTENT MAP (2026-09-30) ──');
+{
+  const s = ready();
+  const p = executionPrompt(input(s)).text;
+  ok(/X6b\. SITE INTENT MAP/.test(p) && /X9b\. THE FINDABLE SITE QUALITY GATE/.test(p), 'the build prompt carries the intent map (X6b) and the gate (X9b)');
+  ok(p.includes(SITE_GATE_FETCH) && p.includes('qa/findable-expect.json') && p.includes('quality.siteGate'), '…with the one fetch command, the expect file and the report key');
+  ok(/INHERITED HAZARDS/.test(p) && /pages\.dev\/\*/.test(p) && /AggregateRating/.test(p), 'a template build is told the template repository noindexes every host and carries rating schema');
+  ok(/#business/.test(p) && /trade SUBTYPE/.test(p) && /BreadcrumbList on every page below home/.test(p) && /home → every service page/.test(p), 'X6 names the entity @id, the subtype, breadcrumbs and the internal-link pattern');
+  ok(/QA label, NOT copy/.test(p), 'baseline questions are QA labels, never copy');
+  const json = p.slice(p.indexOf('Save this as qa/findable-expect.json'));
+  const map = JSON.parse(json.slice(json.indexOf('```json') + 7, json.indexOf('```', json.indexOf('```json') + 7)));
+  ok(map.siteIntentMapVersion === 1 && map.domain === 'harbourlocks.co.uk' && Array.isArray(map.intents), 'the map in the prompt is valid JSON for the gate');
+  ok(map.services.length === mapOf(s).config.services.length && map.intents.filter((x: { source: string }) => x.source === 'service').length === map.services.length, 'every selected service is an intent with an owner');
+  ok(!map.phone || map.phone === rowsFor(s).find((r) => r.key === 'phone' && r.status === 'verified')?.value, 'the identity is the VERIFIED values only');
+  const qs = ['Emergency locksmith near me', 'Who can fix a uPVC door lock in Scarborough?', 'Locksmith in Timbuktu open late'];
+  const ev = { ...toRebuildPromptInput(ctx()), frozenQuestions: qs };
+  const m2 = siteIntentMap({ ...input(s), evidence: ev }, mapOf(s));
+  const accounted = qs.every((q) => m2.intents.some((x) => x.question === q) || m2.unowned.includes(q));
+  ok(accounted, 'every frozen baseline question is either owned by a page or listed for Paul — none silently dropped');
+  ok(m2.intents.filter((x) => x.source === 'baseline').every((x) => x.intent.startsWith('Baseline: ') && x.question), 'a baseline intent carries its question as a QA label');
+}
+{
+  const s = ready();
+  const noGate = { ...OK_RESULT, quality: { oldVsNew: OK_RESULT.quality.oldVsNew, standard: OK_RESULT.quality.standard } };
+  const st = importInto(s, noGate).state;
+  ok(buildExecutionStatus(st, true) !== 'preview_ready' && st.build_execution.errors.some((e) => /Site quality gate not run/.test(e)), 'a preview_ready claim with NO gate report is refused — not run is not passed');
+  const failing = { ...OK_RESULT, quality: { ...OK_RESULT.quality, siteGate: { ...OK_RESULT.quality.siteGate, passed: false, checks: [{ id: 'links', label: 'Every internal link resolves', level: 'fail', details: ['/ → /missing/'] }, { id: 'schema', label: 'Valid JSON-LD', level: 'fail', details: ['rating markup'] }] } } };
+  const sf = importInto(s, failing).state;
+  ok(buildExecutionStatus(sf, true) !== 'preview_ready' && sf.build_execution.qa.linksPassed === false && sf.build_execution.qa.schemaPassed === false, 'a failed gate check turns the self-reported qa value false — the gate beats the claim');
+  ok(sf.build_execution.errors.some((e) => /Site quality gate FAILED: Every internal link resolves \(\/ → \/missing\/\)/.test(e)), 'the failure is an error naming the check and its first detail');
+  const lying = { ...OK_RESULT, quality: { ...OK_RESULT.quality, siteGate: { ...OK_RESULT.quality.siteGate, passed: true, checks: [{ id: 'orphans', label: 'No orphans', level: 'fail', details: [] }] } } };
+  ok(importInto(s, lying).state.build_execution.errors.some((e) => /FAILED/.test(e)), 'passed:true with a failing check reads as FAILED');
+  const odd = readSiteGateReport({ siteGateVersion: 1, domain: 'x', mode: 'dist', passed: true, checks: [{ id: 'a', label: 'a', level: 'great' }] });
+  ok(odd.checks[0].level === 'fail' && odd.passed === false, 'an unknown check level reads as FAIL, never pass');
+  const other = { ...OK_RESULT, quality: { ...OK_RESULT.quality, siteGate: { ...OK_RESULT.quality.siteGate, domain: 'mc-locksmiths.com' } } };
+  ok(importInto(s, other).state.build_execution.errors.some((e) => /ran for mc-locksmiths\.com/.test(e)), 'a gate run for another domain does not count');
+  const noPrev = { ...OK_RESULT, quality: { ...OK_RESULT.quality, siteGatePreview: undefined } };
+  ok(importInto(s, noPrev).state.build_execution.errors.some((e) => /Preview site gate not run/.test(e)), 'preview_ready also needs the --url --preview run');
+  const good = importInto(s, OK_RESULT).state;
+  ok(good.build_execution.errors.length === 0 && good.build_execution.warnings.some((w) => /Site gate warnings to read: One unique title per page/.test(w)), 'a passing gate adds no error and carries its warnings');
+  ok(siteGateProblems(EMPTY_SITE_GATE, 'x.co.uk').length === 1, 'absent report → exactly the not-run problem');
+  ok(retryPrompt(input(sf)).text.includes('THE SITE QUALITY GATE (fix the SITE until it passes'), 'the retry prompt re-prints the gate when it failed');
+  const saved = parseWebsiteBuild(normaliseWebsiteBuild(sf));
+  ok(JSON.stringify(saved.build_execution.errors) === JSON.stringify(sf.build_execution.errors), 'gate errors live in the existing errors key — the saved shape (paid-client-hub) is unchanged');
 }
 
 console.log('\n── THE PAGE ──');

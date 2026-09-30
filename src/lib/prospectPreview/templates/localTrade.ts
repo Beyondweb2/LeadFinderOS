@@ -51,7 +51,9 @@ function jsonLd(cfg: ProspectConfig, pack: TradePack): string {
   if (cfg.services.length) {
     ld.hasOfferCatalog = { '@type': 'OfferCatalog', name: pack.servicePhrase, itemListElement: cfg.services.map((s) => ({ '@type': 'Offer', itemOffered: { '@type': 'Service', name: s.name } })) };
   }
-  if (cfg.proof.rating) ld.aggregateRating = { '@type': 'AggregateRating', ratingValue: cfg.proof.rating.value.rating, reviewCount: cfg.proof.rating.value.count };
+  /* ⛔ No aggregateRating / Review markup (the Findable build standard, 2026-09-30): a genuine rating is
+     shown as visible content only. Self-serving third-party ratings in a business's own schema are not
+     eligible for rich results, and this one was emitted only when the rating was good. */
   // Escape "<" so a value can never close the script element.
   return JSON.stringify(ld).replace(/</g, '\\u003c');
 }

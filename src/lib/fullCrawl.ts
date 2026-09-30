@@ -292,7 +292,8 @@ export interface PageEvidence {
   footer?: string;
 }
 
-const CREDENTIALS: Array<{ name: string; re: RegExp }> = [
+/** Exported for presenceSources.ts, which names these entries instead of keeping a second copy. */
+export const CREDENTIALS: Array<{ name: string; re: RegExp }> = [
   { name: 'NICEIC', re: /\bNICEIC\b/i }, { name: 'NAPIT', re: /\bNAPIT\b/i }, { name: 'ELECSA', re: /\bELECSA\b/i },
   { name: 'Gas Safe', re: /\bGas\s*Safe\b/i }, { name: 'OFTEC', re: /\bOFTEC\b/i }, { name: 'HETAS', re: /\bHETAS\b/i },
   { name: 'TrustMark', re: /\bTrust\s*Mark\b/i }, { name: 'Checkatrade', re: /\bCheckatrade\b/i },

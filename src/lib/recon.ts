@@ -425,46 +425,58 @@ const FIELD_KEYS: Record<string, string> = {
   brands: 'brands', manufacturers: 'brands', review_profiles: 'review_profiles', reviews: 'reviews_on_site', testimonials: 'reviews_on_site',
   directory_profiles: 'directory_profiles', social_profiles: 'social_profiles', social: 'social_profiles',
   company_number: 'company_number', standout: 'standout', legal: 'legal_facts',
+  faq: 'faqs', faqs: 'faqs', questions: 'faqs', history: 'company_history', company_history: 'company_history', about: 'company_history', established: 'company_history',
+  customer_groups: 'customer_groups', customers: 'customer_groups', who_we_serve: 'customer_groups',
 };
 /** Keys that hold a LIST — several values are items, not a contradiction. */
 const LIST_KEYS = new Set(['service_areas', 'services', 'accreditations', 'brands', 'review_profiles', 'directory_profiles', 'social_profiles', 'prices', 'guarantee', 'insurance', 'legal_facts', 'reviews_on_site',
-  'memberships', 'qualifications', 'awards', 'payment_methods', 'licences', 'compliance', 'analytics_ids', 'ads_ids']);
+  'memberships', 'qualifications', 'awards', 'payment_methods', 'licences', 'compliance', 'analytics_ids', 'ads_ids', 'faqs', 'customer_groups']);
 
-/* ── THE SOURCE-SITE FACT RULE (Paul, 2026-09-25, the quality standard — supersedes the earlier
-   same-day "every commercial claim needs approval" rule) ─────────────────────────────────────────
-   A factual claim the client's OWN public site states directly and consistently — services, genuine
-   service areas, qualifications, accreditations, memberships, years trading, guarantees, contact
-   details, the public address, customer groups, payment methods, hours, business descriptions — is
-   CLIENT-SUPPLIED SOURCE INFORMATION: accepted with basis "source_site" (shown as "source: existing
-   client website"), NEVER described as independently verified. Paul decides only CONTRADICTIONS,
-   AMBIGUITY, INFERENCE or ANOTHER ENTITY's claim (all routed to "detected" in applyRecon: flagged,
-   multi-valued, not verbatim / high confidence, or disagreeing with what LeadFinderOS holds).
-   GENUINE REVIEWS AND THE AGGREGATE RATING / COUNT (Paul, 2026-09-27) are source information too: they
-   auto-accept on the same terms as any source-site fact (high confidence, visible, one value, no conflict,
-   nothing LeadFinderOS holds disagrees) and the build shows the rating with a snapshot date. A conflict,
-   an uncertain identity or an unsourced figure still lands in "needs approval" — never a routine step.
-   STILL ALWAYS PAUL'S (money, legal exposure): prices, insurance, awards, DBS, licences, compliance,
-   VAT / legal status, company number, availability,
-   tracking / ads IDs, and anything unrecognised (⛔ positive allowlist — a key nobody listed needs
-   approval). And any value carrying a SUPERLATIVE or an AVAILABILITY claim ("best", "leading",
-   "trusted", "24/7"…) whatever its key: "24/7" is the classic cross-field contradiction with the
-   stated opening hours (BS4, 2026-09-25), which a same-field conflict check cannot see. */
+/* ── THE SOURCE-SITE FACT RULE (Paul, 2026-09-30 — supersedes 2026-09-25 and 2026-09-27) ────────────
+   A factual claim the client's OWN public website already states is APPROVED SOURCE-SITE EVIDENCE by
+   default: accepted with basis "source_site" (shown as "source: existing client website"), NEVER
+   described as independently verified, and never a routine Paul approval. That covers services,
+   service areas, opening hours, payment methods, credentials, accreditations, qualifications, licences,
+   insurance, memberships, awards, guarantees, years trading, company history, FAQs, customer groups,
+   contact details, the public address, legal / VAT / company details, genuine reviews and the rating.
+   Paul decides ONLY what the site cannot settle on its own (all routed to "detected" in applyRecon):
+     · CONFLICT      two pages disagree, Claude flagged a contradiction, or LeadFinderOS holds a
+                     different value — never silently choose between them
+     · AMBIGUITY     not stated verbatim / not high confidence / inferred
+     · CROSS-FIELD   an availability claim ("24/7", "round the clock") the stated opening hours
+                     contradict (BS4, 2026-09-25 — a same-field check cannot see it)
+     · RISK          a SUPERLATIVE or comparative claim ("best", "leading", "No. 1", "cheapest") — a
+                     marketing claim, not a fact; a PRICE (a binding offer that goes stale); tracking /
+                     ads IDs (configuration, not a claim); anything unrecognised (positive allowlist)
+   Never invented: a fact the site does not state stays missing. */
 export const SOURCE_SITE_FACT_KEYS: ReadonlySet<string> = new Set([
   'business_name', 'trade', 'phone', 'email', 'website', 'social_profiles', 'directory_profiles', 'review_profiles', 'primary_town',
-  'whatsapp_number', 'address', 'service_areas', 'qualifications', 'accreditations', 'memberships', 'years_experience',
+  'whatsapp_number', 'address', 'service_areas', 'services', 'qualifications', 'accreditations', 'memberships', 'years_experience',
   'guarantee', 'payment_methods', 'opening_hours', 'standout', 'owner_name', 'response_time', 'brands',
   'review_rating', 'reviews_on_site',
+  'insurance', 'licences', 'awards', 'dbs', 'compliance', 'availability', 'company_number', 'vat_status', 'legal_status', 'legal_facts',
+  'faqs', 'company_history', 'customer_groups',
 ]);
 /** The earlier name, kept for callers — it is now the whole source-site allowlist. */
 export const LOW_RISK_FACT_KEYS: ReadonlySet<string> = SOURCE_SITE_FACT_KEYS;
-export const STRONG_CLAIM = /\b(best|leading|no\.?\s?1|number one|award[- ]?winning|trusted|official|vetted|insured|cheapest|lowest|24\/7|24 hours|24hr|24-hour|round[- ]the[- ]clock|any ?time)\b/i;
+/** Marketing superlatives / comparatives: an opinion dressed as a fact — always Paul's. */
+export const STRONG_CLAIM = /\b(best|leading|no\.?\s?1|number one|cheapest|lowest|unbeatable|top[- ]rated|award[- ]winning|official)\b/i;
+/** Round-the-clock availability. Accepted unless the stated opening hours say otherwise (checkAvailability). */
+export const AVAILABILITY_CLAIM = /\b(24\/7|24 ?hours?|24hr|24-hour|round[- ]the[- ]clock|any ?time|day or night)\b/i;
 export function isHighRiskFact(key: string, values: string[]): boolean {
   return !SOURCE_SITE_FACT_KEYS.has(key) || values.some((v) => STRONG_CLAIM.test(v));
+}
+/** A claim of round-the-clock availability that the site's own stated hours contradict. */
+export function availabilityConflict(claims: string[], hours: string[]): boolean {
+  const says247 = claims.some((v) => AVAILABILITY_CLAIM.test(v));
+  const statedHours = hours.filter((h) => h.trim() && !AVAILABILITY_CLAIM.test(h) && !/emergenc/i.test(h));
+  return says247 && statedHours.length > 0;
 }
 const LABELS: Record<string, string> = {
   ...Object.fromEntries(CORE_BUILD_FACTS.map((f) => [f.key, f.label])), company_number: 'Company number', legal_facts: 'Legal facts', reviews_on_site: 'Reviews shown on the current site',
   memberships: 'Memberships', qualifications: 'Qualifications', dbs: 'DBS check', awards: 'Awards', review_rating: 'Review rating / count', payment_methods: 'Payment methods',
   vat_status: 'VAT status', legal_status: 'Legal entity / status', licences: 'Licences', compliance: 'Compliance claims', availability: 'Availability (e.g. 24/7)',
+  faqs: 'FAQs on the current site', company_history: 'Company history', customer_groups: 'Customer groups', insurance: 'Insurance',
   website: 'Current website', analytics_ids: 'Analytics IDs', ads_ids: 'Google Ads IDs',
 };
 
@@ -524,7 +536,11 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     ...(r.trackingIds?.analytics ?? []).map((v) => ({ field: 'analytics_ids', label: '', value: v, sourceUrl: r.sourceUrl, sourceContext: 'tracking scripts', confidence: 'high' as const, evidence: 'visible' as const, conflicts: [] })),
     ...(r.trackingIds?.ads ?? []).map((v) => ({ field: 'ads_ids', label: '', value: v, sourceUrl: r.sourceUrl, sourceContext: 'ads tags', confidence: 'high' as const, evidence: 'visible' as const, conflicts: [] })),
   ];
-  for (const g of groupFacts([...r.facts, ...trackingFacts])) {
+  const groups = groupFacts([...r.facts, ...trackingFacts]);
+  const hoursValues = [...(groups.find((g) => g.key === 'opening_hours')?.values ?? []), ...(byRow.get('opening_hours') && byRow.get('opening_hours')!.status !== 'missing' ? [byRow.get('opening_hours')!.value] : [])];
+  const claimValues = groups.flatMap((g) => g.values.filter((v) => AVAILABILITY_CLAIM.test(v)));
+  const hoursClash = availabilityConflict(claimValues, hoursValues);
+  for (const g of groups) {
     const list = LIST_KEYS.has(g.key);
     const value = list ? g.values.join(', ') : g.values[0];
     const multi = !list && g.values.length > 1;
@@ -549,12 +565,12 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     }
     const cleanGroup = g.allClean && !g.flagged && !multi;
     const disagrees = !!existingValue && !agrees;
-    const isService = g.key === 'services';
-    const highRisk = isHighRiskFact(g.key, g.values);
-    const status: StoredFactStatus = cleanGroup && !disagrees && !highRisk && !isService ? 'verified' : 'detected';
+    const highRisk = isHighRiskFact(g.key, g.values) || g.key === 'prices';
+    const clash = hoursClash && (g.key === 'opening_hours' || g.values.some((v) => AVAILABILITY_CLAIM.test(v)));
+    const status: StoredFactStatus = cleanGroup && !disagrees && !highRisk && !clash ? 'verified' : 'detected';
     const why = [
-      isService ? 'Source-derived service candidates — the site names them; confirm what is still offered (Template Mapping).' : '',
-      !isService && highRisk ? 'Price, legal, availability or superlative claim — always needs your approval, even when the site states it.' : '',
+      g.key === 'prices' ? 'A price is a binding offer that goes stale — confirm it is current before it is published.' : highRisk ? (SOURCE_SITE_FACT_KEYS.has(g.key) ? 'A superlative / comparative claim (' + (g.values.find((v) => STRONG_CLAIM.test(v)) ?? '').slice(0, 60) + ') — marketing, not a fact; your call.' : 'Not a recognised business fact (or a tracking ID) — your call.') : '',
+      clash ? 'The site claims round-the-clock availability but also states opening hours (' + hoursValues.filter((h) => !AVAILABILITY_CLAIM.test(h)).join(' / ').slice(0, 120) + ') — which is true?' : '',
       multi ? 'Pages disagree: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       g.flagged && !multi ? 'Claude flagged a conflict: ' + g.values.map((v) => '"' + v + '"').join(' / ') + '.' : '',
       !g.allClean ? 'Not stated verbatim (inferred or not high confidence).' : '',
@@ -575,7 +591,7 @@ export function applyRecon(state: WebsiteBuildState, r: ReconResult, rows: FactR
     });
     if (!row || row.status === 'missing') report.added++;
     if (status === 'verified') report.verified++; else report.needsApproval++;
-    if (multi || g.flagged || disagrees) {
+    if (multi || g.flagged || disagrees || clash) {
       report.conflicts++;
       review.push({ kind: 'conflict', key: g.key, label: row?.label || g.label, detail: why, resolved: false });
     }
