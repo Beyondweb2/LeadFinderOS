@@ -4,7 +4,7 @@ import { allStopRefusal } from "../_shared/protection.ts";
 import { startApifyRun, getApifyRun, getApifyRunItems, abortApifyRun } from "../_shared/enrichment/apify.ts";
 import { AI_SEARCH_ACTOR, toCountryCode } from "../_shared/enrichment/ai-search.ts";
 import { USAGE_CRITICAL_PCT } from "../_shared/enrichment/apify-usage.ts";
-import { isPublicHttpUrl, readCapped } from "../_shared/site-research.ts";
+import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import {
   assemblePresence, buildIdentity, claimedCredentials, extractSiteSignals, foldClientCitations, mergePresence,
   operatorSetStatus, presenceQueries, presenceSummary,
@@ -44,7 +44,7 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30c";
+const BUILD_ID = "directory-presence-2026-09-30f";
 const RUN_POLL_MS = 3_000;
 /** 100 s, up from the 60 s check-directory-listings used: three of eight live searches timed out at 60 s
  *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
@@ -358,7 +358,9 @@ Deno.serve(async (req) => {
 
     const now = new Date().toISOString();
     const stored = await loadRows();
-    const merged = mergePresence(leadId, stored, findings, now, runId, { searched: search && attempts.some((x) => x.state === "succeeded") });
+    /* For WITHDRAWING an older rule's row, "searched" means EVERY search completed: a partial search
+       cannot say a listing is gone (measured: Farid's name search timed out and its listings were withdrawn). */
+    const merged = mergePresence(leadId, stored, findings, now, runId, { searched: search && attempts.length > 0 && attempts.every((x) => x.state === "succeeded") });
     if (merged.length) {
       const payload = merged.map(({ id: _id, ...r }) => ({ ...r, user_id: lead.user_id, operator_note: r.operator_note ?? null, updated_at: now }));
       const { error } = await service.from("lead_directory_presence").upsert(payload, { onConflict: "lead_id,source_key" });

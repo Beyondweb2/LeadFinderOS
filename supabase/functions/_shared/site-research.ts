@@ -49,8 +49,7 @@ export const leadTown = (l: ResearchLead) => (l.derived_town || l.search_locatio
 
 /** Public http(s) only. A lead's website comes from Google Places or an operator, but this runs a
  *  server-side fetch, so a loopback / private-range address is refused rather than followed. */
-/** Exported for directory-presence (the same SSRF guard, not a copy). */
-export function isPublicHttpUrl(raw: string): boolean {
+function isPublicHttpUrl(raw: string): boolean {
   try {
     const u = new URL(raw);
     if (!/^https?:$/.test(u.protocol)) return false;
@@ -65,7 +64,7 @@ export function isPublicHttpUrl(raw: string): boolean {
   } catch { return false; }
 }
 
-export async function readCapped(res: Response): Promise<string> {
+async function readCapped(res: Response): Promise<string> {
   if (!res.body) return await res.text().catch(() => "");
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
