@@ -1,9 +1,12 @@
-import { Activity, FileText, Layers } from 'lucide-react';
+import { Activity, Boxes, FileText, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE, type Tone } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
-import type { NicheLabel, TemplateFlag } from '@/lib/adminIntelligence';
-import { NICHE_MIN_MESSAGED, NICHE_WEAK_FACTOR, TEMPLATE_HIGH_FACTOR, TEMPLATE_MIN_LEADS, TEMPLATE_REJECTION_SHARE, TEMPLATE_WEAK_FACTOR } from '@/lib/adminIntelligence';
+import type { NicheLabel, TemplateFlag, UsageFlag } from '@/lib/adminIntelligence';
+import {
+  NICHE_MIN_MESSAGED, NICHE_WEAK_FACTOR, TEMPLATE_HIGH_FACTOR, TEMPLATE_MIN_LEADS, TEMPLATE_REJECTION_SHARE, TEMPLATE_WEAK_FACTOR,
+  USAGE_COSTLY_MAX_USES, USAGE_COSTLY_USD, USAGE_DROP_MIN_PREVIOUS, USAGE_DROP_SHARE,
+} from '@/lib/adminIntelligence';
 import { Rate } from '@/components/admin/controlCentre';
 
 /* ══ SALES INTELLIGENCE PANELS (release 3) ═════════════════════════════════════════════════════════
@@ -110,6 +113,47 @@ export function NichesPanel({ o }: { o: O }) {
       <p className="mt-3 text-[11px] text-muted-foreground">
         Needs more data: under {NICHE_MIN_MESSAGED} leads messaged. Promising data: reply rate at or above the book's ({pct(o.nicheBookReplyRate)}) and at least one interested. Weak response so far: reply rate at or under {NICHE_WEAK_FACTOR}× the book's. In line with the book: enough data, neither.
         {' '}Contactable = has a phone and is not marked "no WhatsApp". "No website on record" means the field is blank — not proof they have none. Cost per niche is not attributable yet (searches are not tied to leads).
+      </p>
+    </Panel>
+  );
+}
+
+const USAGE_FLAG: Record<UsageFlag, { label: string; tone: Tone }> = {
+  unused: { label: 'Unused', tone: 'amber' },
+  dropped: { label: 'Dropped sharply', tone: 'amber' },
+  costly_low_use: { label: 'Costly for its use', tone: 'red' },
+  new_tracking: { label: 'Tracking began 30 Sep', tone: 'grey' },
+};
+
+export function FeatureUsagePanel({ o }: { o: O }) {
+  const rows = o.features;
+  const used = rows?.filter((r) => r.uses > 0).length ?? 0;
+  return (
+    <Panel collapseKey="admin.cc.features" title="What LeadFinderOS is used for" icon={Boxes} tone="purple" defaultOpen={false}
+      hint={`${o.period.label} · useful actions only (a script shown or copied, an audit run, a contact logged) — never clicks or time spent.`}
+      summary={rows ? `${used} of ${rows.length} features used` : 'Usage unavailable'}>
+      {!rows ? <Empty>Feature usage could not be read just now.</Empty> : (
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead><tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+              {['Feature', 'Uses', 'Previous period', 'Who', 'Recorded cost', ''].map((h, i) => <th key={h + i} className={cn('py-2 font-semibold', i === 0 ? 'pr-3' : 'px-2', (i === 1 || i === 2 || i === 4) && 'text-right')}>{h}</th>)}
+            </tr></thead>
+            <tbody>{[...rows].sort((a, b) => b.uses - a.uses).map((r) => (
+              <tr key={r.key} className={cn('border-b border-border/40', r.uses === 0 && 'text-muted-foreground')}>
+                <td className="py-1.5 pr-3">{r.label}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{num(r.uses)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{r.previous === null ? '—' : num(r.previous)}</td>
+                <td className="px-2 py-1.5 text-xs">{r.people.map((p) => `${p.name} ${p.uses}`).join(' · ') || '—'}</td>
+                <td className="px-2 py-1.5 text-right text-xs tabular-nums">{r.costUsd === null ? '—' : `$${r.costUsd.toFixed(2)}`}</td>
+                <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{r.flags.map((f) => <Chip key={f} {...USAGE_FLAG[f]} />)}</span></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Counted from what each feature records (audits run, contacts logged, links sent, socials a person found — the 30 Sep backfill excluded). Four features record nothing of their own, so since 30 Sep they log one useful action a day per lead: the call script shown, a LinkedIn or email script copied, Focus Mode opened.
+        {' '}Dropped sharply = at or under {Math.round(USAGE_DROP_SHARE * 100)}% of the previous period (from {USAGE_DROP_MIN_PREVIOUS}+). Costly for its use = ${USAGE_COSTLY_USD}+ spent on {USAGE_COSTLY_MAX_USES} or fewer uses. Test accounts are shown apart, never in the totals.
       </p>
     </Panel>
   );

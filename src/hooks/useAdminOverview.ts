@@ -11,6 +11,8 @@ export type AdminOverviewResponse = AdminOverview & {
   exclusions: { kind: string; reason: string | null }[];
   costNotes: { unrecorded: string[]; usdToGbp: number };
   commissionError: string | null;
+  /** The Findable funnel (SQL admin_site_funnel); null = unreadable. */
+  site: SiteFunnel | null;
   /** Background jobs (admin_job_runs); null = unreadable. */
   jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null;
   generatedAt: string;
@@ -18,6 +20,17 @@ export type AdminOverviewResponse = AdminOverview & {
 };
 
 export interface PeriodChoice { key: PeriodKey; from?: string; to?: string }
+
+type Bucket = { key: string | null; n: number };
+/** What SQL admin_site_funnel returns (release 5). Browser counts are SESSIONS; server counts are rows. */
+export interface SiteFunnel {
+  tracking_since: string | null;
+  sessions: number; page_views: number; internal_sessions: number;
+  free_check_started: number; onboarding_started: number; checkout_started_browser: number;
+  free_check_submitted: number; free_check_completed: number; signup_forms: number;
+  checkout_sessions: number; checkout_sessions_unattributed?: number; checkout_refused: number; paid: number;
+  landing_pages: Bucket[]; referrers: Bucket[]; campaigns: Bucket[]; devices: Bucket[]; top_pages: Bucket[];
+}
 
 /** The Admin control centre's numbers — server-folded (fn admin-overview), never the whole book in
  *  the browser. Cached for five minutes; Refresh refetches. */

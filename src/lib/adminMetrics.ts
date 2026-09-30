@@ -38,7 +38,7 @@ import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts'
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
 import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
-import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldNiches, foldTemplates, type Bottleneck, type NicheRow, type TemplatesBlock } from './adminIntelligence.ts';
+import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, foldTemplates, type Bottleneck, type FeatureRow, type NicheRow, type TemplatesBlock, type UsageRow } from './adminIntelligence.ts';
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -234,6 +234,8 @@ export interface AdminInput {
   triage?: TriageRow[] | null;
   /** Release 4: the weekly check, opportunities and directory issues for the paying clients. */
   clientExtras?: ClientExtras | null;
+  /** Release 5: feature uses in the period and the one before (SQL admin_feature_usage). */
+  usage?: { now: UsageRow[]; previous: UsageRow[] | null } | null;
 }
 
 export interface AdminOverview {
@@ -249,6 +251,8 @@ export interface AdminOverview {
   bottlenecks: Bottleneck[];
   /** Prospect sign-ups (internal / test submissions excluded) started in the period, and how many paid. */
   signups: { started: number; paid: number };
+  /** Release 5: null = usage could not be read (never shown as "nothing used"). */
+  features: FeatureRow[] | null;
   calls: { rows: CallRow[]; total: CallRow };
   money: Money;
   today: SinceBlock; yesterday: SinceBlock;
@@ -669,6 +673,10 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     const st = salesStateOf({ status: f.lead.status, is_potential_work: f.lead.is_potential_work, amount_paid: f.lead.amount_paid, call_booked_at: f.lead.call_booked_at, whatsapp_sent_at: f.lead.whatsapp_sent_at }, input.nowMs).state;
     return (st === 'interested' || st === 'meeting_booked') && !f.lead.is_archived && (!f.lead.next_action || f.lead.next_action === 'none');
   }).length;
+  const features = input.usage ? foldFeatureUsage({
+    now: input.usage.now, previous: input.usage.previous, costByFeature: money.cost.period.byFeature,
+    nameOf, isExcludedUser: (u) => isExcludedUser(ex, u), periodFromDay: p.fromDay,
+  }) : null;
   const bottlenecks = findBottlenecks({
     contacted: totals.cohort.contacted, replied: totals.cohort.replied, interested: totals.cohort.interested, meetings: totals.cohort.meeting, sales: totals.cohort.paid,
     signupStarts: signupLeads.size, signupsPaid: paidSignupLeads.size,
@@ -676,12 +684,15 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     interestedWithoutNextAction: interestedNoNext,
     deadTemplates: templates.meta.filter((r) => r.leadsSent >= BOTTLENECK_THRESHOLDS.templateDeadSends && r.replies === 0).map((r) => r.template),
     periodLabel: p.label,
+    costlyFeatures: features ? features.filter((f) => f.flags.includes('costly_low_use')).map((f) => `${f.label} ($${(f.costUsd ?? 0).toFixed(2)}, ${f.uses} use${f.uses === 1 ? '' : 's'})`) : null,
+    unusedFeatures: features ? features.filter((f) => f.flags.includes('unused')).map((f) => f.label) : null,
   });
 
   return {
     period: p, team, totals, excludedActivity, funnel, channels,
     templates, niches: niches.rows, nicheBookReplyRate: niches.bookReplyRate, bottlenecks,
     signups: { started: signupLeads.size, paid: paidSignupLeads.size },
+    features,
     calls: { rows: [...callRows.values()].sort((a, b) => b.total - a.total), total: callTotal },
     money, today: todayBlock, yesterday: yesterdayBlock,
     attention: attentionItems(input, facts, ledger, nameOf, todayDay, ta.items),

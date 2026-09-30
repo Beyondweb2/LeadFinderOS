@@ -25,6 +25,7 @@ import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
 import { NextActionPill } from '@/components/NextActionPill';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
+import { logFeatureUse } from '@/lib/featureUsage';
 import { Empty, Panel } from '@/components/salesDash/ui';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,8 @@ const siteHref = (w: string | null) => (w ? (/^https?:\/\//i.test(w) ? w : `http
 export default function Focus() {
   const { role } = useSubscription();
   const navigate = useNavigate();
+  // Focus Mode opened (Admin control centre feature usage; one per person per day — no lead, no spend).
+  useEffect(() => { logFeatureUse('focus_mode'); }, []);
   const [params, setParams] = useSearchParams();
   const view = (params.get('view') ?? 'next') as FocusView;
   const startLead = params.get('lead');

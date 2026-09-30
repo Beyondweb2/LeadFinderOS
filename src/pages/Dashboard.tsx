@@ -21,8 +21,9 @@ import {
   AttentionQueue, CallsPanel, ChannelsPanel, CommissionPanel, ContributionPanel, CostPanel,
   FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
 } from '@/components/admin/controlCentre';
-import { BottlenecksPanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
+import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
+import { FindableFunnelPanel } from '@/components/admin/traffic';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -152,6 +153,14 @@ const Dashboard = () => {
 
           <Section title="Clients">
             <ClientHealthPanel o={o} onOpen={(id) => navigate(`/paid-clients/${id}`)} />
+          </Section>
+
+          <Section title="Traffic">
+            <FindableFunnelPanel o={o} />
+          </Section>
+
+          <Section title="System">
+            <FeatureUsagePanel o={o} />
           </Section>
         </>
       )}
