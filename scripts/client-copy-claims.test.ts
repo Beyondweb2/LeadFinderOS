@@ -113,8 +113,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["page-plan queue logic (operator)", "src/lib/pagePlanQueue.ts"],
   ["page-plan queue screen (operator)", "src/pages/PagePlanQueue.tsx"],
   ["dashboard tasks (operator)", "src/lib/dashboardTasks.ts"],
-  ["next actions card (operator)", "src/components/dashboard/NextActionsCard.tsx"],
-  ["client delivery card (operator)", "src/components/dashboard/ClientDeliveryCard.tsx"],
+  ["admin control centre (operator)", "src/components/admin/controlCentre.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
   /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */

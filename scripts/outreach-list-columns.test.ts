@@ -116,8 +116,11 @@ ok(OUTREACH_LIST_SELECT === OUTREACH_LIST_COLUMNS.join(", ") && !OUTREACH_LIST_S
      response and the team directory (server-folded rows), never the Dashboard's lead list — so the walk
      stops at them, as it stops at the column lists. */
   const SALES_SURFACES = ["src/components/salesDash/sections.tsx", "src/components/salesDash/ui.tsx", "src/lib/salesWorkspace.ts", "src/lib/salesLinks.ts", "src/hooks/useSalesCrm.ts"];
-  const d = columnReads(root, ["src/pages/Dashboard.tsx", "src/hooks/useDashboardMetrics.ts"], [COLUMN_LISTS, ...SALES_SURFACES], LIVE);
-  ok(d.files.length > 50, `the Dashboard walk reached ${d.files.length} files`);
+  /* 2026-09-30: the Dashboard page itself reads no lead rows any more (fn admin-overview folds them
+     server-side), so the walk starts at the hook that still owns this lead list. */
+  ok(!/useDashboardMetrics|from\('outreach_leads'\)/.test(read("src/pages/Dashboard.tsx")), "the Dashboard page downloads no lead list");
+  const d = columnReads(root, ["src/hooks/useDashboardMetrics.ts"], [COLUMN_LISTS, ...SALES_SURFACES], LIVE);
+  ok(d.files.length > 10, `the Dashboard walk reached ${d.files.length} files`);
   const missing = [...d.reads.keys()].filter((c) => !DASH.has(c));
   ok(missing.length === 0, missing.length ? `Dashboard code reads ${missing.map((c) => `${c} (${d.reads.get(c)!.join(", ")})`).join("; ")} — add to DASHBOARD_LEAD_COLUMNS` : `all ${d.reads.size} lead columns the Dashboard reads are downloaded`);
   for (const col of DASHBOARD_LEAD_COLUMNS) ok(LIVE.includes(col), `dashboard column ${col} is live`);

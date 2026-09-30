@@ -226,8 +226,9 @@ console.log('\n── COLLAPSIBLE SECTIONS: ONE PATTERN ──');
   ok(/aria-expanded=\{open\}/.test(c) && /\{open && <div className="mt-2">\{children\}<\/div>\}/.test(c), '· a chevron with aria-expanded; the body is unmounted when shut');
   ok(/useSectionOpen\(`dashboard\.section\.\$\{storageKey\}`, defaultOpen\)/.test(read('src/components/dashboard/DashboardSection.tsx')), '· DashboardSection uses the same hook');
   ok(/if \(collapseKey\) return <CollapsiblePanel/.test(read('src/components/salesDash/ui.tsx')), '· the dashboard Panel collapses through the same hook');
-  const admin = read('src/pages/Dashboard.tsx');
-  ok(['admin.next-actions', 'admin.follow-ups', 'admin.waiting', 'admin.clients', 'admin.activity'].every((k) => admin.includes(`"${k}"`)) && /storageKey="free-checks"/.test(admin) && /storageKey="submissions"/.test(admin), '· every Admin dashboard section collapses');
+  /* 2026-09-30: the Admin dashboard is the control centre — its panels live in components/admin. */
+  const admin = read('src/pages/Dashboard.tsx') + read('src/components/admin/controlCentre.tsx');
+  ok(['admin.cc.attention', 'admin.cc.today', 'admin.cc.team', 'admin.cc.funnel', 'admin.cc.channels', 'admin.cc.calls', 'admin.cc.revenue', 'admin.cc.contribution', 'admin.cc.commission', 'admin.cc.cost', 'admin.cc.clients'].every((k) => admin.includes(`"${k}"`)) && /storageKey="free-checks"/.test(admin) && /storageKey="submissions"/.test(admin), '· every Admin dashboard section collapses');
   const sales = read('src/pages/SalesDashboard.tsx') + read('src/components/salesDash/sections.tsx');
   ok(['sales.conversion', 'sales.campaigns', 'sales.templates', 'sales.pipeline', 'sales.trends'].every((k) => sales.includes(k)), '· the Sales dashboard sections collapse');
   const hub = read('src/pages/ClientHub.tsx');
