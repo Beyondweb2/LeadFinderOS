@@ -27,7 +27,7 @@ const json = (b: unknown, s = 200) =>
 const PAGE = 1000;
 const WAVE = 4;
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30a";
+const BUILD_ID = "admin-overview-2026-09-30b";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
