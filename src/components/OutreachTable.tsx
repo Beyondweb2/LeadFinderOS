@@ -167,8 +167,10 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
-import { useLastLoggedContacts } from '@/hooks/useLastLoggedContacts';
-import { contactAgo, meetingIsCurrent, meetingWhen } from '@/lib/leadState';
+import { useLastLoggedContacts, useWrongNumbers } from '@/hooks/useLastLoggedContacts';
+import { contactAgo, meetingIsCurrent, meetingWhen, salesStateOf, stateShownByBadge, type SalesStateView } from '@/lib/leadState';
+import { SalesStatePill } from '@/components/SalesStatePill';
+import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1856,6 +1858,16 @@ export function OutreachTable({
      "Call · Left voicemail · 2h ago" line under the pipeline pill. Read per page, never the whole book. */
   const pageLeadIds = useMemo(() => paginatedLeads.map((l) => l.id), [paginatedLeads]);
   const lastLogged = useLastLoggedContacts(pageLeadIds);
+  const wrongNums = useWrongNumbers(pageLeadIds);
+  /* THE ROW'S SALES STATE (Paul, 2026-09-30: "actions visibly change the lead wherever the rep is
+     working") — the same reading as Focus Mode and the popup (leadState.salesStateOf), from the row, its
+     last logged contact and the Wrong number mark. null when the pipeline badge beside it already says
+     exactly that state (stateShownByBadge) — one pill, never two. */
+  const rowSalesState = (lead: OutreachLead): SalesStateView | null => {
+    const lc = lastLogged.data?.get(lead.id);
+    const v = salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
+    return stateShownByBadge(v, pipelineStatusLabel(lead.status)) ? null : v;
+  };
 
   // Always point walkthrough Step 5 to a visible, actionable track button
   const walkthroughTrackLeadId = (
@@ -2615,6 +2627,7 @@ export function OutreachTable({
                 <OutreachMobileCard
                   key={lead.id}
                   lead={lead}
+                  salesState={rowSalesState(lead)}
                   campaignName={showCampaignName && lead.campaign_id ? (campaignNameByLead?.[lead.id] ?? null) : null}
                   isSelected={selectedIds.has(lead.id)}
                   onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
@@ -2822,6 +2835,7 @@ export function OutreachTable({
                               ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at)
                               : undefined}
                           >
+                            {(() => { const v = rowSalesState(lead); return v ? <SalesStatePill view={v} size="xs" className="mb-1" /> : null; })()}
                             {onPipelineStatusChange ? (
                               <PipelineStatusSelect
                                 value={lead.status}
