@@ -7,7 +7,7 @@ import { USAGE_CRITICAL_PCT } from "../_shared/enrichment/apify-usage.ts";
 import { isPublicHttpUrl, readCapped } from "../_shared/safe-fetch.ts";
 import {
   assemblePresence, buildIdentity, claimedCredentials, extractSiteSignals, foldClientCitations, mergePresence,
-  operatorSetStatus, presenceQueries, presenceSummary,
+  operatorSetStatus, presenceQueries, presenceSummary, rejudgeStoredListing,
   type CitationRow, type ListingCandidate, type PresenceReviewItem, type PresenceStatus, type StoredPresenceRow,
   type TradeEvidenceRow, tradeKeys,
 } from "../../../src/lib/directoryPresence.ts";
@@ -44,7 +44,7 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Marker only this code produces — the deploy check greps the bundle for it. */
-const BUILD_ID = "directory-presence-2026-09-30f";
+const BUILD_ID = "directory-presence-2026-09-30g";
 const RUN_POLL_MS = 3_000;
 /** 100 s, up from the 60 s check-directory-listings used: three of eight live searches timed out at 60 s
  *  (2026-09-30). Everything else runs concurrently, so the whole run stays inside the ~150 s edge limit. */
@@ -358,9 +358,11 @@ Deno.serve(async (req) => {
 
     const now = new Date().toISOString();
     const stored = await loadRows();
-    /* For WITHDRAWING an older rule's row, "searched" means EVERY search completed: a partial search
-       cannot say a listing is gone (measured: Farid's name search timed out and its listings were withdrawn). */
-    const merged = mergePresence(leadId, stored, findings, now, runId, { searched: search && attempts.length > 0 && attempts.every((x) => x.state === "succeeded") });
+    /* An older rule's rows are re-judged against their OWN stored evidence (never by repeating a
+       search — measured: a partial search withdrew real listings). Older recommendations are withdrawn
+       only when this run's evidence loaded in full: trade fold read, citations read. */
+    const evidenceComplete = !!evidence && !notes.some((n) => /^citations unreadable/.test(n));
+    const merged = mergePresence(leadId, stored, findings, now, runId, { rejudge: (row) => rejudgeStoredListing(identity, row), evidenceComplete });
     if (merged.length) {
       const payload = merged.map(({ id: _id, ...r }) => ({ ...r, user_id: lead.user_id, operator_note: r.operator_note ?? null, updated_at: now }));
       const { error } = await service.from("lead_directory_presence").upsert(payload, { onConflict: "lead_id,source_key" });
