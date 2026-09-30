@@ -1,5 +1,5 @@
 {
-  "note": "Live public.outreach_leads columns, read from information_schema on 2026-09-28. Refresh when a column is added.",
+  "note": "Live public.outreach_leads columns, read from information_schema on 2026-09-30. Refresh when a column is added.",
   "columns": [
     "id",
     "user_id",
@@ -115,6 +115,14 @@
     "lead_source",
     "service_areas",
     "sold_by_user_id",
-    "sold_at"
+    "sold_at",
+    "domain_control",
+    "service_terminated_at",
+    "service_termination_reason",
+    "service_termination_note",
+    "service_terminated_by",
+    "contract_total_payments",
+    "linkedin_url",
+    "linkedin_status"
   ]
 }

@@ -179,7 +179,10 @@ export interface OutreachLead {
   // Phase 2 enrichment backbone (Apify-backed, stubbed)
   facebook_status?: string | null;          // 'found' | 'none' | 'error' | null
   instagram_url?: string | null;
-  instagram_status?: string | null;         // 'found' | 'none' | 'error' | null
+  instagram_status?: string | null;         // 'confirmed' | 'likely' | 'review' | 'none' (legacy: 'found')
+  /** The canonical LinkedIn (business page, else the person) — mirrored by _social_profiles_sync. */
+  linkedin_url?: string | null;
+  linkedin_status?: string | null;          // 'confirmed' | 'likely' | 'review' | 'none'
   instagram_method?: string | null;         // 'apify' | 'manual' | null
   instagram_last_checked_at?: string | null;
   enrichment_source?: string | null;        // 'website_scrape' | 'apify' | 'manual'

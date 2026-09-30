@@ -70,7 +70,7 @@ export function inboxLeadTableFor(role: string | null | undefined): InboxLeadTab
 
 /* next_action / next_action_date (2026-09-28): the thread header shows the human-set next action, so a
    change made in Outreach or the prospect panel is visible here without opening anything. */
-const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, next_action, next_action_date, next_action_note';
+const LEAD_COLUMNS = 'id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id, category, search_keyword, search_location, address, amount_paid, contact_name, hook_followup_queued_at, is_potential_work, facebook_url, instagram_url, linkedin_url, facebook_status, instagram_status, linkedin_status, next_action, next_action_date, next_action_note';
 
 /** One lead row, freshly read by id — used to close the gap between an inbound reply's message
  *  (visible the instant its realtime INSERT lands) and its status flip to 'replied' (a second,

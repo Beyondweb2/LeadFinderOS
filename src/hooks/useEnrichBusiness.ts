@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { notifyLeadChanged } from '@/lib/leadSync';
 import type { OutreachLead } from '@/types/outreach';
 
 /**
@@ -42,7 +43,13 @@ export function useEnrichBusiness(
         return data;
       }
       if (!data?.success) {
-        toast({ title: 'Enrich failed', description: data?.error ?? 'Please try again.', variant: 'destructive' });
+        toast({ title: 'Enrich failed', description: data?.detail ?? data?.error ?? 'Please try again.', variant: 'destructive' });
+        return data;
+      }
+      /* Our own records + their website already had it all — nothing was bought (2026-09-30). */
+      if (data.skipped === 'already_found') {
+        toast({ title: 'Nothing bought', description: `${data.summary ?? ''} — ${data.detail ?? ''}` });
+        notifyLeadChanged(lead.id);
         return data;
       }
 
@@ -52,12 +59,19 @@ export function useEnrichBusiness(
       // Website: stored server-side when the lead had none; mirror it locally so the
       // 🌐 link shows immediately.
       if (data.website && !lead.website) patch.website = data.website;
+      /* ⛔ An existing email is never overwritten (2026-09-30) — only a blank one is filled. ⛔ On a real
+         lead the server saved the socials through the one rule (social_saved); writing facebook_url /
+         instagram_url from here would bypass it. Only a Find Leads search result (no row yet) carries
+         them in the patch, into its own search store. */
       if (data.applied) {
-        if (data.email) Object.assign(patch, { email: data.email, email_status: 'found', email_method: 'apify', enrichment_source: 'apify' });
-        if (data.facebook) Object.assign(patch, { facebook_url: data.facebook, facebook_status: 'found', facebook_method: data.facebookMethod ?? 'apify' });
-        if (data.instagram) Object.assign(patch, { instagram_url: data.instagram, instagram_status: 'found', instagram_method: data.instagramMethod ?? 'apify' });
+        if (data.email && !(lead.email ?? '').trim()) Object.assign(patch, { email: data.email, email_status: 'found', email_method: 'apify', enrichment_source: 'apify' });
+        if (!data.social_saved) {
+          if (data.facebook) Object.assign(patch, { facebook_url: data.facebook, facebook_status: 'found', facebook_method: data.facebookMethod ?? 'apify' });
+          if (data.instagram) Object.assign(patch, { instagram_url: data.instagram, instagram_status: 'found', instagram_method: data.instagramMethod ?? 'apify' });
+        }
       }
       if (Object.keys(patch).length) await onUpdate(lead.id, patch);
+      if (data.social_saved) notifyLeadChanged(lead.id);
 
       // A possible FB/IG that wasn't auto-attached — surface it for the operator to
       // verify + paste via 🔗. Reason tells them WHY (name vs location mismatch).
@@ -68,13 +82,13 @@ export function useEnrichBusiness(
       if (data.facebookSuggestion?.url) {
         toast({
           title: '⚠ Possible Facebook — verify',
-          description: `Found ${data.facebookSuggestion.url} but ${suggestionWhy(data.facebookSuggestion.reason)}. Check it, then paste via the 🔗 button if it's right.`,
+          description: `Found ${data.facebookSuggestion.url} but ${suggestionWhy(data.facebookSuggestion.reason)}. ${data.social_saved ? "Saved as a possible match — confirm or reject it on the lead's Prospect tab." : "Check it before using it."}`,
         });
       }
       if (data.instagramSuggestion?.url) {
         toast({
           title: '⚠ Possible Instagram — verify',
-          description: `Found ${data.instagramSuggestion.url} but ${suggestionWhy(data.instagramSuggestion.reason)}. Check it, then paste via the 🔗 button if it's right.`,
+          description: `Found ${data.instagramSuggestion.url} but ${suggestionWhy(data.instagramSuggestion.reason)}. ${data.social_saved ? "Saved as a possible match — confirm or reject it on the lead's Prospect tab." : "Check it before using it."}`,
         });
       }
 
