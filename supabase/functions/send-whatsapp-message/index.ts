@@ -77,7 +77,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener). */
-const BUILD_ID = "2026-09-30-leadstate";
+const BUILD_ID = "2026-09-30a";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

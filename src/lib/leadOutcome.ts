@@ -52,7 +52,12 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
     if (r.ok) { if (!r.unchanged) said.push(ok); } else failed.push(`Not done: ${ok} (${refusalText(r.error)})`);
     return r.ok;
   };
-  if (plan.status === 'interested') await step('lead_set_stage', { _status: 'interested' }, 'Moved back to Interested');
+  /* A no becoming a yes: the database clears ONLY the Not interested suppression when the status leaves
+     not_interested for interested / won (trigger, migration 20260930170000) — never Wrong number, an
+     opt-out, the prospect's own "no" reply or any other block. The line says it, as the rule's words. */
+  if (plan.status === 'interested' && await step('lead_set_stage', { _status: 'interested' }, 'Moved back to Interested') && lead.status === 'not_interested') {
+    said.push('Not interested block lifted (any other block stays)');
+  }
   if (plan.star) await step('lead_mark_interested', { _on: true }, 'Marked Interested ⭐');
   if (plan.status === 'not_interested') {
     if (await step('lead_set_stage', { _status: 'not_interested' }, 'Status set to Not interested')) {

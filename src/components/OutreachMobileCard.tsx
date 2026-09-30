@@ -1,3 +1,5 @@
+import { SalesStatePill } from '@/components/SalesStatePill';
+import type { SalesStateView } from '@/lib/leadState';
 import { memo } from 'react';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,9 @@ import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTION
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
+  /** The lead's sales state (leadState.salesStateOf), or null when the pipeline badge already says it —
+   *  decided once by the table (rowSalesState), 2026-09-30. */
+  salesState?: SalesStateView | null;
   /** Muted campaign-name sub-line under the business name — passed only in the
    *  "All campaigns" view when the lead has a campaign; null/undefined hides it. */
   campaignName?: string | null;
@@ -65,6 +70,7 @@ interface OutreachMobileCardProps {
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
+  salesState,
   lead,
   campaignName,
   isSelected,
@@ -198,6 +204,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
                 )}
 
+                {salesState && <SalesStatePill view={salesState} size="xs" />}
                 {/* Pipeline Status */}
                 {onPipelineStatusChange && (
                   <Select

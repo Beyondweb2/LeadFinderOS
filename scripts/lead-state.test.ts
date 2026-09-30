@@ -13,7 +13,7 @@ import path from "node:path";
 import {
   MEETING_KEEP_AFTER_MS, NOT_INTERESTED_STATUSES, OUTCOME_RULE_VALUES, SALES_STATES, SALES_STATE_LABEL, SALES_STATE_TONE,
   contactAgo, isEngaged, isOutOfOutreach, lastContactOf, lastContactText, lastLoggedByLead, lastLoggedContactOf,
-  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction,
+  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, stateShownByBadge, suggestNextAction,
 } from "../src/lib/leadState.ts";
 import { CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail, outcomesFor, salesStageOf } from "../src/lib/salesCrm.ts";
 import { INBOUND_NO_DOWNGRADE, STRONG_STATUSES, postgrestList } from "../src/lib/strongStatuses.ts";
@@ -272,6 +272,35 @@ console.log("\n── 11. automatic writes never downgrade a deal — ONE list �
   const copies = walk("supabase/functions").filter((p) => /["'`]\((?:[a-z_]+,)*price_given(?:,[a-z_]+)*\)["'`]/.test(read(p)));
   ok(copies.length === 0, `no hand-kept status list left (${copies.join(", ") || "none"})`);
   ok(salesStageOf("won_pending_onboarding") === "won" && STRONG_STATUSES.includes("won_pending_onboarding"), "a WON lead can no longer be flipped to Replied by an inbound message");
+}
+
+console.log("\n── 12. Paul's decisions, 2026-09-30 (follow-up) ──");
+{
+  // 1. A human revive clears ONLY the Not interested suppression.
+  const sql = strip(read("supabase/migrations/20260930170000_revive_clears_not_interested.sql").replace(/^\s*--.*$/gm, ""));
+  ok(/old\.status is distinct from 'not_interested' or new\.status not in \('interested', 'won_pending_onboarding'\)/.test(sql), "fires only from not_interested → interested / won (Meeting booked writes interested)");
+  ok(/where s\.reason = 'not_interested' and s\.wrong_number_at is null/.test(sql), "deletes ONLY reason not_interested, and never a row carrying a Wrong number mark");
+  ok(!/replied_no|opted_out|'closed'|'archived'/.test(sql), "…never names replied_no / opt-out / closed / archived (they are untouched)");
+  ok(/after update of status on public\.outreach_leads/.test(sql) && /'suppression_cleared', 'not_interested'/.test(sql), "a trigger on the status change (admin and sales alike), with a History line");
+  for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back"]) ok(outcomePlan(o, { status: "not_interested" }).status === null, `${o} on a Not interested lead writes no status → the block stays`);
+  ok(outcomePlan("interested", { status: "not_interested" }).status === "interested" && outcomePlan("meeting_booked", { status: "not_interested" }).status === "interested", "Interested / Meeting booked on it → status interested → the block is lifted");
+  ok(/said\.push\('Not interested block lifted \(any other block stays\)'\)/.test(read("src/lib/leadOutcome.ts")), "the result line says the block was lifted");
+  // 2. The sales-state pill on Outreach rows — one pill, never two.
+  const v = (s: Parameters<typeof salesStateOf>[0]) => salesStateOf(s, NOW);
+  ok(stateShownByBadge(v({ status: "initial_contact" }), "Contacted") && stateShownByBadge(v({ status: "replied" }), "Replied") && stateShownByBadge(v({ status: "not_interested" }), "Not Interested"), "the badge already says Contacted / Replied / Not interested → no second pill");
+  ok(stateShownByBadge(v({ status: "payment_received", amount_paid: 99 }), "Paid") && stateShownByBadge(v({ status: "won_pending_onboarding" }), "Won · awaiting onboarding"), "Paid is Client; Won is Won → no second pill");
+  ok(!stateShownByBadge(v({ status: "not_contacted", lastLogged: logged("left_voicemail") }), "New"), "a New badge with a logged voicemail → the Contacted pill shows (the action visibly changed the row)");
+  ok(!stateShownByBadge(v({ status: "report_sent", is_potential_work: true }), "Report Sent"), "starred on Report Sent → Interested pill");
+  ok(!stateShownByBadge(v({ status: "initial_contact", call_booked_at: at(5) }), "Contacted"), "a booked meeting → Meeting booked pill");
+  ok(!stateShownByBadge(v({ status: "initial_contact", wrongNumber: true }), "Contacted"), "a wrong number → Wrong number pill");
+  ok(!stateShownByBadge(v({ status: "no_whatsapp_needs_sms" }), "No WhatsApp"), "No WhatsApp badge on a New lead → the New pill shows");
+  const table = read("src/components/OutreachTable.tsx");
+  ok(/stateShownByBadge\(v, pipelineStatusLabel\(lead\.status\)\) \? null : v/.test(table) && /<SalesStatePill view=\{v\} size="xs"/.test(table) && /salesState=\{rowSalesState\(lead\)\}/.test(table), "Outreach desktop row and phone card draw the pill through the one rule");
+  ok(/useWrongNumbers\(pageLeadIds\)/.test(table) && /data-testid="row-last-contact"/.test(table), "…with the Wrong number mark for the page, and the Last contact line kept underneath");
+  const wn = read("supabase/migrations/20260930170100_leads_wrong_numbers.sql");
+  ok(/public\.can_work_lead\(l\.id\)/.test(wn) && /revoke all on function public\.leads_wrong_numbers\(uuid\[\]\) from public, anon/.test(wn), "the batch Wrong number read is role-checked and not for anon");
+  // 3. Voice note stays off the Next Action list.
+  ok(!NEXT_ACTION_OPTIONS.some((o) => (o.value as string) === "send_voice_note"), "Voice note is a contact format, not a Next Action");
 }
 
 console.log(`\n${f === 0 ? "ALL PASS" : `${f} FAILURES`}`);
