@@ -289,7 +289,7 @@ Order suggested; every line is Paul's call:
    `preview_links`, `claim_tokens`, `site_events`, `lead_claims`, `lead_notes`, `personal_actions`,
    `lead_contacts`; after step 7 also `usage_events`, `user_metrics` (and `profiles` if decided).
    ⛔ NOT `outreach_events` (read by `useDashboardMetrics`), NOT `outreach_history` (lead-add
-   dedupe), NOT `client_listings` (read by `usePlaybook`), NOT `enrichment_*` / `api_usage_log`.
+   dedupe), NOT `client_listings` (was read by `usePlaybook`; no reader since the Playbook went — kept as history, 2026-09-30), NOT `enrichment_*` / `api_usage_log`.
 5. `bulk_jobs.job_type` CHECK constraint: may keep `audit_and_push`/`enrich`/`site_gen` — 27 old
    rows carry those values, so tightening it needs those rows deleted first. Recommend leave.
 6. `lead_status` enum (22 values, nothing reads it) — report only, leave.

@@ -1,6 +1,5 @@
 /* RELATIVE imports with an explicit .ts — this file is reached by supabase/functions/directory-presence. */
 import { nameMatches, nameIsTextJudgeable, normalizeForMatch } from './nameMatch.ts';
-import { norm, EVIDENCE_MIN_AUDITS, THIN_MIN_AUDITS } from './buildPlaybook.ts';
 import { CREDENTIALS } from './fullCrawl.ts';
 import { isProvableJunkName } from './competitorCleaning.ts';
 import { classifyKnownEntity } from './knownEntities.ts';
@@ -43,6 +42,23 @@ export const PRESENCE_STATUSES: readonly PresenceStatus[] = ['existing', 'needs_
 export const OPERATOR_STATUSES: readonly PresenceStatus[] = ['added', 'verified', 'not_relevant'];
 
 export type Priority = 'high' | 'medium' | 'low';
+
+/* ── the trade key ────────────────────────────────────────────────────────────────────────────────
+   Moved verbatim from the retired buildPlaybook.ts (2026-09-30), with the two evidence thresholds.
+   The trade fold keys ai_audits.business_type by norm(); tradeKeys() below and the edge function's
+   audit selection both use THIS function, so the fold and the lookup cannot disagree.
+   ⚠️ NOT the same as _shared/search-cache-key.ts's normalisation (that one keys a search cache). */
+export const norm = (t: string | null | undefined) => {
+  const s = (t ?? '').toLowerCase();
+  if (/plumb/.test(s)) return 'plumber';
+  if (/accountant|accountancy|bookkeep/.test(s)) return 'accountant';
+  if (/electric/.test(s)) return 'electrician';
+  return s.trim();
+};
+/** A host cited across at least this many of a trade's audits is established evidence. */
+export const EVIDENCE_MIN_AUDITS = 5;
+/** Below EVIDENCE_MIN_AUDITS but at least this many: thin evidence (low priority at most). */
+export const THIN_MIN_AUDITS = 2;
 
 /** The matching rules' version, stamped on every row a check writes (evidence.engine_version). BUMP
  *  IT whenever a change could withdraw an earlier finding — that is what lets a recheck re-judge rows
@@ -222,7 +238,7 @@ function urlWords(url: string): string {
 
 /** The WHOLE name, collapsed ("brodleylocksmiths"), inside the URL path ("/brodleylocksmithsandprop…").
  *  Only the whole name: two of its words in a path is how a Timpson store page at /shoe-repairs read
- *  as "Ronnie's Shoe Repairs" on live data, so ownCitations.looksLikeOwnListing's two-token rule —
+ *  as "Ronnie's Shoe Repairs" on live data, so the retired ownCitations.looksLikeOwnListing's two-token rule —
  *  too loose for a name made of trade words — is deliberately not used here. */
 function slugCarriesName(url: string, name: string): boolean {
   const slug = normalizeForMatch(name).split(/\s+/).filter((t) => t && !['ltd', 'limited', 'the', 'and', 'co', 'uk', 'llp', 'plc'].includes(t)).join('');
@@ -585,7 +601,7 @@ export interface PresenceInputs {
   identity: BusinessIdentity;
   candidates: ListingCandidate[];
   citations: ClientCitationFold;
-  /** playbook-evidence rows (every trade — this file selects the business's). */
+  /** Trade-fold rows (presence_trade_citation_hosts); this file selects the business's trade keys. */
   tradeEvidence: TradeEvidenceRow[];
   tradeAuditTotals: Record<string, number>;
   claimed: Array<{ sourceKey: string; credential: string; quote: string }>;

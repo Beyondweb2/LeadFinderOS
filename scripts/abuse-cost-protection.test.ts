@@ -72,7 +72,6 @@ const EXEMPT: Record<string, string> = {
   "extract-competitors": "no role: a person's call must own the run (the book owner); the queue worker (stopped by the emergency stop) is its caller",
   "generate-report": "admin/internal; called by the queue worker after a run finishes",
   "backfill-lead-towns": "filters to leads the CALLER owns (user_id) — a salesperson owns none, so it spends nothing for them",
-  "check-directory-listings": "owner-only (lead.user_id = caller) and refuses at REFUSE_AT_PCT of the Apify cap",
   "process-whatsapp-queue": "cron; the person modes are read-only/suppress; its paid audit-ahead honours paidMode()",
   "process-ai-audit-queue": "cron / admin; honours paidMode() per tick",
   "clear-enrichment-cache": "deletes cache rows, spends nothing",

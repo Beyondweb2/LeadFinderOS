@@ -23,9 +23,9 @@ listing anywhere. This is not a "submit to 100 directories" tool.
 |---|---|---|
 | Directory facts (what a host IS, who can action it, cost) | `src/lib/directoryFacts.ts` (64 hosts) | live, reused |
 | Host matching without substring traps | `src/lib/directoryHosts.ts` (`hostMatches`, `hostnameOf`) | reused |
-| Trade-level citation fold (host × trade × audits) | fn `playbook-evidence` | **broken**: folds the whole `ai_audit_queue` through PostgREST and answers 500 "canceling statement due to statement timeout" (measured 2026-09-30, 43 s). Not reused — replaced for this engine by `presence_trade_citation_hosts` |
-| Organic "is the business on X" search | fn `check-directory-listings` → `lead_directory_checks` (2 rows ever, 2026-08-14) | **orphaned** since the Playbook UI was removed (commit `8f321486`); nothing calls it |
-| Per-audit own citations | `src/lib/ownCitations.ts` | no importers; its `looksLikeOwnListing` was tried and rejected here (see §3) |
+| Trade-level citation fold (host × trade × audits) | fn `playbook-evidence` (**retired**, §12) | **broken**: folds the whole `ai_audit_queue` through PostgREST and answers 500 "canceling statement due to statement timeout" (measured 2026-09-30, 43 s). Not reused — replaced for this engine by `presence_trade_citation_hosts` |
+| Organic "is the business on X" search | fn `check-directory-listings` (**retired**, §12) → `lead_directory_checks` (2 rows ever, 2026-08-14) | **orphaned** since the Playbook UI was removed (commit `8f321486`); nothing calls it |
+| Per-audit own citations | `src/lib/ownCitations.ts` (**retired**, §12) | no importers; its `looksLikeOwnListing` was tried and rejected here (see §3) |
 | Site crawl: socials, directory brand names, full-crawl `profiles` (with URLs) and `credentials` | `lead_crawl_checks.result.siteInfo`, `.full_evidence.business` | reused as evidence |
 | Schema `sameAs` | nowhere — `siteEvidence.ts` deliberately never reads it | **new** here (`extractSiteSignals`) |
 | Google's record (phone, website, address) | `phone_cache` (written by `google-place-details`) | reused, free |
@@ -169,19 +169,41 @@ reason, issues, evidence, first/last checked/last seen, set_by_operator, recogni
 record for, as against a host seen only in a search — scraped aggregators; ALREADY ON lists recognised
 first).
 
-## 9. Paid Client hub integration — NOT done, deliberately
+## 9. Paid Client hub integration — NOT built yet (Paul, 2026-09-30)
 
-Another session owns the Paid Client hub / Discovery / Baseline UI; none of its files were touched.
-To integrate once that branch has merged:
-1. A client-side caller: `edgeInvoke('directory-presence', {action:'summary', lead_id})` on open (free),
-   and a "Check listings" button for `{action:'run', search:true}` that prices itself on its face
-   (up to three searches) — opening the view must never spend.
-2. A panel in `src/pages/ClientHub.tsx` with three groups from the summary — ALREADY ON / NEEDS
-   ATTENTION / WORTH ADDING — each count in its header, confidence and issues per row, the reason
-   verbatim, recognised sources above search-only hosts, and per-row buttons for `set_status` (Mark added · Not relevant · Reset). Show "Never
-   checked" when `summary.checked` is false and "Not searched yet" when `searched` is false.
-3. Add the new screen to `OPERATOR_SCREENS` (it contains competitor names — operator copy, never sent
-   to a client). No change to `paid-client-hub` is needed; the function is self-contained.
+⛔ **Wait until the Paid Client / Admin dashboard work has merged to main.** Then build ONE panel that
+consumes this engine — no second directory engine, no second task system.
+
+**The panel** (plain on the surface, technical detail behind an expand):
+- Three groups from `summary`: **ALREADY ON · NEEDS ATTENTION · WORTH ADDING**, each with its count.
+- Per row: the source, the reason in plain words, any consistency issue, last checked. Confidence,
+  signals, found details and competitor evidence sit behind an expand — never on the main surface.
+- Per-row actions: **Added · Verified · Not relevant · Reset** (`set_status`).
+- One **Check listings** button → `{action:'run', search:true}`, priced on its face (up to three
+  searches). Opening the panel calls `{action:'summary'}` only — opening never spends.
+- "Never checked" when `summary.checked` is false; "Not searched yet" when `searched` is false;
+  recognised sources above search-only hosts in ALREADY ON.
+- Add it to `OPERATOR_SCREENS` (it names competitors — operator copy, never sent to a client). No
+  change to `paid-client-hub` is needed.
+
+**Joining the existing Opportunity Backlog / Ongoing Improvements lifecycle**
+(`client_opportunities`, `docs/baseline-workflow.md`) — directory work rides the lifecycle that already
+exists rather than a new one:
+
+| Directory step | `client_opportunities.status` | `lead_directory_presence.status` |
+|---|---|---|
+| Worth adding (the engine's recommendation) | — (not yet an opportunity) | `worth_adding` |
+| Operator plans it | `planned` | `worth_adding` |
+| Operator creates the listing | `implemented` (`what_changed` = the listing) | `added` |
+| Waiting for the next listings check | `waiting_recheck` | `added` |
+| A check finds the listing | stays `waiting_recheck` for its visibility recheck | `verified` |
+| Visibility recheck | `improved` / `no_change` (its own recheck, never the listing's existence) | — |
+| Not pursuing | `not_pursuing` | `not_relevant` |
+
+Owed schema for that join (additive, when built): `client_opportunities.source` gains `'directory'`, and
+a nullable `presence_source_key` with a unique index on (`lead_id`, `presence_source_key`), so one
+directory source is ever one opportunity. ⛔ The listing being VERIFIED proves the action happened; it
+never marks an opportunity `improved` — only a visibility recheck may (no causation claims).
 
 ## 10. Live results (2026-09-30, free evidence, read-only harness)
 
@@ -218,16 +240,12 @@ the 100 s wait (several did); such a run is aborted and the check is marked part
   check-first "no profile on record".
 - A search reads one page of organic results per query; a listing on page 2 is not seen (absence is
   never an answer, so nothing is downgraded by it).
-- `playbook-evidence` itself still times out; its only remaining caller is the orphaned `check-directory-listings`. Fixing or retiring both is a deep-clean decision.
-- `check-directory-listings` + `lead_directory_checks` and `client_listings` are superseded by this and
-  unused; retiring them is a deep-clean decision for Paul.
 - `_shared/safe-fetch.ts` holds the same SSRF guard + capped reader as `_shared/site-research.ts`
   (two copies). It exists so this function does not import site-research, whose closure is the whole
   report/hook stack (hookScore, auditReport, salesStyle…) — that had made directory-presence one of the
   functions to redeploy whenever those change. Switching site-research onto the leaf means redeploying
   warm-lead-reply and voice-note-script (other sessions' functions) — owed, not done. The function's
-  closure is now 20 files: `directoryPresence`, `presenceSources`, `directoryFacts`, `directoryHosts`,
-  `buildPlaybook`, `nameMatch`, `fullCrawl` (+ `crawlCheck`, `crawlUrl`), `competitorCleaning`,
+  closure is now 18 files: `directoryPresence`, `presenceSources`, `directoryFacts`, `nameMatch`, `fullCrawl` (+ `crawlCheck`, `crawlUrl`), `competitorCleaning`,
   `knownEntities`, `protectionLimits`, `roleRules`, and `_shared/` `access`, `operator-auth`,
   `protection`, `safe-fetch`, `enrichment/apify`, `ai-search`, `apify-usage`.
 - The Social Profiles work (`src/lib/socialProfiles.ts`, fn `social-profiles`, merged by another session
@@ -237,3 +255,29 @@ the 100 s wait (several did); such a run is aborted and the check is marked part
 - Host lists overlap three ways (`siteInfo.ts` SOCIAL/DIRECTORIES, `fullCrawl.ts` THIRD_PARTY,
   `presenceSources.ts`): consolidating onto `presenceSources` is owed, not done here (those feed live
   crawl output another session reads).
+
+## 12. Legacy retired (2026-09-30, Paul's decision)
+
+ONE directory engine. Proved dead before removal — no caller in `src/`, `supabase/functions/`,
+`scripts/`, `cron.job` (0 matching jobs), findable-site or findable-directory; the only call was
+check-directory-listings → playbook-evidence:
+
+- **Edge functions** `check-directory-listings` (no UI caller since commit `8f321486` removed the
+  Playbook) and `playbook-evidence` (500 on every call — statement timeout): source, `config.toml`
+  entries and the deployed functions removed.
+- **Libraries** with no importer outside themselves: `buildPlaybook.ts` (the old evidence-to-tasks
+  engine — a second directory recommender), `directoryHosts.ts`, `ownCitations.ts`, and the Playbook
+  documents `playbookDoc.ts`, `playbookDocStyle.ts`, `clientRequestDoc.ts`, `clientRequestSelect.ts`,
+  `clientRequestAsks.ts`, `clientHeld.ts`.
+- **Kept, moved verbatim into the engine:** `norm`, `EVIDENCE_MIN_AUDITS`, `THIN_MIN_AUDITS` →
+  `directoryPresence.ts`; `hostMatches` → `presenceSources.ts`. `directoryFacts.ts` stays (the engine's
+  host facts).
+- **Data kept:** `lead_directory_checks` (2 historic rows, no writer now) and `client_listings` (0 rows,
+  the deep-clean plan keeps it). Nothing deleted from the database.
+- Tests updated: `client-copy-claims` (three renderers and the playbook assertions), `question-trade-fit`,
+  `role-rules`, `abuse-cost-protection`; `directory-presence.test.ts` now asserts the retired files and
+  config entries are gone, nothing calls the retired functions, and `directoryFacts` feeds only this
+  engine (the "only one of it" test).
+- CLAUDE.md: the `clientHeld` and `clientRequestDoc` clauses (modules gone) and the Playbook code-map row
+  removed. One stale comment remains in `src/pages/AiAudit.tsx` (~line 2466, "buildClientDoc in
+  buildPlaybook.ts") — left because another session is editing that page; comment only.

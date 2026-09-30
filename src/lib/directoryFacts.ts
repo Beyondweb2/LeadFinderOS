@@ -3,7 +3,7 @@
 
    Two things are kept apart on purpose:
      1. EVIDENCE — which sources the engines actually cite, per trade. Derived live from
-        ai_audit_queue citations (see buildPlaybook). It improves on its own as audits accumulate.
+        ai_audit_queue citations (directoryPresence.ts + presence_trade_citation_hosts). It improves on its own as audits accumulate.
      2. FACTS — signup URL, cost, who is allowed to action it, vetting. This CANNOT be derived from
         citations and must be checked against each site by a human.
 
@@ -54,7 +54,7 @@
    about the evidence, not about Checkatrade.
 
    WHICH hosts matter for a trade is decided ONLY by citations in ai_audit_queue, in
-   buildPlaybook.ts. This file answers a different question: given that a host came up, what IS it
+   directoryPresence.ts. This file answers a different question: given that a host came up, what IS it
    and who can action it. Keyed by host, never by trade.
    ══════════════════════════════════════════════════════════════════════════════ */
 
