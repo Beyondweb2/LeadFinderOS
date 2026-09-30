@@ -115,6 +115,64 @@ export async function checkWrongNumber(service: any, rawPhone: string | null | u
   }
 }
 
+/**
+ * Did this number or lead EXPLICITLY opt out (reason OPT_OUT_REASON, src/lib/marketingConsent.ts)?
+ * The check a manual template send makes so a marketing template never reaches someone who said stop.
+ * ⚠️ FAILS CLOSED: a failed lookup answers null, which optOutBlocksTemplate treats as blocked.
+ * ⚠️ The reason is written as a literal so this file keeps no imports (every sender reaches it);
+ *    scripts/marketing-optout.test.ts pins it equal to OPT_OUT_REASON.
+ */
+// deno-lint-ignore no-explicit-any
+export async function checkOptedOut(service: any, who: { phone?: string | null; leadId?: string | null }): Promise<boolean | null> {
+  const phone = toE164(who.phone);
+  const leadId = (who.leadId ?? "").trim() || null;
+  if (!phone && !leadId) return false;
+  try {
+    for (const [col, val] of [["phone_e164", phone], ["lead_id", leadId]] as const) {
+      if (!val) continue;
+      const { data, error } = await service.from("contact_suppressions")
+        .select("id").eq(col, val).eq("reason", "opted_out").limit(1).maybeSingle();
+      if (error) throw new Error((error as { message?: string }).message ?? "read failed");
+      if (data) return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("[suppression] opt-out lookup FAILED — failing closed:", (e as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Record an EXPLICIT opt-out (2026-09-30). ⛔ NOT "already suppressed → nothing to do": a number
+ * suppressed for a weaker reason (archived, a decline, Wrong number) must still be marked opted_out, or
+ * the manual template guard (checkOptedOut) would never see the stop. So an existing row on the phone
+ * has its REASON upgraded in place (email and the Wrong number mark are kept); otherwise suppress()
+ * writes a new row. opted_out survives both clearing paths: lead_clear_wrong_number deletes only
+ * reason 'wrong_number' rows, and the revive trigger only 'not_interested' ones.
+ */
+// deno-lint-ignore no-explicit-any
+export async function recordOptOut(service: any, who: { phone?: string | null; leadId?: string | null }, source: string): Promise<"recorded" | "already" | "failed"> {
+  const phone = toE164(who.phone);
+  const leadId = (who.leadId ?? "").trim() || null;
+  if (!phone && !leadId) return "failed";
+  try {
+    if ((await checkOptedOut(service, { phone, leadId })) === true) return "already";
+    if (phone) {
+      const { data: row, error } = await service.from("contact_suppressions").select("id").eq("phone_e164", phone).limit(1).maybeSingle();
+      if (error) throw new Error((error as { message?: string }).message ?? "read failed");
+      if (row) {
+        const { error: uErr } = await service.from("contact_suppressions").update({ reason: "opted_out", source }).eq("id", (row as { id: string }).id);
+        if (uErr) throw new Error((uErr as { message?: string }).message ?? "update failed");
+        return "recorded";
+      }
+    }
+    return (await suppress(service, { phone, leadId }, { reason: "opted_out", source })) ? "recorded" : "failed";
+  } catch (e) {
+    console.error("[suppression] opt-out write FAILED:", (e as Error).message);
+    return "failed";
+  }
+}
+
 /** Boolean convenience for call sites that only branch. Same failing-closed behaviour. */
 // deno-lint-ignore no-explicit-any
 export async function isSuppressed(service: any, who: SuppressionIdentity): Promise<boolean> {

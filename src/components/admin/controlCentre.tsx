@@ -383,6 +383,9 @@ export function RevenuePanel({ o }: { o: O }) {
       {m.outsideLedger.count > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">Not in these figures: {m.outsideLedger.count} earlier client payment{m.outsideLedger.count === 1 ? '' : 's'} totalling {gbp(m.outsideLedger.amount)} ({m.outsideLedger.names.join(', ')}) were taken before the payment ledger, or outside this Stripe account.</p>
       )}
+      {m.outsideLedger.refunded.count > 0 && (
+        <p className="mt-1 text-xs text-muted-foreground">Refunded, and also outside the ledger: {m.outsideLedger.refunded.names.join(', ')} (paid {gbp(m.outsideLedger.refunded.amount)} in total). Marked Refunded on the lead; no refund is recorded in the payment ledger, so the refund's amount and date are not on record here. Not counted as revenue.</p>
+      )}
     </Panel>
   );
 }
@@ -463,17 +466,18 @@ export function ContributionPanel({ o }: { o: O }) {
   const k = o.money.contribution;
   return (
     <Panel collapseKey="admin.cc.contribution" title="Money overview" icon={Receipt} tone="green"
-      hint={`${o.period.label} · contribution before every other business cost. This is not profit: hosting, software, tax, your time and unrecorded API spend are not in it.`}
-      summary={`${gbp(k.value)} contribution`}>
+      hint={`${o.period.label} · money in (pounds) and recorded API spend (US dollars), kept apart. This is not profit.`}
+      summary={`${gbp(k.afterCommission)} after commission · ${usd(k.apiUsd)} API spend`}>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Figure strong tone="green" label="Revenue collected (net)" value={gbp(k.revenueNet)} />
         <span className="text-lg text-muted-foreground">−</span>
         <Figure label="Sales commission" value={gbp(k.commission)} />
-        <span className="text-lg text-muted-foreground">−</span>
-        <Figure label="API spend" value={gbp(k.apiGbp)} sub={`${usd(o.money.cost.period.usd)} at $1 = £${o.costNotes.usdToGbp} (fixed estimate)`} />
         <span className="text-lg text-muted-foreground">=</span>
-        <Figure strong tone={k.value >= 0 ? 'green' : 'red'} label="Contribution before other costs" value={gbp(k.value)} />
+        <Figure strong tone={k.afterCommission >= 0 ? 'green' : 'red'} label="Revenue after commission" value={gbp(k.afterCommission)} />
+        <span className="mx-1 hidden h-10 w-px bg-border sm:block" aria-hidden />
+        <Figure label="API spend (recorded, US dollars)" value={usd(k.apiUsd)} sub="not converted or subtracted" />
       </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">API spend is billed in US dollars and revenue is in pounds, so the two are shown side by side rather than combined — there is no dated exchange rate on record to convert with. Neither figure includes hosting, software, tax, your time or unrecorded API spend.</p>
     </Panel>
   );
 }

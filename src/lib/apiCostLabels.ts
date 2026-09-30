@@ -55,7 +55,7 @@ export const UNRECORDED_SPEND: readonly string[] = [
   'email sending, hosting and Stripe fees',
 ];
 
-/** ⚠️ A FIXED ESTIMATE, not a live rate: API spend is recorded in US dollars and revenue in pounds, so
- *  the contribution line converts at this rate and SAYS so. Update it if the pound moves a lot. */
-export const USD_TO_GBP_ESTIMATE = 0.75;
-export const usdToGbp = (usd: number): number => Math.round(usd * USD_TO_GBP_ESTIMATE * 100) / 100;
+/* ⛔ NO CURRENCY CONVERSION (Paul, 2026-09-30 integrity pass): API spend is recorded in US dollars and
+   revenue in pounds. There was a fixed 0.75 "estimate" here, subtracted from GBP revenue as if it were
+   pounds — an exchange rate with no source and no date. It is gone: the Money overview keeps the two
+   currencies apart and never adds them up. Do not bring a rate back without a dated, sourced one. */

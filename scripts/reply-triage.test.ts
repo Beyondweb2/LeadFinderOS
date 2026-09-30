@@ -34,7 +34,7 @@ console.log('\n── opt-out is phrases only, and narrow ──');
     ok(!isOptOut(t), `NOT an opt-out: "${t}"`);
   ok(r('wrong number').category === 'wrong_person' && !r('wrong number').suppress, 'wrong number stays its own flow — never suppressed here');
   const c = r('STOP', client);
-  ok(c.bucket === 'urgent_admin' && !c.suppress, "a paying client's STOP goes to Paul and is never auto-suppressed (it would stop their service messages)");
+  ok(c.bucket === 'urgent_admin' && c.suppress && c.method === 'rule', "a paying client's STOP suppresses marketing too (being a client never overrides it) AND goes to Paul as urgent");
 }
 
 console.log('\n── measured on 1,843 real replies (2026-09-30) ──');
@@ -141,7 +141,7 @@ console.log('\n── the History kind exists in the migration and has a label �
   const fn = readFileSync(new URL('../supabase/functions/conversation-triage/index.ts', import.meta.url), 'utf8');
   ok(!/from\("outreach_leads"\)\.update/.test(fn) && !/payment_ledger/.test(fn), 'the triage function never writes a lead or money');
   ok(/\(await paidMode\(service\)\) === "all_stop"/.test(fn) && /AI_DAILY_CAP_USD/.test(fn) && /AI_MAX_PER_RUN/.test(fn), 'the model call honours the emergency stop, a per-run cap and a daily cap');
-  ok(/reason: "opted_out", source: "whatsapp_optout_inbound"/.test(fn) && /if \(d\.suppress\)/.test(fn), 'only a rule decision (d.suppress) can suppress, through the shared suppress()');
+  ok(/recordOptOut\(service, \{ phone, leadId: p\.lead_id \}, "whatsapp_optout_inbound"\)/.test(fn) && /if \(d\.suppress\)/.test(fn), 'only a rule decision (d.suppress) can suppress, through the shared recordOptOut()');
   ok(/admin_job_claim/.test(fn) && /if \(claimed !== true\) return/.test(fn) && /admin_job_finish/.test(fn), 'one run at a time: the lease is claimed first and released with the outcome');
 }
 

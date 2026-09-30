@@ -36,7 +36,7 @@ import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './
 import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotals } from './commission.ts';
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
-import { costFeatureOf, costProviderOf, isChargeRow, usdToGbp } from './apiCostLabels.ts';
+import { costFeatureOf, costProviderOf, isChargeRow } from './apiCostLabels.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
 import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, foldTemplates, type Bottleneck, type FeatureRow, type NicheRow, type TemplatesBlock, type UsageRow } from './adminIntelligence.ts';
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
@@ -177,10 +177,14 @@ export interface Money {
   byRoute: { build: number; optimise: number; unknown: number };
   payingClients: number; activeSubscriptions: number; pastDue: number;
   /** Paid leads with no payment in the ledger (paid before it, or outside this Stripe account). */
-  outsideLedger: { count: number; amount: number; names: string[] };
+  /** Payments on a lead row that the ledger never saw. ⛔ `refunded` is split out: a refunded payment
+   *  outside the ledger has no refund row either, so it must never read as money kept. */
+  outsideLedger: { count: number; amount: number; names: string[]; refunded: { count: number; amount: number; names: string[] } };
   commission: { totals: EarningsTotals | null; periodAdded: number; bySeller: CommissionSellerRow[] };
   cost: { period: CostBlock; today: number; week: number; month: number };
-  contribution: { revenueNet: number; commission: number; apiGbp: number; value: number };
+  /** ⛔ Pounds and dollars kept apart — never one combined figure (apiCostLabels.ts). afterCommission is
+   *  GBP; apiUsd is the recorded API spend in USD, shown beside it, not subtracted from it. */
+  contribution: { revenueNet: number; commission: number; afterCommission: number; apiUsd: number };
 }
 export interface SinceBlock { whatsappSent: number; replies: number; interested: number; meetings: number; sales: number; revenue: number; commission: number; apiUsd: number }
 export type AttentionGroup = 'urgent' | 'today' | 'review' | 'blocked';
@@ -616,6 +620,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const paidLeads = realLeads.filter((l) => isPaidLead(l) && !l.service_terminated_at);
   const ledgerPaidLeads = new Set(ledger.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded').map((r) => r.lead_id));
   const outside = realLeads.filter((l) => (Number(l.amount_paid) || 0) > 0 && !ledgerPaidLeads.has(l.id));
+  const outsideSum = (ls: AdminLead[]) => ({ count: ls.length, amount: round2(ls.reduce((s, l) => s + (Number(l.amount_paid) || 0), 0)), names: ls.map((l) => l.business_name ?? 'Client') });
 
   const commissionBySeller = new Map<string, CommissionSellerRow>();
   for (const l of input.commissionLines ?? []) {
@@ -631,7 +636,6 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const commissionPeriod = round2((input.commissionLines ?? []).filter((l) => l.status !== 'not_commissionable' && inPeriod(l.occurredAt, p)).reduce((s, l) => s + l.commission, 0));
 
   const periodCost = costBlock(input.cost.period, nameOf);
-  const apiGbp = usdToGbp(periodCost.usd);
   const money: Money = {
     period: periodMoney, week: moneyBlock(ledger, input.week), month: moneyBlock(ledger, input.month),
     bySeller: [...sellerAgg].map(([userId, a]) => ({ userId, name: nameOf(userId), ...a })).sort((a, b) => b.gross - a.gross),
@@ -639,10 +643,10 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     payingClients: paidLeads.length,
     activeSubscriptions: paidLeads.filter((l) => LIVE_SUBSCRIPTION.has(String(l.subscription_status))).length,
     pastDue: paidLeads.filter((l) => l.subscription_status === 'past_due').length,
-    outsideLedger: { count: outside.length, amount: round2(outside.reduce((s, l) => s + (Number(l.amount_paid) || 0), 0)), names: outside.map((l) => l.business_name ?? 'Client') },
+    outsideLedger: { ...outsideSum(outside.filter((l) => String(l.status) !== 'refunded')), refunded: outsideSum(outside.filter((l) => String(l.status) === 'refunded')) },
     commission: { totals: input.commissionTotals, periodAdded: commissionPeriod, bySeller: [...commissionBySeller.values()] },
     cost: { period: periodCost, today: costTotal(input.cost.today), week: costTotal(input.cost.week), month: costTotal(input.cost.month) },
-    contribution: { revenueNet: periodMoney.net, commission: commissionPeriod, apiGbp, value: round2(periodMoney.net - commissionPeriod - apiGbp) },
+    contribution: { revenueNet: periodMoney.net, commission: commissionPeriod, afterCommission: round2(periodMoney.net - commissionPeriod), apiUsd: round2(periodCost.usd) },
   };
 
   /* Today / yesterday — the same definitions, book-wide. */

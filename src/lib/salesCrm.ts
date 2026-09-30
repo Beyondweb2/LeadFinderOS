@@ -113,6 +113,7 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'usage_paused': return 'Usage temporarily paused — contact Paul';
     case 'no_phone': return 'This lead has no phone number';
     case 'wrong_number': return 'This number is marked Wrong number — the admin can clear it on the lead';
+    case 'opted_out': return 'This number asked to stop — marketing templates are not sent to it';
     default: return code ? `Refused: ${code}` : 'Something went wrong';
   }
 }
