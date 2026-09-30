@@ -211,11 +211,11 @@ console.log('\n── BUILD PACK ──');
   ok(all.map((p) => p.id).join(',') === 'setup,capture,master,local,preview,visual_qa,seo_qa,production,final_qa', 'all nine outputs, in order');
   const setup = all.find((p) => p.id === 'setup')!;
   ok(setup.blockedBy.length === 0, 'setup is ready once repo, owner and folder are recorded');
-  for (const c of ['git clone --branch main https://github.com/Beyondweb2/MCLocksmiths.git', 'robocopy', '/XD .git node_modules dist .astro', 'git init -b main', 'git remote add origin https://github.com/Beyondweb2/SCPlumbingGas.git', 'git push -u origin main', 'https://github.com/new', 'npm install']) {
+  for (const c of ['git clone https://github.com/Beyondweb2/MCLocksmiths-New.git', 'checkout --detach ' + MCL_TEMPLATE.sourcePinnedCommit, 'robocopy', '/XD .git node_modules dist .astro', 'git init -b main', 'git remote add origin https://github.com/Beyondweb2/SCPlumbingGas.git', 'git push -u origin main', 'https://github.com/new', 'npm install']) {
     ok(setup.text.includes(c), `setup includes: ${c}`);
   }
   ok(/already exists/.test(setup.text), 'setup refuses to copy over an existing folder');
-  ok(setup.text.includes('"C:\\Users\\paulj\\_templates\\mcl-local-trades"'), 'the template cache sits beside the client folder, quoted for PowerShell');
+  ok(setup.text.includes('"C:\\Users\\paulj\\_templates\\mcl-local-trades--mclocksmiths-new"') && !/pull --ff-only/.test(setup.text), 'the template cache sits beside the client folder, one per SOURCE repo, quoted for PowerShell; checked out at the pin, never pulled');
   const master = all.find((p) => p.id === 'master')!;
   const heads = ['A. PROJECT MISSION', 'B. BUILD MODE', 'C. SOURCE OF TRUTH', 'D. VERIFIED BUSINESS FACTS', 'E. UNVERIFIED / FORBIDDEN CLAIMS', 'F. EXISTING SITE INVENTORY', 'G. VISUAL REQUIREMENTS', 'H. APPROVED PAGE ARCHITECTURE', 'I. REDIRECT MAP', 'J. CONTENT REQUIREMENTS', 'K. SEO / GEO REQUIREMENTS', 'L. ASSET RULES', 'M. TECHNICAL REQUIREMENTS', 'N. GIT RULES', 'O. PREVIEW / DEPLOYMENT PROCESS', 'P. QA', 'Q. DEFINITION OF DONE'];
   const idx = heads.map((h) => master.text.indexOf('## ' + h));

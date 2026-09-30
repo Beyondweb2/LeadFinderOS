@@ -74,6 +74,8 @@ export interface TemplateField {
 }
 
 export interface TemplateService {
+  /** The page the template builds for this service (its URL path), when it has one. */
+  path?: string;
   id: string;
   name: string;
   /** Phrases that identify this service in a source site's service names, titles, H1s and URLs. */
@@ -108,6 +110,15 @@ export interface WebsiteTemplate {
   previewUrl: string;
   /** The source client the structure came from — named so its facts are recognised as foreign. */
   sourceClient: string;
+  /** live_client_repo = a real client's live site used as the seed (short-term, Paul 2026-09-30);
+   *  findable_template = a Findable-owned canonical template with no client in it (the target). */
+  sourceKind: 'live_client_repo' | 'findable_template';
+  /** The exact commit builds copy. A live client repo keeps changing; a build must not change with it. */
+  sourcePinnedCommit: string;
+  /** What the seed repo carries that a client copy must replace or remove — printed in X1. */
+  inheritedHazards: string[];
+  /** How this template becomes (or stays) Findable-owned. */
+  canonicalPlan: string;
   sourceRepoUrl: string;
   sourceRepoOwner: string;
   sourceRepoPrivate: boolean;
@@ -212,7 +223,7 @@ const byId = <T extends { id: string }>(list: T[], over: Partial<Record<string, 
   [...list.map((x) => ({ ...x, ...(over[x.id] ?? {}) })), ...extra];
 
 const MCL_FORBIDDEN: ForbiddenSeedValue[] = [
-  { kind: 'owner', value: 'Morgan' },
+  { kind: 'owner', value: 'Morgan' }, { kind: 'owner', value: 'Cornelius' },
   { kind: 'business_name', value: 'MC Locksmiths' }, { kind: 'business_name', value: 'MCLocksmiths' },
   { kind: 'domain', value: 'mc-locksmiths' },
   { kind: 'town', value: 'Canterbury' }, { kind: 'town', value: 'Kent' }, { kind: 'town', value: 'Whitstable' }, { kind: 'town', value: 'Herne Bay' },
@@ -224,6 +235,7 @@ const MCL_FORBIDDEN: ForbiddenSeedValue[] = [
   { kind: 'profile', value: 'Checkatrade' }, { kind: 'profile', value: 'MyBuilder' }, { kind: 'profile', value: 'MyJobQuote' }, { kind: 'profile', value: 'MPL' },
   { kind: 'brand', value: 'Yale' }, { kind: 'brand', value: 'Chubb' }, { kind: 'brand', value: 'Mul-T-Lock' },
   { kind: 'trade_word', value: 'locksmith' },
+  { kind: 'profile', value: 'dpom.co.uk' }, { kind: 'claim', value: 'sn_b2bdfacc96ca9789' },
   { kind: 'claim', value: '24/7' }, { kind: 'claim', value: '15-30 minutes' }, { kind: 'claim', value: '£65' }, { kind: 'claim', value: '£75' },
 ];
 
@@ -232,24 +244,38 @@ export const MCL_TEMPLATE_ID = 'mcl-local-trades';
 export const MCL_TEMPLATE: WebsiteTemplate = {
   id: MCL_TEMPLATE_ID,
   name: 'MCL Local Trades Template',
-  version: '1.1',
+  version: '2.0',
   trade: 'Locksmith',
   previewUrl: '',
-  description: 'The finished MCLocksmiths site (Astro + Tailwind, Cloudflare Pages) as a reusable local-trades design system and page structure: hero, service and location card systems, CTA and floating call/WhatsApp actions, FAQ and pricing layouts, schema and redirect framework. ⚠ v1.1 (2026-09-30): the source repo is the SUPERSEDED MCL build — its public/_headers noindexes every host and its Layout emits an aggregateRating node; both must be replaced in the client copy (the site quality gate fails them). The live MCL site is Beyondweb2/MCLocksmiths-New.',
+  description: 'The live MCLocksmiths site (Beyondweb2/MCLocksmiths-New — a clean-room Findable build: Astro, Cloudflare Pages) as a reusable local-trades design system and page structure. Business content lives in src/data/*.ts; components and layouts read from it. Hero, service paths, coverage map, proof and review carousel, price ledger, FAQ list, floating call / WhatsApp, breadcrumbs and a one-entity JSON-LD graph (src/lib/schema.ts).',
   sourceClient: 'MC Locksmiths (Morgan, Canterbury)',
-  sourceRepoUrl: 'https://github.com/Beyondweb2/MCLocksmiths.git',
+  sourceKind: 'live_client_repo',
+  sourcePinnedCommit: 'a2db9748ca495b9786841d5e1bbd1ae4822392b6',
+  inheritedHazards: [
+    'src/data/*.ts is MC Locksmiths\' business: rewrite every module from the client config (business, services, areas, pricing, proof, faqs, gallery, brands, problems, navigation) — never leave a Morgan fact, review, price or photo reference.',
+    'src/data/site.ts dpomSentinelScriptUrl is MCL\'s OWN click-fraud script key (DPOM): set it to null; tracking stays off.',
+    'Reviews in src/data/proof.ts and the Google review data in business.ts are Morgan\'s customers: remove them; show only this client\'s genuine reviews.',
+    'scripts/legacy-urls.mjs, public/_redirects and docs/legacy-urls.md are MCL\'s 325 old URLs: replace with this client\'s redirect map (none if no old site).',
+    'src/components/CoverageMap.astro, Logo.astro and src/layouts/ServiceLayout.astro hard-code MCL / Canterbury / Kent: make them read from src/data.',
+    'src/assets/photos, src/assets/maps, public/images/brand, client-assets/ and the favicons are Morgan\'s: delete and add only this client\'s approved assets (a map of THIS client\'s area).',
+    'docs/, README.md, CLAUDE.md, AGENTS.md and DESIGN-PROVENANCE.md describe MCL: replace with this client\'s records (keep the clean-room asset rules).',
+    'Legal pages are marked built: false in src/data/navigation.ts — a site with a form needs /privacy/ built before production.',
+    'public/_headers noindexes only *.pages.dev — keep it exactly so; never a "/*" noindex.',
+  ],
+  canonicalPlan: 'Short term (Paul, 2026-09-30): seed from MCLocksmiths-New at the pinned commit. Target: a Findable-owned repository (Beyondweb2/findable-local-trades-template) extracted from it — src/data filled with a clearly fictitious sample business, no client assets, the three hard-coded components reading src/data — then sourceKind findable_template, the MCL seed values dropped and this client-repo dependency ended.',
+  sourceRepoUrl: 'https://github.com/Beyondweb2/MCLocksmiths-New.git',
   sourceRepoOwner: 'Beyondweb2',
   sourceRepoPrivate: true,
   sourceBranch: 'main',
-  framework: 'Astro 7 + Tailwind CSS 4 + @astrojs/sitemap',
+  framework: 'Astro 7 + @astrojs/sitemap (hand-written CSS design tokens, no Tailwind)',
   nodeVersion: '22.12 or newer',
   installCommand: 'npm install',
   devCommand: 'npm run dev',
   devUrl: 'http://localhost:4321',
   buildCommand: 'npm run build',
   buildOutputDir: 'dist',
-  testCommand: 'npm test',
-  cloudflare: 'Cloudflare Pages. Static output in dist (no Pages Functions — the old /api/public/lead endpoint was retired on 2026-09-23; forms post to the Findable site-enquiry function). Legacy redirects in public/_redirects.',
+  testCommand: 'npm run check',
+  cloudflare: 'Cloudflare Pages. Static output in dist, no Pages Functions (forms post to the Findable site-enquiry function). trailingSlash always, directory format. Legacy redirects generated by scripts/legacy-urls.mjs into public/_redirects.',
   serverFunctions: [],
   defaultPageFamilies: [
     { family: 'homepage', path: '/', title: 'Home' },
@@ -261,25 +287,23 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { family: 'pricing', path: '/pricing/', title: 'Pricing', note: 'Only with verified prices.' },
     { family: 'about', path: '/about/', title: 'About' },
     { family: 'faq', path: '/faqs/', title: 'FAQs' },
-    { family: 'gallery', path: '/gallery/', title: 'Gallery', note: "Only with the client's own photos." },
+    { family: 'gallery', path: '/gallery/', title: 'Gallery', note: "Only with the client's own photos (the template shows work photos in sections, not a gallery page)." },
     { family: 'contact', path: '/contact/', title: 'Contact' },
     { family: 'legal', path: '/privacy/', title: 'Privacy' },
     { family: 'legal', path: '/cookies/', title: 'Cookies' },
     { family: 'legal', path: '/terms/', title: 'Terms' },
   ],
   reusableComponents: [
-    'Layout.astro (head, meta, JSON-LD entity graph with stable @id)', 'Header.astro / Footer.astro',
-    'PageHero.astro', 'ServiceCard.astro / ServiceGridCard.astro', 'RelatedServices.astro / RelatedLocations.astro',
-    'CtaSection.astro', 'FloatingActions.astro (sticky call + WhatsApp)', 'ProblemSelector.astro',
-    'FaqItem.astro', 'PricingItem.astro', 'TrustStrip.astro / CredentialItem.astro / BrandPanel.astro',
-    'ReviewCard.astro', 'Breadcrumbs.astro', 'ContentSection.astro / ContentList.astro / SectionHeading.astro',
-    'ConsentBanner.astro + analytics consent', 'Icon.astro', 'src/styles/global.css (design tokens)',
+    'src/layouts/BaseLayout.astro (head, meta, canonical, JSON-LD) + ServiceLayout.astro', 'src/lib/schema.ts (one business @id, breadcrumbs)', 'src/lib/crumbs.ts',
+    'Header.astro / Footer.astro / FindableCredit.astro', 'Hero.astro (photo behind the copy on phones)', 'ServicePaths.astro / RelatedServices.astro',
+    'CoverageMap.astro (areas hub map)', 'Proof.astro / TrustMarquee.astro / ReviewCarousel.astro', 'PriceLedger.astro / PriceStrip.astro',
+    'FaqList.astro / QuestionList.astro', 'ContactButtons.astro / FloatingContact.astro (sticky call + WhatsApp)', 'CtaBand.astro / Steps.astro / OptionRows.astro / RuledList.astro',
+    'Gallery.astro', 'Breadcrumbs.astro', 'ConsentBanner.astro + Tracking.astro (off by default)', 'Icon.astro', 'scripts/check-dist.mjs, check-tracking.mjs (keep: they are the template\'s own gate)',
   ],
   visualStyle: [
-    'Bold trade look: strong primary colour, dark header/footer, high-contrast CTAs',
-    'Card grids for services and locations; icon-led trust strip',
-    'Sticky mobile call / WhatsApp bar; mobile-first spacing',
-    'Hero with photo, headline, two CTAs (call, WhatsApp)',
+    'Editorial trade look: strong accent colour tokens, generous type scale, ruled lists rather than card grids',
+    'Mobile hero with the photo behind the copy; sticky call / WhatsApp on phones',
+    'Areas hub led by a genuine map; proof and reviews near the top',
   ],
   primaryTrade: 'locksmith',
   supportedTrades: ['locksmith'],
@@ -337,15 +361,15 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { id: 'ads', group: 'tracking', label: 'Google Ads ID', requirement: 'optional', source: { fact: 'ads_ids' }, configPath: 'tracking.ads' },
   ]).map((fl) => (fl.id === 'consent' ? { ...fl, requiredWhen: { field: 'analytics' } } : fl)),
   serviceCatalogue: [
-    { id: 'emergency-lockouts', name: 'Emergency lockouts', synonyms: ['locked out', 'lockout', 'lock out', 'emergency locksmith', 'emergency entry', 'emergency', 'gain entry', 'non destructive entry', 'lost keys'] },
-    { id: 'lock-changes', name: 'Lock changes & upgrades', synonyms: ['lock change', 'lock changes', 'change locks', 'lock replacement', 'replace locks', 'new locks', 'lock fitting', 'lock installation', 'lock upgrade', 'rekey'] },
-    { id: 'upvc-door-mechanism', name: 'uPVC & multipoint repairs', synonyms: ['upvc', 'u pvc', 'multipoint', 'multi point', 'door mechanism', 'gearbox', 'door handle', 'upvc lock repairs'] },
-    { id: 'high-security-upgrades', name: 'High-security upgrades', synonyms: ['high security', 'anti snap', 'anti-snap', 'ts007', 'sold secure', '3 star', 'british standard', 'bs3621', 'insurance approved'] },
-    { id: 'burglary-repair', name: 'Burglary repairs', synonyms: ['burglary', 'break in', 'break-in', 'forced entry', 'board up', 'boarding up', 'after a break'] },
-    { id: 'commercial', name: 'Commercial locksmith', synonyms: ['commercial', 'master key', 'access control', 'shop', 'office', 'landlord'] },
-    { id: 'safe-opening', name: 'Safe opening', synonyms: ['safe opening', 'safe engineer', 'safe cracking', 'open a safe', 'safes'] },
-    { id: 'key-safe-installation', name: 'Key safe installation', synonyms: ['key safe', 'keysafe', 'key box', 'key lock box'] },
-    { id: 'garage-locks', name: 'Garage locks', synonyms: ['garage', 'garage door', 'shed lock'] },
+    { id: 'emergency-lockouts', path: '/services/emergency-lockouts/', name: 'Emergency lockouts', synonyms: ['locked out', 'lockout', 'lock out', 'emergency locksmith', 'emergency entry', 'emergency', 'gain entry', 'non destructive entry', 'lost keys'] },
+    { id: 'lock-changes', path: '/services/lock-changes-upgrades/', name: 'Lock changes & upgrades', synonyms: ['lock change', 'lock changes', 'change locks', 'lock replacement', 'replace locks', 'new locks', 'lock fitting', 'lock installation', 'lock upgrade', 'rekey'] },
+    { id: 'upvc-door-mechanism', path: '/services/upvc-door-mechanism/', name: 'uPVC & multipoint repairs', synonyms: ['upvc', 'u pvc', 'multipoint', 'multi point', 'door mechanism', 'gearbox', 'door handle', 'upvc lock repairs'] },
+    { id: 'high-security-upgrades', path: '/services/high-security-upgrades/', name: 'High-security upgrades', synonyms: ['high security', 'anti snap', 'anti-snap', 'ts007', 'sold secure', '3 star', 'british standard', 'bs3621', 'insurance approved'] },
+    { id: 'burglary-repair', path: '/services/burglary-repair/', name: 'Burglary repairs', synonyms: ['burglary', 'break in', 'break-in', 'forced entry', 'board up', 'boarding up', 'after a break'] },
+    { id: 'commercial', path: '/commercial/', name: 'Commercial locksmith', synonyms: ['commercial', 'master key', 'access control', 'shop', 'office', 'landlord'] },
+    { id: 'safe-opening', path: '/services/digital-safe-opening/', name: 'Safe opening', synonyms: ['safe opening', 'safe engineer', 'safe cracking', 'open a safe', 'safes'] },
+    { id: 'key-safe-installation', path: '/services/key-safe-installation/', name: 'Key safe installation', synonyms: ['key safe', 'keysafe', 'key box', 'key lock box'] },
+    { id: 'garage-locks', path: '/services/garage-door-locks/', name: 'Garage locks', synonyms: ['garage', 'garage door', 'shed lock'] },
   ],
   minServices: 1,
   /* Phase 4: the logo is OPTIONAL — with no approved logo the config carries a text wordmark of the
@@ -383,17 +407,12 @@ export const MCL_TEMPLATE: WebsiteTemplate = {
     { id: 'images', label: 'Photos, van, gallery, logo, favicon, share image', sourceExample: 'hero-van.webp, 95 gallery photos, orange MC logo', factKey: 'photos' },
   ],
   clientContentFiles: [
-    'src/lib/siteConfig.ts', 'src/lib/homeContent.ts', 'src/lib/serviceContent.ts', 'src/lib/locationContent.ts',
-    'src/lib/galleryContent.ts', 'src/lib/prices.ts', 'src/lib/brandVisibility.ts',
-    'src/pages/*.astro (every page)',
-    'src/components/*.astro (24 hard-coded MCL strings across Header, Footer, CTA, hero, cards, wizard)',
-    'src/layouts/Layout.astro (entity JSON-LD, default meta — REMOVE its aggregateRating node)', 'astro.config.mjs (site: https://mc-locksmiths.com)',
-    'public/_headers (the superseded build noindexes EVERY host with "/*" — replace with the pages.dev-only noindex rule)',
-    'public/_redirects (MCL legacy URLs — replace entirely)', 'public/robots.txt (sitemap URL)',
-    'public/site.webmanifest, public/og-image.*', 'README.md, CLAUDE.md, AGENTS.md, docs/ (MCL records)',
-    'tests/*.test.ts (assert MCL content — rewrite for the new client)',
+    'src/data/*.ts (every module — business, site, services, areas, pricing, proof, faqs, gallery, brands, problems, navigation)',
+    'src/pages/**/*.astro (page copy and the per-service / per-town pages)', 'src/components/CoverageMap.astro, Logo.astro, src/layouts/ServiceLayout.astro (hard-coded MCL strings)',
+    'astro.config.mjs (site: https://mc-locksmiths.com)', 'public/_redirects + scripts/legacy-urls.mjs + docs/legacy-urls.md (MCL legacy URLs — replace entirely)',
+    'public/robots.txt (sitemap URL)', 'README.md, CLAUDE.md, AGENTS.md, DESIGN-PROVENANCE.md, docs/ (MCL records)',
   ],
-  clientAssetDirs: ['public/images/gallery', 'public/images/badges', 'public/images/brands', 'public/images (hero-van.webp, logo.png)', 'public (favicons, apple-touch-icon, safari-pinned-tab.svg, og-image)'],
+  clientAssetDirs: ['src/assets/photos', 'src/assets/maps', 'public/images/brand', 'client-assets/images', 'public (favicon.ico, favicon.svg, favicon-32.png, apple-touch-icon.png)'],
   forbiddenSeedValues: MCL_FORBIDDEN,
   leftoverNeedles: MCL_FORBIDDEN.map((v) => v.value),
 };
@@ -421,6 +440,13 @@ export function recommendedTemplates(trade: string): WebsiteTemplate[] {
 export function recommendedRoute(trade: string): 'template_rebuild' | 'bespoke' | '' {
   if (!trade.trim()) return '';
   return recommendedTemplates(trade).length ? 'template_rebuild' : 'bespoke';
+}
+
+/** The local cache folder for a template's source repo — one per SOURCE, so a template that changes its
+ *  seed repo (MCLocksmiths → MCLocksmiths-New, 2026-09-30) never reuses a clone of the old one. */
+export function templateCacheName(t: WebsiteTemplate): string {
+  const repo = (t.sourceRepoUrl.split('/').pop() || 'source').replace(/\.git$/i, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  return t.id + '--' + repo;
 }
 
 export function templateById(id: string | null | undefined): WebsiteTemplate | null {
