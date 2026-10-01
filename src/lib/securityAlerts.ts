@@ -1,11 +1,14 @@
 // securityAlerts — the words for security events: the Admin screen's rows and Paul's alert email
 // (2026-09-29). ONE function per purpose, shared by the SPA and fn security-admin (edge-reachable:
-// relative imports only, none needed).
+// relative imports with an explicit .ts only).
 //
 // ⛔ ADMIN-FACING ONLY. These sentences name spend and providers; a salesperson never receives them
 // (their refusal is USAGE_PAUSED_DETAIL, src/lib/protectionLimits.ts).
 
-export const SECURITY_SCREEN_URL = 'https://leadfinderos-next.pages.dev/admin/api-usage';
+import { operatorAppUrl } from '../config/operatorApp.ts';
+
+/* The app's address comes from the one constant (src/config/operatorApp.ts), never typed here. */
+export const SECURITY_SCREEN_URL = operatorAppUrl('/admin/api-usage');
 
 export interface SecurityEventRow {
   kind: string;

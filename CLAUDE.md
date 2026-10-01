@@ -19,8 +19,14 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 - **Product:** Findable — AI visibility for local UK businesses (§1). **Two paying customers, RG
   Locksmiths and Ronnie's Shoe Repairs; SC Plumbing & Gas refunded.** Re-count before quoting.
-- **Repo:** `main` auto-deploys the SPA to **`https://leadfinderos-next.pages.dev`** (Cloudflare
-  Pages) on push — observed working 2026-09-23 (`3972fd42` live within the hour). ⛔ **Never verify
+- **Operator app = `https://app.leadfinderos.com`** (canonical since 2026-10-01; custom domain on
+  the `leadfinderos-next` Pages project). Written ONCE: `OPERATOR_APP_URL`,
+  `src/config/operatorApp.ts` (SPA, edge, scripts all import it; `operator-app-url.test.ts` fails on
+  a second copy). `https://leadfinderos-next.pages.dev` is the **temporary legacy/fallback** address
+  during the migration — same build, still in Supabase Auth Redirect URLs, never used to build a
+  link. Do not redirect it until Paul says so.
+- **Repo:** `main` auto-deploys the SPA to the `leadfinderos-next` Cloudflare Pages project
+  (served at app.leadfinderos.com) on push — observed working 2026-09-23. ⛔ **Never verify
   against `leadfinderos.pages.dev`** — a legacy project, not connected, frozen on an old bundle
   (§7). NEITHER project is in the Cloudflare account wrangler uses on this machine (it has only
   `findable-site`, `findable-directory`), so prove a deploy by the live BUNDLE, never a dashboard
@@ -880,7 +886,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Audit engine | fns `create-ai-audit`, `process-ai-audit-queue`, `extract-competitors`, `run-seo-scan`, `_shared/enrichment/*` |
 | Harness | `scripts/run-tests.mjs`, `check-typecheck-baseline.mjs`, `check-edge-syntax.mjs`, `check-edge-undefined.mjs`, `check-cross-repo-sync.mjs` |
 
-- Live operator app **`https://leadfinderos-next.pages.dev`** — this is PRODUCTION. ⛔
+- Live operator app **`https://app.leadfinderos.com`** — this is PRODUCTION (`OPERATOR_APP_URL`,
+  `src/config/operatorApp.ts`). `https://leadfinderos-next.pages.dev` is the same project's own
+  address: a temporary legacy/fallback during the 2026-10-01 migration. Supabase Auth Site URL is
+  the new domain; Redirect URLs hold both; edge secret `TEAM_APP_URL` holds the new domain. ⛔
   **`leadfinderos.pages.dev` is LEGACY: a stale Cloudflare project, not connected to `main`, that
   still answers 200 with an old bundle (same title, same sign-in page).** Never use it for any
   verification. A deploy check against it reports "not live" forever and has now misled TWO
@@ -938,8 +947,6 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   byte-identical to a local build once filename hashes are neutralised; the other two differ only
   by the baked-in Supabase URL/key (a local build has no `.env`) and by Windows CRLF line endings in
   the raw-imported `src/mockup/templates/*.html`. There is no deploy fault.
-- `src/components/SEOHead.tsx` `BASE_URL` still names the legacy `leadfinderos.pages.dev`, so the
-  operator app's canonical/OG URLs point at the stale site. App code — change it in its own task.
 - 🔴 **`findable.live/w/<code>` is not live yet.** `findable-site/functions/w/[code].ts` exists but
   the repo was not deployed — `npm run deploy` ships the working tree and that tree carries two
   unrelated uncommitted edits (`Footer.astro`, `research.astro`). Download works; the link does not.

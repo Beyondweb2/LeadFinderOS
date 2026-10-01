@@ -85,8 +85,10 @@ Deploy:
 - [ ] Edge functions **do not auto-deploy**: `npx supabase functions deploy <name>` by hand.
 - [ ] **Redeploy every function that imports a shared module you changed**, and prove each one. They keep
       running old code until you do.
-- [ ] SPA auto-deploys on push to `main` (Cloudflare Pages) to **`leadfinderos-next.pages.dev`** —
-      verify THERE by bundle marker (`node scripts/verify-live.mjs`). ⛔ Never against the legacy
+- [ ] SPA auto-deploys on push to `main` (Cloudflare Pages, project `leadfinderos-next`) to
+      **`https://app.leadfinderos.com`** (`leadfinderos-next.pages.dev` is the temporary legacy
+      fallback, same build) — verify by bundle marker (`node scripts/verify-live.mjs`, which reads
+      `OPERATOR_APP_URL`). ⛔ Never against the legacy
       `leadfinderos.pages.dev`, which is frozen on an old bundle and always looks "not live".
 - [ ] 🔴 **findable-site DOES NOT. IT HAS NO CI AT ALL — `npm run deploy` IS THE ONLY WAY IT SHIPS.**
       `"deploy": "astro build && npx wrangler pages deploy dist --project-name=findable-site"`.

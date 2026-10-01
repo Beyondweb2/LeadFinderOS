@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
+import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -395,7 +396,9 @@ serve(async (req) => {
        Nothing is deleted: team_members keeps the person, lead_activity keeps their authorship, and
        their leads stay assigned until the admin moves them. Passwords are never seen: the invitee sets
        their own through a one-time link the admin sends them. */
-    const TEAM_APP_URL = (Deno.env.get('TEAM_APP_URL') ?? 'https://leadfinderos-next.pages.dev').replace(/\/+$/, '');
+    /* The secret overrides; the fallback is the ONE constant (src/config/operatorApp.ts), never a
+       hostname typed here. A blank secret counts as unset. */
+    const TEAM_APP_URL = (Deno.env.get('TEAM_APP_URL')?.trim() || OPERATOR_APP_URL).replace(/\/+$/, '');
     const SET_PASSWORD_URL = `${TEAM_APP_URL}/set-password`;
     const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const uuidOk = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);

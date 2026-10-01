@@ -1,0 +1,5 @@
+# The operator app is private: every route but /auth and /set-password is behind sign-in.
+# Nothing here should ever be listed by a search engine, on any host (app.leadfinderos.com
+# or the legacy pages.dev address). See src/components/SEOHead.tsx.
+/*
+  X-Robots-Tag: noindex, nofollow

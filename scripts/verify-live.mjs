@@ -28,8 +28,10 @@
 
 /* ⛔ PRODUCTION, NOT THE LEGACY HOST (corrected 2026-09-23). This pointed at leadfinderos.pages.dev,
    a stale project not connected to main, so every run could only ever report "not live" — the
-   false alarm that twice sent a session hunting a broken deploy that did not exist. */
-const SPA = 'https://leadfinderos-next.pages.dev';
+   false alarm that twice sent a session hunting a broken deploy that did not exist.
+   Since 2026-10-01 it is the custom domain, read from the ONE constant (Node strips the types). */
+import { OPERATOR_APP_URL } from '../src/config/operatorApp.ts';
+const SPA = OPERATOR_APP_URL;
 const SITE = 'https://findable.live';
 
 const get = async (url) => {
