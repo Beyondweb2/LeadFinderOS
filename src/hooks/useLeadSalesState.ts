@@ -19,7 +19,7 @@ export function useLeadSalesState(leadId: string, whatsapp?: WhatsAppTouch | nul
   const lastLogged = lastLoggedContactOf(activity.data);
   const view = row ? salesStateOf({
     ...row,
-    lastLogged: lastLogged ? { outcome: lastLogged.outcomeValue ?? '', at: lastLogged.at } : null,
+    lastLogged: lastLogged ? { outcome: lastLogged.outcomeValue ?? '', at: lastLogged.at, reached: lastLogged.everReached } : null,
     wrongNumber: wrong.data?.wrong ?? null,
   }) : null;
   /* The fallback "WhatsApp · Sent" line only when the opener really went (a failed send's stamp is not a contact). */

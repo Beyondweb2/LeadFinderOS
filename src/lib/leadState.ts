@@ -72,8 +72,9 @@ export interface LeadStateInput {
   amount_paid?: unknown;
   call_booked_at?: string | null;
   whatsapp_sent_at?: string | null;
-  /** The newest hand-logged contact (lastLoggedContactOf), when the caller has the timeline. */
-  lastLogged?: { outcome: string; at: string } | null;
+  /** The newest hand-logged contact (lastLoggedContactOf), when the caller has the timeline. `reached`: did ANY
+   *  logged contact reach the business (everReached) — absent → judged from this outcome alone. */
+  lastLogged?: { outcome: string; at: string; reached?: boolean } | null;
   /** The number is marked Wrong number (lead_wrong_number), when the caller knows. */
   wrongNumber?: boolean | null;
   /** Meta has confirmed a delivery to this number at least once (outreach_leads.whatsapp_ever_delivered). */
@@ -87,6 +88,16 @@ export interface LeadStateInput {
    (2026-10-01) and read "Contacted". The stamp counts only while the status is not a failed-send status, or
    when Meta has confirmed a delivery at least once. The stored rows are untouched. */
 export const FAILED_SEND_STATUSES: ReadonlySet<string> = new Set(['no_whatsapp', 'whatsapp_failed', 'no_whatsapp_needs_sms']);
+
+/* ⛔ AN ATTEMPT IS NOT A CONTACT (Paul, 2026-10-01: "Logged no-answer call: Attempted contact, not successful
+   contact. Logged spoke to owner: Contacted."). THE one list of logged outcomes that mean a real conversation
+   (was copied in salesPerformance.ts and adminMetrics.ts), and the ones that REACHED the business: a
+   conversation, or a message we really sent. No answer, voicemail, a connection request and wrong number
+   are attempts — kept in History and the Last contact line, never "Contacted". */
+export const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set([
+  'spoke_to_owner', 'interested', 'call_back', 'meeting_booked', 'not_interested', 'agency_controls_site',
+]);
+export const REACHED_OUTCOMES: ReadonlySet<string> = new Set([...CONVERSATION_OUTCOMES, 'message_sent']);
 export function openerReallySent(l: Pick<LeadStateInput, 'status' | 'whatsapp_sent_at' | 'whatsapp_ever_delivered'>): boolean {
   if (!l.whatsapp_sent_at) return false;
   if (l.whatsapp_ever_delivered === true) return true;
@@ -131,9 +142,10 @@ export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): Sal
   if (l.is_potential_work || INTERESTED_STATUSES.has(status)) return v('interested', status === 'price_given' ? 'Price given' : null);
   if (stage === 'replied') return v('replied');
   if (l.wrongNumber) return v('wrong_number');
-  // Contacted = the pipeline says so, OR a person logged any contact, OR an opener really went out
-  // (a failed send's leftover stamp is not contact — openerReallySent).
-  if (stage === 'contacted' || !!l.lastLogged || openerReallySent(l)) return v('contacted');
+  // Contacted = the pipeline says so, OR a logged contact REACHED them (not a no-answer / voicemail
+  // attempt), OR an opener really went out (a failed send's leftover stamp is not contact).
+  const loggedReached = !!l.lastLogged && (l.lastLogged.reached ?? REACHED_OUTCOMES.has(l.lastLogged.outcome));
+  if (stage === 'contacted' || loggedReached || openerReallySent(l)) return v('contacted');
   if (stage === 'new' || stage === 'queued') return v('new', stage === 'queued' ? 'Opener queued' : null);
   return v('other', status ? status.replace(/_/g, ' ') : null);
 }
@@ -285,6 +297,8 @@ export interface LastContactView {
   actorId: string | null;
   note: string | null;
   tone: 'good' | 'bad' | 'neutral';
+  /** Did ANY logged contact on this lead reach the business (REACHED_OUTCOMES)? */
+  everReached: boolean;
 }
 
 const OUTCOME_TONE: Record<string, 'good' | 'bad'> = { interested: 'good', meeting_booked: 'good', not_interested: 'bad', wrong_number: 'bad' };
@@ -298,6 +312,7 @@ export function lastLoggedContactOf(rows: ReadonlyArray<ActivityRow> | null | un
     if (!best || Date.parse(r.created_at) > Date.parse(best.created_at)) best = r;
   }
   if (!best) return null;
+  const everReached = (rows ?? []).some((r) => LOGGED_CONTACT_KINDS.has(r.kind) && REACHED_OUTCOMES.has(String(r.data?.outcome ?? '')));
   const outcome = String(best.data?.outcome ?? '');
   const channel = best.data?.channel ? String(best.data.channel) : (best.kind === 'call_outcome' ? 'call' : '');
   return {
@@ -308,6 +323,7 @@ export function lastLoggedContactOf(rows: ReadonlyArray<ActivityRow> | null | un
     actorId: best.actor_user_id ?? null,
     note: (best.body ?? '').trim() || null,
     tone: OUTCOME_TONE[outcome] ?? 'neutral',
+    everReached,
   };
 }
 
@@ -319,7 +335,7 @@ export interface WhatsAppTouch { direction: 'inbound' | 'outbound'; at: string; 
  *  contact. Either side may be missing. */
 export function lastContactOf(logged: LastContactView | null, whatsapp: WhatsAppTouch | null): LastContactView | null {
   const wa: LastContactView | null = whatsapp && !whatsapp.failed && Number.isFinite(Date.parse(whatsapp.at))
-    ? { method: 'WhatsApp', outcome: whatsapp.direction === 'inbound' ? 'Replied' : 'Sent', outcomeValue: null, at: whatsapp.at, actorId: null, note: null, tone: whatsapp.direction === 'inbound' ? 'good' : 'neutral' }
+    ? { method: 'WhatsApp', outcome: whatsapp.direction === 'inbound' ? 'Replied' : 'Sent', outcomeValue: null, at: whatsapp.at, actorId: null, note: null, tone: whatsapp.direction === 'inbound' ? 'good' : 'neutral', everReached: logged?.everReached ?? false }
     : null;
   if (!logged) return wa;
   if (!wa) return logged;

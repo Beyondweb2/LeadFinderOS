@@ -34,7 +34,7 @@ import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
 import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution.ts';
 import { onboardingLinkStatus } from './onboardingLinkStatus.ts';
-import { NOT_INTERESTED_STATUSES } from './leadState.ts';
+import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } from './leadState.ts';
 import { holderTimeline } from './holderTimeline.ts';
 
 export interface PerfLead {
@@ -66,10 +66,8 @@ export interface PerfHit { lead_id: string; page: string; created_at: string }
 /** The dashboard's channels ARE the one contact-method set (src/lib/contactMethods.ts, 2026-09-28). */
 export const CONTACT_CHANNELS: readonly string[] = CONTACT_METHODS.map((m) => m.value);
 export type ContactChannel = string;
-/** Outcomes that mean a real conversation happened. */
-export const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set([
-  'spoke_to_owner', 'interested', 'call_back', 'meeting_booked', 'not_interested', 'agency_controls_site',
-]);
+/** Outcomes that mean a real conversation happened — THE list lives in leadState.ts (2026-10-01). */
+export { CONVERSATION_OUTCOMES };
 const INTERESTED_OUTCOMES: ReadonlySet<string> = new Set(['interested', 'meeting_booked']);
 const INTERESTED_STATUSES: ReadonlySet<string> = new Set(['interested', 'price_given', 'won_pending_onboarding']);
 /* NOT INTERESTED is the lead state engine's set (src/lib/leadState.ts, 2026-09-30) — it now includes
@@ -238,7 +236,9 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
       const outcome = String(a.data?.outcome ?? '');
       const ch = (a.kind === 'call_outcome' ? 'call' : String(a.data?.channel ?? 'other')) as ContactChannel;
       const channel: ContactChannel = (CONTACT_CHANNELS as readonly string[]).includes(ch) ? ch : 'other';
-      contactTimes.push(t(a.created_at)); channels.add(channel);
+      /* ⛔ Contacted counts only a logged contact that REACHED them (2026-10-01): a no-answer / voicemail call is an
+         attempt — it still counts in the call stats below and stays in History. */
+      if (REACHED_OUTCOMES.has(outcome)) { contactTimes.push(t(a.created_at)); channels.add(channel); }
       if (CONVERSATION_OUTCOMES.has(outcome)) respondedChannels.add(channel);
       latestOutcome = outcome;
       if (channel === 'call' && (sinceMs === null || t(a.created_at) >= sinceMs)) {

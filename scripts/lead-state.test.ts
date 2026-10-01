@@ -56,8 +56,9 @@ console.log("── 1. every stored status reads as ONE sales state; none falls 
 
 console.log("\n── 2. the scenarios (Paul's list) ──");
 {
-  ok(st({ ...newLead, lastLogged: logged("no_answer") }) === "contacted", "New + No answer → Contacted");
-  ok(st({ ...newLead, lastLogged: logged("left_voicemail") }) === "contacted", "New + Left voicemail → Contacted");
+  /* Paul, 2026-10-01: "Logged no-answer call: Attempted contact, not successful contact." */
+  ok(st({ ...newLead, lastLogged: logged("no_answer") }) === "new", "New + No answer → still New (an attempt; History keeps it)");
+  ok(st({ ...newLead, lastLogged: logged("left_voicemail") }) === "new" && st({ ...newLead, lastLogged: logged("spoke_to_owner") }) === "contacted" && st({ ...newLead, lastLogged: { ...logged("no_answer"), reached: true } }) === "contacted", "voicemail is an attempt; spoke to owner is Contacted; an earlier real conversation still counts after a later no-answer");
   ok(st({ ...newLead, lastLogged: logged("spoke_to_owner") }) === "contacted", "New + Spoke to owner → Contacted");
   const p = outcomePlan("interested", newLead);
   ok(p.star && p.status === null, "New + Interested → the star (no pipeline rewrite)");
@@ -255,7 +256,7 @@ console.log("\n── 10. queues: Next best actions and Focus read the state ─
   ok(FOCUS_VIEWS.some((v) => v.key === "meetings") && focusQueue(ws, "meetings").map((i) => i.leadId).join(",") === "meet,later", "Focus Mode has a Meetings view");
   ok(/call_booked_at"/.test(read("supabase/functions/sales-performance/index.ts")) || /call_booked_at",/.test(read("supabase/functions/sales-performance/index.ts")), "sales-performance reads call_booked_at");
   const perf = read("src/lib/salesPerformance.ts");
-  ok(/import \{ NOT_INTERESTED_STATUSES \} from '\.\/leadState\.ts';/.test(perf) && !/const NOT_INTERESTED_STATUSES/.test(perf), "the dashboard's Not interested is the engine's set (one of it)");
+  ok(perf.includes('import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } fr' + "om './leadState" + ".ts'") &&!/const NOT_INTERESTED_STATUSES/.test(perf) && !/const CONVERSATION_OUTCOMES/.test(perf), "the dashboard's Not interested and conversation outcomes are the engine's sets (one of each)");
 }
 
 console.log("\n── 11. automatic writes never downgrade a deal — ONE list ──");

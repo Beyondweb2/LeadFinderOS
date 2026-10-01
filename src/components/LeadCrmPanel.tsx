@@ -266,7 +266,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
   const stateLead = () => {
     const last = lastLoggedContactOf(activity.data);
-    return { ...lead, lastLogged: last ? { outcome: last.outcomeValue ?? '', at: last.at } : null, wrongNumber: wrong.data?.wrong ?? null };
+    return { ...lead, lastLogged: last ? { outcome: last.outcomeValue ?? '', at: last.at, reached: last.everReached } : null, wrongNumber: wrong.data?.wrong ?? null };
   };
   const scrollToNext = () => requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
 

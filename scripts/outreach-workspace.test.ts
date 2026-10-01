@@ -24,7 +24,7 @@ ok(st({ status: 'no_whatsapp', whatsapp_sent_at: SENT }) === 'New', '3. Meta sai
 ok(st({ status: 'whatsapp_failed', whatsapp_sent_at: SENT }) === 'New', '4. send failed → NOT Contacted');
 ok(st({ status: 'initial_contact', whatsapp_sent_at: SENT }) === 'Contacted', '5. sent → Contacted');
 ok(st({ status: 'replied', whatsapp_sent_at: SENT }) === 'Replied', '6. replied → Replied');
-ok(st({ status: 'not_contacted', lastLogged: { outcome: 'no_answer', at: SENT } }) === 'Contacted', '7. a logged call (no answer) — the existing logged-contact rule; detail stays in History');
+ok(st({ status: 'not_contacted', lastLogged: { outcome: 'no_answer', at: SENT } }) === 'New', '7. a no-answer call is an ATTEMPT, not Contacted (History keeps it)');
 ok(st({ status: 'not_contacted', lastLogged: { outcome: 'spoke_to_owner', at: SENT } }) === 'Contacted', '8. spoke to owner → Contacted');
 ok(st({ status: 'no_whatsapp', whatsapp_sent_at: SENT, whatsapp_ever_delivered: true }) === 'Contacted', 'a number Meta once delivered to still counts as contacted');
 ok(!openerReallySent({ status: 'no_whatsapp', whatsapp_sent_at: SENT }) && openerReallySent({ status: 'report_sent', whatsapp_sent_at: SENT }) && !openerReallySent({ status: 'initial_contact', whatsapp_sent_at: null }), 'openerReallySent: the stamp only, and never for a failed send');
