@@ -1,8 +1,8 @@
 {
-  "name": "My Website — yoursites.uk",
-  "short_name": "My Website",
-  "description": "Manage your website and bookings.",
-  "start_url": "/barber",
+  "name": "LeadFinder Pro",
+  "short_name": "LeadFinder",
+  "description": "Private operator app.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0B0F14",
