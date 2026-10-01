@@ -2,7 +2,7 @@
 //
 // One operator-triggered "Enrich" gathers, for a single lead:
 //   • contacts: email / Facebook / Instagram (from one mapsEnrich — already real)
-//   • WhatsApp-capability signal: line_type defaulted to 'mobile' (Twilio HLR lookup
+//   • line-type signal (NOT WhatsApp proof — whatsAppCapability.ts): line_type defaulted to 'mobile' (Twilio HLR lookup
 //     removed — it added latency and could hang a synchronous generate)
 //   • image pool: Maps photos (+ FB/IG photos, graceful) → candidates for the picker
 //   • a low-confidence flag when the business can't be verified (no place ref or

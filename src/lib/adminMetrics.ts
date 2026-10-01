@@ -59,6 +59,8 @@ export interface AdminLead {
   is_potential_work: boolean | null;
   call_booked_at: string | null;
   whatsapp_sent_at: string | null;
+  /** Meta confirmed a delivery once (openerReallySent). Absent → judged from the status alone. */
+  whatsapp_ever_delivered?: boolean | null;
   next_action: string | null;
   next_action_date: string | null;
   is_archived: boolean | null;
@@ -523,7 +525,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     for (const o of f.optOut) if (inP(o.at, p)) once(o.who, 'optOuts', id);
 
     /* Cohort: leads FIRST contacted in the period, credited to whoever made that first contact. */
-    const first = f.contacts.find((c) => !isExcludedUser(ex, c.who));
+    // The first contact that REACHED them (a real send, or a reached logged outcome) — the funnel's own rule.
+    const first = f.contacts.find((c) => !isExcludedUser(ex, c.who) && (c.kind === 'whatsapp' || REACHED_OUTCOMES.has(String(c.outcome ?? ''))));
     if (first && inP(first.at, p)) {
       const r = rowFor(first.who);
       if (r) {

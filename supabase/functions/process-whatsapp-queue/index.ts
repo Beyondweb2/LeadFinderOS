@@ -819,7 +819,8 @@ Deno.serve(async (req) => {
           const { data, error } = await service
             .from("whatsapp_messages")
             .select("phone")
-            .neq("status", "failed")
+            // A send that never left (failed / failed_temporary / simulated) is not a conversation (2026-10-01).
+            .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")
             /* ⚠️ ORDERED BY id. Without a stable unique order, paging can repeat or skip rows and the
                set would be quietly incomplete - the same reason fetchAllRows exists in the SPA. */
             .order("id", { ascending: true })
@@ -1863,7 +1864,8 @@ Deno.serve(async (req) => {
         .from("whatsapp_messages")
         .select("id, lead_id")
         .eq("phone", toNumber)
-        .neq("status", "failed")
+        // A send that never left is not prior contact; a NULL status still blocks (sending path).
+        .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")
         .limit(1);
       if (Array.isArray(prior) && prior.length > 0) {
         await service.from("outreach_leads").update({
@@ -1888,7 +1890,7 @@ Deno.serve(async (req) => {
     if (!alreadySent) {
       const { data: priorMsg } = await service
         .from("whatsapp_messages").select("id")
-        .eq("lead_id", lead.id).eq("direction", "outbound").eq("status", "sent").limit(1).maybeSingle();
+        .eq("lead_id", lead.id).eq("direction", "outbound").in("status", ["sent", "delivered", "read"]).limit(1).maybeSingle(); // delivered / read are real sends too
       alreadySent = !!priorMsg;
     }
     if (!alreadySent) {

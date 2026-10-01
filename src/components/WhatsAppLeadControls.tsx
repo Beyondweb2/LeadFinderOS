@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MessageSquare, Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { openerReallySent } from '@/lib/leadState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WHATSAPP_TEMPLATES, type OutreachLead } from '@/types/outreach';
 import { TemplatePreviewButton, TemplateSnippet } from '@/components/TemplateWordingPreview';
@@ -133,7 +134,7 @@ export function WhatsAppLeadControls({
         <p className="text-xs leading-relaxed text-cyan-500">
           Landline{lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''} — flagged, not queued. It can't receive WhatsApp.
         </p>
-      ) : lead.whatsapp_sent_at ? (
+      ) : openerReallySent(lead) ? (
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <Check className="h-3.5 w-3.5 text-green-500" />
           Sent {new Date(lead.whatsapp_sent_at).toLocaleDateString()}

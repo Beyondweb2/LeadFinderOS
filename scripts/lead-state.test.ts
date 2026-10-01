@@ -91,7 +91,9 @@ console.log("\n── 2. the scenarios (Paul's list) ──");
   ok(st({ ...newLead, wrongNumber: false }) === "new", "Wrong number cleared by the admin → the reading goes back");
   ok(outcomePlan("wrong_number", { status: "payment_received", amount_paid: 99 }).suppressNumber, "a wrong number is a NUMBER fact — suppressed for a client too");
   ok(st({ ...newLead, lastLogged: logged("message_sent") }) === "contacted", "Email / LinkedIn / social message sent → Contacted");
-  ok(st({ ...newLead, whatsapp_sent_at: at(-2) }) === "contacted", "a WhatsApp opener sent → Contacted");
+  /* 2026-10-01: an opener SENT moves the pipeline to initial_contact; a stamp left on a lead still New is a send that
+     failed and was put back (not contact). */
+  ok(st({ ...newLead, status: "initial_contact", whatsapp_sent_at: at(-2) }) === "contacted" && st({ ...newLead, whatsapp_sent_at: at(-2) }) === "new", "a WhatsApp opener sent → Contacted; a leftover stamp on a New lead is not");
 }
 
 console.log("\n── 3. real life: stronger states are not downgraded, and a no can become a yes ──");

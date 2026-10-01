@@ -75,6 +75,7 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { markLeadInterested, setLeadPipelineStatus } from '@/lib/leadQuickActions';
 import { recordOnboardingLinkEvent } from '@/hooks/useOnboardingLink';
 import { ONBOARDING_LINK_RE, previewUrl } from '@/lib/onboardingLinkStatus';
+import { isRealSend } from '@/lib/realSend';
 import {
   DEFAULT_FIRST_REPLY_MODE,
   DEFAULT_FIRST_REPLY_TEMPLATE,
@@ -575,7 +576,7 @@ const Inbox = () => {
       const t = new Date(m.created_at).getTime();
       if (m.direction === 'inbound') {
         latestInboundAt.set(key, Math.max(latestInboundAt.get(key) ?? 0, t));
-      } else if (m.status !== 'failed') {
+      } else if (isRealSend(m.status)) {
         if (m.template_name && REPORT_TEMPLATES.has(canonicalTemplate(m.template_name))) latestReportAt.set(key, Math.max(latestReportAt.get(key) ?? 0, t));
         else if (m.template_name === 'hook_followup') hookSent.add(key);
       }
@@ -615,7 +616,7 @@ const Inbox = () => {
       const t = new Date(m.created_at).getTime();
       if (m.direction === 'inbound') {
         everInbound.add(key);
-      } else if (m.status !== 'failed') {
+      } else if (isRealSend(m.status)) {
         if (m.template_name === 'initial_contact') latestOpenerAt.set(key, Math.max(latestOpenerAt.get(key) ?? 0, t));
         else if (m.template_name && REPORT_TEMPLATES.has(m.template_name)) reportSent.add(key);
         else if (m.template_name === 'contact_followup') contactSent.add(key);

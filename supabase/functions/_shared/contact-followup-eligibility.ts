@@ -46,7 +46,7 @@ export async function contactFollowupEligible(service: any, lead: ContactLeadLit
     const { data: openers } = await service
       .from("whatsapp_messages")
       .select("created_at")
-      .eq("phone", to).eq("direction", "outbound").eq("template_name", "initial_contact").neq("status", "failed")
+      .eq("phone", to).eq("direction", "outbound").eq("template_name", "initial_contact").in("status", ["sent", "delivered", "read"]) // a REAL opener (2026-10-01): a temporarily failed / simulated one is not
       .order("created_at", { ascending: false }).limit(1);
     const openerAt = openers?.[0]?.created_at ? new Date(openers[0].created_at).getTime() : 0;
     if (!openerAt) return { eligible: false, reason: "no_opener" };

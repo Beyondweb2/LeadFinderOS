@@ -17,6 +17,7 @@ import type { CrawlStoredResult } from '@/lib/crawlResult';
 import type { WhatsAppTemplateSnapshot } from '@/lib/whatsappTemplateSnapshot';
 import { serviceWindowState } from '@/lib/serviceWindow';
 import { sendMediaAttachmentRequest } from '@/lib/sendMediaAttachment';
+import { isRealSend } from '@/lib/realSend';
 
 // whatsapp_messages isn't in the generated types yet — RLS still enforces access
 // (operators read their own; admin reads all incl. Unassigned).
@@ -665,7 +666,7 @@ export function useInbox() {
   const earliestReportLinkSentByLead = useMemo(() => {
     const m = new Map<string, number>();
     for (const msg of messages) {
-      if (msg.direction !== 'outbound' || !msg.lead_id || !msg.template_name || msg.status === 'failed') continue;
+      if (msg.direction !== 'outbound' || !msg.lead_id || !msg.template_name || !isRealSend(msg.status)) continue;
       if (!REPORT_LINK_TEMPLATES.has(msg.template_name)) continue;
       const t = new Date(msg.created_at).getTime();
       if (Number.isNaN(t)) continue;

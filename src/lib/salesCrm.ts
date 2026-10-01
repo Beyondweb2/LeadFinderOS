@@ -90,6 +90,9 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
   switch (code) {
     case 'already_owned': return ownerName ? `Already added · ${ownerName}` : 'Already added by someone else';
     case 'already_contacted': return 'Already contacted — it cannot be claimed';
+    // The claim rule (lead_claim_block, 2026-10-01): sales eligibility, never a channel fact like No WhatsApp.
+    case 'not_interested': return 'They said no — it cannot be claimed';
+    case 'suppressed': return 'Outreach to this business is stopped — it cannot be claimed';
     case 'archived': return 'This lead is archived';
     case 'client': return 'This business is a client';
     case 'exists': return ownerName ? `Already added · ${ownerName}` : 'Already in LeadFinderOS';

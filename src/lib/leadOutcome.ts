@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { refusalText } from '@/lib/salesCrm';
-import { outcomePlan, salesStateOf, type LeadStateInput, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
+import { outcomePlan, salesStateOf, REACHED_OUTCOMES, type LeadStateInput, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
 
 export interface OutcomeLead extends LeadStateInput { id: string; next_action?: string | null }
 
@@ -28,7 +28,8 @@ export function stateAfterPlan(lead: OutcomeLead, plan: OutcomePlan, outcome: st
     status: plan.status ?? lead.status,
     is_potential_work: plan.status === 'not_interested' ? false : plan.star ? true : lead.is_potential_work,
     call_booked_at: plan.clearMeeting ? null : lead.call_booked_at,
-    lastLogged: logged ? { outcome, at: new Date(nowMs).toISOString() } : lead.lastLogged,
+    /* An earlier real conversation still counts after this outcome (a later no-answer never downgrades). */
+    lastLogged: logged ? { outcome, at: new Date(nowMs).toISOString(), reached: (lead.lastLogged?.reached ?? false) || REACHED_OUTCOMES.has(outcome) } : lead.lastLogged,
     wrongNumber: plan.suppressNumber ? true : lead.wrongNumber,
   }, nowMs);
 }
