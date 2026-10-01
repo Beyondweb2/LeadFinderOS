@@ -25,7 +25,8 @@ export interface OutcomeResult { plan: OutcomePlan; said: string[]; failed: stri
 export function stateAfterPlan(lead: OutcomeLead, plan: OutcomePlan, outcome: string, logged: boolean, nowMs = Date.now()): SalesStateView {
   return salesStateOf({
     ...lead,
-    status: plan.status ?? lead.status,
+    /* A revive's status is the server's (lead_revive); for the reading here it is simply no longer a no. */
+    status: plan.status ?? (plan.revive ? 'not_contacted' : lead.status),
     is_potential_work: plan.status === 'not_interested' ? false : plan.star ? true : lead.is_potential_work,
     call_booked_at: plan.clearMeeting ? null : lead.call_booked_at,
     /* An earlier real conversation still counts after this outcome (a later no-answer never downgrades). */
@@ -53,11 +54,17 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
     if (r.ok) { if (!r.unchanged) said.push(ok); } else failed.push(`Not done: ${ok} (${refusalText(r.error)})`);
     return r.ok;
   };
-  /* A no becoming a yes: the database clears ONLY the Not interested suppression when the status leaves
-     not_interested for interested / won (trigger, migration 20260930170000) — never Wrong number, an
-     opt-out, the prospect's own "no" reply or any other block. The line says it, as the rule's words. */
-  if (plan.status === 'interested' && await step('lead_set_stage', { _status: 'interested' }, 'Moved back to Interested') && lead.status === 'not_interested') {
-    said.push('Not interested block lifted (any other block stays)');
+  /* A no becoming a yes (lead_revive, migration 20261002120000): the lead leaves Not interested for the
+     workflow status its own WhatsApp history proves (Replied / You replied / Contacted / New), so a later
+     reply still moves it to Replied. The server lifts ONLY the Not interested block — never Wrong number,
+     an opt-out or any other block. The star is the separate step below. */
+  if (plan.revive) {
+    const r = await leadRpc('lead_revive', { _lead_id: lead.id });
+    if (!r.ok) failed.push(`Not done: Moved back from Not interested (${refusalText(r.error)})`);
+    else if (!r.unchanged) {
+      said.push('Moved back from Not interested');
+      if (r.block_lifted === true) said.push('Not interested block lifted (any other block stays)');
+    }
   }
   if (plan.star) await step('lead_mark_interested', { _on: true }, 'Marked Interested ⭐');
   if (plan.status === 'not_interested') {
@@ -73,7 +80,7 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
   if (plan.suppressNumber) await step('lead_mark_wrong_number', {}, 'Number blocked: no templates, queue or automated WhatsApp');
   /* A refused write means the plan did not fully happen: the reading is then the contact alone, and no
      state change is claimed in History. */
-  const after = failed.length ? stateAfterPlan(lead, { ...plan, star: false, status: null, suppressNumber: false, clearMeeting: false }, outcome, logged) : stateAfterPlan(lead, plan, outcome, logged);
+  const after = failed.length ? stateAfterPlan(lead, { ...plan, star: false, status: null, revive: false, suppressNumber: false, clearMeeting: false }, outcome, logged) : stateAfterPlan(lead, plan, outcome, logged);
   if (!(await recordStateChange(lead.id, before, after, outcome))) failed.push('Not done: adding the status change to History');
   notifyLeadChanged(lead.id);
   return { plan, said, failed, after };

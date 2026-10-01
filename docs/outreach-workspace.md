@@ -225,3 +225,27 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   archived barber lead keeps `interested` + the star.
 - **SMS:** the post-contact tips popup's "No WhatsApp? Try SMS" tip is removed. The not-on-WhatsApp warning,
   the Outreach intro and three unused locale strings no longer suggest SMS.
+
+## H. Revived leads and the Inbox status filter (2026-10-02, Paul's brief)
+
+- **Revive.** Root cause: logging Interested or Meeting booked on a Not interested or Closed lead wrote
+  `lead_set_stage('interested')`, the pre-star status. `whatsapp-inbound` protects that status from a downgrade
+  (`INBOUND_NO_DOWNGRADE`), so a later reply never set Replied, and `send-whatsapp-message` moves only
+  `replied` → `awaiting_reply`. Now `outcomePlan` returns `revive: true` (its `status` is only ever
+  `not_interested`), and `applyOutcome` calls **`lead_revive`** (migration `20261002120000`). It writes the
+  status the lead's own WhatsApp history proves: their message last → `replied`, ours last →
+  `awaiting_reply`, an opener really sent → `initial_contact`, otherwise `not_contacted` (the pill still reads
+  Contacted from the logged call). It never writes `interested` and never touches the star.
+  **The block lift has one rule:** `_lift_not_interested_block`, called by the unchanged trigger (not_interested
+  → interested / won) and by `lead_revive` (leaving not_interested only; Closed keeps its old no-lift
+  behaviour). It removes only reason `not_interested` rows without a wrong-number mark, and records History.
+  Live rolled-back test: `supabase/tests/lead-revive.sql` (18 checks). `lead_set_stage` still allows
+  `interested` (the allowlist is pinned to `SALES_SETTABLE_STATUSES` by three suites), but no client sends it
+  (swept).
+- **Inbox filter.** Root cause: the Inbox matched `c.leadStatus === statusFilter`, the STORED status, while its
+  pill showed `pillStatusOf`. Its logged contacts were read only for the rows already shown, so a filter could
+  never use them. Now **`src/lib/statusFilter.ts` `shownStatusMatches`** is the one match. It is Outreach's rule
+  (the pill's status in `statusesForFilter`'s group; Interested = `isStarred`), used by both pages. The Inbox
+  reads `useAllLoggedContacts` before filtering, and its list pill and filter read the same `listStageOf`.
+  Unchanged: the Inbox keeps unassigned and paying conversations always visible, and the hidden
+  not-interested and closed rows.

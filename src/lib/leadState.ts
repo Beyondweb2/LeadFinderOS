@@ -275,7 +275,10 @@ export interface OutcomePlan {
   /** Set the Interested star. */
   star: boolean;
   /** Write this pipeline status. */
-  status: 'not_interested' | 'interested' | null;
+  status: 'not_interested' | null;
+  /** Leave Not interested / Closed (lead_revive): the server writes the workflow status the lead's own
+   *  WhatsApp history proves and lifts the Not interested block. Never the pre-star 'interested'. */
+  revive: boolean;
   /** Clear the Next Action to 'none' (the one automatic next-action write the rule allows). */
   clearNextAction: boolean;
   /** Cancel the booked meeting (call_booked_at → null): Not interested means the meeting is off. */
@@ -291,10 +294,10 @@ export interface OutcomePlan {
 /** THE ONE RULE for a logged outcome's follow-on, for both roles and every screen.
  *  ⛔ Never downgrades: a client or a won lead is only recorded; the star is never set twice; a lead
  *  already Not interested is not re-written. ⛔ Real life: Interested / Meeting booked on a lead that
- *  said no earlier moves it back to Interested (status 'interested' + the star) — EXCEPT an opted-out
- *  number (a WhatsApp STOP), whose status is the suppression's and is left alone. */
+ *  said no earlier is revived (lead_revive — a real workflow status, 2026-10-02) and starred — EXCEPT an
+ *  opted-out number (a WhatsApp STOP), whose status is the suppression's and is left alone. */
 export function outcomePlan(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown; next_action?: string | null; call_booked_at?: string | null }, nowMs: number = Date.now()): OutcomePlan {
-  const plan: OutcomePlan = { star: false, status: null, clearNextAction: false, clearMeeting: false, suppressNumber: false, askMeeting: false, askCallBackDay: false };
+  const plan: OutcomePlan = { star: false, status: null, revive: false, clearNextAction: false, clearMeeting: false, suppressNumber: false, askMeeting: false, askCallBackDay: false };
   const { effect } = outcomeRule(outcome);
   const status = (lead.status ?? '').trim();
   const stage = salesStageOf(status);
@@ -305,7 +308,7 @@ export function outcomePlan(outcome: string, lead: { status?: string | null; is_
   if (locked) return plan;
   if (effect === 'interested' || effect === 'meeting') {
     if (!lead.is_potential_work) plan.star = true;
-    if (status === 'not_interested' || status === 'closed') plan.status = 'interested';
+    if (status === 'not_interested' || status === 'closed') plan.revive = true;
   }
   if (effect === 'not_interested') {
     if (!NOT_INTERESTED_STATUSES.has(status)) plan.status = 'not_interested';

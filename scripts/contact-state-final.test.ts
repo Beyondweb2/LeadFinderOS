@@ -60,7 +60,7 @@ ok(whatsAppCapabilityOf({ status: 'no_whatsapp', line_type: 'mobile' }) === 'not
 
 console.log('\n── the table reads ONE status for pill and filter, over every lead ──');
 const table = read('src/components/OutreachTable.tsx');
-ok(table.includes('wanted.includes(pillStatusOf(lead.status, rowSalesState(lead)) as LeadStatus)'), 'the status filter reads what the pill shows');
+ok(table.includes('result = result.filter((lead) => shownStatusMatches(statusFilter, lead, rowSalesState(lead)));') && read('src/lib/statusFilter.ts').includes('statusesForFilter(filter as StatusFilterValue).includes(pillStatusOf(lead.status, stage) as LeadStatus)'), 'the status filter reads what the pill shows (the shared matcher, 2026-10-02)');
 ok(table.includes('const lastLogged = useAllLoggedContacts();') && !table.includes('useLastLoggedContacts(pageLeadIds)'), 'the logged contacts are read for every lead, not just the page');
 ok((table.match(/const rowSalesState = /g) ?? []).length === 1, 'one rowSalesState, shared by the pill and the filter');
 
