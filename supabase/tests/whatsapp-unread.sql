@@ -7,9 +7,11 @@ begin
   select user_id into book from team_members where is_book_owner limit 1;
   select tm.user_id into sid from team_members tm join user_roles r on r.user_id = tm.user_id and r.role = 'sales' order by tm.created_at limit 1;
   select tm.user_id into tid from team_members tm join user_roles r on r.user_id = tm.user_id and r.role = 'sales' where tm.user_id <> sid order by tm.created_at limit 1;
-  select l.id, regexp_replace(l.phone, '[^0-9]', '', 'g') into lid, ph from outreach_leads l
-    where l.assigned_to_user_id = sid and l.phone is not null and not l.is_archived and not public.lead_is_client(l.amount_paid, l.status) limit 1;
-  ph := case when ph like '0%' then '44' || substr(ph, 2) else ph end;
+  /* ⛔ ITS OWN FIXTURE (2026-10-02): it borrowed "a live lead assigned to the first salesperson, with a phone" and
+     failed (phone NULL) the day there was none. Rolled back; the number is in the Ofcom drama range. */
+  lid := gen_random_uuid(); ph := '447700900621';
+  insert into outreach_leads (id, user_id, business_name, status, phone, assigned_to_user_id, assigned_at)
+    values (lid, book, 'QA unread (rolled back)', 'initial_contact', '+' || ph, sid, now());
   insert into whatsapp_messages (user_id, lead_id, phone, direction, body, message_type, status, test_mode)
     values (book, lid, ph, 'inbound', 'QA unread (rolled back)', 'text', 'received', false);
   perform set_config('request.jwt.claims', json_build_object('sub', book, 'role', 'authenticated')::text, true);

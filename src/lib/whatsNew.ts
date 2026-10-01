@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-hourly-reminders', date: '2026-10-01', title: 'Reminders at the right time', audience: 'all',
+    body: 'Next Action reminders now arrive at their time, once, and Done or Clear starts the next action with a blank note.',
+    report: {
+      added: [],
+      changed: [
+        'Reminders run every hour instead of once a morning. A timed Next Action reminds you in the first hour after its UK time ("Send proposal at 16:00"); one without a time reminds you from 07:00 UK on its day.',
+        'Each Next Action reminds you once. Moving it to a new day or time, or changing its type, counts as a new one.',
+        'The reminder goes to whoever owns the lead when it is due, so a lead handed over beforehand reminds its new owner.',
+        'Done and Clear also clear the Next Action\'s note, so the next one starts blank. History keeps the note that went with it.',
+      ],
+      removed: [],
+      effect: 'You hear about each Next Action at its time, once, and an old note never carries over.',
+    } },
   { id: '2026-10-01-one-next-action', date: '2026-10-01', title: 'One kind of Next Action', audience: 'all',
     body: 'A booked meeting and a call-back are now real Next Actions. The Next Action column shows "+ Set" or the action with its green tick, never both.',
     report: {

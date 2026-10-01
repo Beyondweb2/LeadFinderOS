@@ -338,3 +338,39 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   `supabase/tests/next-action-one-flow.sql` (29 checks). `next-action-human-only.sql` (19) and
   `sales-shared-workflow.sql` (37) were updated to the new signature and the Meeting sync. `sales-team-board.sql`
   passes 41/41.
+
+## L. Done/Clear take the note; hourly reminders; every database test green (2026-10-02)
+
+- **Done / Clear:** `lead_set_follow_up` with `none` now also clears `next_action_note`, so the next action starts
+  blank. History keeps it: `follow_up_set.from.note`, and "Completed: Call · Fri 2 Oct · 14:30 — ask about the
+  website". The lead's own notes, learned-on-call facts, contact History and client notes are other columns,
+  untouched. Built on feat/one-next-action's body (the booking mirror: `call_booked_at` = the timed Meeting's
+  instant, or null; CHECK `outreach_leads_booking_is_the_meeting`).
+- ⛔ **Recorded collision:** this session's first apply replaced one-next-action's live `lead_set_follow_up` with an
+  older body (it dropped the booking mirror) for about 20 minutes. It was restored as theirs plus the two note lines.
+  No real lead was saved in the gap and no row broke the constraint. Rule (already in §3): read the LIVE
+  definition and every open worktree's migrations for the function before replacing it, not only your own
+  last file.
+- **Reminders (`notify_due_follow_ups`, cron job 15 `notify-follow-ups-due`, now `0 * * * *`):**
+  - Date-only: due today from the first sweep at or after 07:00 UK; an earlier day (overdue) at the next sweep.
+  - Timed: the first sweep at or after its UK time (`next_action_due_at`).
+  - No date, nothing planned, archived: never.
+  - One per (person, version): `notifications`' unique `(user_id, dedupe_key)`. The key is the lead, the type and
+    the day, plus the time when timed. A reschedule, a new time or a new type is a new version. The date-only key
+    is the old one, so nothing already reminded repeats.
+  - The recipient is the owner at the sweep (`lead_recipient`), so a transfer before the reminder reaches only
+    the new owner.
+  - Words: "Business — Send proposal at 16:00" (`next_action_label`).
+- **The database tests (28 files, all green):**
+  - `notifications.sql`, `quick-close.sql` and `whatsapp-unread.sql` (D, test data): each borrowed "a live lead
+    assigned to the first salesperson (with a phone)". None existed, so lead_id or phone was NULL. Each now
+    creates its own rolled-back fixture. Its follow-up check uses yesterday, so it does not depend on the hour.
+  - `multi-user-rls.sql` check 70 (A, stale): it asserted that an automatic queue send at `sent` assigns the lead.
+    Since 2026-10-01 it assigns only once delivered. It now checks both halves on its own fixture.
+  - `next-action-human-only.sql`: Clear now clears the note (Paul), and `lead_set_call_booked` delegates to
+    `lead_set_follow_up`.
+  - `coverage-found-added.sql` and `weekly-commission-tiers.sql` always passed but had no written expectation;
+    they now carry `-- Expect:` lines.
+  - The runner I used reads all four output formats (QA_RESULT, RESULTS, RESULT k=v, ROLLBACK_ONLY) against those
+    lines.
+- Tests: `scripts/next-action-reminders.test.ts`; live `supabase/tests/next-action-reminders.sql` (21 checks).

@@ -1,5 +1,6 @@
 -- LIVE TEST of the weekly-tier stamping (migration 20260929180000). ALWAYS ROLLS BACK: it ends by raising.
 -- Run through the Management API; the result is the text of the final exception.
+-- Expect exact: WEEK[pi_t01=1@30 pi_t02=2@30 pi_t03=3@30 pi_t04=4@40 pi_t05=5@40 pi_t06=6@40 pi_t07=7@50 pi_t08=8@50 pi_t09=9@50 pi_t10=10@50] AFTER_REFUND[pi_t01=1 pi_t02=2 pi_t03=3 pi_t04=4 pi_t05=5 pi_t06=6 pi_t07=7 pi_t08=8 pi_t09=9 pi_t10=10] BOUNDARY[pi_sun=2026-10-05#11@50 pi_mon=2026-10-12#1@30] LEGACY[flat_30_v0@0.3000]
 do $$
 declare
   s uuid := gen_random_uuid();          -- a throwaway seller id (no FK on sold_by_user_id)

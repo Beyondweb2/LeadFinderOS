@@ -352,9 +352,11 @@ export function activityDetail(
       const from = (d.from ?? {}) as Record<string, unknown>;
       const now = historyAction(d.next_action, d.date, d.time);
       const note = d.note ? ` — ${String(d.note)}` : '';
+      const fromNote = from.note ? ` — ${String(from.note)}` : '';
       switch (d.change) {
-        case 'completed': return `Completed: ${historyAction(from.next_action, from.date, from.time)}`;
-        case 'cleared': return from.next_action && from.next_action !== 'none' ? `Cleared: ${historyAction(from.next_action, from.date, from.time)}` : 'Next action cleared';
+        /* Done / Clear take the note with them (2026-10-02) — History keeps it, from the row before. */
+        case 'completed': return `Completed: ${historyAction(from.next_action, from.date, from.time)}${fromNote}`;
+        case 'cleared': return from.next_action && from.next_action !== 'none' ? `Cleared: ${historyAction(from.next_action, from.date, from.time)}${fromNote}` : 'Next action cleared';
         case 'set': return `Set: ${now}${note}`;
         case 'rescheduled': return `Rescheduled: ${now} (was ${[historyDay(from.date) ?? 'no date', hhmmOf(from.time as string | null)].filter(Boolean).join(' · ')})${note}`;
         case 'changed': return `Changed: ${nextActionWords(from.next_action)} → ${now}${note}`;

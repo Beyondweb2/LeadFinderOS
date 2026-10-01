@@ -31,13 +31,18 @@ insert into t_results (name, ok, detail) select 'no trigger on outreach_leads wr
 insert into t_results (name, ok, detail) select 'no scheduled job mentions next_action', not exists (select 1 from cron.job where command ~* 'next_action'), null;
 insert into t_results (name, ok, detail) select 'only lead_set_follow_up sets a chosen next action',
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')') = array['lead_set_call_booked', 'lead_set_follow_up'],
+    where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')') <@ array['lead_set_call_booked', 'lead_set_follow_up']
+  and 'lead_set_follow_up' = any (select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')'),
   (select string_agg(p.proname::text, ', ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')');
-/* 2026-10-02: lead_set_call_booked moves an EXISTING Meeting's day + time with the booking; it never sets a type
-   (its next_action = 'meeting' is the WHERE clause). */
-insert into t_results (name, ok, detail) select 'lead_set_call_booked never sets a type',
-  pg_get_functiondef('public.lead_set_call_booked'::regproc) !~* 'set\s+next_action\s*=' and pg_get_functiondef('public.lead_set_call_booked'::regproc) ~* 'where id = _lead_id and next_action = ''meeting''', null;
+/* 2026-10-02: lead_set_call_booked never writes the type itself — it either delegates to lead_set_follow_up (the one
+   write, migration 20261002180000_one_next_action) or, in the older form, only moves an existing Meeting's day and
+   time (its next_action = 'meeting' is the WHERE clause). */
+insert into t_results (name, ok, detail) select 'lead_set_call_booked never sets a type itself',
+  pg_get_functiondef('public.lead_set_call_booked'::regproc) !~* 'set\s+next_action\s*='
+  and (pg_get_functiondef('public.lead_set_call_booked'::regproc) ~* 'return public\.lead_set_follow_up\('
+       or pg_get_functiondef('public.lead_set_call_booked'::regproc) ~* 'where id = _lead_id and next_action = ''meeting'''), null;
 
 -- ── as Sales A ──
 set local role authenticated;
@@ -64,7 +69,8 @@ do $$ declare r jsonb; v record; begin
   insert into t_results (name, ok, detail) values ('…and the follow-up note stays intact', v.nn = 'ring after 10', v.nn);
   r := public.lead_set_follow_up((select mine from t_fx), 'none', null, 'ring after 10');
   select next_action::text a, next_action_date d, next_action_note nn into v from public.sales_leads where id = (select mine from t_fx);
-  insert into t_results (name, ok, detail) values ('Sales CLEARS it', v.a = 'none' and v.d is null and v.nn = 'ring after 10', v.a);
+  /* 2026-10-02 (Paul): Clear takes the Next Action's note with it (History keeps it). */
+  insert into t_results (name, ok, detail) values ('Sales CLEARS it (and its note)', v.a = 'none' and v.d is null and v.nn is null, v.a);
   insert into t_results (name, ok, detail) values ('status and owner untouched by the follow-up edits',
     (select status from public.sales_leads where id = (select mine from t_fx)) = 'price_given'
     and (select assigned_to_user_id from public.sales_leads where id = (select mine from t_fx)) = 'cccccccc-0000-4000-8000-00000000000a', null);
