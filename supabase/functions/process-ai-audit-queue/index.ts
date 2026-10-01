@@ -17,7 +17,7 @@ import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
 import { autoMarkHookLeadNotInterested, autoMarkSixOfSixNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
-import { seoScanAllowed, WEEKLY_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
+import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
@@ -847,8 +847,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     ids = (openRuns ?? []).map((r: Row) => r.id);
   }
   let finalised = 0;
-  // Auto-report kill-switch: ON unless AUTO_REPORT_ENABLED is explicitly "0"/"false"/"off". Default ON.
-  const autoReportEnabled = !["0", "false", "off"].includes((Deno.env.get("AUTO_REPORT_ENABLED") ?? "").trim().toLowerCase());
+  /* AUTO_REPORT_ENABLED is no longer read: the public yoursites.uk/r/ "listing" (generate-report) was retired 2026-10-01 — docs/r-profile-pages-audit.md. */
   // Extraction invokes are QUEUED per-run and awaited AFTER the loop, so a slow extract-competitors
   // call never blocks finalising the other runs — but the edge runtime still can't cut them off.
   const extractionInvokes: Promise<void>[] = [];
@@ -866,9 +865,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
      Same SUCCESS conditions though: COMPLETE and not capped. maybeSendFreeCheckResult does its own
      lane check (enrichment_source = 'free_check'), so every other audit falls straight through. */
   const freeCheckJobs: { runId: string; auditId: string }[] = [];
-  // Auto-report: audits that just finalised → generate their public /r/ report AFTER extraction (so
-  // the report reflects the cleaned competitor list). Collected in the loop; deduped + fired below.
-  const reportJobs: { auditId: string }[] = [];
   // D2 — completion auto-send: audits that just went COMPLETE (never capped) whose lead should be
   // queued an operator-selected template via whatsapp_auto_replies (trigger 'audit_complete').
   // Gated by the SAME master kill-switch as the first-reply rule (AUTO_AUDIT_REPLY_ENABLED) plus a
@@ -1344,13 +1340,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
           await stampCleaningFailure(service, runId, `invoke error: ${why.slice(0, 160)}`);
         }
       })());
-      // Auto-report: queue a public /r/ business report for this finalised audit — processed AFTER
-      // extraction (below) so it reflects the cleaned competitors. COMPLETE runs only (not capped):
-      // the existing-report SELECT guard makes the FIRST report permanent, so a capped run's
-      // partial-data report would block the full report from a later re-run — capped audits stay on
-      // the manual button. No lead-id gate; skipped when AUTO_REPORT_ENABLED is off. Existing-report
-      // guard + fail-safe wrapping live in the processor below.
-      if (autoReportEnabled && !isCapped && !allFailed && runRow?.audit_id) reportJobs.push({ auditId: runRow.audit_id as string });
       /* The free-check result. Success only: a capped run has partial data and a failed one has
          none, and a stranger must never receive either. */
       if (!isCapped && !allFailed && runRow?.audit_id) freeCheckJobs.push({ runId, auditId: runRow.audit_id as string });
@@ -1437,7 +1426,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     }
   }
   const auditReady = (auditId: string) => processingRuns.some((p) => p.auditId === auditId && readyRuns.has(p.runId));
-  for (let i = reportJobs.length - 1; i >= 0; i--) if (!auditReady(reportJobs[i].auditId)) reportJobs.splice(i, 1);
   for (let i = freeCheckJobs.length - 1; i >= 0; i--) if (!auditReady(freeCheckJobs[i].auditId)) freeCheckJobs.splice(i, 1);
   for (let i = completionSendJobs.length - 1; i >= 0; i--) if (!auditReady(completionSendJobs[i].auditId)) completionSendJobs.splice(i, 1);
   for (let i = baselineJobs.length - 1; i >= 0; i--) if (!auditReady(baselineJobs[i].auditId)) baselineJobs.splice(i, 1);
@@ -1482,97 +1470,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     }
   }
 
-  // Auto-report: NOW that competitors are cleaned, generate the public /r/ business report for each
-  // finalised audit — but ONLY if one doesn't already exist (SELECT guard on audit_id + report_type
-  // 'profile', so re-runs never overwrite). Calls generate-report's internal branch (service key +
-  // x-cron-secret + x-internal-job). Wrapped so any failure only logs and NEVER blocks/fails the
-  // audit — the manual "Generate listing" button remains the fallback. Sequential so two runs of the
-  // same audit in one tick can't both slip past the guard.
-  /* ⛔ AUTO-REPORT ONLY FOR AN ENGAGED LEAD (Paul, 2026-09-16). The public /r/ listing is a
-     crawlable SEO artifact; it matters for clients and leads who have engaged, NOT for a cold
-     prospect who may never reply. It fires at audit finalisation, when a cold outreach lead is
-     still not_contacted/queued/initial_contact — so gating here skips exactly those. Measured: 315
-     of 750 auto-reports in the last 30d were for leads that never replied, i.e. gpt-4o spent on
-     prospects who never answered. This does NOT affect what a prospect can open — their report link
-     is served LIVE by render-audit-report and needs no business_reports row — and the manual
-     "Generate listing" button remains for every other case. Engaged = replied-or-beyond, or paid. */
-  const AUTO_REPORT_ENGAGED_STATUSES = new Set([
-    "replied", "awaiting_reply", "report_sent", "interested", "price_given",
-    "payment_received", "in_delivery", "completed",
-  ]);
-  for (const job of reportJobs) {
-    try {
-      /* ⛔ MARKET AUDITS NEVER GET A REPORT. THE MOST IMPORTANT GUARD IN THIS FILE.
-         A market audit has NO business attached — its business_name is a sentinel like
-         "[market] locksmiths · Hastings" and its lead_id is null. This auto-report path has no
-         lead-id gate (see its comment above), so without this check a market audit finishing
-         cleanly would PUBLISH A PUBLIC /r/ REPORT, titled with the sentinel, with no human
-         involved. Read from the column, never from the name: a string prefix is not a safety
-         guard. The two other completion side effects (audit_reply, D2 completion send) are
-         already safe because both require a lead_id. */
-      const { data: auditRow } = await service
-        .from("ai_audits").select("is_market, business_name, lead_id, audit_purpose").eq("id", job.auditId).maybeSingle();
-      /* ⛔ A WEEKLY VISIBILITY CHECK NEVER GETS A PUBLIC REPORT (release 4, 2026-09-30). It is Paul's
-         internal monitoring of a paying client — an "engaged" lead by the gate below — and a crawlable
-         listing built from a weekly directional check would be both public and misleading. Keyed on
-         the stored purpose, the one marker. Every other audit is unchanged. */
-      if ((auditRow as { audit_purpose?: string | null } | null)?.audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE) {
-        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: a weekly visibility check is internal.`);
-        continue;
-      }
-      if (auditRow?.is_market === true) {
-        console.log(`[process-ai-audit-queue] auto-report REFUSED for market audit ${job.auditId} ("${auditRow.business_name}"): market audits have no business and must never produce a public report.`);
-        continue;
-      }
-      /* THE ENGAGED-LEAD GATE. Read status + amount_paid off the lead; skip unless engaged or paid.
-         No lead (should not happen for a non-market audit) → skip: nothing to be engaged. */
-      const reportLeadId = (auditRow as { lead_id?: string | null } | null)?.lead_id ?? null;
-      let leadEngaged = false;
-      if (reportLeadId) {
-        const { data: lr } = await service
-          .from("outreach_leads").select("status, amount_paid").eq("id", reportLeadId).maybeSingle();
-        const lst = ((lr as { status?: string | null } | null)?.status ?? "").trim();
-        const lpaid = Number((lr as { amount_paid?: number | null } | null)?.amount_paid ?? 0) > 0;
-        leadEngaged = lpaid || AUTO_REPORT_ENGAGED_STATUSES.has(lst);
-      }
-      if (!leadEngaged) {
-        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: lead not engaged (cold prospect) — the manual button remains.`);
-        continue;
-      }
-      const { data: existing } = await service
-        .from("business_reports")
-        .select("id")
-        .eq("audit_id", job.auditId)
-        .eq("report_type", "profile")
-        .limit(1)
-        .maybeSingle();
-      if (existing) {
-        console.log(`[process-ai-audit-queue] auto-report skipped for audit ${job.auditId}: a profile report already exists.`);
-        continue;
-      }
-      /* No Authorization header — same fix as the extract-competitors invoke above: generate-report
-         was also missing from config.toml (verify_jwt defaulted TRUE), so the rotated non-JWT
-         service key stopped passing the platform check and auto-reports silently stopped after
-         2026-08-10. config.toml now lists it, and the cron-secret branch needs no bearer at all. */
-      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-report`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
-          "x-internal-job": "1",
-        },
-        body: JSON.stringify({ auditId: job.auditId }),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.error(`[process-ai-audit-queue] auto-report failed for audit ${job.auditId}: HTTP ${res.status} ${txt.slice(0, 300)}`);
-      } else {
-        console.log(`[process-ai-audit-queue] auto-report generated for audit ${job.auditId}.`);
-      }
-    } catch (e) {
-      console.error(`[process-ai-audit-queue] auto-report error for audit ${job.auditId}:`, e instanceof Error ? e.message : String(e));
-    }
-  }
+  /* ⛔ NO AUTO-REPORT. This used to call generate-report for every finalised engaged-lead audit and
+     publish a gpt-4o "business profile" at yoursites.uk/r/<slug>; the public yoursites.uk/r/ "listing" (generate-report) was retired 2026-10-01 — docs/r-profile-pages-audit.md.
+     Nothing a client or prospect receives depended on it: their report is rendered live by
+     render-audit-report from the audit itself. Do not reinstate. */
 
   // D2 — completion auto-send: queue the operator-selected template for each COMPLETE audit's lead
   // via whatsapp_auto_replies (processed ≥3 min later by process-whatsapp-queue mode 'auto_replies',

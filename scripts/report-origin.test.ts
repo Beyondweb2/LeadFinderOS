@@ -101,12 +101,9 @@ for (const dir of SCAN_DIRS) {
 /* ⚠️ KNOWN AND ACCEPTED, each with a reason — an unexplained entry here is a bug, not a fixture.
    Anything NOT on this list fails the test. */
 const ACCEPTED = new Set<string>([
-  /* The LLM business-PROFILE pages (business_reports, generate-report). A different document from
-     the audit report and still served from this repo's own Pages deploy; retiring or moving it is
-     an open decision, flagged to Paul 2026-09-09. Listed so it cannot be forgotten. */
-  'functions/r/[slug].ts → yoursites.uk',
-  'supabase/functions/generate-report/index.ts → yoursites.uk',
-  'src/pages/AiAudit.tsx → yoursites.uk',
+  /* (The LLM business-PROFILE pages — functions/r/[slug].ts, generate-report, AI Audit's listing
+     button — were listed here until 2026-10-01, when the feature was retired. None of them names
+     the host in code any more.) */
   /* Barber-era claim links in the message queues. Inert (no lead carries a share_token any more)
      and left in place rather than given surgery in the same pass as the product deletion. */
   'supabase/functions/process-whatsapp-queue/index.ts → yoursites.uk',

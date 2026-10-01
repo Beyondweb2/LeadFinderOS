@@ -31,7 +31,7 @@ console.log('── separate from the guarantee ──');
   ok(/!isRemeasure && !isWeeklyCheck && !freshAudit/.test(create), '…and never bolts it onto an old audit');
   ok(/isWeeklyCheck \? WEEKLY_CHECK_AUDIT_PURPOSE/.test(create), '…and stores it as its purpose');
   const queue = read('supabase/functions/process-ai-audit-queue/index.ts');
-  ok(/audit_purpose === WEEKLY_CHECK_AUDIT_PURPOSE\) \{\s*console\.log\(`\[process-ai-audit-queue\] auto-report skipped/.test(queue), 'the queue never publishes a public report for it');
+  ok(!/functions\/v1\/generate-report/.test(queue), 'the queue never publishes a public report for it (it publishes none at all since 2026-10-01)');
   const fn = read('supabase/functions/weekly-visibility/index.ts');
   ok(!/from\("outreach_leads"\)\.(update|upsert|insert)/.test(fn) && !/from\("ai_audits"\)\.(insert|update|upsert)/.test(fn) && !/remeasure_audit_id|remeasure_due_date/.test(fn),
     'the weekly function never writes a lead or an audit row directly, and never reads or writes the re-measure fields');

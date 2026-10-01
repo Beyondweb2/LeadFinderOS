@@ -1,7 +1,7 @@
 /* Refreshes that re-download less (2026-09-27, site-wide speed pass):
      1. the AI Audit landing poll re-reads only the in-flight audits, and the whole book at most once
         a minute and when the last run settles — never every 5 s;
-     2. a small hydrate (the poll, a name search's matches) reads only its own audits' runs/reports;
+     2. a small hydrate (the poll, a name search's matches) reads only its own audits' runs;
      3. the book's three reads run side by side;
      4. opening an already-finished audit does not reload the book;
      5. bulk "set product" / "set trade" count only writes that landed, and do not reload every lead;
@@ -28,9 +28,9 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
   ok(/\.from\('ai_audits'\)\.select\(cached\?\.archivedReady \? AUDIT_SELECT : AUDIT_SELECT_BASE\)\.in\('id', ids\)/.test(poll), "the in-flight refresh reads those audits by id, with the list's own select");
 
   const parts = src.slice(src.indexOf("const loadRunParts = useCallback"), src.indexOf("const assembleAudits"));
-  ok((parts.match(/if \(scope\) q = q\.in\('audit_id', scope\);/g) ?? []).length === 2, "a scoped hydrate filters BOTH runs and reports to its own audits");
+  ok((parts.match(/if \(scope\) q = q\.in\('audit_id', scope\);/g) ?? []).length === 1, "a scoped hydrate filters the runs to its own audits");
   ok(/const scope = auditRows\.length <= SCOPED_HYDRATE_MAX \? auditRows\.map\(\(a\) => a\.id\) : null;/.test(src), "small sets are scoped; the whole book is read straight through");
-  ok(/await Promise\.all\(\[[\s\S]{0,700}?fetchAllRowsParallel<[\s\S]{0,900}?fetchAllRows<\{ audit_id/.test(parts), "runs and reports are read side by side");
+  ok(!/business_reports/.test(parts), "no business_reports read: the listing pill it fed was retired 2026-10-01 (docs/r-profile-pages-audit.md)");
   ok(/seo_grade:results_seo_grade/.test(parts) && !/select\([^)]*results->seo/.test(src),"the SEO grade comes from the plain column, never by opening results (migration 20260927130000)");
   ok(/const \[fetched, parts\] = await Promise\.all\(\[readAudits\(\), loadRunParts\(null\)\]\);/.test(src), "the book's audits read no longer waits in front of runs/reports");
 
