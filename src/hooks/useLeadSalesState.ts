@@ -1,6 +1,6 @@
 import { useLeadCrmRow, useWrongNumber } from '@/components/LeadCrmPanel';
 import { useLeadActivity } from '@/hooks/useSalesCrm';
-import { lastContactOf, lastLoggedContactOf, salesStateOf, type LastContactView, type WhatsAppTouch } from '@/lib/leadState';
+import { lastContactOf, lastLoggedContactOf, openerReallySent, salesStateOf, type LastContactView, type WhatsAppTouch } from '@/lib/leadState';
 
 /* THE DATA BEHIND THE SALES STATE PILL AND THE LAST CONTACT LINE (lead state audit, 2026-09-30).
    The reading is src/lib/leadState.ts; these hooks only gather its facts from the queries every other
@@ -22,7 +22,8 @@ export function useLeadSalesState(leadId: string, whatsapp?: WhatsAppTouch | nul
     lastLogged: lastLogged ? { outcome: lastLogged.outcomeValue ?? '', at: lastLogged.at } : null,
     wrongNumber: wrong.data?.wrong ?? null,
   }) : null;
-  const wa: WhatsAppTouch | null = whatsapp ?? (row?.whatsapp_sent_at ? { direction: 'outbound', at: row.whatsapp_sent_at } : null);
+  /* The fallback "WhatsApp · Sent" line only when the opener really went (a failed send's stamp is not a contact). */
+  const wa: WhatsAppTouch | null = whatsapp ?? (row && openerReallySent(row) ? { direction: 'outbound', at: row.whatsapp_sent_at! } : null);
   const lastContact: LastContactView | null = lastContactOf(lastLogged, wa);
   return { view, lastLogged, lastContact, row };
 }

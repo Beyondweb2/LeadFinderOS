@@ -9,6 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
+import { useWhatsAppUnreadCounts } from '@/hooks/useWhatsAppUnread';
+import { GROUPED_NOTIFICATION_KINDS, REPLY_CARD_LINK, bellCount, replyCardBody, replyCardTitle, replySummary, type ReplySummary } from '@/lib/notificationGrouping';
 import { TONE, ago, type Tone } from '@/components/salesDash/ui';
 
 /* ══ THE NOTIFICATION CENTRE (Sales Experience release 3, 2026-09-28) ═════════════════════════════════
@@ -39,7 +41,9 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };
 
-function List({ n, onGo, onClose }: { n: ReturnType<typeof useNotifications>; onGo: (x: AppNotification) => void; onClose?: () => void }) {
+function List({ n, onGo, onClose, replies, onReplies, count }: { n: ReturnType<typeof useNotifications>; onGo: (x: AppNotification) => void; onClose?: () => void; replies: ReplySummary; onReplies: () => void; count: number }) {
+  /* Replies are ONE card (notificationGrouping.ts); their stored rows are never drawn one by one. */
+  const shown = n.rows.filter((r) => !GROUPED_NOTIFICATION_KINDS.has(r.kind));
   const [alerts, setAlerts] = useState(readAlerts);
   const canAlert = typeof window !== 'undefined' && 'Notification' in window;
   const toggleAlerts = async (on: boolean) => {
@@ -53,15 +57,27 @@ function List({ n, onGo, onClose }: { n: ReturnType<typeof useNotifications>; on
   return (
     <div className="flex max-h-[min(34rem,80vh)] flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2.5">
-        <p className="text-sm font-semibold">Notifications{n.unread ? <span className="ml-1.5 rounded-full bg-blue-500 px-1.5 text-[11px] font-bold text-white">{n.unread}</span> : null}</p>
+        <p className="text-sm font-semibold">Notifications{count ? <span className="ml-1.5 rounded-full bg-blue-500 px-1.5 text-[11px] font-bold text-white">{count}</span> : null}</p>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => void n.markRead(null)} disabled={!n.unread} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"><CheckCheck className="h-3.5 w-3.5" />Mark all read</button>
           {onClose && <button type="button" onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label="Close"><X className="h-4 w-4" /></button>}
         </div>
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {n.rows.length === 0 && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
-        {n.rows.map((x) => {
+        {replies.messages > 0 && (
+          <li>
+            <button type="button" onClick={onReplies} data-testid="grouped-replies" className="flex w-full items-start gap-2.5 rounded-lg bg-blue-500/[0.06] px-2.5 py-2 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              <span className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE.blue.icon)}><MessageCircleReply className="h-4 w-4" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-snug">{replyCardTitle(replies)}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{replyCardBody(replies)}</span>
+                <span className="mt-1 inline-block text-xs font-medium text-primary">Open Inbox</span>
+              </span>
+            </button>
+          </li>
+        )}
+        {shown.length === 0 && replies.messages === 0 && <li className="px-3 py-8 text-center text-xs text-muted-foreground">You're all caught up. New replies, payments and follow-ups will appear here.</li>}
+        {shown.map((x) => {
           const k = KIND[x.kind] ?? { icon: Bell, tone: 'grey' as Tone };
           return (
             <li key={x.id} className="group relative">
@@ -96,25 +112,34 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
     try { if (Notification.permission === 'granted') { const w = new Notification(x.title, { body: x.body ?? undefined, tag: x.id }); w.onclick = () => { window.focus(); if (x.link) navigate(x.link); }; } } catch { /* not supported */ }
   });
   const go = (x: AppNotification) => { if (!x.read_at) void n.markRead([x.id]); setOpen(false); if (x.link) navigate(x.link); };
+  /* The grouped reply card, from the Inbox's own unread state — it falls as conversations are opened. */
+  const wa = useWhatsAppUnreadCounts();
+  const replies = replySummary(wa.rows);
+  const count = bellCount(wa.rows.length, n.rows);
+  const openReplies = () => {
+    const ids = n.rows.filter((r) => GROUPED_NOTIFICATION_KINDS.has(r.kind) && !r.read_at).map((r) => r.id);
+    if (ids.length) void n.markRead(ids);
+    setOpen(false); navigate(REPLY_CARD_LINK);
+  };
   // The bell's tab title count: a glance from another tab.
   useEffect(() => {
     if (variant === 'mobile') return;
     const base = document.title.replace(/^\(\d+\) /, '');
-    document.title = n.unread ? `(${n.unread}) ${base}` : base;
-  }, [n.unread, variant]);
-  const Icon = n.unread ? BellRing : Bell;
-  const badge = n.unread > 0 && <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-blue-500 px-1 text-center text-[10px] font-bold leading-[18px] text-white tabular-nums">{n.unread > 99 ? '99+' : n.unread}</span>;
+    document.title = count ? `(${count}) ${base}` : base;
+  }, [count, variant]);
+  const Icon = count ? BellRing : Bell;
+  const badge = count > 0 && <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-blue-500 px-1 text-center text-[10px] font-bold leading-[18px] text-white tabular-nums">{count > 99 ? '99+' : count}</span>;
 
   if (variant === 'mobile') {
     return (
       <>
-        <button type="button" onClick={() => setOpen(true)} className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-muted" aria-label={`Notifications${n.unread ? `, ${n.unread} unread` : ''}`}>
+        <button type="button" onClick={() => setOpen(true)} className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-muted" aria-label={`Notifications${count ? `, ${count} unread` : ''}`}>
           <Icon className="h-5 w-5" />{badge}
         </button>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="top" className="p-0 [&>button]:hidden">
             <SheetHeader className="sr-only"><SheetTitle>Notifications</SheetTitle></SheetHeader>
-            <List n={n} onGo={go} onClose={() => setOpen(false)} />
+            <List n={n} onGo={go} onClose={() => setOpen(false)} replies={replies} onReplies={openReplies} count={count} />
           </SheetContent>
         </Sheet>
       </>
@@ -123,12 +148,12 @@ export function NotificationCenter({ variant }: { variant: 'desktop' | 'mobile' 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="fixed bottom-4 right-4 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-foreground shadow-lg transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:inline-flex" aria-label={`Notifications${n.unread ? `, ${n.unread} unread` : ''}`}>
-          <Icon className={cn('h-5 w-5', n.unread && 'text-blue-500')} />{badge}
+        <button type="button" className="fixed bottom-4 right-4 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-foreground shadow-lg transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:inline-flex" aria-label={`Notifications${count ? `, ${count} unread` : ''}`}>
+          <Icon className={cn('h-5 w-5', count > 0 && 'text-blue-500')} />{badge}
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" align="end" sideOffset={10} className="w-[380px] p-0">
-        <List n={n} onGo={go} />
+        <List n={n} onGo={go} replies={replies} onReplies={openReplies} count={count} />
       </PopoverContent>
     </Popover>
   );

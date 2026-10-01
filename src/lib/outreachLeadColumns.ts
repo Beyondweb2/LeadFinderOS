@@ -37,6 +37,10 @@ export const OUTREACH_LIST_COLUMNS = [
   // WhatsApp queue + send state
   'whatsapp_status', 'whatsapp_template', 'whatsapp_sent_at', 'whatsapp_delivery_status',
   'whatsapp_message_id', 'queued_at', 'contact_followup_queued_at',
+  // Meta confirmed a delivery once (2026-10-01): a failed later send is still a real contact
+  // (leadState.openerReallySent) and the number is WhatsApp verified (whatsAppCapability). Not in the
+  // sales view — a salesperson's rows fall back to the status / delivery status, never a guess.
+  'whatsapp_ever_delivered',
 ] as const;
 
 export type OutreachListColumn = (typeof OUTREACH_LIST_COLUMNS)[number];

@@ -793,6 +793,14 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   gold star, never a pill** (Paul). Never draw a `SalesStatePill` beside it; the stage is its tooltip only. The
   lead popup is the detail view (both). Paul rejected a stage-substituting pill the same day — do not bring it back.
 
+**Outreach truth** (`docs/outreach-workspace.md`)
+- ⛔ **A send stamp is not a contact when the send failed**: `whatsapp_sent_at` is set when Meta ACCEPTS; read
+  contact through `leadState.openerReallySent`, never the raw stamp. WhatsApp reachability only through
+  `whatsAppCapability.ts` — `line_type` is an offline format guess, never "WhatsApp-capable".
+- The Status cell shows status only; last contact is its tooltip; what happens next is the Next Action column.
+- Reply notifications are ONE bell card from `my_whatsapp_unread_counts` (the Inbox's unread truth); never count
+  `whatsapp_reply` rows.
+
 **Sales Team Board** (`docs/sales-team-board.md`)
 - Admin → team messages/tasks live in `team_posts` / `team_post_recipients` / `team_post_events`; **no
   write grants** — every write is a role-checked function. Recipients are a frozen snapshot; "Everyone"

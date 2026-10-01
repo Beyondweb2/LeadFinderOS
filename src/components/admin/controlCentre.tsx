@@ -50,7 +50,7 @@ const GROUP_META: Record<AttentionGroup, { label: string; tone: Tone }> = {
   urgent: { label: 'Urgent', tone: 'red' }, today: { label: 'Today', tone: 'amber' }, review: { label: 'Review', tone: 'purple' }, blocked: { label: 'Blocked', tone: 'grey' },
 };
 
-export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSuppress, sorter, waitingInInbox = 0, onAssign, delegated }: {
+export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSuppress, sorter, waitingInInbox = 0, onAssign, delegated, onFixTrades }: {
   items: AttentionItem[]; onOpen: (i: AttentionItem) => void;
   triage: TriageSummary | null; period: string; onResolve: (triageId: string) => Promise<void>;
   /** Paul confirms an opt-out the rules could not be sure of. */
@@ -64,6 +64,8 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
   onAssign?: (i: AttentionItem) => void;
   /** Follow-ups taken off this list because a salesperson holds them as a board task. */
   delegated?: DelegatedSummary | null;
+  /** "Fix automatically" on the no-trade line: fill trades from data we already hold (free). */
+  onFixTrades?: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const groups = (Object.keys(GROUP_META) as AttentionGroup[]).map((g) => ({ g, rows: items.filter((i) => i.group === g) })).filter((x) => x.rows.length);
@@ -118,6 +120,12 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
                         className="flex shrink-0 items-center gap-1 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50">
                         Stripe<ExternalLink className="h-3 w-3" />
                       </a>
+                    )}
+                    {onFixTrades && i.kind === 'no_trade' && (
+                      <button type="button" title="Fill in the trades from data we already hold — free, nothing is sent" onClick={onFixTrades}
+                        className="shrink-0 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50" data-testid="fix-trades">
+                        Fix automatically
+                      </button>
                     )}
                     {onAssign && attentionAssignable(i) && (
                       <button type="button" title="Give this lead to a salesperson with your instructions (it lands on their Team board)"

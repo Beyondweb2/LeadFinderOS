@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  hookReportState, hookRunInFlight, hookStateNeedsPolling, hookStateOf, pickHookAudit, scoreHookAuditForCard,
-  type HookCardAudit, type HookCardScore, type HookReportState,
+  hookReportState, hookRunInFlight, hookStateNeedsPolling, hookStateOf, isOutreachAudit, pickHookAudit, reportLinkFor, scoreHookAuditForCard,
+  type HookCardAudit, type HookCardScore, type HookReportLink, type HookReportState,
 } from '@/lib/hookVisibility';
 import type { HookScoreRow } from '@/lib/hookScore';
 
@@ -31,7 +31,11 @@ export interface HookVisibilityData {
   state: unknown;
   card: HookCardScore | null;
   report: HookReportState;
+  /** Every outreach (sales) audit this lead has had, newest first — the workspace's "Previous checks"
+   *  list (2026-10-01). Only audits with a finished run carry a report link; nothing else is listed. */
+  history: HookHistoryItem[];
 }
+export interface HookHistoryItem { auditId: string; createdAt: string | null; label: string | null; finished: boolean; link: HookReportLink | null }
 
 type LoadedAudit = HookCardAudit & { lead_id: string | null; short_code: string | null };
 
@@ -49,9 +53,13 @@ async function load(leadId: string): Promise<HookVisibilityData> {
       return { id: p.id, status: p.status, run_number: p.run_number, created_at: p.created_at ?? null, results: { hook: p.hook ?? null, competitor_cleaning: p.competitor_cleaning ?? null } };
     }),
   }));
+  const history: HookHistoryItem[] = list.filter(isOutreachAudit).map((a) => {
+    const finished = (a.ai_audit_runs ?? []).some((r) => r.status === 'complete');
+    return { auditId: a.id, createdAt: a.created_at, label: [a.business_type, a.location_text].filter(Boolean).join(' · ') || null, finished, link: finished ? reportLinkFor(a) : null };
+  });
   const picked = pickHookAudit(list);
   if (!picked) {
-    return { audit: null, runId: null, runStatus: null, inFlight: false, state: null, card: null, report: hookReportState({ leadId, audits: list, picked: null, score: null }) };
+    return { audit: null, runId: null, runStatus: null, inFlight: false, state: null, card: null, report: hookReportState({ leadId, audits: list, picked: null, score: null }), history };
   }
   const { data: rows, error: rowsError } = await sb.from('ai_audit_queue')
     .select('id, question, status, result, engines').eq('run_id', picked.runId).order('created_at', { ascending: true });
@@ -66,6 +74,7 @@ async function load(leadId: string): Promise<HookVisibilityData> {
     state,
     card,
     report: hookReportState({ leadId, audits: list, picked, score: card.score }),
+    history,
   };
 }
 

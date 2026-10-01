@@ -38,7 +38,7 @@ export interface HookCardAudit extends AuditKindRow {
 /** The kinds the card reads: an ordinary per-business audit (every hook is one) and the legacy
  *  pre-purpose single-run audit. A paid baseline, a measurement, a free check and a Discovery scan
  *  are different instruments and never shown as the outreach score. */
-function isOutreachAudit(a: HookCardAudit): boolean {
+export function isOutreachAudit(a: HookCardAudit): boolean {
   if (a.is_market === true) return false;
   const k = auditKind(a);
   return k === 'ordinary' || k === 'single_run';

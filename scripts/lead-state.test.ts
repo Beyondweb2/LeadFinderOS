@@ -226,7 +226,9 @@ console.log("\n── 9. one reading on every screen ──");
   ok(inbox.includes('<PipelineStatusSelect value={active.leadStatus} stage={activeSales.view}') && !inbox.includes('<SalesStatePill'), "the Inbox thread header shows the state as its ONE status pill");
   ok(/statusFilter === 'interested'\s*\n?\s*\? byCampaign\.filter\(\(c\) => c\.isPotentialWork \|\| INTERESTED_STATUSES\.has/.test(inbox), "⛔ the Inbox Interested filter reads the star (it matched a status nothing writes)");
   const table = read("src/components/OutreachTable.tsx");
-  ok(/useLastLoggedContacts\(pageLeadIds\)/.test(table) && /data-testid="row-last-contact"/.test(table) && /data-testid="row-meeting"/.test(table), "Outreach rows: one small line — a current meeting, else the last logged contact (this page's rows only)");
+  /* 2026-10-01 (Paul: "Status means status. Next Action means what should happen next"): the meeting and the
+     call-back prompt moved to the Next Action column (nextUpHint); the last contact is the status tooltip. */
+  ok(/useLastLoggedContacts\(pageLeadIds\)/.test(table) && /data-testid="row-next-up"/.test(table) && !/data-testid="row-meeting"/.test(table), "Outreach rows: what is coming sits in Next Action; the last contact is the status tooltip (this page's rows only)");
   const hooks = read("src/hooks/useLastLoggedContacts.ts");
   ok(/\.order\('id'\)\.range\(from, from \+ 999\)/.test(hooks), "the batch read pages (PostgREST stops at 1,000 silently)");
   const badge = read("src/components/PipelineStatusBadge.tsx");
@@ -294,7 +296,7 @@ console.log("\n── 12. Paul's decisions, 2026-09-30 (follow-up) ──");
   ok(!card.includes('<SalesStatePill') && card.split('<OneStatusPill').length - 1 === 2, "Outreach phone card: ONE pill (editable or read-only)");
   ok(table.includes('fill-yellow-500 flex-shrink-0"><title>Interested</title>'), "Interested is the gold star on the row, not a pill");
   ok(sel.includes('Pipeline status · now'), "the pill's menu says it sets the pipeline status");
-  ok(/useWrongNumbers\(pageLeadIds\)/.test(table) && /data-testid="row-last-contact"/.test(table), "…with the Wrong number mark for the page, and the Last contact line kept underneath");
+  ok(table.includes('useWrongNumbers(pageLeadIds)') &&table.includes('Last contact: ${lc.method}') && !table.includes('data-testid="row-last-contact"'), '…with the Wrong number mark for the page; the last contact is the status tooltip, not a line under the pill (2026-10-01)');
   const wn = read("supabase/migrations/20260930170100_leads_wrong_numbers.sql");
   ok(/public\.can_work_lead\(l\.id\)/.test(wn) && /revoke all on function public\.leads_wrong_numbers\(uuid\[\]\) from public, anon/.test(wn), "the batch Wrong number read is role-checked and not for anon");
   // 3. Voice note stays off the Next Action list.

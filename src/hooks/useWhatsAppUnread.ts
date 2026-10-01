@@ -72,3 +72,25 @@ export function useMarkWhatsAppRead() {
     void qc.invalidateQueries({ queryKey: UNREAD_KEY(user.id) });
   }, [qc, user?.id]);
 }
+
+/** The same unread conversations with how many unread replies each holds — the bell's grouped card
+ *  (2026-10-01, SQL my_whatsapp_unread_counts, built on my_whatsapp_unread). Key under the unread key, so
+ *  every invalidation of the unread state (opening a thread, a reply arriving) refreshes it too. */
+export function useWhatsAppUnreadCounts() {
+  const { user } = useAuth();
+  const { role } = useSubscription();
+  const q = useQuery({
+    queryKey: [...UNREAD_KEY(user?.id), 'counts'] as const,
+    enabled: !!user?.id && !!role,
+    staleTime: 30_000,
+    refetchInterval: POLL_MS,
+    refetchOnWindowFocus: true,
+    retry: 1,
+    queryFn: async (): Promise<(UnreadRow & { unread_messages: number })[]> => {
+      const { data, error } = await sb.rpc('my_whatsapp_unread_counts');
+      if (error) throw error;
+      return (data ?? []) as (UnreadRow & { unread_messages: number })[];
+    },
+  });
+  return { rows: q.data ?? [], loaded: q.isSuccess };
+}

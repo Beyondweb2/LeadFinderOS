@@ -1892,9 +1892,16 @@ Deno.serve(async (req) => {
       alreadySent = !!priorMsg;
     }
     if (!alreadySent) {
+      /* ⛔ A FAILED send is not a prior send (2026-10-01). This read matched ANY non-test row, so a lead whose
+         only opener had FAILED (Meta 131026, not on WhatsApp) tripped the guard on re-queue and was restored
+         to initial_contact — "Contacted" with no message ever delivered (2 leads, 2026-10-01). The comment
+         above already said failed-only history must not block; now the read agrees. A NULL delivery_status
+         still blocks (on a sending path, absent means do not). */
       const { data: priorSend } = await service
         .from("whatsapp_sends").select("id")
-        .eq("lead_id", lead.id).eq("test_mode", false).limit(1).maybeSingle();
+        .eq("lead_id", lead.id).eq("test_mode", false)
+        .or("delivery_status.is.null,delivery_status.not.in.(failed,failed_temporary,simulated)")
+        .limit(1).maybeSingle();
       alreadySent = !!priorSend;
     }
     if (alreadySent) {

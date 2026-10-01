@@ -118,7 +118,9 @@ import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
-import { LeadDetailDialog } from './LeadDetailDialog';
+import { LeadDetailDialog, type WorkspaceTab } from './LeadDetailDialog';
+import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
+import { nextUpHint } from '@/lib/nextActionView';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
 import { isLiveLeadWithoutTrade, OUTREACH_PRESETS, type OutreachPreset } from '@/lib/leadTrade';
@@ -439,6 +441,8 @@ export function OutreachTable({
   const [sigInstagram, setSigInstagram] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
+  /** Which workspace tab the popup opens on (the call icon opens Work, where the call is logged). */
+  const [detailTab, setDetailTab] = useState<WorkspaceTab | undefined>(undefined);
   /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
      2026-08-18). `detailLead` was set once on row click and never tracked `leads`, so an edit made
      inside the dialog — a delivery-checklist tick especially — neither showed nor ACCUMULATED:
@@ -737,10 +741,13 @@ export function OutreachTable({
     // Call has no dialog panel, so mark panel as closed immediately
     window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
     highlightLead(lead.id);
-    /* The attempt log writes the lead row directly — the admin's bookkeeping. A salesperson records
-       the call itself in the lead's CRM panel (Record a call). */
-    if (perms.editLeadRecord) executeContact(lead, 'call');
-  }, [executeContact, onContactMethodChange, perms.editLeadRecord]);
+    /* ⛔ A TAP ON CALL IS NOT A CALL (Paul, 2026-10-01: "clicking the normal phone number does NOT falsely log a
+       call"). It used to run executeContact → an attempt with no outcome AND status initial_contact, so a
+       number nobody spoke to read "Contacted". Now the dialler opens (the tel: link) and the lead's workspace
+       opens on Work, where the person logs what actually happened (lead_log_contact) and sets the Next Action. */
+    setDetailTab('work');
+    setDetailLead(lead);
+  }, [onContactMethodChange]);
 
   // Launch-pad: when the parent passes a launchIntent (e.g. from Manage), open the
   // matching lead's composer FRESH with the chosen template + that barber's link.
@@ -1757,7 +1764,8 @@ export function OutreachTable({
     if (hasEmail) result = result.filter((lead) => !!lead.email);
     if (hasInstagram) result = result.filter((lead) => !!lead.instagram_url);
     if (hasFacebook) result = result.filter((lead) => !!lead.facebook_url);
-    if (hasWhatsApp) result = result.filter((lead) => lead.line_type === 'mobile');
+    // Worth trying on WhatsApp (whatsAppCapability.ts): verified, or a mobile not yet tried — never a number Meta rejected.
+    if (hasWhatsApp) result = result.filter((lead) => isWhatsAppWorthTrying(whatsAppCapabilityOf(lead)));
 
     // Hide leads confirmed not on WhatsApp (permanent 131026 → status='no_whatsapp').
     if (hideNoWhatsApp) result = result.filter((lead) => lead.status !== 'no_whatsapp');
@@ -2844,9 +2852,10 @@ export function OutreachTable({
                               "I've responded, waiting on them" (awaitingReplyTooltip). */}
                           <TableCell
                             onClick={(e) => e.stopPropagation()}
-                            title={lead.status === 'awaiting_reply'
-                              ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at)
-                              : undefined}
+                            title={[
+                              lead.status === 'awaiting_reply' ? awaitingReplyTooltip(lead.whatsapp_template, lead.whatsapp_sent_at) : null,
+                              (() => { const lc = lastLogged.data?.get(lead.id); return lc ? `Last contact: ${lc.method} · ${lc.outcome} · ${contactAgo(lc.at)}` : null; })(),
+                            ].filter(Boolean).join('\n') || undefined}
                           >
                             {onPipelineStatusChange ? (
                               <PipelineStatusSelect
@@ -2865,15 +2874,10 @@ export function OutreachTable({
                             ) : (
                               <OneStatusPill status={lead.status} stage={rowSalesState(lead)} />
                             )}
-                            {/* ONE SMALL LINE, ONLY WHEN THERE IS SOMETHING TO SAY: a current meeting (the
-                                sales state's Meeting booked — leadState.meetingIsCurrent), else the last
-                                logged contact. The same words as the popup and Focus Mode. */}
-                            {meetingIsCurrent(lead.call_booked_at, Date.now()) ? (
-                              <div className="mt-1 whitespace-nowrap text-[10px] font-semibold text-blue-600 dark:text-blue-400" data-testid="row-meeting">Meeting · {meetingWhen(lead.call_booked_at!)}</div>
-                            ) : (() => {
-                              const lc = lastLogged.data?.get(lead.id);
-                              return lc ? <div className="mt-1 max-w-[170px] truncate text-[10px] text-muted-foreground" data-testid="row-last-contact" title={lc.note ?? undefined}>{lc.method} · <span className={lc.tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : lc.tone === 'bad' ? 'text-red-600 dark:text-red-400' : ''}>{lc.outcome}</span> · {contactAgo(lc.at)}</div> : null;
-                            })()}
+                            {/* ⛔ STATUS MEANS STATUS (Paul, 2026-10-01). The last-contact line ("Call · Call back · 3 days
+                                ago") read as a next action under the pill while the Next Action column said "+ Set". It is
+                                history: it now lives in this cell's tooltip (and the popup / Focus). What happens NEXT is in
+                                the Next Action column. */}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <NextActionEditor
@@ -2882,6 +2886,12 @@ export function OutreachTable({
                               onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
                               leadId={lead.id}
                             />
+                            {/* What happens next, when no Next Action is stored: a booked meeting, or a call-back
+                                someone logged without picking a day (nextUpHint — never writes anything). */}
+                            {(() => {
+                              const h = nextUpHint(lead, lastLogged.data?.get(lead.id) ?? null, Date.now());
+                              return h ? <div className={cn('mt-1 whitespace-nowrap text-[10px] font-semibold', h.tone === 'meeting' ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400')} data-testid="row-next-up" title={h.title}>{h.text}</div> : null;
+                            })()}
                           </TableCell>
                         </>
                       )}
@@ -3353,8 +3363,9 @@ export function OutreachTable({
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog
         open={!!detailLead}
-        onOpenChange={(open) => { if (!open) { setDetailLead(null); onDetailClosed?.(); } }}
+        onOpenChange={(open) => { if (!open) { setDetailLead(null); setDetailTab(undefined); onDetailClosed?.(); } }}
         lead={detailLead}
+        initialTab={detailTab}
         onStatusChange={onStatusChange}
         onNextActionChange={onNextActionChange}
         onUpdateLead={onUpdateLead ?? (() => Promise.resolve(null))}

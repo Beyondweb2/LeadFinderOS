@@ -677,6 +677,10 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
   const hook = hookQ.data;
   const [hookBusy, setHookBusy] = useState(false);
   const [proposed, setProposed] = useState<string[] | null>(null);
+  /* Trade + town typed here when the lead has none (2026-10-01): the same values the Inbox's audit prompt
+     saves (lead_set_details for sales, the row for the admin), so "add them first" has somewhere to go. */
+  const [details, setDetails] = useState<{ type: string; loc: string } | null>(null);
+  const [override, setOverride] = useState<{ type: string; loc: string } | null>(null);
   const autoProposed = useRef(false);
   const lead = crm.data;
   const needsProposal = autoPropose && !!lead && !hookQ.isLoading && !hookQ.isError && !hook?.audit && !proposed;
@@ -688,9 +692,16 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
   }, [needsProposal]);
   if (!lead) return null;
 
-  const propose = async () => {
-    const { bizType, loc, body } = hookInputs(lead, hook);
-    if (!bizType || !loc) { toast({ title: 'Need a trade and a town', description: 'Add the trade and town on the Prospect tab first.', variant: 'destructive' }); return; }
+  /* The audit's inputs, with any trade/town typed here taking the place of the blank ones. */
+  const inputs = (ov: { type: string; loc: string } | null = override) => {
+    const base = hookInputs(lead, hook);
+    if (!ov) return base;
+    return { ...base, bizType: base.bizType || ov.type, loc: base.loc || ov.loc,
+      body: { ...base.body, business_type: base.bizType || ov.type, location_text: base.loc || ov.loc } };
+  };
+  const propose = async (ov: { type: string; loc: string } | null = override) => {
+    const { bizType, loc, body } = inputs(ov);
+    if (!bizType || !loc) { setDetails({ type: bizType, loc }); return; }
     setHookBusy(true);
     try {
       const data = await invokeEdge<{ ok: boolean; questions?: string[]; error?: string }>('create-ai-audit', { ...body, preview: true });
@@ -703,9 +714,25 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
   };
 
   const reviewed = proposed ? reviewedHookQuestions(proposed) : null;
+  const saveDetailsThenPropose = async () => {
+    const type = (details?.type ?? '').trim(); const loc = (details?.loc ?? '').trim();
+    if (!type || !loc) { toast({ title: 'Both are needed', description: 'Enter the trade and the town.', variant: 'destructive' }); return; }
+    setHookBusy(true);
+    try {
+      // Both roles through lead_set_details (ownership-checked, History logged) — never a direct row write here.
+      const write = await leadRpc('lead_set_details', { _lead_id: lead.id, _contact_name: null, _search_keyword: type, _search_location: loc });
+      if (!write.ok) { toast({ title: "Couldn't save the trade and town", description: refusalText(write.error), variant: 'destructive' }); return; }
+      setOverride({ type, loc }); setDetails(null);
+      void qc.invalidateQueries({ queryKey: leadCrmKey(lead.id) });
+      notifyLeadChanged(lead.id);
+    } finally { setHookBusy(false); }
+    // Propose with the typed values themselves (the row re-read and the state update can lag a moment).
+    void propose({ type, loc });
+  };
+
   const run = async () => {
     if (!reviewed?.ok) return;
-    const { body } = hookInputs(lead, hook);
+    const { body } = inputs();
     setHookBusy(true);
     try {
       const data = await invokeEdge<{ ok: boolean; error?: string; message?: string; already_running?: boolean }>('create-ai-audit', { ...body, questions: reviewed.questions });
@@ -761,7 +788,45 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
           </div>
         </section>
       )}
-      {!proposed && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
+      {details && !proposed && (
+        <section className={cn(CARD, 'space-y-2')} data-testid="hook-need-details">
+          <div className={LABEL}>The check needs this lead&rsquo;s trade and town</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Input value={details.type} onChange={(e) => setDetails({ ...details, type: e.target.value })} placeholder="Trade, e.g. roofer" className="h-9 text-sm" aria-label="Trade" />
+            <Input value={details.loc} onChange={(e) => setDetails({ ...details, loc: e.target.value })} placeholder="Town, e.g. Leeds" className="h-9 text-sm" aria-label="Town" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Saved on the lead, then the three questions are proposed for you to check. Nothing is sent to the lead.</p>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={hookBusy} onClick={() => setDetails(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void saveDetailsThenPropose()} data-testid="hook-save-details">
+              {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Save and propose questions
+            </Button>
+          </div>
+        </section>
+      )}
+      {/* RE-RUN (2026-10-01): a finished check can be run again — a NEW audit (the old one stays below and in
+          History). The same propose → review → run path; the server refuses a second one while one is running. */}
+      {!proposed && !details && !hookQ.isLoading && !hookQ.isError && hook?.audit && !hook.inFlight && (
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void propose()} data-testid="hook-rerun">
+            {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Run a new check
+          </Button>
+        </div>
+      )}
+      {(hook?.history?.length ?? 0) > 1 && (
+        <section className={cn(CARD, 'space-y-1')} data-testid="hook-history">
+          <div className={LABEL}>Previous checks</div>
+          <ul className="space-y-0.5 text-xs">
+            {hook!.history.map((h) => (
+              <li key={h.auditId} className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-muted-foreground">{h.createdAt ? new Date(h.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : 'Undated'}{h.label ? ` · ${h.label}` : ''}</span>
+                {h.link ? <a href={h.link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Open report</a> : <span className="text-muted-foreground/70">{h.finished ? '' : 'not finished'}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {!proposed && !details && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
         <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')}>
           <div className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">AI visibility check</span> — not run for this lead yet. It asks ChatGPT and Google AI the questions a customer would, and shows who they name instead.

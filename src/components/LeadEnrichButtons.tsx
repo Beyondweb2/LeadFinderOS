@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { socialKindOf } from '@/lib/socialUrl';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { OutreachLead } from '@/types/outreach';
+import { WHATSAPP_CAPABILITY_DETAIL, WHATSAPP_CAPABILITY_LABEL, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
 
 /** Ensure an absolute https:// href so a scheme-less stored value (e.g.
  *  "instagram.com/x" or protocol-relative "//instagram.com/x") opens the profile in a
@@ -63,7 +64,8 @@ export function LeadEnrichButtons({
   socials = true,
 }: LeadEnrichButtonsProps) {
   const { enrich: enrichAll, enriching, limitReached } = useEnrichBusiness(lead, onUpdate);
-  const lt = lead.line_type; // HLR line-type: WhatsApp-capability proxy
+  /* WhatsApp reachability from the ONE truth model (whatsAppCapability.ts) — never line_type alone. */
+  const wa = whatsAppCapabilityOf(lead);
 
   // The "website" field is often actually a social link (a Maps listing whose only
   // "website" is the business's Facebook/Instagram). Show it with the matching social
@@ -90,11 +92,12 @@ export function LeadEnrichButtons({
     websiteItem,
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
-  // WhatsApp-capability chip (HLR line-type): mobile → likely WhatsApp.
-  const whatsappChip = lt === 'mobile'
-    ? <span key="wa" title="Mobile — WhatsApp-capable (line-type check)" className="p-1.5 text-green-500"><Smartphone className="h-3.5 w-3.5" /></span>
-    : (lt === 'landline' || lt === 'voip')
-      ? <span key="wa" title={`${lt} — not WhatsApp-capable`} className="p-1.5 text-muted-foreground/50"><PhoneOff className="h-3.5 w-3.5" /></span>
+  /* ⛔ The phone chip says only what we KNOW (2026-10-01): a mobile is "Mobile number" until a message is
+     delivered; a Meta rejection is "No WhatsApp" — never "WhatsApp-capable" beside a No WhatsApp status. */
+  const whatsappChip = wa === 'verified' || wa === 'mobile_unchecked'
+    ? <span key="wa" title={WHATSAPP_CAPABILITY_DETAIL[wa]} aria-label={WHATSAPP_CAPABILITY_LABEL[wa]} className={`p-1.5 ${wa === 'verified' ? 'text-green-500' : 'text-muted-foreground'}`}><Smartphone className="h-3.5 w-3.5" /></span>
+    : wa === 'not_on_whatsapp' || wa === 'not_mobile'
+      ? <span key="wa" title={WHATSAPP_CAPABILITY_DETAIL[wa]} aria-label={WHATSAPP_CAPABILITY_LABEL[wa]} className="p-1.5 text-muted-foreground/50"><PhoneOff className="h-3.5 w-3.5" /></span>
       : null;
 
   const contactLinks = contacts.map(({ key, Icon, href, color, title, external }) => (
