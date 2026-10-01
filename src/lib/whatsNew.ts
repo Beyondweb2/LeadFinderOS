@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-meeting-time-once', date: '2026-10-01', title: 'The meeting time shows once', audience: 'all',
+    body: 'When a meeting is the Next Action, its day and time are in the Next Action bar only.',
+    report: {
+      added: [],
+      changed: ['The folded "Call booked · website" line says "Booked" instead of repeating the time when that meeting is the Next Action. A booked meeting that is not the Next Action still shows its time there.'],
+      removed: ['The repeated meeting time.'],
+      effect: 'One place to read when the meeting is; the website and domain details are still on the line.',
+    } },
   { id: '2026-10-01-work-tab-folds', date: '2026-10-01', title: 'A shorter Work tab', audience: 'all',
     body: 'Campaign, Call booked, the sign-up link and WhatsApp outreach fold to one line each that says where things stand. Tap a line to open it.',
     report: {
