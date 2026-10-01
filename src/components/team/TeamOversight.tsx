@@ -15,6 +15,7 @@ import {
   type TaskStatus, type TeamPostKind,
 } from '@/lib/teamBoard';
 import { cn } from '@/lib/utils';
+import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import type { ComposerSeed } from './TeamComposer';
 
 /* ══ THE ADMIN'S VIEW OF WHAT WAS SENT (2026-10-01, docs/sales-team-board.md) ════════════════════════
@@ -136,7 +137,7 @@ export function TeamOversight({ enabled, onCompose }: { enabled: boolean; onComp
                     </ul>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                    {p.lead && <Link to={`/inbox?lead=${p.lead.id}`} className="text-primary hover:underline">Open the lead</Link>}
+                    {p.lead && <Link to={whatsAppLinkForLead(p.lead.id)} className="text-primary hover:underline">Open the lead</Link>}
                     {p.status === 'draft' && <button type="button" className="text-primary hover:underline" onClick={() => onCompose({ draft: p })}>Edit and send</button>}
                     {p.status === 'draft' && <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => void discard(p)}>Discard</button>}
                     {p.status === 'published' && p.kind !== 'lead_assignment' && <button type="button" className="text-primary hover:underline" onClick={() => setEditing(p)}>Edit (labelled)</button>}

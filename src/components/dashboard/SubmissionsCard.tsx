@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ClipboardList, Loader2, MailWarning, MessageCircle, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { outreachLeadLink } from '@/lib/salesLinks';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { firstNameFrom, questionnaireFollowupBody } from '@/lib/questionnaireFollowup';
@@ -216,7 +217,7 @@ export function SubmissionsCard() {
                     />
                     <button
                       className={`font-medium ${r.lead_id ? 'hover:underline' : ''}`}
-                      onClick={r.lead_id ? () => navigate(`/outreach?leadId=${r.lead_id}`) : undefined}
+                      onClick={r.lead_id ? () => navigate(outreachLeadLink(r.lead_id!)) : undefined}
                       disabled={!r.lead_id}
                     >
                       {name}
