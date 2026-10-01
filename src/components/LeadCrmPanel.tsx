@@ -33,7 +33,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
 import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
-import { applyOutcome, recordStateChange } from '@/lib/leadOutcome';
+import { applyOutcome } from '@/lib/leadOutcome';
+import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
+import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
 import { SalesStatePill } from '@/components/SalesStatePill';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -120,17 +122,8 @@ function toLocalInput(iso: string) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-/** A London calendar day, n days from today, as YYYY-MM-DD. */
-export function londonDayPlus(n: number, now = new Date()): string {
-  const d = new Date(now.getTime() + n * 86_400_000);
-  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-}
-export const QUICK_DATES = [
-  { label: 'Today', days: 0 },
-  { label: 'Tomorrow', days: 1 },
-  { label: 'In 3 days', days: 3 },
-  { label: 'Next week', days: 7 },
-] as const;
+/* The day helpers moved with the form (src/components/NextActionForm.tsx); re-exported for old imports. */
+export { londonDayPlus, QUICK_DATES } from '@/components/NextActionForm';
 
 /** The lead's CRM columns, from the caller's own source. */
 export function useLeadCrmRow(leadId: string) {
@@ -247,7 +240,7 @@ export interface OutcomeResultLine { contact: string | null; state: SalesStateVi
 type FollowOn = (outcome: string, channel: string, logged: boolean) => Promise<OutcomeResultLine>;
 /** A Next Action the panel pre-fills after an outcome (never saved by itself). requireDate: Call back —
  *  Save stays off until a day is picked. `why` names the outcome that suggested it. */
-type FollowUpPreset = { nextAction: string; date?: string; note?: string; requireDate?: boolean; why?: string };
+type FollowUpPreset = NextActionPreset;
 
 export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
   const crm = useLeadCrmRow(leadId);
@@ -259,6 +252,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
   const qc = useQueryClient();
   const [preset, setPreset] = useState<FollowUpPreset | null>(null);
   const [askWhen, setAskWhen] = useState(false);
+  const { toast } = useToast();
   const nextRef = useRef<HTMLElement>(null);
   if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
   if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
@@ -292,21 +286,25 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
     return { contact: null, state: res.after, change: stateChangeText(before, res.after), said: res.said, failed: res.failed, suggestion };
   };
 
-  /* The meeting: ONE Save writes the time (call_booked_at) and the Next Action "Meeting" on that day
-     — a person pressed Save with both shown, so the Next Action is still human-set. */
-  const saveMeeting = async (localValue: string) => {
+  /* ⛔ ONE NEXT-ACTION WRITE (src/lib/nextActionWrite.ts, 2026-10-02): this panel, the Outreach row and the phone
+     card save through the same functions. The meeting: ONE Save writes the time (call_booked_at) and the Next
+     Action "Meeting" on that day — a person pressed Save with both shown, so it is still human-set. */
+  const afterWrite = (r: WriteResult, okText: string, before?: CrmRow | null) => {
+    if (r.ok) { if (r.patch) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, ...r.patch } as CrmRow : row)); toast({ title: okText }); }
+    else { if (before !== undefined) qc.setQueryData(leadCrmKey(leadId), before); toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' }); }
+    return r;
+  };
+  /* The open panel shows the chosen values the moment Save is pressed; a refusal puts the old ones back. */
+  const showAtOnce = (patch: Record<string, unknown>) => {
+    const before = qc.getQueryData<CrmRow | null>(leadCrmKey(leadId));
+    qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, ...patch } as CrmRow : row));
+    return before ?? null;
+  };
+  const saveMeeting = async (localValue: string, note: string | null = null) => {
     const iso = localValue ? new Date(localValue).toISOString() : null;
     if (!iso) return;
-    const before = salesStateOf(stateLead());
-    const r = await save('lead_set_call_booked', { _at: iso }, 'Meeting booked', { call_booked_at: iso });
-    if (!r.ok) return;
-    const day = new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-    const time = new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
-    await save('lead_set_follow_up', { _next_action: 'meeting', _date: day, _note: `Meeting at ${time}` }, 'Meeting booked · Next Action set',
-      { next_action: 'meeting', next_action_date: day, next_action_note: `Meeting at ${time}` });
-    await recordStateChange(leadId, before, salesStateOf({ ...stateLead(), call_booked_at: iso }), 'meeting_booked');
-    notifyLeadChanged(leadId);
-    setAskWhen(false);
+    const r = afterWrite(await bookMeeting(leadId, iso, note, stateLead()), 'Meeting booked · Next Action set');
+    if (r.ok) setAskWhen(false);
   };
 
   const agency = lead.website_control === 'agency_controls';
@@ -341,9 +339,11 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       <section className={cn(CARD, preset && 'border-amber-500/50')} ref={nextRef}>
         <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-        <FollowUp key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
-          onSave={async (a) => { const r = await save('lead_set_follow_up', { _next_action: a.nextAction, _date: a.date, _note: a.note }, a.nextAction === 'none' ? 'Next action cleared' : 'Next action saved',
-            { next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note }); if (r.ok) setPreset(null); return r; }} />
+        <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${lead.call_booked_at}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
+          onSave={async (a) => {
+            const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note });
+            const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.meetingAt ? 'Meeting booked · Next Action set' : 'Next action saved', before);
+            if (r.ok) setPreset(null); return r; }} />
       </section>
 
       <LeadCampaign lead={lead} save={save} />
@@ -581,62 +581,6 @@ function InternalNote({ save }: { save: SaveFn }) {
         }}>Add note</Button>
       </div>
     </section>
-  );
-}
-
-function FollowUp({ lead, onSave, preset, onDismiss }: {
-  lead: { next_action: string | null; next_action_date: string | null; next_action_note: string | null };
-  onSave: (a: { nextAction: string; date: string | null; note: string | null }) => Promise<unknown>;
-  /** An outcome was just logged: its suggested Next Action (leadState suggestNextAction), pre-filled —
-   *  never saved; the person checks it and presses Save. requireDate: Call back needs a day. */
-  preset?: FollowUpPreset | null;
-  onDismiss?: () => void;
-}) {
-  const known = NEXT_ACTION_OPTIONS.some((o) => o.value === lead.next_action);
-  const [nextAction, setNextAction] = useState(preset?.nextAction ?? lead.next_action ?? 'none');
-  const [date, setDate] = useState(preset ? (preset.date ?? '') : (lead.next_action_date ?? ''));
-  const [note, setNote] = useState(preset?.note ?? lead.next_action_note ?? '');
-  const has = !!lead.next_action && lead.next_action !== 'none';
-  const needsDay = !!preset?.requireDate && !date;
-  const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
-  return (
-    <div className="space-y-2" data-testid="next-action">
-      {preset && (
-        <p className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-200" data-testid="next-action-suggested">
-          <span>{preset.requireDate ? `${preset.why ?? 'Call back'}: pick the day, then Save.` : `Suggested after “${preset.why ?? 'the contact'}” — change anything, then Save to keep it.`}</span>
-          {onDismiss && <button type="button" className="shrink-0 underline underline-offset-2" onClick={onDismiss}>Not now</button>}
-        </p>
-      )}
-      {has && (
-        <p className="text-xs"><span className="text-muted-foreground">Now: </span>
-          <span className="font-semibold">{NEXT_ACTION_OPTIONS.find((o) => o.value === lead.next_action)?.label ?? lead.next_action!.replace(/_/g, ' ')}</span>
-          {lead.next_action_date ? <span className="text-muted-foreground"> on {new Date(lead.next_action_date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}</span> : null}
-        </p>
-      )}
-      <Select value={nextAction} onValueChange={setNextAction}>
-        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Nothing planned" /></SelectTrigger>
-        <SelectContent>
-          {NEXT_ACTION_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          {!known && lead.next_action ? <SelectItem value={lead.next_action}>{lead.next_action.replace(/_/g, ' ')}</SelectItem> : null}
-        </SelectContent>
-      </Select>
-      <div className={cn('flex flex-wrap items-center gap-1.5', nextAction === 'none' && 'pointer-events-none opacity-40')}>
-        {QUICK_DATES.map((q) => (
-          <button key={q.label} type="button" className={cn(chip, date === londonDayPlus(q.days) && 'border-primary text-primary')} onClick={() => setDate(londonDayPlus(q.days))}>{q.label}</button>
-        ))}
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 w-[9.5rem] text-xs" disabled={nextAction === 'none'} aria-label="Next action date" />
-      </div>
-      <Input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 text-xs" placeholder="What to do, e.g. ring after their website contract ends" />
-      <div className="flex items-center justify-end gap-2">
-        {has && (
-          <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs text-muted-foreground" onClick={() => void onSave({ nextAction: 'none', date: null, note: note.trim() || null })}>
-            <X className="h-3.5 w-3.5" />Clear
-          </Button>
-        )}
-        <Button size="sm" className="h-8 text-xs" disabled={needsDay} title={needsDay ? 'Pick the day first' : undefined} data-testid="save-next-action"
-          onClick={() => void onSave({ nextAction, date: nextAction === 'none' ? null : (date || null), note: note.trim() || null })}>Save next action</Button>
-      </div>
-    </div>
   );
 }
 

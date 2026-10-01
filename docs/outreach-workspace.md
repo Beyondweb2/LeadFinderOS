@@ -270,3 +270,31 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   `filteredList` was empty, which replaced the pinned open conversation. The admin always has matches; a
   salesperson with one conversation had none. The empty state now waits for `shownList`. The marker and
   select-all (which reads `filteredList`) are unchanged.
+
+## J. One Next Action: one form, one write, one list (2026-10-02, Paul's brief)
+
+- **The model (unchanged):** `outreach_leads.next_action` (enum `next_action_type`), `next_action_date` (a London
+  DAY), `next_action_note` (≤500). The only time is a Meeting's `call_booked_at`. Reminders
+  (`notify_due_follow_ups`) and the team brief (`assign_lead_with_brief`, which calls `lead_set_follow_up`
+  server-side) read and write the same columns.
+- **The types (unchanged, one list):** `NEXT_ACTION_OPTIONS` in `salesCrm.ts`: Call, WhatsApp follow-up,
+  Email, Follow up (other), Send information, Meeting, plus Nothing planned. The enum's other values
+  (send_voice_note, send_initial_text, 2nd_follow_up, send_draft, check_3_day_removal, remove_if_no_reply) are
+  older ones that are only ever read (`NEXT_ACTION_LABEL`). None were added: next actions are barely used (one
+  live lead had one on 2026-10-02), and the suggested extras overlap these (Call back = Call + the Call back
+  outcome's day; Send quote / proposal / report = Send information + the note; Book meeting = Meeting with a
+  time).
+- **What was duplicated:** the Outreach cell (`NextActionEditor`, row and phone card) was its own popup. It had
+  no note, no time and no Clear, and it auto-saved the moment a type and a day were both picked. The admin's
+  save (`useOutreach.updateNextAction`) wrote the row directly, logged only the old `outreach_activities`, and
+  left no History line. A salesperson's went through `lead_set_follow_up`. The admin list did not even load
+  the note.
+- **Now:** one form, `src/components/NextActionForm.tsx` (extracted from the workspace's `FollowUp`, plus the
+  Meeting time), drawn by the lead workspace and the Outreach cell. One write, `src/lib/nextActionWrite.ts`:
+  `saveNextAction` → `lead_set_follow_up`, and `bookMeeting` → `lead_set_call_booked` + the Meeting on that
+  day + History "Meeting booked". Used by the cell, the workspace (its meeting form too), and
+  `useOutreach.updateNextAction` (bulk menu, Inbox popup; a value not given keeps the lead's own). The display
+  is `nextActionView` / `nextActionText` everywhere, now with the Meeting's time. Paid Clients and the team
+  composer use the same words.
+- Tests: `scripts/next-action-one-flow.test.ts`; live rolled-back `supabase/tests/next-action-one-flow.sql`
+  (14 checks).

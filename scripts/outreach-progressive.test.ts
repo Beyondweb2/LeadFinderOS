@@ -126,7 +126,8 @@ ok(leadSourceFor("admin").table === "outreach_leads" && leadSourceFor("admin").l
 /* 41 → 45 on 2026-09-30: the canonical LinkedIn link + the three social statuses (the Socials line on every row);
    → 46 the same day: call_booked_at, for the row's Meeting line (lead state model). */
 // 47 since 2026-10-01: + whatsapp_ever_delivered (truthful Contacted / WhatsApp verified).
-ok(OUTREACH_LIST_COLUMNS.length === 47, "admin list is 47 columns");
+// 48 since 2026-10-02: + next_action_note (the row shows and edits the Next Action's note, the one form).
+ok(OUTREACH_LIST_COLUMNS.length === 48, "admin list is 48 columns");
 const sales = leadSourceFor("sales");
 ok(sales.table === "sales_leads", "sales: the safe sales_leads view (their own assigned prospects; the view decides)");
 const salesView = new Set<string>(SALES_VIEW_COLUMNS);

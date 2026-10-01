@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-next-action-one-flow', date: '2026-10-02', title: 'One Next Action form everywhere', audience: 'all',
+    body: 'The Next Action column now opens the same form as the lead workspace, with the note, the day and a meeting time.',
+    report: {
+      added: [
+        'In the Next Action column: the note, the quick days (Today, Tomorrow, In 3 days, Next week), a time for a Meeting, and Clear.',
+        'A Meeting with a time books it, the same as "Meeting booked" in the workspace, and the column shows the time (for example "Meeting · Thu 2 Oct · 14:30").',
+      ],
+      changed: [
+        'The column shows the type, the day and the note, not just the type.',
+        'It saves when you press Save. It no longer saves on its own as soon as a type and a day were picked.',
+        'Every Next Action save, from the column, the bulk menu, the workspace or the Inbox, goes through the same server function, so History records each one for Admin and salespeople alike.',
+        'Paid clients shows the next action in the same words (it showed the raw value, including "none").',
+      ],
+      removed: ['The separate lighter Next Action popup in the Outreach table.'],
+      effect: 'One way to set, edit, reschedule, complete or remove a Next Action, with the same types and fields on every screen.',
+    } },
   { id: '2026-10-02-no-legacy-interested', date: '2026-10-02', title: 'The open conversation stays in the Inbox list', audience: 'all',
     body: 'The conversation you have open stays in the Inbox list even when no conversation matches your filters.',
     report: {

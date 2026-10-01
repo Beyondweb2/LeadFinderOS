@@ -134,7 +134,9 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
     ok(dialog.includes(g), `the detail withholds: ${g.split("\n")[0].slice(0, 60)}`);
   }
   const crm = read("src/components/LeadCrmPanel.tsx");
-  for (const fn of ["lead_set_follow_up", "lead_set_call_booked", "lead_log_contact", "lead_set_website_control", "lead_add_note"]) ok(crm.includes(`'${fn}'`), `the CRM panel saves through ${fn}`);
+  /* lead_set_follow_up (and the meeting's lead_set_call_booked) moved into the one next-action write, 2026-10-02. */
+  const naWrite = read("src/lib/nextActionWrite.ts");
+  for (const fn of ["lead_set_follow_up", "lead_set_call_booked", "lead_log_contact", "lead_set_website_control", "lead_add_note"]) ok(crm.includes(`'${fn}'`) || (naWrite.includes(`'${fn}'`) && crm.includes("from '@/lib/nextActionWrite'")), `the CRM panel saves through ${fn}`);
   /* The owner moved to the popup's state strip, above the tabs (UI cleanup 2026-09-29). */
   ok(/<LeadOwnerControl leadId=\{leadId\} \/>/.test(read("src/components/LeadStateStrip.tsx")) && /<HookVisibilityCard/.test(crm) && /useLeadActivity\(leadId\)/.test(crm), "…with the owner, the Hook Audit and the activity timeline");
   ok(!/\.from\('outreach_leads'\)\.update|\.update\(/.test(strip(crm)), "…and never writes a lead row directly");

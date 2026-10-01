@@ -2878,12 +2878,8 @@ export function OutreachTable({
                                 the Next Action column. */}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            <NextActionEditor
-                              action={lead.next_action}
-                              date={lead.next_action_date}
-                              onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
-                              leadId={lead.id}
-                            />
+                            {/* The one Next Action form and write, the same as the lead workspace (NextActionForm). */}
+                            <NextActionEditor lead={lead} />
                             {/* What happens next, when no Next Action is stored: a booked meeting, or a call-back
                                 someone logged without picking a day (nextUpHint — never writes anything). */}
                             {(() => {

@@ -149,10 +149,12 @@ console.log("\n── 5. outcome → Next Action: suggested, pre-filled, human-s
   const mig = read("supabase/migrations/20260930150000_next_action_types.sql");
   for (const v of ["email", "send_info", "meeting"]) ok(new RegExp(`add value if not exists '${v}'`).test(mig), `the enum gains '${v}'`);
   const crm = read("src/components/LeadCrmPanel.tsx");
-  ok(/requireDate: sug\.days === null && res\.plan\.askCallBackDay/.test(crm) && /disabled=\{needsDay\}/.test(crm), "Call back cannot be saved without a day");
+  const naForm = read("src/components/NextActionForm.tsx");
+  ok(/requireDate: sug\.days === null && res\.plan\.askCallBackDay/.test(crm) && /const needsDay = \(!!preset\?\.requireDate && !date\)/.test(naForm) && /disabled=\{needsDay \|\| busy\}/.test(naForm), "Call back cannot be saved without a day (the one form, NextActionForm)");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ Log Contact itself never saves a Next Action");
-  ok(/'lead_set_call_booked', \{ _at: iso \}/.test(crm) && /_next_action: 'meeting'/.test(crm) && /Save meeting/.test(crm), "the meeting's ONE Save writes the time and the Next Action Meeting (a person pressed it)");
+  const naWrite = read("src/lib/nextActionWrite.ts");
+  ok(/'lead_set_call_booked', \{ _lead_id: leadId, _at: at \}/.test(naWrite) && /_next_action: 'meeting'/.test(naWrite) && /bookMeeting\(leadId, iso, note, stateLead\(\)\)/.test(crm) && /Save meeting/.test(crm), "the meeting's ONE Save writes the time and the Next Action Meeting (a person pressed it; the one write, bookMeeting)");
 }
 
 console.log("\n── 6. Last contact ──");

@@ -26,7 +26,7 @@ export const OUTREACH_LIST_COLUMNS = [
   // trade / town (audit eligibility, town badge, "Set trade")
   'category', 'search_keyword', 'search_location', 'derived_town', 'town_fetch_note',
   // pipeline
-  'status', 'previous_status', 'next_action', 'next_action_date', 'notes', 'is_potential_work',
+  'status', 'previous_status', 'next_action', 'next_action_date', 'next_action_note', 'notes', 'is_potential_work',
   'amount_paid', 'product', 'contact_method', 'outreach_attempts', 'last_outreach_attempt_at',
   'call_booked_at', // the row's Meeting line (lead state audit, 2026-09-30)
   'instantly_pushed_at',

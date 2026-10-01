@@ -43,6 +43,9 @@ export interface NextActionView {
   bucket: FollowUpBucket;
   /** What to do, in the person's own words (next_action_note), or null. */
   note: string | null;
+  /** "14:30" — a Meeting's booked time (call_booked_at, London) when it falls on the action's day; else null.
+   *  ⛔ The only time the model stores: next_action_date is a DAY. */
+  time: string | null;
 }
 
 function dayDiff(from: string, to: string): number {
@@ -55,28 +58,45 @@ function dayLabel(d: string, opts: Intl.DateTimeFormatOptions): string {
 
 /** The lead's next action in words, or null when there is none. */
 export function nextActionView(
-  lead: { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null } | null | undefined,
+  lead: { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null; call_booked_at?: string | null } | null | undefined,
   today: string = londonToday(),
 ): NextActionView | null {
-  return nextActionViewOf(lead?.next_action, lead?.next_action_date, lead?.next_action_note, today);
+  return nextActionViewOf(lead?.next_action, lead?.next_action_date, lead?.next_action_note, today, lead?.call_booked_at);
+}
+
+/** The note a meeting is saved with: "Meeting at 14:30", then the person's own words if they gave any. */
+export function meetingNote(time: string, note: string | null | undefined): string {
+  const own = (note ?? '').trim().replace(/^Meeting at \d{2}:\d{2}(\s*·\s*)?/, '');
+  return own ? `Meeting at ${time} · ${own}` : `Meeting at ${time}`;
+}
+
+/** The London day and time of a booked meeting: { day: '2026-10-03', time: '14:30' }. */
+export function meetingDayTime(iso: string): { day: string; time: string } {
+  const d = new Date(iso);
+  return {
+    day: d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
+    time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }),
+  };
 }
 
 /** The same, from the three values themselves (a row that carries no note passes none). */
-export function nextActionViewOf(rawAction: string | null | undefined, rawDate: string | null | undefined, rawNote?: string | null, today: string = londonToday()): NextActionView | null {
+export function nextActionViewOf(rawAction: string | null | undefined, rawDate: string | null | undefined, rawNote?: string | null, today: string = londonToday(), callBookedAt?: string | null): NextActionView | null {
   const action = (rawAction ?? '').trim();
   if (!action || action === 'none') return null;
   const label = NEXT_ACTION_LABEL[action] ?? action.replace(/_/g, ' ');
   const note = (rawNote ?? '').trim() || null;
   const date = (rawDate ?? '').slice(0, 10);
+  const mt = action === 'meeting' && callBookedAt && Number.isFinite(Date.parse(callBookedAt)) ? meetingDayTime(callBookedAt) : null;
+  const time = mt && mt.day === date ? mt.time : null;
   const bucket = followUpBucket(date || null, today);
-  if (bucket === 'none') return { label, when: null, short: null, bucket, note };
+  if (bucket === 'none') return { label, when: null, short: null, bucket, note, time: null };
   const diff = dayDiff(today, date);
   const dm = dayLabel(date, { day: 'numeric', month: 'short' });
-  if (bucket === 'overdue') return { label, when: `Overdue · ${dm}`, short: 'Overdue', bucket, note };
-  if (bucket === 'today') return { label, when: 'Today', short: 'Today', bucket, note };
-  if (diff === 1) return { label, when: 'Tomorrow', short: 'Tomorrow', bucket, note };
+  if (bucket === 'overdue') return { label, when: `Overdue · ${dm}`, short: 'Overdue', bucket, note, time };
+  if (bucket === 'today') return { label, when: 'Today', short: 'Today', bucket, note, time };
+  if (diff === 1) return { label, when: 'Tomorrow', short: 'Tomorrow', bucket, note, time };
   const when = diff < 7 ? dayLabel(date, { weekday: 'short', day: 'numeric', month: 'short' }) : dm;
-  return { label, when, short: dm, bucket, note };
+  return { label, when, short: dm, bucket, note, time };
 }
 
 /* ══ NEXT ACTION FILTERS AND SORTS — ONE RULE FOR THE INBOX AND OUTREACH (2026-09-30) ═══════════════
@@ -152,7 +172,7 @@ export function nextActionSortKey(lead: { next_action?: string | null; next_acti
 
 /** One line for a title / tooltip: "Call · Tomorrow · ring after their website contract ends". */
 export function nextActionText(v: NextActionView): string {
-  return [v.label, v.when, v.note].filter(Boolean).join(' · ');
+  return [v.label, v.when, v.time, v.note].filter(Boolean).join(' · ');
 }
 
 /* ── WHAT HAPPENS NEXT WHEN NO NEXT ACTION IS STORED (2026-10-01) ────────────────────────────────────
