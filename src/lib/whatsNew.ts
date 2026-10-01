@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-why-they-said-no', date: '2026-10-01', title: 'Record why they said no', audience: 'all',
+    body: 'When you mark a lead Not interested, a short box asks why. Pick a reason, add a note if useful, Save. Or Skip.',
+    report: {
+      added: [
+        'Marking a lead Not interested (the status pill on Outreach, the lead workspace or the Inbox, or the Not interested outcome on a call) asks "Why did they say no?" with nine reasons. Other needs a short note; every other note is optional.',
+        'A Not interested lead shows "Why they said no" in its Work panel, with Change, or Add reason if none was recorded.',
+        'History records each reason, who saved it and when. A correction keeps the old one ("was Too expensive").',
+        'Admin dashboard: "Why prospects say no", the reasons for the period with counts and percentages, and how many said no with no reason recorded. Each row opens to the leads behind it.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'We learn what keeps losing prospects (price, an existing provider, timing, value) instead of guessing. Older Not interested leads show "Reason not recorded"; nothing was filled in for them.',
+    } },
   { id: '2026-10-01-inbox-top-bar', date: '2026-10-01', title: 'A tidier Inbox top bar', audience: 'all',
     body: 'The WhatsApp Inbox header is two clean rows: the title with New (and Send now) on one, the filters on the other. Every control is the same size.',
     report: {

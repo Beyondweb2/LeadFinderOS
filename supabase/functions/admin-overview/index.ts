@@ -18,7 +18,7 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-09-30k";
+const BUILD_ID = "admin-overview-2026-10-01-lost-reasons";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: { ...corsHeaders, "x-build": BUILD_ID } });

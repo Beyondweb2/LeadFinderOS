@@ -22,6 +22,7 @@ import {
   FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
 } from '@/components/admin/controlCentre';
 import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
+import { LostReasonsPanel } from '@/components/admin/lostReasons';
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
 import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traffic';
 import { BusinessSummaryPanel } from '@/components/admin/businessSummary';
@@ -157,6 +158,7 @@ const Dashboard = () => {
 
           <Section title="Sales intelligence">
             <BottlenecksPanel o={o} />
+            <LostReasonsPanel o={o} />
             <TemplatesPanel o={o} />
             <NichesPanel o={o} />
           </Section>

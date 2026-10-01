@@ -238,8 +238,9 @@ const Outreach = () => {
       if (lead && !lead.is_potential_work) await markMultipleAsInterested([leadId]);
       return;
     }
-    await updateStatus(leadId, status as any);
+    const r = await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
+    return r; // null = refused (the row's pill then does not ask why they said no)
   }, [updateStatus, markMultipleAsInterested, allLeads]);
 
   if (isLoading) {
