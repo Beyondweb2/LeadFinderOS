@@ -357,7 +357,10 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
           </div>
           <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_time}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
             onSave={async (a) => {
-              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.note });
+              /* A Meeting with a day and time also books it — shown at once too, so the folded Call booked line
+                 never reads "Nothing recorded" while the bar already shows the meeting. */
+              const bookedAt = a.nextAction === 'meeting' && a.date && a.time ? londonInstant(a.date, a.time.slice(0, 5)) : null;
+              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.note, ...(bookedAt ? { call_booked_at: bookedAt } : {}) });
               const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
               if (r.ok) { setPreset(null); setEditingNext(false); } return r; }} />
         </>) : (
