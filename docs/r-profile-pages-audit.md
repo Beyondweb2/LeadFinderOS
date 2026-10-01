@@ -98,16 +98,34 @@ What stopped:
 What `/r/<slug>` returns:
 - **410 Gone**, `X-Robots-Tag: noindex, nofollow` plus a robots meta, a 419-byte page, no database
   read. Live on app.leadfinderos.com and leadfinderos-next.pages.dev.
-- ⚠️ **yoursites.uk/r/ is NOT changed yet.** yoursites.uk is the legacy `leadfinderos` Pages project
-  (same bundle as leadfinderos.pages.dev). It is not in the Cloudflare account wrangler reaches here
-  (only findable-site, findable-directory), so it cannot be deployed from this machine. Its frozen
-  `/r/` function reads profile content with the anon key through ONE policy, `"Public can read
-  published reports"` (anon + authenticated, `status = 'published'`).
-  - **Option A:** drop that policy. Paul's approval is needed (a DROP); nothing else reads that way.
-    Then yoursites.uk/r/* serves its own 404 + robots noindex page; the rows stay;
-    render-audit-report uses the service role and is unaffected.
-  - **Option B:** redeploy main to that project from its own Cloudflare account. That gives the 410.
-    It is safe: the frozen bundle has no `/s/` route either, and `functions/a` is on main.
+- ✅ **yoursites.uk/r/: closed 2026-10-01 by dropping the public read policy (Paul chose option A).**
+  - **Why a policy and not a deploy.** yoursites.uk is the legacy `leadfinderos` Pages project (same
+    bundle as leadfinderos.pages.dev). It is not in the Cloudflare account wrangler reaches here, and
+    Paul chose not to redeploy it. Its frozen `/r/` function read profile content with the anon key
+    through one policy.
+  - **Dependency check just before the drop (read-only).**
+    - Code, in all three repos: the only live read of `business_reports` was `render-audit-report`,
+      which uses `SUPABASE_SERVICE_ROLE_KEY`.
+    - Database: no views, SQL functions or triggers on the table.
+    - The only anonymous reader was the frozen yoursites.uk function being retired.
+  - **Dropped:** `drop policy "Public can read published reports" on public.business_reports;`. It
+    was PERMISSIVE, SELECT, roles `{anon,authenticated}`, using `(status = 'published'::text)`, with
+    no WITH CHECK. To restore it:
+    `create policy "Public can read published reports" on public.business_reports for select to anon, authenticated using (status = 'published');`
+  - **Unchanged, read back:** `"Admins manage business_reports"` (ALL, authenticated,
+    `has_role(auth.uid(),'admin')`); RLS enabled; table grants identical before and after; service
+    role bypasses RLS.
+  - **Rows:** before and after the same — 1,296 total, 1,295 published, 69 legacy-slug published,
+    last update 2026-09-30 17:31:33.
+  - **Live results after the drop:**
+    - An anonymous REST read returns `[]`.
+    - yoursites.uk/r/<slug> answers GET 404 "Report not found", `<meta name="robots"
+      content="noindex">`, `max-age=0`, no profile content. HEAD still gets 200, because the frozen
+      function handles GET only and HEAD falls to the SPA shell, which holds no profile.
+    - app.leadfinderos.com/r and leadfinderos-next/r still answer 410.
+    - These are all unchanged, same status, bytes and marker: findable.live/r/<code>,
+      /report/<uuid>, /report/<name-8hex> (legacy), render-audit-report `?slug=`, yoursites.uk/a/
+      and app/a/ (301 to findable.live), and `/s/` on both hosts.
 
 What is unchanged and verified, before and after (same status, bytes and marker):
 - findable.live/r/<code>, findable.live/report/<uuid>, findable.live/report/<name-8hex> (legacy),
