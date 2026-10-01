@@ -19,6 +19,7 @@ import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCampaigns } from '@/hooks/useCampaigns';
+import { callBookedSummaryOf } from '@/lib/workspaceHeader';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
@@ -33,7 +34,7 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { meetingIsCurrent, meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
@@ -490,16 +491,8 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
   );
 }
 
-/** The Call booked section's folded line: the booked time (while current), who controls the site and the domain. */
-function callBookedSummary(lead: CrmRow): string {
-  const parts: string[] = [];
-  if (meetingIsCurrent(lead.call_booked_at, Date.now())) parts.push(meetingWhen(lead.call_booked_at!));
-  const site = WEBSITE_CONTROL_OPTIONS.find((o) => o.value === lead.website_control && o.value !== 'unknown');
-  if (site) parts.push(site.label);
-  const dom = DOMAIN_CONTROL_OPTIONS.find((o) => o.value === lead.domain_control);
-  if (dom) parts.push(dom.value === 'unknown' ? 'Domain owner unknown' : dom.value === 'third_party_owns' ? 'Someone else controls the domain' : 'Domain: theirs');
-  return parts.length ? parts.join(' · ') : 'Nothing recorded';
-}
+/** The Call booked section's folded line — the one rule in src/lib/workspaceHeader.ts (no time when the Next Action bar shows it). */
+const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now(), { websiteControl: WEBSITE_CONTROL_OPTIONS, meetingWhen });
 
 /** A WhatsApp conversation is recorded by its messages; what CAME of it is still the rep's to say.
  *  These apply the same plan as the logged outcomes, without a second record of the messages. */
