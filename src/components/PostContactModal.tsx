@@ -5,7 +5,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowRight, Phone, MessageSquare, ClipboardList } from 'lucide-react';
+import { ArrowRight, Phone, ClipboardList } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -55,10 +55,7 @@ export function PostContactModal() {
           </DialogTitle>
 
           <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-5 space-y-4 w-full">
-            <div className="flex gap-3 items-start">
-              <MessageSquare className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-              <p><span className="text-foreground font-medium">{t('postContact.noWhatsappTrySms')}</span> {t('postContact.noWhatsappTrySmsDesc')}</p>
-            </div>
+            {/* ⛔ The "No WhatsApp? Try SMS" tip is gone (Paul, 2026-10-01): we do no SMS outreach. */}
             <div className="flex gap-3 items-start">
               <Phone className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
               <p><span className="text-foreground font-medium">{t('postContact.callingIsKing')}</span> {t('postContact.callingIsKingDesc')}</p>

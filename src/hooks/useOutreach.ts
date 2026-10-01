@@ -5,6 +5,7 @@ import { fetchAllRows, fetchAllRowsParallel, fetchPagesAfterFirst } from '@/lib/
 import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetComplete, mergeAfterBackgroundLoad, type LeadLoadState } from '@/lib/outreachLoad';
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
+import { markLeadInterested } from '@/lib/leadQuickActions';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -1636,17 +1637,13 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     if (!lead) return false;
     if (isSales()) return !!(await salesUpdateLead(leadId, { is_potential_work: true }));
 
-    const { error } = await supabase
-      .from('outreach_leads')
-      .update({
-        is_potential_work: true,
-      })
-      .eq('id', leadId);
-
-    if (error) {
+    /* ⛔ ONE WRITE FOR THE STAR (2026-10-01): lead_mark_interested, the same function the star buttons and a
+       salesperson's "Interested" call — so History records "Starred" whichever control was used. */
+    const r = await markLeadInterested(leadId, true);
+    if (!r.ok) {
       toast({
         title: 'Error updating lead',
-        description: error.message,
+        description: r.error,
         variant: 'destructive',
       });
       return false;
@@ -1663,49 +1660,36 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
     window.dispatchEvent(new CustomEvent('demo-checklist-status-change'));
     
-    // Added to Track Leads — no toast
-
-    // Log activity (non-blocking)
-    if (user) {
-      try {
-        await supabase.from('outreach_activities').insert({
-          lead_id: leadId,
-          user_id: user.id,
-          activity_type: 'interested',
-          description: 'Marked as interested and added to Track Leads',
-        });
-      } catch (e) {
-        console.error('Failed to log interested activity (non-blocking):', e);
-      }
-    }
+    // Added to Track Leads — no toast. History: lead_mark_interested wrote the "Starred" row.
 
     return true;
-  }, [leads, archivedLeads, user]);
+  }, [leads, archivedLeads]);
 
   // Mark multiple leads as interested
   const markMultipleAsInterested = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
     if (isSales()) { for (const id of leadIds) await salesUpdateLead(id, { is_potential_work: true }); return true; }
 
-    const { error } = await supabase
-      .from('outreach_leads')
-      .update({ 
-        is_potential_work: true,
-      })
-      .in('id', leadIds);
-
-    if (error) {
+    /* The same one write as a single star (lead_mark_interested, History per lead), ten at a time. */
+    const done: string[] = [];
+    let firstError: string | null = null;
+    for (let i = 0; i < leadIds.length; i += 10) {
+      const batch = leadIds.slice(i, i + 10);
+      const results = await Promise.all(batch.map((id) => markLeadInterested(id, true)));
+      results.forEach((r, j) => { if (r.ok) done.push(batch[j]); else firstError ??= r.error; });
+    }
+    if (firstError) {
       toast({
-        title: 'Error updating leads',
-        description: error.message,
+        title: done.length ? `${leadIds.length - done.length} not marked interested` : 'Error updating leads',
+        description: firstError,
         variant: 'destructive',
       });
-      return false;
     }
+    if (done.length === 0) return false;
 
     // Update local state — preserve existing status
-    const updateLeadFn = (l: OutreachLead): OutreachLead => 
-      leadIds.includes(l.id) ? { ...l, is_potential_work: true } : l;
+    const updateLeadFn = (l: OutreachLead): OutreachLead =>
+      done.includes(l.id) ? { ...l, is_potential_work: true } : l;
     
     setLeads((prev) => prev.map(updateLeadFn));
     setArchivedLeads((prev) => prev.map(updateLeadFn));

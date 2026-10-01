@@ -73,7 +73,7 @@ export function OutreachIntroModal() {
                 <MessageSquare className="h-3.5 w-3.5" />
               </div>
               <p>
-                <span className="text-foreground font-medium">Contact leads directly</span> — reach out via WhatsApp, SMS, or call. The contact method and status update automatically.
+                <span className="text-foreground font-medium">Contact leads directly</span> — reach out via WhatsApp or a call. The contact method and status update automatically.
               </p>
             </div>
             <div className="flex gap-2.5">

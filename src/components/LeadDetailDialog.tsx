@@ -57,6 +57,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
 import { SalesStatePill } from '@/components/SalesStatePill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
+import { pillStatusOf } from '@/lib/leadState';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
 import { LeadHistoryPanel, LeadHookPanel, LeadWorkPanel, ProspectProfilePanel } from '@/components/LeadCrmPanel';
 
@@ -418,7 +419,8 @@ function LeadDetailBody({
           {salesState.view && <SalesStatePill view={salesState.view} />}
           <Select value={PIPELINE_STATUS_OPTIONS.some((o) => o.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="WhatsApp pipeline status" title="WhatsApp pipeline status">
-              <PipelineStatusBadge status={lead.status as PipelineStatus} />
+              {/* The raw pipeline badge — except the pre-star 'interested', which is never a pill (pillStatusOf). */}
+              <PipelineStatusBadge status={(lead.status === 'interested' ? pillStatusOf(lead.status, salesState.view) : lead.status) as PipelineStatus} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
               {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>))}

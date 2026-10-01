@@ -201,3 +201,27 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   `last_outreach_attempt_at` are `NOT_STORED_FOR_SALES` (`salesPatchPlan.ts`). A salesperson has no direct write on
   `outreach_leads` (RLS: owner `user_id` or admin), so `logAttempt`'s row update silently matches 0 rows on an
   assigned lead. That is by design, and it predates this work. The admin's attempt stores both.
+
+## G. Interested is the star, in every filter (2026-10-01, Paul's brief)
+
+- **The one field:** `outreach_leads.is_potential_work` (the gold star). `leadState.isStarred` is the one reading;
+  every Interested filter uses it: the Outreach status filter's "Interested ⭐ (star only)", the ⭐ Interested
+  toggle (kept, because it combines with a status, e.g. Contacted + ⭐) and the Inbox's Interested filter. Before,
+  the status-filter option compared the row pill with the stored status `interested`, which nothing had written
+  since 19 Sep, so it found no starred lead. The Inbox's version also let in Price given without a star.
+- **The one write:** every "Interested" in a status menu (Outreach row, phone card, workspace, bulk "Set
+  Status", Inbox pill, `setLeadPipelineStatus`) and every star button calls `lead_mark_interested` (History
+  "Starred" / "Unstarred"). The admin's menus used to write the column directly with no History, and the row,
+  phone card and bulk paths each wrote it twice.
+- **The pill:** the star never moves it (`scripts/interested-star.test.ts` sweeps it with and without the
+  star). The stored status `interested` is never drawn as a pill: `pillStatusOf` shows Contacted (reached) or
+  New. One path still writes it, together with the star: a no turned yes (`leadOutcome`), because the trigger
+  that lifts the Not interested block keys on it. Such a lead stays "interested" in the pipeline, so a later
+  reply cannot flip it to Replied (it is protected); its pill reads Contacted.
+- **Legacy rows:** 24 live leads had status `interested` and no star, all with WhatsApp replies and with no
+  record of when they were marked. Normalised (deterministic): the star on, the status from the last WhatsApp
+  message (theirs → `replied`, 7; ours → `awaiting_reply`, 17), a History note plus the star and stage rows on
+  each. The before-state is in `_legacy_interested_backup_20261001` (RLS on, no policies, no anon grant). One
+  archived barber lead keeps `interested` + the star.
+- **SMS:** the post-contact tips popup's "No WhatsApp? Try SMS" tip is removed. The not-on-WhatsApp warning,
+  the Outreach intro and three unused locale strings no longer suggest SMS.

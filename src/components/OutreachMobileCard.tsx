@@ -53,7 +53,6 @@ interface OutreachMobileCardProps {
   showTrackButton?: boolean;
   isHighlighted?: boolean;
   isLastContacted?: boolean;
-  onAutoTrack?: () => void;
   onCompleteAction?: () => void;
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
@@ -86,7 +85,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   showTrackButton = true,
   isHighlighted = false,
   isLastContacted = false,
-  onAutoTrack,
   onCompleteAction,
   phoneFetchStatus,
   onRetryPhoneFetch,
@@ -209,10 +207,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     value={lead.status || 'not_contacted'}
                     onValueChange={(v) => {
                       const status = v as PipelineStatus;
+                      // "Interested" sets the star inside onPipelineStatusChange (one write, History).
                       onPipelineStatusChange(status);
-                      if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
-                        onAutoTrack();
-                      }
                     }}
                   >
                     <SelectTrigger 

@@ -41,7 +41,7 @@ import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
-import { INTERESTED_STATUSES, salesStateOf } from '@/lib/leadState';
+import { isStarred, salesStateOf } from '@/lib/leadState';
 import { useLastLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
@@ -670,9 +670,10 @@ const Inbox = () => {
       /* ⛔ "Interested" IS THE STAR (lead state audit, 2026-09-30): the filter matched status 'interested'
          only — a value nothing has written since the star replaced it — so it missed every starred lead.
          It now reads Interested the way leadState.salesStateOf does: the star, or an interested / quoted
-         status. */
+         status. ⛔ 2026-10-01 (Paul): the star ONLY — "Price given" without a star is not Interested; the
+         same rule as Outreach (leadState.isStarred). */
       : statusFilter === 'interested'
-        ? byCampaign.filter((c) => c.isPotentialWork || INTERESTED_STATUSES.has(c.leadStatus ?? '') || c.unassigned || c.isPaid)
+        ? byCampaign.filter((c) => isStarred({ is_potential_work: c.isPotentialWork }) || c.unassigned || c.isPaid)
       : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant

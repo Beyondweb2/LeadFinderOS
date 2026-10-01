@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-interested-is-the-star', date: '2026-10-01', title: 'Interested filters show every starred lead', audience: 'all',
+    body: 'Every Interested filter now lists the leads with the gold star, whatever their status.',
+    report: {
+      added: [],
+      changed: [
+        'The status filter\'s "Interested ⭐" and the ⭐ Interested button list every starred lead. Before, the status filter only found the old stored Interested status.',
+        'The Inbox\'s Interested filter lists starred leads only. "Price given" without a star is no longer included.',
+        'Choosing Interested from any status menu adds the star in the same way as the star button, and History records it.',
+        '24 older leads carrying the old Interested status now have the star, and their status shows what their WhatsApp messages prove (Replied or You replied). Each has a History note.',
+      ],
+      removed: ['The "No WhatsApp? Try SMS" tip, and every other suggestion to use SMS.'],
+      effect: 'The star is the one sign of interest. Adding or removing it never changes the status pill.',
+    } },
   { id: '2026-10-01-star-keeps-contacted', date: '2026-10-01', title: 'Starring a lead keeps it Contacted', audience: 'all',
     body: 'A lead you spoke to stays Contacted when you star it or log Interested or Meeting booked.',
     report: {

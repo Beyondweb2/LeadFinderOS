@@ -34,7 +34,10 @@ const cases: [string, LeadStateInput, StatusFilterValue][] = [
   ['failed WhatsApp', { status: 'whatsapp_failed', whatsapp_sent_at: S }, 'whatsapp_failed' as StatusFilterValue],
   ['No WhatsApp', { status: 'no_whatsapp', whatsapp_sent_at: S }, canonicalFilterValue('no_whatsapp' as StatusFilterValue)],
   ['No WhatsApp, then reached by phone', { status: 'no_whatsapp', whatsapp_sent_at: S, lastLogged: logged('spoke_to_owner') }, CONTACTED],
-  ['interested', { status: 'interested', is_potential_work: true }, 'interested' as StatusFilterValue],
+  /* 2026-10-01 (interested-star.test.ts): Interested is the star, never a pill. The stored pre-star status shows the
+     contact truth; the Interested filter reads the star (isStarred), not the pill. */
+  ['legacy stored interested, never reached', { status: 'interested', is_potential_work: true }, NEW],
+  ['legacy stored interested, reached', { status: 'interested', is_potential_work: true, whatsapp_sent_at: S }, CONTACTED],
   ['meeting booked (pipeline still Contacted)', { status: 'initial_contact', whatsapp_sent_at: S, call_booked_at: '2026-10-02T13:00:00Z' }, CONTACTED],
   ['client', { status: 'payment_received', amount_paid: 99 }, 'payment_received' as StatusFilterValue],
   /* Live verification 2026-10-01: a state that outranks "contacted" (the ⭐, a meeting) must not hide the contact. */

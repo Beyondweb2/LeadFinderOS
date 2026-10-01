@@ -174,7 +174,7 @@ import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
-import { contactAgo, meetingIsCurrent, meetingWhen, pillStatusOf, salesStateOf, type SalesStateView } from '@/lib/leadState';
+import { contactAgo, isStarred, meetingIsCurrent, meetingWhen, pillStatusOf, salesStateOf, type SalesStateView } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1717,6 +1717,10 @@ export function OutreachTable({
            from "Paid (money in)" — the one place customers are listed. Until every lead has loaded the
            filter is not applied (and cannot be chosen); the filters row says so. */
         if (listComplete) result = result.filter((lead) => isPaidLead(lead));
+      } else if (statusFilter === 'interested') {
+        /* ⛔ "Interested ⭐" = the gold star, whatever the status (isStarred — the same rule as the ⭐ toggle
+           and the Inbox). It matched the pre-star stored status and missed every starred lead. */
+        result = result.filter((lead) => isStarred(lead));
       } else {
         /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
            no account and the landline — everyone unreachable that way. statusesForFilter returns the
@@ -1765,10 +1769,10 @@ export function OutreachTable({
       result = result.filter((lead) => lead.status !== 'already_visible');
     }
 
-    // Filter: interested-only toggle. Interested is the STAR (is_potential_work) — the status menu's
-    // Interested writes the star, never a status — plus any legacy row still carrying the old status.
+    // Filter: the ⭐ Interested toggle — the star only (isStarred, the same rule as the status filter's
+    // "Interested ⭐"). Kept as well as that option: it combines with a status ("Contacted" + ⭐).
     if (trackedOnly) {
-      result = result.filter((lead) => lead.is_potential_work === true || lead.status === 'interested');
+      result = result.filter((lead) => isStarred(lead));
     }
 
     // Contactability filters (AND) — only REAL stored values, matching the row icons.
@@ -2084,12 +2088,8 @@ export function OutreachTable({
                       <Select
                         onValueChange={(v) => {
                           const ids = Array.from(selectedIds);
+                          // "Interested" sets the star inside onStatusChange (one write per lead, History).
                           ids.forEach(id => onStatusChange(id, v as LeadStatus));
-                          // Auto-track when setting to interested
-                          if (v === 'interested' && onMarkAsInterested) {
-                            const untracked = ids.filter(id => !leads.find(l => l.id === id)?.is_potential_work);
-                            if (untracked.length > 0) onMarkAsInterested(untracked);
-                          }
                           setSelectedIds(new Set());
                           // Status updated — no toast
                         }}
@@ -2499,7 +2499,7 @@ export function OutreachTable({
               <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
             </Select>
             {perms.assignOwner && <OwnerFilterSelect value={ownerFilter} onChange={(v) => { setOwnerFilter(v); setCurrentPage(1); }} selfId={user?.id} />}
-            {/* Interested filter toggle — show only leads with status 'interested' */}
+            {/* ⭐ Interested toggle — starred leads only (isStarred), combinable with any status */}
             <Button
               variant={trackedOnly ? 'default' : 'outline'}
               size="sm"
@@ -2670,7 +2670,6 @@ export function OutreachTable({
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onCallClick={() => handleCallClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
-                  onAutoTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastContactedLeadId === lead.id}
@@ -2729,7 +2728,7 @@ export function OutreachTable({
                     <TableRow
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
-                        lead.is_potential_work || lead.status === 'interested' ? 'bg-primary/5' : ''
+                        isStarred(lead) ? 'bg-primary/5' : ''
                       } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
                       onClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                     >
@@ -2871,10 +2870,8 @@ export function OutreachTable({
                                 onValueChange={(status) => {
                                   // Clear optimistic override so manual change isn't blocked
                                   setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
+                                  // "Interested" sets the star inside onPipelineStatusChange (one write, History).
                                   onPipelineStatusChange(lead.id, status);
-                                  if (status === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
-                                    onMarkAsInterested([lead.id]);
-                                  }
                                 }}
                               />
                             ) : (

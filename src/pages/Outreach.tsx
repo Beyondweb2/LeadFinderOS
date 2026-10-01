@@ -231,17 +231,16 @@ const Outreach = () => {
     if (isDemoLead(leadId)) return;
     // Interested is a separate operator marker, not a pipeline stage. Keep the current status and
     // add the tracked/starred flag so the lead can continue through the real pipeline stages.
+    /* ⛔ The one write for the star, for both roles: markMultipleAsInterested → lead_mark_interested (History
+       "Starred"). Every "Interested" in a status menu (row, phone card, workspace, bulk) arrives here. */
     if (status === 'interested') {
       const lead = allLeads.find(l => l.id === leadId);
-      if (lead && !lead.is_potential_work) {
-        await updateLead(leadId, { is_potential_work: true });
-        window.dispatchEvent(new CustomEvent('track-lead-added'));
-      }
+      if (lead && !lead.is_potential_work) await markMultipleAsInterested([leadId]);
       return;
     }
     await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
-  }, [updateStatus, updateLead, allLeads]);
+  }, [updateStatus, markMultipleAsInterested, allLeads]);
 
   if (isLoading) {
     return (
