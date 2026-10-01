@@ -22,6 +22,17 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-no-legacy-interested', date: '2026-10-02', title: 'The open conversation stays in the Inbox list', audience: 'all',
+    body: 'The conversation you have open stays in the Inbox list even when no conversation matches your filters.',
+    report: {
+      added: [],
+      changed: [
+        'When nothing matches the Inbox filters, the conversation you have open still shows at the top, marked "Opened · outside your current filters". Before, the list showed "No conversations yet" instead, which mostly affected salespeople with few conversations.',
+        'Behind the scenes, nothing can save the old "Interested" status any more. Any request for it just adds the gold star and keeps the real status.',
+      ],
+      removed: [],
+      effect: 'Admin and salespeople see the same Inbox list, and the star stays the only sign of interest.',
+    } },
   { id: '2026-10-02-revive-and-inbox-filters', date: '2026-10-02', title: 'Inbox filters match the status pill', audience: 'all',
     body: 'Inbox status filters now use the status each conversation shows, and a lead that said no then yes moves on normally.',
     report: {

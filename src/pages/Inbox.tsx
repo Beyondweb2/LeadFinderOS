@@ -1960,7 +1960,10 @@ const Inbox = () => {
               <p className="text-sm">Couldn’t load conversations.</p>
               <Button size="sm" variant="outline" onClick={() => void refetch()}>Retry</Button>
             </div>
-          ) : filteredList.length === 0 ? (
+          ) : shownList.length === 0 ? (
+            /* ⛔ shownList, not filteredList (2026-10-02): when nothing matches the filters, the OPEN conversation is
+               still drawn (pinned, "outside your current filters"). Testing for filteredList hid it whenever the
+               filters matched nothing, which happened to a salesperson with few conversations, never to the admin. */
             <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
               <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
               {searchTerm ? (
