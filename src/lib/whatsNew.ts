@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-star-keeps-contacted', date: '2026-10-01', title: 'Starring a lead keeps it Contacted', audience: 'all',
+    body: 'A lead you spoke to stays Contacted when you star it or log Interested or Meeting booked.',
+    report: {
+      added: [],
+      changed: [
+        'A lead reached by phone and then starred shows the Contacted pill and sits under the Contacted filter. Before, the star turned it back to New.',
+        'The same applies when Interested or Meeting booked is logged on a call, since both add the star.',
+        'A starred lead nobody has reached still shows New with its star.',
+      ],
+      removed: [],
+      effect: 'The pill and the filter stay truthful about contact whatever star or meeting a lead has.',
+    } },
   { id: '2026-10-01-contact-state-final', date: '2026-10-01', title: 'Status filter matches the status pill', audience: 'all',
     body: 'A lead reached by phone shows as Contacted in its pill, under the Contacted filter and in every label.',
     report: {

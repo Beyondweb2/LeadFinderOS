@@ -188,3 +188,16 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   confirm), the follow-up batch (initial_contact only), and the "Most recent contact" sort (it sorts by the latest
   attempt or send).
 - Tests: `scripts/contact-state-final.test.ts` (the brief's whole matrix: pill ↔ filter, attempts, labels, AI context).
+
+### F2. Live verification found: the star hid the contact (2026-10-01)
+
+- Driving the Test salesperson on a QA lead: Spoke to owner → Contacted ✓, then ⭐ → the pill and the filter went
+  back to **New**. `pillStatusOf` keyed on `state === 'contacted'`, and the star (and a current meeting) outrank
+  contacted in `salesStateOf`. So logging "Interested" or "Meeting booked" on a call, which both set the star, showed
+  New too.
+- Fix: `SalesStateView.reached` (a real send, a logged conversation, or a pipeline already past New), computed once
+  in `salesStateOf` whatever state wins; `pillStatusOf` reads it. Starred and never reached stays "New ⭐".
+- A salesperson's "Open in WhatsApp app" stores only the `outreach_events` attempt: `outreach_attempts` /
+  `last_outreach_attempt_at` are `NOT_STORED_FOR_SALES` (`salesPatchPlan.ts`). A salesperson has no direct write on
+  `outreach_leads` (RLS: owner `user_id` or admin), so `logAttempt`'s row update silently matches 0 rows on an
+  assigned lead. That is by design, and it predates this work. The admin's attempt stores both.

@@ -103,11 +103,15 @@ export const REACHED_OUTCOMES: ReadonlySet<string> = new Set([...CONVERSATION_OU
    2026-10-01: "put the pills back to how they worked yesterday"). But the pipeline status is the WhatsApp
    pipeline: a business the rep REACHED by phone still reads "New" (or "No WhatsApp") there. When the sales
    state is Contacted and the pipeline still says not-contacted / no WhatsApp / failed, the pill shows the
-   solid "Contacted" badge instead. Display only — the stored status and its menu are untouched. */
+   solid "Contacted" badge instead. Display only — the stored status and its menu are untouched.
+   ⛔ It reads REACHED, not the state (live verification, 2026-10-01): a stronger state (the ⭐, a meeting) outranks
+   "contacted", so a lead the rep spoke to and then starred — or logged "Interested" / "Meeting booked" on, which
+   set the star — fell back to the pipeline's "New" pill and sat under the New filter. Starred and never reached
+   stays "New ⭐". */
 const PIPELINE_NOT_CONTACTED: ReadonlySet<string> = new Set(['', 'not_contacted', 'no_whatsapp', 'no_whatsapp_needs_sms', 'whatsapp_failed']);
-export function pillStatusOf(status: string | null | undefined, stage: Pick<SalesStateView, 'state'> | null | undefined): string | null {
+export function pillStatusOf(status: string | null | undefined, stage: (Pick<SalesStateView, 'state'> & { reached?: boolean }) | null | undefined): string | null {
   const s = (status ?? '').trim();
-  if (stage?.state === 'contacted' && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
+  if ((stage?.state === 'contacted' || stage?.reached === true) && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
   return status ?? null;
 }
 /** Statuses on which a leftover send stamp means nothing was delivered: a failed send, or a lead put back to
@@ -125,6 +129,9 @@ export interface SalesStateView {
   tone: SalesStateTone;
   /** Short qualifier drawn after the label: "Thu 2 Oct 14:30", "Price given", "Refunded", a raw status. */
   detail: string | null;
+  /** They were REACHED — a real send, a logged conversation, or the pipeline already past New — whatever state
+   *  outranks it. The pill reads this (pillStatusOf), so the ⭐ never turns a reached lead back into "New". */
+  reached: boolean;
 }
 
 const paidOf = (v: unknown) => { const n = Number(v ?? 0); return Number.isFinite(n) && n > 0; };
@@ -148,7 +155,11 @@ export function meetingIsCurrent(callBookedAt: string | null | undefined, nowMs:
 export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): SalesStateView {
   const status = (l.status ?? '').trim();
   const stage = salesStageOf(status);
-  const v = (state: SalesState, detail: string | null = null): SalesStateView => ({ state, label: SALES_STATE_LABEL[state], tone: SALES_STATE_TONE[state], detail });
+  // Contacted = the pipeline says so, OR a logged contact REACHED them (not a no-answer / voicemail
+  // attempt), OR an opener really went out (a failed send's leftover stamp is not contact).
+  const loggedReached = !!l.lastLogged && (l.lastLogged.reached ?? REACHED_OUTCOMES.has(l.lastLogged.outcome));
+  const reached = stage === 'contacted' || loggedReached || openerReallySent(l);
+  const v = (state: SalesState, detail: string | null = null): SalesStateView => ({ state, label: SALES_STATE_LABEL[state], tone: SALES_STATE_TONE[state], detail, reached });
   if (paidOf(l.amount_paid) || stage === 'client') return v('client', status === 'refunded' ? 'Refunded' : null);
   if (stage === 'won') return v('won');
   const saidNo = NOT_INTERESTED_STATUSES.has(status) || (l.lastLogged?.outcome === 'not_interested' && !l.is_potential_work);
@@ -157,10 +168,7 @@ export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): Sal
   if (l.is_potential_work || INTERESTED_STATUSES.has(status)) return v('interested', status === 'price_given' ? 'Price given' : null);
   if (stage === 'replied') return v('replied');
   if (l.wrongNumber) return v('wrong_number');
-  // Contacted = the pipeline says so, OR a logged contact REACHED them (not a no-answer / voicemail
-  // attempt), OR an opener really went out (a failed send's leftover stamp is not contact).
-  const loggedReached = !!l.lastLogged && (l.lastLogged.reached ?? REACHED_OUTCOMES.has(l.lastLogged.outcome));
-  if (stage === 'contacted' || loggedReached || openerReallySent(l)) return v('contacted');
+  if (reached) return v('contacted');
   if (stage === 'new' || stage === 'queued') return v('new', stage === 'queued' ? 'Opener queued' : null);
   return v('other', status ? status.replace(/_/g, ' ') : null);
 }
