@@ -719,7 +719,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   yoursites.uk/r/ "listing" (fn `generate-report`) is RETIRED: `/r/[slug]` answers 410 + noindex,
   and `generate-report` is a 410 stub. ⛔ **Never delete `business_reports` rows**: they are the
   legacy name-plus-8-hex REPORT slug map for `render-audit-report`. yoursites.uk is the legacy
-  `leadfinderos` project, which main does not deploy. Record: `docs/r-profile-pages-audit.md`.
+  `leadfinderos` project, which main does not deploy; its frozen `/r/` is closed by the dropped anon policy (anon reads of `business_reports` return nothing). Record: `docs/r-profile-pages-audit.md`.
 - **The Welcome Pack resolves from `outreach_leads.baseline_audit_id` ONLY**, and asserts the row's
   `audit_purpose` rather than trusting the claim trigger. Never "the newest completed audit" — that
   was the bug, and a Discovery scan would have become a client's baseline pack. `welcomePackData.ts`
