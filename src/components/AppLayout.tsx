@@ -7,6 +7,7 @@ import { ReviewQueueTab } from '@/components/ReviewQueueTab';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { CommandPalette, PaletteButton } from '@/components/CommandPalette';
 import { FeedbackAndNews } from '@/components/FeedbackAndNews';
+import { LostReasonPrompt } from '@/components/LostReasonPrompt';
 import appLogo from '@/assets/logo.png';
 import { useAuth } from '@/hooks/useAuth';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -79,6 +80,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         <NotificationCenter variant="desktop" />
         <CommandPalette />
         <FeedbackAndNews />
+        {/* "Why did they say no?" — the one prompt every Not interested path opens (src/lib/lostReasonAsk.ts). */}
+        <LostReasonPrompt />
 
         {/* ⛔ THE REVIEW QUEUE, HERE BECAUSE THIS SHELL MOUNTS ONCE. It renders nothing at all when
             nobody is waiting, so it costs every other screen a single cheap RLS-scoped read and no

@@ -802,29 +802,30 @@ const Inbox = () => {
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: on } : s));
     } finally { setStarSaving(false); }
   };
-  const handleSetStatus = async (c: WaConversation, status: PipelineStatus) => {
-    if (!c.leadId || (status === c.leadStatus && (status !== 'interested' || c.isPotentialWork))) return;
+  /* Returns false when nothing was written, so the pill does not then ask why they said no. */
+  const handleSetStatus = async (c: WaConversation, status: PipelineStatus): Promise<boolean> => {
+    if (!c.leadId || (status === c.leadStatus && (status !== 'interested' || c.isPotentialWork))) return false;
     // “Interested” is an operator marker, not a pipeline stage. Preserve the current status and
     // persist the separate tracked/starred flag instead.
-    if (!maySetStatus(perms, status)) { toast({ title: 'Admin only', description: refusalText('stage_not_allowed'), variant: 'destructive' }); return; }
+    if (!maySetStatus(perms, status)) { toast({ title: 'Admin only', description: refusalText('stage_not_allowed'), variant: 'destructive' }); return false; }
     if (status === 'interested') {
       /* ONE path for both roles (src/lib/leadQuickActions.ts, shared with Focus Mode); it notifies too. */
       const r = await markLeadInterested(c.leadId, perms.editLeadRecord);
-      if (!r.ok) { toast({ title: 'Could not mark interested', description: r.error, variant: 'destructive' }); return; }
+      if (!r.ok) { toast({ title: 'Could not mark interested', description: r.error, variant: 'destructive' }); return false; }
       patchLeadPotentialWork(c.leadId, true);
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, isPotentialWork: true } : s));
       toast({ title: 'Marked interested', description: 'The pipeline status was left unchanged.' });
-      return;
+      return true;
     }
     if (c.leadStatus === 'payment_received' && status !== 'payment_received') {
-      if (!window.confirm(`${c.label} is marked Paid. Change it to "${status.replace(/_/g, ' ')}"? This removes it from the paid state.`)) return;
+      if (!window.confirm(`${c.label} is marked Paid. Change it to "${status.replace(/_/g, ' ')}"? This removes it from the paid state.`)) return false;
     }
     setSavingStatusKey(c.key);
     try {
       /* ONE path for both roles (src/lib/leadQuickActions.ts): the admin's direct write, a salesperson's
          ownership-checked one + the queue stop on "not interested"; it notifies every screen. */
       const r = await setLeadPipelineStatus(c.leadId, status, perms.editLeadRecord);
-      if (!r.ok) { toast({ title: 'Could not update status', description: r.error, variant: 'destructive' }); return; }
+      if (!r.ok) { toast({ title: 'Could not update status', description: r.error, variant: 'destructive' }); return false; }
       patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
       /* ⛔ AND THE SYNTHETIC COPY, or the header/list pill would show the OLD status until the next
          refetch. `conversations` is derived from `leads`, so patchLeadStatus covers every real
@@ -833,6 +834,7 @@ const Inbox = () => {
          the only object that holds a second copy. Same handler, no second update path. */
       setSynthetic((s) => (s && s.leadId === c.leadId ? { ...s, leadStatus: status } : s));
       if (status === 'not_interested') toast({ title: 'Marked not interested', description: 'Hidden from the list — reappears if they reply.' });
+      return true;
     } finally {
       setSavingStatusKey(null);
     }
@@ -2062,7 +2064,7 @@ const Inbox = () => {
                 <div className="mt-0.5 flex items-center gap-1">
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} />}
+                    : <PipelineStatusSelect value={c.leadStatus} stage={listStageOf(c.leadId)} onValueChange={(status) => handleSetStatus(c, status)} askReasonFor={{ leadId: c.leadId, businessName: c.label }} />}
                   <EngagementPills reportOpenedAt={c.reportOpenedAt} siteVisitedAt={c.siteVisitedAt} geminiNamed={c.geminiNamed} geminiAnswers={c.geminiAnswers} />
                   {/* Next action at a glance: red overdue, amber today, grey later; nothing when none. */}
                   <NextActionPill lead={leadByIdForState.get(c.leadId)} size="xs" className="ml-auto" />
@@ -2140,7 +2142,7 @@ const Inbox = () => {
                     {active.leadId && (
                       savingStatusKey === active.key
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} />
+                        : <PipelineStatusSelect value={active.leadStatus} stage={activeSales.view} onValueChange={(status) => handleSetStatus(active, status)} askReasonFor={active.leadId ? { leadId: active.leadId, businessName: active.label } : null} />
                     )}
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
                         control above is the one solid pipeline pill; interested is the star — the separate

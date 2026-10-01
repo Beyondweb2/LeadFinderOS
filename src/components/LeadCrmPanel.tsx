@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
 import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
+import { askLostReason } from '@/lib/lostReasonAsk';
+import { LOST_REASON_UNRECORDED, lostReasonLabel } from '@/lib/lostReason';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
 import { londonInstant, londonLocalInput, meetingDayTime } from '@/lib/nextActionView';
@@ -86,7 +88,7 @@ const sb = supabase as any;
 /* status / is_potential_work / amount_paid / whatsapp_sent_at (2026-09-30): the facts the sales state
    is read from (src/lib/leadState.ts), so the Work panel knows the state before and after a tap. Both
    sources have them (the sales view's amount_paid is always null — a client is not in it at all). */
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at, lost_reason, lost_reason_note';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
@@ -98,6 +100,8 @@ interface CrmRow {
   campaign_id: string | null;
   domain_control: string | null;
   status: string | null; is_potential_work: boolean | null; amount_paid: number | null; whatsapp_sent_at: string | null;
+  /** Why they said no (lead_set_lost_reason); null = not recorded. */
+  lost_reason: string | null; lost_reason_note: string | null;
 }
 
 export const leadCrmKey = (leadId: string) => ['lead-crm', leadId] as const;
@@ -286,6 +290,10 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
     const before = salesStateOf(sl);
     const res = await applyOutcome(sl, outcome, before, logged);
     if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
+    /* Why did they say no? The one prompt, once the lead really reads Not interested. */
+    if (outcome === 'not_interested' && res.after.state === 'not_interested' && !res.failed.length) {
+      askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note });
+    }
     const sug = suggestNextAction(channel, outcome);
     let suggestion: string | null = null;
     const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
@@ -337,6 +345,22 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
   return (
     <div className="space-y-3">
       <LogContact save={save} followOn={followOn} defaultOpen={logContactOpen} />
+
+      {/* Why they said no: shown only while the lead is Not interested. Add one (skipped, or before this
+          existed: "Reason not recorded", never guessed) or correct it; History keeps every version. */}
+      {lead.status === 'not_interested' && (
+        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="lost-reason">
+          <span className="min-w-0 text-xs">
+            <span className="text-muted-foreground">Why they said no · </span>
+            <span className={cn('font-medium', !lead.lost_reason && 'text-muted-foreground')}>{lead.lost_reason ? lostReasonLabel(lead.lost_reason) : LOST_REASON_UNRECORDED}</span>
+            {lead.lost_reason_note && <span className="block text-muted-foreground">{lead.lost_reason_note}</span>}
+          </span>
+          <Button size="sm" variant="outline" className="h-7 text-xs" data-testid="lost-reason-edit"
+            onClick={() => askLostReason({ leadId, businessName: lead.business_name, reason: lead.lost_reason, note: lead.lost_reason_note })}>
+            {lead.lost_reason ? 'Change' : 'Add reason'}
+          </Button>
+        </section>
+      )}
 
       {askWhen && (
         <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">

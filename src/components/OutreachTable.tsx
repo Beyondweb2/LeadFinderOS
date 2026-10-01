@@ -181,7 +181,7 @@ interface OutreachTableProps {
   onLeadClick: (lead: OutreachLead) => void;
   onStatusChange: (leadId: string, status: LeadStatus) => void;
   onContactMethodChange?: (leadId: string, method: ContactMethod) => void;
-  onPipelineStatusChange?: (leadId: string, status: PipelineStatus) => void;
+  onPipelineStatusChange?: (leadId: string, status: PipelineStatus) => void | Promise<unknown>;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => void;
   onRemoveAll: () => void;
   onArchive?: (leadId: string) => void;
@@ -2863,12 +2863,13 @@ export function OutreachTable({
                               <PipelineStatusSelect
                                 value={lead.status}
                                 stage={rowSalesState(lead)}
+                                askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
                                 triggerProps={lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : undefined}
                                 onValueChange={(status) => {
                                   // Clear optimistic override so manual change isn't blocked
                                   setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
                                   // "Interested" sets the star inside onPipelineStatusChange (one write, History).
-                                  onPipelineStatusChange(lead.id, status);
+                                  return onPipelineStatusChange(lead.id, status);
                                 }}
                               />
                             ) : (

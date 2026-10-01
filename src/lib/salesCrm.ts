@@ -9,6 +9,7 @@
  * ⛔ ENUMERATED, NEVER FALLEN THROUGH. Every known status is listed; an unknown one reads as
  * 'other' and shows its raw value, rather than being quietly filed as "new" or "contacted". */
 import { CONTACT_METHODS, LOGGED_CONTACT_METHODS, contactMethodLabel } from './contactMethods.ts';
+import { lostReasonLabel } from './lostReason.ts';
 
 export type SalesStage =
   | 'new' | 'queued' | 'contacted' | 'replied' | 'interested' | 'awaiting_decision'
@@ -165,6 +166,11 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'template_required': return 'Choose which approved opener to send first';
     case 'not_an_initial_opener': return 'Bulk initial outreach sends an approved opener only';
     case 'stage_not_allowed': return 'Only the admin can set that status';
+    /* lead_set_lost_reason (why they said no, 2026-10-01). */
+    case 'not_not_interested': return 'The lead is not Not interested any more, so no reason was saved';
+    case 'reason_not_allowed': return 'Pick one of the reasons';
+    case 'reason_note_required': return 'Say briefly why (needed for Other)';
+    case 'reason_note_too_long': return 'The note is too long';
     case 'admin_only': return 'Only the admin can change that';
     case 'unknown_campaign': return 'That campaign no longer exists';
     case 'sales_only': return 'Only a salesperson removes leads from their own list';
@@ -318,6 +324,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   opted_out: 'Asked to stop',
   /* request_lead_transfer (2026-09-30): the salesperson asked the admin to move the lead. */
   transfer_requested: 'Transfer requested',
+  /* lead_set_lost_reason (2026-10-01): why a Not interested lead said no; a correction keeps the old one. */
+  lost_reason_set: 'Why they said no',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */
@@ -373,6 +381,10 @@ export function activityDetail(
     case 'bulk_queued': return d.template ? String(d.template) : null;
     case 'archived_set': return d.archived ? 'Archived' : 'Restored';
     case 'transfer_requested': return d.note ? String(d.note) : 'No reason given';
+    case 'lost_reason_set': return [
+      `Reason: ${lostReasonLabel(d.reason as string | null)}${d.from_reason ? ` (was ${lostReasonLabel(d.from_reason as string)})` : ''}`,
+      d.note ? `Note: ${String(d.note)}` : null,
+    ].filter(Boolean).join('\n');
     case 'marked_interested': return d.on === false ? 'Unstarred' : 'Starred';
     case 'lead_added': return d.source ? `Source: ${String(d.source).replace(/_/g, ' ')}` : null;
     case 'lead_assigned':

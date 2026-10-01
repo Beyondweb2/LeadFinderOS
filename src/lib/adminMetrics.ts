@@ -37,6 +37,7 @@ import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './
 import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotals } from './commission.ts';
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
 import { isExcludedLead, isExcludedUser, isInternalEmail, isTestMessage, type Exclusions } from './metricExclusions.ts';
+import { LOST_REASONS, lostReasonLabel } from './lostReason.ts';
 import { costFeatureOf, costProviderOf, isChargeRow } from './apiCostLabels.ts';
 import { isLiveLeadWithoutTrade } from './leadTrade.ts';
 import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, type TriageBucket, type TriageCategory } from './replyTriage.ts';
@@ -86,6 +87,11 @@ export interface AdminLead {
   /** 2026-09-30: the Stripe link on a failed-payment item. */
   stripe_subscription_id?: string | null;
   stripe_customer_id?: string | null;
+  /** Why they said no (lead_set_lost_reason, 2026-10-01). Null = not recorded. */
+  lost_reason?: string | null;
+  lost_reason_note?: string | null;
+  lost_reason_recorded_at?: string | null;
+  lost_reason_recorded_by?: string | null;
 }
 export interface AdminMessage {
   /** Release 3: ties a reply to its triage row (template "positive" replies). */
@@ -277,6 +283,21 @@ export interface AdminInput {
   delegatedTasks?: DelegatedTask[] | null;
 }
 /** One open lead-assignment task on the Team board: the lead, who holds the task, its state. */
+/** One reason on "Why prospects say no": how many, the share of the leads WITH a reason, and who they are. */
+export interface LostReasonRow { key: string; label: string; count: number; pct: number; leads: LostReasonLead[] }
+export interface LostReasonLead { id: string; business: string; note: string | null; who: string; at: string | null }
+export interface LostReasons {
+  /** Leads that are Not interested now and said no in the period (test activity excluded). */
+  saidNo: number;
+  recorded: number;
+  /** Said no with no reason recorded — never guessed, never backfilled. */
+  unrecorded: number;
+  rows: LostReasonRow[];
+  unrecordedLeads: LostReasonLead[];
+}
+/** The most leads listed under one reason (the count is never capped). */
+export const LOST_REASON_LIST_MAX = 25;
+
 export interface DelegatedTask { post_id: string; lead_id: string; user_id: string; task_status: string; published_at: string }
 export interface DelegatedSummary { count: number; items: { leadId: string; business: string; owner: string; status: string; why: string; kind: string }[] }
 
@@ -308,6 +329,7 @@ export interface AdminOverview {
   triageWaitingInInbox: number;
   clients: ClientRow[];
   inventory: { leads: number; active: number; archived: number; addedByTestAccounts: number };
+  lostReasons: LostReasons;
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────────────────────────────── */
@@ -762,6 +784,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
           baselineStarted: c.baselineStarted, remeasureDue: c.remeasureDue, remeasured: c.remeasured, payment: c.payment, refunded: c.refunded, todayDay,
         }, input.clientExtras) };
       }),
+    lostReasons: foldLostReasons(facts, p, ex, nameOf),
     inventory: {
       leads: input.leads.length,
       active: input.leads.filter((l) => !l.is_archived).length,
@@ -771,6 +794,40 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   };
 }
 
+/* ── Why prospects say no (2026-10-01) ─────────────────────────────────────────────────────────────
+   The leads that are Not interested NOW (status not_interested; an opt-out or a Closed conversation is not
+   a sales "no") and said no in the period: the moment is the newest "no" in History (the same events the
+   funnel's Not interested count reads), or, for a lead with none, when the reason was recorded. All time =
+   every such lead. A "no" made by a test account is excluded like every other test activity. The reason is
+   the lead's canonical one (lead_set_lost_reason); a lead without one is "Reason not recorded" — counted,
+   listed, never guessed. Percentages are of the leads WITH a reason. */
+function foldLostReasons(facts: LeadFacts[], p: ReportingPeriod, ex: Exclusions, nameOf: (u: string | null | undefined) => string): LostReasons {
+  const by = new Map<string, LostReasonLead[]>();
+  const unrecorded: LostReasonLead[] = [];
+  let saidNo = 0;
+  for (const f of facts) {
+    if (String(f.lead.status ?? '') !== 'not_interested') continue;
+    const last = f.notInterested.reduce<{ at: number; who: string | null } | null>((m, n) => (!m || n.at > m.at ? n : m), null);
+    if (last && isExcludedUser(ex, last.who)) continue;
+    const at = last?.at ?? ms(f.lead.lost_reason_recorded_at);
+    if (p.fromMs !== null && !inP(at, p)) continue;
+    saidNo += 1;
+    const item: LostReasonLead = {
+      id: f.lead.id, business: f.lead.business_name || 'Unnamed business', note: f.lead.lost_reason_note ?? null,
+      who: nameOf(f.lead.lost_reason ? f.lead.lost_reason_recorded_by : last?.who), at: Number.isFinite(at) ? new Date(at).toISOString() : null,
+    };
+    const key = f.lead.lost_reason;
+    if (!key) { unrecorded.push(item); continue; }
+    const list = by.get(key); if (list) list.push(item); else by.set(key, [item]);
+  }
+  const recorded = saidNo - unrecorded.length;
+  const newest = (a: LostReasonLead, b: LostReasonLead) => Date.parse(b.at ?? '') - Date.parse(a.at ?? '') || 0;
+  const order = (k: string) => { const i = LOST_REASONS.findIndex((r) => r.value === k); return i < 0 ? LOST_REASONS.length : i; };
+  const rows = [...by.entries()]
+    .map(([key, leads]) => ({ key, label: lostReasonLabel(key), count: leads.length, pct: recorded ? Math.round((leads.length / recorded) * 100) : 0, leads: leads.sort(newest).slice(0, LOST_REASON_LIST_MAX) }))
+    .sort((a, b) => b.count - a.count || order(a.key) - order(b.key));
+  return { saidNo, recorded, unrecorded: unrecorded.length, rows, unrecordedLeads: unrecorded.sort(newest).slice(0, LOST_REASON_LIST_MAX) };
+}
 /* ── The state WORDS on a Needs-your-attention line (2026-10-01) ─────────────────────────────────────
    The same reading as every screen (salesStateOf) WITH the lead's logged contacts, so a lead reached by phone
    is never described as "New". Labels only: the urgency, "settled" and ordering decisions keep their inputs. */

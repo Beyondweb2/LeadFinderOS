@@ -45,7 +45,7 @@ async function allRows<T>(build: (from: number, to: number, count: boolean) => a
   return out.filter((r) => { const id = (r as { id?: string }).id; if (!id) return true; if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
-const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, whatsapp_ever_delivered, next_action, next_action_date, next_action_time, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build, stripe_subscription_id, stripe_customer_id";
+const LEAD_COLUMNS = "id, business_name, created_at, added_by_user_id, assigned_to_user_id, sold_by_user_id, sold_at, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, whatsapp_ever_delivered, next_action, next_action_date, next_action_time, is_archived, phone, email, search_keyword, category, payment_date, refunded_at, service_terminated_at, subscription_status, contract_total_payments, baseline_audit_id, remeasure_due_date, remeasure_audit_id, website, delivery_checklist, website_build, stripe_subscription_id, stripe_customer_id, lost_reason, lost_reason_note, lost_reason_recorded_at, lost_reason_recorded_by";
 
 /** ⛔ FINDABLE-PAID ROWS ONLY (src/lib/apiCostAccounting.ts isFindableCost): usage from before each
  *  provider's move to Paul's own account was paid by Move37 and never reaches a Findable total — the
