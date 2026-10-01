@@ -119,34 +119,37 @@ const TARGETS = [
     resolve: spaLazy('Baseline'),
     present: ['Measuring the wrong trade', 'answered this about a different trade'],
   },
+  /* 🔴 REWRITTEN 2026-10-01. These four targets asserted the RETIRED offer as PRESENT ("29.99",
+     "Cancel any time", "The monthly starts 14 days later unless you cancel", "had my report"), so a
+     correct live site failed them and a reverted one would have passed. They now check the current
+     offer (£99, then £99/month from week six; Build 12 / Optimise 6 payments) and the 2026-10-01
+     homepage (guarantee headline, yellow = service, outline = free audit), and keep the retired
+     wording as ABSENT so a stale build cannot read green. */
   {
     name: 'findable.live · hero + pricing card',
     resolve: page(`${SITE}/`),
-    present: ['had my report', 'Your second payment is',
-              'The monthly starts 14 days later unless you cancel'],
-    /* The removals. Without these a half-deployed build reads green. */
-    absent: ['one-off', 'You decide what happens next', 'Once your claim window closes',
-             'href="#how" class="inline-flex items-center justify-center rounded-full border'],
+    present: ['Improve my AI visibility', 'Get a free AI audit', 'Then £99/month from week 6',
+              '12 payments if we build your site'],
+    absent: ['one-off', '29.99', 'unless you cancel', 'refund your first', 'Cancel any time',
+             'Once your claim window closes'],
   },
   {
-    name: 'findable.live · proof section lead',
+    name: 'findable.live · guarantee',
     resolve: page(`${SITE}/`),
-    /* The rendered text wraps across a source line, so the marker is the tail of the sentence —
-       the half that changed — not the whole thing. */
-    present: ['so you can see the'],
-    absent: ['that is the whole guarantee'],
+    present: ['We improve AI visibility or you get your', 'within 14 days of your results'],
+    absent: ['that is the whole guarantee', 'What you get, or your'],
   },
   {
-    name: 'findable.live · FAQ + WhatWeDo wording',
-    resolve: page(`${SITE}/`),
-    present: ['fourteen days after you get your four week results',
-              'taken fourteen days after you get your results'],
-    absent: ['starting the day your claim window closes'],
+    name: 'findable.live · refunds page',
+    resolve: page(`${SITE}/refunds/`),
+    present: ['email us within 14 days of your results', 'Findable Build', 'Findable Optimise'],
+    absent: ['29.99', 'Cancel any time'],
   },
   {
     name: 'findable.live · onboarding island',
     resolve: island('/onboarding/', 'What you pay'),
-    present: ['What you pay', '29.99', 'four week results', 'Cancel any time', 'confirmed_phone'],
+    present: ['What you pay'],
+    absent: ['29.99', 'Cancel any time'],
   },
 ];
 

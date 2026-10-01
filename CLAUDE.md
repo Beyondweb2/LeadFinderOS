@@ -183,8 +183,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
-  were); if the number has not gone up, they
-  email within 14 days of their results and get the £99 back. `findable.live/refunds` is the
+  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`); Google AI Overview is recorded,
+  never scored. "The number" = named answers ÷ answered answers pooled over every frozen question,
+  replay vs baseline (`compareMeasurements` → `numberWentUp`). Same rule on Build and Optimise; only
+  the clock differs (eight weeks for a new-domain Build, `remeasureWeeksFor`). If the number has not
+  gone up, they email within 14 days of their results and get the £99 back, **plus the first monthly
+  payment if it has already been taken** (`GUARANTEE_PAYMENT_TWO_SENTENCE`); a valid claim ends the
+  monthly. Verified against the code 2026-10-01. `findable.live/refunds` is the
   customer-facing authority. ⛔ **No hedge beside it** ("the engines decide", "anyone who promises is
   guessing") — a promise with a disclaimer stapled on reads as walking it back.
 - **"Gone up" = `movement === 'improved'`, beyond `NOISE_BAND_PP`.** Inside the band qualifies for the
