@@ -35,6 +35,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'A lead only counts as Contacted when a message really went, or a logged contact reached them (spoke to owner, call back, interested, a message sent…). A WhatsApp that Meta rejected, or a no-answer / voicemail call, is an attempt: it stays in History, not Contacted.',
         'The phone icon says only what is known: "Mobile number" until a message is delivered, "No WhatsApp" after Meta rejects one. The WhatsApp-capable filter leaves rejected numbers out.',
         'Tapping Call opens the dialler and the lead on its Work tab to log what happened. It no longer records a call by itself.',
+        'A business reached by phone shows the solid Contacted pill even if its WhatsApp status still says New or No WhatsApp.',
         'The Status column shows only the status. The last contact is in its tooltip. A booked meeting, or a call-back with no day set, shows in the Next Action column.',
       ],
       removed: ['The grey "Call · Call back · 3 days ago" line under the status pill (it was history, not a next action).'],

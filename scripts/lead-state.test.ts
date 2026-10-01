@@ -13,7 +13,7 @@ import path from "node:path";
 import {
   MEETING_KEEP_AFTER_MS, NOT_INTERESTED_STATUSES, OUTCOME_RULE_VALUES, SALES_STATES, SALES_STATE_LABEL, SALES_STATE_TONE,
   contactAgo, isEngaged, isOutOfOutreach, lastContactOf, lastContactText, lastLoggedByLead, lastLoggedContactOf,
-  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction,
+  meetingIsCurrent, offeredOutcomes, outcomePlan, outcomeRule, pillStatusOf, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction,
 } from "../src/lib/leadState.ts";
 import { CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail, outcomesFor, salesStageOf } from "../src/lib/salesCrm.ts";
 import { INBOUND_NO_DOWNGRADE, STRONG_STATUSES, postgrestList } from "../src/lib/strongStatuses.ts";
@@ -292,7 +292,9 @@ console.log("\n── 12. Paul's decisions, 2026-09-30 (follow-up) ──");
   const table = read("src/components/OutreachTable.tsx");
   const card = read("src/components/OutreachMobileCard.tsx");
   const sel = read("src/components/PipelineStatusSelect.tsx");
-  ok(sel.includes('<PipelineStatusBadge status={(status as PipelineStatus) ?? undefined} compact={compact} />') && !sel.includes('SalesStatePill'), "the one pill is the solid pipeline badge (its own words and colours), never a sales-state pill");
+  ok(sel.includes('<PipelineStatusBadge status={(pillStatusOf(status, stage) as PipelineStatus) ?? undefined} compact={compact} />') && !sel.includes('SalesStatePill'), "the one pill is the solid pipeline badge (its own words and colours), never a sales-state pill");
+  ok(pillStatusOf('not_contacted', { state: 'contacted' }) === 'initial_contact' && pillStatusOf('no_whatsapp', { state: 'contacted' }) === 'initial_contact' && pillStatusOf('no_whatsapp', { state: 'new' }) === 'no_whatsapp' && pillStatusOf('replied', { state: 'replied' }) === 'replied' && pillStatusOf('queued', { state: 'interested' }) === 'queued',
+    "a lead reached by phone shows the solid Contacted pill even when the WhatsApp pipeline still says New / No WhatsApp; nothing else changes");
   ok(table.includes('stage={rowSalesState(lead)}') && table.includes('<OneStatusPill status={lead.status} stage={rowSalesState(lead)} />') && !table.includes('<SalesStatePill') && table.includes('salesState={rowSalesState(lead)}'), "Outreach desktop row: ONE pill, no second pill");
   ok(!card.includes('<SalesStatePill') && card.split('<OneStatusPill').length - 1 === 2, "Outreach phone card: ONE pill (editable or read-only)");
   ok(table.includes('fill-yellow-500 flex-shrink-0"><title>Interested</title>'), "Interested is the gold star on the row, not a pill");

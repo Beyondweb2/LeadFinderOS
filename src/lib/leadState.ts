@@ -98,6 +98,18 @@ export const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set([
   'spoke_to_owner', 'interested', 'call_back', 'meeting_booked', 'not_interested', 'agency_controls_site',
 ]);
 export const REACHED_OUTCOMES: ReadonlySet<string> = new Set([...CONVERSATION_OUTCOMES, 'message_sent']);
+
+/* ⛔ THE ROW PILL TELLS THE TRUTH ABOUT CONTACT (2026-10-01). The pill is the solid pipeline badge (Paul,
+   2026-10-01: "put the pills back to how they worked yesterday"). But the pipeline status is the WhatsApp
+   pipeline: a business the rep REACHED by phone still reads "New" (or "No WhatsApp") there. When the sales
+   state is Contacted and the pipeline still says not-contacted / no WhatsApp / failed, the pill shows the
+   solid "Contacted" badge instead. Display only — the stored status and its menu are untouched. */
+const PIPELINE_NOT_CONTACTED: ReadonlySet<string> = new Set(['', 'not_contacted', 'no_whatsapp', 'no_whatsapp_needs_sms', 'whatsapp_failed']);
+export function pillStatusOf(status: string | null | undefined, stage: Pick<SalesStateView, 'state'> | null | undefined): string | null {
+  const s = (status ?? '').trim();
+  if (stage?.state === 'contacted' && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
+  return status ?? null;
+}
 export function openerReallySent(l: Pick<LeadStateInput, 'status' | 'whatsapp_sent_at' | 'whatsapp_ever_delivered'>): boolean {
   if (!l.whatsapp_sent_at) return false;
   if (l.whatsapp_ever_delivered === true) return true;

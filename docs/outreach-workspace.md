@@ -39,6 +39,10 @@ included, and restored a re-queued failed lead to `initial_contact` (2 leads).
   Admin Services & Bookkeeping → `email_sent` (its previous status); `whatsapp_delivery_status` set to the
   real latest result.
 
+- **The row pill** stays the solid pipeline badge (Paul's choice); `leadState.pillStatusOf` shows the solid
+  "Contacted" badge when a logged contact reached the business but the WhatsApp pipeline still says New / No
+  WhatsApp / failed. Display only; the menu still sets the stored pipeline status.
+
 ### WhatsApp vs mobile (`src/lib/whatsAppCapability.ts`)
 
 The row icon said "Mobile — WhatsApp-capable (line-type check)" from `line_type` (an OFFLINE number-format
