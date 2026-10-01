@@ -1,8 +1,8 @@
-# The /r/<slug> "listing" pages: read-only audit (2026-10-01)
+# The /r/<slug> "listing" pages: audit, then RETIRED (2026-10-01)
 
-**What I did:** a read-only audit, with no change to `/r/` itself. Same day, I fixed the Dashboard
-Submissions link (`?leadId=` → `?lead=`, via `outreachLeadLink`; guarded in
-`dashboard-links.test.ts`).
+**Status: ✅ RETIRED 2026-10-01 (Paul), main `3ecc83cd`.** See "Retirement" at the end. The audit
+below is the evidence it was based on, kept as written. Same day, separately: the Dashboard
+Submissions link was fixed (`?leadId=` → `?lead=`, via `outreachLeadLink`; `dashboard-links.test.ts`).
 
 ## What they are
 `functions/r/[slug].ts` is a Cloudflare Pages Function. It reads a `status='published'` row from
@@ -69,7 +69,7 @@ yoursites.uk is not in the account wrangler uses here.
   that isn't theirs or ours-by-brand — is search manipulation by the brief's own definition, and its
   schema misattributes authorship.
 
-## Recommendation (needs Paul's decision; not built)
+## Recommendation (as written before Paul decided; superseded by "Retirement" below)
 1. **Stop generating.** Remove the auto-report call in `process-ai-audit-queue` and the
    "Generate listing" item.
 2. **Keep every URL resolving but noindex.** Add `X-Robots-Tag: noindex` and a robots meta to
@@ -82,3 +82,42 @@ yoursites.uk is not in the account wrangler uses here.
 4. If a public profile is ever wanted for a PAYING client, put it under the client's own domain (the
    page generator / website build). Not on a third-party host, and not on app.leadfinderos.com (the
    private operator app).
+
+## Retirement (2026-10-01, Paul; main `3ecc83cd`, merge of `5f6f8631`)
+What stopped:
+- **Auto-report.** `process-ai-audit-queue` no longer calls `generate-report`. The
+  `AUTO_REPORT_ENABLED` switch is no longer read. Redeployed; the live bundle has no
+  `functions/v1/generate-report` and carries the "NO AUTO-REPORT" marker. The 30 s cron answers 200.
+- **`generate-report`** is a stub: every POST answers `410 {"error":"retired"}`; there is no model
+  call and no insert. Its `config.toml` entry stays. Verified live.
+- **AI Audit** lost "Generate listing" / "View listing", "Credentials for listing" and its panel,
+  both `business_reports` reads, and the list's `report` pill (`AuditLite.report_slug`). Verified in
+  the live AiAudit chunk. `ai_audits.credentials` stays as a column (re-audit still copies it);
+  nothing reads it now.
+
+What `/r/<slug>` returns:
+- **410 Gone**, `X-Robots-Tag: noindex, nofollow` plus a robots meta, a 419-byte page, no database
+  read. Live on app.leadfinderos.com and leadfinderos-next.pages.dev.
+- ⚠️ **yoursites.uk/r/ is NOT changed yet.** yoursites.uk is the legacy `leadfinderos` Pages project
+  (same bundle as leadfinderos.pages.dev). It is not in the Cloudflare account wrangler reaches here
+  (only findable-site, findable-directory), so it cannot be deployed from this machine. Its frozen
+  `/r/` function reads profile content with the anon key through ONE policy, `"Public can read
+  published reports"` (anon + authenticated, `status = 'published'`).
+  - **Option A:** drop that policy. Paul's approval is needed (a DROP); nothing else reads that way.
+    Then yoursites.uk/r/* serves its own 404 + robots noindex page; the rows stay;
+    render-audit-report uses the service role and is unaffected.
+  - **Option B:** redeploy main to that project from its own Cloudflare account. That gives the 410.
+    It is safe: the frozen bundle has no `/s/` route either, and `functions/a` is on main.
+
+What is unchanged and verified, before and after (same status, bytes and marker):
+- findable.live/r/<code>, findable.live/report/<uuid>, findable.live/report/<name-8hex> (legacy),
+  and render-audit-report `?slug=`.
+- yoursites.uk/a/<uuid> and app.leadfinderos.com/a/<uuid> (301 to findable.live/report).
+- `/s/` on both hosts. It is the SPA shell; the barber viewer was deleted 2026-09-09, so these
+  links already showed the app's not-found screen before this change.
+
+Rows: 1,296 (1,295 published, 69 legacy-slug). None deleted or updated; the last update is still
+2026-09-30. Guard: `scripts/r-profile-retired.test.ts`.
+
+Left alone: findable-directory's unused `reportsOrigin()` helper (its own repo, nothing calls it) and
+the historical `openai_generate_report` spend label in `apiCostLabels.ts`.
