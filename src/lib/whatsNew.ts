@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-inbox-top-bar', date: '2026-10-01', title: 'A tidier Inbox top bar', audience: 'all',
+    body: 'The WhatsApp Inbox header is two clean rows: the title with New (and Send now) on one, the filters on the other. Every control is the same size.',
+    report: {
+      added: [],
+      changed: [
+        'New (and Send now for admins) stay on the title line at every screen size. On a phone, Send now shows as its icon.',
+        'The filters sit together as one group: two columns on a phone, one line on a wide screen. All of them use the same text size.',
+        'A status or campaign filter you have set is highlighted in blue, like the other filters. The Sort button shows a short name ("Latest reply"); its menu keeps the full wording.',
+        'The four list views (All, Unread, Waiting on us, Waiting on them) are a 2 by 2 grid, so none sits alone on a second line.',
+      ],
+      removed: [],
+      effect: 'Same controls, same filters, nothing works differently. The top of the Inbox is easier to read and takes less room.',
+    } },
   { id: '2026-10-01-hourly-reminders', date: '2026-10-01', title: 'Reminders at the right time', audience: 'all',
     body: 'Next Action reminders now arrive at their time, once, and Done or Clear starts the next action with a blank note.',
     report: {
