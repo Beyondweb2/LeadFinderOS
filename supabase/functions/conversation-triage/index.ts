@@ -9,7 +9,7 @@ import {
   type TriageDecision,
 } from "../../../src/lib/replyTriage.ts";
 import { isPaidLead } from "../../../src/lib/leadPayment.ts";
-import { salesStateOf } from "../../../src/lib/leadState.ts";
+import { lastLoggedByLead, salesStateOf, type LastContactView } from "../../../src/lib/leadState.ts";
 
 // conversation-triage — files every inbound WhatsApp as urgent / admin / salesperson / nothing / review
 // (Admin control centre, release 2, 2026-09-30; docs/admin-control-centre.md §Reply triage).
@@ -82,6 +82,16 @@ async function run(service: Service): Promise<Record<string, unknown>> {
     if (error) throw new Error(`leads: ${error.message}`);
     for (const l of (data ?? []) as LeadRow[]) leads.set(l.id, l);
   }
+  /* The leads' logged contacts (2026-10-01): the AI is told the SAME state every screen shows, so a lead reached
+     by phone is never described to it as "New". Context only — the bucket rules do not read it. A failed read
+     leaves the context without them (as before), never stops the sort. */
+  const logged = new Map<string, LastContactView>();
+  for (let i = 0; i < leadIds.length; i += 150) {
+    const { data, error } = await service.from("lead_activity").select("lead_id, kind, body, data, created_at, actor_user_id")
+      .in("lead_id", leadIds.slice(i, i + 150)).in("kind", ["call_outcome", "contact_logged"]).limit(5000);
+    if (error) { console.error("[conversation-triage] logged contacts", error.message); break; }
+    for (const [k, v] of lastLoggedByLead((data ?? []) as Parameters<typeof lastLoggedByLead>[0])) logged.set(k, v);
+  }
   // The newest pending message per lead is the one worth a model call; earlier ones in the same burst are superseded.
   const newestOf = new Map<string, string>();
   for (const p of pending) if (p.lead_id) newestOf.set(p.lead_id, p.id);
@@ -115,7 +125,8 @@ async function run(service: Service): Promise<Record<string, unknown>> {
         const { data: thread } = await service.from("whatsapp_messages").select("direction, body, created_at").eq("lead_id", p.lead_id ?? "00000000-0000-0000-0000-000000000000").lte("created_at", p.created_at).order("created_at", { ascending: false }).limit(8);
         const t = ((thread ?? []) as { direction: string; body: string | null }[]).reverse().map((m) => ({ direction: m.direction, text: String(m.body ?? "").slice(0, 600) }));
         if (!t.length) t.push({ direction: "inbound", text: String(p.body ?? "").slice(0, 600) });
-        const state = lead ? salesStateOf({ status: lead.status, is_potential_work: lead.is_potential_work, amount_paid: lead.amount_paid, call_booked_at: lead.call_booked_at, whatsapp_sent_at: lead.whatsapp_sent_at }).label : "Unknown number";
+        const lc = lead ? logged.get(lead.id) : undefined;
+        const state = lead ? salesStateOf({ status: lead.status, is_potential_work: lead.is_potential_work, amount_paid: lead.amount_paid, call_booked_at: lead.call_booked_at, whatsapp_sent_at: lead.whatsapp_sent_at, whatsapp_ever_delivered: lead.whatsapp_ever_delivered, lastLogged: lc ? { outcome: lc.outcomeValue ?? "", at: lc.at, reached: lc.everReached } : null }).label : "Unknown number";
         const prompt = triagePrompt({ thread: t, isClient, state });
         const res = await callModel(TRIAGE_MODEL, prompt.system, prompt.user, TRIAGE_TOOL, 0);
         aiCalls += 1;

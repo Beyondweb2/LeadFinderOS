@@ -165,3 +165,26 @@ contact, so a lead reached by phone reads New there (labels only, counts unaffec
 App" path from Manage (`handleDialogSent` → `executeContact`) still records an attempt with status
 `initial_contact` (14 legacy, archived leads have only that).
 Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim-rule.sql` 16/16.
+
+## F. Final contact-state consistency (2026-10-01)
+
+- **Outreach status filter = the row pill.** The filter matched the STORED pipeline status while the pill read
+  `pillStatusOf(status, rowSalesState(lead))`, and the logged contacts behind it were read for the visible page
+  only. Now one `rowSalesState` (above the filter) over `useAllLoggedContacts()` (every logged contact the caller
+  may see — a small table) feeds both; the filter keeps a lead when the status its pill SHOWS is in the option.
+  The page-only Wrong-number read was dropped from this reading (it never changed the pill and the filter cannot
+  see it off-page).
+- **Labels:** Needs your attention lines (`adminMetrics.stateOf`, and the reply-triage items' `state`) were built
+  without logged contacts, so a lead reached by phone read "New"; they now use `stateLabelOf` (the lead's logged
+  contacts from its facts). `conversation-triage` reads the leads' logged contacts once per run and tells the AI the
+  same state. Labels only: urgency, "settled", follow-up counts, ordering keep their inputs.
+- **The old "Open in WhatsApp app" path** (`handleDialogSent` → `executeContact` → `logAttempt`) set a New lead to
+  `initial_contact`. Both hooks now record the attempt (outreach_attempts / last_outreach_attempt_at / an
+  outreach_events "attempt") and never change the status. The 14 archived legacy leads that path once set to
+  initial_contact were left: nothing records their status before, so there is no deterministic correction.
+- **Sweep:** no remaining place sets Contacted from a click or a queue, reads a failed send as contact, or treats a
+  mobile as WhatsApp. Intentional and kept: the queue's own `initial_contact` on a Meta-accepted send (a failure
+  webhook moves it to No WhatsApp), coverage "worked", "never tried" checks (`isFreshLead`, the phone-change
+  confirm), the follow-up batch (initial_contact only), and the "Most recent contact" sort (it sorts by the latest
+  attempt or send).
+- Tests: `scripts/contact-state-final.test.ts` (the brief's whole matrix: pill ↔ filter, attempts, labels, AI context).

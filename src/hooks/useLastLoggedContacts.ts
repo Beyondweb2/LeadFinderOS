@@ -63,3 +63,29 @@ export function useWrongNumbers(leadIds: readonly string[]) {
     },
   });
 }
+
+/** The newest logged contact for EVERY lead the caller can see (2026-10-01) — one read of the logged
+ *  contacts (a small table: RLS scopes it to the caller's own leads for a salesperson). Outreach reads its
+ *  row status, its status FILTER and its Next Action hint from this ONE map, so a lead reached by phone is
+ *  "Contacted" in the pill and under the Contacted filter alike, whichever page it is on. */
+export function useAllLoggedContacts(enabled = true) {
+  const [bump, setBump] = useState(0);
+  useEffect(() => onLeadChanged((d) => { if (!d.optimistic) setBump((n) => n + 1); }), []);
+  return useQuery({
+    queryKey: ['last-logged-contacts', 'all', bump],
+    enabled,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const rows: { lead_id: string; kind: string; body: string | null; data: Record<string, unknown> | null; created_at: string; actor_user_id: string | null }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from('lead_activity').select('id, lead_id, kind, body, data, created_at, actor_user_id')
+          .in('kind', ['call_outcome', 'contact_logged']).order('id').range(from, from + 999);
+        if (error) throw error;
+        rows.push(...(data ?? []));
+        if ((data ?? []).length < 1000) break;
+      }
+      return lastLoggedByLead(rows);
+    },
+  });
+}
