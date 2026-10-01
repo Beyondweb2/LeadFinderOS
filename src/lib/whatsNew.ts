@@ -22,6 +22,43 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-outreach-workspace', date: '2026-10-01', title: 'Outreach is the full sales workspace', audience: 'all',
+    body: 'Truthful contact status, honest WhatsApp labels, Next Actions in their own column, and the AI audit where you work the call.',
+    report: {
+      added: [
+        'The AI visibility check on the lead’s Work tab: the score, who AI names instead, the report, "Run a new check", and a list of previous checks.',
+        'If a lead has no trade or town, the check asks for them right there and saves them.',
+        'A star in the lead workspace header to mark (or unmark) interested.',
+        'A Google Maps link and the phone’s WhatsApp status ("Mobile number", "WhatsApp verified", "No WhatsApp") on the Prospect tab.',
+      ],
+      changed: [
+        'A lead only counts as Contacted when a message really went (or a contact was logged). A WhatsApp that Meta rejected no longer shows as Contacted.',
+        'The phone icon says only what is known: "Mobile number" until a message is delivered, "No WhatsApp" after Meta rejects one. The WhatsApp-capable filter leaves rejected numbers out.',
+        'Tapping Call opens the dialler and the lead on its Work tab to log what happened. It no longer records a call by itself.',
+        'The Status column shows only the status. The last contact is in its tooltip. A booked meeting, or a call-back with no day set, shows in the Next Action column.',
+      ],
+      removed: ['The grey "Call · Call back · 3 days ago" line under the status pill (it was history, not a next action).'],
+      effect: 'You can work a lead start to finish from Outreach — check the business and its audit, call, log the outcome and set the Next Action — and the counts no longer include contact that never happened.',
+    } },
+  { id: '2026-10-01-grouped-replies', date: '2026-10-01', title: 'One card for new WhatsApp replies', audience: 'all',
+    body: 'The bell shows "6 new replies from 4 businesses" instead of a card per reply.',
+    report: {
+      added: ['One card at the top of the bell with the number of unread replies and businesses. It opens the Inbox on Unread.'],
+      changed: [
+        'The count comes from the same unread state as the Inbox: it goes down as you open conversations and never shows a lead that is no longer yours.',
+        'The bell number = unread conversations + other unread notifications.',
+      ],
+      removed: ['One notification card per WhatsApp reply.'],
+      effect: 'A quieter bell that matches the Inbox. Payments, assignments, tasks and other notices still show on their own.',
+    } },
+  { id: '2026-10-01-trade-autofix', date: '2026-10-01', title: 'Missing trades, filled automatically', audience: 'admin',
+    body: '"Fix automatically" on Needs your attention fills in missing trades from data we already hold.',
+    report: {
+      added: ['"Fix automatically" on the "No trade stored" line: it reads each lead’s audit, campaign and business name, saves the trade when the evidence is strong, and lists the rest for you.'],
+      changed: [],
+      removed: [],
+      effect: 'Free (no AI, no Google, no website visits). Only the trade is written, recorded in History with its evidence; nothing is sent and no status, owner or Next Action changes.',
+    } },
   { id: '2026-10-01-moved-history', date: '2026-10-01', title: 'Moving a lead no longer moves its past', audience: 'admin',
     body: 'Work is credited to whoever held the lead at the time. The 82 leads worked under the Test account are now yours, with their history kept as it was.',
     report: {

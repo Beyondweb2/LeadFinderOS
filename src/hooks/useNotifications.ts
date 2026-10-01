@@ -57,6 +57,8 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
         if ((p.eventType === 'INSERT' || p.eventType === 'UPDATE') && p.new?.kind === 'lead_assigned' && p.new.lead_id) notifyLeadChanged(p.new.lead_id);
         /* The Team Board (2026-10-01) rides the same channel: a team post or an assignment re-reads it. */
         if (p.new && TEAM_BOARD_KINDS.has(p.new.kind)) void qc.invalidateQueries({ queryKey: ['team-board'] });
+        /* A new reply raises the bell's grouped card at once (it reads the Inbox's unread state). */
+        if (p.new?.kind === 'whatsapp_reply') void qc.invalidateQueries({ queryKey: ['whatsapp-unread'] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };

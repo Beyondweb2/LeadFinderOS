@@ -8,6 +8,7 @@
  * ⛔ ENUMERATED. 'none' and null mean "no next action" and draw nothing; a stored value this file does
  * not know is shown as its own words, never dropped. */
 import { followUpBucket, londonToday, type FollowUpBucket } from './salesCrm.ts';
+import { meetingIsCurrent, meetingWhen } from './leadState.ts';
 
 /** The words for each stored next_action value. The first six are the ones the popup offers today
  *  (NEXT_ACTION_OPTIONS); the rest are older values that can still be on a row. */
@@ -152,4 +153,26 @@ export function nextActionSortKey(lead: { next_action?: string | null; next_acti
 /** One line for a title / tooltip: "Call · Tomorrow · ring after their website contract ends". */
 export function nextActionText(v: NextActionView): string {
   return [v.label, v.when, v.note].filter(Boolean).join(' · ');
+}
+
+/* ── WHAT HAPPENS NEXT WHEN NO NEXT ACTION IS STORED (2026-10-01) ────────────────────────────────────
+   The Next Action column shows the stored Next Action (NextActionEditor). When there is none it may add ONE
+   small line about what is genuinely coming: a booked meeting (call_booked_at, still current), or a
+   call-back someone logged without picking a day ("Call back · no day set" — the Work panel pre-fills the
+   follow-up but never saves it; Next Actions stay human-set). Display only: nothing is written. */
+export interface NextUpHint { text: string; title: string; tone: 'meeting' | 'prompt' }
+export function nextUpHint(
+  lead: { next_action?: string | null; call_booked_at?: string | null },
+  lastLogged: { outcomeValue?: string | null; at: string } | null,
+  nowMs: number,
+): NextUpHint | null {
+  const action = (lead.next_action ?? '').trim();
+  if (action && action !== 'none') return null;
+  if (meetingIsCurrent(lead.call_booked_at, nowMs)) {
+    return { text: `Meeting · ${meetingWhen(lead.call_booked_at!)}`, title: 'A meeting is booked. Set a Next Action to plan the follow-up.', tone: 'meeting' };
+  }
+  if (lastLogged?.outcomeValue === 'call_back') {
+    return { text: 'Call back · no day set', title: 'They asked for a call back, but no day was saved. Set the Next Action.', tone: 'prompt' };
+  }
+  return null;
 }

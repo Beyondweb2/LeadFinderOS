@@ -5,6 +5,7 @@ import { leadSourceLabel } from '@/lib/salesPerformance';
 import type { OutreachLead } from '@/types/outreach';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { isDemoLead } from '@/lib/demoLeads';
+import { WHATSAPP_CAPABILITY_DETAIL, WHATSAPP_CAPABILITY_LABEL, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
 
 /* WHO IS THIS? — the prospect in one card, for the workspace's Prospect tab (2026-09-28). Only what we
    genuinely hold: a contact name shows only when one was recorded, never a guess from the business
@@ -16,14 +17,17 @@ export function ProspectFacts({ lead }: { lead: OutreachLead }) {
   const campaign = lead.campaign_id ? campaigns.find((c) => c.id === lead.campaign_id)?.name ?? 'A campaign' : 'No campaign';
   const town = lead.derived_town || lead.search_location || null;
   const owner = lead.assigned_to_user_id ? team.byId.get(lead.assigned_to_user_id)?.display_name ?? 'A teammate' : 'Unassigned';
+  const wa = whatsAppCapabilityOf(lead);
+  /* Google Maps — the same rule as the Inbox header (a stored Maps URL, else the place id). */
+  const maps = lead.google_maps_url || ((lead as { place_id?: string | null }).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as { place_id?: string | null }).place_id}` : null);
   const site = lead.website ? (/^https?:\/\//i.test(lead.website) ? lead.website : 'https://' + lead.website) : null;
   const rows: { icon: typeof Phone; label: string; value: React.ReactNode }[] = [
     { icon: Building2, label: 'Business', value: [lead.business_name, lead.search_keyword || lead.category].filter(Boolean).join(' · ') },
     { icon: User, label: 'Contact', value: lead.contact_name || <span className="italic text-muted-foreground/60">Not known</span> },
-    { icon: Phone, label: 'Phone', value: lead.phone ? <a href={`tel:${lead.phone}`} className="font-semibold hover:underline">{lead.phone}</a> : <span className="italic text-muted-foreground/60">None</span> },
+    { icon: Phone, label: 'Phone', value: lead.phone ? <span className="inline-flex flex-wrap items-baseline gap-x-2"><a href={`tel:${lead.phone}`} className="font-semibold hover:underline">{lead.phone}</a><span className="text-muted-foreground" title={WHATSAPP_CAPABILITY_DETAIL[wa]}>{WHATSAPP_CAPABILITY_LABEL[wa]}</span></span> : <span className="italic text-muted-foreground/60">None</span> },
     { icon: Globe, label: 'Website', value: site ? <a href={site} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lead.website!.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}</a> : <span className="italic text-muted-foreground/60">None on file</span> },
     { icon: Mail, label: 'Email', value: lead.email ? <a href={`mailto:${lead.email}`} className="hover:underline">{lead.email}</a> : <span className="inline-flex flex-wrap items-center gap-x-2"><span className="italic text-muted-foreground/60">None on file</span>{!isDemoLead(lead.id) && <FindEmailButton leadId={lead.id} website={lead.website} />}</span> },
-    { icon: MapPin, label: 'Location', value: [town, lead.address && lead.address !== town ? lead.address : null].filter(Boolean).join(' · ') || <span className="italic text-muted-foreground/60">Unknown</span> },
+    { icon: MapPin, label: 'Location', value: <span className="inline-flex flex-wrap items-baseline gap-x-2"><span>{[town, lead.address && lead.address !== town ? lead.address : null].filter(Boolean).join(' · ') || <span className="italic text-muted-foreground/60">Unknown</span>}</span>{maps && <a href={maps} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Maps</a>}</span> },
     { icon: Compass, label: 'Source', value: leadSourceLabel(lead.lead_source) },
     { icon: Megaphone, label: 'Campaign', value: campaign },
     { icon: User, label: 'Owner', value: owner },

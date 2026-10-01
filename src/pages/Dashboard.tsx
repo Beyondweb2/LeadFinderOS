@@ -27,6 +27,7 @@ import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traff
 import { BusinessSummaryPanel } from '@/components/admin/businessSummary';
 import { TeamComposer, type ComposerSeed } from '@/components/team/TeamComposer';
 import { TeamOversight } from '@/components/team/TeamOversight';
+import { TradeAutofixDialog } from '@/components/admin/TradeAutofixDialog';
 import { useState } from 'react';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -69,6 +70,7 @@ const Dashboard = () => {
   /* The one Send to sales team composer (2026-10-01): the header button, a draft or clarification from the
      team board panel, and Assign on a Needs your attention item all open it. */
   const [compose, setCompose] = useState<ComposerSeed | null>(null);
+  const [fixTrades, setFixTrades] = useState(false);
 
   /* ⛔ Every item opens WHERE ITS ACTION IS DONE (2026-09-30, docs/sales-workflow-nav.md has the audit):
      a WhatsApp chase → that Inbox conversation; a client task → the hub at its stage; a list problem →
@@ -132,6 +134,7 @@ const Dashboard = () => {
               sorter={o.jobs?.find((j) => j.job === 'conversation-triage') ?? null} waitingInInbox={o.triageWaitingInInbox}
               delegated={o.delegated ?? null}
               onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
+              onFixTrades={() => setFixTrades(true)}
               onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
               onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
             <SinceYesterday o={o} attention={o.attention.length} />
@@ -192,6 +195,7 @@ const Dashboard = () => {
         </Section>
       </div>
 
+      <TradeAutofixDialog open={fixTrades} onOpenChange={setFixTrades} onDone={() => void q.refetch()} />
       <TeamComposer open={!!compose} onOpenChange={(v) => { if (!v) { setCompose(null); void q.refetch(); } }} seed={compose} />
       {o && <p className="text-[11px] text-muted-foreground">{o.exclusionNote} Figures are server totals ({o.ms} ms, {o.build}).</p>}
     </div>

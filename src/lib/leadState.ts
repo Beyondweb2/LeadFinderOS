@@ -76,6 +76,21 @@ export interface LeadStateInput {
   lastLogged?: { outcome: string; at: string } | null;
   /** The number is marked Wrong number (lead_wrong_number), when the caller knows. */
   wrongNumber?: boolean | null;
+  /** Meta has confirmed a delivery to this number at least once (outreach_leads.whatsapp_ever_delivered). */
+  whatsapp_ever_delivered?: boolean | null;
+}
+
+/* ⛔ A SEND STAMP IS NOT A CONTACT WHEN THE SEND FAILED (Paul, 2026-10-01: "An attempted contact that failed
+   does not count as successful contact"). The queue sets whatsapp_sent_at the moment Meta ACCEPTS a message;
+   a second later Meta's webhook may say "not on WhatsApp" (131026) — the status becomes no_whatsapp but the
+   stamp is never cleared (leadFailurePatch). 209 of 217 no_whatsapp leads carried it with zero real sends
+   (2026-10-01) and read "Contacted". The stamp counts only while the status is not a failed-send status, or
+   when Meta has confirmed a delivery at least once. The stored rows are untouched. */
+export const FAILED_SEND_STATUSES: ReadonlySet<string> = new Set(['no_whatsapp', 'whatsapp_failed', 'no_whatsapp_needs_sms']);
+export function openerReallySent(l: Pick<LeadStateInput, 'status' | 'whatsapp_sent_at' | 'whatsapp_ever_delivered'>): boolean {
+  if (!l.whatsapp_sent_at) return false;
+  if (l.whatsapp_ever_delivered === true) return true;
+  return !FAILED_SEND_STATUSES.has((l.status ?? '').trim());
 }
 
 export interface SalesStateView {
@@ -116,8 +131,9 @@ export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): Sal
   if (l.is_potential_work || INTERESTED_STATUSES.has(status)) return v('interested', status === 'price_given' ? 'Price given' : null);
   if (stage === 'replied') return v('replied');
   if (l.wrongNumber) return v('wrong_number');
-  // Contacted = the pipeline says so, OR a person logged any contact, OR an opener went out.
-  if (stage === 'contacted' || !!l.lastLogged || !!l.whatsapp_sent_at) return v('contacted');
+  // Contacted = the pipeline says so, OR a person logged any contact, OR an opener really went out
+  // (a failed send's leftover stamp is not contact — openerReallySent).
+  if (stage === 'contacted' || !!l.lastLogged || openerReallySent(l)) return v('contacted');
   if (stage === 'new' || stage === 'queued') return v('new', stage === 'queued' ? 'Opener queued' : null);
   return v('other', status ? status.replace(/_/g, ' ') : null);
 }

@@ -49,6 +49,10 @@ import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks, SocialProfilesPanel } from '@/components/SocialLinks';
 import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { markLeadInterested } from '@/lib/leadQuickActions';
+import { notifyLeadChanged } from '@/lib/leadSync';
+import { useToast } from '@/hooks/use-toast';
+import { Star } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { maySetStatus } from '@/lib/access';
 import { SalesStatePill } from '@/components/SalesStatePill';
@@ -380,6 +384,7 @@ function LeadDetailBody({
             ) : (
               <>
                 <span className="truncate">{lead.business_name}</span>
+                {!isDemoLead(lead.id) && <StarToggle leadId={lead.id} on={!!lead.is_potential_work} canWriteRow={perms.editLeadRecord} />}
                 {perms.editLeadRecord && <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>}
@@ -490,6 +495,9 @@ function LeadDetailBody({
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
           <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
+            {/* ⛔ THE AUDIT IS WHERE THE CALL IS WORKED (2026-10-01): score, who AI names instead, the report,
+                re-run and previous checks — the SAME card and the same create-ai-audit hook path as the Inbox. */}
+            {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
@@ -506,7 +514,6 @@ function LeadDetailBody({
             <ProspectFacts lead={lead} />
             {!isDemoLead(lead.id) && <SocialProfilesPanel lead={lead} />}
             {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
-            {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {(() => {
               /* Social profiles live in ONE place, SocialProfilesPanel above (2026-09-30) — never a second
                  list of the same links here. This card is the admin's editable contact fields only. */
@@ -754,5 +761,31 @@ function LeadDetailBody({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* THE STAR — the one interest mark, now also in the workspace header (2026-10-01; the Inbox header has the
+   same toggle). lead_mark_interested for both roles: History records Starred / Unstarred. Shown on only after
+   the server said yes. */
+function StarToggle({ leadId, on, canWriteRow }: { leadId: string; on: boolean; canWriteRow: boolean }) {
+  const { toast } = useToast();
+  const [state, setState] = useState(on);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setState(on), [on]);
+  return (
+    <button type="button" disabled={busy} aria-pressed={state} data-testid="workspace-star"
+      aria-label={state ? 'Remove the interested star' : 'Mark as interested'} title={state ? 'Interested — click to remove the star' : 'Mark as interested (star)'}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await markLeadInterested(leadId, canWriteRow, !state);
+          if (!r.ok) { toast({ title: state ? 'Could not remove the star' : 'Could not mark interested', description: r.error, variant: 'destructive' }); return; }
+          setState(!state);
+          notifyLeadChanged(leadId, 'workspace-star', { is_potential_work: !state });
+        } finally { setBusy(false); }
+      }}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-muted disabled:opacity-50">
+      <Star className={state ? 'h-4 w-4 fill-amber-400 text-amber-500' : 'h-4 w-4 text-muted-foreground/60'} />
+    </button>
   );
 }
