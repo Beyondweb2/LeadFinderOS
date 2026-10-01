@@ -8,7 +8,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync } from 'node:fs';
 import { NEXT_ACTION_OPTIONS } from '../src/lib/salesCrm.ts';
-import { NEXT_ACTION_LABEL, meetingDayTime, meetingNote, nextActionText, nextActionView, nextActionViewOf } from '../src/lib/nextActionView.ts';
+import { NEXT_ACTION_LABEL, londonInstant, londonLocalInput, meetingDayTime, meetingNote, nextActionText, nextActionView, nextActionViewOf } from '../src/lib/nextActionView.ts';
 
 let fails = 0;
 const ok = (c: boolean, l: string) => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -48,11 +48,18 @@ ok(['email', 'send_info', 'meeting'].every((v) => enumSql.includes(`add value if
 ok(form.includes("{!known && lead.next_action ? <SelectItem value={lead.next_action}>{NEXT_ACTION_LABEL[lead.next_action]"), 'an older stored type is shown in its own words and can be kept');
 
 console.log('\n── the fields: type, day, a Meeting\'s time, the note ──');
-ok(form.includes('aria-label="Next action date"') && form.includes('aria-label="Meeting time"') && form.includes('aria-label="Next action note"') && form.includes('maxLength={500}'), 'the form has the day, the Meeting time and the note (≤500, the column\'s limit)');
-ok(/const meetingAt = isMeeting && date && time \? new Date\(`\$\{date\}T\$\{time\}`\)\.toISOString\(\) : null;/.test(form) && /if \(a\.nextAction === 'meeting' && a\.meetingAt\) return bookMeeting\(/.test(write), 'a Meeting with a time books call_booked_at (the only time the model stores)');
+ok(form.includes('aria-label="Next action date"') && form.includes('aria-label="Meeting time (UK)"') && form.includes('aria-label="Next action note"') && form.includes('maxLength={500}'), 'the form has the day, the Meeting time and the note (≤500, the column\'s limit)');
+ok(form.includes('const meetingAt = isMeeting && date && time ? londonInstant(date, time) : null;') && /if \(a\.nextAction === 'meeting' && a\.meetingAt\) return bookMeeting\(/.test(write), 'a Meeting with a time books call_booked_at (the only time the model stores)');
 ok(meetingNote('14:30', null) === 'Meeting at 14:30' && meetingNote('14:30', 'bring the audit') === 'Meeting at 14:30 · bring the audit' && meetingNote('15:00', 'Meeting at 14:30 · bring the audit') === 'Meeting at 15:00 · bring the audit', 'the meeting note carries the time once, then the person\'s words (a reschedule replaces the time)');
 const bst = meetingDayTime('2026-10-02T13:30:00Z');
 ok(bst.day === '2026-10-02' && bst.time === '14:30', 'the meeting time is London time (BST: 13:30Z → 14:30)');
+/* Found live (2026-10-02): the form read "14:30" in the computer's own clock (UTC+7 here) and booked 08:30 UK. */
+ok(londonInstant('2026-10-02', '14:30') === '2026-10-02T13:30:00.000Z', 'a typed 14:30 is 14:30 UK time in summer (BST), whatever this computer\'s clock');
+ok(londonInstant('2026-12-02', '14:30') === '2026-12-02T14:30:00.000Z', '…and in winter (GMT)');
+ok(londonInstant('2026-03-29', '01:30') !== null && londonLocalInput(londonInstant('2026-10-02', '09:05')!) === '2026-10-02T09:05', 'round trip: what is typed is what is shown');
+ok(londonInstant('2026-10-02', '') === null && londonInstant('', '14:30') === null, 'no day or no time → no instant (never a guessed one)');
+ok(form.includes('londonInstant(date, time)') && !form.includes('new Date(`${date}T${time}`)'), 'the form books UK time');
+ok(crm.includes('londonInstant(localValue.slice(0, 10), localValue.slice(11, 16))') && crm.includes('(UK time)') && !crm.includes('your local time') && !crm.includes('toLocalInput('), 'the workspace\'s meeting fields read and show UK time too');
 
 console.log('\n── it shows clearly after saving ──');
 const m = nextActionViewOf('meeting', '2026-10-02', 'Meeting at 14:30', TODAY, '2026-10-02T13:30:00Z')!;

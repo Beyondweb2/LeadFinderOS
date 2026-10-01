@@ -70,6 +70,24 @@ export function meetingNote(time: string, note: string | null | undefined): stri
   return own ? `Meeting at ${time} · ${own}` : `Meeting at ${time}`;
 }
 
+/** ⛔ A MEETING TIME IS TYPED AND SHOWN IN UK TIME (2026-10-02). Every screen shows call_booked_at in London
+ *  time, so the time a person types is London time too — whatever clock their own computer runs on (Paul's
+ *  is not on UK time). '2026-10-02' + '14:30' → the instant 14:30 in London that day (BST or GMT). */
+export function londonInstant(day: string, hhmm: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+  const guess = Date.parse(`${day}T${hhmm}:00Z`);
+  if (!Number.isFinite(guess)) return null;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
+  const shown = Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`);
+  return new Date(guess - (shown - guess)).toISOString();
+}
+/** A booked instant as a datetime-local value in UK time ('2026-10-02T14:30'). */
+export function londonLocalInput(iso: string): string {
+  const { day, time } = meetingDayTime(iso);
+  return `${day}T${time}`;
+}
+
 /** The London day and time of a booked meeting: { day: '2026-10-03', time: '14:30' }. */
 export function meetingDayTime(iso: string): { day: string; time: string } {
   const d = new Date(iso);

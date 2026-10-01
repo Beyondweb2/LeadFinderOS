@@ -298,3 +298,8 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   composer use the same words.
 - Tests: `scripts/next-action-one-flow.test.ts`; live rolled-back `supabase/tests/next-action-one-flow.sql`
   (14 checks).
+- **Found live: meeting times are UK time.** The form, and the workspace's two meeting boxes ("When is the call /
+  meeting?" and "Call booked for"), read the typed time in the computer's own clock. Paul's is UTC+7, so 14:30
+  booked 08:30 UK, while every screen shows UK time. All three now use `londonInstant` / `londonLocalInput`
+  (`nextActionView.ts`; BST and GMT tested) and are labelled "(UK time)". This overturns the 2026-09-30 test
+  rule "the meeting box does not claim UK time": it reads UK time now, so the label is true.
