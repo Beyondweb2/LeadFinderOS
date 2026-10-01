@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, Minus, PhoneCall, Plus, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, Megaphone, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { leadPermissions } from '@/lib/access';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +18,7 @@ import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { useCampaigns } from '@/hooks/useCampaigns';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
@@ -32,12 +33,13 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { meetingIsCurrent, meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
 import { londonInstant, londonLocalInput } from '@/lib/nextActionView';
 import { SalesStatePill } from '@/components/SalesStatePill';
+import { WorkSection } from '@/components/WorkSection';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE LEAD'S CRM — THREE PANELS, BOTH ROLES, BOTH PAGES (2026-09-27; split into the prospect
@@ -372,11 +374,9 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
 
       <InternalNote save={save} />
 
-      <details className={CARD}>
-        <summary className="flex cursor-pointer select-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
-          <BriefcaseBusiness className="h-3.5 w-3.5 text-primary" />Call booked · who controls the website
-        </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      {/* Folded to its summary (declutter pass 2): the booked time and who controls the site and domain. */}
+      <WorkSection icon={BriefcaseBusiness} title="Call booked · website" testId="call-booked" summary={callBookedSummary(lead)}>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="block text-[11px] font-medium text-muted-foreground">Call booked for (UK time)</label>
             <Input type="datetime-local" key={lead.call_booked_at ?? 'none'} className="h-9 text-xs"
@@ -414,7 +414,7 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
             <p className="text-[11px] text-muted-foreground">Say: “{SALES_DOMAIN_LINE}”</p>
           </div>
         </div>
-      </details>
+      </WorkSection>
 
       {leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
     </div>
@@ -480,13 +480,25 @@ function RemoveFromMyLeads({ leadId, onRemoved }: { leadId: string; onRemoved?: 
    caller's to work (a salesperson: assigned to them, not a client) and that the campaign exists. Picking
    only: creating, renaming or deleting a campaign stays on the admin's campaign screens (hideCreate). */
 function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
+  const { campaigns } = useCampaigns();
+  const name = lead.campaign_id ? campaigns.find((c) => c.id === lead.campaign_id)?.name ?? 'Campaign set' : 'No campaign';
   return (
-    <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')} data-testid="lead-campaign">
-      <span className={LABEL}>Campaign</span>
-      <CampaignPicker mode="assign" hideCreate value={lead.campaign_id} className="h-8 w-[220px] text-xs"
+    <WorkSection icon={Megaphone} title="Campaign" testId="lead-campaign" summary={name}>
+      <CampaignPicker mode="assign" hideCreate value={lead.campaign_id} className="h-8 w-full text-xs sm:w-[260px]"
         onChange={(id) => { if (id !== lead.campaign_id) void save('lead_set_campaign', { _campaign_id: id }, id ? 'Campaign saved' : 'Removed from its campaign', { campaign_id: id }); }} />
-    </section>
+    </WorkSection>
   );
+}
+
+/** The Call booked section's folded line: the booked time (while current), who controls the site and the domain. */
+function callBookedSummary(lead: CrmRow): string {
+  const parts: string[] = [];
+  if (meetingIsCurrent(lead.call_booked_at, Date.now())) parts.push(meetingWhen(lead.call_booked_at!));
+  const site = WEBSITE_CONTROL_OPTIONS.find((o) => o.value === lead.website_control && o.value !== 'unknown');
+  if (site) parts.push(site.label);
+  const dom = DOMAIN_CONTROL_OPTIONS.find((o) => o.value === lead.domain_control);
+  if (dom) parts.push(dom.value === 'unknown' ? 'Domain owner unknown' : dom.value === 'third_party_owns' ? 'Someone else controls the domain' : 'Domain: theirs');
+  return parts.length ? parts.join(' · ') : 'Nothing recorded';
 }
 
 /** A WhatsApp conversation is recorded by its messages; what CAME of it is still the rep's to say.
@@ -536,14 +548,26 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
   /* Social outreach → platform → outcome: ONE Social pill; picking it shows LinkedIn / Facebook /
      Instagram (LinkedIn first). Keeps the row at five pills. */
   const inSocial = !!current?.social;
+  const resultLine = result ? (
+    /* ⛔ THE VISIBLE RESULT (2026-09-30): what was recorded, the state it left the lead in (and the
+       change, when there was one), what else happened, and the Next Action waiting to be saved. Drawn
+       under the header whether the section is open or folded. */
+    <div className="space-y-1 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]" data-testid="logged-line">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Check className="h-3.5 w-3.5 text-emerald-600" />
+        <span className="font-semibold text-foreground">{result.contact}</span>
+        <span className="text-muted-foreground">→</span>
+        <SalesStatePill view={result.state} size="xs" />
+        {result.change && <span className="text-muted-foreground" data-testid="state-change">{result.change}</span>}
+      </div>
+      {result.said.length > 0 && <p className="text-muted-foreground">{result.said.join(' · ')}</p>}
+      {result.failed.length > 0 && <p className="text-destructive">{result.failed.join(' · ')}</p>}
+      {result.suggestion && <p className="font-medium text-amber-700 dark:text-amber-300" data-testid="suggestion">{result.suggestion}</p>}
+    </div>
+  ) : null;
   return (
-    <section className={cn(CARD, open ? 'border-primary/30' : 'py-2.5')} data-testid="log-contact" data-open={open ? 'true' : 'false'}>
-      <button type="button" className={cn('flex w-full items-center gap-1.5 text-left', open && 'mb-2')} aria-expanded={open} onClick={() => setOpen((o) => !o)} data-testid="log-contact-toggle">
-        <PhoneCall className="h-3.5 w-3.5 shrink-0 text-primary" /><span className={LABEL}>Log a contact</span>
-        {!open && <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">· call, WhatsApp, email, in person, social</span>}
-        <span className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-hidden>{open ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</span>
-      </button>
-      {open && (<>
+    <WorkSection icon={PhoneCall} title="Log a contact" summary={open ? null : 'Call, WhatsApp, email, in person, social'} summaryClass="hidden sm:inline"
+      open={open} onOpenChange={setOpen} testId="log-contact" className={open ? 'border-primary/30' : undefined} after={resultLine}>
       <div className="mb-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you contacted them">
         {primary.map((c) => (
           <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
@@ -581,24 +605,7 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
         {offeredOutcomes(outcomesFor(channel)).map((o) => outcomeButton(o, true))}
       </div>
       </>)}
-      </>)}
-      {/* ⛔ THE VISIBLE RESULT (2026-09-30): what was recorded, the state it left the lead in (and the
-          change, when there was one), what else happened, and the Next Action waiting to be saved. */}
-      {result && (
-        <div className="mt-2.5 space-y-1 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px]" data-testid="logged-line">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Check className="h-3.5 w-3.5 text-emerald-600" />
-            <span className="font-semibold text-foreground">{result.contact}</span>
-            <span className="text-muted-foreground">→</span>
-            <SalesStatePill view={result.state} size="xs" />
-            {result.change && <span className="text-muted-foreground" data-testid="state-change">{result.change}</span>}
-          </div>
-          {result.said.length > 0 && <p className="text-muted-foreground">{result.said.join(' · ')}</p>}
-          {result.failed.length > 0 && <p className="text-destructive">{result.failed.join(' · ')}</p>}
-          {result.suggestion && <p className="font-medium text-amber-700 dark:text-amber-300" data-testid="suggestion">{result.suggestion}</p>}
-        </div>
-      )}
-    </section>
+    </WorkSection>
   );
 }
 
@@ -608,7 +615,7 @@ function InternalNote({ save }: { save: SaveFn }) {
     /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
     <section className={CARD}>
       <div className="mb-2 flex items-center gap-1.5"><Lock className="h-3 w-3" /><span className={LABEL}>Internal note</span><span className="text-[10px] uppercase tracking-wide text-amber-500">never sent</span></div>
-      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="Spoke to owner, agency runs the site, call again next month…" />
+      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="e.g. agency runs the site, call again next month" />
       <div className={cn('mt-2 flex justify-end', !note.trim() && 'hidden')}>
         <Button size="sm" className="h-8 text-xs" disabled={!note.trim()} onClick={async () => {
           const r = await save('lead_add_note', { _body: note }, 'Note added');

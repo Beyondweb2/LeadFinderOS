@@ -15,6 +15,7 @@ import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
 import { useToast } from '@/hooks/use-toast';
 import { useQueueState } from '@/hooks/useQueueState';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
+import { WorkSection } from '@/components/WorkSection';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -119,35 +120,33 @@ export function WhatsAppLeadControls({
     }
   };
 
-  return (
-    <section className="rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm">
-      <div className="mb-2 flex items-center gap-1.5">
-        <MessageSquare className="h-3.5 w-3.5 text-green-500" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">WhatsApp outreach</span>
-      </div>
+  /* ⛔ FOLDED TO ITS STATE (declutter pass 2, 2026-10-01). The three settled states (not on WhatsApp, a
+     landline, the opener already sent) are one line with nothing to open. Otherwise the line says where the
+     queue stands; the template picker and the queue button are inside. A failed send and a PAUSED queue are
+     warnings — drawn while folded. */
+  const sentDay = lead.whatsapp_sent_at ? new Date(lead.whatsapp_sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : '';
+  if (lead.status === 'no_whatsapp') {
+    return <WorkSection icon={MessageSquare} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach" summaryClass="text-amber-600 dark:text-amber-400"
+      summary="No WhatsApp — this number can't receive it. Call or email instead." />;
+  }
+  if (lead.status === 'no_whatsapp_needs_sms') {
+    return <WorkSection icon={MessageSquare} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach" summaryClass="text-cyan-600 dark:text-cyan-400"
+      summary={`Landline${lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''} — flagged, not queued. It can't receive WhatsApp.`} />;
+  }
+  if (openerReallySent(lead)) {
+    return <WorkSection icon={Check} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach"
+      summary={`Sent ${sentDay}${lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}${lead.whatsapp_delivery_status ? ` (${lead.whatsapp_delivery_status})` : ''}`} />;
+  }
+  const summary = queued ? `Queued${lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}` : lead.status === 'whatsapp_failed' ? 'Last send failed' : 'Not queued';
+  const alert = lead.status === 'whatsapp_failed' && !queued ? (
+    <p className="text-[11px] leading-relaxed text-orange-400">Previous WhatsApp send failed (temporary). You can re-queue to try again.</p>
+  ) : queued && queueLine.tone === 'paused' ? (
+    <p className="text-[11px] font-medium text-amber-500" data-testid="queued-paused">{queueLine.text}</p>
+  ) : null;
 
-      {lead.status === 'no_whatsapp' ? (
-        <p className="text-xs leading-relaxed text-amber-500">
-          Not on WhatsApp — this number can't receive WhatsApp. Reach them by call or email instead.
-        </p>
-      ) : lead.status === 'no_whatsapp_needs_sms' ? (
-        <p className="text-xs leading-relaxed text-cyan-500">
-          Landline{lead.line_type && lead.line_type !== 'landline' ? ` (${lead.line_type})` : ''} — flagged, not queued. It can't receive WhatsApp.
-        </p>
-      ) : openerReallySent(lead) ? (
-        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Check className="h-3.5 w-3.5 text-green-500" />
-          Sent {new Date(lead.whatsapp_sent_at).toLocaleDateString()}
-          {lead.whatsapp_template ? ` · ${lead.whatsapp_template}` : ''}
-          {lead.whatsapp_delivery_status ? ` (${lead.whatsapp_delivery_status})` : ''}
-        </p>
-      ) : (
-        <>
-          {lead.status === 'whatsapp_failed' && (
-            <p className="mb-2 text-[11px] leading-relaxed text-orange-400">
-              Previous WhatsApp send failed (temporary). You can re-queue to try again.
-            </p>
-          )}
+  return (
+    <WorkSection icon={MessageSquare} iconClass="text-green-500" title="WhatsApp outreach" testId="whatsapp-outreach" summary={summary}
+      summaryClass={queued ? 'text-sky-600 dark:text-sky-400' : undefined} alert={alert}>
           <label className="mb-1 block text-[11px] text-muted-foreground">Template</label>
           <Select value={template} disabled={salesPath && queued} onValueChange={(v) => (salesPath ? setSalesTemplate(v) : onUpdate(lead.id, { whatsapp_template: v }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={salesPath && queued ? (lead.whatsapp_template ?? 'Queued') : 'Choose a template'} /></SelectTrigger>
@@ -167,7 +166,7 @@ export function WhatsAppLeadControls({
           {!(salesPath && queued) && <Button
             size="sm"
             variant={queued ? 'outline' : 'default'}
-            className="mt-2.5 h-7 w-full gap-1.5 text-xs"
+            className="mt-2.5 h-8 w-full gap-1.5 text-xs"
             onClick={salesPath ? salesQueue : toggleQueue}
             disabled={busy || (!queued && !templateChosen)}
             title={!queued && !templateChosen ? 'Choose a template first' : undefined}
@@ -190,8 +189,6 @@ export function WhatsAppLeadControls({
               {lead.whatsapp_template ? `${lead.whatsapp_template} · ` : ''}{queueLine.text}{salesPath ? ' Ask the admin to take it out of the queue.' : ''}
             </p>
           )}
-        </>
-      )}
-    </section>
+    </WorkSection>
   );
 }
