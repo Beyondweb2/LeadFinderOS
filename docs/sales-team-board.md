@@ -139,6 +139,14 @@ or padded; fewer than three in every Google AI miss still refuses. Same order as
   Next Actions / messages untouched. NOT rewritten (historical rows, left for Paul to decide):
   `added_by_user_id` on those 82 (the dashboard still counts them as "added by test accounts") and the 99
   `lead_activity` rows the Test account logged (its calls/contacts stay out of performance numbers).
+- **Paul, 2026-10-01: keep those historical rows as they are.** Not rewritten. Each of the 82 leads got a History
+  note ("Legacy test-account record …", by Paul, `lead_add_note`; the Paul SALES QA lead excluded). And attribution
+  was fixed so a move never moves history: `src/lib/holderTimeline.ts` — an event that names no person (queue
+  send, inbound reply, automatic suppression) is credited to whoever held the lead WHEN it happened, from the
+  lead's own lead_assigned / lead_unassigned / lead_claimed rows (no recorded move → the current holder, as
+  before). Used by adminMetrics (sends, replies, logged contacts, suppressions; "follow-ups due" and the attention
+  owner stay the CURRENT holder) and salesPerformance (sales-performance now reads `assigned_to_user_id`; a caller
+  that does not falls back to the old behaviour). Test: `scripts/holder-timeline.test.ts`.
 
 - The only active salespeople are the two test accounts, so **Everyone reaches nobody** until a real
   salesperson joins; pick a test account by name to try it.

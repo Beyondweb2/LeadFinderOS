@@ -42,6 +42,7 @@ import { HIGH_INTENT, REP_ESCALATE_HOURS, TRIAGE_CATEGORY_LABEL, triageIsOpen, t
 import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, foldTemplates, type Bottleneck, type FeatureRow, type NicheRow, type TemplatesBlock, type UsageRow } from './adminIntelligence.ts';
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
 import { attentionAssignable } from './teamBoard.ts';
+import { holderTimeline } from './holderTimeline.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -327,7 +328,10 @@ function groupBy<T>(rows: T[], key: (r: T) => string | null): Map<string, T[]> {
 /** Per-lead facts, read ONCE and shared by every section. */
 interface LeadFacts {
   lead: AdminLead;
+  /** Who holds it NOW — for present-tense work (follow-ups due, who to chase, the attention owner). */
   holder: string | null;
+  /** Who held it at time t (holderTimeline) — the credit for any past event that names no person. */
+  heldBy: (t: number) => string | null;
   /** Contact moments by person (real sends + logged contacts), ascending, with channel. */
   contacts: { at: number; who: string | null; channel: ChannelKey; outcome: string | null; kind: string }[];
   humanReplies: number[];
@@ -346,6 +350,10 @@ interface LeadFacts {
 function leadFacts(input: AdminInput, lead: AdminLead, msgs: AdminMessage[], acts: AdminActivity[], sups: AdminSuppression[]): LeadFacts {
   const ex = input.exclusions;
   const holder = lead.assigned_to_user_id ?? input.bookOwnerId;
+  /* ⛔ A PAST EVENT IS CREDITED TO WHOEVER HELD THE LEAD THEN (holderTimeline, 2026-10-01): moving a lead
+     never moves its history (Paul: "activity from the reassignment onward should attribute normally"). */
+  const timeline = holderTimeline(lead.assigned_to_user_id ?? null, acts);
+  const heldBy = (t: number) => timeline(t) ?? input.bookOwnerId;
   const contacts: LeadFacts['contacts'] = [];
   const humanReplies: number[] = [];
   let lastInbound: number | null = null; let lastOutbound: number | null = null; let hasInbound = false;
@@ -354,7 +362,7 @@ function leadFacts(input: AdminInput, lead: AdminLead, msgs: AdminMessage[], act
     const t = ms(m.created_at);
     if (m.direction === 'outbound' && isRealSend(m.status)) {
       lastOutbound = lastOutbound === null ? t : Math.max(lastOutbound, t);
-      contacts.push({ at: t, who: m.sent_by_user_id ?? holder, channel: 'whatsapp', outcome: null, kind: 'whatsapp' });
+      contacts.push({ at: t, who: m.sent_by_user_id ?? heldBy(t), channel: 'whatsapp', outcome: null, kind: 'whatsapp' });
     } else if (m.direction === 'inbound') {
       hasInbound = true;
       if (!looksAutomated(m.body ?? '')) { humanReplies.push(t); lastInbound = lastInbound === null ? t : Math.max(lastInbound, t); }
@@ -365,7 +373,7 @@ function leadFacts(input: AdminInput, lead: AdminLead, msgs: AdminMessage[], act
   const wrongNumber: LeadFacts['wrongNumber'] = []; const optOut: LeadFacts['optOut'] = [];
   const markInterested = (at: number, who: string | null) => { if (!interested || at < interested.at) interested = { at, who }; };
   for (const a of acts) {
-    const at = ms(a.created_at); const who = a.actor_user_id ?? holder;
+    const at = ms(a.created_at); const who = a.actor_user_id ?? heldBy(at);
     const d = a.data ?? {};
     if (a.kind === 'marked_interested' && d.on !== false) markInterested(at, who);
     if (a.kind === 'stage_changed') {
@@ -393,16 +401,16 @@ function leadFacts(input: AdminInput, lead: AdminLead, msgs: AdminMessage[], act
   }
   for (const s of sups) {
     if (String(s.source ?? '').startsWith('backfill')) continue;
-    if (s.wrong_number_at) wrongNumber.push({ at: ms(s.wrong_number_at), who: s.wrong_number_by ?? holder });
+    if (s.wrong_number_at) wrongNumber.push({ at: ms(s.wrong_number_at), who: s.wrong_number_by ?? heldBy(ms(s.wrong_number_at)) });
     const r = String(s.reason ?? '');
-    if (OPT_OUT_REASONS.has(r)) optOut.push({ at: ms(s.created_at), who: holder });
-    else if (DECLINE_REASONS.has(r)) notInterested.push({ at: ms(s.created_at), who: holder });
+    if (OPT_OUT_REASONS.has(r)) optOut.push({ at: ms(s.created_at), who: heldBy(ms(s.created_at)) });
+    else if (DECLINE_REASONS.has(r)) notInterested.push({ at: ms(s.created_at), who: heldBy(ms(s.created_at)) });
   }
   contacts.sort((x, y) => x.at - y.at);
   humanReplies.sort((x, y) => x - y);
   const status = String(lead.status ?? '');
   return {
-    lead, holder, contacts, humanReplies,
+    lead, holder, heldBy, contacts, humanReplies,
     interested,
     interestedEver: interested !== null || lead.is_potential_work === true || INTERESTED_STATUSES.has(status) || status === 'won_pending_onboarding' || isPaidLead(lead),
     meetings, meetingEver: meetings.length > 0 || !!lead.call_booked_at,
@@ -508,7 +516,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
         else r.otherContacts += 1;
       }
     }
-    if (f.humanReplies.some((t) => inP(t, p))) once(f.holder, 'replies', id);
+    for (const t of f.humanReplies) if (inP(t, p)) once(f.heldBy(t), 'replies', id);
     if (f.interested && inP(f.interested.at, p)) once(f.interested.who, 'interested', id);
     for (const m of f.meetings) if (inP(m.at, p)) once(m.who, 'meetings', id);
     for (const n of f.notInterested) if (inP(n.at, p)) once(n.who, 'notInterested', id);
@@ -576,7 +584,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   }
   // Distinct-lead metrics must not double count a lead two people touched: recount them book-wide.
   const bookDistinct = (pick: (f: LeadFacts) => boolean) => facts.filter(pick).length;
-  totals.replies = bookDistinct((f) => f.humanReplies.some((t) => inP(t, p)) && !isExcludedUser(ex, f.holder));
+  totals.replies = bookDistinct((f) => f.humanReplies.some((t) => inP(t, p) && !isExcludedUser(ex, f.heldBy(t))));
   totals.interested = bookDistinct((f) => !!f.interested && inP(f.interested.at, p) && !isExcludedUser(ex, f.interested.who));
   totals.meetings = bookDistinct((f) => f.meetings.some((m) => inP(m.at, p) && !isExcludedUser(ex, m.who)));
   totals.leadsMessaged = bookDistinct((f) => f.contacts.some((c) => c.kind === 'whatsapp' && inP(c.at, p) && !isExcludedUser(ex, c.who)));
@@ -689,7 +697,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   /* Today / yesterday — the same definitions, book-wide. */
   const since = (q: ReportingPeriod, costRows: CostRow[]): SinceBlock => ({
     whatsappSent: facts.reduce((s, f) => s + f.contacts.filter((c) => c.kind === 'whatsapp' && inP(c.at, q) && !isExcludedUser(ex, c.who)).length, 0),
-    replies: facts.filter((f) => f.humanReplies.some((t) => inP(t, q)) && !isExcludedUser(ex, f.holder)).length,
+    replies: facts.filter((f) => f.humanReplies.some((t) => inP(t, q) && !isExcludedUser(ex, f.heldBy(t)))).length,
     interested: facts.filter((f) => f.interested && inP(f.interested.at, q) && !isExcludedUser(ex, f.interested.who)).length,
     meetings: facts.filter((f) => f.meetings.some((m) => inP(m.at, q) && !isExcludedUser(ex, m.who))).length,
     sales: ledger.filter((r) => r.kind === 'initial' && r.status === 'succeeded' && inPeriod(r.occurred_at, q)).length,
