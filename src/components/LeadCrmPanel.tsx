@@ -36,6 +36,7 @@ import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesS
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
+import { londonInstant, londonLocalInput } from '@/lib/nextActionView';
 import { SalesStatePill } from '@/components/SalesStatePill';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -116,11 +117,6 @@ const LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-foregroun
 
 function fmt(ts: string) {
   return new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
-}
-function toLocalInput(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 /* The day helpers moved with the form (src/components/NextActionForm.tsx); re-exported for old imports. */
 export { londonDayPlus, QUICK_DATES } from '@/components/NextActionForm';
@@ -301,7 +297,8 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
     return before ?? null;
   };
   const saveMeeting = async (localValue: string, note: string | null = null) => {
-    const iso = localValue ? new Date(localValue).toISOString() : null;
+    /* The typed value is UK time, as every screen shows it (londonInstant), whatever this computer's clock. */
+    const iso = localValue ? londonInstant(localValue.slice(0, 10), localValue.slice(11, 16)) : null;
     if (!iso) return;
     const r = afterWrite(await bookMeeting(leadId, iso, note, stateLead()), 'Meeting booked · Next Action set');
     if (r.ok) setAskWhen(false);
@@ -314,8 +311,8 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       {askWhen && (
         <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
-          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (your local time)
-            <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? toLocalInput(lead.call_booked_at) : ''} />
+          <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (UK time)
+            <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? londonLocalInput(lead.call_booked_at) : ''} />
           </label>
           <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setAskWhen(false)}>Later</Button>
           <Button size="sm" className="h-9 text-xs" data-testid="meeting-save" onClick={() => {
@@ -356,11 +353,11 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-medium text-muted-foreground">Call booked for</label>
+            <label className="block text-[11px] font-medium text-muted-foreground">Call booked for (UK time)</label>
             <Input type="datetime-local" key={lead.call_booked_at ?? 'none'} className="h-9 text-xs"
-              defaultValue={lead.call_booked_at ? toLocalInput(lead.call_booked_at) : ''}
+              defaultValue={lead.call_booked_at ? londonLocalInput(lead.call_booked_at) : ''}
               onBlur={async (e) => {
-                const v = e.target.value ? new Date(e.target.value).toISOString() : null;
+                const v = e.target.value ? londonInstant(e.target.value.slice(0, 10), e.target.value.slice(11, 16)) : null;
                 if (v === (lead.call_booked_at ? new Date(lead.call_booked_at).toISOString() : null)) return;
                 await save('lead_set_call_booked', { _at: v }, v ? 'Call booked' : 'Call cleared', { call_booked_at: v });
               }} />

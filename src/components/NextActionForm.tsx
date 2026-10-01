@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
-import { NEXT_ACTION_LABEL, meetingDayTime, nextActionView, nextActionText } from '@/lib/nextActionView';
+import { NEXT_ACTION_LABEL, londonInstant, meetingDayTime, nextActionView, nextActionText } from '@/lib/nextActionView';
 import type { NextActionInput } from '@/lib/nextActionWrite';
 
 /* ⛔ THE ONE NEXT ACTION FORM (2026-10-02, Paul). The lead workspace's Work tab, the Outreach row and the phone
@@ -56,7 +56,7 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
   const run = async (a: NextActionInput) => { setBusy(true); try { await onSave(a); } finally { setBusy(false); } };
   const save = () => {
     if (nextAction === 'none') return run({ nextAction: 'none', date: null, note: note.trim() || null });
-    const meetingAt = isMeeting && date && time ? new Date(`${date}T${time}`).toISOString() : null;
+    const meetingAt = isMeeting && date && time ? londonInstant(date, time) : null;
     return run({ nextAction, date: date || null, note: note.trim() || null, meetingAt });
   };
   return (
@@ -85,10 +85,10 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
         ))}
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 w-[9.5rem] text-xs" disabled={nextAction === 'none'} aria-label="Next action date" />
         {isMeeting && (
-          <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-8 w-[6.5rem] text-xs" aria-label="Meeting time" data-testid="next-action-time" />
+          <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-8 w-[6.5rem] text-xs" aria-label="Meeting time (UK)" title="UK time" data-testid="next-action-time" />
         )}
       </div>
-      {isMeeting && <p className="text-[11px] text-muted-foreground">With a time, this books the meeting (shows as “Meeting booked”).</p>}
+      {isMeeting && <p className="text-[11px] text-muted-foreground">Time is UK time. With a time, this books the meeting (shows as “Meeting booked”).</p>}
       <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="h-9 text-xs" placeholder="What to do, e.g. ring after their website contract ends" aria-label="Next action note" />
       <div className="flex items-center justify-end gap-2">
         {onCancel && <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onCancel}>Cancel</Button>}

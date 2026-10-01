@@ -34,6 +34,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'It saves when you press Save. It no longer saves on its own as soon as a type and a day were picked.',
         'Every Next Action save, from the column, the bulk menu, the workspace or the Inbox, goes through the same server function, so History records each one for Admin and salespeople alike.',
         'Paid clients shows the next action in the same words (it showed the raw value, including "none").',
+        'Meeting times are typed in UK time everywhere (the Next Action form and the workspace\'s meeting boxes), the same time every screen shows. Before, they used your own computer\'s clock, so a meeting typed outside the UK was booked at the wrong UK time.',
       ],
       removed: ['The separate lighter Next Action popup in the Outreach table.'],
       effect: 'One way to set, edit, reschedule, complete or remove a Next Action, with the same types and fields on every screen.',

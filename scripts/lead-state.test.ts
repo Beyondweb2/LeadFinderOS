@@ -201,7 +201,8 @@ console.log("\n── 7. History says the state change, and only a real one ─�
   ok(/cause\.data\?\.outcome === a\.data\?\.outcome/.test(crm) && /rows\.slice\(0, i\)\.reverse\(\)\.find/.test(crm), "…only the NEAREST contact, and only with the same outcome (a WhatsApp result was pinned to an older call)");
   ok(/const MECHANISM = new Set\(\['marked_interested', 'stage_changed'\]\)/.test(crm), "…the star / pipeline rows of that change fold into its one line");
   ok(activityDetail({ kind: "follow_up_set", data: { next_action: "none" } }, () => "") === "Next action cleared", "a cleared Next Action reads 'Next action cleared', not 'none'");
-  ok(!/\(UK time\)/.test(crm), "the meeting box does not claim UK time (it reads the browser's clock)");
+  /* 2026-10-02: the box now READS UK time (londonInstant) — the label is true, so it says so. */
+  ok(/\(UK time\)/.test(crm) && /londonInstant\(localValue\.slice\(0, 10\), localValue\.slice\(11, 16\)\)/.test(crm) && !/your local time/.test(crm), "the meeting box reads UK time and says so (it used to read the browser's clock)");
   ok(activityDetail({ kind: "call_booked", data: { at: null } }, () => "") === "Cancelled" && /14:30$/.test(activityDetail({ kind: "call_booked", data: { at: "2026-10-02T13:30:00Z" } }, () => "") ?? ""), "a meeting row says its London time, or Cancelled");
 }
 
