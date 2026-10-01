@@ -95,3 +95,26 @@ trade, or two sources agreeing) is saved; medium (name or campaign name alone) i
 is left. SQL `admin_set_lead_trade` (migration `20261001220100`, admin-only) writes `search_keyword` only
 while blank and logs `details_set` with source, confidence and evidence. Free: no AI, Google or crawl.
 Dry run on the live 42: **36 high (33 barbers, 3 plumbers), 5 review, 1 unresolved**.
+
+## Live on production (2026-10-01, main 1c3d72a1, leadfinderos-next)
+
+- SQL: `20261001220000` (my_whatsapp_unread_counts) and `20261001220100` (admin_set_lead_trade), applied and
+  read back (anon cannot execute; admin-only check present). Functions redeployed after a fresh main check
+  each time, every bundle checked for a new-code marker: admin-overview, business-summary,
+  conversation-triage, sales-performance, process-whatsapp-queue (the already-sent filter).
+- Data: the 2 falsely restored leads corrected (evidence above); **36 trades saved** through
+  admin_set_lead_trade as Paul (33 barbers, 3 plumbers; 36 History rows with evidence). No-trade count 42 → 6
+  (5 for review: SOUL PLUMBING, Buddies Dog grooming, Fresh Kuts, Infinite Golden Scissors, A Cut in Time;
+  1 unresolved: Dogs of Southsea). No messages sent.
+- **Tested as the Test salesperson** (the "Paul SALES" QA lead, assigned to Test, then returned to Paul with
+  its Next Action cleared; signed out after): the lead opened on Work with the audit block first, Log a
+  contact, Next Action; star in the header; "Propose questions" proposed three via create-ai-audit; Run was
+  REFUSED by the server's town gate ("Google could not confirm the town") — the same guard as the Inbox, so no
+  audit ran (cost: the question proposal only). Logging "Call back" → the row's Next Action column read
+  "Call back · no day set", nothing under the Status pill, its tooltip "Last contact: Call · Call back"; the
+  pill read the solid "Contacted" (pipeline still New). Setting Call · Tomorrow in the workspace → the column
+  read "Call · Tomorrow" and the Inbox header showed the same "Call · Tomorrow". The Inbox list row read
+  "New" — fixed the same day (the list now reads logged contacts). Outreach at 390 / 820 / 1440 px: no
+  horizontal overflow. The bell no longer counts Test's 9 stale reply notices.
+- Not done: the admin screens were not clicked (no admin session); "Fix automatically" was run through the
+  same function from here. Nobody has visually reviewed the screens.
