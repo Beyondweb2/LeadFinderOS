@@ -66,6 +66,8 @@ export type NextActionType =
   | 'check_3_day_removal'
   | 'email'
   | 'send_info'
+  | 'send_proposal'
+  | 'chase_payment'
   | 'meeting';
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden' | 'Thailand';
@@ -157,6 +159,8 @@ export interface OutreachLead {
   next_action_date: string | null;
   /** What to do, in words (at most 500 characters). Written only through src/lib/nextActionWrite.ts. */
   next_action_note?: string | null;
+  /** UK wall-clock time on next_action_date (HH:MM, optional). Written only through src/lib/nextActionWrite.ts. */
+  next_action_time?: string | null;
   notes: string | null;
   country: Country | null;
   list_type: ListType;

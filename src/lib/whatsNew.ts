@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-next-action-time', date: '2026-10-02', title: 'Next Actions can have a time', audience: 'all',
+    body: 'Every Next Action can now have an optional UK time, and there are two new types: Send proposal and Chase payment.',
+    report: {
+      added: [
+        'An optional time on every Next Action, for example "Call · Tomorrow · 14:30". It is UK time, whatever clock your computer runs on.',
+        'Two types: Send proposal and Chase payment, each with its own filter.',
+        'A "No time" link to remove a time while keeping the day.',
+      ],
+      changed: [
+        'A timed Next Action counts as overdue only once its UK time has passed. One without a time works exactly as before.',
+        'History says what happened: Set, Rescheduled (with what it was), Changed (Call → Send proposal), Completed or Cleared.',
+        'A Meeting\'s time and the booked meeting are one time. Booking or moving one moves the other.',
+        'The daily reminder names the action in words, with its time.',
+      ],
+      removed: ['The "Meeting at 14:30" line added to a meeting\'s note. The time now shows by itself.'],
+      effect: 'Every screen shows the same action, day and time, and nothing counts as overdue before its time.',
+    } },
   { id: '2026-10-02-next-action-one-flow', date: '2026-10-02', title: 'One Next Action form everywhere', audience: 'all',
     body: 'The Next Action column now opens the same form as the lead workspace, with the note, the day and a meeting time.',
     report: {

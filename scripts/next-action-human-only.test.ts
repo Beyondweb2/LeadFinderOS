@@ -116,7 +116,11 @@ console.log("\n── 4. the database ──");
     }
   }
   const setters = [...latest.entries()].filter(([, b]) => /next_action\s*=\s*(?!'none')/i.test(b)).map(([n]) => n);
-  ok(setters.length === 1 && setters[0] === "lead_set_follow_up", `only lead_set_follow_up sets a chosen next action (${setters.join(", ")})`);
+  /* 2026-10-02: lead_set_call_booked moves an EXISTING Meeting's day + time with the booking (one meeting time);
+     it never sets a type (its next_action = 'meeting' is the WHERE). */
+  const callBooked = latest.get("lead_set_call_booked") ?? "";
+  ok(setters.every((n) => n === "lead_set_follow_up" || n === "lead_set_call_booked") && setters.includes("lead_set_follow_up"), `only lead_set_follow_up sets a chosen next action (${setters.join(", ")})`);
+  ok(!/set next_action\s*=/i.test(callBooked) && /where id = _lead_id and next_action = 'meeting'/i.test(callBooked), "…lead_set_call_booked only moves an existing Meeting's day and time, never its type");
   ok(/perform public\._require_work\(_lead_id\);/.test(latest.get("lead_set_follow_up") ?? ""), "…and it checks role + ownership first");
   ok(!/next_action/i.test(latest.get("claim_lead") ?? "x next_action"), "claiming a lead does not touch next_action");
   ok(/'not_contacted', 'none'/.test(latest.get("sales_add_lead") ?? ""), "a salesperson's added lead starts at 'none'");

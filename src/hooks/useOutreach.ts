@@ -1319,9 +1319,12 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     note?: string | null,
   ): Promise<OutreachLead | null> => {
     const lead = leads.find((l) => l.id === leadId) ?? archivedLeads.find((l) => l.id === leadId);
+    const date = nextAction === 'none' ? null : (nextActionDate ?? lead?.next_action_date ?? null);
     const r = await saveNextAction(leadId, {
       nextAction,
-      date: nextAction === 'none' ? null : (nextActionDate ?? lead?.next_action_date ?? null),
+      date,
+      /* The time stays with its day: the bulk menu (type only) keeps it; a new day drops it. */
+      time: date && date === lead?.next_action_date ? (lead?.next_action_time ?? null) : null,
       note: note === undefined ? (lead?.next_action_note ?? null) : note,
     });
     if (!r.ok) {

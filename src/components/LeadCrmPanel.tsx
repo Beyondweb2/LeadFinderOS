@@ -81,12 +81,12 @@ const sb = supabase as any;
 /* status / is_potential_work / amount_paid / whatsapp_sent_at (2026-09-30): the facts the sales state
    is read from (src/lib/leadState.ts), so the Work panel knows the state before and after a tap. Both
    sources have them (the sales view's amount_paid is always null — a client is not in it at all). */
-const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at';
+const CRM_COLUMNS = 'id, business_name, search_keyword, category, derived_town, search_location, country, website, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, website_control, website_control_note, assigned_to_user_id, services_included, service_areas, address, domain_control, campaign_id, status, is_potential_work, amount_paid, whatsapp_sent_at';
 
 interface CrmRow {
   id: string; business_name: string | null; search_keyword: string | null; category: string | null;
   derived_town: string | null; search_location: string | null; country: string | null; website: string | null;
-  next_action: string | null; next_action_date: string | null; next_action_note: string | null;
+  next_action: string | null; next_action_date: string | null; next_action_time: string | null; next_action_note: string | null;
   call_booked_at: string | null; website_control: string | null; website_control_note: string | null;
   assigned_to_user_id: string | null;
   services_included: string[] | null; service_areas: string[] | null; address: string | null;
@@ -300,7 +300,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
     /* The typed value is UK time, as every screen shows it (londonInstant), whatever this computer's clock. */
     const iso = localValue ? londonInstant(localValue.slice(0, 10), localValue.slice(11, 16)) : null;
     if (!iso) return;
-    const r = afterWrite(await bookMeeting(leadId, iso, note, stateLead()), 'Meeting booked · Next Action set');
+    const r = afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()), 'Meeting booked · Next Action set');
     if (r.ok) setAskWhen(false);
   };
 
@@ -336,10 +336,10 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
 
       <section className={cn(CARD, preset && 'border-amber-500/50')} ref={nextRef}>
         <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-        <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${lead.call_booked_at}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
+        <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_time}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
           onSave={async (a) => {
-            const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note });
-            const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.meetingAt ? 'Meeting booked · Next Action set' : 'Next action saved', before);
+            const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.note });
+            const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
             if (r.ok) setPreset(null); return r; }} />
       </section>
 

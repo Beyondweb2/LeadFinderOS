@@ -149,7 +149,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(/create or replace function public\.lead_set_profile[\s\S]*?perform public\._require_work\(_lead_id\);/.test(MIG), "lead_set_profile checks role + ownership first");
   ok(!/phone\s*=/.test((MIG.match(/update public\.outreach_leads set\s*services_included[\s\S]*?where id = _lead_id;/) ?? [""])[0]), "…and never writes the phone (an identity key)");
   ok(/revoke all on function public\.lead_set_profile\(uuid, text\[\], text\[\], text, text\) from public, anon;/.test(MIG), "anon cannot call lead_set_profile");
-  const tail = SALES_VIEW_COLUMNS.slice(-9, -6).join(","); // then domain_control (20260928180000), town_fetch_note (20260929000000), the 4 social columns (20260930140000)
+  const tail = SALES_VIEW_COLUMNS.slice(-10, -7).join(","); // then domain_control (20260928180000), town_fetch_note (20260929000000), the 4 social columns (20260930140000), next_action_time (20261002160100)
   ok(tail === "lead_source,services_included,service_areas", "the sales view gains services + areas at its END (and the SPA's column list matches)");
   const viewSql = (MIG.match(/create or replace view public\.sales_leads[\s\S]*?from public\.outreach_leads l/) ?? [""])[0];
   ok(!/sold_by|stripe|amount_paid,|refund|delivery_(checklist|ref|notes)/.test(viewSql.replace("null::numeric as amount_paid", "")), "the sales view carries no sale stamp, money or delivery column");

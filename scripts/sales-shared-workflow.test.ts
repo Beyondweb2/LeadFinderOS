@@ -29,8 +29,9 @@ console.log("── the safe view is the salesperson's only lead source ──")
 {
   /* The NEWEST definition of the view (20260928120000 appended lead_source after amount_paid;
      20260928160000 appended services_included + service_areas; 20260928180000 domain_control;
-     20260929000000 town_fetch_note; 20260930140000 linkedin_url + the three social statuses). */
-  const mig = read("supabase/migrations/20260930140000_social_profiles.sql");
+     20260929000000 town_fetch_note; 20260930140000 linkedin_url + the three social statuses;
+     20261002160100 next_action_time). */
+  const mig = read("supabase/migrations/20261002160100_next_action_time.sql");
   const view = mig.slice(mig.indexOf("create or replace view public.sales_leads"), mig.indexOf("from public.outreach_leads l", mig.indexOf("create or replace view public.sales_leads")));
   const cols = [...view.matchAll(/(null::numeric as amount_paid)|l\.([a-z_]+)/g)].map((m) => (m[1] ? "amount_paid" : m[2]));
   ok(cols.length === SALES_VIEW_COLUMNS.length && cols.every((c, i) => c === SALES_VIEW_COLUMNS[i]), `SALES_VIEW_COLUMNS equals the view's ${cols.length} columns, in order`);
@@ -62,7 +63,7 @@ console.log("\n── every salesperson edit is a server function, positive matc
   ok(eq(planSalesPatch({ status: "not_interested", is_potential_work: false, is_archived: true }).steps.map((s) => s.fn), ["lead_set_stage", "lead_mark_interested", "lead_set_archived"]), "Not interested unstars and archives, like the admin's");
   const fu = planSalesPatch({ next_action_date: "2026-10-01" }).steps[0] as { fn: string; hasNextAction: boolean; hasDate: boolean };
   ok(fu.fn === "lead_set_follow_up" && fu.hasDate && !fu.hasNextAction, "a date-only change → lead_set_follow_up, the action is READ, not blanked");
-  ok(/select\('next_action, next_action_date, next_action_note'\)/.test(read("src/lib/leadRpc.ts")) && /_note: cur\.next_action_note/.test(read("src/lib/leadRpc.ts")), "…and the follow-up note is carried over, never wiped");
+  ok(/select\('next_action, next_action_date, next_action_time, next_action_note'\)/.test(read("src/lib/leadRpc.ts")) && /_note: cur\.next_action_note, _time: time/.test(read("src/lib/leadRpc.ts")), "…and the follow-up note is carried over, never wiped (and the time, while its day stays)");
   ok(eq(planSalesPatch({ contact_name: "Mark" }).steps, [{ fn: "lead_set_details", contact_name: "Mark", search_keyword: null, search_location: null }]), "contact name → lead_set_details, the other two left alone (null)");
   ok(eq(planSalesPatch({ search_keyword: "plumbers", search_location: "Leeds" }).steps, [{ fn: "lead_set_details", contact_name: null, search_keyword: "plumbers", search_location: "Leeds" }]), "trade + town → lead_set_details");
   for (const k of ["business_name", "phone", "email", "website", "amount_paid", "notes", "campaign_id", "product", "delivery_checklist", "image_url", "whatsapp_template", "user_id", "assigned_to_user_id"]) {
