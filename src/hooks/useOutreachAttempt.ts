@@ -17,14 +17,9 @@ export function useOutreachAttempt() {
         contact_method: channel,
       };
 
-      // If status is New (not_contacted), auto-set to Initial Contact
-      // Do not override Replied, Interested, Paid, Not Interested
-      const protectedStatuses = ['replied', 'interested', 'not_interested', 'payment_received', 'completed'];
-      if (!currentStatus || currentStatus === 'not_contacted') {
-        updates.status = 'initial_contact';
-      } else if (protectedStatuses.includes(currentStatus)) {
-        // Don't change status
-      }
+      /* ⛔ An attempt never changes the status (2026-10-01): opening a dialler or the WhatsApp app is not
+         contact. Contacted comes only from a real send or a logged contact that reached them (leadState). */
+      void currentStatus;
 
       // Fire-and-forget: update lead + insert event in parallel
       const updatePromise = supabase

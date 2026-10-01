@@ -28,10 +28,10 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
       outreach_attempts: (lead.outreach_attempts || 0) + 1,
       last_outreach_attempt_at: new Date().toISOString(),
     };
-    // Auto-set status to Initial Contact for new leads on first outreach
-    if (!previousStatus || previousStatus === 'not_contacted') {
-      updates.status = 'initial_contact';
-    }
+    /* ⛔ AN ATTEMPT IS NOT A CONTACT (2026-10-01). This used to set a New lead to initial_contact ("Contacted")
+       the moment "Open in WhatsApp app" was pressed — nothing proves a message was sent from the external app.
+       The attempt is still recorded (outreach_attempts / last_outreach_attempt_at / an outreach_events row: the
+       "worked" count and the duplicate-opener protection read it); the status is left alone. */
     onUpdate(lead.id, updates);
 
     // demo-checklist-contact dispatched by OutreachTable on button click

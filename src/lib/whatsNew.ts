@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-contact-state-final', date: '2026-10-01', title: 'Status filter matches the status pill', audience: 'all',
+    body: 'A lead reached by phone shows as Contacted in its pill, under the Contacted filter and in every label.',
+    report: {
+      added: [],
+      changed: [
+        'The Outreach status filter uses the status each row shows: a business reached by phone is under Contacted, not New.',
+        'Needs your attention and the reply sorter describe a lead reached by phone as Contacted, not New.',
+        'Opening the WhatsApp app from a lead records an attempt only. It no longer marks the lead Contacted.',
+      ],
+      removed: [],
+      effect: 'Pills, filters and labels always agree, and nothing counts as contact unless a message really went or a conversation was logged.',
+    } },
   { id: '2026-10-01-claim-no-whatsapp', date: '2026-10-01', title: 'No WhatsApp leads can be claimed to call', audience: 'all',
     body: 'A business that is not on WhatsApp can now be claimed and worked by phone, email or social.',
     report: {

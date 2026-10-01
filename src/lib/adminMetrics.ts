@@ -768,6 +768,19 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   };
 }
 
+/* ── The state WORDS on a Needs-your-attention line (2026-10-01) ─────────────────────────────────────
+   The same reading as every screen (salesStateOf) WITH the lead's logged contacts, so a lead reached by phone
+   is never described as "New". Labels only: the urgency, "settled" and ordering decisions keep their inputs. */
+export function stateLabelOf(l: AdminLead, f: Pick<LeadFacts, 'contacts'> | undefined, nowMs: number): ReturnType<typeof salesStateOf> {
+  const logged = (f?.contacts ?? []).filter((c) => c.kind !== 'whatsapp');
+  const latest = logged.reduce<typeof logged[number] | null>((a, c) => (!a || c.at > a.at ? c : a), null);
+  return salesStateOf({
+    status: l.status, is_potential_work: l.is_potential_work, amount_paid: l.amount_paid, call_booked_at: l.call_booked_at,
+    whatsapp_sent_at: l.whatsapp_sent_at, whatsapp_ever_delivered: l.whatsapp_ever_delivered,
+    lastLogged: latest ? { outcome: String(latest.outcome ?? ''), at: new Date(latest.at).toISOString(), reached: logged.some((c) => REACHED_OUTCOMES.has(String(c.outcome ?? ''))) } : null,
+  }, nowMs);
+}
+
 /* ── Needs your attention ───────────────────────────────────────────────────────────────────────── */
 
 /** Kinds that mean a person acted on the lead (a Next Action, a booking, a logged contact, a state move). */
@@ -785,7 +798,7 @@ function attentionItems(
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
   const factsById = new Map(facts.map((f) => [f.lead.id, f]));
   const biz = (id: string | null) => (id ? leadById.get(id)?.business_name ?? 'Unknown business' : '');
-  const stateOf = (l: AdminLead) => salesStateOf({ status: l.status, is_potential_work: l.is_potential_work, amount_paid: l.amount_paid, call_booked_at: l.call_booked_at, whatsapp_sent_at: l.whatsapp_sent_at }, nowMs).label;
+  const stateOf = (l: AdminLead) => stateLabelOf(l, factsById.get(l.id), nowMs).label;
 
   // URGENT — an open dispute on a payment.
   for (const r of ledger) {
@@ -929,7 +942,7 @@ function triageAttention(input: AdminInput, facts: LeadFacts[], nameOf: (u: stri
     } else continue;
     out.push({
       key: `triage:${r.id}`, group, kind: `reply_${r.category}`, leadId, business: f.lead.business_name ?? 'Lead',
-      why, owner: f.holder ? nameOf(f.holder) : 'Nobody', sinceIso: r.message_at, state: st.label, action, open: 'inbox',
+      why, owner: f.holder ? nameOf(f.holder) : 'Nobody', sinceIso: r.message_at, state: stateLabelOf(f.lead, f, input.nowMs).label, action, open: 'inbox',
       triageId: r.id, confidence: r.confidence ?? undefined, method: r.method,
     });
   }

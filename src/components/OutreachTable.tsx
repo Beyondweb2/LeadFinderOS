@@ -173,8 +173,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS } from '@/hooks/useOutreachFindEmails';
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
-import { useLastLoggedContacts, useWrongNumbers } from '@/hooks/useLastLoggedContacts';
-import { contactAgo, meetingIsCurrent, meetingWhen, salesStateOf, type SalesStateView } from '@/lib/leadState';
+import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
+import { contactAgo, meetingIsCurrent, meetingWhen, pillStatusOf, salesStateOf, type SalesStateView } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1649,6 +1649,16 @@ export function OutreachTable({
   /* Over every loaded lead, so a pair is still a pair when one half is filtered out. */
   const sharedPhoneIds = useMemo(() => sharedPhoneLeadIds(leadsWithOptimistic), [leadsWithOptimistic]);
 
+  /* ⛔ ONE ROW STATUS FOR THE PILL AND THE FILTER (2026-10-01). Both read rowSalesState → pillStatusOf over the
+     SAME facts, loaded for EVERY lead (useAllLoggedContacts), so a lead reached by phone is "Contacted" in its
+     pill and under the Contacted filter alike, on whichever page it sits. (It used to filter on the stored
+     WhatsApp status while the pill read the logged contacts of the visible page only.) */
+  const lastLogged = useAllLoggedContacts();
+  const rowSalesState = useCallback((lead: OutreachLead): SalesStateView => {
+    const lc = lastLogged.data?.get(lead.id);
+    return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null });
+  }, [lastLogged.data]);
+
   const filteredAndSortedLeads = useMemo(() => {
     // While the active leads are still loading, archived rows stay out, so every visible count is
     // active-loaded against active-total (src/lib/outreachLoad.ts). Complete → unchanged.
@@ -1713,7 +1723,8 @@ export function OutreachTable({
            group, and returns [value] for anything it does not recognise, so an unknown filter narrows
            rather than widening to everything. */
         const wanted = statusesForFilter(statusFilter);
-        result = result.filter((lead) => wanted.includes(lead.status as LeadStatus));
+        // The status the row's pill SHOWS (pillStatusOf over rowSalesState), not the raw stored one.
+        result = result.filter((lead) => wanted.includes(pillStatusOf(lead.status, rowSalesState(lead)) as LeadStatus));
       }
     }
 
@@ -1816,7 +1827,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, perms.assignOwner, user?.id, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, perms.assignOwner, user?.id, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, rowSalesState]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1901,17 +1912,12 @@ export function OutreachTable({
   );
   /* The newest logged contact for the rows on this page only (lead state audit, 2026-09-30) — the
      "Call · Left voicemail · 2h ago" line under the pipeline pill. Read per page, never the whole book. */
-  const pageLeadIds = useMemo(() => paginatedLeads.map((l) => l.id), [paginatedLeads]);
-  const lastLogged = useLastLoggedContacts(pageLeadIds);
-  const wrongNums = useWrongNumbers(pageLeadIds);
+  /* The logged contacts behind the row's tooltip and Next Action hint are the same all-leads map as above. */
   /* THE ROW'S SALES STATE (Paul, 2026-09-30: "actions visibly change the lead wherever the rep is
      working") — the same reading as Focus Mode and the popup (leadState.salesStateOf), from the row, its
      last logged contact and the Wrong number mark. ⛔ ONE PILL (2026-10-01): it is handed to the status
      control, which draws the ONE solid pipeline pill and uses the stage only for its tooltip. */
-  const rowSalesState = (lead: OutreachLead): SalesStateView => {
-    const lc = lastLogged.data?.get(lead.id);
-    return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
-  };
+  // rowSalesState is defined once above the filter (the pill and the filter share it).
 
   // Always point walkthrough Step 5 to a visible, actionable track button
   const walkthroughTrackLeadId = (
