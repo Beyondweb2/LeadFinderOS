@@ -34,11 +34,15 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (222 suites). **Honest green is 217/222 (2026-09-28, with `FINDABLE_SITE_DIR` at a current
-  findable-site)** — `coverage-lead-counts`, `report-attribution`, `verdict`, `site-origin` (needs Deno),
-  `onboarding-audit-fields`; without `FINDABLE_SITE_DIR`, also `check-cross-repo-sync` and
-  `manual-onboarding` (both need a current findable-site). Read the FAILED names, never the
-  count. Typecheck reads 9 = the baseline (2026-09-27). Check WHICH files.
+  (268 suites). **FULLY GREEN, 268/268, on 2026-10-02** — there are NO known failures any more; a red
+  suite is a real finding. (The old "known-stale" four were stale tests fixed that day; `site-origin`
+  runs under Node with a `Deno.env` stand-in.) Typecheck reads 9 = the deliberate baseline LIST.
+  ⚠️ **The cross-repo suites read findable-site SOURCE** via `FINDABLE_SITE_DIR` or `../findable-site`.
+  In `LeadFinderOS-wt/` that sibling is a junction to **`C:/Users/paulj/findable-site-wt/main-mirror`**, a
+  clean detached worktree of findable-site `origin/master` (it used to point at the stale, dirty primary
+  checkout, which made four suites fail against code that was not live). `npm test` prints which tree
+  it read and warns when it is behind or dirty. **Refresh it after a findable-site merge:**
+  `git -C C:/Users/paulj/findable-site-wt/main-mirror fetch -q origin && git -C … checkout -q --detach origin/master`.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
@@ -938,11 +942,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   biggest markets the day it runs).
 - `run_number` is a read-then-write with no unique index — the stagger stays sequential until it has one.
 - Nothing sends the four-week results by WhatsApp (email only); the email itself waits on copy approval.
-- **The gate is red on `origin/main` itself (2026-09-22), none of it paid-baseline:** `typecheck:baseline`
-  has 3 errors above the list (`Inbox.tsx` ×2, `OutreachTable.tsx` — a Lucide `title` prop),
-  `check-edge-undefined` flags `page-generator/index.ts:898,903` (`user`), and `explain-offer`,
-  `new-site-tier`, `remeasure-results`, `onboarding-audit-fields` fail beside the four known-stale
-  suites (142/151). Fix or re-baseline in their own task; read the FAILED names.
+- ~~The gate is red on `origin/main` itself (2026-09-22)~~ — resolved: 268/268 green on 2026-10-02 (§0).
 - Two stranded free checks may still need the card's resend pressed.
 - `FINDABLE_ALLOWED_ORIGINS` may not contain `findable.live` — unfalsifiable and no longer depended on.
 - Website clicks other than the report link are untracked, by design for now.
@@ -962,6 +962,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 9. Parked branches, other docs
 
+- ⚠️ **The PRIMARY checkout `C:/Users/paulj/LeadFinderOS` is ~453 commits behind `origin/main`** and idle since
+  2026-09-21 (audited 2026-10-02). **Its `CLAUDE.md` is stale: read `git show origin/main:CLAUDE.md`.** Class A:
+  every tracked edit in it is already on main or superseded (its `whatsapp-inbound.ts` edit is for a chain
+  deleted 2026-09-28 — never port it); the one unmerged test block was ported 2026-10-02. Before resetting it,
+  KEEP the untracked `SQL_FOR_PAUL_*.sql` (each is the only copy; `client_error_message` and
+  `unschedule_instantly_poll` look still pending). Never `git worktree remove` anything through it without
+  unlinking `node_modules` junctions first. Do not delete the folder: 49 worktrees hang off its `.git`.
 - **Do not merge:** `edge-check-gate` (`d3fd6713`), `findable-product-rename` (`a8365707`),
   `short-signup-url` (`c8896003`).
 - `HANDOFF.md`, `ONBOARDING.md` (untracked) describe the deleted barber product — the best map of it,

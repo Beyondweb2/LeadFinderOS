@@ -47,7 +47,11 @@ console.log("\n── ⛔ THE CASE THE RUNG COULD NOT SHOW ──");
   const state = coverageStateFor("locksmiths", town("Norwich"), facts);
   const withLeads = countLeadsByPair([{ trade: "locksmiths", town: "Norwich" }, { trade: "locksmiths", town: "Norwich" }]);
   const without = countLeadsByPair([]);
-  ok(state === "measured", "both towns grade `measured`");
+  /* 🔴 2026-10-02: the `measured` rung was DELETED on 2026-09-09 with the per-town market view
+     (coverageState.ts: worked / leads / untouched only), and this line kept asserting it. A measurement
+     no longer moves the rung, so both towns grade `untouched`: the point of the block stands, the
+     rung is identical and only the COUNT tells the two apart. */
+  ok(state === "untouched", "both towns grade the same rung (`untouched`; a measurement alone does not move it)");
   ok((withLeads.get(k) ?? 0) === 2 && (without.get(k) ?? 0) === 0,
     "  but one shows 2 leads and the other shows none — visible at a glance, no clicking in");
 }

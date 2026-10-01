@@ -332,7 +332,16 @@ function heroVerdict(
   const N = questionsAsked > 0 ? questionsAsked : total;
   /* ⚠️ HEADLINE AND SUB ARE PAUL'S EXACT WORDING (2026-08-29). [X] [Y] [N] are the real figures —
      X = answers naming the client, Y = counted answers, N = distinct questions asked. Do not
-     paraphrase these; they were written to be read by a client. */
+     paraphrase these; they were written to be read by a client.
+     🔴 TWO CLAUSES CUT, NOTHING REWORDED (2026-10-02). This hero renders on every report that is not
+     a quick check, a hook, a paid baseline or still measuring, which INCLUDES THE FREE CHECK sent to
+     prospects we have done no work for. Two clauses were written for ABLM (a client with pages) and
+     were false or unmeasured there:
+       · inconsistent: "Where we have built pages you show up well; where we have not, you are still
+         invisible." (we have built nothing for a prospect);
+       · many: ", ahead of most local competitors" (no comparison with competitors is measured).
+     Everything else is Paul's text verbatim. To restore either, it must first be made conditional on
+     data that proves it (scripts/verdict.test.ts asserts their absence). */
   if (key === 'rare') {
     return {
       band,
@@ -344,14 +353,14 @@ function heroVerdict(
     return {
       band,
       punch: `You&rsquo;re being named, but not yet consistently.`,
-      sub: `You were named in ${named} of ${total} answers. Where we have built pages you show up well; where we have not, you are still invisible. That gap is the opportunity.`,
+      sub: `You were named in ${named} of ${total} answers. That gap is the opportunity.`,
     };
   }
   if (key === 'many') {
     return {
       band,
       punch: `You&rsquo;re being named across many of the questions that matter.`,
-      sub: `You were named in ${named} of ${total} answers, ahead of most local competitors. The job now is to hold these and win the rest.`,
+      sub: `You were named in ${named} of ${total} answers. The job now is to hold these and win the rest.`,
     };
   }
   return {

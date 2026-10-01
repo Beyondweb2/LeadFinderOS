@@ -1,7 +1,7 @@
 import { Globe, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Panel, Empty, TONE } from '@/components/salesDash/ui';
-import type { AdminOverviewResponse, SearchSummary, SiteFunnel } from '@/hooks/useAdminOverview';
+import type { AdminOverviewResponse, OwnSiteSearchSummary, SearchSummary, SiteFunnel } from '@/hooks/useAdminOverview';
 
 /* ══ FINDABLE SITE TRAFFIC + FUNNEL (release 5) ════════════════════════════════════════════════════
    First-party, cookie-free (fn site-analytics). Browser steps count SESSIONS; server steps count what
@@ -72,12 +72,64 @@ export function ClientSearchPanel({ o }: { o: O }) {
   );
 }
 
+const pct = (n: number | null | undefined) => (typeof n === 'number' ? `${(n * 100).toFixed(1)}%` : '—');
+const pos = (n: number | null | undefined) => (typeof n === 'number' ? n.toFixed(1) : '—');
+
+const OWN_SEARCH_STATE: Record<OwnSiteSearchSummary['state'], string> = {
+  ...SEARCH_STATE,
+  not_connected: 'Not connected yet: findable.live is not verified in Search Console, or the Google credential is not set up',
+};
+
+/* 2026-10-02 — findable.live's OWN Google search numbers (own_site_search_*, the same daily sync as the
+   clients). Lives inside this panel on purpose: it is Findable's site, not a client, and must never be
+   counted with them. Figures appear only when the state is "populated"; nothing is estimated. */
+function OwnSiteSearch({ o }: { o: O }) {
+  const x = o.ownSearch;
+  return (
+    <div className="mt-4 rounded-xl border border-border/60 px-3 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Google search · findable.live (Search Console)</p>
+        {x && <span className={cn('text-xs', x.state === 'populated' ? TONE.green.text : x.state === 'error' ? TONE.red.text : 'text-muted-foreground')}>{x.state === 'populated' ? 'Connected' : OWN_SEARCH_STATE[x.state]}</span>}
+      </div>
+      {x === undefined ? <p className="mt-1 text-xs text-muted-foreground">Not available from this version of the dashboard yet.</p>
+        : x === null ? <p className="mt-1 text-xs text-muted-foreground">Search Console data could not be read just now.</p>
+        : x.state === 'error' ? <p className="mt-1 text-xs text-muted-foreground">{x.lastError ?? 'The last sync failed.'}</p>
+        : x.state !== 'populated' ? (
+          !o.searchConfigured
+            ? <p className="mt-1 text-xs text-muted-foreground">No Google service account is set up yet. The steps are in findable-site docs/findable-offsite-authority-plan.md, "Search Console and Bing: exact steps".</p>
+            : <p className="mt-1 text-xs text-muted-foreground">No search data for {x.property ?? 'findable.live'} yet. It appears after the next 05:00 sync once the property is verified and the service account is added to it.</p>
+        ) : (
+          <div className="mt-2 text-xs">
+            <p className="tabular-nums">
+              Last 28 full days: <span className="font-semibold">{num(x.clicks)}</span> clicks · <span className="font-semibold">{num(x.impressions)}</span> impressions · CTR <span className="font-semibold">{pct(x.ctr)}</span> · average position <span className="font-semibold">{pos(x.position)}</span>
+              {x.previous ? <span className="text-muted-foreground"> · previous 28 days {num(x.previous.clicks)} / {num(x.previous.impressions)}</span> : <span className="text-muted-foreground"> · no comparison yet (data from {x.dataFrom})</span>}
+            </p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              {([['Top queries', (x.topQueries ?? []).map((r) => ({ k: r.query, r }))], ['Top pages', (x.topPages ?? []).map((r) => ({ k: r.path, r }))]] as const).map(([title, rows]) => (
+                <div key={title} className="min-w-0">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+                  {!rows.length ? <p className="text-xs text-muted-foreground">None yet.</p> : (
+                    <ul className="space-y-1">{rows.map(({ k, r }) => (
+                      <li key={k} className="grid grid-cols-[1fr_auto] gap-2"><span className="truncate">{k || '/'}</span><span className="tabular-nums text-muted-foreground">{num(r.clicks)} · {num(r.impressions)} · {pct(r.ctr)} · {pos(r.position)}</span></li>
+                    ))}</ul>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">Columns: clicks · impressions · CTR · average position.</p>
+          </div>
+        )}
+    </div>
+  );
+}
+
 export function FindableFunnelPanel({ o }: { o: O }) {
   const s: SiteFunnel | null = o.site;
   if (!s) {
     return (
       <Panel collapseKey="admin.cc.site" title="Findable.live funnel" icon={Globe} tone="blue" defaultOpen={false} summary="Unavailable">
         <Empty>The site numbers could not be read just now.</Empty>
+        <OwnSiteSearch o={o} />
       </Panel>
     );
   }
@@ -119,6 +171,7 @@ export function FindableFunnelPanel({ o }: { o: O }) {
           <List title="Most viewed" rows={s.top_pages} />
         </div>
       )}
+      <OwnSiteSearch o={o} />
       <p className="mt-3 text-[11px] text-muted-foreground">
         {tracked ? `Visitor tracking since ${new Date(s.tracking_since!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. ` : 'Visitor tracking begins when the site update ships; until then only the server steps have numbers. '}
         A session is one browser tab's visit (a random id that disappears when the tab closes) — no cookies, no IP address, no names. Your own visits are excluded: from inside LeadFinderOS, operator previews, and any browser marked with the one-time internal link. Sign-ups made with your own email are excluded server-side.

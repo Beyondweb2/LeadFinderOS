@@ -444,6 +444,16 @@ export function buildPageRows(
 /** How many query rows the UI asks for. Top-by-clicks is enough for v1; no delta analysis. */
 export const QUERY_ROW_LIMIT = 50;
 
+/* ── FINDABLE'S OWN SITE (2026-10-02) ─────────────────────────────────────────────────────────────
+   findable.live rides the same sync and the same credential, but writes to its OWN tables
+   (own_site_search_*), keyed by this site_key, never by a lead. The property string itself lives in
+   the own_site_search_property row (seeded by the migration), not here: one record, one place.
+   ⛔ Nothing in the paid-client path may read own_site_search_*; nothing here may write
+   search_console_* (scripts/own-site-search.test.ts). */
+export const OWN_SITE_KEY = 'findable';
+/** How many top queries / pages the admin panel shows for findable.live. */
+export const OWN_SITE_TOP_ROWS = 10;
+
 /* ── Folding Search Console rows onto the unique key BEFORE they are written ────────────────── */
 
 export interface RawAnalyticsRow { date: string; page: string; query?: string; clicks: number; impressions: number; position: number }

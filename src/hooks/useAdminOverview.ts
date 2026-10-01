@@ -18,6 +18,9 @@ export type AdminOverviewResponse = AdminOverview & {
   site: SiteFunnel | null;
   /** Google Search Console per paying client, by lead id; null = unreadable. */
   search: Record<string, SearchSummary> | null;
+  /** findable.live's OWN Search Console summary (own_site_search_*, never a client); null = unreadable.
+   *  Optional: an older admin-overview deploy does not send it. */
+  ownSearch?: OwnSiteSearchSummary | null;
   /** Whether a Google service-account credential is set at all. */
   searchConfigured: boolean;
   /** The latest AI business summary (fn business-summary); null = none yet or unreadable. */
@@ -43,6 +46,17 @@ export interface SearchSummary {
   previous?: { clicks: number; impressions: number } | null;
   dataFrom?: string | null;
   topPages?: { path: string; clicks: number; impressions: number }[];
+}
+/** findable.live in Google search (2026-10-02). Figures exist only when state is "populated". */
+export interface OwnSiteSearchSummary {
+  state: SearchSummary['state'];
+  property?: string | null; lastSyncedAt?: string | null; lastError?: string | null;
+  window?: { from: string; to: string };
+  clicks?: number; impressions?: number; ctr?: number | null; position?: number | null;
+  previous?: { clicks: number; impressions: number } | null;
+  dataFrom?: string | null;
+  topPages?: { path: string; clicks: number; impressions: number; ctr: number | null; position: number | null }[];
+  topQueries?: { query: string; clicks: number; impressions: number; ctr: number | null; position: number | null }[];
 }
 /** What SQL admin_site_funnel returns (release 5). Browser counts are SESSIONS; server counts are rows. */
 export interface SiteFunnel {
