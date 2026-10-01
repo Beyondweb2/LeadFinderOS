@@ -32,6 +32,21 @@ ok(/<Card className=\{cn\('overflow-y-auto p-1\.5 md:h-full md:max-h-none', acti
 ok(/<Card className=\{cn\('min-w-0 flex-col overflow-hidden md:flex md:h-full', active \? 'flex h-\[calc\(100dvh-10\.5rem\)\]' : 'hidden'\)\}>/.test(inbox), 'the thread panel is full height from md and clips, never widens the page; on a phone it fills the screen only when open');
 ok(/<div ref=\{threadRef\} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">/.test(inbox), 'the message list is the part that grows and scrolls (min-h-0), so the composer stays at the bottom');
 
+console.log('── the top bar (2026-10-01) ──');
+const topBar = inbox.slice(inbox.indexOf('THE TOP BAR (2026-10-01)'), inbox.indexOf('BOTH ROLES SEE A PAUSED QUEUE'));
+const filtersAt = topBar.indexOf('aria-label="Filter conversations"');
+ok(filtersAt > 0 && topBar.indexOf('handleSendNow') < filtersAt && topBar.indexOf('setNewOpen') < filtersAt, 'Send now and New sit on the title row, above the filter group');
+ok(/<div className="flex shrink-0 items-center gap-2">/.test(topBar), '   in a group that never shrinks or wraps');
+const filterGroup = topBar.slice(filtersAt);
+for (const label of ['Lead status', 'Next action due', 'Next action type', 'Sort conversations']) {
+  ok(filterGroup.includes(`aria-label="${label}"`), `"${label}" is in the filter group`);
+}
+ok(!/text-xs|text-\[1[01]px\]/.test(filterGroup), 'no filter shrinks its own text: every control on the bar is text-sm');
+ok((filterGroup.match(/'h-9/g) ?? []).length === 5, 'all five filters are h-9');
+const toggle = inbox.slice(inbox.indexOf('function AutoReplyToggle()'), inbox.indexOf('function PreviewLinkedText'));
+ok(/order-last flex w-full flex-wrap/.test(toggle) && !/text-\[11px\]/.test(toggle), 'the reply rule takes its own row on a narrower screen, at the bar\'s text size');
+ok(/role="tablist" aria-label="Show conversations"/.test(inbox) && /mb-1\.5 grid grid-cols-2 gap-1 px-0\.5" role="tablist"/.test(inbox), 'the four list views are a 2 × 2 grid (no single tab orphaned on a second line)');
+
 console.log('── less chrome ──');
 const header = inbox.slice(inbox.indexOf('{/* Thread header */}'), inbox.indexOf('THE REPORT STATE MOVED INTO THE AI VISIBILITY CARD'));
 const nameAt = header.indexOf('active.label');

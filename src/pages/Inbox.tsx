@@ -330,17 +330,26 @@ function AutoReplyToggle() {
 
   const sending = mode === 'send';
   return (
-    <div className="flex min-h-9 max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/60 bg-background px-2.5 py-1">
+    /* ══ PLACEMENT (Inbox top bar, 2026-10-01) ══ The control is laid out for the page header it lives in:
+       from 1440px it sits on the title row beside Send now / New (1600px in send mode, whose template
+       picker makes it wider: measured, it does not fit a 1440 screen); below that it takes its own
+       full-width row under the title (order-last + w-full), so the primary actions never wrap away from
+       the title. Below lg the question and the count share one line and the three answers fill the next.
+       It uses the same h-9 / text-sm as every other control on the bar, with no box of its own. */
+    <div className={cn('order-last flex w-full flex-wrap items-center gap-x-3 gap-y-2',
+      sending
+        ? 'min-[1600px]:order-none min-[1600px]:w-auto min-[1600px]:border-r min-[1600px]:border-border min-[1600px]:pr-4'
+        : 'min-[1440px]:order-none min-[1440px]:w-auto min-[1440px]:border-r min-[1440px]:border-border min-[1440px]:pr-4')}>
       {/* 🔴 "On reply" WAS TOO SHORT TO CARRY THE SCOPE. With options reading "Run audit only" and
           "Audit + auto-send", the control looked like a global audit switch: Paul set it expecting
           it to govern the outreach QUEUE and then reasonably believed it was why outreach had
           stopped. It governs neither — the drip never reads this. The full question is rendered
           now, and the options are answers to it. */}
-      <span className="text-xs font-medium whitespace-nowrap" title="What happens automatically when a business replies to your opener. This does NOT affect the outreach queue — queued leads are always audited and sent.">
+      <span className="whitespace-nowrap text-sm font-medium text-muted-foreground" title="What happens automatically when a business replies to your opener. This does NOT affect the outreach queue — queued leads are always audited and sent.">
         {FIRST_REPLY_MODE_QUESTION}{sending && !envOn ? ' ⚠' : ''}
       </span>
       {/* Exactly one lit segment, so the state cannot be half-read. */}
-      <div className="flex items-center rounded-md border border-border/60 overflow-hidden">
+      <div className="order-last flex h-9 w-full items-stretch overflow-hidden rounded-md border border-input lg:order-none lg:w-auto">
         {FIRST_REPLY_MODES.map((m) => (
           <button
             key={m}
@@ -348,7 +357,7 @@ function AutoReplyToggle() {
             disabled={saving}
             onClick={() => pickMode(m)}
             title={FIRST_REPLY_MODE_HINTS[m]}
-            className={`px-2 h-7 text-[11px] font-medium transition disabled:opacity-60 ${
+            className={`flex-1 whitespace-nowrap px-3 text-sm font-medium transition disabled:opacity-60 lg:flex-none ${
               mode === m
                 ? (m === 'send' ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground')
                 : 'bg-transparent text-muted-foreground hover:text-foreground'
@@ -361,13 +370,13 @@ function AutoReplyToggle() {
       {/* Audit-only mode's whole point: how many leads are measured and waiting for ME to send.
           Counts leads with a COMPLETED audit, never parked rows — see auditOnlyReadyCount. */}
       {mode === 'audit_only' && readyCount !== null && readyCount > 0 && (
-        <span className="text-[11px] text-muted-foreground whitespace-nowrap" title="Leads whose audit auto-ran and has finished — send the warm template by hand">
+        <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground lg:order-last lg:ml-0" title="Leads whose audit auto-ran and has finished — send the warm template by hand">
           {readyCount} ready to send
         </span>
       )}
       {sending && (
         <Select value={replyTemplate} onValueChange={pickTemplate}>
-          <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="order-last h-9 w-full lg:w-[160px]" aria-label="Template sent on a first reply"><SelectValue /></SelectTrigger>
           <SelectContent>
             {WHATSAPP_TEMPLATES.map((t) => (
               <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -394,6 +403,13 @@ function PreviewLinkedText({ text }: { text: string }) {
   parts.push(text.slice(last));
   return <>{parts.map((p, i) => typeof p === 'string' ? p : <a key={i} href={previewUrl(p.url)} target="_blank" rel="noopener noreferrer" className="underline" title="Opens as a preview. Your visit is not counted as their open.">{p.url}</a>)}</>;
 }
+
+/** The list orders: the menu shows `label`, the trigger shows `short` so it fits the filter row. */
+const LIST_SORT_OPTIONS = [
+  { value: 'recent', label: 'Newest message', short: 'Newest message' },
+  { value: 'recent_reply', label: 'Most recent reply from them', short: 'Latest reply' },
+  { value: 'next_action', label: 'Next action: most overdue first', short: 'Most overdue' },
+] as const;
 
 const Inbox = () => {
   const { user, conversations, messages, messagesForKey, leads, auditByLeadId, auditRunningLeadIds, hasSiteFaultLeadIds, hasSiteFindingsLeadIds, crawlByLeadId, isLoading, isError, send, sendVoice, sendMedia, preview, refetch, loadLead, patchLeadStatus, patchLeadPotentialWork } = useInbox();
@@ -1712,19 +1728,43 @@ const Inbox = () => {
      the old stacked sizes. */
   return (
     <div className="space-y-4 md:flex md:h-[calc(100dvh-6.5rem)] md:min-h-[560px] md:flex-col md:space-y-2 lg:h-[calc(100dvh-7.5rem)]">
-      <div className={cn('flex flex-wrap items-center justify-between gap-2 md:shrink-0', active && 'hidden md:flex')}>
-        <div className="flex items-baseline gap-3">
-          {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
-          <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight"><MessageCircle className="h-6 w-6 text-blue-500" />WhatsApp Inbox</h1>
-          <p className="hidden text-sm text-muted-foreground xl:block">Every WhatsApp conversation with your leads.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      {/* ══ THE TOP BAR (2026-10-01) ═══════════════════════════════════════════════════════════════
+          Two rows, each one job. Row 1: what the page is, and its two actions (Send now, New). They
+          stay on the title's line at every width (Send now drops to its icon on a phone). The admin's
+          first-reply rule joins row 1 on a wide screen and takes its own row under the title below that
+          (see AutoReplyToggle). Row 2: the five list filters as one group: two columns on a phone, a
+          balanced 3 + 2 grid at tablet and laptop widths, one line from xl. Every control is h-9 and
+          text-sm, and an active filter is drawn in the primary colour, the same way on all five. */}
+      <div className={cn('space-y-3 md:shrink-0', active && 'hidden md:block')}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex min-w-0 flex-1 items-baseline gap-3">
+            {/* ⛔ It SAYS WhatsApp (Paul, 2026-09-28). One conversation system, one page, both roles. */}
+            <h1 className="flex shrink-0 items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl"><MessageCircle className="h-6 w-6 shrink-0 text-blue-500" />WhatsApp Inbox</h1>
+            <p className="hidden truncate text-sm text-muted-foreground min-[1760px]:block">Every WhatsApp conversation with your leads.</p>
+          </div>
           {/* The one auto-reply rule's switch (admin-only — hides itself otherwise). */}
           {perms.queueControls && <AutoReplyToggle />}
+          <div className="flex shrink-0 items-center gap-2">
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSendNow}
+                disabled={sendingNow}
+                aria-label="Send now"
+                title="Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window"
+              >
+                {sendingNow ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : <Send className="h-4 w-4 sm:mr-1.5" />}<span className="hidden sm:inline">Send now</span>
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-6 xl:flex xl:flex-nowrap xl:items-center" role="group" aria-label="Filter conversations">
           {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
-          {perms.campaigns && <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />}
+          {perms.campaigns && <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className={cn('h-9 w-full md:col-span-2 xl:w-[170px]', campaignFilter && 'border-primary/50 text-primary')} />}
           <Select value={statusFilter ?? '__all__'} onValueChange={(v) => setStatusFilter(v === '__all__' ? null : v)}>
-            <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={cn('h-9 xl:w-[170px]', perms.campaigns ? 'md:col-span-2' : 'md:col-span-3', statusFilter && 'border-primary/50 text-primary')} aria-label="Lead status"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All statuses</SelectItem>
               {PIPELINE_STATUS_OPTIONS.map((opt) => (
@@ -1739,33 +1779,18 @@ const Inbox = () => {
           </Select>
           {/* Next Action: when, what, and the order (both roles) — beside the other filters. */}
           <Select value={naWhen} onValueChange={(v) => setNaWhen(v as NextActionWhen)}>
-            <SelectTrigger className={cn('h-9 w-[150px] text-xs', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
-            <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={cn('h-9 xl:w-[160px]', perms.campaigns ? 'md:col-span-2' : 'md:col-span-3', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
+            <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={naKind} onValueChange={(v) => setNaKind(v as NextActionKind)}>
-            <SelectTrigger className={cn('h-9 w-[140px] text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
-            <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={cn('h-9 md:col-span-3 xl:w-[160px]', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
+            <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
           </Select>
+          {/* The trigger shows a short name for the order; the menu keeps the full wording. */}
           <Select value={listSort} onValueChange={(v) => setListSort(v as typeof listSort)}>
-            <SelectTrigger className={cn('h-9 w-[200px] text-xs', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="mr-1 text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent" className="text-xs">Newest message</SelectItem>
-              <SelectItem value="recent_reply" className="text-xs">Most recent reply from them</SelectItem>
-              <SelectItem value="next_action" className="text-xs">Next action: most overdue first</SelectItem>
-            </SelectContent>
+            <SelectTrigger className={cn('h-9 md:col-span-3 xl:w-[200px]', perms.campaigns && 'col-span-2', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="truncate"><span className="mr-1.5 text-muted-foreground">Sort:</span>{LIST_SORT_OPTIONS.find((o) => o.value === listSort)?.short}</span></SelectTrigger>
+            <SelectContent>{LIST_SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
           </Select>
-          {isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleSendNow}
-              disabled={sendingNow}
-              title="Send the next queued WhatsApp message now — skips only the pacing wait; still respects pause, the daily cap and the 7am–9:30pm window"
-            >
-              {sendingNow ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />} Send now
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
         </div>
       </div>
 
@@ -1797,13 +1822,15 @@ const Inbox = () => {
       <div className="grid gap-3 md:min-h-0 md:flex-1 md:grid-cols-[300px_1fr] md:grid-rows-[minmax(0,1fr)]">
         {/* Conversation list */}
         <Card className={cn('overflow-y-auto p-1.5 md:h-full md:max-h-none', active ? 'hidden md:block' : 'min-h-[50vh]')}>
-          <div className="mb-1.5 flex flex-wrap gap-1 px-0.5" role="tablist" aria-label="Show conversations">
+          {/* Four views in a 2 × 2 grid: the 300px column cannot hold all four on one line, and a free wrap
+              left "Waiting on them" alone on a second row (2026-10-01). */}
+          <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5" role="tablist" aria-label="Show conversations">
             {INBOX_QUICK_FILTERS.map((f) => {
               const n = f.value === 'unread' ? quickCounts.unread : f.value === 'waiting' ? quickCounts.waiting : null;
               const on = quickFilter === f.value;
               return (
                 <button key={f.value} type="button" role="tab" aria-selected={on} onClick={() => setQuickFilter(f.value)}
-                  className={cn('flex h-8 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
+                  className={cn('flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs font-medium transition-colors',
                     on ? 'bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60')}>
                   {f.label}{n !== null && n > 0 && <span className={cn('rounded-full px-1.5 text-[10px] font-bold tabular-nums', on ? 'bg-blue-500 text-white' : 'bg-muted text-foreground')}>{n}</span>}
                 </button>
@@ -1826,7 +1853,7 @@ const Inbox = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by business name…"
-              className="h-8 pr-7 text-xs"
+              className="h-8 pr-7 text-xs md:text-xs"
               aria-label="Search conversations by business name"
             />
             {search && (
