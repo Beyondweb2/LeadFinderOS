@@ -37,6 +37,13 @@ const cases: [string, LeadStateInput, StatusFilterValue][] = [
   ['interested', { status: 'interested', is_potential_work: true }, 'interested' as StatusFilterValue],
   ['meeting booked (pipeline still Contacted)', { status: 'initial_contact', whatsapp_sent_at: S, call_booked_at: '2026-10-02T13:00:00Z' }, CONTACTED],
   ['client', { status: 'payment_received', amount_paid: 99 }, 'payment_received' as StatusFilterValue],
+  /* Live verification 2026-10-01: a state that outranks "contacted" (the ⭐, a meeting) must not hide the contact. */
+  ['spoke to owner, then starred', { status: 'not_contacted', is_potential_work: true, lastLogged: logged('spoke_to_owner') }, CONTACTED],
+  ['"Interested" logged on a call (sets the star)', { status: 'not_contacted', is_potential_work: true, lastLogged: logged('interested') }, CONTACTED],
+  ['"Meeting booked" logged on a call', { status: 'not_contacted', is_potential_work: true, call_booked_at: '2026-10-02T13:00:00Z', lastLogged: logged('meeting_booked') }, CONTACTED],
+  ['No WhatsApp, reached by phone, starred', { status: 'no_whatsapp', is_potential_work: true, lastLogged: logged('spoke_to_owner') }, CONTACTED],
+  ['starred but never reached', { status: 'not_contacted', is_potential_work: true }, NEW],
+  ['starred, no-answer only', { status: 'not_contacted', is_potential_work: true, lastLogged: logged('no_answer') }, NEW],
 ];
 for (const [label, lead, filter] of cases) {
   const appears = inFilter(lead, filter);
