@@ -7,7 +7,7 @@ import {
 import { TRIAGE_SURFACE_DAYS } from "../../../src/lib/replyTriage.ts";
 import type { ClientExtras } from "../../../src/lib/clientHealth.ts";
 import type { UsageRow } from "../../../src/lib/adminIntelligence.ts";
-import { finaliseTotals, pagePath, periodWindows, resolvePerformanceState, sumTotals, totalsFromAggregate } from "../../../src/lib/searchPerformance.ts";
+import { finaliseTotals, OWN_SITE_KEY, OWN_SITE_TOP_ROWS, pagePath, periodWindows, resolvePerformanceState, sumTotals, totalsFromAggregate } from "../../../src/lib/searchPerformance.ts";
 import { buildExclusions, exclusionNote, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
 import { londonDay, previousPeriod, resolvePeriod, type ReportingPeriod } from "../../../src/lib/reportingPeriod.ts";
 import { costProviderOf, UNRECORDED_SPEND } from "../../../src/lib/apiCostLabels.ts";
@@ -198,6 +198,47 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     search = out;
   } catch (err) { console.error("[admin-overview] search console", err instanceof Error ? err.message : err); search = null; }
 
+  /* 2026-10-02 — FINDABLE'S OWN SITE in Search Console (own_site_search_*; never the client tables).
+     Same state resolver and the same 28-day windows as the client panel. Figures exist only when the
+     state is "populated"; "vs previous" only when stored data covers the previous window. Unreadable
+     → null (the panel says so). Nothing is estimated. */
+  let ownSearch: Record<string, unknown> | null = null;
+  try {
+    const { data: prop, error: pErr } = await service.from("own_site_search_property").select("site_key, gsc_property, status, last_synced_at, last_sync_error").eq("site_key", OWN_SITE_KEY).maybeSingle();
+    if (pErr) throw new Error(pErr.message);
+    const p = prop as { site_key: string; gsc_property: string | null; status: string; last_synced_at: string | null; last_sync_error: string | null } | null;
+    const w = periodWindows(28, londonDay(nowMs));
+    if (!p || !w) ownSearch = { state: resolvePerformanceState(p, 0), property: p?.gsc_property ?? null };
+    else {
+      const [cur, prev, cov, q] = await Promise.all([
+        service.rpc("own_site_search_page_totals", { p_site: OWN_SITE_KEY, p_from: w.current.from, p_to: w.current.to }),
+        service.rpc("own_site_search_page_totals", { p_site: OWN_SITE_KEY, p_from: w.previous.from, p_to: w.previous.to }),
+        service.rpc("own_site_search_coverage", { p_site: OWN_SITE_KEY }),
+        service.rpc("own_site_search_query_totals", { p_site: OWN_SITE_KEY, p_from: w.current.from, p_to: w.current.to }),
+      ]);
+      for (const r of [cur, prev, cov, q]) if (r.error) throw new Error(r.error.message);
+      type Agg = { clicks: number; impressions: number; position_impressions: number };
+      const curRows = (cur.data ?? []) as (Agg & { page: string })[];
+      const state = resolvePerformanceState(p, curRows.length);
+      const covRow = ((cov.data ?? []) as { first_date: string | null }[])[0] ?? null;
+      const prevCovered = !!covRow?.first_date && covRow.first_date <= w.previous.from;
+      const total = finaliseTotals(sumTotals(curRows.map(totalsFromAggregate)));
+      const prevTotal = prevCovered ? finaliseTotals(sumTotals(((prev.data ?? []) as Agg[]).map(totalsFromAggregate))) : null;
+      const byClicks = <T extends Agg>(a: T, b: T) => Number(b.clicks) - Number(a.clicks) || Number(b.impressions) - Number(a.impressions);
+      const row = (t: Agg) => { const f = finaliseTotals(totalsFromAggregate(t)); return { clicks: f.clicks, impressions: f.impressions, ctr: f.ctr, position: f.position }; };
+      ownSearch = {
+        state, property: p.gsc_property, lastSyncedAt: p.last_synced_at, lastError: p.last_sync_error, window: w.current,
+        ...(state === "populated" ? {
+          clicks: total.clicks, impressions: total.impressions, ctr: total.ctr, position: total.position,
+          previous: prevTotal ? { clicks: prevTotal.clicks, impressions: prevTotal.impressions } : null,
+          dataFrom: covRow?.first_date ?? null,
+          topPages: [...curRows].sort(byClicks).slice(0, OWN_SITE_TOP_ROWS).map((r) => ({ path: pagePath(r.page), ...row(r) })),
+          topQueries: [...((q.data ?? []) as (Agg & { query: string })[])].sort(byClicks).slice(0, OWN_SITE_TOP_ROWS).map((r) => ({ query: r.query, ...row(r) })),
+        } : {}),
+      };
+    }
+  } catch (err) { console.error("[admin-overview] own-site search console", err instanceof Error ? err.message : err); ownSearch = null; }
+
   /* Background jobs: last run, status, error (admin_job_runs). Unreadable → null, shown as unknown. */
   let jobs: { job: string; lastStartedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; lastError: string | null; runs: number }[] | null = null;
   {
@@ -277,7 +318,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     costNotes: { unrecorded: UNRECORDED_SPEND },
     costAccounting,
     commissionError: commissionError ? "Commission could not be read from the ledger just now." : null,
-    jobs, site, search, searchConfigured, latestSummary,
+    jobs, site, search, ownSearch, searchConfigured, latestSummary,
     generatedAt: new Date(nowMs).toISOString(),
   };
 }

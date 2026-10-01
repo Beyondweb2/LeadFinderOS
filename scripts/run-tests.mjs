@@ -23,7 +23,7 @@
            npm test market     only files whose name contains "market"
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readdirSync, existsSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -111,6 +111,38 @@ const files = [
 if (!files.length) {
   console.error(`No suites matched "${filter}".`);
   process.exit(1);
+}
+/* ══ THE findable-site SIBLING IS PART OF THE TEST INPUT — SAY WHEN IT IS STALE (2026-10-02) ═══════
+   Several suites read findable-site's SOURCE (cross-repo sync, the onboarding copy, the report
+   proxies, the onboarding audit fields) from FINDABLE_SITE_DIR or ../findable-site. On 2026-10-02
+   that sibling pointed at a checkout two weeks behind master with uncommitted edits, and FOUR suites
+   failed against code that is not live, which read as product failures for days.
+   ⛔ This does NOT skip or pass anything: those suites still run against whatever the sibling holds.
+   It prints which tree they read and whether it matches the last-fetched origin/master, so a red
+   line that is really a stale checkout says so. Fix: point FINDABLE_SITE_DIR at a clean worktree of
+   origin/master, or refresh the mirror the sibling links to (CLAUDE.md §3). */
+{
+  const siteDir = process.env.FINDABLE_SITE_DIR || path.resolve(ROOT, '..', 'findable-site');
+  const git = (...a) => spawnSync('git', ['-C', siteDir, ...a], { encoding: 'utf8' });
+  if (!existsSync(siteDir)) {
+    console.log(`⚠️  findable-site not found at ${siteDir} — the cross-repo suites will fail.\n`);
+  } else {
+    const head = git('rev-parse', 'HEAD').stdout.trim();
+    const master = git('rev-parse', 'origin/master').stdout.trim();
+    const dirty = git('status', '--porcelain', '--', 'src', 'functions', 'public').stdout.trim();
+    const behind = head && master ? Number(git('rev-list', '--count', `${head}..${master}`).stdout.trim() || 0) : NaN;
+    if (!head || !master) console.log(`⚠️  findable-site at ${siteDir} is not a git checkout with origin/master — cannot tell if it is current.\n`);
+    else if (behind > 0 || dirty) {
+      console.log('\x1b[33m' + '═'.repeat(70));
+      console.log(`⚠️  ENVIRONMENT: the findable-site the cross-repo suites read is NOT current master.`);
+      console.log(`    ${siteDir}`);
+      console.log(`    ${behind > 0 ? `${behind} commit${behind === 1 ? '' : 's'} behind origin/master (as last fetched)` : 'at origin/master'}${dirty ? ', with uncommitted edits in src/functions/public' : ''}.`);
+      console.log('    Red results in check-cross-repo-sync, manual-onboarding, self-sourced-handoff and');
+      console.log('    onboarding-audit-fields may describe that checkout, not live code. Set FINDABLE_SITE_DIR');
+      console.log('    to a clean origin/master worktree, or refresh the mirror (CLAUDE.md §3).');
+      console.log('═'.repeat(70) + '\x1b[0m\n');
+    } else console.log(`findable-site input: ${siteDir} at origin/master (${head.slice(0, 7)}), clean.\n`);
+  }
 }
 console.log(`Running ${files.length} suite${files.length === 1 ? '' : 's'}${filter ? ` matching "${filter}"` : ''}…\n`);
 

@@ -312,6 +312,22 @@ each client's Search Console property; set the JSON key as the edge secret; add 
 `performance-sync` mode `properties`). The branch's MCL seed SQL is NOT safe to run as written (it writes
 the dropped column and lists 14 pages that now redirect).
 
+### findable.live itself (2026-10-02)
+
+Findable's OWN site rides the same `performance-sync` (same `GOOGLE_SERVICE_ACCOUNT_JSON`, same 05:00 cron,
+read-only scope) but writes SEPARATE tables, so it can never be counted as a client:
+`own_site_search_property` (one row: `findable` → `sc-domain:findable.live`, status `not_connected` until a
+sync succeeds), `own_site_search_page_daily`, `own_site_search_query_daily`, plus service-role-only SQL
+`own_site_search_page_totals` / `_query_totals` / `_coverage` (migration `20261002090000`, RLS on, no
+policies). The daily run syncs it first, whether or not any client is connected; no credential → the run
+records `not_configured` and fetches nothing. Backfill: `{"mode":"backfill","site":"findable"}` (admin, 30-day
+chunks up to 90). `admin-overview` returns `ownSearch` (28-day clicks, impressions, CTR, average position,
+top 10 queries and pages, previous 28 days when covered); it renders INSIDE the existing "Findable.live
+funnel" panel, not as a new dashboard. Guard: `scripts/own-site-search.test.ts`.
+**Remaining (Paul):** verify `findable.live` as a Domain property in Search Console; create the service
+account + JSON key; add the service-account email as a Restricted user on that property; give the key to a
+session to set as the secret. Steps in findable-site `docs/findable-offsite-authority-plan.md`.
+
 ## AI business summary (release 6)
 
 fn `business-summary` (cron `business-summary-weekly`, Mondays 06:30 UTC: the last full London week vs

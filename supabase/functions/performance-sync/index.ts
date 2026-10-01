@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isInternalCall, refusalBody, requireAdmin } from "../_shared/access.ts";
 import {
-  BACKFILL_CHUNK_DAYS, BACKFILL_MAX_DAYS, SETTLED_LAG_DAYS, addDays, chunkWindow, foldDailyRows, syncWindow, toISODate, type DateWindow,
+  BACKFILL_CHUNK_DAYS, BACKFILL_MAX_DAYS, OWN_SITE_KEY, SETTLED_LAG_DAYS, addDays, chunkWindow, foldDailyRows, syncWindow, toISODate, type DateWindow,
 } from "../../../src/lib/searchPerformance.ts";
 import { fetchPageDaily, fetchQueryDaily, getAccessToken, listProperties, parseServiceAccount } from "../_shared/google-search-console.ts";
 import { isPaidLead } from "../../../src/lib/leadPayment.ts";
@@ -18,6 +18,10 @@ import { isPaidLead } from "../../../src/lib/leadPayment.ts";
    clients are skipped; the reporting domain is read from the connection row (else website_build).
    ⛔ No Google credential (GOOGLE_SERVICE_ACCOUNT_JSON unset) → the run records "not configured" and
    touches nothing. Search Console reads are free; nothing here spends.
+   🔴 2026-10-02: FINDABLE'S OWN SITE rides this same run (own_site_search_property, site_key
+   'findable' → sc-domain:findable.live) and writes ONLY own_site_search_* — never the client tables,
+   never a lead. It is synced first and regardless of how many clients are connected. Backfill takes
+   {"mode":"backfill","site":"findable"} for it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 const corsHeaders = {
@@ -26,7 +30,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const BUILD_ID = "performance-sync-2026-09-30a";
+const BUILD_ID = "performance-sync-2026-10-02a";
 const FN = "performance-sync";
 const UPSERT_BATCH = 500;
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
@@ -64,6 +68,42 @@ async function syncClient(service: Service, token: string, conn: ConnectionRow, 
   return pages + queries;
 }
 
+interface OwnSiteRow { site_key: string; gsc_property: string; canonical_domain: string }
+
+async function ownSite(service: Service): Promise<OwnSiteRow | null> {
+  const { data, error } = await service.from("own_site_search_property").select("site_key, gsc_property, canonical_domain").eq("site_key", OWN_SITE_KEY).maybeSingle();
+  if (error) throw new Error(`own site: ${error.message}`);
+  return (data as OwnSiteRow | null) ?? null;
+}
+
+async function syncOwnSite(service: Service, token: string, site: OwnSiteRow, window: DateWindow): Promise<number> {
+  const property = text(site.gsc_property);
+  if (!property) throw new Error("no gsc_property on the own-site record");
+  const syncedAt = new Date().toISOString();
+  const [pageRows, queryRows] = await Promise.all([fetchPageDaily(token, property, window.from, window.to), fetchQueryDaily(token, property, window.from, window.to)]);
+  const tag = (rows: readonly object[]): Record<string, unknown>[] => rows.map((f) => ({ site_key: site.site_key, ...f, synced_at: syncedAt }));
+  const pages = await upsertAll(service, "own_site_search_page_daily", tag(foldDailyRows(pageRows, text(site.canonical_domain) || null, false)), "site_key,date,page");
+  const queries = await upsertAll(service, "own_site_search_query_daily", tag(foldDailyRows(queryRows, text(site.canonical_domain) || null, true)), "site_key,date,page,query");
+  return pages + queries;
+}
+
+const markOwn = (service: Service, siteKey: string, patch: Record<string, unknown>) =>
+  service.from("own_site_search_property").update({ ...patch, updated_at: new Date().toISOString() }).eq("site_key", siteKey);
+
+async function runOwnSite(service: Service, token: string, window: DateWindow): Promise<Record<string, unknown>> {
+  const site = await ownSite(service);
+  if (!site) return { site: OWN_SITE_KEY, ok: false, error: "no own-site record" };
+  try {
+    const rows = await syncOwnSite(service, token, site, window);
+    await markOwn(service, site.site_key, { status: "connected", last_synced_at: new Date().toISOString(), last_sync_error: null, last_sync_row_count: rows });
+    return { site: site.site_key, ok: true, rows };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    await markOwn(service, site.site_key, { status: "error", last_sync_error: message.slice(0, 500) });
+    return { site: site.site_key, ok: false, error: message.slice(0, 200) };
+  }
+}
+
 const mark = (service: Service, id: string, patch: Record<string, unknown>) =>
   service.from("client_search_connections").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
 
@@ -84,13 +124,15 @@ async function connections(service: Service, leadId: string | null): Promise<Con
 
 async function daily(service: Service, todayISO: string): Promise<Record<string, unknown>> {
   const conns = await connections(service, null);
-  if (!conns.length) return { status: "ok", clients: 0, note: "no connected clients" };
   let account;
   try { account = parseServiceAccount(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")); }
-  catch (e) { return { status: "not_configured", clients: conns.length, note: e instanceof Error ? e.message : String(e) }; }
+  catch (e) { return { status: "not_configured", clients: conns.length, own_site: "not_configured", note: e instanceof Error ? e.message : String(e) }; }
   const window = syncWindow(todayISO);
   if (!window) throw new Error("bad_today");
   const token = await getAccessToken(account);
+  /* Findable's own site first, whether or not any client is connected. */
+  const ownSiteResult = await runOwnSite(service, token, window);
+  if (!conns.length) return { status: "ok", window, clients: 0, own_site: ownSiteResult, note: "no connected clients" };
   const results: Record<string, unknown>[] = [];
   for (const c of conns) {
     try {
@@ -103,7 +145,7 @@ async function daily(service: Service, todayISO: string): Promise<Record<string,
       results.push({ lead_id: c.lead_id, ok: false, error: message.slice(0, 200) });
     }
   }
-  return { status: "ok", window, clients: results.length, results };
+  return { status: "ok", window, clients: results.length, own_site: ownSiteResult, results };
 }
 
 Deno.serve(async (req) => {
@@ -128,6 +170,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, properties: await listProperties(await getAccessToken(account)) });
     }
 
+    if (mode === "backfill" && text(body.site) === OWN_SITE_KEY) {
+      if (internal) return json({ ok: false, error: "admin_only" }, 403);
+      const site = await ownSite(service);
+      if (!site) return json({ ok: false, error: "no_own_site_record" }, 404);
+      let account;
+      try { account = parseServiceAccount(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")); }
+      catch (e) { return json({ ok: false, error: "not_configured", detail: e instanceof Error ? e.message : String(e) }); }
+      const days = Math.min(Math.max(Number(body.days) || BACKFILL_MAX_DAYS, 1), BACKFILL_MAX_DAYS);
+      const to = addDays(todayISO, -SETTLED_LAG_DAYS);
+      const from = to ? addDays(to, -(days - 1)) : null;
+      if (!from || !to) return json({ ok: false, error: "bad_dates" }, 400);
+      const chunks = chunkWindow({ from, to }, BACKFILL_CHUNK_DAYS);
+      const index = Math.max(0, Math.floor(Number(body.chunk) || 0));
+      if (index >= chunks.length) return json({ ok: true, done: true, chunks_total: chunks.length });
+      try {
+        const rows = await syncOwnSite(service, await getAccessToken(account), site, chunks[index]);
+        await markOwn(service, site.site_key, { status: "connected", last_synced_at: new Date().toISOString(), last_sync_error: null, last_sync_row_count: rows });
+        return json({ ok: true, site: site.site_key, chunk: index, chunks_total: chunks.length, window: chunks[index], rows, next_chunk: index + 1 < chunks.length ? index + 1 : null });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await markOwn(service, site.site_key, { status: "error", last_sync_error: message.slice(0, 500) });
+        return json({ ok: false, error: "sync_failed", detail: message.slice(0, 300) }, 502);
+      }
+    }
     if (mode === "backfill") {
       if (internal) return json({ ok: false, error: "admin_only" }, 403);
       const leadId = text(body.lead_id);

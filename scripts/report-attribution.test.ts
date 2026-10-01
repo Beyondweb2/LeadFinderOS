@@ -32,36 +32,44 @@ const base = (named: number, total: number): AiAuditReportData => ({
   competitors: ["LockFit Locksmiths Huntingdon"],
   topCompetitors: [{ name: "LockFit Locksmiths Huntingdon", count: 25 }],
   competitorMentions: 470,
-  gutPunch: { question: "emergency lockouts locksmiths in St neots UK", engineLabel: "Gemini", rivals: ["Keytek Locksmiths St Neots"] },
+  gutPunch: { question: "emergency lockouts locksmiths in St neots UK", engineLabel: "Gemini", rivals: ["Keytek Locksmiths St Neots"], answer: "Here are some locksmiths in St Neots.", businesses: ["Keytek Locksmiths St Neots"] },
   generatedAtLabel: "11 Aug 2026",
 } as AiAuditReportData);
 
-console.log("── ⛔ NAMED SOMEWHERE -> THE WORD 'never' MUST NOT APPEAR IN THE ATTRIBUTION ──");
+/* 🔴 REVISED 2026-10-02. The quote's attribution line (div.gb-attr) was REMOVED on 2026-09-16, when
+   Paul replaced the quote with the chat card ("What AI actually said": one engine, the exact question,
+   the firms it named, and the callout "{business} wasn't mentioned in this search"). These blocks read
+   gb-attr, so three of them failed and the edge case passed VACUOUSLY on an empty string. They now
+   read what the report renders today. FAULT 1 is still the thing guarded: no sentence on the page may
+   claim "never named" when the audit-wide count says otherwise, and the card's claim must be scoped
+   to the one answer it shows. The absent case is stated by the COUNT ("0 times"), not by a stronger
+   sentence: that is the 2026-09-16 design. */
+const text = (html: string) => html.replace(/<style[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ").replace(/&rsquo;/g, "\u2019").replace(/&times;/g, "x").replace(/\s+/g, " ");
+const card = (html: string) => html.match(/<section class="chatcard">([\s\S]*?)<\/section>/)?.[1] ?? "";
+
+console.log("── ⛔ NAMED SOMEWHERE -> NOTHING ON THE PAGE MAY SAY 'never' ──");
 {
   const html = renderReportHtml(base(8, 24));
-  const attr = html.match(/<div class="gb-attr">([\s\S]*?)<\/div>/)?.[1] ?? "";
-  console.log(`   attribution: ${attr.trim()}`);
-  ok(attr.length > 0, "the attribution line renders");
-  ok(!/never named/i.test(attr), "⛔ it does NOT say 'never named' when the business WAS named");
-  ok(/wasn/i.test(attr) && /this answer/i.test(attr), "  it scopes to the quoted answer instead");
-  ok(/Gemini/.test(attr), "  and still attributes the engine");
-  /* The headline and the attribution must be able to sit together without contradicting. */
-  ok(/8 times in 24 answers/.test(html), "the headline still states the audit-wide count");
+  const c = card(html);
+  ok(c.length > 0, "the chat card renders (a not-named answer that carries firms)");
+  ok(!/never (named|mentioned|appear)/i.test(text(html)), "⛔ no 'never named' anywhere when the business WAS named");
+  ok(/wasn\u2019t mentioned in this search/.test(text(c)), "  the card's claim is scoped to the one search it shows");
+  ok(/cc-brand[^>]*>[\s\S]*?Gemini/.test(c), "  and it attributes the engine");
+  ok(/8 times RG Locksmiths cambs showed up/.test(text(html)) && /out of 24 answers/.test(text(html)), "the headline still states the audit-wide count");
 }
 
-console.log("\n── THE STRONG LINE SURVIVES FOR A GENUINELY ABSENT BUSINESS ──");
+console.log("\n── THE ABSENT BUSINESS IS STATED BY THE COUNT ──");
 {
-  const html = renderReportHtml(base(0, 24));
-  const attr = html.match(/<div class="gb-attr">([\s\S]*?)<\/div>/)?.[1] ?? "";
-  console.log(`   attribution: ${attr.trim()}`);
-  ok(/never named/i.test(attr), "named === 0 still reads 'was never named' — the absent case is not softened");
+  const t = text(renderReportHtml(base(0, 24)));
+  ok(/0 times RG Locksmiths cambs showed up/.test(t), "named === 0 says 0 times, plainly; the absent case is not softened");
 }
 
 console.log("\n── EDGE: named 1 of 24 is still 'named somewhere' ──");
-/* The boundary that matters: one mention anywhere forbids the word. */
+/* The boundary that matters: one mention anywhere forbids the word. Asserted on the whole page now,
+   so it can no longer pass on an empty match. */
 {
-  const attr = renderReportHtml(base(1, 24)).match(/<div class="gb-attr">([\s\S]*?)<\/div>/)?.[1] ?? "";
-  ok(!/never named/i.test(attr), "a single mention across the whole audit is enough to forbid 'never'");
+  const html = renderReportHtml(base(1, 24));
+  ok(card(html).length > 0 && !/never (named|mentioned|appear)/i.test(text(html)), "a single mention across the whole audit is enough to forbid 'never'");
 }
 
 console.log("\n── ⛔ FRAGMENTS ARE NOT FIRMS (the names measured on RG's own report) ──");

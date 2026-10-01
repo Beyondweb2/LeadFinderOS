@@ -30,7 +30,7 @@ const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 
-const flow = read('../findable-site/src/components/OnboardingFlow.tsx');
+const flow = process.env.FINDABLE_SITE_DIR ? fs.readFileSync(path.join(process.env.FINDABLE_SITE_DIR, 'src/components/OnboardingFlow.tsx'), 'utf8') : read('../findable-site/src/components/OnboardingFlow.tsx');
 const baseline = read('supabase/functions/_shared/audit-baseline.ts');
 const create = read('supabase/functions/create-ai-audit/index.ts');
 
@@ -40,11 +40,20 @@ ok(/skipped: "no_business_type"/.test(baseline), 'startPaidBaseline still refuse
 ok(/skipped: "no_location"/.test(baseline), 'and without a town');
 ok(/skipped: "no_lead_id"/.test(baseline), 'and without a lead');
 
-console.log('\n-- business name is asked on BOTH paths --');
-/* It is unconditional in the panel list: no isGeneric, no askTradeTown. */
+console.log('\n-- business name is asked whenever it would otherwise be BLANK --');
+/* 🔴 REVISED 2026-10-02. This used to demand the panel UNCONDITIONALLY. Paul's 2026-09-18
+   simplification (findable-site e48f787) hid it on the tagged path, where the lead row already holds
+   the name, and this test was red from then on. What it protects is unchanged and still enforced:
+   nobody reaches the pay screen with business_name blank (create-ai-audit 400s without one). So: the
+   cold path always; the tagged path whenever the prefilled name is blank, through a MONOTONIC latch
+   (askBusiness, the same shape as askTradeTown). Gating on isGeneric ALONE fails here. */
 const list = flow.slice(flow.indexOf('const preSubs: PreSub[] = ['), flow.indexOf('];', flow.indexOf('const preSubs: PreSub[] = [')));
-ok(/"you",/.test(list) && /"business",/.test(list), 'the panel list always contains "business"');
-ok(!/isGeneric \? \[?"business"/.test(list), 'and it is NOT conditional on there being no lead');
+ok(/"you",/.test(list) && /\.\.\.\(isGeneric \|\| askBusiness \? \(\["business"\] as PreSub\[\]\) : \[\]\),/.test(list),
+   'the panel list asks "business" on the cold path OR when the tagged name is blank');
+ok(!/\.\.\.\(isGeneric \? \(\["business"\]/.test(list), 'and it is NOT gated on the cold path alone');
+ok(/if \(!isGeneric && !businessName\.trim\(\)\) setAskBusiness\(true\);/.test(flow),
+   'a tagged lead with a blank name turns the panel on');
+ok(!/setAskBusiness\(false\)/.test(flow), 'and it is never turned back off');
 ok(/case "business": return bizName\.trim\(\)\.length > 1;/.test(flow), 'and it is required to advance');
 
 console.log('\n-- one business-name value, not two --');

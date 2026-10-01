@@ -127,6 +127,30 @@ ok(siteFaultLine(true, { version: 1, signals: FAULTY }, now) === null, "website 
 ok(siteFaultLine(true, { version: CRAWL_CHECK_VERSION, signals: FAULTY }, now - 40 * 86_400_000) === null, "website + a STALE crawl → null");
 ok(resolveSiteFault(true, [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: true }], null, true) === CLEAN_SITE_FAULT_LINE,
   "website + successful clean crawl + measured visibility gap → the exact clean-site fallback");
+{
+  const cleanSiteFault = resolveSiteFault(
+    true,
+    [{ result: { status: "complete", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: true }],
+    null,
+    true,
+  );
+  ok(cleanSiteFault === CLEAN_SITE_FAULT_LINE && cleanSiteFault.trim().length > 0,
+    "clean successful crawl resolves a non-empty client-facing site fault");
+  ok(getTemplateSendability(NAME, { shareToken: null }, { reportSlug: REPORT, hasSiteFault: !!cleanSiteFault }).ok,
+    "clean successful crawl with a visibility gap makes the fault template eligible");
+  const preview = renderTemplateBody(NAME, "Clean Crawl Ltd", REPORT, "locksmith", "A, B and C", undefined, "Huntingdon", cleanSiteFault ?? undefined);
+  ok(preview.includes(`Here's the main thing holding you back.\n\n${CLEAN_SITE_FAULT_LINE}\n\n`),
+    "preview uses the exact clean-site fallback");
+  ok(preview.split(CLEAN_SITE_FAULT_LINE).length - 1 === 1,
+    "preview inserts the clean-site fallback exactly once");
+  const params = (claimTemplatePayload(NAME, "en", "Clean Crawl Ltd", REPORT, {
+    trade: "locksmith", town: "Huntingdon", rivals: ["A", "B", "C"], siteFault: cleanSiteFault ?? "", auditUrl: REPORT,
+  }).template.components as Array<{ parameters: Array<{ text: string }> }>)[0].parameters;
+  ok(params[5].text === CLEAN_SITE_FAULT_LINE,
+    "Meta payload {{6}} uses the exact clean-site fallback");
+  ok(preview === renderTemplateBody(NAME, "Clean Crawl Ltd", REPORT, "locksmith", "A, B and C", undefined, "Huntingdon", params[5].text),
+    "queued/transcript rendering uses the same value as Meta {{6}}");
+}
 ok(resolveSiteFault(true, [{ result: { status: "unavailable", version: CRAWL_CHECK_VERSION, signals: CLEAN }, createdAtMs: now, complete: false }], null, true) === null,
   "website + unavailable crawl + visibility gap → unavailable (never clean fallback)");
 ok(resolveSiteFault(true, [], null, true) === null, "website + no crawl + visibility gap → unavailable (never clean fallback)");
