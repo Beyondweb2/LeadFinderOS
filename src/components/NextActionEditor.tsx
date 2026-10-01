@@ -24,7 +24,7 @@ type EditorLead = LeadStateInput & {
   next_action?: string | null;
   next_action_date?: string | null;
   next_action_note?: string | null;
-  call_booked_at?: string | null;
+  next_action_time?: string | null;
 };
 
 const BUCKET_TEXT = { overdue: 'text-red-600 dark:text-red-400', today: 'text-amber-600 dark:text-amber-400', upcoming: 'text-muted-foreground', none: 'text-muted-foreground' } as const;
@@ -36,7 +36,7 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
   const save = async (a: NextActionInput) => {
     const r = await saveNextAction(lead.id, a, lead);
     if (!r.ok) { toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' }); return r; }
-    toast({ title: a.nextAction === 'none' ? 'Next action cleared' : a.meetingAt ? 'Meeting booked · Next Action set' : 'Next action saved' });
+    toast({ title: a.nextAction === 'none' ? (a.done ? 'Next action completed' : 'Next action cleared') : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved' });
     setOpen(false);
     return r;
   };
@@ -60,14 +60,14 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
         <PopoverContent className="w-auto p-4" align="start">
           {open && (
             <NextActionForm compact
-              lead={{ next_action: lead.next_action ?? null, next_action_date: lead.next_action_date ?? null, next_action_note: lead.next_action_note ?? null, call_booked_at: lead.call_booked_at ?? null }}
+              lead={{ next_action: lead.next_action ?? null, next_action_date: lead.next_action_date ?? null, next_action_note: lead.next_action_note ?? null, next_action_time: lead.next_action_time ?? null }}
               onSave={save} onCancel={() => setOpen(false)} />
           )}
         </PopoverContent>
       </Popover>
       {v && (
         <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500 hover:bg-green-500/10 hover:text-green-400"
-          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null })} title="Done — clear the next action" aria-label="Done — clear the next action">
+          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })} title="Done — clear the next action" aria-label="Done — clear the next action">
           <CheckCircle2 className="h-4 w-4" />
         </Button>
       )}

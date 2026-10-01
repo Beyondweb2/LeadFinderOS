@@ -37,6 +37,23 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['Nothing. Every control is inside its section.'],
       effect: 'The Work tab is about a third shorter, and you can read every section\'s state without opening it.',
     } },
+  { id: '2026-10-01-next-action-time', date: '2026-10-01', title: 'Next Actions can have a time', audience: 'all',
+    body: 'Every Next Action can now have an optional UK time, and there are two new types: Send proposal and Chase payment.',
+    report: {
+      added: [
+        'An optional time on every Next Action, for example "Call · Tomorrow · 14:30". It is UK time, whatever clock your computer runs on.',
+        'Two types: Send proposal and Chase payment, each with its own filter.',
+        'A "No time" link to remove a time while keeping the day.',
+      ],
+      changed: [
+        'A timed Next Action counts as overdue only once its UK time has passed. One without a time works exactly as before.',
+        'History says what happened: Set, Rescheduled (with what it was), Changed (Call → Send proposal), Completed or Cleared.',
+        'A Meeting\'s time and the booked meeting are one time. Booking or moving one moves the other.',
+        'The daily reminder names the action in words, with its time.',
+      ],
+      removed: ['The "Meeting at 14:30" line added to a meeting\'s note. The time now shows by itself.'],
+      effect: 'Every screen shows the same action, day and time, and nothing counts as overdue before its time.',
+    } },
   { id: '2026-10-01-workspace-declutter', date: '2026-10-01', title: 'A calmer lead workspace', audience: 'all',
     body: 'The lead popup shows each thing once: the status, who owns it, the Next Action, the last contact. Everything else is one tap away.',
     report: {

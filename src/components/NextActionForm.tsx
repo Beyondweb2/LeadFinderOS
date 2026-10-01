@@ -5,15 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
-import { NEXT_ACTION_LABEL, londonInstant, meetingDayTime, nextActionView, nextActionText } from '@/lib/nextActionView';
+import { NEXT_ACTION_LABEL, hhmmOf, nextActionView, nextActionText } from '@/lib/nextActionView';
 import type { NextActionInput } from '@/lib/nextActionWrite';
 
 /* ⛔ THE ONE NEXT ACTION FORM (2026-10-02, Paul). The lead workspace's Work tab, the Outreach row and the phone
    card draw THIS form; it saves through src/lib/nextActionWrite.ts (lead_set_follow_up, both roles). Every
    type offered is NEXT_ACTION_OPTIONS; a stored value outside it (an older one) is shown in its own words and
-   can be kept. Fields: the type, the day (quick days or a date), the time for a Meeting (call_booked_at —
-   the only time the model stores), and the note. Save writes it; Done and Clear remove it (cleared in
-   History); editing and rescheduling are the same Save. Nothing auto-saves. */
+   can be kept. Fields: the type, the day (quick days or a date), an OPTIONAL time (UK time, every type —
+   next_action_time; a Meeting with a time is the booked meeting), and the note. Save writes it; Clear removes
+   it; editing and rescheduling are the same Save. Nothing auto-saves. */
 
 /** A London calendar day, n days from today, as YYYY-MM-DD. */
 export function londonDayPlus(n: number, now = new Date()): string {
@@ -28,7 +28,7 @@ export const QUICK_DATES = [
 ] as const;
 
 export type NextActionPreset = { nextAction: string; date?: string; note?: string; requireDate?: boolean; why?: string };
-export type NextActionFormLead = { next_action: string | null; next_action_date: string | null; next_action_note: string | null; call_booked_at?: string | null };
+export type NextActionFormLead = { next_action: string | null; next_action_date: string | null; next_action_note: string | null; next_action_time?: string | null };
 
 export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, compact = false }: {
   lead: NextActionFormLead;
@@ -42,22 +42,20 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
   compact?: boolean;
 }) {
   const known = NEXT_ACTION_OPTIONS.some((o) => o.value === lead.next_action);
-  const bookedDayTime = lead.call_booked_at && Number.isFinite(Date.parse(lead.call_booked_at)) ? meetingDayTime(lead.call_booked_at) : null;
   const [nextAction, setNextAction] = useState(preset?.nextAction ?? lead.next_action ?? 'none');
   const [date, setDate] = useState(preset ? (preset.date ?? '') : (lead.next_action_date ?? ''));
-  const [time, setTime] = useState(lead.next_action === 'meeting' && bookedDayTime && bookedDayTime.day === lead.next_action_date ? bookedDayTime.time : '');
+  const [time, setTime] = useState(preset ? '' : (hhmmOf(lead.next_action_time) ?? ''));
   const [note, setNote] = useState(preset?.note ?? lead.next_action_note ?? '');
   const [busy, setBusy] = useState(false);
   const has = !!lead.next_action && lead.next_action !== 'none';
   const isMeeting = nextAction === 'meeting';
-  const needsDay = (!!preset?.requireDate && !date) || (isMeeting && !!time && !date);
+  const needsDay = (!!preset?.requireDate && !date) || (!!time && !date);
   const now = nextActionView(lead);
   const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
   const run = async (a: NextActionInput) => { setBusy(true); try { await onSave(a); } finally { setBusy(false); } };
   const save = () => {
     if (nextAction === 'none') return run({ nextAction: 'none', date: null, note: note.trim() || null });
-    const meetingAt = isMeeting && date && time ? londonInstant(date, time) : null;
-    return run({ nextAction, date: date || null, note: note.trim() || null, meetingAt });
+    return run({ nextAction, date: date || null, time: date && time ? time : null, note: note.trim() || null });
   };
   return (
     <div className={cn('space-y-2', compact && 'w-[17rem]')} data-testid="next-action">
@@ -84,11 +82,13 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
           <button key={q.label} type="button" className={cn(chip, date === londonDayPlus(q.days) && 'border-primary text-primary')} onClick={() => setDate(londonDayPlus(q.days))}>{q.label}</button>
         ))}
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-8 w-[9.5rem] text-xs" disabled={nextAction === 'none'} aria-label="Next action date" />
-        {isMeeting && (
-          <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-8 w-[6.5rem] text-xs" aria-label="Meeting time (UK)" title="UK time" data-testid="next-action-time" />
+        <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={nextAction === 'none'}
+          className={cn('h-8 w-[6.5rem] text-xs', isMeeting && 'border-primary/60')} aria-label="Time (optional, UK)" title="Optional — UK time" data-testid="next-action-time" />
+        {time && nextAction !== 'none' && (
+          <button type="button" className="text-[11px] text-muted-foreground underline underline-offset-2" onClick={() => setTime('')} data-testid="next-action-no-time">No time</button>
         )}
       </div>
-      {isMeeting && <p className="text-[11px] text-muted-foreground">Time is UK time. With a time, this books the meeting (shows as “Meeting booked”).</p>}
+      <p className="text-[11px] text-muted-foreground">{isMeeting ? 'Time is UK time. With a time, this books the meeting (shows as “Meeting booked”).' : 'Time is optional, in UK time.'}</p>
       <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="h-9 text-xs" placeholder="What to do, e.g. ring after their website contract ends" aria-label="Next action note" />
       <div className="flex items-center justify-end gap-2">
         {onCancel && <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onCancel}>Cancel</Button>}

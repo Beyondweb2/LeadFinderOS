@@ -24,13 +24,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 
-const flow = process.env.FINDABLE_SITE_DIR ? fs.readFileSync(path.join(process.env.FINDABLE_SITE_DIR, 'src/components/OnboardingFlow.tsx'), 'utf8') : read('../findable-site/src/components/OnboardingFlow.tsx');
+/* ⛔ READ WHAT IS DEPLOYED, NOT WHATEVER IS CHECKED OUT (2026-10-02). This suite failed on main for days while
+   findable-site's origin/master passed it in full: it read the WORKING TREE of whichever findable-site copy was
+   on disk (an old worktree, or the stale primary checkout). findable-site deploys only from origin/master, so
+   that is what this reads — through git, whatever the checkout's state — and it says which revision. If git
+   cannot answer, it falls back to the file and says so. */
+const siteDir = process.env.FINDABLE_SITE_DIR || path.join(ROOT, '..', 'findable-site');
+const FLOW_PATH = 'src/components/OnboardingFlow.tsx';
+const flow = (() => {
+  try {
+    const rev = execFileSync('git', ['-C', siteDir, 'rev-parse', '--short', 'origin/master'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const src = execFileSync('git', ['-C', siteDir, 'show', `origin/master:${FLOW_PATH}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+    console.log(`(findable-site ${FLOW_PATH} read at origin/master ${rev} — what is deployed)`);
+    return src;
+  } catch {
+    console.log(`(findable-site: no origin/master at ${siteDir}; reading its working tree — may not be what is deployed)`);
+    return fs.readFileSync(path.join(siteDir, FLOW_PATH), 'utf8');
+  }
+})();
 const baseline = read('supabase/functions/_shared/audit-baseline.ts');
 const create = read('supabase/functions/create-ai-audit/index.ts');
 

@@ -1242,6 +1242,7 @@ export type Database = {
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
+          next_action_time: string | null
           next_checkin_date: string | null
           notes: string | null
           outreach_attempts: number
@@ -1324,6 +1325,7 @@ export type Database = {
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
+          next_action_time?: string | null
           next_checkin_date?: string | null
           notes?: string | null
           outreach_attempts?: number
@@ -1406,6 +1408,7 @@ export type Database = {
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
+          next_action_time?: string | null
           next_checkin_date?: string | null
           notes?: string | null
           outreach_attempts?: number
@@ -2228,6 +2231,8 @@ export type Database = {
         | "email"
         | "send_info"
         | "meeting"
+        | "send_proposal"
+        | "chase_payment"
       site_status: "draft" | "published" | "archived"
     }
     CompositeTypes: {
@@ -2404,6 +2409,11 @@ export const Constants = {
         "send_follow_up",
         "check_3_day_removal",
         "2nd_follow_up",
+        "email",
+        "send_info",
+        "meeting",
+        "send_proposal",
+        "chase_payment",
       ],
       site_status: ["draft", "published", "archived"],
     },

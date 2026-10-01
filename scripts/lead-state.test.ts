@@ -154,7 +154,7 @@ console.log("\n── 5. outcome → Next Action: suggested, pre-filled, human-s
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ Log Contact itself never saves a Next Action");
   const naWrite = read("src/lib/nextActionWrite.ts");
-  ok(/'lead_set_call_booked', \{ _lead_id: leadId, _at: at \}/.test(naWrite) && /_next_action: 'meeting'/.test(naWrite) && /bookMeeting\(leadId, iso, note, stateLead\(\)\)/.test(crm) && /Save meeting/.test(crm), "the meeting's ONE Save writes the time and the Next Action Meeting (a person pressed it; the one write, bookMeeting)");
+  ok(/return saveNextAction\(leadId, \{ nextAction: 'meeting', date: day, time, note: note \?\? null \}, stateLead\);/.test(naWrite) && /bookMeeting\(leadId, iso, note \?\? lead\.next_action_note, stateLead\(\)\)/.test(crm) && /Save meeting/.test(crm), "the meeting's ONE Save writes the Next Action Meeting at that UK day + time; the server books it from the same time (2026-10-02)");
 }
 
 console.log("\n── 6. Last contact ──");

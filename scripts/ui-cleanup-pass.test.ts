@@ -46,7 +46,7 @@ console.log("\n── one pill, every screen ──");
   const inbox = read("src/pages/Inbox.tsx");
   ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
   ok(/<NextActionPill lead=\{activeLead\} onClick=\{\(\) => setDetailLeadId\(active\.leadId\)\} \/>/.test(inbox), "Inbox header: the pill, tap → the prospect");
-  ok(/next_action, next_action_date, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note, so the header pill carries it");
+  ok(/next_action, next_action_date, next_action_time, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
   ok(/<NextActionPill lead=\{crm\.data\} \/>/.test(read("src/pages/Focus.tsx")), "Focus Mode: the pill on the lead card");
   const editor = read("src/components/NextActionEditor.tsx");

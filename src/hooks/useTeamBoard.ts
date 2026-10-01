@@ -58,7 +58,7 @@ export interface AdminPost {
   status: 'draft' | 'published' | 'discarded'; due_date: string | null; priority: TeamPriority | null;
   created_at: string; published_at: string | null; edited_at: string | null; edit_count: number;
   audience: 'selected' | 'everyone'; recipient_ids: string[]; follow_up_of: string | null;
-  lead: { id: string; name: string | null; owner: string | null; next_action?: string | null; next_action_date?: string | null } | null;
+  lead: { id: string; name: string | null; owner: string | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null } | null;
   recipients: { user_id: string; name: string; read_at: string | null; task_status: TaskStatus | null; status_at: string | null; completed_at: string | null; cancelled_reason: string | null }[];
 }
 
@@ -125,10 +125,10 @@ export function useLeadSearch(term: string, enabled: boolean) {
   return useQuery({
     queryKey: ['team-board', 'lead-search', t], enabled: enabled && t.length >= 2, staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await sb.from('outreach_leads').select('id, business_name, assigned_to_user_id, next_action, next_action_date, status, is_archived')
+      const { data, error } = await sb.from('outreach_leads').select('id, business_name, assigned_to_user_id, next_action, next_action_date, next_action_time, status, is_archived')
         .ilike('business_name', `%${t.replace(/[%_]/g, '')}%`).order('updated_at', { ascending: false }).limit(10);
       if (error) throw error;
-      return (data ?? []) as { id: string; business_name: string | null; assigned_to_user_id: string | null; next_action?: string | null; next_action_date?: string | null; status: string | null; is_archived: boolean | null }[];
+      return (data ?? []) as { id: string; business_name: string | null; assigned_to_user_id: string | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; status: string | null; is_archived: boolean | null }[];
     },
   });
 }
@@ -138,10 +138,10 @@ export function useLeadBrief(leadId: string | null) {
   return useQuery({
     queryKey: ['team-board', 'lead', leadId], enabled: !!leadId, staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await sb.from('outreach_leads').select('id, business_name, assigned_to_user_id, next_action, next_action_date, next_action_note, status, amount_paid')
+      const { data, error } = await sb.from('outreach_leads').select('id, business_name, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, status, amount_paid')
         .eq('id', leadId).maybeSingle();
       if (error) throw error;
-      return data as { id: string; business_name: string | null; assigned_to_user_id: string | null; next_action?: string | null; next_action_date?: string | null; next_action_note: string | null; status: string | null; amount_paid: number | null } | null;
+      return data as { id: string; business_name: string | null; assigned_to_user_id: string | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; next_action_note: string | null; status: string | null; amount_paid: number | null } | null;
     },
   });
 }

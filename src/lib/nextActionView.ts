@@ -1,31 +1,17 @@
 /* THE NEXT ACTION, AS EVERY SCREEN SHOWS IT (UI cleanup pass, 2026-09-29).
  *
- * ⛔ ONE STATE: outreach_leads.next_action / next_action_date / next_action_note — written only by a
- * person, through lead_set_follow_up (the lead popup) or updateNextAction (the Outreach cell). This
+ * ⛔ ONE STATE: outreach_leads.next_action / next_action_date / next_action_time (optional, UK) /
+ * next_action_note — written only by a person, through src/lib/nextActionWrite.ts (lead_set_follow_up). This
  * file only READS it, so the popup, the Inbox list, Outreach and Focus Mode can never describe the
  * same lead's next action in different words. Pure: no imports but the day rule, no I/O.
  *
  * ⛔ ENUMERATED. 'none' and null mean "no next action" and draw nothing; a stored value this file does
  * not know is shown as its own words, never dropped. */
-import { followUpBucket, londonToday, type FollowUpBucket } from './salesCrm.ts';
+import { NEXT_ACTION_LABEL, followUpBucket, hhmmOf, londonInstant, londonToday, type FollowUpBucket } from './salesCrm.ts';
+export { NEXT_ACTION_LABEL, hhmmOf, londonInstant };
 import { meetingIsCurrent, meetingWhen } from './leadState.ts';
 
-/** The words for each stored next_action value. The first six are the ones the popup offers today
- *  (NEXT_ACTION_OPTIONS); the rest are older values that can still be on a row. */
-export const NEXT_ACTION_LABEL: Record<string, string> = {
-  call: 'Call',
-  send_follow_up: 'WhatsApp follow-up',
-  email: 'Email',
-  follow_up: 'Follow up',
-  send_info: 'Send information',
-  meeting: 'Meeting',
-  send_voice_note: 'Voice note',
-  send_initial_text: 'Send opener',
-  '2nd_follow_up': 'Second follow-up',
-  send_draft: 'Send link',
-  check_3_day_removal: 'Check in',
-  remove_if_no_reply: 'Close if no reply',
-};
+/* NEXT_ACTION_LABEL lives in salesCrm.ts (History needs it there; one map, no circular import). */
 
 /** ⛔ THE ONE LIST of Next Action types done IN a WhatsApp conversation (the Inbox). Everything else —
  *  a call, an email, sending information, a meeting, the generic "follow up" — is done from the lead's
@@ -43,8 +29,7 @@ export interface NextActionView {
   bucket: FollowUpBucket;
   /** What to do, in the person's own words (next_action_note), or null. */
   note: string | null;
-  /** "14:30" — a Meeting's booked time (call_booked_at, London) when it falls on the action's day; else null.
-   *  ⛔ The only time the model stores: next_action_date is a DAY. */
+  /** "14:30" — the action's UK time (next_action_time), for every type; null when it has none. */
   time: string | null;
 }
 
@@ -58,30 +43,19 @@ function dayLabel(d: string, opts: Intl.DateTimeFormatOptions): string {
 
 /** The lead's next action in words, or null when there is none. */
 export function nextActionView(
-  lead: { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null; call_booked_at?: string | null } | null | undefined,
+  lead: { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null; next_action_time?: string | null } | null | undefined,
   today: string = londonToday(),
+  nowMs: number = Date.now(),
 ): NextActionView | null {
-  return nextActionViewOf(lead?.next_action, lead?.next_action_date, lead?.next_action_note, today, lead?.call_booked_at);
+  return nextActionViewOf(lead?.next_action, lead?.next_action_date, lead?.next_action_note, today, lead?.next_action_time, nowMs);
 }
 
-/** The note a meeting is saved with: "Meeting at 14:30", then the person's own words if they gave any. */
-export function meetingNote(time: string, note: string | null | undefined): string {
-  const own = (note ?? '').trim().replace(/^Meeting at \d{2}:\d{2}(\s*·\s*)?/, '');
-  return own ? `Meeting at ${time} · ${own}` : `Meeting at ${time}`;
+/** The bucket of a stored lead's next action (date + optional UK time), for every count and filter. */
+export function nextActionBucketOf(lead: { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null } | null | undefined, today: string = londonToday(), nowMs: number = Date.now()): FollowUpBucket {
+  if (!hasAction(lead?.next_action)) return 'none';
+  return followUpBucket(lead?.next_action_date ?? null, today, lead?.next_action_time ?? null, nowMs);
 }
 
-/** ⛔ A MEETING TIME IS TYPED AND SHOWN IN UK TIME (2026-10-02). Every screen shows call_booked_at in London
- *  time, so the time a person types is London time too — whatever clock their own computer runs on (Paul's
- *  is not on UK time). '2026-10-02' + '14:30' → the instant 14:30 in London that day (BST or GMT). */
-export function londonInstant(day: string, hhmm: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
-  const guess = Date.parse(`${day}T${hhmm}:00Z`);
-  if (!Number.isFinite(guess)) return null;
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-    .formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
-  const shown = Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`);
-  return new Date(guess - (shown - guess)).toISOString();
-}
 /** A booked instant as a datetime-local value in UK time ('2026-10-02T14:30'). */
 export function londonLocalInput(iso: string): string {
   const { day, time } = meetingDayTime(iso);
@@ -98,19 +72,18 @@ export function meetingDayTime(iso: string): { day: string; time: string } {
 }
 
 /** The same, from the three values themselves (a row that carries no note passes none). */
-export function nextActionViewOf(rawAction: string | null | undefined, rawDate: string | null | undefined, rawNote?: string | null, today: string = londonToday(), callBookedAt?: string | null): NextActionView | null {
+export function nextActionViewOf(rawAction: string | null | undefined, rawDate: string | null | undefined, rawNote?: string | null, today: string = londonToday(), rawTime?: string | null, nowMs: number = Date.now()): NextActionView | null {
   const action = (rawAction ?? '').trim();
   if (!action || action === 'none') return null;
   const label = NEXT_ACTION_LABEL[action] ?? action.replace(/_/g, ' ');
   const note = (rawNote ?? '').trim() || null;
   const date = (rawDate ?? '').slice(0, 10);
-  const mt = action === 'meeting' && callBookedAt && Number.isFinite(Date.parse(callBookedAt)) ? meetingDayTime(callBookedAt) : null;
-  const time = mt && mt.day === date ? mt.time : null;
-  const bucket = followUpBucket(date || null, today);
+  const time = date ? hhmmOf(rawTime) : null;
+  const bucket = followUpBucket(date || null, today, time, nowMs);
   if (bucket === 'none') return { label, when: null, short: null, bucket, note, time: null };
   const diff = dayDiff(today, date);
   const dm = dayLabel(date, { day: 'numeric', month: 'short' });
-  if (bucket === 'overdue') return { label, when: `Overdue · ${dm}`, short: 'Overdue', bucket, note, time };
+  if (bucket === 'overdue') return { label, when: diff === 0 ? 'Overdue · Today' : `Overdue · ${dm}`, short: 'Overdue', bucket, note, time };
   if (bucket === 'today') return { label, when: 'Today', short: 'Today', bucket, note, time };
   if (diff === 1) return { label, when: 'Tomorrow', short: 'Tomorrow', bucket, note, time };
   const when = diff < 7 ? dayLabel(date, { weekday: 'short', day: 'numeric', month: 'short' }) : dm;
@@ -118,7 +91,10 @@ export function nextActionViewOf(rawAction: string | null | undefined, rawDate: 
 }
 
 /* ══ NEXT ACTION FILTERS AND SORTS — ONE RULE FOR THE INBOX AND OUTREACH (2026-09-30) ═══════════════
-   Both screens, both roles, read the same stored values (next_action / next_action_date) through these,
+   ⛔ 2026-10-02: a timed action is overdue once its UK time has passed (followUpBucket) — so "Overdue" and
+   "Due today" split a day at that time; an untimed one keeps the day rule. "Next 7 days" is what is still to
+   come (an overdue action is under Overdue only).
+   Both screens, both roles, read the same stored values (next_action / next_action_date / _time) through these,
    so "Overdue" means the same thing everywhere. ⛔ Nothing is invented: an action with no date is
    "No date set", never given one; "No Next Action" is 'none' or empty. A done action is one a person
    cleared (to 'none'), so it is never still due. Days are London calendar days (londonToday). */
@@ -133,13 +109,15 @@ export const NEXT_ACTION_WHEN_OPTIONS: { value: NextActionWhen; label: string }[
   { value: 'undated', label: 'Set, no date' },
   { value: 'none', label: 'No next action' },
 ];
-export type NextActionKind = 'all' | 'call' | 'whatsapp' | 'email' | 'send_info' | 'meeting' | 'other';
+export type NextActionKind = 'all' | 'call' | 'whatsapp' | 'email' | 'send_info' | 'send_proposal' | 'chase_payment' | 'meeting' | 'other';
 export const NEXT_ACTION_KIND_OPTIONS: { value: NextActionKind; label: string }[] = [
   { value: 'all', label: 'Any type' },
   { value: 'call', label: 'Call' },
   { value: 'whatsapp', label: 'WhatsApp follow-up' },
   { value: 'email', label: 'Email' },
   { value: 'send_info', label: 'Send information' },
+  { value: 'send_proposal', label: 'Send proposal' },
+  { value: 'chase_payment', label: 'Chase payment' },
   { value: 'meeting', label: 'Meeting / callback' },
   { value: 'other', label: 'Other' },
 ];
@@ -154,14 +132,16 @@ export function nextActionKindOf(action: string | null | undefined): Exclude<Nex
   if (WHATSAPP_NEXT_ACTIONS.has(a)) return 'whatsapp';
   if (a === 'email') return 'email';
   if (a === 'send_info') return 'send_info';
+  if (a === 'send_proposal') return 'send_proposal';
+  if (a === 'chase_payment') return 'chase_payment';
   if (a === 'meeting') return 'meeting';
   return 'other';
 }
 
 /** Does a lead's next action pass the When + Type filters? */
 export function passesNextActionFilter(
-  lead: { next_action?: string | null; next_action_date?: string | null } | null | undefined,
-  when: NextActionWhen, kind: NextActionKind, today: string = londonToday(),
+  lead: { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null } | null | undefined,
+  when: NextActionWhen, kind: NextActionKind, today: string = londonToday(), nowMs: number = Date.now(),
 ): boolean {
   const action = lead?.next_action;
   if (when === 'none') return !hasAction(action);
@@ -173,19 +153,21 @@ export function passesNextActionFilter(
   if (!d) return when === 'undated';
   if (when === 'undated') return false;
   const diff = dayDiff(today, d);
-  if (when === 'overdue') return diff < 0;
-  if (when === 'today') return diff === 0;
+  const overdue = followUpBucket(d, today, lead?.next_action_time ?? null, nowMs) === 'overdue';
+  if (when === 'overdue') return overdue;
+  if (when === 'today') return diff === 0 && !overdue;
   if (when === 'tomorrow') return diff === 1;
-  if (when === 'next7') return diff >= 0 && diff <= 7;
+  if (when === 'next7') return diff >= 0 && diff <= 7 && !overdue;
   return diff > 7; // later
 }
 
 /** Sort key for "Next Action due soonest" (most overdue first): dated actions by date, then undated
  *  actions, then leads with none. Ascending. */
-export function nextActionSortKey(lead: { next_action?: string | null; next_action_date?: string | null } | null | undefined): string {
+export function nextActionSortKey(lead: { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null } | null | undefined): string {
   if (!hasAction(lead?.next_action)) return '3';
   const d = (lead?.next_action_date ?? '').slice(0, 10);
-  return d ? `1${d}` : '2';
+  // Within a day: timed actions by their time, then the day's untimed ones.
+  return d ? `1${d} ${hhmmOf(lead?.next_action_time) ?? '24:00'}` : '2';
 }
 
 /** One line for a title / tooltip: "Call · Tomorrow · ring after their website contract ends". */

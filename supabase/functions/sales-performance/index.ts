@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
 
     const leads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
-        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_note, call_booked_at", (c ? { count: "exact" } : undefined));
+        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at", (c ? { count: "exact" } : undefined));
       /* The person's leads, plus any client they SOLD that has since been reassigned (the win stays theirs). */
       if (personId) q = q.or(`assigned_to_user_id.eq.${personId},sold_by_user_id.eq.${personId}`);
       return q.order("id").range(a, b);
