@@ -42,6 +42,7 @@ import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { INTERESTED_STATUSES, salesStateOf } from '@/lib/leadState';
+import { useLastLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
@@ -692,7 +693,16 @@ const Inbox = () => {
   const leadByIdForState = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
   /* The list row's stage for its ONE status pill — the same reading as the header, from the row the Inbox
      already holds (status, star, amount paid, meeting, opener sent). */
-  const listStageOf = (leadId: string | null) => { const l = leadId ? leadByIdForState.get(leadId) : undefined; return l ? salesStateOf(l) : null; };
+  /* The list rows' logged contacts (2026-10-01): the same per-lead read Outreach uses, so a business reached by
+     phone reads Contacted in the list exactly as in the header (one reading, salesStateOf + REACHED_OUTCOMES). */
+  const listLeadIds = useMemo(() => [...new Set(list.map((c) => c.leadId).filter((x): x is string => !!x))], [list]);
+  const listLogged = useLastLoggedContacts(listLeadIds);
+  const listStageOf = (leadId: string | null) => {
+    const l = leadId ? leadByIdForState.get(leadId) : undefined;
+    if (!l) return null;
+    const lc = listLogged.data?.get(l.id);
+    return salesStateOf({ ...l, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null });
+  };
   const stateByKey = useMemo(() => {
     const out = new Map<string, ConversationState>();
     const nowMs = Date.now();
