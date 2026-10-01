@@ -1,27 +1,30 @@
 import { Helmet } from 'react-helmet-async';
+import { OPERATOR_APP_URL } from '@/config/operatorApp';
 
 interface SEOHeadProps {
   title: string;
   description: string;
   canonical?: string;
+  /** Kept for the existing callers. Ignored: every page of this app is noindex (below). */
   noindex?: boolean;
   jsonLd?: Record<string, unknown>;
 }
 
-/* The operator app's real host. Was leadfinderapp.lovable.app, a dead Lovable preview URL, which
-   pointed every canonical and og:url tag on the site at a domain that is not this app. See
-   functions/_middleware.ts, which states the operator host explicitly. */
-const BASE_URL = 'https://leadfinderos.pages.dev';
-
-export function SEOHead({ title, description, canonical, noindex, jsonLd }: SEOHeadProps) {
-  const fullCanonical = canonical ? `${BASE_URL}${canonical}` : undefined;
+/* ⛔ THE OPERATOR APP IS NEVER INDEXED (2026-10-01). Every route is behind sign-in except /auth
+   and /set-password, so there is nothing here a search engine should list. noindex is therefore
+   ALWAYS emitted, not left to each caller to remember — and public/_headers sends the same
+   X-Robots-Tag on every response, so the instruction is in the HTML before any script runs.
+   The canonical names the one production address (src/config/operatorApp.ts). It was the stale
+   leadfinderos.pages.dev until 2026-10-01, and leadfinderapp.lovable.app before that. */
+export function SEOHead({ title, description, canonical, jsonLd }: SEOHeadProps) {
+  const fullCanonical = canonical ? `${OPERATOR_APP_URL}${canonical}` : undefined;
 
   return (
     <Helmet>
       <title>{title}</title>
       <meta name="description" content={description} />
       {fullCanonical && <link rel="canonical" href={fullCanonical} />}
-      {noindex && <meta name="robots" content="noindex,nofollow" />}
+      <meta name="robots" content="noindex,nofollow" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       {fullCanonical && <meta property="og:url" content={fullCanonical} />}

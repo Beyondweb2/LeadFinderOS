@@ -69,8 +69,8 @@ console.log('\n── NO LIVE CODE BUILDS A REPORT URL ON ANOTHER HOST ──');
 /* Walk every source file we ship and look for a RETIRED PRODUCT DOMAIN in CODE. A future wrong
    host is caught by the constant checks above, which are the exhaustive half of this test.
    ⚠️ pages.dev is deliberately NOT in this list, and that is a scoping decision rather than an
-   oversight. Two legitimate uses exist — SEOHead's BASE_URL (the operator app really does live at
-   leadfinderos.pages.dev) and findable-checkout's CORS allowlist — so including it would make this
+   oversight. Legitimate uses exist — findable-checkout's CORS allowlist, the client-site preview
+   tooling — so including it would make this
    test fail on correct code and train the next person to widen the exemption list instead of
    reading it. "Is a preview domain leaking into a customer-facing URL" is a different question
    with its own guard: resolveSiteOrigin + scripts/site-origin.test.ts. */

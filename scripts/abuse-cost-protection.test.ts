@@ -211,7 +211,7 @@ console.log("\n── alerts ──");
   ok(/Test <t@example\.invalid> \(sales\) — spend_cap/.test(text), "email: who, email, role, event");
   ok(/When: 2026-09-29T10:00:00Z/.test(text) && /Automatically restricted: yes/.test(text) && /Automatically restricted: no/.test(text), "email: when, and whether it was restricted");
   ok(/\$16\.00/.test(text) && /System — spend_spike/.test(text), "email: the spend, and system events named as System");
-  ok(/https:\/\/leadfinderos-next\.pages\.dev\/admin\/api-usage/.test(text), "email: where to act");
+  ok(text.includes("https://app.leadfinderos.com/admin/api-usage") && !/pages\.dev/.test(text), "email: where to act (the canonical operator app, never pages.dev)");
   ok(/2 alerts \(1 restricted\/critical\)/.test(mail.subject), "one email per sweep, counted in the subject");
   ok(eventRestricted("spend_cap") && !eventRestricted("spend_warning"), "restricted vs warning");
   const sa = read("supabase/functions/security-admin/index.ts");
