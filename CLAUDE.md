@@ -24,7 +24,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `src/config/operatorApp.ts` (SPA, edge, scripts all import it; `operator-app-url.test.ts` fails on
   a second copy). `https://leadfinderos-next.pages.dev` is the **temporary legacy/fallback** address
   during the migration — same build, still in Supabase Auth Redirect URLs, never used to build a
-  link. Do not redirect it until Paul says so.
+  link. Do not redirect it until Paul says so. Record: `docs/operator-app-domain.md`.
 - **Repo:** `main` auto-deploys the SPA to the `leadfinderos-next` Cloudflare Pages project
   (served at app.leadfinderos.com) on push — observed working 2026-09-23. ⛔ **Never verify
   against `leadfinderos.pages.dev`** — a legacy project, not connected, frozen on an old bundle
