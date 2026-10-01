@@ -68,7 +68,6 @@ export interface AuditLite extends AuditRow {
   baseline_runs_counted: number | null;
   baseline_completed_at: string | null;
   baseline_error: string | null;
-  report_slug: string | null;
   /** Whether the linked lead has paid. The slot the audit asked to keep: nothing qualifies yet
    *  (amount_paid is null on all 409 leads), so it simply does not render until one does. */
   lead_paid?: boolean;

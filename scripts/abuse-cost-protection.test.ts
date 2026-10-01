@@ -70,7 +70,6 @@ const EXEMPT: Record<string, string> = {
   "paid-baseline": "admin-only; client measurement work — it only calls create-ai-audit internally, which checks the emergency stop",
   "paid-client-hub": "admin-only client delivery; no paid provider call of its own",
   "extract-competitors": "no role: a person's call must own the run (the book owner); the queue worker (stopped by the emergency stop) is its caller",
-  "generate-report": "admin/internal; called by the queue worker after a run finishes",
   "backfill-lead-towns": "filters to leads the CALLER owns (user_id) — a salesperson owns none, so it spends nothing for them",
   "process-whatsapp-queue": "cron; the person modes are read-only/suppress; its paid audit-ahead honours paidMode()",
   "process-ai-audit-queue": "cron / admin; honours paidMode() per tick",

@@ -187,7 +187,8 @@ export function AuditPills({ audit, run }: { audit: AuditLite; run: RunLite | nu
          The route survives on every row. If the row menu ever loses it, put the chip back. */}
       {audit.lead_paid === true && !isClientBaseline && <ClientPill title="This lead has paid">client</ClientPill>}
       {/* ASSETS: facts, not signals. */}
-      {audit.report_slug && <AssetPill title={`Published at /r/${audit.report_slug}`}>report</AssetPill>}
+      {/* RETIRED 2026-10-01: the `report` pill marked a public yoursites.uk/r/ listing, a feature that no
+          longer exists (docs/r-profile-pages-audit.md). */}
       {/* REMOVED 2026-07-30: the `playbook` asset pill. It was never a link — just a marker saying an
           LLM playbook existed for the run — and sitting one pill away from `checklist` it read as a
           duplicate of it when the two are different documents entirely. `checklist` above is the one

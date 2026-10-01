@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Plus, X, ArrowLeft, Sparkles, RefreshCw, ExternalLink, Search, Check, FileText,
   Building2, Users, Globe, Map as MapIcon, Download, ChevronDown,
-  Copy, Save, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
+  Copy, CircleStop, ChevronRight, Eye, CopyPlus, AlertTriangle, ListChecks, ClipboardList, Undo2,
   Archive, ShieldCheck, MoreHorizontal, Compass, Trash2 } from 'lucide-react';
 // NOTE: lucide's `Map` is imported AS `MapIcon` — importing it as `Map` shadows the global
 // Map constructor, and this module uses `new Map()` (e.g. topCompetitors), which crashed
@@ -186,7 +186,7 @@ function isMissingArchivedColumn(err: { code?: string; message?: string } | null
 }
 
 /** One ai_audits row as it arrives from AUDIT_SELECT, before hydration: baseline_runs_counted is a
- *  string here (the `baseline->>runs_counted` JSON extract) and runs/report_slug are not fetched yet.
+ *  string here (the `baseline->>runs_counted` JSON extract) and runs are not fetched yet.
  *  hydrateAudits turns this into an AuditLite. */
 type RawAuditRow = AuditRow & {
   lead_id: string | null;
@@ -488,19 +488,8 @@ const AiAudit = () => {
   const [showSeoDetail, setShowSeoDetail] = useState(false);
   const [regenerating, setRegenerating] = useState(false); // Regenerate-button loading state
   const [reextracting, setReextracting] = useState(false); // Re-extract-competitors loading state
-  // Public /r/[slug] report PAGE for the open audit (business_reports row, if any). Distinct from
-  // the internal `reports` snapshot below: this is the crawlable page served at yoursites.uk/r/.
-  const [reportSlug, setReportSlug] = useState<string | null>(null);      // slug of the newest report row
-  const [reportStatus, setReportStatus] = useState<string | null>(null);  // 'published' | 'draft' | null
-  const [reportPageLoading, setReportPageLoading] = useState(false);      // generate-report in flight
-  // Operator-entered professional credentials/regulation for the open audit (ai_audits.credentials).
-  // Fed to generate-report as a trust signal; set here inline so it's ready BEFORE generating a listing.
-  const [credentials, setCredentials] = useState('');
-  const [credentialsSaving, setCredentialsSaving] = useState(false);
-  /* The credentials field is opened from the More menu now. NOT persisted: it is a panel you
-     opened for one job, and finding it already open on return is the "arrives over the thing you
-     came back for" fault (§6c). It springs open with a value already saved, so nothing is lost. */
-  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  /* RETIRED 2026-10-01: the public yoursites.uk/r/<slug> "listing" (generate-report) and its
+     credentials field. See docs/r-profile-pages-audit.md. The in-app report below is unrelated. */
   // Which run's report is currently open (null = not viewing a report). Replaces the old
   // boolean so we can open a SPECIFIC run's persisted report snapshot.
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -667,9 +656,9 @@ const AiAudit = () => {
        anything extra. */
     const runsByAudit = new Map<string, RunLite[]>();
     const inFlightRunIds: string[] = [];
-    if (scope && scope.length === 0) return { runsByAudit, reportByAudit: new Map<string, string>() };
+    if (scope && scope.length === 0) return { runsByAudit };
     const sb = supabase as unknown as SupabaseClient;
-    const [{ rows: runRows }, { rows: reportRowsAll }] = await Promise.all([
+    const { rows: runRows } = await (
       /* ⚡ seo_grade from the plain results_seo_grade column (2026-09-27, migration
          20260927130000): `results->seo->>overallGrade` opened every run's whole results blob (64 MB
          table) for one letter. The parts trigger keeps the column equal to results on every write;
@@ -683,14 +672,8 @@ const AiAudit = () => {
           .select('id, audit_id, run_number, status, mention_rate, created_at, actor_cost_usd, seo_grade:results_seo_grade');
         if (scope) q = q.in('audit_id', scope);
         return q.order('id', { ascending: true }).range(from, to);
-      }, (r) => r.id),
-      // Published report per audit → the "report" pill. Existence only. Same one-pass read.
-      fetchAllRows<{ audit_id: string | null; slug: string }>('AiAudit (reports)', (from, to) => {
-        let q = sb.from('business_reports').select('audit_id, slug');
-        if (scope) q = q.in('audit_id', scope);
-        return q.order('id', { ascending: true }).range(from, to);
-      }),
-    ]);
+      }, (r) => r.id)
+    );
     for (const r of runRows) {
       const list = runsByAudit.get(r.audit_id) ?? [];
       list.push({
@@ -711,11 +694,6 @@ const AiAudit = () => {
        per audit afterwards is the same result and cannot be broken by paging. */
     for (const list of runsByAudit.values()) list.sort((a, b) => b.run_number - a.run_number);
 
-    const reportByAudit = new Map<string, string>();
-    for (const r of reportRowsAll) {
-      if (r.audit_id && !reportByAudit.has(r.audit_id)) reportByAudit.set(r.audit_id, r.slug);
-    }
-
     // Live progress for the runs still draining — nothing fetched when nothing is in flight.
     const counts = await fetchQueueCounts(inFlightRunIds);
     for (const list of runsByAudit.values()) {
@@ -724,14 +702,13 @@ const AiAudit = () => {
         if (c) { r.done = c.done; r.total = c.total; }
       }
     }
-    return { runsByAudit, reportByAudit };
+    return { runsByAudit };
   }, [fetchQueueCounts]);
 
-  const assembleAudits = (auditRows: RawAuditRow[], { runsByAudit, reportByAudit }: Awaited<ReturnType<typeof loadRunParts>>): AuditLite[] =>
+  const assembleAudits = (auditRows: RawAuditRow[], { runsByAudit }: Awaited<ReturnType<typeof loadRunParts>>): AuditLite[] =>
     auditRows.map((a) => ({
       ...a,
       baseline_runs_counted: a.baseline_runs_counted === null ? null : Number(a.baseline_runs_counted),
-      report_slug: reportByAudit.get(a.id) ?? null,
       runs: runsByAudit.get(a.id) ?? [],
     }));
 
@@ -2377,84 +2354,6 @@ const AiAudit = () => {
      prints its own honest line when it does not. Nothing is generated, so nothing can be generated
      prematurely. */
 
-  // ── Public report page (/r/[slug]) ──────────────────────────────────────────
-  // Look up the newest business_reports row for the OPEN audit, so the action row can show
-  // "View report" (published) vs "Generate report" (none yet). business_reports isn't in the
-  // generated types, so query through an untyped client cast. Keyed on auditId; cleared when
-  // no audit is open. `cancelled` guards against a late response after the audit switched.
-  useEffect(() => {
-    let cancelled = false;
-    if (!auditId) { setReportSlug(null); setReportStatus(null); setCredentials(''); return; }
-    (async () => {
-      const { data } = await (supabase as unknown as SupabaseClient)
-        .from('business_reports')
-        .select('slug, status')
-        .eq('audit_id', auditId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (cancelled) return;
-      const row = data as { slug?: string; status?: string } | null;
-      setReportSlug(row?.slug ?? null);
-      setReportStatus(row?.status ?? null);
-      // Pre-fill the inline credentials field from the audit's stored value (may be null). Untyped
-      // cast: `credentials` was added by migration but isn't in the (stale) generated types yet.
-      const { data: aud } = await (supabase as unknown as SupabaseClient)
-        .from('ai_audits').select('credentials').eq('id', auditId).maybeSingle();
-      if (cancelled) return;
-      setCredentials(((aud as { credentials?: string | null } | null)?.credentials ?? '').toString());
-    })();
-    return () => { cancelled = true; };
-  }, [auditId]);
-
-  // Save the inline credentials field back to ai_audits.credentials. The NEXT "Generate listing"
-  // picks it up (generate-report reads this column). Untyped cast: credentials isn't in the gen types.
-  const saveCredentials = async () => {
-    if (!auditId || credentialsSaving) return;
-    setCredentialsSaving(true);
-    try {
-      const { error } = await (supabase as unknown as SupabaseClient)
-        .from('ai_audits')
-        .update({ credentials: credentials.trim() || null })
-        .eq('id', auditId);
-      if (error) throw new Error(error.message);
-      toast({ title: 'Credentials saved', description: 'Included next time you generate the listing.' });
-    } catch (e) {
-      toast({ title: "Couldn't save credentials", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setCredentialsSaving(false);
-    }
-  };
-
-  const openReportPage = (slug: string) =>
-    window.open(`https://yoursites.uk/r/${slug}`, '_blank', 'noopener');
-
-  // Generate the public report PAGE for this audit (generate-report edge fn → inserts a published
-  // business_reports row), then link to it. Admin-gated on the edge, so we pass the session token
-  // explicitly. Takes ~10-20s; the button shows a loading state meanwhile.
-  const generateReportPage = async () => {
-    if (!auditId || reportPageLoading) return;
-    setReportPageLoading(true);
-    try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      const { data, error } = await supabase.functions.invoke('generate-report', {
-        body: { auditId },
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (error || !data?.ok || !data.slug) throw new Error(error?.message ?? data?.error ?? 'generation failed');
-      const slug = data.slug as string;
-      setReportSlug(slug);
-      setReportStatus('published');   // generate-report inserts as published
-      toast({ title: 'Report generated', description: 'The public report page is live.' });
-      openReportPage(slug);            // auto-open the new page
-    } catch (e) {
-      toast({ title: "Couldn't generate the report", description: e instanceof Error ? e.message : 'Try again', variant: 'destructive' });
-    } finally {
-      setReportPageLoading(false);
-    }
-  };
-
   /* REMOVED 2026-07-30: the LLM playbook viewer (iframe preview + Internal/Client toggle + Regenerate
      + Download PDF) and generatePlaybook alongside it. It rendered the generate-playbook document,
      which recommended Bing Places (zero citations in 10,615) and omitted Checkatrade (662 across 58
@@ -3305,40 +3204,9 @@ const AiAudit = () => {
                         </DropdownMenuItem>
                       )}
 
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>Deliverables</DropdownMenuLabel>
-                      {/* Public LISTING page (/r/[slug]) — distinct from the in-app report above:
-                          this is the crawlable public listing. Needs auditId (generate-report's key). */}
-                      {!isDraining && liveTally.done > 0 && auditId && (
-                        reportSlug && reportStatus === 'published' ? (
-                          <DropdownMenuItem onSelect={() => openReportPage(reportSlug)}>
-                            <ExternalLink className="mr-2 h-4 w-4" /> View listing
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onSelect={generateReportPage} disabled={reportPageLoading}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            {reportPageLoading ? 'Generating…' : 'Generate listing'}
-                          </DropdownMenuItem>
-                        )
-                      )}
-                      {/* ── PLAYBOOK. ONE BUTTON, ONE DOCUMENT. Goes to /playbook/:auditId, the
-                          EVIDENCE-derived document — not the deleted generate-playbook LLM one
-                          that recommended Bing Places (zero citations in 10,615) and never
-                          mentioned Checkatrade (662 across 58 of 59 plumber audits).
-                          GATED ON auditId ALONE, deliberately not on liveTally.done: the ranking
-                          is trade-level, so the document is complete even when THIS run failed.
-                          Macca-Gas's run died at the Apify cap and its playbook is still right. */}
-                      {/* ⛔ REMOVED 2026-09-29 (UI cleanup): the Playbook menu item — no longer used (Paul). */}
-                      {/* Credentials moved in here: an occasional field that was holding a
-                          permanent row of vertical space above the actual result. */}
-                      {!isDraining && liveTally.done > 0 && auditId && (
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setCredentialsOpen((v) => !v); }}>
-                          <Save className="mr-2 h-4 w-4" />
-                          <span className="flex-1">Credentials for listing</span>
-                          {credentials.trim() ? <Check className="h-3.5 w-3.5 text-muted-foreground" /> : null}
-                        </DropdownMenuItem>
-                      )}
-
+                      {/* ⛔ REMOVED: the "Deliverables" group. Playbook went 2026-09-29 (Paul); the
+                          public listing (View / Generate listing) and "Credentials for listing" were
+                          retired 2026-10-01 with the yoursites.uk/r/ pages (docs/r-profile-pages-audit.md). */}
                       <DropdownMenuSeparator />
                       {/* Re-extract — FREE and instant: recomputes from the STORED answers, no
                           re-scrape. It also appears as a button under the dirty-names warning,
@@ -3430,24 +3298,6 @@ const AiAudit = () => {
                       {reextracting ? 'Re-extracting…' : 'Re-extract competitors — free'}
                     </Button>
                   )}
-                </div>
-              )}
-
-              {/* Inline credentials/regulation for the listing — a small operator field. Saved to
-                  ai_audits.credentials; the NEXT "Generate listing" picks it up. Same gate as the
-                  listing button (a valid, non-draining audit). */}
-              {credentialsOpen && !isDraining && liveTally.done > 0 && auditId && (
-                <div className="space-y-1 rounded-md border border-border/60 bg-muted/20 p-3">
-                  <Label className="text-xs text-muted-foreground">Credentials / regulation (for listing)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input value={credentials} onChange={(e) => setCredentials(e.target.value)}
-                      placeholder="e.g. ACCA regulated, Chartered Tax Adviser (CTA)" className="h-8 text-sm" />
-                    <Button variant="outline" size="sm" onClick={saveCredentials} disabled={credentialsSaving} className="shrink-0">
-                      {credentialsSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                      {credentialsSaving ? 'Saving…' : 'Save'}
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Set before generating the listing — it's surfaced as a trust signal.</p>
                 </div>
               )}
 
