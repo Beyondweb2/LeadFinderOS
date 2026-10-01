@@ -147,7 +147,7 @@ import { londonToday } from '@/lib/conversationState';
 import { BulkAssignSelect } from '@/components/BulkAssignSelect';
 import { OwnerAvatar } from './OwnerBadge';
 import { NEXT_ACTION_OPTIONS as CRM_NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
-import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, statusesForFilter, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
+import { OUTREACH_STATUS_OPTIONS, OUTREACH_STATUS_FILTER_OPTIONS, canonicalFilterValue, isPaidFilterValue, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, PRODUCT_OPTIONS, PRODUCT_UNDECIDED, productOf, sharedPhoneLeadIds, type ProductValue, type StatusFilterValue } from '@/types/outreach';
 import { isPaidLead } from '@/lib/leadPayment';
 import { useApifyUsage, apifyWarningText } from '@/hooks/useApifyUsage';
 import {
@@ -174,7 +174,8 @@ import { useOutreachFindEmails, CRAWLABLE_STATUSES_DEFAULT, CRAWL_STATUS_OPTIONS
 import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
-import { contactAgo, isStarred, meetingIsCurrent, meetingWhen, pillStatusOf, salesStateOf, type SalesStateView } from '@/lib/leadState';
+import { shownStatusMatches } from '@/lib/statusFilter';
+import { contactAgo, isStarred, meetingIsCurrent, meetingWhen, salesStateOf, type SalesStateView } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -1717,18 +1718,12 @@ export function OutreachTable({
            from "Paid (money in)" — the one place customers are listed. Until every lead has loaded the
            filter is not applied (and cannot be chosen); the filters row says so. */
         if (listComplete) result = result.filter((lead) => isPaidLead(lead));
-      } else if (statusFilter === 'interested') {
-        /* ⛔ "Interested ⭐" = the gold star, whatever the status (isStarred — the same rule as the ⭐ toggle
-           and the Inbox). It matched the pre-star stored status and missed every starred lead. */
-        result = result.filter((lead) => isStarred(lead));
       } else {
-        /* ⚠️ A FILTER OPTION CAN COVER MORE THAN ONE STATUS. "No WhatsApp" means both the mobile with
-           no account and the landline — everyone unreachable that way. statusesForFilter returns the
-           group, and returns [value] for anything it does not recognise, so an unknown filter narrows
-           rather than widening to everything. */
-        const wanted = statusesForFilter(statusFilter);
-        // The status the row's pill SHOWS (pillStatusOf over rowSalesState), not the raw stored one.
-        result = result.filter((lead) => wanted.includes(pillStatusOf(lead.status, rowSalesState(lead)) as LeadStatus));
+        /* ⛔ THE ONE MATCH, shared with the Inbox (src/lib/statusFilter.ts): the status the row's pill SHOWS
+           (pillStatusOf over rowSalesState) is in the option's group — "No WhatsApp" covers the mobile with no
+           account and the landline; an unknown value narrows, never widens — and "Interested ⭐" is the gold
+           star whatever the status (isStarred). */
+        result = result.filter((lead) => shownStatusMatches(statusFilter, lead, rowSalesState(lead)));
       }
     }
 

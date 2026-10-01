@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-revive-and-inbox-filters', date: '2026-10-02', title: 'Inbox filters match the status pill', audience: 'all',
+    body: 'Inbox status filters now use the status each conversation shows, and a lead that said no then yes moves on normally.',
+    report: {
+      added: [],
+      changed: [
+        'Inbox status filters use the status the pill shows, the same rule as Outreach. A business reached by phone is under Contacted.',
+        'A lead that said no and then yes (Interested or Meeting booked logged) goes back to its real status, Replied, You replied, Contacted or New, instead of a hidden old "Interested" status. A later reply now moves it to Replied.',
+        'The Not interested block on the number is still lifted exactly as before. Wrong number and opt-out blocks are never lifted.',
+      ],
+      removed: [],
+      effect: 'Every page shows and filters the same status for a lead, and a revived lead flows through Replied and You replied like any other.',
+    } },
   { id: '2026-10-01-interested-is-the-star', date: '2026-10-01', title: 'Interested filters show every starred lead', audience: 'all',
     body: 'Every Interested filter now lists the leads with the gold star, whatever their status.',
     report: {

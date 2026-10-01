@@ -57,7 +57,7 @@ ok(nextActionViewOf('call', '2026-09-28', null, '2026-10-01')?.bucket === 'overd
 ok(!/executeContact\(lead, 'call'\)/.test(table) && /setDetailTab\('work'\)/.test(table), 'tapping Call never logs a call; it opens the workspace on Work');
 
 const inboxSrc = read('src/pages/Inbox.tsx');
-ok(inboxSrc.includes('useLastLoggedContacts(listLeadIds)') && inboxSrc.includes('reached: lc.everReached'), 'the Inbox list reads the same logged contacts, so list and header agree (Contacted)');
+ok(inboxSrc.includes('const allLogged = useAllLoggedContacts();') && inboxSrc.includes('reached: lc.everReached'), 'the Inbox list reads the same logged contacts, so list and header agree (Contacted) — every contact since 2026-10-02, so the filter can read them too');
 
 console.log('\n── Audits from Outreach (the same engine) ──');
 const dlg = read('src/components/LeadDetailDialog.tsx');

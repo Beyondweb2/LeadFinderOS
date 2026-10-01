@@ -41,8 +41,9 @@ import { PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES, type PipelineStatus } from
 import { TemplateSnippet } from '@/components/TemplateWordingPreview';
 import { NextActionPill } from '@/components/NextActionPill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
-import { isStarred, salesStateOf } from '@/lib/leadState';
-import { useLastLoggedContacts } from '@/hooks/useLastLoggedContacts';
+import { salesStateOf } from '@/lib/leadState';
+import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
+import { shownStatusMatches } from '@/lib/statusFilter';
 import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
@@ -637,6 +638,18 @@ const Inbox = () => {
     return { eligible, contactSent };
   }, [messages, conversations, auditByLeadId]);
 
+  const leadByIdForState = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
+  /* The row's stage for its ONE status pill AND for the status filter (2026-10-02) — the same reading as the
+     header and as Outreach: salesStateOf over the row the Inbox holds plus EVERY logged contact the caller may
+     see (useAllLoggedContacts, Outreach's read). The filter needs them for all rows, not only the shown ones —
+     a phone-only contact read just for the visible list could never put a lead under "Contacted". */
+  const allLogged = useAllLoggedContacts();
+  const listStageOf = useCallback((leadId: string | null) => {
+    const l = leadId ? leadByIdForState.get(leadId) : undefined;
+    if (!l) return null;
+    const lc = allLogged.data?.get(l.id);
+    return salesStateOf({ ...l, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null });
+  }, [leadByIdForState, allLogged.data]);
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
   const list = useMemo(() => {
@@ -672,9 +685,9 @@ const Inbox = () => {
          It now reads Interested the way leadState.salesStateOf does: the star, or an interested / quoted
          status. ⛔ 2026-10-01 (Paul): the star ONLY — "Price given" without a star is not Interested; the
          same rule as Outreach (leadState.isStarred). */
-      : statusFilter === 'interested'
-        ? byCampaign.filter((c) => isStarred({ is_potential_work: c.isPotentialWork }) || c.unassigned || c.isPaid)
-      : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned || c.isPaid);
+      /* ⛔ THE ONE MATCH, shared with Outreach (src/lib/statusFilter.ts, 2026-10-02): the status the row's pill
+         SHOWS, not the stored one — reached by phone → under Contacted; "Interested" stays the star only. */
+      : byCampaign.filter((c) => shownStatusMatches(statusFilter, { status: c.leadStatus, is_potential_work: c.isPotentialWork }, listStageOf(c.leadId)) || c.unassigned || c.isPaid);
     // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
     // the user has explicitly filtered TO that status. `removedKeys` gives an instant
     // optimistic drop right after "Remove from inbox" (before the refetch lands).
@@ -683,7 +696,7 @@ const Inbox = () => {
       ? byStatus
       : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
     return visible.filter((c) => !removedKeys.has(c.key));
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, hookState, contactState]);
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys, hookState, contactState, listStageOf]);
 
   /* Search narrows the already-filtered list. Case-insensitive partial match on the business name
      (c.label — for a lead that IS the business name; for an unassigned convo it is "+<phone>"),
@@ -692,19 +705,6 @@ const Inbox = () => {
   /* ⛔ ONE STATE RULE (src/lib/conversationState.ts) for every row, the thread header and the dashboard.
      Unread is withheld until this person's read times have loaded, so a slow read never flashes the
      whole day's replies as unread. */
-  const leadByIdForState = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
-  /* The list row's stage for its ONE status pill — the same reading as the header, from the row the Inbox
-     already holds (status, star, amount paid, meeting, opener sent). */
-  /* The list rows' logged contacts (2026-10-01): the same per-lead read Outreach uses, so a business reached by
-     phone reads Contacted in the list exactly as in the header (one reading, salesStateOf + REACHED_OUTCOMES). */
-  const listLeadIds = useMemo(() => [...new Set(list.map((c) => c.leadId).filter((x): x is string => !!x))], [list]);
-  const listLogged = useLastLoggedContacts(listLeadIds);
-  const listStageOf = (leadId: string | null) => {
-    const l = leadId ? leadByIdForState.get(leadId) : undefined;
-    if (!l) return null;
-    const lc = listLogged.data?.get(l.id);
-    return salesStateOf({ ...l, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null });
-  };
   const stateByKey = useMemo(() => {
     const out = new Map<string, ConversationState>();
     const nowMs = Date.now();

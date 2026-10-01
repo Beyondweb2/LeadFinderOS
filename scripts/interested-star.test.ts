@@ -49,11 +49,12 @@ ok(pillStatusOf('interested', null) === 'interested', '…with no stage to read 
 
 console.log('\n── every Interested FILTER reads the star ──');
 const table = read('src/components/OutreachTable.tsx');
-ok(table.includes("} else if (statusFilter === 'interested') {") && table.includes('result = result.filter((lead) => isStarred(lead));'), 'Outreach status filter "Interested ⭐" → isStarred');
+const matcher = read('src/lib/statusFilter.ts');
+ok(table.includes('result = result.filter((lead) => shownStatusMatches(statusFilter, lead, rowSalesState(lead)));') && matcher.includes("if (filter === 'interested') return isStarred(lead);"), 'Outreach status filter "Interested ⭐" → isStarred (the shared matcher, 2026-10-02)');
 ok(/if \(trackedOnly\) \{\n\s+result = result\.filter\(\(lead\) => isStarred\(lead\)\);/.test(table), 'Outreach ⭐ Interested toggle → isStarred');
 ok(!table.includes("lead.status === 'interested'"), 'no Outreach filter or tint reads the stored status');
 const inbox = read('src/pages/Inbox.tsx');
-ok(inbox.includes("? byCampaign.filter((c) => isStarred({ is_potential_work: c.isPotentialWork }) || c.unassigned || c.isPaid)") && !inbox.includes('INTERESTED_STATUSES'), 'Inbox "Interested" filter → isStarred (Price given without a star is out)');
+ok(inbox.includes('shownStatusMatches(statusFilter, { status: c.leadStatus, is_potential_work: c.isPotentialWork }') && !inbox.includes('INTERESTED_STATUSES'), 'Inbox "Interested" filter → isStarred through the shared matcher (Price given without a star is out)');
 
 console.log('\n── every "Interested" in a menu writes the star through ONE function ──');
 const outreach = read('src/hooks/useOutreach.ts');

@@ -106,9 +106,9 @@ console.log("\n── 3. real life: stronger states are not downgraded, and a no
   }
   ok(!outcomePlan("interested", { status: "replied", amount_paid: 99 }).star, "paid by amount → locked, whatever the status says");
   const back = outcomePlan("interested", { status: "not_interested" });
-  ok(back.star && back.status === "interested", "Not interested + Interested → back to Interested (status + star)");
-  ok(outcomePlan("meeting_booked", { status: "closed" }).status === "interested", "Closed + Meeting booked → back to Interested");
-  ok(outcomePlan("interested", { status: "opted_out" }).status === null, "⛔ an opted-out number (a WhatsApp STOP) keeps its status — the star only");
+  ok(back.star && back.revive && back.status === null, "Not interested + Interested → revived (lead_revive, a real workflow status) + the star (2026-10-02)");
+  ok(outcomePlan("meeting_booked", { status: "closed" }).revive, "Closed + Meeting booked → revived");
+  ok(outcomePlan("interested", { status: "opted_out" }).status === null && !outcomePlan("interested", { status: "opted_out" }).revive, "⛔ an opted-out number (a WhatsApp STOP) keeps its status — the star only");
   ok(outcomePlan("not_interested", { status: "not_interested" }).status === null, "Not interested twice → written once");
   ok(!outcomePlan("interested", { status: "replied", is_potential_work: true }).star, "the star is never set twice");
   ok(st({ status: "replied", is_potential_work: true }) === "interested", "Replied + star → Interested (stronger wins)");
@@ -227,7 +227,7 @@ console.log("\n── 9. one reading on every screen ──");
   ok(!/Call booked ·/.test(strip2) && /<LastContactLine/.test(strip2), "the strip no longer draws the meeting twice; Last contact is the shared line");
   const inbox = read("src/pages/Inbox.tsx");
   ok(inbox.includes('<PipelineStatusSelect value={active.leadStatus} stage={activeSales.view}') && !inbox.includes('<SalesStatePill'), "the Inbox thread header shows the state as its ONE status pill");
-  ok(/statusFilter === 'interested'\s*\n?\s*\? byCampaign\.filter\(\(c\) => isStarred\(\{ is_potential_work: c\.isPotentialWork \}\)/.test(inbox), "⛔ the Inbox Interested filter reads the star, and only the star (2026-10-01; interested-star.test.ts)");
+  ok(inbox.includes("byCampaign.filter((c) => shownStatusMatches(statusFilter, { status: c.leadStatus, is_potential_work: c.isPotentialWork }, listStageOf(c.leadId))") && /if \(filter === 'interested'\) return isStarred\(lead\);/.test(read("src/lib/statusFilter.ts")), "⛔ the Inbox Interested filter reads the star, and only the star (through the shared matcher, 2026-10-02)");
   const table = read("src/components/OutreachTable.tsx");
   /* 2026-10-01 (Paul: "Status means status. Next Action means what should happen next"): the meeting and the
      call-back prompt moved to the Next Action column (nextUpHint); the last contact is the status tooltip. */
@@ -288,7 +288,8 @@ console.log("\n── 12. Paul's decisions, 2026-09-30 (follow-up) ──");
   ok(!/replied_no|opted_out|'closed'|'archived'/.test(sql), "…never names replied_no / opt-out / closed / archived (they are untouched)");
   ok(/after update of status on public\.outreach_leads/.test(sql) && /'suppression_cleared', 'not_interested'/.test(sql), "a trigger on the status change (admin and sales alike), with a History line");
   for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back"]) ok(outcomePlan(o, { status: "not_interested" }).status === null, `${o} on a Not interested lead writes no status → the block stays`);
-  ok(outcomePlan("interested", { status: "not_interested" }).status === "interested" && outcomePlan("meeting_booked", { status: "not_interested" }).status === "interested", "Interested / Meeting booked on it → status interested → the block is lifted");
+  for (const o of ["no_answer", "left_voicemail", "message_sent", "spoke_to_owner", "call_back"]) ok(!outcomePlan(o, { status: "not_interested" }).revive, `${o} on a Not interested lead is no revive`);
+  ok(outcomePlan("interested", { status: "not_interested" }).revive && outcomePlan("meeting_booked", { status: "not_interested" }).revive, "Interested / Meeting booked on it → lead_revive → the block is lifted (revive-and-inbox-filter.test.ts)");
   ok(/said\.push\('Not interested block lifted \(any other block stays\)'\)/.test(read("src/lib/leadOutcome.ts")), "the result line says the block was lifted");
   // 2. ONE status pill (Paul, 2026-10-01): yesterday's solid pipeline badge, the star for Interested.
   const table = read("src/components/OutreachTable.tsx");
