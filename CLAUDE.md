@@ -656,6 +656,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **The Dashboard "Full Reset" is gone**; `reset_my_account()` still exists in the DB until Phase 3.
 
 **WhatsApp**
+- **Compliance position: reviewed and NON-BLOCKING (Paul, 2026-10-02)** — `docs/whatsapp-outreach-compliance.md`.
+  WhatsApp = a lightweight opener / follow-up; live calling becomes the main cold channel. PECR / WhatsApp
+  questions are a legal-policy matter, NOT an engineering blocker: build no consent fields, no
+  company-type classification, no new blocking rules, and do not change the openers for this reason.
+  ⛔ Never write that cold WhatsApp outreach is definitively lawful (or unlawful). ⛔ The opt-out /
+  suppression behaviour stays exactly as strict as it is. Reopen only on the triggers in that doc.
 - **One sendable list: `WHATSAPP_TEMPLATES` (`src/types/outreach.ts`).** Legacy barber names stay in
   `LEGACY_WHATSAPP_TEMPLATES`/`templateBodies.ts`/`SUPERSEDED_BODIES` because they render historic
   transcripts. **A template lives in eleven places** — `WA_TEMPLATES` + bodies (`whatsapp-send.ts`),
@@ -1022,6 +1028,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Sales Experience: WhatsApp unread / states / deep link, the workspace dashboard, earnings, notifications, Focus Mode, feedback | `docs/sales-experience.md` |
 | Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
+| WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
