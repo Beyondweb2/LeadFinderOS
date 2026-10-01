@@ -79,7 +79,7 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
     "src/lib/salesPatchPlan.ts": "a salesperson's manual edit → lead_set_follow_up",
     "src/lib/leadRpc.ts": "runs that plan (lead_set_follow_up)",
     "src/components/LeadCrmPanel.tsx": "the manual Next action control (and the meeting's one Save: time + 'Meeting')",
-    "src/lib/leadOutcome.ts": "Not interested clears the Next Action — 'none' only",
+    "src/lib/leadOutcome.ts": "Not interested clears the Next Action; a logged Call back / Meeting booked saves Call / Meeting (no day)",
     /* 2026-10-02: ONE write for every screen (src/lib/nextActionWrite.ts), ONE form (NextActionForm). */
     "src/lib/nextActionWrite.ts": "THE one next-action write (lead_set_follow_up / lead_set_call_booked), both roles",
     "src/components/NextActionForm.tsx": "the one form: hands the person's pick to the write on Save / Clear",
@@ -99,7 +99,9 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
   const form = strip(read("src/components/NextActionForm.tsx"));
   ok(!/useEffect|setTimeout/.test(editor) && !/useEffect|setTimeout/.test(form) && /onClick=\{\(\) => void save\(\)\}/.test(form), "nothing auto-saves: the cell and the form save only when the person presses Save (or Clear / Done)");
   const outcome = strip(read("src/lib/leadOutcome.ts"));
-  ok([...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].length === 1 && [...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "a logged outcome only ever CLEARS the next action (leadOutcome writes 'none', once)");
+  /* 2026-10-02 (Paul): a logged Call back / Meeting booked SAVES Call / Meeting (no day) — a person's tap. */
+  const outcomeWrites = [...outcome.matchAll(/_next_action:\s*([^,]+),/g)].map((m) => m[1].trim());
+  ok(outcomeWrites.length === 2 && outcomeWrites.includes("'none'") && outcomeWrites.includes("plan.setNextAction") && /setNextAction: 'call' \| 'meeting' \| null;/.test(read("src/lib/leadState.ts")), `a logged outcome clears ('none') or saves only Call / Meeting (${outcomeWrites.join(" | ")})`);
   const dialog = strip(read("src/components/LeadDetailDialog.tsx"));
   ok([...dialog.matchAll(/onNextActionChange\(lead\.id, '([a-z_]+)'/g)].every((m) => m[1] === "none"), "the lead dialog's only automatic next-action call clears it (paid / lost)");
 }
@@ -120,7 +122,7 @@ console.log("\n── 4. the database ──");
      it never sets a type (its next_action = 'meeting' is the WHERE). */
   const callBooked = latest.get("lead_set_call_booked") ?? "";
   ok(setters.every((n) => n === "lead_set_follow_up" || n === "lead_set_call_booked") && setters.includes("lead_set_follow_up"), `only lead_set_follow_up sets a chosen next action (${setters.join(", ")})`);
-  ok(!/set next_action\s*=/i.test(callBooked) && /where id = _lead_id and next_action = 'meeting'/i.test(callBooked), "…lead_set_call_booked only moves an existing Meeting's day and time, never its type");
+  ok(!/set next_action\s*=/i.test(callBooked) && /return public\.lead_set_follow_up\(_lead_id, 'meeting'/i.test(callBooked), "…lead_set_call_booked writes nothing itself: it books through lead_set_follow_up (one write, 2026-10-02)");
   ok(/perform public\._require_work\(_lead_id\);/.test(latest.get("lead_set_follow_up") ?? ""), "…and it checks role + ownership first");
   ok(!/next_action/i.test(latest.get("claim_lead") ?? "x next_action"), "claiming a lead does not touch next_action");
   ok(/'not_contacted', 'none'/.test(latest.get("sales_add_lead") ?? ""), "a salesperson's added lead starts at 'none'");

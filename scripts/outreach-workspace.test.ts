@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { salesStateOf, openerReallySent } from '../src/lib/leadState.ts';
 import { whatsAppCapabilityOf, isWhatsAppWorthTrying, WHATSAPP_CAPABILITY_LABEL } from '../src/lib/whatsAppCapability.ts';
-import { nextUpHint, nextActionViewOf } from '../src/lib/nextActionView.ts';
+import { nextActionViewOf } from '../src/lib/nextActionView.ts';
 import { bellCount, replyCardTitle, replySummary } from '../src/lib/notificationGrouping.ts';
 import { inferTrade, tradeFromText } from '../src/lib/tradeInference.ts';
 
@@ -49,10 +49,8 @@ console.log('\n── Next Action lives in the Next Action column ──');
 const table = read('src/components/OutreachTable.tsx');
 ok(!/data-testid="row-last-contact"/.test(table) && !/data-testid="row-meeting"/.test(table), 'nothing under the Status pill');
 ok(/Last contact: \$\{lc\.method\}/.test(table), 'the last contact moved to the status tooltip');
-ok(/data-testid="row-next-up"/.test(table), 'the Next Action column carries what is coming');
-ok(nextUpHint({ next_action: 'none' }, { outcomeValue: 'call_back', at: SENT }, NOW)?.text === 'Call back · no day set', 'a call-back with no day → a prompt in Next Action');
-ok(nextUpHint({ next_action: 'call' }, { outcomeValue: 'call_back', at: SENT }, NOW) === null, 'a stored Next Action wins — no second line');
-ok(nextUpHint({ next_action: null, call_booked_at: '2026-10-02T13:00:00Z' }, null, NOW)?.tone === 'meeting', 'a booked meeting shows there');
+/* 2026-10-02: no derived "what is coming" line (nextUpHint is gone) — scripts/one-next-action.test.ts. */
+ok(!/data-testid="row-next-up"/.test(table) && !/nextUpHint/.test(table), 'the Next Action column carries only the saved Next Action');
 ok(nextActionViewOf('call', '2026-09-28', null, '2026-10-01')?.bucket === 'overdue' && nextActionViewOf('call', '2026-10-01', null, '2026-10-01')?.bucket === 'today' && nextActionViewOf('none', '2026-10-01', null, '2026-10-01') === null, 'overdue / today / cleared (UK days, the existing rule)');
 ok(!/executeContact\(lead, 'call'\)/.test(table) && /setDetailTab\('work'\)/.test(table), 'tapping Call never logs a call; it opens the workspace on Work');
 

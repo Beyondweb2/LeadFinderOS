@@ -17,7 +17,9 @@ import { NextActionForm } from '@/components/NextActionForm';
    both roles, History). It used to be a lighter popup: no note, no time, auto-saved the moment a type and a
    day were both picked, and the admin's save wrote the row directly with no History line.
    The trigger reads the one view (nextActionView): "Call · Tomorrow", "Meeting · Thu 2 Oct · 14:30", the note
-   underneath. Colour follows urgency: red overdue, amber today, grey later. ✓ Done clears it. */
+   underneath. Colour follows urgency: red overdue, amber today, grey later. ✓ completes it (History: completed;
+   a Meeting's booking goes with it — the server keeps call_booked_at as the Meeting's mirror).
+   ⛔ The cell is "+ Set" OR the saved action and its ✓ (2026-10-02, Paul) — never a second line beside it. */
 
 type EditorLead = LeadStateInput & {
   id: string;
@@ -36,7 +38,7 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
   const save = async (a: NextActionInput) => {
     const r = await saveNextAction(lead.id, a, lead);
     if (!r.ok) { toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' }); return r; }
-    toast({ title: a.nextAction === 'none' ? (a.done ? 'Next action completed' : 'Next action cleared') : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved' });
+    toast({ title: a.nextAction === 'none' ? (a.done ? (lead.next_action === 'meeting' ? 'Meeting completed · kept in History' : 'Next action completed') : 'Next action cleared') : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved' });
     setOpen(false);
     return r;
   };
@@ -67,7 +69,7 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
       </Popover>
       {v && (
         <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500 hover:bg-green-500/10 hover:text-green-400"
-          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })} title="Done — clear the next action" aria-label="Done — clear the next action">
+          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })} title="Complete next action" aria-label="Complete next action" data-testid="complete-next-action">
           <CheckCircle2 className="h-4 w-4" />
         </Button>
       )}

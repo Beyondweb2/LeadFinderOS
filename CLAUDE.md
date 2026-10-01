@@ -74,7 +74,12 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   a salesperson's writes go through `planSalesPatch` → the lead functions (a direct update from a sales
   session is a SILENT 0-row success); what Sales cannot do is `leadPermissions` (`src/lib/access.ts`).
   ⛔ **Next Action is human-set only** (Paul, 2026-09-28) — no add/claim/send/reply/audit/status/queue/
-  cron path may write `next_action`/`next_action_date` (clearing to 'none' is fine).
+  cron path may write `next_action`/`next_action_date` (clearing to 'none' is fine). Exception (Paul,
+  2026-10-02): a person logging Call back / Meeting booked saves Call / Meeting with no day (`outcomePlan.setNextAction`).
+  ⛔ **ONE Next Action** (`docs/one-next-action.md`): `call_booked_at` is the MIRROR of a Meeting Next Action with a
+  time, written only inside `lead_set_follow_up` (`lead_set_call_booked` is a wrapper); the CHECK
+  `outreach_leads_booking_is_the_meeting` refuses anything else. Never draw a derived "what's next" line
+  beside the Next Action (the deleted `nextUpHint`); the Outreach cell is "+ Set" OR the action and its ✓.
   `scripts/next-action-human-only.test.ts` sweeps every writer; `supabase/tests/next-action-human-only.sql`.
   ⛔ **One Next Action display** (UI cleanup 2026-09-29, `docs/ui-cleanup-pass.md`): every screen draws it
   through `src/lib/nextActionView.ts` + `NextActionPill` (red overdue / amber today / grey later) and
@@ -828,7 +833,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **A send stamp is not a contact when the send failed**: `whatsapp_sent_at` is set when Meta ACCEPTS; read
   contact through `leadState.openerReallySent`, never the raw stamp. WhatsApp reachability only through
   `whatsAppCapability.ts` — `line_type` is an offline format guess, never "WhatsApp-capable".
-- The Status cell shows status only; last contact is its tooltip; what happens next is the Next Action column.
+- The Status cell shows status only; last contact is its tooltip; what happens next is the Next Action column —
+  the saved Next Action only (2026-10-02).
 - Reply notifications are ONE bell card from `my_whatsapp_unread_counts` (the Inbox's unread truth); never count
   `whatsapp_reply` rows.
 

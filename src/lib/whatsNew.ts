@@ -22,6 +22,27 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-one-next-action', date: '2026-10-01', title: 'One kind of Next Action', audience: 'all',
+    body: 'A booked meeting and a call-back are now real Next Actions. The Next Action column shows "+ Set" or the action with its green tick, never both.',
+    report: {
+      added: [
+        'Logging "Call back" sets the Next Action "Call · No date set". Add the day when you know it.',
+        'Logging "Meeting booked" sets the Next Action "Meeting". Saving when it is puts the day and time on it.',
+        'A green tick on every Next Action in Outreach: "Complete next action". It completes it and adds it to History.',
+      ],
+      changed: [
+        'A meeting is booked, moved and completed as its Next Action, so the meeting time and the Next Action can never disagree.',
+        'Completing, clearing or changing a Meeting ends the booking too. History keeps the meeting and says why it ended.',
+        'Booked meetings and call-backs show in the Next Action filters (Due today, Tomorrow, Set no date, Meeting / callback).',
+        'Three leads that had a call-back logged with nothing planned now show "Call · No date set".',
+        'WhatsApp Inbox: the Next Action filters and Sort moved to the top bar, next to campaigns and statuses.',
+      ],
+      removed: [
+        'The small grey line under "+ Set" ("Meeting · Fri 2 Oct 15:15", "Call back · no day set").',
+        'The separate "Call booked for" time box on the Work tab. Use the Next Action instead.',
+      ],
+      effect: 'If something looks like a Next Action, it is one: you can edit it, filter by it and complete it.',
+    } },
   { id: '2026-10-01-meeting-time-once', date: '2026-10-01', title: 'The meeting time shows once', audience: 'all',
     body: 'When a meeting is the Next Action, its day and time are in the Next Action bar only.',
     report: {

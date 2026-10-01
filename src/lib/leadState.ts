@@ -191,8 +191,8 @@ export function salesStateOf(l: LeadStateInput, nowMs: number = Date.now()): Sal
 export type OutcomeEffect =
   | 'record'          // the record itself: Last contact + History (+ Contacted, derived)
   | 'interested'      // the Interested star
-  | 'meeting'         // the star + asks when (call_booked_at) → Meeting booked
-  | 'call_back'       // asks which day → Next Action "Call" on that day
+  | 'meeting'         // the star + SAVES the Next Action "Meeting" (no date yet) + asks when → Meeting booked
+  | 'call_back'       // SAVES the Next Action "Call" (no date yet) + offers the day
   | 'not_interested'  // status not_interested + stop the queue + clear the Next Action
   | 'wrong_number';   // suppress the number (contact_suppressions) — the lead and History stay
 
@@ -215,8 +215,8 @@ const RULES: Record<string, Omit<OutcomeRule, 'value'>> = {
   connection_sent:{ effect: 'record', offered: true, does: 'Records the connection request. Suggests following up in 3 days.' },
   spoke_to_owner: { effect: 'record', offered: true, does: 'Records the conversation. Pick a Next Action below.' },
   interested:     { effect: 'interested', offered: true, does: 'Marks the lead Interested. Suggests sending information today.' },
-  call_back:      { effect: 'call_back', offered: true, does: 'Records it and asks which day to call back — sets the Next Action.' },
-  meeting_booked: { effect: 'meeting', offered: true, does: 'Marks Interested and asks when — shows Meeting booked with the time.' },
+  call_back:      { effect: 'call_back', offered: true, does: 'Records it and sets the Next Action “Call” — add the day when you know it.' },
+  meeting_booked: { effect: 'meeting', offered: true, does: 'Marks Interested and sets the Next Action “Meeting” — add when it is to show Meeting booked.' },
   not_interested: { effect: 'not_interested', offered: true, does: 'Sets Not interested, stops automatic messages and clears the Next Action. History is kept.' },
   wrong_number:   { effect: 'wrong_number', offered: true, does: 'Blocks templates, the queue and automated WhatsApp to this number. The admin can clear it.' },
   /* ⛔ AN ATTRIBUTE, NOT AN OUTCOME (2026-09-30): who controls the website is a fact about the business
@@ -285,6 +285,11 @@ export interface OutcomePlan {
   clearMeeting: boolean;
   /** Suppress the number (lead_mark_wrong_number). */
   suppressNumber: boolean;
+  /** ⛔ ONE NEXT ACTION (Paul, 2026-10-02): the Next Action this outcome SAVES, because the rep definitely has
+   *  something to do — 'call' for Call back, 'meeting' for Meeting booked — or null. Saved with no day ("Call ·
+   *  No date set") through lead_set_follow_up; the person adds the day after. Null when the lead's Next Action is
+   *  already that type (its day and time are kept). Every other outcome only SUGGESTS (suggestNextAction). */
+  setNextAction: 'call' | 'meeting' | null;
   /** Open the "when is it?" form (date + time) — the meeting. */
   askMeeting: boolean;
   /** Open the "which day?" form — the call-back. */
@@ -297,7 +302,7 @@ export interface OutcomePlan {
  *  said no earlier is revived (lead_revive — a real workflow status, 2026-10-02) and starred — EXCEPT an
  *  opted-out number (a WhatsApp STOP), whose status is the suppression's and is left alone. */
 export function outcomePlan(outcome: string, lead: { status?: string | null; is_potential_work?: boolean | null; amount_paid?: unknown; next_action?: string | null; call_booked_at?: string | null }, nowMs: number = Date.now()): OutcomePlan {
-  const plan: OutcomePlan = { star: false, status: null, revive: false, clearNextAction: false, clearMeeting: false, suppressNumber: false, askMeeting: false, askCallBackDay: false };
+  const plan: OutcomePlan = { star: false, status: null, revive: false, clearNextAction: false, clearMeeting: false, suppressNumber: false, setNextAction: null, askMeeting: false, askCallBackDay: false };
   const { effect } = outcomeRule(outcome);
   const status = (lead.status ?? '').trim();
   const stage = salesStageOf(status);
@@ -305,6 +310,10 @@ export function outcomePlan(outcome: string, lead: { status?: string | null; is_
   if (effect === 'wrong_number') plan.suppressNumber = true; // a number fact — true for any lead
   if (effect === 'call_back') plan.askCallBackDay = true;
   if (effect === 'meeting') plan.askMeeting = true;
+  /* A task for any lead, a client too (a client asking for a call back is still a call to make). */
+  const current = (lead.next_action ?? '').trim();
+  if (effect === 'call_back' && current !== 'call') plan.setNextAction = 'call';
+  if (effect === 'meeting' && current !== 'meeting') plan.setNextAction = 'meeting';
   if (locked) return plan;
   if (effect === 'interested' || effect === 'meeting') {
     if (!lead.is_potential_work) plan.star = true;

@@ -302,7 +302,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   stage_changed: 'Pipeline status changed',
   state_changed: 'Status changed',
   follow_up_set: 'Next action',
-  call_booked: 'Call booked',
+  call_booked: 'Meeting booking',
   call_outcome: 'Call',
   contact_logged: 'Contact',
   website_control_set: 'Website control',
@@ -363,8 +363,11 @@ export function activityDetail(
       if (!d.next_action || d.next_action === 'none') return 'Next action cleared';
       return `${nextActionWords(d.next_action)}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
     }
-    /* The meeting's time in London, or "Cancelled" when it was cleared (Not interested cancels it). */
-    case 'call_booked': return d.at ? new Date(String(d.at)).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).replace(',', '') : 'Cancelled';
+    /* The meeting's time in London, or why the booking ended: it follows the Meeting Next Action (2026-10-02), so
+       completing it reads "Done", changing to another action "Replaced by the next action", a removed time
+       "Time removed"; a clear (or an older row with no reason — Not interested cancels it) reads "Cancelled". */
+    case 'call_booked': return d.at ? new Date(String(d.at)).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).replace(',', '')
+      : d.reason === 'completed' ? 'Done' : d.reason === 'changed' ? 'Replaced by the next action' : d.reason === 'time_removed' ? 'Time removed' : 'Cancelled';
     case 'bulk_queued': return d.template ? String(d.template) : null;
     case 'archived_set': return d.archived ? 'Archived' : 'Restored';
     case 'transfer_requested': return d.note ? String(d.note) : 'No reason given';

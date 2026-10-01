@@ -11,8 +11,11 @@ import { hhmmOf, londonInstant, meetingDayTime } from '@/lib/nextActionView';
  * for EVERY type) and next_action_note (what to do, at most 500 characters). Every screen writes through
  * these functions, which call the ownership-checked server function for BOTH roles:
  *   lead_set_follow_up → the four columns at once + History "follow_up_set" saying set / rescheduled /
- *   changed / updated / completed / cleared. A Meeting saved with a time also books it (call_booked_at,
- *   set by the server from the same time — one meeting time).
+ *   changed / updated / completed / cleared. ⛔ ONE NEXT ACTION (2026-10-02): call_booked_at ("Meeting booked")
+ *   is set by the server ONLY as the mirror of a Meeting Next Action with a time, and cleared the moment the
+ *   Next Action stops being that Meeting (completed, cleared, changed, time removed). lead_set_call_booked is a
+ *   wrapper over the same write. A logged Call back / Meeting booked saves its Next Action through here too
+ *   (src/lib/leadOutcome.ts).
  * Reminders (notify_due_follow_ups) read the day and print the time. Screens: the lead workspace
  * (LeadCrmPanel), the Outreach row and phone card (NextActionEditor), the bulk "Set Action" menu and the
  * Inbox's lead popup (useOutreach.updateNextAction). They all draw the same form (NextActionForm). */
@@ -38,12 +41,14 @@ export type WriteResult = RpcResult & { patch?: Record<string, unknown> };
  *  state, a Meeting booked here also records "Meeting booked" in History. */
 export async function saveNextAction(leadId: string, a: NextActionInput, stateLead?: LeadStateInput): Promise<WriteResult> {
   const none = a.nextAction === 'none';
-  const note = (a.note ?? '').trim() || null;
+  /* Done / Clear take the note with the action (the server does the same; History keeps it). */
+  const note = none ? null : ((a.note ?? '').trim() || null);
   const date = none ? null : (a.date || null);
   const time = date ? hhmmOf(a.time) : null;
   const meetingAt = a.nextAction === 'meeting' && date && time ? londonInstant(date, time) : null;
-  const patch: Record<string, unknown> = { next_action: a.nextAction, next_action_date: date, next_action_time: time, next_action_note: note };
-  if (meetingAt) patch.call_booked_at = meetingAt;
+  /* ⛔ call_booked_at is the Meeting's mirror (migration 20261002180000): the timed Meeting's instant, else null —
+     so completing, clearing or changing a Meeting takes its booking with it, on every open screen at once. */
+  const patch: Record<string, unknown> = { next_action: a.nextAction, next_action_date: date, next_action_time: time, next_action_note: note, call_booked_at: meetingAt };
   notifyLeadChanged(leadId, undefined, patch, true);
   const r = await leadRpc('lead_set_follow_up', { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) });
   if (!r.ok) { notifyLeadChanged(leadId); return r; }

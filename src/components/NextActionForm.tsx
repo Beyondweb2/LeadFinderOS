@@ -27,14 +27,14 @@ export const QUICK_DATES = [
   { label: 'Next week', days: 7 },
 ] as const;
 
-export type NextActionPreset = { nextAction: string; date?: string; note?: string; requireDate?: boolean; why?: string };
+export type NextActionPreset = { nextAction: string; date?: string; note?: string; why?: string };
 export type NextActionFormLead = { next_action: string | null; next_action_date: string | null; next_action_note: string | null; next_action_time?: string | null };
 
 export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, compact = false }: {
   lead: NextActionFormLead;
   onSave: (a: NextActionInput) => Promise<unknown>;
   /** An outcome was just logged: its suggested Next Action (leadState suggestNextAction), pre-filled —
-   *  never saved; the person checks it and presses Save. requireDate: Call back needs a day. */
+   *  never saved; the person checks it and presses Save. */
   preset?: NextActionPreset | null;
   onDismiss?: () => void;
   /** The Outreach popover's Cancel. */
@@ -49,7 +49,7 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
   const [busy, setBusy] = useState(false);
   const has = !!lead.next_action && lead.next_action !== 'none';
   const isMeeting = nextAction === 'meeting';
-  const needsDay = (!!preset?.requireDate && !date) || (!!time && !date);
+  const needsDay = !!time && !date;
   const now = nextActionView(lead);
   const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
   const run = async (a: NextActionInput) => { setBusy(true); try { await onSave(a); } finally { setBusy(false); } };
@@ -61,7 +61,7 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
     <div className={cn('space-y-2', compact && 'w-[17rem]')} data-testid="next-action">
       {preset && (
         <p className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-200" data-testid="next-action-suggested">
-          <span>{preset.requireDate ? `${preset.why ?? 'Call back'}: pick the day, then Save.` : `Suggested after “${preset.why ?? 'the contact'}” — change anything, then Save to keep it.`}</span>
+          <span>{`Suggested after “${preset.why ?? 'the contact'}” — change anything, then Save to keep it.`}</span>
           {onDismiss && <button type="button" className="shrink-0 underline underline-offset-2" onClick={onDismiss}>Not now</button>}
         </p>
       )}
