@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText,
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
-  BarChart3, Map as MapIcon, Wallet, Target, MessageSquarePlus, Gift,
+  BarChart3, Map as MapIcon, MessageSquarePlus, Gift,
 } from 'lucide-react';
 import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
 import { cn } from '@/lib/utils';
@@ -62,15 +62,15 @@ export function MobileBottomNav() {
 
   /* ⛔ Sales uses the SAME Outreach and Inbox as the admin (src/lib/access.ts, 2026-09-27); the
      admin's items are unchanged. */
-  /* Sales, 2026-09-28: the sidebar's order (SALES_NAV_ORDER) — Results, Find Leads, Outreach — with
-     the Inbox kept on the bar (it is the daily tool; four items + More fit a 320 px phone) and
-     Coverage under More. Admin: unchanged bar; Coverage joins More, next to the Inbox. */
+  /* Sales, 2026-10-01: the sidebar's order (SALES_NAV_ORDER) — Outreach, WhatsApp, Find Leads, Sales
+     (four items + More fit a 320 px phone), Coverage under More (SALES_SECONDARY_NAV). Earnings is part of
+     Sales; Focus Mode is retired. Admin: unchanged bar; Coverage joins More, next to the Inbox. */
   const mainNavItems = role === 'sales'
     ? [
-        { title: 'Results', url: '/sales-dashboard', icon: BarChart3 },
-        { title: t('nav.search'), url: '/find-leads', icon: Search },
         { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
         { title: 'WhatsApp', url: '/inbox', icon: MessageSquare },
+        { title: t('nav.search'), url: '/find-leads', icon: Search },
+        { title: 'Sales', url: '/sales-dashboard', icon: BarChart3 },
       ]
     : [
         { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -79,11 +79,11 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: 'Earnings', url: '/earnings', icon: Wallet }, { title: 'Focus Mode', url: '/focus', icon: Target }, { title: 'Coverage', url: '/coverage', icon: MapIcon }]
+    ? [{ title: 'Coverage', url: '/coverage', icon: MapIcon }]
     : [
         { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
-        { title: 'Earnings', url: '/earnings', icon: Wallet },
+        { title: 'Sales', url: '/sales-dashboard', icon: BarChart3 },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
         { title: t('nav.templates'), url: '/templates', icon: FileText },
       ];

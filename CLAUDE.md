@@ -168,17 +168,28 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Quick Close** (`src/lib/quickClose.ts`, fn `quick-close`, `docs/sales-experience.md` §9): a salesperson's
   5-question close + the required website route (Build / Optimise) on the SAME onboarding row (locked find-or-create) → the EXISTING `findable-checkout`
   (row + lead only; never a price). Domain / agency doubt = Paul review, never silently safe.
-- **Sales commission** (`src/lib/commission.ts`, `docs/sales-experience.md` §4, §11): the INITIAL payment
-  earns by the **weekly tier** (Paul, 2026-09-29) — per salesperson, Monday–Sunday London, clients 1–3 30%,
-  4–6 40%, 7+ 50%, NOT retrospective, reset every Monday, ordered by payment time then payment id — plus
+- **Sales commission** (`src/lib/commission.ts`, `docs/sales-page-monthly-commission.md`, `docs/sales-experience.md` §4, §11): the INITIAL payment
+  earns by the **monthly tier** (Paul, 2026-10-01; replaced the weekly tier) — per salesperson, per London
+  calendar month, sales 1–12 30%, 13–24 40%, 25+ 50%, NOT retrospective, reset on the 1st, ordered by payment
+  time then payment id; a fully refunded / lost sale stops counting towards LATER sales' places; a test
+  account's or test lead's sale (`metric_exclusions`) is stamped `test_excluded` at 0% — plus
   20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund / chargeback (an
   offset once paid out), from the **payment ledger** (`payment_ledger`, written by `stripe-webhook` + the
   admin backfill) — never from a CRM status. Only role `sales` earns. ⛔ **The place and rate are STAMPED by
-  the database** (`restamp_weekly_commission`, a trigger on the ledger, per-seller-week lock) into
-  `commission_week_seq` / `commission_rate`, and the code READS them — never recompute a rate in code. A
-  refund never renumbers a week. Rows from before the tiers are `flat_30_v0` and never counted. There is
-  no weekly bonus. `WEEKLY_TIERS` (TS) and `weekly_tier_rate()` (SQL) are one table in two places —
-  `scripts/weekly-commission-tiers.test.ts` pins them.
+  the database ONCE** (`stamp_monthly_commission_for`, a trigger on the ledger, per-seller-month lock) into
+  `commission_month_seq` / `commission_rate`, and the code READS them — never recompute a rate in code; a
+  stamped row is never renumbered or re-rated. Rows stamped under an older rule (`flat_30_v0`,
+  `weekly_tier_v1`) keep what they earned. There is no bonus. `MONTHLY_TIERS` (TS) and
+  `monthly_tier_rate()` (SQL) are one table in two places — `scripts/monthly-commission-tiers.test.ts` pins them.
+- **Sales page** (`/sales-dashboard`, 2026-10-01): the Sales dashboard and Earnings are ONE page (`/earnings`
+  redirects); the month's ladder is the top card. **Focus Mode is retired** (`/focus` → Outreach): its
+  Previous / Next is in the lead popup, its lists are Sales → What to do next, its recent WhatsApp messages are
+  in the popup. Salesperson menu: Outreach, WhatsApp, Find Leads, Sales; Coverage under More (`SALES_NAV_ORDER`,
+  `SALES_SECONDARY_NAV`).
+- **Agency check** (`docs/agency-detection.md`): Find Leads checks each result's own website (fn
+  `agency-check`, a sitemap-guided sample, ≤10 requests, no AI) → `website_agency_checks` per domain, 30 days.
+  ⛔ The machine never sets `website_control`; the lead shows "Detected: …" with Confirm agency / Not agency.
+  ⛔ Platform (WordPress, Wix…) is context only; one weak sign is never "Agency likely".
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_BUILD_TOTAL_PAYMENTS` / `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site

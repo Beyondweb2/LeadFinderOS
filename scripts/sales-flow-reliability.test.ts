@@ -9,7 +9,7 @@
    Google details) is supabase/tests/sales-flow-reliability.sql, always rolled back.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { existsSync, readFileSync } from "node:fs";
-import { canOpenRoute, orderNavForRole, SALES_NAV_ORDER } from "../src/lib/access.ts";
+import { canOpenRoute, orderNavForRole, SALES_NAV_ORDER, SALES_SECONDARY_NAV } from "../src/lib/access.ts";
 import { coverageKey, describeWorkers, workersByPair } from "../src/lib/coverageState.ts";
 import { isUsableSearch, packSearchResults, resultSetSignature, unpackSearchResults } from "../src/lib/searchResultsCache.ts";
 import { visibleResults } from "../src/lib/searchResultsView.ts";
@@ -28,12 +28,14 @@ console.log("── nav ──");
     .matchAll(/url: '([^']+)'/g)].map((m) => m[1]);
   const items = urls.map((url) => ({ url }));
   const sales = orderNavForRole(items.filter((i) => canOpenRoute("sales", i.url)), "sales").map((i) => i.url);
-  ok(JSON.stringify(sales) === JSON.stringify(["/sales-dashboard", "/earnings", "/focus", "/find-leads", "/outreach", "/coverage", "/inbox"]),
-    `sales sidebar: Sales dashboard, Earnings, Find Leads, Outreach, Coverage, WhatsApp (got ${sales.join(", ")})`);
-  ok(sales[0] === "/sales-dashboard", "Sales dashboard is first");
-  ok(sales.indexOf("/find-leads") < sales.indexOf("/outreach"), "Find Leads comes before Outreach");
-  ok(sales.indexOf("/coverage") === sales.indexOf("/outreach") + 1, "Coverage is immediately after Outreach");
-  for (const u of urls) if (!SALES_NAV_ORDER.includes(u)) ok(!canOpenRoute("sales", u), `sales still cannot open the admin page ${u}`);
+  /* Paul, 2026-10-01: Outreach → WhatsApp → Find Leads → Sales; Coverage under "More"; Earnings is part of
+     Sales and Focus Mode is retired (neither is a menu item). */
+  ok(JSON.stringify(sales) === JSON.stringify(["/outreach", "/inbox", "/find-leads", "/sales-dashboard", "/coverage"]),
+    `sales sidebar: Outreach, WhatsApp, Find Leads, Sales, then Coverage (got ${sales.join(", ")})`);
+  ok(sales[0] === "/outreach", "Outreach is first");
+  ok(JSON.stringify(SALES_SECONDARY_NAV) === JSON.stringify(["/coverage"]) && /idx === firstSecondary && <li[^>]*data-testid="nav-more">More<\/li>/.test(sidebar), "Coverage sits under More in the sidebar");
+  ok(!urls.includes("/earnings") && !urls.includes("/focus"), "no menu item for Earnings or Focus Mode");
+  for (const u of urls) if (!SALES_NAV_ORDER.includes(u) && !SALES_SECONDARY_NAV.includes(u)) ok(!canOpenRoute("sales", u), `sales still cannot open the admin page ${u}`);
 
   const admin = orderNavForRole(items.filter((i) => canOpenRoute("admin", i.url)), "admin").map((i) => i.url);
   ok(admin[0] === "/" && admin.length === urls.length, "admin keeps every item, Dashboard first");
@@ -47,8 +49,8 @@ console.log("── nav ──");
   const mobile = read("src/components/MobileBottomNav.tsx");
   const salesBar = mobile.slice(mobile.indexOf("const mainNavItems = role === 'sales'"), mobile.indexOf(": [", mobile.indexOf("const mainNavItems = role === 'sales'")));
   const bar = [...salesBar.matchAll(/url: '([^']+)'/g)].map((m) => m[1]);
-  ok(JSON.stringify(bar) === JSON.stringify(["/sales-dashboard", "/find-leads", "/outreach", "/inbox"]), `mobile sales bar: Results, Find Leads, Outreach, Inbox (got ${bar.join(", ")})`);
-  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Earnings', url: '\/earnings', icon: Wallet \}, \{ title: 'Focus Mode', url: '\/focus', icon: Target \}, \{ title: 'Coverage', url: '\/coverage'/.test(mobile), "mobile sales: Earnings, Focus Mode and Coverage under More");
+  ok(JSON.stringify(bar) === JSON.stringify(["/outreach", "/inbox", "/find-leads", "/sales-dashboard"]), `mobile sales bar: Outreach, WhatsApp, Find Leads, Sales (got ${bar.join(", ")})`);
+  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Coverage', url: '\/coverage', icon: MapIcon \}\]/.test(mobile), "mobile sales: only Coverage under More");
   ok(!/url: '\/(team|paid-clients|ai-audit|templates|admin)'/.test(salesBar), "mobile sales bar has no admin page");
   ok(/icon: MapIcon/.test(mobile) && !/icon: Map \}/.test(mobile), "the mobile nav does not shadow the global Map");
 }

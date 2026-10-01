@@ -36,6 +36,7 @@ import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution
 import { onboardingLinkStatus } from './onboardingLinkStatus.ts';
 import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } from './leadState.ts';
 import { holderTimeline } from './holderTimeline.ts';
+import { londonDay, londonMidnightMs } from './reportingPeriod.ts';
 
 export interface PerfLead {
   id: string;
@@ -391,11 +392,14 @@ export function rate(num: number, den: number): number | null {
 
 export const PERIODS = [
   { value: 'all', label: 'All time', days: null },
+  /* The London calendar month (2026-10-01): the Sales page counts the same month the commission ladder does. */
+  { value: 'month', label: 'This month', days: null },
   { value: '30', label: 'Last 30 days', days: 30 },
   { value: '7', label: 'Last 7 days', days: 7 },
 ] as const;
 export type PeriodValue = typeof PERIODS[number]['value'];
 export function periodSinceMs(p: string, now = Date.now()): number | null {
+  if (p === 'month') return londonMidnightMs(`${londonDay(now).slice(0, 7)}-01`);
   const d = PERIODS.find((x) => x.value === p)?.days ?? null;
   return d === null ? null : now - d * 86_400_000;
 }

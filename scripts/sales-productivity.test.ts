@@ -1,10 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   PRODUCTIVITY (Sales Experience release 4, docs/sales-experience.md §6): Focus Mode's queue and the
-   saved views, the command palette, recent leads, safe shortcuts, the one Interested / Not-interested path.
+   PRODUCTIVITY (Sales Experience release 4, docs/sales-experience.md §6; Focus Mode retired 2026-10-01):
+   where Focus Mode's useful parts went (Previous / Next in the lead popup, its lists on Sales, the recent
+   WhatsApp messages in the popup), the command palette, recent leads, safe shortcuts, the one
+   Interested / Not-interested path.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import fs from "node:fs";
 import path from "node:path";
-import { focusQueue, linkedInSearchUrl, FOCUS_VIEWS } from "../src/lib/focusQueue.ts";
+import { linkedInSearchUrl } from "../src/lib/socialProfiles.ts";
 import { goTarget, isPaletteKey, isTypingTarget, GO_SHORTCUTS } from "../src/lib/shortcuts.ts";
 import { canOpenRoute } from "../src/lib/access.ts";
 import type { SalesWorkspace } from "../src/lib/salesWorkspace.ts";
@@ -14,21 +16,22 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" :
 const root = path.resolve(import.meta.dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(/\r\n/g, "\n");
 
-const pl = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: `Biz ${id}`, at: null, warmth: null, ...extra });
-const w = {
-  nextActions: [{ kind: "reply_waiting", leadId: "a", name: "Biz a", title: "New WhatsApp reply", detail: "Waiting 2h", at: null, tone: "blue", link: "whatsapp" }, { kind: "going_cold", leadId: "b", name: "Biz b", title: "Warm lead going cold", detail: "x", at: null, tone: "amber", link: "whatsapp" }],
-  followUps: { overdue: [pl("c", { detail: "Call" })], dueToday: [pl("d"), pl("c")], repliedUnanswered: [pl("a")], interestedUntouched: [], signupSent: [pl("e", { detail: "Not opened yet" })], goingCold: [pl("b")] },
-  pipeline: [{ key: "interested", label: "Interested", count: 1, leads: [pl("f", { warmth: "warm" })] }, { key: "replied", label: "Replied", count: 1, leads: [pl("a", { warmth: "needs_follow_up" })] }],
-} as unknown as SalesWorkspace;
-
-console.log("\n── Focus Mode's queue and the saved views ──");
-ok(focusQueue(w, "next").map((i) => i.leadId).join() === "a,b", "default: the dashboard's next best actions, in its order");
-ok(focusQueue(w, "follow_up_today").map((i) => i.leadId).join() === "c,d", "follow up today = overdue then due today, each lead once");
-ok(focusQueue(w, "overdue")[0].why === "Call", "a follow-up shows the person's own Next Action");
-ok(focusQueue(w, "interested")[0].leadId === "f" && focusQueue(w, "warm")[0].leadId === "f", "interested and warm views");
-ok(focusQueue(w, "signup_sent")[0].why === "Not opened yet" && focusQueue(w, "going_cold")[0].leadId === "b" && focusQueue(w, "replied")[0].leadId === "a", "signup sent / going cold / replied views");
-ok(focusQueue(w, "nonsense").length === 2, "an unknown view falls back to next best actions");
-ok(FOCUS_VIEWS.length === 9 && FOCUS_VIEWS.some((v) => v.key === "meetings"), "nine saved views (Meetings booked added 2026-09-30)");
+console.log("\n── Focus Mode is retired; its useful parts moved ──");
+const dialog = read("src/components/LeadDetailDialog.tsx");
+const table = read("src/components/OutreachTable.tsx");
+ok(!fs.existsSync(path.join(root, "src/pages/Focus.tsx")) && !fs.existsSync(path.join(root, "src/lib/focusQueue.ts")), "the Focus page and its queue are deleted");
+ok(/<Route path="\/focus" element=\{<FocusRedirect \/>\} \/>/.test(read("src/App.tsx")) && /outreachLeadLink\(lead\)/.test(read("src/components/FocusRedirect.tsx")), "/focus redirects to Outreach (a ?lead= opens that lead)");
+ok(!/'\/focus'/.test(read("src/components/AppSidebar.tsx") + read("src/components/MobileBottomNav.tsx") + read("src/lib/shortcuts.ts")) && !/\/focus|FOCUS_VIEWS|saved view/.test(read("src/components/CommandPalette.tsx").replace(/Focus Mode and its saved views retired/, "")), "no menu, shortcut or palette entry leads to Focus Mode");
+ok(/stepper\?: LeadStepper \| null;/.test(dialog) && /<StepperBar s=\{stepper\} \/>/.test(dialog), "the lead popup has Previous / Next");
+const keys = dialog.slice(dialog.indexOf("onKeyDown={(e) => {\n          if (!stepper"), dialog.indexOf("{stepper && stepper.total > 1"));
+ok(/typingIn\(e\.target\)/.test(keys) && /ArrowRight/.test(keys) && /ArrowLeft/.test(keys) && !/rpc|invoke|save|update/.test(keys), "← / → only move between leads, never while typing, never write");
+ok(/filteredAndSortedLeads\.findIndex\(\(l\) => l\.id === detailLead\.id\)/.test(table) && /stepper=\{detailStepper\}/.test(table), "Outreach steps through its own filtered, sorted list (every page)");
+ok(/stepPlace\.current/.test(table), "a lead that drops out of the list keeps its place: Next opens the one that took it");
+const groups = read("src/components/salesDash/sections.tsx");
+for (const k of ["meetings", "warm", "signupSent", "goingCold"]) ok(new RegExp(`key: '${k}'`).test(groups), `Sales → What to do next has the "${k}" list`);
+ok(/followUps\.warm\.push\(pl\)/.test(read("src/lib/salesWorkspace.ts")), "the warm list is filled by the same warmth reading");
+const recent = read("src/components/RecentWhatsApp.tsx");
+ok(/context !== 'inbox' && <RecentWhatsApp leadId=\{lead\.id\} \/>/.test(dialog) && /\.limit\(RECENT_WHATSAPP_COUNT\)/.test(recent) && !/\.insert\(|\.update\(|functions\.invoke|\.rpc\(/.test(recent), "the latest WhatsApp messages are in the popup (read-only; the Inbox shows the thread itself)");
 ok(linkedInSearchUrl("Acme Locks", "Leeds") === "https://www.linkedin.com/search/results/all/?keywords=Acme%20Locks%20Leeds" && linkedInSearchUrl(null, null) === null, "LinkedIn is a search link, never a scrape");
 
 console.log("\n── shortcuts are safe ──");
@@ -41,21 +44,13 @@ for (const file of ["src/lib/shortcuts.ts", "src/components/CommandPalette.tsx"]
   const s = read(file);
   ok(!/\.rpc\(|functions\.invoke|\.update\(|\.insert\(|\.delete\(|\.upsert\(/.test(s), `${file}: opens things only — no write, no send`);
 }
-const focus = read("src/pages/Focus.tsx");
-const keyHandler = focus.slice(focus.indexOf("const onKey = (e: KeyboardEvent)"), focus.indexOf("window.addEventListener('keydown', onKey)"));
-ok(/go\(1\)/.test(keyHandler) && !/quick\(|save|rpc|invoke/.test(keyHandler), "Focus Mode's keys only move between leads");
 
 console.log("\n── one CRM, no second copy ──");
-ok(/<LeadWorkPanel key=\{item\.leadId\} leadId=\{item\.leadId\}( onOutcome=\{onOutcome\})? \/>/.test(focus) && /<LeadHookPanel key=\{item\.leadId\} leadId=\{item\.leadId\} \/>/.test(focus), "Focus reuses the lead workspace's own panels (log contact, Next Action, notes, audit)");
-/* 2026-09-30 (lead state audit): Focus's separate Interested / Not interested buttons are gone — they were
-   the same writes as the Log Contact outcomes, which the Work panel carries out through the one executor
-   (src/lib/leadOutcome.ts) for both roles. scripts/lead-state.test.ts holds the full rule. */
-ok(!/markLeadInterested|setLeadPipelineStatus/.test(focus) && /applyOutcome\(/.test(read("src/components/LeadCrmPanel.tsx")), "Focus's Interested / Not interested are the Work panel's outcomes — the one path");
+ok(/applyOutcome\(/.test(read("src/components/LeadCrmPanel.tsx")), "Interested / Not interested are the Work panel's outcomes — the one path");
 const inbox = read("src/pages/Inbox.tsx");
 ok(/markLeadInterested\(c\.leadId, perms\.editLeadRecord\)/.test(inbox) && /setLeadPipelineStatus\(c\.leadId, status, perms\.editLeadRecord\)/.test(inbox) && !/mode: 'suppress_lead', lead_id: c\.leadId/.test(inbox), "…and so does the Inbox (the queue stop is written once)");
 const qa = read("src/lib/leadQuickActions.ts");
 ok((qa.match(/mode: 'suppress_lead'/g) ?? []).length === 1 && /if \(status === 'not_interested'\)/.test(qa), "not-interested stops the queue, once, in one place — for both roles (the admin path wrote no suppression, 2026-09-30)");
-ok(canOpenRoute("sales", "/focus") && /<Route path="\/focus" element=\{<Focus \/>\} \/>/.test(read("src/App.tsx")), "Focus Mode is routed and open to Sales");
 
 console.log("\n── the palette and recent leads ──");
 const pal = read("src/components/CommandPalette.tsx");

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -11,12 +11,12 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { canOpenRoute, orderNavForRole } from '@/lib/access';
+import { canOpenRoute, orderNavForRole, SALES_SECONDARY_NAV } from '@/lib/access';
 import { useWhatsAppUnread } from '@/hooks/useWhatsAppUnread';
 import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
-  BarChart3, MessageCircle, Wallet, Target, MessageSquarePlus,
+  BarChart3, MessageCircle, MessageSquarePlus,
 } from 'lucide-react';
 import { FeedbackNewsButtons } from '@/components/FeedbackAndNews';
 import { PaletteButton } from '@/components/CommandPalette';
@@ -41,9 +41,8 @@ export function AppSidebar() {
     /* ⛔ Sales: the item SAYS WhatsApp (Paul, 2026-09-28: "I should not have to know that Inbox means
        WhatsApp"). Same route, same page, same conversations — one conversation system. */
     { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },
-    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: 'Results by campaign and template' },
-    { title: 'Earnings', url: '/earnings', icon: Wallet, description: 'Commission from client payments' },
-    { title: 'Focus Mode', url: '/focus', icon: Target, description: 'One lead at a time' },
+    /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup). */
+    { title: 'Sales', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your sales and commission' : 'Sales and commission' },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
@@ -57,7 +56,11 @@ export function AppSidebar() {
      every item in the list order above (Dashboard, Find Leads, Outreach, Coverage directly below it,
      then Inbox…). A salesperson's order is the working day, Paul 2026-09-28: results → find leads →
      work the pipeline → market coverage → messages (SALES_NAV_ORDER). Presentation only. */
-  const navItems = orderNavForRole(allNavItems.filter((item) => canOpenRoute(role, item.url)), role);
+  const ordered = orderNavForRole(allNavItems.filter((item) => canOpenRoute(role, item.url)), role);
+  /* A salesperson's secondary items (Coverage) sit under "More", after the main list. */
+  const isSecondary = (url: string) => role === 'sales' && SALES_SECONDARY_NAV.includes(url);
+  const navItems = [...ordered.filter((i) => !isSecondary(i.url)), ...ordered.filter((i) => isSecondary(i.url))];
+  const firstSecondary = navItems.findIndex((i) => isSecondary(i.url));
 
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);
@@ -93,14 +96,16 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {navItems.map((item, idx) => {
                 const isActive = location.pathname === item.url;
                 const isFlashing =
                   (item.url === '/outreach' && flashCRM) ||
                   (item.url === '/find-leads' && flashSearch);
                 const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
-                  <SidebarMenuItem key={item.url}>
+                  <Fragment key={item.url}>
+                  {idx === firstSecondary && <li className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50" data-testid="nav-more">More</li>}
+                  <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={isActive}>
                     <Link
                         to={item.url}
@@ -132,6 +137,7 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                  </Fragment>
                 );
               })}
             </SidebarMenu>

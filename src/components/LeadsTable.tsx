@@ -17,7 +17,11 @@ import { useToast } from '@/hooks/use-toast';
 import { socialKindOf } from '@/lib/socialUrl';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
+import { useAgencyChecks } from '@/hooks/useAgencyChecks';
+import { SiteManagementCell } from './SiteManagementCell';
+import { agencyCheckDomain, isHighConfidenceAgency, passesSiteFilter, siteStateOf, SITE_FILTERS, type SiteFilter } from '@/lib/agencyCheck';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -149,19 +153,31 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     (savedView?.socials ?? []).filter((s): s is 'instagram' | 'facebook' => s === 'instagram' || s === 'facebook'),
   );
   const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, savedView?.page ?? 1));
-  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); }, [ALL_STATUSES]);
+  /* ══ WHO RUNS THEIR WEBSITE? (2026-10-01) ══ Every result with its own website is checked as soon as
+     the results arrive (useAgencyChecks, a few at a time; each row fills in as it finishes). */
+  const [siteFilter, setSiteFilter] = useState<SiteFilter>('all');
+  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilter('all'); }, [ALL_STATUSES]);
+  const hasOwnSite = useCallback((l: Lead) => l.websiteStatus === 'HAS_OWN_WEBSITE' && !!agencyCheckDomain(l.websiteUrl), []);
+  const agencyItems = useMemo(() => leads.map((l) => ({ websiteUrl: l.websiteUrl, hasOwnWebsite: hasOwnSite(l) })), [leads, hasOwnSite]);
+  const agency = useAgencyChecks(agencyItems);
+  const highAgency = useCallback((l: Lead) => hasOwnSite(l) && isHighConfidenceAgency(agency.rowFor(l.websiteUrl)), [agency, hasOwnSite]);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    const shown = leads.filter((lead) => {
       const effectiveStatus = lead.websiteStatus === 'DIRECTORY_ONLY' ? 'NO_WEBSITE' : lead.websiteStatus;
       if (!statusFilters.includes(effectiveStatus)) return false;
       if (socialFilters.length) {
         const kind = socialKindOf(lead.websiteUrl);
         if (!kind || !socialFilters.includes(kind)) return false;
       }
+      if (!passesSiteFilter(siteFilter, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
       return true;
     });
-  }, [leads, statusFilters, socialFilters]);
+    /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
+       rows never jump under the cursor while results are still arriving. The rest keep their order. */
+    if (agency.pending > 0) return shown;
+    return [...shown.filter((l) => !highAgency(l)), ...shown.filter((l) => highAgency(l))];
+  }, [leads, statusFilters, socialFilters, siteFilter, agency, hasOwnSite, highAgency]);
 
   const visible = visibleResults(leads.length, filteredLeads.length);
   const filterNotice = visible.filtered ? (
@@ -225,9 +241,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     () => selectableLeads.filter((l) => selectedIds.has(l.id)),
     [selectableLeads, selectedIds],
   );
-  const allSelected = selectableLeads.length > 0 && selectableLeads.every((l) => selectedIds.has(l.id));
+  /* Select all leaves out high-confidence agency sites (they can still be ticked one by one). */
+  const selectAllPool = useMemo(() => selectableLeads.filter((l) => !highAgency(l)), [selectableLeads, highAgency]);
+  const allSelected = selectAllPool.length > 0 && selectAllPool.every((l) => selectedIds.has(l.id));
   const handleSelectAll = useCallback(() => {
-    setSelectedIds(allSelected ? new Set() : new Set(selectableLeads.map((l) => l.id)));
+    setSelectedIds(allSelected ? new Set() : new Set(selectAllPool.map((l) => l.id)));
   }, [allSelected, selectableLeads]);
   const handleSelectOne = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -418,9 +436,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         >
           <span className="flex items-center gap-1.5 text-sm"><Facebook className="h-3.5 w-3.5 text-blue-600" /> Listing = Facebook</span>
         </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Site management</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={siteFilter} onValueChange={(v) => setSiteFilter(v as SiteFilter)}>
+          {SITE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter]);
+  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilter]);
 
   // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
   // Outreach pattern: appear with a selection; "Add all shown" when none selected.
@@ -441,21 +464,23 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         </Tooltip>
       );
     }
-    if (selectableLeads.length > 0) {
+    /* "Add all shown" leaves out high-confidence agency sites too, the same as Select all (2026-10-01). */
+    if (selectAllPool.length > 0) {
+      const left = selectableLeads.length - selectAllPool.length;
       return (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border">
+            <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectAllPool)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border" data-testid="add-all-shown">
               {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-              Add all shown ({selectableLeads.length})
+              Add all shown ({selectAllPool.length})
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{addCampaignTooltip}</TooltipContent>
+          <TooltipContent>{left > 0 ? `${addCampaignTooltip}. Leaves out ${left} site${left === 1 ? '' : 's'} an agency likely runs — add ${left === 1 ? 'it' : 'them'} one by one if you want.` : addCampaignTooltip}</TooltipContent>
         </Tooltip>
       );
     }
     return null;
-  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd, addCampaignTooltip]);
+  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, selectAllPool, bulkAdding, runBulkAdd, addCampaignTooltip]);
 
   // Secondary bulk/scan actions, grouped under one "Bulk ▾" menu:
   //   Enrich selected · Check for websites · Find emails · Add all with emails.
@@ -631,8 +656,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-medium shrink-0">Outside town</span>
                     )}
                   </div>
-                  <div className="mt-1 flex items-center gap-1.5">
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
+                    {hasOwnSite(lead) && <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite compact />}
                   </div>
                   {onEnrichPatch && (
                     <div className="mt-1.5">
@@ -747,16 +773,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     />
                   </TableHead>
                 )}
-                <TableHead className="w-[28%] pl-2">Business Name</TableHead>
-                <TableHead className="w-[20%]">Website Status</TableHead>
-                <TableHead className="w-[30%]">More Details</TableHead>
-                <TableHead className="w-[20%]" data-walkthrough="actions-column-header">Actions</TableHead>
+                <TableHead className="w-[25%] pl-2">Business Name</TableHead>
+                <TableHead className="w-[15%]">Website Status</TableHead>
+                <TableHead className="w-[17%]" title="Who runs their website — a machine check of the site">Site management</TableHead>
+                <TableHead className="w-[25%]">More Details</TableHead>
+                <TableHead className="w-[18%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={bulkAllowed ? 5 : 4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={bulkAllowed ? 6 : 5} className="h-24 text-center text-muted-foreground">
                     {emptyRows}
                   </TableCell>
                 </TableRow>
@@ -801,6 +828,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         </TooltipContent>
                       </Tooltip>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite={hasOwnSite(lead)} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">

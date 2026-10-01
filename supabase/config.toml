@@ -180,6 +180,12 @@ verify_jwt = true
 [functions.voice-note-script]
 verify_jwt = true
 
+# agency-check: who runs a website (2026-10-01). SPA-only caller with the operator's JWT (admin or sales);
+# the handler does resolveActor itself. Free: a small crawl of the site, cached per domain in
+# website_agency_checks. Writes nothing else.
+[functions.agency-check]
+verify_jwt = true
+
 # social-profiles: Find socials / add / confirm / not them (2026-09-30). SPA-only caller with the operator's
 # JWT (admin or sales); the handler does resolveActor + leadAccess itself. Free: our records, then the
 # lead's own website. Never fetches LinkedIn, never spends money, never writes an email.

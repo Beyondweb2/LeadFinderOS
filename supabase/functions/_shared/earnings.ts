@@ -7,14 +7,14 @@ import {
   commissionLines, commissionOn, earningsTotals, COMMISSION_RECURRING_RATE,
   type CommissionLine, type ClientEarnings, type EarningsTotals, type LedgerRow, type PayoutRow, type ProjectionInput,
 } from "../../../src/lib/commission.ts";
-import { FINDABLE_MONTHLY_GBP } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
 
 export interface Earnings {
   lines: CommissionLine[];
-  clients: (ClientEarnings & { remainingPotential: number; subscriptionStatus: string | null })[];
+  clients: (ClientEarnings & { remainingPotential: number; subscriptionStatus: string | null; package: string | null })[];
   totals: EarningsTotals;
   /** Whether this person earns commission at all (a salesperson). False for the admin's own sales. */
   commissionable: boolean;
@@ -26,7 +26,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function loadEarnings(service: Service, personId: string | null, todayIso: string): Promise<Earnings> {
   const [ledgerRes, rolesRes, payoutsRes] = await Promise.all([
-    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_week_start, commission_week_seq, commission_rate").order("occurred_at").limit(10000),
+    service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate").order("occurred_at").limit(10000),
     service.from("user_roles").select("user_id, role"),
     service.from("commission_payouts").select("user_id, period_month, amount_gbp, paid_at"),
   ]);
@@ -56,7 +56,8 @@ export async function loadEarnings(service: Service, personId: string | null, to
     const status = leads.get(c.leadId)?.subscription_status ?? null;
     const monthly = lastRecurring.get(c.leadId) ?? FINDABLE_MONTHLY_GBP;
     const active = !!status && LIVE_SUBSCRIPTION.has(status);
-    return { ...c, subscriptionStatus: status, remainingPotential: active ? round2(c.commissionablePaymentsLeft * commissionOn(monthly, COMMISSION_RECURRING_RATE)) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active } as ProjectionInput };
+    const route = serviceRouteForTotal(leads.get(c.leadId)?.contract_total_payments ?? null);
+    return { ...c, subscriptionStatus: status, package: route ? SERVICE_ROUTE_NAME[route] : null, remainingPotential: active ? round2(c.commissionablePaymentsLeft * commissionOn(monthly, COMMISSION_RECURRING_RATE)) : 0, _proj: { leadId: c.leadId, paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: monthly, active } as ProjectionInput };
   });
   const totals = earningsTotals(lines, payouts, clients.map((c) => c._proj), todayIso);
   const sellers = [...new Set(lines.map((l) => l.sellerId).filter((s): s is string => !!s && sales.has(s)))];

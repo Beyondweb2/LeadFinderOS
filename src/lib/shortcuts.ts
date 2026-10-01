@@ -3,12 +3,10 @@
    cannot be undone by pressing Back. Never fires while the person is typing. */
 
 export const GO_SHORTCUTS: readonly { keys: string; to: string; label: string; adminOnly?: boolean }[] = [
-  { keys: 'g d', to: '/sales-dashboard', label: 'Sales dashboard' },
+  { keys: 'g d', to: '/sales-dashboard', label: 'Sales' },
   { keys: 'g w', to: '/inbox', label: 'WhatsApp' },
   { keys: 'g o', to: '/outreach', label: 'Outreach' },
   { keys: 'g l', to: '/find-leads', label: 'Find Leads' },
-  { keys: 'g f', to: '/focus', label: 'Focus Mode' },
-  { keys: 'g e', to: '/earnings', label: 'Earnings' },
   { keys: 'g c', to: '/coverage', label: 'Coverage' },
 ];
 

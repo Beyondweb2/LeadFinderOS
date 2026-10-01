@@ -48,7 +48,6 @@ console.log("\n── one pill, every screen ──");
   ok(/<NextActionPill lead=\{activeLead\} onClick=\{\(\) => setDetailLeadId\(active\.leadId\)\} \/>/.test(inbox), "Inbox header: the pill, tap → the prospect");
   ok(/next_action, next_action_date, next_action_time, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
-  ok(/<NextActionPill lead=\{crm\.data\} \/>/.test(read("src/pages/Focus.tsx")), "Focus Mode: the pill on the lead card");
   const editor = read("src/components/NextActionEditor.tsx");
   ok(/const v = nextActionView\(lead\);/.test(editor) && /<NextActionForm compact/.test(editor) && /NEXT_ACTION_OPTIONS \} from '@\/lib\/salesCrm'/.test(read("src/components/NextActionForm.tsx")), "Outreach cell: the same words and the same form (every choice) as the popup (2026-10-02)");
   ok(!has("src/hooks/useCustomNextActions.ts") && !has("src/components/NextActionBadge.tsx") && !/custom::|CUSTOM_PREFIX|setLeadCustomAction/.test(editor), "the device-only custom action labels are gone (a second, invisible next-action system)");
@@ -82,7 +81,7 @@ console.log("\n── the one rule for what an outcome also changes (now src/lib
   const crm = read("src/components/LeadCrmPanel.tsx");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ logging an outcome still never saves a next action by itself");
-  ok(/applyOutcome\(/.test(crm) && !/onOutcome/.test(read("src/components/LeadDetailDialog.tsx")) && !/onOutcome/.test(read("src/pages/Focus.tsx")), "the popup and Focus Mode share the one rule — the Work panel carries it out for both");
+  ok(/applyOutcome\(/.test(crm) && !/onOutcome/.test(read("src/components/LeadDetailDialog.tsx")), "the popup carries out the one rule through the Work panel (Focus Mode retired 2026-10-01)");
 }
 
 console.log("\n── no hover template preview ──");
@@ -133,7 +132,7 @@ console.log("\n── Find email ──");
   const btn = read("src/components/FindEmailButton.tsx");
   ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
   ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
-  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Focus.tsx", /!lead\.email && <FindEmailButton/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
     ok(re.test(read(p)), `${p}: beside the email option, only when there is none`);
   }
   const mig = read("supabase/migrations/20260929180000_lead_find_email.sql");

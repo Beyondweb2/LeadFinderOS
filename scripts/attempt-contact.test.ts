@@ -42,7 +42,8 @@ ok(read('supabase/functions/send-whatsapp-message/index.ts').includes(NOTSENT), 
 ok(/template_name", "initial_contact"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/contact-followup-eligibility.ts'))
   && /template_name", "audit_reply"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/hook-followup-eligibility.ts')), 'a follow-up needs a REAL opener / report before it');
 ok(/openerReallySent\(lead\) \?|if \(openerReallySent\(lead\)\)/.test(read('src/components/WhatsAppLeadControls.tsx')), 'the WhatsApp panel never says "Sent" for a refused send');
-for (const f of ['src/pages/Focus.tsx', 'src/hooks/useInbox.ts']) ok(read(f).includes('isRealSend('), `${f}: a real send is isRealSend, not "not failed"`);
+/* Focus Mode retired 2026-10-01: its send reading went with it. */
+for (const f of ['src/hooks/useInbox.ts']) ok(read(f).includes('isRealSend('), `${f}: a real send is isRealSend, not "not failed"`);
 ok(!/'mobile' = WhatsApp-capable proxy/.test(read('src/types/outreach.ts')) && !/is the proxy for "WhatsApp-capable"/.test(read('src/lib/lineType.ts')), 'no comment still calls a mobile WhatsApp-capable');
 
 console.log('\n── trades: the business\'s own website services count ──');

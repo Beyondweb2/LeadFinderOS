@@ -79,14 +79,14 @@ function decode(s: string): string {
 }
 
 /** Strip tags to visible-ish text, collapsing whitespace. */
-function textOf(html: string): string {
+export function textOf(html: string): string {
   return decode(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
 /** All href values in the html (raw, not resolved). */
-function hrefs(html: string): string[] {
+export function hrefs(html: string): string[] {
   const out: string[] = [];
   const re = /<a\b[^>]*href=["']([^"']+)["']/gi;
   let m: RegExpExecArray | null;
@@ -96,7 +96,7 @@ function hrefs(html: string): string[] {
 
 /** The footer region: the last <footer>…</footer> if present, else the last 20% of the body. Where
  *  the copyright, the "built by" line and the agency link live. */
-function footerHtml(html: string): string {
+export function footerHtml(html: string): string {
   const m = /<footer\b[^>]*>([\s\S]*?)<\/footer>/i.exec(html);
   if (m) return m[1];
   const body = /<body\b[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
@@ -104,7 +104,7 @@ function footerHtml(html: string): string {
 }
 
 /** hostname of a URL, lowercased, www-stripped, or null. */
-function hostOf(u: string): string | null {
+export function hostOf(u: string): string | null {
   try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch { return null; }
 }
 
@@ -158,7 +158,7 @@ const DIRECTORIES: Array<{ name: string; host: RegExp; text: RegExp }> = [
 ];
 
 /** Platform signatures — a generator meta tag, a tell-tale asset host, or a body marker. */
-const PLATFORMS: Array<{ name: string; re: RegExp }> = [
+export const PLATFORMS: Array<{ name: string; re: RegExp }> = [
   { name: "WordPress", re: /wp-content|wp-includes|<meta[^>]+generator[^>]+wordpress/i },
   { name: "Wix", re: /static\.wixstatic\.com|wix\.com|_wixcssimports|X-Wix-/i },
   { name: "Squarespace", re: /static1\.squarespace\.com|squarespace\.com|\bsquarespace\b/i },
@@ -171,7 +171,7 @@ const PLATFORMS: Array<{ name: string; re: RegExp }> = [
 
 /* Hosts that are NOT an agency even when linked in the footer — socials, directories, platforms,
    maps, review widgets, government. Keeps builtBy.footerLinks to genuine candidates. */
-const NON_AGENCY_HOST = /(^|\.)(facebook|instagram|twitter|x|linkedin|youtube|youtu|tiktok|yell|checkatrade|trustatrader|which|trustpilot|mybuilder|ratedpeople|bark|google|goo\.gl|maps|bing|apple|wix|squarespace|shopify|godaddy|weebly|webflow|wordpress|gov\.uk|paypal|stripe|whatsapp|wa\.me|mailto|tel)\b/i;
+export const NON_AGENCY_HOST = /(^|\.)(facebook|instagram|twitter|x|linkedin|youtube|youtu|tiktok|yell|checkatrade|trustatrader|which|trustpilot|mybuilder|ratedpeople|bark|google|goo\.gl|maps|bing|apple|wix|squarespace|shopify|godaddy|weebly|webflow|wordpress|gov\.uk|paypal|stripe|whatsapp|wa\.me|mailto|tel)\b/i;
 
 /* ── the extractors ─────────────────────────────────────────────────────────────────────────────── */
 

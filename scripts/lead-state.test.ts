@@ -19,7 +19,6 @@ import { CALL_OUTCOMES, NEXT_ACTION_OPTIONS, activityDetail, outcomesFor, salesS
 import { INBOUND_NO_DOWNGRADE, STRONG_STATUSES, postgrestList } from "../src/lib/strongStatuses.ts";
 import { NEXT_ACTION_LABEL } from "../src/lib/nextActionView.ts";
 import { OUTREACH_STATUS_OPTIONS, PIPELINE_STATUS_OPTIONS } from "../src/types/outreach.ts";
-import { focusQueue, FOCUS_VIEWS } from "../src/lib/focusQueue.ts";
 import { foldSalesWorkspace } from "../src/lib/salesWorkspace.ts";
 
 let f = 0;
@@ -221,11 +220,8 @@ console.log("\n── 8. the executor: both roles, the ownership-checked functio
 
 console.log("\n── 9. one reading on every screen ──");
 {
-  const focus = read("src/pages/Focus.tsx");
-  ok(/<SalesStatePill view=\{st\.view\}/.test(focus) && /<LastContactLine v=\{st\.lastContact\}/.test(focus), "Focus Mode: the state and the Last contact at a glance");
-  ok(!/lead\.status\.replace\(/.test(focus), "…the raw status chip is gone");
-  ok(!/markLeadInterested|setLeadPipelineStatus|ThumbsDown/.test(focus), "…the duplicate Interested / Not interested buttons are gone (Log Contact has them)");
-  ok(!/onOutcome/.test(focus) && !/onOutcome/.test(read("src/components/LeadDetailDialog.tsx")), "no screen keeps its own outcome rule");
+  /* Focus Mode retired 2026-10-01 (its stepping and recent messages are in the popup). */
+  ok(!/onOutcome/.test(read("src/components/LeadDetailDialog.tsx")), "no screen keeps its own outcome rule");
   const dlg = read("src/components/LeadDetailDialog.tsx");
   ok(/<SalesStatePill view=\{salesState\.view\}/.test(dlg) && !/Marked interested \(the star\)/.test(dlg), "the popup header leads with the state; the separate star chip is gone");
   const strip2 = read("src/components/LeadStateStrip.tsx");
@@ -262,7 +258,7 @@ console.log("\n── 10. queues: Next best actions and Focus read the state ─
   ok(!ws.nextActions.some((a) => a.leadId === "later"), "…a meeting next week is not an action yet");
   ok(ws.followUps.meetings.map((m) => m.id).join(",") === "meet,later", "…but both are on the Meetings list, soonest first");
   ok(!ws.followUps.meetings.some((m) => m.id === "out") && !ws.nextActions.some((a) => a.leadId === "out"), "a not-interested lead's meeting is not surfaced");
-  ok(FOCUS_VIEWS.some((v) => v.key === "meetings") && focusQueue(ws, "meetings").map((i) => i.leadId).join(",") === "meet,later", "Focus Mode has a Meetings view");
+  ok(/key: 'meetings'/.test(read("src/components/salesDash/sections.tsx")), "Sales → What to do next has a Meetings list (moved from Focus Mode)");
   ok(/call_booked_at"/.test(read("supabase/functions/sales-performance/index.ts")) || /call_booked_at",/.test(read("supabase/functions/sales-performance/index.ts")), "sales-performance reads call_booked_at");
   const perf = read("src/lib/salesPerformance.ts");
   ok(perf.includes('import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } fr' + "om './leadState" + ".ts'") &&!/const NOT_INTERESTED_STATUSES/.test(perf) && !/const CONVERSATION_OUTCOMES/.test(perf), "the dashboard's Not interested and conversation outcomes are the engine's sets (one of each)");
