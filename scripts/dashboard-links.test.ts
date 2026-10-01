@@ -2,7 +2,7 @@
    EVERY DASHBOARD ITEM OPENS WHERE ITS ACTION IS DONE (2026-09-30, docs/sales-workflow-nav.md).
    Run: npx tsx scripts/dashboard-links.test.ts
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { attentionPath, clientHubLink, nextActionLink, outreachLeadLink, leadTarget } from '../src/lib/salesLinks.ts';
 import { WHATSAPP_NEXT_ACTIONS, NEXT_ACTION_LABEL } from '../src/lib/nextActionView.ts';
 import { stripeDashboardUrl, foldAdminOverview, type AdminInput, type AdminLead } from '../src/lib/adminMetrics.ts';
@@ -102,6 +102,31 @@ console.log('\n── the pages honour the links ──');
   ok(/const loadLead = useCallback/.test(useInbox) && /fetchOneInboxLead\(leadId, leadTable\)/.test(useInbox) && /\.eq\('lead_id', leadId\)/.test(useInbox), 'loadLead reads through the person\'s own lead source and RLS-scoped messages');
   const sd = read('src/pages/SalesDashboard.tsx');
   ok(/isAdmin \? \(linkedPerson/.test(sd), 'Team comparison opens one salesperson\'s view — admin only');
+}
+
+console.log('\n── one lead-link convention: ?lead=, built only by the helpers (2026-10-01) ──');
+{
+  /* 🔴 The Submissions card navigated to /outreach?leadId= from 2026-08-10. Outreach has never read
+     ?leadId (it read no URL at all until Release A, and then only ?lead=), so clicking a submission
+     never opened the lead. Release A's sweep missed it because the card built its own string.
+     ⚠️ /ai-audit?leadId= is NOT this bug: it is the AI Audit page's own deep link and that page
+     reads 'leadId' (AiAudit.tsx). Only /outreach and /inbox are swept here. */
+  ok(/navigate\(outreachLeadLink\(r\.lead_id!\)\)/.test(read('src/components/dashboard/SubmissionsCard.tsx')), 'a dashboard submission opens /outreach?lead= through outreachLeadLink');
+  ok(/to=\{whatsAppLinkForLead\(p\.lead\.id\)\}/.test(read('src/components/team/TeamOversight.tsx')), 'Team oversight "Open the lead" uses whatsAppLinkForLead');
+  const walk = (d: string): string[] => readdirSync(new URL(`../${d}`, import.meta.url)).flatMap((n) => {
+    const p = `${d}/${n}`; return statSync(new URL(`../${p}`, import.meta.url)).isDirectory() ? walk(p) : /\.tsx?$/.test(n) ? [p] : [];
+  });
+  /* The two helpers own the strings. teamBoard.ts is edge-shared (admin-overview, business-summary)
+     and builds the same /inbox?lead= shape itself, so moving it means redeploying both — left as is. */
+  const OWNERS = new Set(['src/lib/salesLinks.ts', 'src/lib/conversationState.ts', 'src/lib/teamBoard.ts']);
+  const wrong: string[] = []; const handBuilt: string[] = [];
+  for (const f of walk('src')) {
+    const code = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    if (/\/(outreach|inbox)\?(?:[^'"`\s]*&)?leadId=/.test(code)) wrong.push(f);
+    if (!OWNERS.has(f) && /['"`]\/(outreach|inbox)\?lead=/.test(code)) handBuilt.push(f);
+  }
+  ok(wrong.length === 0, `no /outreach or /inbox link uses ?leadId=${wrong.length ? ': ' + wrong.join(', ') : ''}`);
+  ok(handBuilt.length === 0, `no screen hand-builds /outreach?lead= or /inbox?lead=${handBuilt.length ? ': ' + handBuilt.join(', ') : ''}`);
 }
 
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
