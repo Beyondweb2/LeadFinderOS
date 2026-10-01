@@ -112,7 +112,19 @@ const PIPELINE_NOT_CONTACTED: ReadonlySet<string> = new Set(['', 'not_contacted'
 export function pillStatusOf(status: string | null | undefined, stage: (Pick<SalesStateView, 'state'> & { reached?: boolean }) | null | undefined): string | null {
   const s = (status ?? '').trim();
   if ((stage?.state === 'contacted' || stage?.reached === true) && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
+  /* ⛔ "Interested" IS NEVER A PILL (Paul, 2026-10-01). The stored status 'interested' is the pre-star marker;
+     one path still writes it (a no turned yes, leadOutcome — the trigger that lifts the Not interested block
+     keys on it), always together with the star. The pill shows the contact truth instead; the star says
+     Interested. With no stage to read, it is left as it is (an absent reading never becomes a real one). */
+  if (s === 'interested' && stage) return stage.reached ? 'initial_contact' : 'not_contacted';
   return status ?? null;
+}
+
+/** ⛔ THE ONE INTEREST READING FOR EVERY "Interested" FILTER (Paul, 2026-10-01): the gold star
+ *  (`is_potential_work`) — whatever the status. Starred → in; no star → out. Set and cleared only through
+ *  lead_mark_interested (the star buttons and every status menu's "Interested"). */
+export function isStarred(l: { is_potential_work?: boolean | null } | null | undefined): boolean {
+  return l?.is_potential_work === true;
 }
 /** Statuses on which a leftover send stamp means nothing was delivered: a failed send, or a lead put back to
  *  New / Queued after one (a temporary failure re-queues and keeps the stamp — whatsapp-failure.ts). */

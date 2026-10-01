@@ -227,7 +227,7 @@ console.log("\n── 9. one reading on every screen ──");
   ok(!/Call booked ·/.test(strip2) && /<LastContactLine/.test(strip2), "the strip no longer draws the meeting twice; Last contact is the shared line");
   const inbox = read("src/pages/Inbox.tsx");
   ok(inbox.includes('<PipelineStatusSelect value={active.leadStatus} stage={activeSales.view}') && !inbox.includes('<SalesStatePill'), "the Inbox thread header shows the state as its ONE status pill");
-  ok(/statusFilter === 'interested'\s*\n?\s*\? byCampaign\.filter\(\(c\) => c\.isPotentialWork \|\| INTERESTED_STATUSES\.has/.test(inbox), "⛔ the Inbox Interested filter reads the star (it matched a status nothing writes)");
+  ok(/statusFilter === 'interested'\s*\n?\s*\? byCampaign\.filter\(\(c\) => isStarred\(\{ is_potential_work: c\.isPotentialWork \}\)/.test(inbox), "⛔ the Inbox Interested filter reads the star, and only the star (2026-10-01; interested-star.test.ts)");
   const table = read("src/components/OutreachTable.tsx");
   /* 2026-10-01 (Paul: "Status means status. Next Action means what should happen next"): the meeting and the
      call-back prompt moved to the Next Action column (nextUpHint); the last contact is the status tooltip. */

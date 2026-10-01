@@ -29,6 +29,8 @@ export async function markLeadInterested(leadId: string, _isAdmin: boolean, on =
 
 /** Set a pipeline status (the Inbox pill; Focus Mode's "Not interested"). */
 export async function setLeadPipelineStatus(leadId: string, status: string, isAdmin: boolean): Promise<QuickResult> {
+  /* "Interested" is the star, never a status: the one write (lead_mark_interested), for both roles. */
+  if (status === 'interested') return markLeadInterested(leadId, isAdmin, true);
   const { error } = isAdmin
     ? await updateLeadStatus(leadId, status as LeadStatus)
     : await salesPatchLead(leadId, { status }).then((r) => ({ error: r.ok ? null : refusalText(r.error) }));

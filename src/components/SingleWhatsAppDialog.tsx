@@ -94,7 +94,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, initial
     if (lead.whatsapp_status === 'no') {
       toast({
         title: 'Not on WhatsApp',
-        description: `${lead.business_name} was previously marked as not on WhatsApp. Try SMS or Call instead.`,
+        description: `${lead.business_name} was previously marked as not on WhatsApp. Try a call instead.`,
       });
       handleOpenChange(false);
     }
