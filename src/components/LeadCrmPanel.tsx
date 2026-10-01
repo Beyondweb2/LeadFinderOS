@@ -37,7 +37,7 @@ import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesS
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
-import { londonInstant, londonLocalInput } from '@/lib/nextActionView';
+import { londonInstant, londonLocalInput, meetingDayTime } from '@/lib/nextActionView';
 import { SalesStatePill } from '@/components/SalesStatePill';
 import { WorkSection } from '@/components/WorkSection';
 
@@ -288,6 +288,8 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
     const sug = suggestNextAction(channel, outcome);
     let suggestion: string | null = null;
     const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
+    /* The saved task shows at once (the re-read that follows confirms it). */
+    if (saved) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, next_action: res.plan.setNextAction, next_action_date: null, next_action_time: null, call_booked_at: null } as CrmRow : row));
     if (res.plan.askMeeting) { setAskWhen(true); suggestion = 'Add when it is below — it goes on the Next Action “Meeting”'; }
     else if (res.plan.askCallBackDay) {
       /* The Call is already the Next Action (or was): the form opens on it so the day can be added. */
@@ -323,7 +325,10 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
     /* The typed value is UK time, as every screen shows it (londonInstant), whatever this computer's clock. */
     const iso = localValue ? londonInstant(localValue.slice(0, 10), localValue.slice(11, 16)) : null;
     if (!iso) return;
-    const r = afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()), 'Meeting booked · Next Action set');
+    /* Shown at once, like the form's Save (the write is several server calls); a refusal puts the old row back. */
+    const { day, time } = meetingDayTime(iso);
+    const before = showAtOnce({ next_action: 'meeting', next_action_date: day, next_action_time: time, call_booked_at: iso });
+    const r = afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()), 'Meeting booked · Next Action set', before);
     if (r.ok) setAskWhen(false);
   };
 

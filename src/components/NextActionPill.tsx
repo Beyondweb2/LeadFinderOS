@@ -38,7 +38,7 @@ export function NextActionPill({ lead, size = 'md', onClick, className }: { lead
     <Comp type={onClick ? 'button' : undefined} onClick={onClick} title={title} data-testid="next-action-pill"
       className={cn('inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold', TONE[v.bucket], onClick && 'hover:brightness-95', className)}>
       <CalendarClock className="h-3 w-3 shrink-0" />
-      <span className="shrink-0">{v.label}{v.when ? ` · ${v.when}` : ''}{v.time ? ` · ${v.time}` : ''}</span>
+      <span className="shrink-0">{v.label}{v.when ? ` · ${v.when}` : ' · No date set'}{v.time ? ` · ${v.time}` : ''}</span>
       {v.note && <span className="min-w-0 truncate font-normal opacity-90">· {v.note}</span>}
     </Comp>
   );
@@ -79,7 +79,8 @@ export function NextActionBar({ lead, onEdit, className }: { lead: Lead | null |
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-5">
           {v.label}
-          {v.when && <span className={cn('font-medium', v.bucket === 'overdue' ? 'text-red-700 dark:text-red-300' : v.bucket === 'today' ? 'text-amber-700 dark:text-amber-300' : 'text-foreground/80')}> · {v.when}</span>}
+          {v.when ? <span className={cn('font-medium', v.bucket === 'overdue' ? 'text-red-700 dark:text-red-300' : v.bucket === 'today' ? 'text-amber-700 dark:text-amber-300' : 'text-foreground/80')}> · {v.when}</span>
+            : <span className="font-medium text-muted-foreground"> · No date set</span>}
           {v.time && <span className="font-medium text-foreground/80"> · {v.time}</span>}
         </p>
         {note && <p className="line-clamp-2 break-words text-xs text-muted-foreground">{note}</p>}

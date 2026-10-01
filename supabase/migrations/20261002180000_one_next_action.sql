@@ -39,7 +39,9 @@ begin
     if btrim(_time) !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then return jsonb_build_object('ok', false, 'error', 'bad_time'); end if;
     v_time := btrim(_time)::time;
   end if;
-  if v_action = 'none' then v_date := null; end if;
+  /* Done / Clear (2026-10-02, Paul): the note belongs to the action — it goes with it (History keeps it).
+     (Added by the timed-reminders session; kept identical to its 20261002190000 so the live body matches.) */
+  if v_action = 'none' then v_date := null; v_note := null; end if;
   if v_date is null then v_time := null; end if;
   /* The booking is the Meeting's own moment, or nothing. */
   v_at := case when v_action = 'meeting' and v_time is not null then public.next_action_due_at(v_date, v_time) end;
@@ -67,7 +69,7 @@ begin
     insert into public.lead_activity (lead_id, actor_user_id, kind, data)
     values (_lead_id, auth.uid(), 'follow_up_set', jsonb_build_object(
       'next_action', v_action::text, 'date', v_date, 'time', to_char(v_time, 'HH24:MI'), 'note', v_note, 'change', v_change,
-      'from', jsonb_build_object('next_action', v_old.na, 'date', v_old.d, 'time', to_char(v_old.t, 'HH24:MI'))));
+      'from', jsonb_build_object('next_action', v_old.na, 'date', v_old.d, 'time', to_char(v_old.t, 'HH24:MI'), 'note', v_old.n)));
   end if;
   if v_old.cb is distinct from v_at then
     insert into public.lead_activity (lead_id, actor_user_id, kind, data)

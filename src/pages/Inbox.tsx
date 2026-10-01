@@ -1737,6 +1737,23 @@ const Inbox = () => {
               {perms.queueControls && <SelectItem value={HOOK_DUE_FILTER}>Hook follow-up due</SelectItem>}
             </SelectContent>
           </Select>
+          {/* Next Action: when, what, and the order (both roles) — beside the other filters. */}
+          <Select value={naWhen} onValueChange={(v) => setNaWhen(v as NextActionWhen)}>
+            <SelectTrigger className={cn('h-9 w-[150px] text-xs', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
+            <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={naKind} onValueChange={(v) => setNaKind(v as NextActionKind)}>
+            <SelectTrigger className={cn('h-9 w-[140px] text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
+            <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={listSort} onValueChange={(v) => setListSort(v as typeof listSort)}>
+            <SelectTrigger className={cn('h-9 w-[200px] text-xs', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="mr-1 text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent" className="text-xs">Newest message</SelectItem>
+              <SelectItem value="recent_reply" className="text-xs">Most recent reply from them</SelectItem>
+              <SelectItem value="next_action" className="text-xs">Next action: most overdue first</SelectItem>
+            </SelectContent>
+          </Select>
           {isAdmin && (
             <Button
               size="sm"
@@ -1823,30 +1840,14 @@ const Inbox = () => {
               </button>
             )}
           </div>
-          {/* Next Action: when, what, and the order (both roles). One compact row; Reset puts all three back. */}
-          <div className="mb-1.5 grid grid-cols-2 gap-1 px-0.5">
-            <Select value={naWhen} onValueChange={(v) => setNaWhen(v as NextActionWhen)}>
-              <SelectTrigger className={cn('h-8 text-xs', naWhen !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action due"><SelectValue /></SelectTrigger>
-              <SelectContent>{NEXT_ACTION_WHEN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={naKind} onValueChange={(v) => setNaKind(v as NextActionKind)}>
-              <SelectTrigger className={cn('h-8 text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
-              <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={listSort} onValueChange={(v) => setListSort(v as typeof listSort)}>
-              <SelectTrigger className={cn('col-span-2 h-8 text-xs', listSort !== 'recent' && 'border-primary/50 text-primary')} aria-label="Sort conversations"><span className="mr-1 text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent" className="text-xs">Newest message</SelectItem>
-                <SelectItem value="recent_reply" className="text-xs">Most recent reply from them</SelectItem>
-                <SelectItem value="next_action" className="text-xs">Next action: most overdue first</SelectItem>
-              </SelectContent>
-            </Select>
-            {naFiltered && (
-              <button type="button" onClick={() => { setNaWhen('all'); setNaKind('all'); setListSort('recent'); }} className="col-span-2 text-left text-[11px] font-medium text-primary hover:underline">
+          {/* Next Action filters + sort live in the top bar (Paul, 2026-10-01); Reset stays by the list, with its count. */}
+          {naFiltered && (
+            <div className="mb-1.5 px-0.5">
+              <button type="button" onClick={() => { setNaWhen('all'); setNaKind('all'); setListSort('recent'); }} className="text-left text-[11px] font-medium text-primary hover:underline">
                 Reset next action filters · {filteredList.length} shown
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {/* ══ BULK TEMPLATE SEND ═══════════════════════════════════════════════════════════════
               Hidden behind a "Select" toggle rather than always-on: checkboxes on every row change
               what a click on a conversation MEANS, and the common action here is opening a thread,

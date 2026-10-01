@@ -41,7 +41,8 @@ export type WriteResult = RpcResult & { patch?: Record<string, unknown> };
  *  state, a Meeting booked here also records "Meeting booked" in History. */
 export async function saveNextAction(leadId: string, a: NextActionInput, stateLead?: LeadStateInput): Promise<WriteResult> {
   const none = a.nextAction === 'none';
-  const note = (a.note ?? '').trim() || null;
+  /* Done / Clear take the note with the action (the server does the same; History keeps it). */
+  const note = none ? null : ((a.note ?? '').trim() || null);
   const date = none ? null : (a.date || null);
   const time = date ? hhmmOf(a.time) : null;
   const meetingAt = a.nextAction === 'meeting' && date && time ? londonInstant(date, time) : null;

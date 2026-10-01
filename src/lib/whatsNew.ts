@@ -22,7 +22,7 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
-  { id: '2026-10-02-one-next-action', date: '2026-10-02', title: 'One kind of Next Action', audience: 'all',
+  { id: '2026-10-01-one-next-action', date: '2026-10-01', title: 'One kind of Next Action', audience: 'all',
     body: 'A booked meeting and a call-back are now real Next Actions. The Next Action column shows "+ Set" or the action with its green tick, never both.',
     report: {
       added: [
@@ -35,6 +35,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'Completing, clearing or changing a Meeting ends the booking too. History keeps the meeting and says why it ended.',
         'Booked meetings and call-backs show in the Next Action filters (Due today, Tomorrow, Set no date, Meeting / callback).',
         'Three leads that had a call-back logged with nothing planned now show "Call · No date set".',
+        'WhatsApp Inbox: the Next Action filters and Sort moved to the top bar, next to campaigns and statuses.',
       ],
       removed: [
         'The small grey line under "+ Set" ("Meeting · Fri 2 Oct 15:15", "Call back · no day set").',
