@@ -13,8 +13,9 @@ a cheap check right after Find Leads, before any audit spend. No AI. Prefer accu
   site's root, never the Places deep link) → `robots.txt` (for `Sitemap:`) → the declared or standard sitemap
   (+ one child of a sitemap index) → up to 6 sample pages: contact, about, a service page, then other
   shallow pages. **≤ 10 requests per domain**, 3 pages at a time, 6 s per request, 25 s per domain, 1 MB per
-  body, public addresses only, one homepage retry on a timeout / server error. An ordinary browser's
-  identity (3 of 50 sites refused a named bot but served a browser — Paul's call to keep or revert).
+  body, public addresses only, one homepage retry on a timeout / server error. ⛔ An honest crawler
+  name, `LeadFinderOS-SiteCheck/1.0` (Paul, 2026-10-01): never disguised as a person's browser. A site that
+  refuses it reads "Unknown — the site blocked the check" (~3 in 50); accepted.
 - **The verdict** (`src/lib/agencyDetect.ts`, pure): strong signs (a footer credit "Website by / Designed by /
   Built by / SEO by …", with or without a link; a developer note in the page source; designer / developer
   metadata) or two independent supporting signs that name the SAME supplier (a footer link to a web-supplier

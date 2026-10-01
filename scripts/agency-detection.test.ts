@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { classifyAgency, selectSamplePages, AGENCY_DEPRIORITISE_CONFIDENCE, AGENCY_CHECK_VERSION, type AgencyPage } from '../src/lib/agencyDetect.ts';
 import { agencyCheckDomain, agencyCellText, isCheckFresh, isHighConfidenceAgency, passesSiteFilter, siteStateOf } from '../src/lib/agencyCheck.ts';
-import { crawlForAgency, AGENCY_MAX_REQUESTS } from '../supabase/functions/_shared/agency-crawl.ts';
+import { crawlForAgency, AGENCY_CRAWLER_UA, AGENCY_MAX_REQUESTS } from '../supabase/functions/_shared/agency-crawl.ts';
 
 let f = 0;
 const ok = (c: unknown, l: string) => { if (!c) f++; console.log((c ? 'PASS ' : 'FAIL ') + l); };
@@ -103,6 +103,12 @@ const fakeFetch = (routes: Record<string, Route>, calls: string[]) => async (url
   ok(r.stats.requests <= AGENCY_MAX_REQUESTS && calls.length === r.stats.requests, `never more than ${AGENCY_MAX_REQUESTS} requests (${r.stats.requests})`);
   ok(calls.some((u) => u.endsWith('/contact')) && calls.some((u) => u.endsWith('/about-us')) && calls.some((u) => u.endsWith('/services')) && !calls.some((u) => /privacy/.test(u)), 'samples contact, about and a service page; skips privacy');
   ok(r.verdict.classification === 'agency_likely' && r.verdict.confidence >= 90, 'and reaches the verdict');
+}
+{
+  /* ⛔ Paul, 2026-10-01: the crawler names itself; it is never disguised as a person's browser. */
+  const seen: string[] = [];
+  await crawlForAgency(SITE, async (_u: string, init?: RequestInit) => { seen.push(String((init?.headers as Record<string, string>)?.['User-Agent'] ?? '')); return new Response('Forbidden', { status: 403 }); });
+  ok(seen.length > 0 && seen.every((ua) => ua === AGENCY_CRAWLER_UA) && /LeadFinderOS-SiteCheck/.test(AGENCY_CRAWLER_UA) && !/Chrome|Safari|Windows NT/.test(AGENCY_CRAWLER_UA), 'every request carries the honest crawler name, never a browser identity');
 }
 {
   const calls: string[] = [];

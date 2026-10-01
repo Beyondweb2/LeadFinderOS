@@ -19,9 +19,11 @@ export const AGENCY_MAX_PAGES = 6;
 export const AGENCY_PAGE_CONCURRENCY = 3;
 export const AGENCY_FETCH_TIMEOUT_MS = 6_000;
 export const AGENCY_TOTAL_BUDGET_MS = 25_000;
-/* An ordinary browser's identity (measured 2026-10-01: 3 of 50 small-business sites refused a named bot but
-   served the same public page to a browser). A handful of public pages per site, at a visitor's pace. */
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+/* ⛔ AN HONEST CRAWLER NAME (Paul, 2026-10-01): an automated check never presents itself as a person's
+   browser. A site that refuses it is "Unknown — the site blocked the check" (measured: ~3 in 50 refuse a named
+   bot); that small loss is accepted and preferred to disguising the crawler. */
+export const AGENCY_CRAWLER_UA = "Mozilla/5.0 (compatible; LeadFinderOS-SiteCheck/1.0; +https://findable.live)";
+const UA = AGENCY_CRAWLER_UA;
 
 export interface AgencyCrawlStats { requests: number; durationMs: number; pagesFetched: number; sitemap: boolean }
 export interface AgencyCrawlResult { verdict: AgencyVerdict; stats: AgencyCrawlStats; finalUrl: string | null }
