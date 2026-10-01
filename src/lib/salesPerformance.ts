@@ -35,9 +35,12 @@ import { isPaidLead } from './leadPayment.ts';
 import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution.ts';
 import { onboardingLinkStatus } from './onboardingLinkStatus.ts';
 import { NOT_INTERESTED_STATUSES } from './leadState.ts';
+import { holderTimeline } from './holderTimeline.ts';
 
 export interface PerfLead {
   id: string;
+  /** Who holds it now. Absent (an older caller) → past events count for the person whose list this is, as before. */
+  assigned_to_user_id?: string | null;
   business_name: string | null;
   campaign_id: string | null;
   status: string | null;
@@ -170,6 +173,10 @@ export interface FoldInput {
 
 /** Is this row the person's own doing? Empty sender/actor = automation on the owner's behalf. */
 const isMine = (personId: string | null, who: string | null) => personId === null || who === null || who === personId;
+/* ⛔ An event that names no person counts for whoever held the lead WHEN it happened (holderTimeline,
+   2026-10-01), never for whoever holds it now — a moved lead brings its past along only as history. */
+const isMineAt = (personId: string | null, who: string | null, heldBy: (t: number) => string | null, at: number) =>
+  personId === null || (who ?? heldBy(at)) === personId;
 
 function groupBy<T extends { lead_id: string }>(rows: T[]): Map<string, T[]> {
   const m = new Map<string, T[]>();
@@ -198,12 +205,17 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
   for (const lead of input.leads) {
     const msgs = msgsBy.get(lead.id) ?? [];
     const acts = (actBy.get(lead.id) ?? []).slice().sort((x, y) => t(x.created_at) - t(y.created_at));
+    /* Who held it when (holderTimeline). The current holder is known only if the caller read it; if not, an
+       unnamed event counts for the person whose leads these are — exactly the behaviour before 2026-10-01. */
+    const heldBy: (at: number) => string | null = 'assigned_to_user_id' in lead
+      ? holderTimeline(lead.assigned_to_user_id ?? null, acts)
+      : () => personId;
     const contactTimes: number[] = [];
     const channels = new Set<ContactChannel>();
     const respondedChannels = new Set<ContactChannel>();
 
     for (const m of msgs) {
-      if (m.direction === 'outbound' && isRealSend(m.status) && isMine(personId, m.sent_by_user_id)) {
+      if (m.direction === 'outbound' && isRealSend(m.status) && isMineAt(personId, m.sent_by_user_id, heldBy, t(m.created_at))) {
         contactTimes.push(t(m.created_at)); channels.add('whatsapp');
       }
     }
@@ -222,7 +234,7 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
       if (a.kind === 'marked_interested' && a.data?.on !== false) { starred = true; markInterested(a.created_at); }
       if (a.kind === 'stage_changed' && INTERESTED_STATUSES.has(String(a.data?.to ?? ''))) markInterested(a.created_at);
       if (CONTACT_KINDS.has(a.kind) && INTERESTED_OUTCOMES.has(String(a.data?.outcome ?? ''))) markInterested(a.created_at);
-      if (!CONTACT_KINDS.has(a.kind) || !isMine(personId, a.actor_user_id)) continue;
+      if (!CONTACT_KINDS.has(a.kind) || !isMineAt(personId, a.actor_user_id, heldBy, t(a.created_at))) continue;
       const outcome = String(a.data?.outcome ?? '');
       const ch = (a.kind === 'call_outcome' ? 'call' : String(a.data?.channel ?? 'other')) as ContactChannel;
       const channel: ContactChannel = (CONTACT_CHANNELS as readonly string[]).includes(ch) ? ch : 'other';
@@ -269,7 +281,7 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
     const mineCredited: string[] = [];
     for (const c of credits) {
       const send = msgs[c.sendIndex];
-      if (!isMine(personId, send.sent_by_user_id)) continue;
+      if (!isMineAt(personId, send.sent_by_user_id, heldBy, t(send.created_at))) continue;
       if (sinceMs !== null && t(send.created_at) < sinceMs) continue;
       mineCredited.push(c.template);
       const row = rowFor(templateAgg, c.template);
@@ -278,7 +290,7 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
     }
     creditedTemplate.set(lead.id, mineCredited);
     for (const m of msgs) {
-      if (m.direction !== 'outbound' || !m.template_name || !isRealSend(m.status) || !isMine(personId, m.sent_by_user_id)) continue;
+      if (m.direction !== 'outbound' || !m.template_name || !isRealSend(m.status) || !isMineAt(personId, m.sent_by_user_id, heldBy, t(m.created_at))) continue;
       if (sinceMs !== null && t(m.created_at) < sinceMs) continue;
       const row = rowFor(templateAgg, m.template_name);
       row.sends += 1; row._leads.add(lead.id);

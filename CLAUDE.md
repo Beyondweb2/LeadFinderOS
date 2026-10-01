@@ -802,6 +802,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   for a lead — it shows the lead's Next Action; completing it touches nothing on the lead.
 - A moved lead cancels the previous holder's open lead tasks (trigger) — any new assignment path gets
   this for free; never delete a task row.
+- ⛔ **Moving a lead never moves its history.** An event naming no person is credited to whoever held the lead
+  THEN (`holderTimeline.ts`), never to the current holder. Never rewrite `added_by_user_id` / `lead_activity`
+  actors to "fix" attribution (Paul, 2026-10-01: keep the historical records).
 
 **Facts about a client**
 - **One ranked resolver, `src/lib/clientFacts.ts`:** onboarding > client record > baseline >
