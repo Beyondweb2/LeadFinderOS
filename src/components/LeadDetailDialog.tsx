@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, Mic } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, Mic, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
@@ -13,7 +13,6 @@ import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
-import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,9 +37,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { parseAmountPaid, isPaidLead } from '@/lib/leadPayment';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
-import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
+import { pipelineStatusLabel } from '@/components/PipelineStatusBadge';
+import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
+import { headerStateShown, markPaidIsMain } from '@/lib/workspaceHeader';
 import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
 import { OnboardingLinkCard } from '@/components/OnboardingLinkCard';
 import { NextActionPill } from '@/components/NextActionPill';
@@ -54,7 +55,6 @@ import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
 import { Star } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
-import { maySetStatus } from '@/lib/access';
 import { SalesStatePill } from '@/components/SalesStatePill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { pillStatusOf } from '@/lib/leadState';
@@ -145,6 +145,8 @@ interface LeadDetailDialogProps {
   context?: 'outreach' | 'inbox';
   /** Which workspace tab opens first. Default: Work (a paying client opens on Client for the admin). */
   initialTab?: WorkspaceTab;
+  /** The person came to log a contact (Outreach's Call button): the Work tab opens with Log a contact expanded. */
+  openLogContact?: boolean;
 }
 
 export type WorkspaceTab = 'work' | 'scripts' | 'prospect' | 'history' | 'client';
@@ -166,6 +168,7 @@ export function LeadDetailDialog({
   onAddCustomStatus,
   context = 'outreach',
   initialTab,
+  openLogContact = false,
 }: LeadDetailDialogProps) {
   const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
   if (!lead) return null;
@@ -193,6 +196,7 @@ export function LeadDetailDialog({
       <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0">
         <LeadDetailBody
           initialTab={initialTab}
+          openLogContact={openLogContact}
           key={fullLead.id}
           lead={fullLead}
           onStatusChange={onStatusChange}
@@ -235,6 +239,7 @@ function LeadDetailBody({
   context = 'outreach',
   onClose,
   initialTab,
+  openLogContact = false,
 }: LeadDetailBodyProps) {
   const permsForTab = useLeadPermissions();
   /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Work. */
@@ -242,6 +247,11 @@ function LeadDetailBody({
   const [scriptTab, setScriptTab] = useState<'call' | 'voice'>('call');
   const bodyRef = useRef<HTMLDivElement>(null);
   const openScript = (which: 'call' | 'voice') => { setScriptTab(which); setTab('scripts'); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
+  const [moreTools, setMoreTools] = useState(false);
+  /* The header bar's Edit opens the ONE Next Action editor on the Work tab. A request the Work panel takes and
+     clears, so it opens once per tap — not again every time the tab is revisited. */
+  const [editNextRequested, setEditNextRequested] = useState(false);
+  const editNextAction = () => { setTab('work'); setEditNextRequested(true); };
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -395,56 +405,59 @@ function LeadDetailBody({
           {/* Lead → its WhatsApp conversation (the one Inbox deep link). Not shown inside the Inbox,
               where the conversation is already open beside this panel. */}
           {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
-          <QuickCloseButton leadId={lead.id} />
+          <div className="flex shrink-0 items-center gap-1.5">
+          <QuickCloseButton leadId={lead.id} variant="quiet" />
           {context !== 'inbox' && lead.phone && (
             <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-500/20 dark:text-blue-300" aria-label={`Open ${lead.business_name} on WhatsApp`}>
               <Phone className="h-3.5 w-3.5" />WhatsApp
             </Link>
           )}
+          </div>
         </div>
 
         <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
 
-        {/* ── WHERE THIS LEAD STANDS (UI cleanup pass, 2026-09-29) ─────────────────────────────────────
-            Line 1: the SALES STATE (SalesStatePill — the one reading, src/lib/leadState.ts: New /
-            Contacted / Replied / Interested / Meeting booked · time / Won / Client / Not interested /
-            Wrong number), then the WhatsApp pipeline status it is read from (the SAME list as the
-            Outreach row — the queue's own stage: Queued, No WhatsApp, 2nd attempt…) and the channel.
-            The separate Interested ⭐ chip is gone: the state says Interested.
-            The state strip: owner, next action, call booked, agency — and the last contact logged, so
-            what was recorded on the Work tab is visible on every tab and after reopening.
-            Last line: how to reach them, and the tools (scripts, crawl, welcome pack, site check).
+        {/* ── WHERE THIS LEAD STANDS (declutter pass, 2026-10-01; first built in the UI cleanup pass) ────────
+            Three concepts, kept apart, each drawn ONCE (src/lib/workspaceHeader.ts):
+              STATUS      — the ONE solid status pill, the same control as the Outreach row and the Inbox
+                            (PipelineStatusSelect → pillStatusOf: a reached lead reads Contacted, an attempt
+                            does not). The sales-state pill joins it only when it adds a fact the pill, the
+                            star and the chips do not (a meeting that is NOT the Next Action, Won, Client,
+                            Not interested by a logged call) — never "Meeting booked" above the same meeting
+                            in the Next Action bar.
+              NEXT ACTION — the bar: the display of the one stored next action; Edit opens the Work tab's
+                            editor. The owner sits with the status; the last contact is a quiet line.
+              TOOLS       — how to reach them and the everyday tools; the less frequent ones (crawl, the
+                            welcome pack before they pay, the site check, the channel) under More tools.
             ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {salesState.view && <SalesStatePill view={salesState.view} />}
-          <Select value={PIPELINE_STATUS_OPTIONS.some((o) => o.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="WhatsApp pipeline status" title="WhatsApp pipeline status">
-              {/* The raw pipeline badge — except the pre-star 'interested', which is never a pill (pillStatusOf). */}
-              <PipelineStatusBadge status={(lead.status === 'interested' ? pillStatusOf(lead.status, salesState.view) : lead.status) as PipelineStatus} />
-            </SelectTrigger>
-            <SelectContent className="pointer-events-auto">
-              {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value} disabled={!maySetStatus(perms, opt.value)}>{opt.label}</SelectItem>))}
-            </SelectContent>
-          </Select>
-          {/* Contact method — same component + dropdown as the Outreach table */}
-          {perms.editLeadRecord ? (
-          <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" aria-label="Channel">
-              <ContactMethodBadge method={lead.contact_method as ContactMethod} />
-            </SelectTrigger>
-            <SelectContent className="pointer-events-auto">
-              {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-            </SelectContent>
-          </Select>
-          ) : lead.contact_method ? <ContactMethodBadge method={lead.contact_method as ContactMethod} /> : null}
-        </div>
+        {(() => {
+          const statusSelect = (
+            <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+              triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
+          );
+          const extraState = salesState.view && headerStateShown(salesState.view, pipelineStatusLabel(pillStatusOf(lead.status, salesState.view)), salesState.row)
+            ? <SalesStatePill view={salesState.view} /> : null;
+          if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{statusSelect}<NextActionPill lead={lead} /></div>;
+          return <LeadStateStrip leadId={lead.id} status={<span className="inline-flex flex-wrap items-center gap-1.5">{statusSelect}{extraState}</span>} onEditNext={editNextAction} />;
+        })()}
 
-        {isDemoLead(lead.id)
-          ? <div className="mt-2.5"><NextActionPill lead={lead} /></div>
-          : <LeadStateStrip leadId={lead.id} onOpenWork={() => { setTab('work'); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} />}
-
-        {/* Reach them + the tools. Plain links, not pills: the pills above are state, these are actions. */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs">
+        {/* Reach them + the everyday tools. Plain links, not pills: the pills above are state, these are actions. */}
+        {(() => {
+          /* The welcome pack is client delivery: one tap once they have paid, under More tools before then. */
+          const welcomePack = perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />;
+          const channel = perms.editLeadRecord ? (
+            <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
+              <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Preferred channel">
+                <span className="text-muted-foreground">Preferred channel:</span>
+                <span className="font-medium">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? 'not set'}</span>
+              </SelectTrigger>
+              <SelectContent className="pointer-events-auto">
+                {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          ) : lead.contact_method ? <span className="text-muted-foreground">Preferred channel: <span className="font-medium text-foreground">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? lead.contact_method}</span></span> : null;
+          return (<>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs" data-testid="workspace-tools">
           {lead.phone && (
             <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline dark:text-emerald-300" title="Call this number">
               <Phone className="h-3.5 w-3.5" />{lead.phone}
@@ -471,14 +484,29 @@ function LeadDetailBody({
               <Mic className="h-3.5 w-3.5" />Voice note
             </button>
           )}
-          {/* Free crawlability check — both roles: a salesperson crawls a lead they work (crawl-check
-              checks it server-side). Fetches only (£0), never the Apify SEO scanner. */}
-          {perms.crawlOwnLead && !isDemoLead(lead.id) && <LeadDetailCrawlButton lead={lead} />}
-          {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report. */}
-          {perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
-          {/* Site check on engagement — only for a replied-or-beyond lead whose audit skipped the SEO scan. */}
-          {perms.clientDelivery && !isDemoLead(lead.id) && <LeadSiteCheckButton lead={lead} />}
+          {isPaidLead(lead) && welcomePack}
+          {!isDemoLead(lead.id) && (
+            <button type="button" onClick={() => setMoreTools((v) => !v)} aria-expanded={moreTools} data-testid="more-tools-toggle"
+              className="inline-flex items-center gap-0.5 font-medium text-muted-foreground hover:text-foreground">
+              More tools<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', moreTools && 'rotate-180')} />
+            </button>
+          )}
         </div>
+        {/* Revealed in place (not a menu), so a crawl or a welcome pack's own dialog stays mounted while it works. */}
+        {moreTools && !isDemoLead(lead.id) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-2 text-xs" data-testid="more-tools">
+            {/* Free crawlability check — both roles: a salesperson crawls a lead they work (crawl-check
+                checks it server-side). Fetches only (£0), never the Apify SEO scanner. */}
+            {perms.crawlOwnLead && <LeadDetailCrawlButton lead={lead} />}
+            {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report. */}
+            {!isPaidLead(lead) && welcomePack}
+            {/* Site check on engagement — only for a replied-or-beyond lead whose audit skipped the SEO scan. */}
+            {perms.clientDelivery && <LeadSiteCheckButton lead={lead} />}
+            {channel}
+          </div>
+        )}
+          </>);
+        })()}
       </div>
 
       {/* ══ THE PROSPECT WORKSPACE (2026-09-28, Paul: "open one prospect and do the job"). ONE dialog
@@ -500,7 +528,7 @@ function LeadDetailBody({
             {/* ⛔ THE AUDIT IS WHERE THE CALL IS WORKED (2026-10-01): score, who AI names instead, the report,
                 re-run and previous checks — the SAME card and the same create-ai-audit hook path as the Inbox. */}
             {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact} editNextRequested={editNextRequested} onEditNextHandled={() => setEditNextRequested(false)} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
@@ -725,13 +753,25 @@ function LeadDetailBody({
       {/* Footer: Mark Paid is my revenue/convert action and shows ONLY while UNPAID — once
           amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from
           the detail view (2026-08-18); a lost lead is set via the status control. When paid there
-          is nothing to show, so the footer bar is absent rather than empty. */}
+          is nothing to show, so the footer bar is absent rather than empty.
+          ⛔ CONTEXTUAL (declutter pass, 2026-10-01): the big green button only at a payment stage — a price
+          given, the deal agreed, delivery running with no amount recorded (workspaceHeader.markPaidIsMain).
+          Before that the same action is a small one in a thin footer: still one tap, never the loudest thing
+          on a lead that is merely New, Contacted or has a meeting booked. Same handler, same writes. */}
       {perms.clientDelivery && !isPaidLead(lead) && (
-        <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3">
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
-            <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
-          </Button>
-        </div>
+        markPaidIsMain(lead.status, salesState.view) ? (
+          <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3" data-testid="mark-paid-main">
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
+              <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
+            </Button>
+          </div>
+        ) : (
+          <div className="shrink-0 flex items-center justify-end border-t border-border/40 px-4 py-1" data-testid="mark-paid-quiet">
+            <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300" onClick={handleMarkPaid} title="Record that they have paid">
+              <Check className="h-3 w-3" /> Mark paid
+            </Button>
+          </div>
+        )
       )}
 
       {/* Payment Received popup */}

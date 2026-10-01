@@ -304,11 +304,13 @@ function FragmentRow({ k, v }: { k: string; v: string | null | undefined }) {
 }
 
 /** The button that opens it (the lead workspace header, Focus Mode). */
-export function QuickCloseButton({ leadId, className, size = 'sm' }: { leadId: string; className?: string; size?: 'sm' | 'lg' }) {
+/** variant 'quiet' (the lead workspace header, 2026-10-01): an outline shortcut that does not compete with
+ *  the Next Action — the same dialog, the same payment path. */
+export function QuickCloseButton({ leadId, className, size = 'sm', variant = 'solid' }: { leadId: string; className?: string; size?: 'sm' | 'lg'; variant?: 'solid' | 'quiet' }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-emerald-600 font-semibold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
+      <button type="button" onClick={() => setOpen(true)} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
         <Zap className="h-3.5 w-3.5" />Quick Close
       </button>
       {open && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}

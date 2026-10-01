@@ -805,6 +805,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.
+- ⛔ **The lead workspace header draws each fact once** (`src/lib/workspaceHeader.ts`): status pill +
+  owner, then the Next Action BAR (display; Edit opens the Work tab's ONE `NextActionForm`), then a quiet
+  last contact. A sales-state pill joins the status only through `headerStateShown` — never "Meeting
+  booked" above the same meeting in the bar. Log a contact is collapsed by default. `docs/workspace-declutter.md`.
 - **`useOutreach` is the one hook not on React Query** — its own piece of work; do not tack it on.
 - ⛔ **Outreach loads progressively** (newest 1,000 first, `src/lib/outreachLoad.ts`): anything that
   needs the WHOLE list gates on `datasetComplete(leadLoad)` (positive match on `'complete'`) — a new

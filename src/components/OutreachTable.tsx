@@ -444,6 +444,8 @@ export function OutreachTable({
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   /** Which workspace tab the popup opens on (the call icon opens Work, where the call is logged). */
   const [detailTab, setDetailTab] = useState<WorkspaceTab | undefined>(undefined);
+  /* Opened by the Call button: the workspace shows Log a contact expanded (it is collapsed otherwise). */
+  const [detailLogContact, setDetailLogContact] = useState(false);
   /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
      2026-08-18). `detailLead` was set once on row click and never tracked `leads`, so an edit made
      inside the dialog — a delivery-checklist tick especially — neither showed nor ACCUMULATED:
@@ -747,6 +749,7 @@ export function OutreachTable({
        number nobody spoke to read "Contacted". Now the dialler opens (the tel: link) and the lead's workspace
        opens on Work, where the person logs what actually happened (lead_log_contact) and sets the Next Action. */
     setDetailTab('work');
+    setDetailLogContact(true);
     setDetailLead(lead);
   }, [onContactMethodChange]);
 
@@ -3357,9 +3360,10 @@ export function OutreachTable({
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
       <LeadDetailDialog
         open={!!detailLead}
-        onOpenChange={(open) => { if (!open) { setDetailLead(null); setDetailTab(undefined); onDetailClosed?.(); } }}
+        onOpenChange={(open) => { if (!open) { setDetailLead(null); setDetailTab(undefined); setDetailLogContact(false); onDetailClosed?.(); } }}
         lead={detailLead}
         initialTab={detailTab}
+        openLogContact={detailLogContact}
         onStatusChange={onStatusChange}
         onNextActionChange={onNextActionChange}
         onUpdateLead={onUpdateLead ?? (() => Promise.resolve(null))}
