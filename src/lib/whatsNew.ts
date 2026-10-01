@@ -22,6 +22,27 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-workspace-declutter', date: '2026-10-02', title: 'A calmer lead workspace', audience: 'all',
+    body: 'The lead popup shows each thing once: the status, who owns it, the Next Action, the last contact. Everything else is one tap away.',
+    report: {
+      added: [
+        'A Next Action bar at the top of the popup: what, when and the note, with Edit (or "Set one" when there is none). Red when overdue, amber when due today.',
+        '"More tools" in the tools row: Crawl site, the welcome pack (before they have paid) and the preferred channel open in place.',
+      ],
+      changed: [
+        'A booked meeting that is also the Next Action shows once, in the Next Action bar, with its time. The separate "Meeting booked" pill only shows when the meeting is not the Next Action.',
+        'The status pill is the same one as the Outreach row and the WhatsApp Inbox. Interested is still the star.',
+        'Log a contact is folded to one line until you open it. It opens by itself when you press Call on Outreach, and folds again after you log an outcome; what was recorded stays visible under it.',
+        'The Next Action box on the Work tab opens only when you edit it (or after an outcome suggests one), and closes after Save. The bar at the top is the same Next Action.',
+        'The AI visibility check takes one line until it has been run.',
+        'The channel ("Contact" / Call / WhatsApp…) is no longer a pill beside the status. It is "Preferred channel" under More tools.',
+        'Quick Close is an outline button, so it does not compete with the next step. It works the same.',
+        'Admin: the big green Mark Paid button only shows when a price has been given, the deal is agreed or delivery is running. Otherwise it is a small "Mark paid" at the bottom. It does exactly the same.',
+        'The internal note box is one line until you type.',
+      ],
+      removed: ['Nothing that does anything. Only repeated pills and always-open panels.'],
+      effect: 'Open a lead and see in a second what state it is in, what to do next and how to do it, with every tool still there.',
+    } },
   { id: '2026-10-02-next-action-one-flow', date: '2026-10-02', title: 'One Next Action form everywhere', audience: 'all',
     body: 'The Next Action column now opens the same form as the lead workspace, with the note, the day and a meeting time.',
     report: {

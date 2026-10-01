@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, CalendarClock, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
+import { BriefcaseBusiness, CalendarClock, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, Minus, PhoneCall, Plus, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { leadPermissions } from '@/lib/access';
 import { supabase } from '@/integrations/supabase/client';
@@ -238,7 +238,9 @@ type FollowOn = (outcome: string, channel: string, logged: boolean) => Promise<O
  *  Save stays off until a day is picked. `why` names the outcome that suggested it. */
 type FollowUpPreset = NextActionPreset;
 
-export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved?: () => void }) {
+/** logContactOpen: the person came to log a contact (Outreach's Call) — Log a contact starts expanded.
+ *  editNextRequested: the header's Next Action bar asked for the editor; taken, then cleared (onEditNextHandled). */
+export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editNextRequested = false, onEditNextHandled }: { leadId: string; onRemoved?: () => void; logContactOpen?: boolean; editNextRequested?: boolean; onEditNextHandled?: () => void }) {
   const crm = useLeadCrmRow(leadId);
   const activity = useLeadActivity(leadId);
   const wrong = useWrongNumber(leadId);
@@ -250,6 +252,17 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
   const [askWhen, setAskWhen] = useState(false);
   const { toast } = useToast();
   const nextRef = useRef<HTMLElement>(null);
+  /* ⛔ THE EDITOR OPENS ON DEMAND (declutter pass, 2026-10-01): the header bar is the display of the Next Action;
+     here the ONE editor (NextActionForm) opens when asked — Edit / Set one on the bar or here, or an outcome's
+     suggestion (preset) — and closes after a Save. Never a second, independently editable copy. */
+  const [editingNext, setEditingNext] = useState(false);
+  useEffect(() => {
+    if (!editNextRequested) return;
+    setEditingNext(true);
+    onEditNextHandled?.();
+    requestAnimationFrame(() => nextRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editNextRequested]);
   if (crm.isLoading) return <section className={CARD}><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></section>;
   if (crm.isError) return <section className={cn(CARD, 'text-xs text-destructive')}>Could not load this lead's CRM details. Close and open it again.</section>;
   if (!lead) return null; // not readable by this caller → nothing to show (the server said so)
@@ -307,7 +320,7 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
   const agency = lead.website_control === 'agency_controls';
   return (
     <div className="space-y-3">
-      <LogContact save={save} followOn={followOn} />
+      <LogContact save={save} followOn={followOn} defaultOpen={logContactOpen} />
 
       {askWhen && (
         <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
@@ -334,13 +347,25 @@ export function LeadWorkPanel({ leadId, onRemoved }: { leadId: string; onRemoved
         </button>
       </section>
 
-      <section className={cn(CARD, preset && 'border-amber-500/50')} ref={nextRef}>
-        <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></div>
-        <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${lead.call_booked_at}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
-          onSave={async (a) => {
-            const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note });
-            const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.meetingAt ? 'Meeting booked · Next Action set' : 'Next action saved', before);
-            if (r.ok) setPreset(null); return r; }} />
+      <section className={cn(CARD, preset && 'border-amber-500/50', !(editingNext || preset) && 'py-2.5')} ref={nextRef} data-testid="next-action-section">
+        {editingNext || preset ? (<>
+          <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span>
+            {!preset && <button type="button" className="ml-auto text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditingNext(false)} data-testid="next-action-close">Close</button>}
+          </div>
+          <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_note}|${lead.call_booked_at}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
+            onSave={async (a) => {
+              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_note: a.note });
+              const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.meetingAt ? 'Meeting booked · Next Action set' : 'Next action saved', before);
+              if (r.ok) { setPreset(null); setEditingNext(false); } return r; }} />
+        </>) : (
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span>
+              <span className="text-[11px] text-muted-foreground">· shown at the top</span></span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNext(true)} data-testid="next-action-open">
+              {lead.next_action && lead.next_action !== 'none' ? 'Edit' : 'Set one'}
+            </Button>
+          </div>
+        )}
       </section>
 
       <LeadCampaign lead={lead} save={save} />
@@ -468,8 +493,13 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
  *  These apply the same plan as the logged outcomes, without a second record of the messages. */
 const WHATSAPP_RESULT_OUTCOMES = ['interested', 'meeting_booked', 'call_back', 'not_interested'] as const;
 
-/** One tap per outcome. The channel defaults to Call; the note is optional and saved with it. */
-function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
+/** One tap per outcome. The channel defaults to Call; the note is optional and saved with it.
+ *  ⛔ COLLAPSED BY DEFAULT (declutter pass, 2026-10-01): one line until the person opens it — or it opens itself
+ *  when they came to log a call (defaultOpen). Every channel and every outcome is still inside. After a
+ *  successful log it closes again; the result line (what was recorded, the state, the suggested Next Action)
+ *  stays visible under the closed header. */
+function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; followOn: FollowOn; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -484,7 +514,8 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
         setNote('');
       }
       const res = await followOn(outcome, channel, logged);
-      setResult({ ...res, contact: `${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}` });
+      setOpen(false);
+      setResult({ ...res, contact:`${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}` });
     } finally { setBusy(null); }
   };
   const outcomeButton = (o: { value: string; label: string }, logged: boolean) => (
@@ -506,8 +537,13 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
      Instagram (LinkedIn first). Keeps the row at five pills. */
   const inSocial = !!current?.social;
   return (
-    <section className={cn(CARD, 'border-primary/30')} data-testid="log-contact">
-      <div className="mb-2 flex items-center gap-1.5"><PhoneCall className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Log a contact</span></div>
+    <section className={cn(CARD, open ? 'border-primary/30' : 'py-2.5')} data-testid="log-contact" data-open={open ? 'true' : 'false'}>
+      <button type="button" className={cn('flex w-full items-center gap-1.5 text-left', open && 'mb-2')} aria-expanded={open} onClick={() => setOpen((o) => !o)} data-testid="log-contact-toggle">
+        <PhoneCall className="h-3.5 w-3.5 shrink-0 text-primary" /><span className={LABEL}>Log a contact</span>
+        {!open && <span className="hidden truncate text-[11px] text-muted-foreground sm:inline">· call, WhatsApp, email, in person, social</span>}
+        <span className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-hidden>{open ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</span>
+      </button>
+      {open && (<>
       <div className="mb-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you contacted them">
         {primary.map((c) => (
           <button key={c.value} type="button" role="radio" aria-checked={channel === c.value} className={chip(channel === c.value)} onClick={() => setChannel(c.value)}>{c.short}</button>
@@ -545,6 +581,7 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
         {offeredOutcomes(outcomesFor(channel)).map((o) => outcomeButton(o, true))}
       </div>
       </>)}
+      </>)}
       {/* ⛔ THE VISIBLE RESULT (2026-09-30): what was recorded, the state it left the lead in (and the
           change, when there was one), what else happened, and the Next Action waiting to be saved. */}
       {result && (
@@ -568,10 +605,11 @@ function LogContact({ save, followOn }: { save: SaveFn; followOn: FollowOn }) {
 function InternalNote({ save }: { save: SaveFn }) {
   const [note, setNote] = useState('');
   return (
-    <section className={cn(CARD, 'border-amber-500/40')}>
+    /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
+    <section className={CARD}>
       <div className="mb-2 flex items-center gap-1.5"><Lock className="h-3 w-3" /><span className={LABEL}>Internal note</span><span className="text-[10px] uppercase tracking-wide text-amber-500">never sent</span></div>
-      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="resize-none text-xs" placeholder="Spoke to owner, agency runs the site, call again next month…" />
-      <div className="mt-2 flex justify-end">
+      <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note ? 2 : 1} className="min-h-[36px] resize-none text-xs" placeholder="Spoke to owner, agency runs the site, call again next month…" />
+      <div className={cn('mt-2 flex justify-end', !note.trim() && 'hidden')}>
         <Button size="sm" className="h-8 text-xs" disabled={!note.trim()} onClick={async () => {
           const r = await save('lead_add_note', { _body: note }, 'Note added');
           if (r.ok) setNote('');
@@ -768,9 +806,13 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
         </section>
       )}
       {!proposed && !details && !hookQ.isLoading && !hookQ.isError && !hook?.audit && (
-        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2')}>
-          <div className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">AI visibility check</span> — not run for this lead yet. It asks ChatGPT and Google AI the questions a customer would, and shows who they name instead.
+        /* Compact until there is something to show (declutter pass, 2026-10-01): the name, "Not run yet", the one
+           button; what it does is on hover. The proposed questions, the run, the result and history are unchanged. */
+        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="hook-not-run"
+          title="Asks ChatGPT and Google AI the questions a customer would, and shows who they name instead. Nothing is sent to the lead.">
+          <div className="flex items-center gap-1.5 text-xs">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /><span className="font-medium text-foreground">AI visibility check</span>
+            <span className="text-muted-foreground">· Not run yet</span>
           </div>
           <Button size="sm" className="h-8 gap-1 text-xs" disabled={hookBusy} onClick={() => void propose()} data-testid="hook-propose">
             {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Propose questions

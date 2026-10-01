@@ -42,7 +42,7 @@ console.log("── the Next Action in words ──");
 
 console.log("\n── one pill, every screen ──");
 {
-  ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /<NextActionPill lead=\{row\} onClick=\{onOpenWork\} \/>/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, from the Work tab's own row; tap → Work");
+  ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /<NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, from the Work tab's own row; Edit → the Work tab's editor (a bar since the declutter pass, 2026-10-01)");
   const inbox = read("src/pages/Inbox.tsx");
   ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
   ok(/<NextActionPill lead=\{activeLead\} onClick=\{\(\) => setDetailLeadId\(active\.leadId\)\} \/>/.test(inbox), "Inbox header: the pill, tap → the prospect");

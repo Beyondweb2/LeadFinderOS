@@ -98,7 +98,7 @@ ok(/\[functions\.quick-close\]\nverify_jwt = true/.test(read("supabase/config.to
 
 console.log("\n── where it lives, and the phone ──");
 const dlg = read("src/components/QuickCloseDialog.tsx");
-ok(/<QuickCloseButton leadId=\{lead\.id\} \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /<QuickCloseButton leadId=\{lead\.id\} size="lg" \/>/.test(read("src/pages/Focus.tsx")), "in the lead workspace (Outreach + WhatsApp Inbox) and Focus Mode");
+ok(/<QuickCloseButton leadId=\{lead\.id\}( variant="quiet")? \/>/.test(read("src/components/LeadDetailDialog.tsx")) && /<QuickCloseButton leadId=\{lead\.id\} size="lg" \/>/.test(read("src/pages/Focus.tsx")), "in the lead workspace (Outreach + WhatsApp Inbox) and Focus Mode");
 ok(/min-h-\[56px\]/.test(dlg) && /h-\[100dvh\]/.test(dlg) && /answers\.decision_maker === 'no' \? null/.test(dlg), "phone: full screen, one question at a time, big targets; a 'No' ends the questions");
 ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(dlg), "every tap is saved (a dropped call resumes)");
 ok(/disabled=\{!v\.windowOpen/.test(dlg) && /send-whatsapp-message/.test(dlg), "WhatsApp send uses the canonical sender and respects the 24-hour window");

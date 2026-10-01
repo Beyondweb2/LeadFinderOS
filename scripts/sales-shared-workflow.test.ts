@@ -129,7 +129,7 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(/<HookAuditDialog lead=\{auditLead\}/.test(table) && /setAuditLead\(lead\)/.test(table), "every role's audit button opens the Hook Audit popup (2026-09-28; the AI Audit page is the admin's advanced link inside it)");
   ok(/lead\.assigned_to_user_id && lead\.assigned_to_user_id !== user\?\.id/.test(table), "the row shows who owns a lead that is not yours");
   const dialog = read("src/components/LeadDetailDialog.tsx");
-  ok(/<LeadWorkPanel leadId=\{lead\.id\}( onRemoved=\{onClose\})?( onOutcome=\{handleOutcome\})? \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\}( older=\{activities\})? \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
+  ok(/<LeadWorkPanel leadId=\{lead\.id\}( onRemoved=\{onClose\})?( onOutcome=\{handleOutcome\})?( logContactOpen=\{openLogContact\} editNextRequested=\{editNextRequested\} onEditNextHandled=\{[^}]*\})? \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\}( older=\{activities\})? \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
   for (const g of ["perms.clientDelivery && !isDemoLead(lead.id) && (\n          <LeadDeliveryCockpit", "{perms.clientDelivery && (\n            <section className={CARD}>\n              <SectionLabel icon={PoundSterling}", "{perms.privateNote && (", "{perms.clientDelivery && !isPaidLead(lead) && ("]) {
     ok(dialog.includes(g), `the detail withholds: ${g.split("\n")[0].slice(0, 60)}`);
   }
