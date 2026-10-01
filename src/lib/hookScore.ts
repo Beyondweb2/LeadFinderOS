@@ -34,6 +34,7 @@
 import { cellNamed, type NamedCell, type NamedContext } from './namedSignal.ts';
 import { articleTrade } from './templateVars.ts';
 import { RIVALS_REQUIRED } from './rivalHook.ts';
+import type { QuestionBasis } from './questionBasis.ts';
 
 /** The engines a hook asks, in DISPLAY order. Each queue row lists these, so every question
  *  runs on both. */
@@ -73,6 +74,9 @@ export interface HookStateV2 {
   /** Set once, by the queue, when a complete 6/6 took the lead out of active outreach. It records
    *  the reason and never deletes anything. */
   auto_not_interested?: { reason: string; lead_id: string; at: string } | null;
+  /** What the questions were written around (2026-10-01): the services verified on the business's own
+   *  website, or the trade + town fallback and why. Absent on hooks created before it existed. */
+  basis?: QuestionBasis;
 }
 
 export function isHookStateV2(v: unknown): v is HookStateV2 {

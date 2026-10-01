@@ -26,7 +26,7 @@ console.log('── 1. the column: "+ Set" or the saved action and its ✓ — n
   ok(/<\/TableCell>/.test(cell.slice(cell.indexOf('<NextActionEditor'))), 'the Next Action cell holds the editor alone');
   const editor = read('src/components/NextActionEditor.tsx');
   ok(/\{v \? \(/.test(editor) && /<Plus className="h-3 w-3" \/>Set/.test(editor), 'the trigger is the action (v) or "+ Set" — one or the other');
-  ok(/\{v && \(\n\s+<Button[^>]*text-green-500/.test(editor) && /title="Complete next action" aria-label="Complete next action"/.test(editor), 'every saved action has the green ✓ "Complete next action"');
+  ok(/\{v && \(\n\s+<Button[^>]*text-green-500/.test(editor) && !/variant === 'cell' &&/.test(editor) && /title="Complete next action" aria-label="Complete next action"/.test(editor), 'every saved action has the green ✓ "Complete next action"');
   ok(/done: true/.test(editor) && /saveNextAction\(lead\.id, a, lead\)/.test(editor), '✓ completes through the one write (History: completed)');
 }
 

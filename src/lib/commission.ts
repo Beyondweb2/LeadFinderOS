@@ -11,7 +11,10 @@
      rule change never rewrites history. A row with no stamped rate (earned before any tier rule) keeps
      the flat COMMISSION_INITIAL_RATE it was earned under; a row stamped under the weekly rule keeps its
      stamped rate. There is no bonus on top of this.
-   - 20% of each of the NEXT THREE qualifying recurring payments actually received (unchanged).
+   - 20% of each of the NEXT SIX qualifying recurring payments actually received (Paul, 2026-10-01; was
+     three) — payments 2–7. ⛔ NOT RETROSPECTIVE: monthly payments 4–6 earn only when they are received on or
+     after COMMISSION_RECURRING_SIX_FROM (London); one received earlier keeps the 0% it earned under the
+     three-payment rule. (Live on 2026-10-01: no recurring payment had ever been received.)
      Always a percentage of the REAL amount — a £29.99 monthly earns £6.00, a £99 monthly £19.80.
      Never a hard-coded figure.
    - EARNED the moment the payment is received (NOT held for the refund window).
@@ -33,7 +36,16 @@
  *  ledger row with no stamped rate. */
 export const COMMISSION_INITIAL_RATE = 0.30;
 export const COMMISSION_RECURRING_RATE = 0.20;
-export const COMMISSION_RECURRING_COUNT = 3;
+export const COMMISSION_RECURRING_COUNT = 6;
+/** Under the old rule only the first this-many monthly payments earned. */
+export const COMMISSION_RECURRING_COUNT_BEFORE = 3;
+/** From this instant (00:00 1 Oct 2026, London) monthly payments 4–6 earn too. Earlier ones are never re-rated. */
+export const COMMISSION_RECURRING_SIX_FROM = '2026-09-30T23:00:00.000Z';
+/** Does the Nth monthly payment (N from 1), received at that time, earn the recurring rate? */
+export function recurringEarns(n: number, occurredAt: string): boolean {
+  if (n <= COMMISSION_RECURRING_COUNT_BEFORE) return true;
+  return n <= COMMISSION_RECURRING_COUNT && Date.parse(occurredAt) >= Date.parse(COMMISSION_RECURRING_SIX_FROM);
+}
 
 /** 🔴 THE MONTHLY TIERS (Paul, 2026-10-01). `upTo` is the last sale number in the month at that rate.
  *  ⛔ MIRRORED by public.monthly_tier_rate() in the database, which is what actually stamps a sale —
@@ -207,7 +219,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         monthStart = p.commission_month_start ? String(p.commission_month_start).slice(0, 10) : null;
         label = testSale ? 'Initial payment · test sale (not counted)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
       }
-      else if (p.kind === 'recurring') { recurringSeen += 1; n = 1 + recurringSeen; rate = recurringSeen <= COMMISSION_RECURRING_COUNT ? COMMISSION_RECURRING_RATE : 0; label = `Month ${recurringSeen}`; }
+      else if (p.kind === 'recurring') { recurringSeen += 1; n = 1 + recurringSeen; rate = recurringEarns(recurringSeen, p.occurred_at) ? COMMISSION_RECURRING_RATE : 0; label = `Month ${recurringSeen}`; }
       else { n = 1; rate = 0; label = 'Additional one-off payment'; }
       if (!earns) rate = 0;
       rateOf.set(p.id, { rate, n });
@@ -371,4 +383,88 @@ export function monthlyTrackerNextLine(t: MonthlyTracker): string {
   if (t.topTier || t.nextTierRate === null) return `Top rate: every sale earns ${pct(t.nextSaleRate)}`;
   if (t.salesToNextTier === 0) return `Next sale earns ${pct(t.nextTierRate)}`;
   return `${t.salesToNextTier} more sale${t.salesToNextTier === 1 ? '' : 's'} to unlock ${pct(t.nextTierRate)}`;
+}
+
+/* ══ THE NEXT SIX MONTHS (Paul, 2026-10-01) ═════════════════════════════════════════════════════════
+   Commission from clients ALREADY sold, by London calendar month: this month and the next five.
+   ⛔ Never a sale that has not happened, never a target, never a growth guess.
+   - EARNED: what the payments table already holds for the month (new-sale and recurring commission,
+     net of reversals) — the same lines, so the two can never disagree.
+   - EXPECTED: each live subscription's remaining commission-earning monthly payments (commissionable-
+     PaymentsLeft: the next-six rule, capped by the contract), dated from Stripe's next billing date and a
+     month apart, at 20% of the client's monthly amount. A billing date already passed with no payment is
+     NOT expected (it would be in the ledger had it been collected); a subscription that is not active or
+     trialing (past due, cancelled) expects nothing. So a failed or refunded payment drops out by itself. */
+export interface ForecastClient { leadId: string; business: string; nextPaymentAt: string | null; paymentsLeft: number; monthlyGbp: number | null; live: boolean }
+/** kind 'reversal' = a refund or chargeback taken back this month (a negative amount, net in the month's figures). */
+export interface ForecastItem { leadId: string; business: string; amount: number; at: string | null; kind: 'new_sale' | 'recurring' | 'reversal'; state: 'earned' | 'expected' }
+export interface ForecastMonth { monthStart: string; earnedNewSale: number; earnedRecurring: number; expected: number; total: number; items: ForecastItem[] }
+export interface CommissionForecast {
+  months: ForecastMonth[];
+  /** Expected (not yet collected) across the visible months. */
+  expectedTotal: number;
+  /** Everything in the visible months: this month's earned + all expected. Equals the sum of the months. */
+  periodTotal: number;
+  /** Expected payments whose date Stripe has not set yet — counted nowhere, listed so nothing is hidden. */
+  undated: ForecastItem[];
+}
+
+const addMonths = (monthStart: string, n: number) => {
+  const [y, m] = monthStart.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 10);
+};
+/** The same day of the month, n months on (clamped to the month's last day), keeping the time. */
+const monthsAfter = (iso: string, n: number) => {
+  const d = new Date(iso);
+  const day = d.getUTCDate();
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1, d.getUTCHours(), d.getUTCMinutes()));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, last));
+  return t.toISOString();
+};
+
+export function commissionForecast(lines: CommissionLine[], clients: ForecastClient[], todayIso: string, monthCount = 6): CommissionForecast {
+  const first = londonMonthStart(todayIso);
+  const starts = Array.from({ length: monthCount }, (_, i) => addMonths(first, i));
+  const businessOf = new Map(clients.map((c) => [c.leadId, c.business]));
+  const months: ForecastMonth[] = starts.map((monthStart) => ({ monthStart, earnedNewSale: 0, earnedRecurring: 0, expected: 0, total: 0, items: [] }));
+  const at = (ms: string) => months.find((m) => m.monthStart === ms);
+  // Earned: this month's lines (later months have none yet).
+  for (const l of lines) {
+    if (l.status === 'not_commissionable' || l.commission === 0) continue;
+    const m = at(l.periodMonth); if (!m) continue;
+    // Net: a reversal comes off the bucket of the payment it reverses, and is listed as itself.
+    if (l.paymentNumber === 1) m.earnedNewSale += l.commission; else m.earnedRecurring += l.commission;
+    const kind = l.kind === 'reversal' ? 'reversal' : l.paymentNumber === 1 ? 'new_sale' : 'recurring';
+    const prev = m.items.find((i) => i.state === 'earned' && i.kind === kind && i.leadId === l.leadId);
+    if (prev) prev.amount = round2(prev.amount + l.commission);
+    else m.items.push({ leadId: l.leadId, business: businessOf.get(l.leadId) ?? 'Client', amount: l.commission, at: l.occurredAt, kind, state: 'earned' });
+  }
+  // Expected: live subscriptions' remaining commission-earning payments.
+  const undated: ForecastItem[] = [];
+  const now = Date.parse(todayIso);
+  for (const c of clients) {
+    if (!c.live || c.paymentsLeft <= 0 || !c.monthlyGbp || c.monthlyGbp <= 0) continue;
+    const amount = commissionOn(c.monthlyGbp, COMMISSION_RECURRING_RATE);
+    if (!c.nextPaymentAt || !Number.isFinite(Date.parse(c.nextPaymentAt))) {
+      undated.push({ leadId: c.leadId, business: c.business, amount: round2(amount * c.paymentsLeft), at: null, kind: 'recurring', state: 'expected' });
+      continue;
+    }
+    for (let k = 0; k < c.paymentsLeft; k++) {
+      const when = monthsAfter(c.nextPaymentAt, k);
+      if (Date.parse(when) < now) continue; // passed with no payment: not expected
+      const m = at(londonMonthStart(when)); if (!m) continue;
+      m.expected += amount;
+      m.items.push({ leadId: c.leadId, business: c.business, amount, at: when, kind: 'recurring', state: 'expected' });
+    }
+  }
+  for (const m of months) {
+    m.earnedNewSale = round2(m.earnedNewSale); m.earnedRecurring = round2(m.earnedRecurring); m.expected = round2(m.expected);
+    m.total = round2(m.earnedNewSale + m.earnedRecurring + m.expected);
+    // Collected first, then expected; each by date.
+    m.items.sort((a, b) => (a.state === b.state ? (a.at ?? '').localeCompare(b.at ?? '') : a.state === 'earned' ? -1 : 1));
+  }
+  const expectedTotal = round2(months.reduce((s, m) => s + m.expected, 0));
+  return { months, expectedTotal, periodTotal: round2(months.reduce((s, m) => s + m.total, 0)), undated };
 }

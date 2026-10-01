@@ -1,6 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    SALES COMMISSION + THE PAYMENT LEDGER (Sales Experience release 2, docs/sales-experience.md §4).
-   Pins Paul's rules (src/lib/commission.ts): 30% initial, 20% × the next three recurring, always of the
+   Pins Paul's rules (src/lib/commission.ts): 30% initial, 20% × the next SIX recurring (three before
+   2026-10-01 — COMMISSION_RECURRING_SIX_FROM; not retrospective), always of the
    REAL amount; earned on payment; refund / chargeback reverse (an offset once paid out); payout on the
    first working day of the following month; projected never in earned; the admin's own sales earn £0.
    And the ledger's shape: idempotent by the Stripe object, recording-only in the webhook, never throws,
@@ -10,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   commissionLines, commissionOn, earningsTotals, nextPayoutDate, payoutDateFor,
-  COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_RATE, COMMISSION_RECURRING_COUNT, type LedgerRow, type PayoutRow,
+  COMMISSION_INITIAL_RATE, COMMISSION_RECURRING_RATE, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_BEFORE, COMMISSION_RECURRING_SIX_FROM, type LedgerRow, type PayoutRow,
 } from "../src/lib/commission.ts";
 
 let f = 0;
@@ -28,16 +29,26 @@ const run = (ledger: LedgerRow[], payouts: PayoutRow[] = [], sellers = new Set([
   commissionLines({ ledger, payouts, isCommissionable: (u) => !!u && sellers.has(u) });
 
 console.log("\n── the rates ──");
-ok(COMMISSION_INITIAL_RATE === 0.3 && COMMISSION_RECURRING_RATE === 0.2 && COMMISSION_RECURRING_COUNT === 3, "30% initial, 20% × 3 recurring");
+ok(COMMISSION_INITIAL_RATE === 0.3 && COMMISSION_RECURRING_RATE === 0.2 && COMMISSION_RECURRING_COUNT === 6 && COMMISSION_RECURRING_COUNT_BEFORE === 3, "30% initial, 20% × 6 recurring (3 before the change)");
+ok(COMMISSION_RECURRING_SIX_FROM === "2026-09-30T23:00:00.000Z", "the change starts 1 October 2026, 00:00 London");
 ok(commissionOn(99, 0.3) === 29.7 && commissionOn(99, 0.2) === 19.8 && commissionOn(29.99, 0.2) === 6 && commissionOn(0, 0.3) === 0, "£29.70 / £19.80 / £29.99 → £6.00 (5.998 rounds half-up)");
 {
-  const L = [row("a", "initial", 99, "2026-09-17T13:00:00Z"), row("a", "recurring", 99, "2026-10-29T10:00:00Z"), row("a", "recurring", 99, "2026-11-29T10:00:00Z"), row("a", "recurring", 99, "2026-12-29T10:00:00Z"), row("a", "recurring", 99, "2027-01-29T10:00:00Z")];
+  const L = [row("a", "initial", 99, "2026-09-17T13:00:00Z"), ...["2026-10-29", "2026-11-29", "2026-12-29", "2027-01-29", "2027-02-28", "2027-03-29", "2027-04-29"].map((d) => row("a", "recurring", 99, `${d}T10:00:00Z`))];
   const { lines, clients } = run(L);
   const pays = lines.filter((l) => l.kind === "payment").sort((a, b) => a.paymentNumber - b.paymentNumber);
-  ok(pays.map((l) => l.commission).join(",") === "29.7,19.8,19.8,19.8,0", "the £99 offer: 29.70, 19.80 ×3, then nothing");
-  ok(Math.round(pays.reduce((s, l) => s + l.commission, 0) * 100) / 100 === 89.1, "…£89.10 maximum per client");
-  ok(pays[4].label === "Month 4" && pays[4].rate === 0, "the 5th payment is shown for history at 0%");
-  ok(clients[0].commissionablePaymentsLeft === 0, "no commissionable payments left after three recurring");
+  ok(pays.map((l) => l.commission).join(",") === "29.7,19.8,19.8,19.8,19.8,19.8,19.8,0", "the £99 offer: 29.70, then 19.80 × the next 6 (payments 2–7), then nothing");
+  ok(Math.round(pays.reduce((s, l) => s + l.commission, 0) * 100) / 100 === 148.5, "…£148.50 maximum per client");
+  ok(pays[7].label === "Month 7" && pays[7].rate === 0, "the 8th payment is shown for history at 0%");
+  ok(clients[0].commissionablePaymentsLeft === 0, "no commissionable payments left after six recurring");
+  const mid = run([row("a", "initial", 99, "2026-09-17T13:00:00Z"), row("a", "recurring", 99, "2026-10-29T10:00:00Z")]).clients[0];
+  ok(mid.commissionablePaymentsLeft === 5, "after one monthly payment, five more earn");
+  /* NOT RETROSPECTIVE: a payment 4–6 received before the change earned nothing then and still earns nothing. */
+  const old = run([row("o", "initial", 99, "2026-05-17T13:00:00Z"), ...["2026-06-29", "2026-07-29", "2026-08-29", "2026-09-29", "2026-10-29", "2026-11-29", "2026-12-29"].map((d) => row("o", "recurring", 99, `${d}T10:00:00Z`))]);
+  const op = old.lines.filter((l) => l.kind === "payment").sort((a, b) => a.paymentNumber - b.paymentNumber).map((l) => l.commission).join(",");
+  ok(op === "29.7,19.8,19.8,19.8,0,19.8,19.8,0", `payment 5 before 1 Oct stays £0; payments 6 and 7 after it earn; the 8th never (got ${op})`);
+  const edge = run([row("x", "initial", 99, "2026-05-17T13:00:00Z"), ...["2026-06-29", "2026-07-29", "2026-08-29"].map((d) => row("x", "recurring", 99, `${d}T10:00:00Z`)), row("x", "recurring", 99, "2026-09-30T22:59:59Z"), row("x", "recurring", 99, "2026-09-30T23:00:00Z")]);
+  const ep = edge.lines.filter((l) => l.kind === "payment").sort((a, b) => a.paymentNumber - b.paymentNumber).map((l) => l.commission);
+  ok(ep[4] === 0 && ep[5] === 19.8, "the boundary: 23:59:59 on 30 Sep (London) earns nothing, 00:00 on 1 Oct earns");
   const cheap = run([row("b", "initial", 99, "2026-09-17T13:00:00Z"), row("b", "recurring", 29.99, "2026-10-29T10:00:00Z")]).lines.find((l) => l.paymentNumber === 2)!;
   ok(cheap.commission === 6 && cheap.clientAmount === 29.99, "commission is 20% of the ACTUAL monthly (£29.99 → £6.00), never a fixed £19.80");
 }

@@ -17,6 +17,7 @@ import { reportShareKey, useReportShare } from '@/hooks/useReportShare';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
+import { AuditBasisLine } from '@/components/HookVisibilityView';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { callBookedSummaryOf } from '@/lib/workspaceHeader';
@@ -694,6 +695,7 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
   const hook = hookQ.data;
   const [hookBusy, setHookBusy] = useState(false);
   const [proposed, setProposed] = useState<string[] | null>(null);
+  const [proposedBasis, setProposedBasis] = useState<unknown>(null);
   /* Trade + town typed here when the lead has none (2026-10-01): the same values the Inbox's audit prompt
      saves (lead_set_details for sales, the row for the admin), so "add them first" has somewhere to go. */
   const [details, setDetails] = useState<{ type: string; loc: string } | null>(null);
@@ -721,10 +723,11 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
     if (!bizType || !loc) { setDetails({ type: bizType, loc }); return; }
     setHookBusy(true);
     try {
-      const data = await invokeEdge<{ ok: boolean; questions?: string[]; error?: string }>('create-ai-audit', { ...body, preview: true });
+      const data = await invokeEdge<{ ok: boolean; questions?: string[]; error?: string; basis?: unknown }>('create-ai-audit', { ...body, preview: true });
       const qs = (data.questions ?? []).filter((q) => typeof q === 'string' && q.trim());
       if (!qs.length) { toast({ title: "Couldn't propose questions", description: data.error ?? 'Try again', variant: 'destructive' }); return; }
       setProposed(qs);
+      setProposedBasis(data.basis ?? null);
     } catch (e) {
       toast({ title: "Couldn't propose questions", description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setHookBusy(false); }
@@ -781,6 +784,7 @@ export function LeadHookPanel({ leadId, autoPropose = false }: { leadId: string;
       {proposed && (
         <section className={cn(CARD, 'space-y-2')} data-testid="hook-proposed-questions">
           <div className={LABEL}>The {proposed.length} questions we will ask ChatGPT and Google AI — edit any of them</div>
+          <AuditBasisLine basis={proposedBasis} />
           <div className="space-y-1.5">
             {proposed.map((q, i) => (
               <div key={i} className="flex items-center gap-2">

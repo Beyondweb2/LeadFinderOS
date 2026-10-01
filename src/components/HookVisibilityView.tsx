@@ -238,6 +238,20 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
   );
 }
 
+/** "Audit based on: Boiler repair · Gas safety checks" — the services the quick audit's questions were
+ *  written around, verified on the business's own website (2026-10-01). Shown only when they came from
+ *  the crawl; the trade + town fallback is internal (results.hook.basis.reason), so it shows nothing. */
+export function AuditBasisLine({ basis }: { basis: unknown }) {
+  const b = basis as { source?: unknown; services?: unknown } | null | undefined;
+  const services = b?.source === 'crawl' && Array.isArray(b.services) ? b.services.filter((s): s is string => typeof s === 'string' && !!s.trim()) : [];
+  if (!services.length) return null;
+  return (
+    <p className="mt-0.5 truncate text-[11px] text-muted-foreground" data-testid="audit-based-on" title={`From their website: ${services.join(', ')}`}>
+      <span className="font-semibold uppercase tracking-wide">Audit based on</span> {services.join(' · ')}
+    </p>
+  );
+}
+
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
@@ -335,6 +349,7 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
         </span>
         {headline}
       </div>
+      {isHookStateV2(state) && <AuditBasisLine basis={state.basis} />}
 
       {legacy && (
         <p className="mt-0.5 text-[11px] text-muted-foreground">

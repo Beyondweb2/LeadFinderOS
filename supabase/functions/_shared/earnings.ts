@@ -4,8 +4,8 @@
 // ⛔ Service role, and SCOPED HERE: personId null = everyone (the caller must be the admin — the callers
 // decide that before calling); a person = the clients THEY sold (ledger snapshot, else the lead's stamp).
 import {
-  commissionLines, commissionOn, earningsTotals, COMMISSION_RECURRING_RATE,
-  type CommissionLine, type ClientEarnings, type EarningsTotals, type LedgerRow, type PayoutRow, type ProjectionInput,
+  commissionForecast, commissionLines, commissionOn, earningsTotals, COMMISSION_RECURRING_RATE,
+  type CommissionForecast, type CommissionLine, type ClientEarnings, type EarningsTotals, type LedgerRow, type PayoutRow, type ProjectionInput,
 } from "../../../src/lib/commission.ts";
 import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
 
@@ -19,9 +19,14 @@ export interface Earnings {
   /** Whether this person earns commission at all (a salesperson). False for the admin's own sales. */
   commissionable: boolean;
   bySeller: { sellerId: string; earned: number; due: number; offset: number; paidOut: number }[];
+  /** The next six London months (2026-10-01): earned so far + expected from clients already sold. */
+  forecast: CommissionForecast;
 }
 
 const LIVE_SUBSCRIPTION = new Set(["active", "trialing", "past_due"]);
+/** The forecast expects a payment only from a subscription in good standing: past due is a payment that
+ *  has already failed, so it expects nothing until Stripe collects it (and the ledger then shows it). */
+const FORECAST_LIVE = new Set(["active", "trialing"]);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function loadEarnings(service: Service, personId: string | null, todayIso: string): Promise<Earnings> {
@@ -34,11 +39,12 @@ export async function loadEarnings(service: Service, personId: string | null, to
   const ledger = ((ledgerRes.data ?? []) as LedgerRow[]).map((r) => ({ ...r, amount_gbp: Number(r.amount_gbp) }));
   const sales = new Set(((rolesRes.data ?? []) as { user_id: string; role: string }[]).filter((r) => r.role === "sales").map((r) => r.user_id));
   const leadIds = [...new Set(ledger.map((r) => r.lead_id).filter((x): x is string => !!x))];
-  const leads = new Map<string, { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null }>();
+  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null };
+  const leads = new Map<string, LeadBits>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(error.message);
-    for (const l of (data ?? []) as { id: string; business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null }[]) leads.set(l.id, l);
+    for (const l of (data ?? []) as (LeadBits & { id: string })[]) leads.set(l.id, l);
   }
   const sellerOfLead = new Map([...leads].map(([id, l]) => [id, l.sold_by_user_id]));
   const all = commissionLines({
@@ -65,8 +71,17 @@ export async function loadEarnings(service: Service, personId: string | null, to
     const t = earningsTotals(lines.filter((l) => l.sellerId === s), payouts.filter((p) => p.user_id === s), [], todayIso);
     return { sellerId: s, earned: t.earned, due: t.due, offset: t.offset, paidOut: t.paidOut };
   });
+  /* Expected only from a salesperson's own commissionable clients — commissionablePaymentsLeft is 0 for
+     anything else, so the admin's own sales forecast nothing, as they earn nothing. */
+  const forecast = commissionForecast(lines, clients.map((c) => {
+    const l = leads.get(c.leadId);
+    return {
+      leadId: c.leadId, business: l?.business_name ?? "Client", nextPaymentAt: l?.subscription_renews_at ?? null,
+      paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: c._proj.monthlyGbp, live: !!l?.subscription_status && FORECAST_LIVE.has(l.subscription_status),
+    };
+  }), todayIso);
   return {
-    lines, totals, bySeller,
+    lines, totals, bySeller, forecast,
     clients: clients.map(({ _proj: _p, ...c }) => c),
     commissionable: personId === null ? true : sales.has(personId),
   };

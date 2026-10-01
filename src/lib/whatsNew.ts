@@ -22,6 +22,23 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-forecast-next-action', date: '2026-10-01', title: 'Your next 6 months, and monthly commission on 6 payments', audience: 'all',
+    body: 'Sales shows what you have earned and what your existing clients are expected to pay you over the next six months. Monthly commission now runs for six payments instead of three.',
+    report: {
+      added: [
+        'A "Your next 6 months" card on Sales: earned this month, total earned, expected over the next six months and the six-month total, then one block per month. Tap a month to see each client and amount.',
+        'In WhatsApp, beside Contacted: "+ Set next action", or the action itself ("Call · Tomorrow"). Tap it to set or change it.',
+        'Quick audits now read the business’s own website first and ask about the services it actually offers. When that was used, the audit card says "Audit based on …".',
+      ],
+      changed: [
+        'Monthly commission: 20% of each of the next six monthly payments a client makes (it was three). Payments received before 1 October keep what they earned.',
+        'The ladder card shows what is due at the next payout; what you earned this month is on the six-month card.',
+      ],
+      removed: [
+        'Find email from the WhatsApp header, the lead popup and Find Leads for salespeople (the admin keeps it). No email addresses were removed.',
+      ],
+      effect: 'You can see what is coming in from clients you have already sold, and each client now pays you for longer. Quick audit questions match what the business really does.',
+    } },
   { id: '2026-10-01-sales-page-monthly', date: '2026-10-01', title: 'One Sales page, a monthly commission ladder', audience: 'sales',
     body: 'Sales and Earnings are one page. Your commission rate now climbs over the calendar month: sales 1–12 earn 30%, 13–24 earn 40%, 25 onwards 50%.',
     report: {

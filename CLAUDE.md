@@ -173,7 +173,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   calendar month, sales 1–12 30%, 13–24 40%, 25+ 50%, NOT retrospective, reset on the 1st, ordered by payment
   time then payment id; a fully refunded / lost sale stops counting towards LATER sales' places; a test
   account's or test lead's sale (`metric_exclusions`) is stamped `test_excluded` at 0% — plus
-  20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund / chargeback (an
+  20% × the next **6** recurring (payments 2–7; 3 before 2026-10-01 London, `COMMISSION_RECURRING_SIX_FROM`
+  — not retrospective, a payment 4–6 received earlier stays £0), of the REAL amount, earned on receipt, reversed by refund / chargeback (an
   offset once paid out), from the **payment ledger** (`payment_ledger`, written by `stripe-webhook` + the
   admin backfill) — never from a CRM status. Only role `sales` earns. ⛔ **The place and rate are STAMPED by
   the database ONCE** (`stamp_monthly_commission_for`, a trigger on the ledger, per-seller-month lock) into
@@ -182,7 +183,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   `weekly_tier_v1`) keep what they earned. There is no bonus. `MONTHLY_TIERS` (TS) and
   `monthly_tier_rate()` (SQL) are one table in two places — `scripts/monthly-commission-tiers.test.ts` pins them.
 - **Sales page** (`/sales-dashboard`, 2026-10-01): the Sales dashboard and Earnings are ONE page (`/earnings`
-  redirects); the month's ladder is the top card. **Focus Mode is retired** (`/focus` → Outreach): its
+  redirects); the month's ladder is the top card, the **six-month forecast** under it (`commissionForecast`,
+  built server-side in `_shared/earnings.ts` from the ledger + `subscription_renews_at`; only active/trialing
+  expect; never a hypothetical sale — `docs/commission-forecast-crawl-first.md`). **Focus Mode is retired** (`/focus` → Outreach): its
   Previous / Next is in the lead popup, its lists are Sales → What to do next, its recent WhatsApp messages are
   in the popup. Salesperson menu: Outreach, WhatsApp, Find Leads, Sales; Coverage under More (`SALES_NAV_ORDER`,
   `SALES_SECONDARY_NAV`).
@@ -232,6 +235,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   | | Shape | `audit_purpose` | Compared? |
   |---|---|---|---|
   | Hook / free check | 3 q × 1 run, both engines = 6 results, no early stop (free check 3 × 3) | `audit` / `free_check` | never |
+  ⛔ **A hook's questions are written CRAWL FIRST** (2026-10-01, `_shared/hook-services.ts`): services verified on
+  the lead's own site (`src/lib/serviceEvidence.ts`, stored as `result.serviceEvidence` on the crawl row) feed
+  the generator's "Known for" line; same 3 questions, no extra paid API; fallback = trade + town, recorded in
+  `results.hook.basis`. HOOKS ONLY — never baseline / measurement / remeasure / free check / discovery.
   | Discovery (paid clients, optional) | wide pool, one generator call per approved town, × 3 if run | `discovery` | never — it informs the choice |
   | Baseline | 20 q, home town + approved areas, balanced, × 3 runs, frozen | `baseline` | the before side |
   | Full measure | 20 q × 3 across home + areas, DISJOINT | `measurement` | never |

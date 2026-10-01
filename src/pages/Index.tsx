@@ -651,13 +651,14 @@ const Index = () => {
                 onBulkAdd={handleBulkAddEntry}
                 onBulkEnrich={handleBulkEnrich}
                 isLeadEnriched={isLeadEnriched}
-                onFindEmails={findEmails}
+                /* The email scan and "Add all with emails" are the admin's (2026-10-01: email outreach is not used). */
+                onFindEmails={viewerRole === 'admin' ? findEmails : undefined}
                 onCancelFindEmails={cancelFindEmails}
                 findingEmails={finding}
                 emailProgress={emailProgress}
                 emailResult={emailResult}
                 withWebsiteCount={withWebsiteCount}
-                onAddAllWithEmails={handleAddAllWithEmails}
+                onAddAllWithEmails={viewerRole === 'admin' ? handleAddAllWithEmails : undefined}
                 addingEmails={addingEmails}
                 addAllWithEmailsCount={leadsWithEmail.length}
                 onExportWithEmails={canExport ? () => void loggedExport(handleExportWithEmails, leads.length, 'results_with_emails') : undefined}

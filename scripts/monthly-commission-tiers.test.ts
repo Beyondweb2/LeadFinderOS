@@ -100,24 +100,25 @@ ok(initLine(linesOf([legacy]), legacy.lead_id!).commission === 29.7 && initLine(
 const unstamped = initial(OCT(1), null);
 ok(initLine(linesOf([unstamped]), unstamped.lead_id!).rate === COMMISSION_INITIAL_RATE && monthlyTracker(linesOf([unstamped]), TODAY).counted === 0, 'an unstamped row falls back to the flat 30% and is never counted on the ladder');
 
-console.log('── 6. TRAILING COMMISSION UNCHANGED ──');
+console.log('── 6. TRAILING COMMISSION: THE NEXT SIX (2026-10-01) ──');
 const c25 = month[24];
 const rec = (i: number): LedgerRow => ({ id: `rc${i}`, lead_id: c25.lead_id, kind: 'recurring', status: 'succeeded', amount_gbp: 29.99, occurred_at: `2026-11-${10 + i}T10:00:00Z`, stripe_object_id: `in_${i}`, stripe_payment_intent_id: null, stripe_charge_id: null, stripe_invoice_id: `in_${i}`, sold_by_user_id: REP });
-const lrec = linesOf([c25, rec(0), rec(1), rec(2), rec(3)]).filter((l) => l.leadId === c25.lead_id && l.kind === 'payment').sort((a, b) => a.paymentNumber - b.paymentNumber);
-ok(lrec[0].commission === 49.5 && lrec.slice(1, 4).every((l) => l.commission === 6) && lrec[4].commission === 0, 'a 50% sale: its monthly payments still earn 20% × the next 3 (£29.99 → £6.00), then nothing');
+const lrec = linesOf([c25, ...[0, 1, 2, 3, 4, 5, 6].map(rec)]).filter((l) => l.leadId === c25.lead_id && l.kind === 'payment').sort((a, b) => a.paymentNumber - b.paymentNumber);
+ok(lrec[0].commission === 49.5 && lrec.slice(1, 7).every((l) => l.commission === 6) && lrec[7].commission === 0, 'a 50% sale: its monthly payments earn 20% × the next 6 (£29.99 → £6.00), then nothing');
 
 console.log('── 7. WHERE IT IS READ, AND THE SALES PAGE ──');
 ok(/commission_rule, commission_month_start, commission_month_seq, commission_rate/.test(read('supabase/functions/_shared/earnings.ts')), 'the earnings loader reads the stamped columns');
 ok(/commission_rule, commission_month_start, commission_month_seq, commission_rate/.test(read('supabase/functions/_shared/payment-ledger.ts')), 'the earned notification reads them too');
 const page = read('src/pages/SalesDashboard.tsx');
 const ladder = read('src/components/salesDash/MonthlyLadder.tsx');
+const forecastCard = read('src/components/salesDash/CommissionForecastCard.tsx');
 ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /MONTHLY_TIERS\.map/.test(ladder), 'one ladder, built from the same lines and the one tier table');
 ok(/lg:grid-cols-\[12fr_12fr_5fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_12fr_5fr\]/, '')), 'the tiers sit side by side from lg and stack on a phone (no squeezed line)');
 ok(/data-testid="ladder-sale"/.test(ladder) && /PopoverContent/.test(ladder) && /client\?\.package/.test(ladder) && /remainingPotential/.test(ladder), 'each sale dot opens the client, date, package, commission and what monthly payments may still earn');
 const labels = [...page.matchAll(/<KpiCard label="([^"]+)"/g)].map((m) => m[1]);
 ok(JSON.stringify(labels) === JSON.stringify(['Calls made', 'People reached', 'Contacted → sale']), `three work numbers, none repeating the ladder (got ${labels.join(', ')})`);
 ok(!/Commission earned|WeeklyTierTracker|TodayStrip|PipelineStrip|TrendsPanel|MilestonesPanel|RecapPanel|TargetsPanel/.test(page), 'the duplicate and decorative cards are gone from the page');
-ok((page + ladder).match(/earnedThisMonth/g)?.length === 1, 'earned this month is drawn once (on the ladder)');
+ok((page + ladder + forecastCard).match(/earnedThisMonth/g)?.length === 1 && /earnedThisMonth/.test(forecastCard), 'earned this month is drawn once (on the six-month card, 2026-10-01)');
 ok(!existsSync(new URL('../src/pages/Earnings.tsx', import.meta.url)) && !existsSync(new URL('../src/components/salesDash/WeeklyTracker.tsx', import.meta.url)), 'the Earnings page and the weekly tracker are deleted');
 ok(!/Pipeline efficiency|Sales velocity|MRR|disposition/i.test(page + ladder + read('src/components/salesDash/earningsParts.tsx')), 'no jargon on the Sales page');
 

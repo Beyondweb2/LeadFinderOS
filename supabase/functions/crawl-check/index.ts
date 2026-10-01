@@ -25,6 +25,7 @@ import {
   DUP_MIN_CLUSTER, DUP_SIMILARITY, THIN_WORDS, CRAWL_CHECK_VERSION, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
 import { extractSiteInfo, SITE_INFO_VERSION, type SiteInfo } from "../../../src/lib/siteInfo.ts";
+import { serviceCandidates, type ServiceEvidence } from "../../../src/lib/serviceEvidence.ts";
 import {
   buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS,
   type EvidencePage, type SiteEvidence,
@@ -569,6 +570,16 @@ Deno.serve(async (req) => {
       console.error(`[crawl-check] site-info extraction failed for ${homeUrl}:`, (e as Error).message);
     }
 
+    /* SERVICE EVIDENCE (2026-10-01, "crawl first, then generate audit questions") — every phrase the site
+       presents as a service, with the page it came from. From the pages already fetched; no extra
+       requests. The quick audit (create-ai-audit, via _shared/hook-services.ts) verifies and ranks them. */
+    let serviceEvidence: ServiceEvidence | null = null;
+    try {
+      if (home?.html) serviceEvidence = serviceCandidates(home.html, servedUrl || homeUrl, samplePagesForInfo);
+    } catch (e) {
+      console.error(`[crawl-check] service evidence failed for ${homeUrl}:`, (e as Error).message);
+    }
+
     const checkedAt = new Date().toISOString();
 
     /* Full evidence is written by the crawl job's finalize step, never by this inline check. */
@@ -581,6 +592,7 @@ Deno.serve(async (req) => {
       version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
+      ...(serviceEvidence ? { serviceEvidence } : {}),
     };
 
     /* ⛔ ONE CANONICAL ROW PER LEAD, WHICHEVER SCREEN STARTED THE CRAWL. Every entry point — Outreach,
@@ -635,7 +647,7 @@ Deno.serve(async (req) => {
     }
 
     return json({
-      ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, deep,
+      ok: true, url: homeUrl, served_url: servedUrl, town: town || null, verdict, signals, siteInfo, evidence, serviceEvidence, deep,
       mode, checked_at: checkedAt, fetches, ms: Date.now() - started, stored, preserved_full_crawl: preserved,
       /* The full evidence's headline only — the row holds the rest, and every screen reads the row. */
       full: null,

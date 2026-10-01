@@ -41,6 +41,7 @@ import {
   expectedResponses, planGenerationBatches,
 } from "../../../src/lib/auditPlan.ts";
 import { planHookQuestions } from "../../../src/lib/hookAudit.ts";
+import { resolveHookServices } from "../_shared/hook-services.ts";
 import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal, type Actor } from "../_shared/access.ts";
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
@@ -976,6 +977,23 @@ Deno.serve(async (req) => {
        preview meant the feature could never appear on the path used by hand, however the run was
        configured. Passing "" for coverage keeps that argument exactly as it was (the preview has
        never had a coverage hint; it is market-audit-only steering). */
+    /* ⛔ CRAWL FIRST, THEN THE QUESTIONS — HOOK AUDITS ONLY (Paul, 2026-10-01). The business's own
+       website decides which services the three hook questions ask about: a fresh stored crawl is
+       reused, otherwise one runs now (_shared/hook-services.ts). The services reach the generator as
+       its "Known for" line — the same call, the same question count, the same engines, no extra paid
+       API. Nothing found → the questions are what they were (trade + town) and the run records
+       basis.source 'fallback' with the reason. Every other purpose — baseline, measurement,
+       re-measure, free check, discovery, weekly check — never reaches this: its methodology is
+       unchanged. A reviewed preview sent back verbatim reads the stored crawl only (no second crawl). */
+    const hookServices = hookAuditRequested && auditPurpose === ORDINARY_AUDIT_PURPOSE && !reuseAuditId
+      ? await resolveHookServices(service, {
+          leadId, website, trade: businessType, town: locationText, businessName, serviceAreas,
+          count: HOOK_SCORE_QUESTIONS, crawlIfMissing: !(providedQuestions && providedQuestions.length),
+        })
+      : null;
+    const questionSpecialisms: string = hookServices?.specialisms || specialisms;
+    if (hookServices) console.log(`[create-ai-audit] hook basis: ${hookServices.basis.source}${hookServices.basis.reason ? ` (${hookServices.basis.reason})` : ""} — ${hookServices.basis.services.join(" · ") || "trade + town"}`);
+
     if (preview) {
       /* ⛔ THE WIZARD'S FULL MEASUREMENT GENERATES HERE AND NOWHERE ELSE. Confirming sends the
          reviewed questions back VERBATIM, so this preview IS the generation step for that path — and
@@ -1008,7 +1026,7 @@ Deno.serve(async (req) => {
         qs = fillGenerated("discovery preview", generated, questionCount, [],
           { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
       } else {
-        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, specialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
+        qs = await generateQuestions(businessName, businessType, locationText, hasWebsite, questionSpecialisms, questionCount, businessScope, country, serviceAreaCoverage, moneyQuestionCount, null, false, marketContext);
       }
       /* A HOOK PREVIEW (the prospect workspace's "Propose questions") is planned exactly as the run
          will plan it, so the three the salesperson reviews are the three that are asked. */
@@ -1021,6 +1039,7 @@ Deno.serve(async (req) => {
         questions: qs,
         ...(previewMoney.length ? { money_questions: previewMoney } : {}),
         question_count: qs.length,
+        ...(hookServices ? { basis: hookServices.basis } : {}),
         estimated_cost_usd: estimate(qs.length),
         unit_cost_usd: estCost,
         engines: AUDIT_ENGINES,
@@ -1355,7 +1374,7 @@ Deno.serve(async (req) => {
             { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
         } else {
           questions = await generateQuestions(
-            businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
+            businessName, businessType, locationText, hasWebsite, questionSpecialisms, questionCount,
             businessScope, country, coverage, moneyQuestionCount, null, false, marketContext,
           );
         }
@@ -1546,7 +1565,7 @@ Deno.serve(async (req) => {
        downstream: the queue keys on results.seo and the report on results.seo.categories. */
     if (moneyQueued.length) runResults.money_questions = moneyQueued;
     // The hook marker (version 2) lives on the run (results.hook). Nothing advances it: every row is queued now.
-    if (hookState) runResults.hook = hookState;
+    if (hookState) runResults.hook = hookServices ? { ...hookState, basis: hookServices.basis } : hookState;
     const { data: run, error: runErr } = await service
       .from("ai_audit_runs")
       .insert({ audit_id: auditId, user_id: userId, run_number: runNumber, status: "pending", results: runResults })

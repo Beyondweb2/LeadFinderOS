@@ -45,7 +45,7 @@ console.log("\n── one pill, every screen ──");
   ok(/<LeadStateStrip leadId=\{lead\.id\}/.test(read("src/components/LeadDetailDialog.tsx")) && /<NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>/.test(read("src/components/LeadStateStrip.tsx")), "popup: the next action above the tabs, from the Work tab's own row; Edit → the Work tab's editor (a bar since the declutter pass, 2026-10-01)");
   const inbox = read("src/pages/Inbox.tsx");
   ok(/<NextActionPill lead=\{leadByIdForState\.get\(c\.leadId\)\} size="xs"/.test(inbox), "Inbox list: a small pill on every row that has one");
-  ok(/<NextActionPill lead=\{activeLead\} onClick=\{\(\) => setDetailLeadId\(active\.leadId\)\} \/>/.test(inbox), "Inbox header: the pill, tap → the prospect");
+  ok(/\{activeLead && <NextActionEditor lead=\{activeLead\} variant="pill" \/>\}/.test(inbox), "Inbox header: the action as a pill (or + Set next action), tap → the one Next Action editor (2026-10-01)");
   ok(/next_action, next_action_date, next_action_time, next_action_note'/.test(read("src/hooks/useInbox.ts")), "…and the Inbox reads the note (and the time), so the header pill carries it");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
   const editor = read("src/components/NextActionEditor.tsx");
@@ -132,8 +132,9 @@ console.log("\n── Find email ──");
   const btn = read("src/components/FindEmailButton.tsx");
   ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
   ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
-  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /<FindEmailButton leadId=\{lead\.id\}/], ["src/pages/Inbox.tsx", /activeLead && !activeLead\.email && <FindEmailButton/]] as const) {
-    ok(re.test(read(p)), `${p}: beside the email option, only when there is none`);
+  /* 2026-10-01: Find email is the admin's alone (perms.enrichLeads) — email outreach is not used; no email data is touched. */
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && perms\.enrichLeads && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /perms\.enrichLeads && <FindEmailButton leadId=\{lead\.id\}/]] as const) {
+    ok(re.test(read(p)), `${p}: beside the email option, only when there is none, admin only`);
   }
   const mig = read("supabase/migrations/20260929180000_lead_find_email.sql");
   ok((mig.match(/perform public\._require_work\(_lead_id\);/g) ?? []).length === 2, "both functions check role + ownership first");

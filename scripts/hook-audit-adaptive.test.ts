@@ -313,7 +313,7 @@ ok(buildHookReportSummary({ state: { ...initialHookState(['q']), executed: 1, st
 /* 2026-09-28: the plan lives in ONE function (finalHookPlan), shared by the run and the hook preview. */
 ok(createAudit.includes('let qs = planHookQuestions(dedupeQuestions(questions).questions, { town: ctx.town });') && createAudit.includes('questions = finalHookPlan(questions, { town: locationText, country, trade: businessType, businessName });') && createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit plans and orders the hook questions (version 2)');
 ok(createAudit.includes('const queueRows = questions.map((q) => ({') && !createAudit.includes('questions.slice(0, 1)'), 'create-ai-audit queues EVERY hook question; nothing stops early');
-ok(createAudit.includes('if (hookState) runResults.hook = hookState;'), 'the plan lives on the run (results.hook) — no migration');
+ok(createAudit.includes('if (hookState) runResults.hook = hookServices ? { ...hookState, basis: hookServices.basis } : hookState;'), 'the plan lives on the run (results.hook, with its question basis since 2026-10-01) — no migration');
 ok(/&& !freshAudit && !isHookAudit\) \{/.test(createAudit), 'H: a hook request never reuses the lead\'s existing audit — an Inbox re-run is a NEW hook that starts at Q1');
 ok((createAudit.match(/from\("ai_audit_runs"\)\s*\.insert\(/g) ?? []).length === 1 && !/from\("ai_audit_runs"\)\s*\.insert\(/.test(queue.replace(/\/\*[\s\S]*?\*\//g, '')), 'only create-ai-audit inserts a run; the processor never mints run 2');
 

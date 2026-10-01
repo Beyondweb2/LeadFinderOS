@@ -10,6 +10,7 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useEarnings } from '@/hooks/useEarnings';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
+import { CommissionForecastCard } from '@/components/salesDash/CommissionForecastCard';
 import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins, SalesByWeek } from '@/components/salesDash/earningsParts';
 import { CampaignCards, ChannelBars, ManageRows, SimpleTable, TemplateTable } from '@/components/salesDash/breakdown';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -125,6 +126,8 @@ export default function SalesDashboard() {
       {/* ── 1. The month: sales, the next sale's rate, what was earned ── */}
       {earn.isLoading && <div className="h-56 animate-pulse rounded-2xl bg-muted/60 motion-reduce:animate-none" aria-busy="true" />}
       {e && oneSeller && e.commissionable && <MonthlyLadder lines={e.lines} clients={e.clients} totals={e.totals} />}
+      {/* The next six months (2026-10-01): earned + expected from clients already sold, by London month. */}
+      {e && oneSeller && e.commissionable && e.forecast && <CommissionForecastCard forecast={e.forecast} totals={e.totals} />}
       {e && oneSeller && !e.commissionable && <p className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Commission is paid to salespeople. Clients you sell yourself show here at £0.</p>}
       {e && !oneSeller && <p className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Pick a salesperson to see their month and commission. The table below has everyone's.</p>}
 

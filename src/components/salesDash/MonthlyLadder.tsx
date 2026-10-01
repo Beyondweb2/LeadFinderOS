@@ -62,10 +62,11 @@ export function MonthlyLadder({ lines, clients, totals, todayIso = new Date().to
             {t.topTier && <span className="text-muted-foreground"> · top rate</span>}
           </p>
         </div>
+        {/* What was earned this month is on the six-month card below (2026-10-01) — drawn once. */}
         <div className="sm:text-right">
-          <p className="text-xs text-muted-foreground">Earned this month</p>
-          <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300" data-testid="ladder-earned">{gbp(totals.earnedThisMonth)}</p>
-          <p className="text-xs text-muted-foreground">{gbp(totals.due)} due {new Date(`${totals.nextPayoutDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>
+          <p className="text-xs text-muted-foreground">Due at the next payout</p>
+          <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300" data-testid="ladder-due">{gbp(totals.due)}</p>
+          <p className="text-xs text-muted-foreground">Paid {new Date(`${totals.nextPayoutDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>
         </div>
       </div>
 

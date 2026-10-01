@@ -18,6 +18,7 @@ import {
   CRAWL_CHECK_VERSION, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
+import { serviceCandidates } from "../../../src/lib/serviceEvidence.ts";
 import { buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS, type EvidencePage } from "../../../src/lib/siteEvidence.ts";
 import {
   FULL_CRAWL, RUNAWAY_URL_CEILING, leanHtml, orderSitemapChildren, processPage, summariseCrawlRows,
@@ -444,11 +445,20 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     if (pages.length) evidence = buildSiteEvidence({ servedUrl, pages, sitemapLocs: summaryState.sitemap_locs_sample ?? [], sitemapUrls: [] });
   } catch (e) { console.error("[crawl-job] evidence failed:", (e as Error).message); }
 
+  /* Service evidence (2026-10-01): the homepage menu + each page's title/h1, as crawl-check stores it. */
+  let serviceEvidence = null;
+  try {
+    const shallow = [...done].sort((a, b) => a.depth - b.depth || a.id - b.id).slice(0, 60);
+    serviceEvidence = serviceCandidates(String(home.lean ?? ""), servedUrl,
+      shallow.map((r) => ({ url: r.final_url || r.url, html: syntheticHtml({ d: r.evidence!.d, j: [] }) })));
+  } catch (e) { console.error("[crawl-job] service evidence failed:", (e as Error).message); }
+
   const checkedAt = new Date().toISOString();
   const result = {
     version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION, checked_at: checkedAt, url: job.start_url, town,
     signals, verdict, siteInfo, job_id: jobId,
     ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
+    ...(serviceEvidence ? { serviceEvidence } : {}),
   };
   const status = full.completeness === "complete" ? "complete" : full.completeness === "failed" ? "failed" : "complete_with_failures";
   await service.from("crawl_jobs").update({ status, result, summary: { ...summaryState, full }, completed_at: checkedAt, lease_until: null, updated_at: checkedAt }).eq("id", jobId);
