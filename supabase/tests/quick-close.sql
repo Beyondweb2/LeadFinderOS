@@ -5,8 +5,11 @@ declare sid uuid; tid uuid; lid uuid; r1 uuid; r2 uuid; n int; c1 boolean; c2 bo
 begin
   select tm.user_id into sid from team_members tm join user_roles r using (user_id) where r.role = 'sales' order by tm.created_at limit 1;
   select tm.user_id into tid from team_members tm join user_roles r using (user_id) where r.role = 'sales' and tm.user_id <> sid order by tm.created_at limit 1;
-  select l.id into lid from outreach_leads l where l.assigned_to_user_id = sid and not l.is_archived
-    and not exists (select 1 from onboarding_responses o where o.lead_id = l.id) limit 1;
+  /* ⛔ ITS OWN FIXTURE (2026-10-02): it borrowed "a live lead assigned to the first salesperson" and failed (lead_id
+     NULL) the day there was none. Rolled back like everything else here. */
+  lid := gen_random_uuid();
+  insert into outreach_leads (id, user_id, business_name, status, assigned_to_user_id, assigned_at)
+    values (lid, (select user_id from team_members where is_book_owner limit 1), 'QA quick close (rolled back)', 'initial_contact', sid, now());
   r1 := public.quick_close_row(lid, 'QA');
   r2 := public.quick_close_row(lid, 'QA');
   select count(*) into n from onboarding_responses where lead_id = lid;

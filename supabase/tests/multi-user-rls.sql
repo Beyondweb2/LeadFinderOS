@@ -226,12 +226,18 @@ do $$ begin
 exception when others then
   insert into t_results (name, ok, detail) values ('admin: new place id insert works', false, sqlerrm);
 end $$;
--- Auto-assign on contact: a queue-style message on an unassigned lead makes it the book owner's.
+-- Auto-assign on contact (assign_lead_on_contact). ⛔ THE RULE CHANGED 2026-10-01 (migration 20261001230000 era,
+-- docs/outreach-workspace.md §E): an AUTOMATIC queue send that is only 'sent' (accepted by Meta, not yet delivered)
+-- no longer assigns — it may still fail as "not on WhatsApp". It assigns the book owner once DELIVERED. This check
+-- asserted the old rule and read NULL (no assignment) — a stale test, not a bug. Now both halves, on its own
+-- fixture lead (it borrowed the newest unassigned live lead).
 reset role;
-do $$ declare v uuid; begin
-  select l.id into v from public.outreach_leads l where l.assigned_to_user_id is null and l.is_archived is not true order by l.created_at desc limit 1;
-  insert into public.whatsapp_messages (direction, lead_id, phone, body, status, user_id) values ('outbound', v, '447000000111', 'test', 'sent', null);
-  insert into t_results (name, ok, detail) values ('trigger: first send assigns book owner', (select assigned_to_user_id from public.outreach_leads where id = v) = public.book_owner_id(), null);
+do $$ declare v uuid := gen_random_uuid(); m uuid; begin
+  insert into public.outreach_leads (id, user_id, business_name, status) values (v, public.book_owner_id(), 'QA auto-assign (rolled back)', 'not_contacted');
+  insert into public.whatsapp_messages (direction, lead_id, phone, body, status, user_id) values ('outbound', v, '447700900611', 'test', 'sent', null) returning id into m;
+  insert into t_results (name, ok, detail) values ('trigger: an automatic send that is only sent does NOT assign yet', (select assigned_to_user_id from public.outreach_leads where id = v) is null, null);
+  update public.whatsapp_messages set status = 'delivered' where id = m;
+  insert into t_results (name, ok, detail) values ('trigger: once delivered, it assigns the book owner', (select assigned_to_user_id from public.outreach_leads where id = v) = public.book_owner_id(), null);
 end $$;
 
 do $$ begin

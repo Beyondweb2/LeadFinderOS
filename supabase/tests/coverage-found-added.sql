@@ -1,4 +1,5 @@
 -- LIVE TEST of record_search_addition (migration 20260929190000). ALWAYS ROLLS BACK: it ends by raising.
+-- Expect: own=true again=true second=true unrecorded_run=false someone_elses_run=false   (and added={"a": false, "c": true})
 do $$
 declare
   me uuid := '262c1d64-05ad-42e8-a81b-7d25553aeff3';     -- the "Test" salesperson (a real auth user)

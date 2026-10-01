@@ -8,8 +8,15 @@ begin
   select user_id into book from team_members where is_book_owner limit 1;
   select tm.user_id into sid from team_members tm join user_roles r using (user_id) where r.role = 'sales' order by tm.created_at limit 1;
   select tm.user_id into tid from team_members tm join user_roles r using (user_id) where r.role = 'sales' and tm.user_id <> sid order by tm.created_at limit 1;
-  select l.id, regexp_replace(l.phone, '[^0-9]', '', 'g') into lid, ph from outreach_leads l where l.assigned_to_user_id = sid and l.phone is not null and not l.is_archived limit 1;
-  select l.id into lid2 from outreach_leads l where l.assigned_to_user_id is null and not l.is_archived limit 1;
+  /* ⛔ ITS OWN FIXTURES (2026-10-02). It borrowed "a lead assigned to the first salesperson, with a phone" from
+     the live book; when none existed (the QA leads were archived and their numbers cleared) lid and ph were NULL
+     and the first insert failed on whatsapp_messages.phone. Rolled back like everything else here; the number is
+     in the Ofcom drama range, never a real phone. */
+  lid := gen_random_uuid(); lid2 := gen_random_uuid(); ph := '447700900601';
+  insert into outreach_leads (id, user_id, business_name, status, phone, assigned_to_user_id, assigned_at)
+    values (lid, book, 'QA notifications rep lead (rolled back)', 'initial_contact', '+' || ph, sid, now());
+  insert into outreach_leads (id, user_id, business_name, status)
+    values (lid2, book, 'QA notifications unassigned lead (rolled back)', 'not_contacted');
   -- two replies while unread → ONE notification, count 2
   insert into whatsapp_messages (user_id, lead_id, phone, direction, body, message_type, status, test_mode) values (book, lid, ph, 'inbound', 'QA one (rolled back)', 'text', 'received', false);
   insert into whatsapp_messages (user_id, lead_id, phone, direction, body, message_type, status, test_mode) values (book, lid, ph, 'inbound', 'QA two (rolled back)', 'text', 'received', false);
@@ -44,8 +51,9 @@ begin
   perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
   update outreach_leads set assigned_to_user_id = book, assigned_at = now() + interval '2 seconds' where id = lid2;
   select count(*) into oa from notifications where user_id = book and kind = 'lead_assigned' and lead_id = lid2;
-  -- a follow-up due: once per scheduled date
-  update outreach_leads set next_action = 'call', next_action_date = (now() at time zone 'Europe/London')::date where id = lid;
+  -- a follow-up due: once per scheduled date. Yesterday (overdue) so it is eligible at ANY hour — the sweep is
+  -- hourly since 2026-10-02 and a date-only action due TODAY waits for 07:00 UK (next-action-reminders.sql).
+  update outreach_leads set next_action = 'call', next_action_date = (now() at time zone 'Europe/London')::date - 1 where id = lid;
   perform public.notify_due_follow_ups();
   select count(*) into f1 from notifications where user_id = sid and kind = 'follow_up_due' and lead_id = lid;
   perform public.notify_due_follow_ups();
