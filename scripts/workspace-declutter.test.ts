@@ -9,8 +9,8 @@
      · nothing was removed: every control the popup had is still mounted somewhere in it.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
-import { headerStateShown, markPaidIsMain, meetingIsTheNextAction, noteBesideTime } from "../src/lib/workspaceHeader.ts";
-import { salesStateOf, pillStatusOf } from "../src/lib/leadState.ts";
+import { callBookedSummaryOf, headerStateShown, markPaidIsMain, meetingIsTheNextAction, noteBesideTime } from "../src/lib/workspaceHeader.ts";
+import { salesStateOf, pillStatusOf, meetingWhen } from "../src/lib/leadState.ts";
 import { nextActionView } from "../src/lib/nextActionView.ts";
 
 let f = 0;
@@ -128,6 +128,24 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   ok(/data-testid="more-tools-toggle"/.test(dlg) && /\{moreTools && !isDemoLead\(lead\.id\) && \(/.test(dlg) && !/DropdownMenu/.test(dlg), "the less frequent tools reveal IN PLACE (not a menu), so their own dialogs stay mounted");
   for (const id of ["learned-agency", "lead-campaign", "domain-control", "meeting-when"]) ok(crm.includes(`data-testid="${id}"`) || crm.includes(`testId="${id}"`), `Work tab keeps ${id}`);
   ok(/<LeadOwnerControl leadId=\{leadId\} \/>/.test(strip) && /<LastContactLine/.test(strip) && /wrong-number-pill/.test(strip), "owner, last contact and Wrong number stay in the header");
+}
+
+console.log("\n── pass 3: the meeting time once — Call booked · website defers to the Next Action ──");
+{
+  const opts = { websiteControl: [{ value: "agency_controls", label: "An agency controls it" }, { value: "unknown", label: "Unknown" }], meetingWhen };
+  const booked = { call_booked_at: TOMORROW_0830, website_control: "agency_controls" };
+  const asNA = callBookedSummaryOf({ ...booked, next_action: "meeting", next_action_date: "2026-10-02", next_action_time: "08:30" }, NOW, opts);
+  ok(asNA === "Booked · An agency controls it", `the meeting IS the Next Action: no time here ("${asNA}")`);
+  const noNA = callBookedSummaryOf({ ...booked, next_action: null }, NOW, opts);
+  ok(noNA === "Fri 2 Oct 08:30 · An agency controls it", `booked, no Next Action: the time stays ("${noNA}")`);
+  const otherNA = callBookedSummaryOf({ ...booked, next_action: "call", next_action_date: "2026-10-01" }, NOW, opts);
+  ok(otherNA.startsWith("Fri 2 Oct 08:30"), "booked, a different Next Action: the time stays");
+  const otherTime = callBookedSummaryOf({ ...booked, next_action: "meeting", next_action_date: "2026-10-02", next_action_time: "10:00" }, NOW, opts);
+  ok(otherTime.startsWith("Fri 2 Oct 08:30"), "a Meeting at a DIFFERENT time is not the same meeting: the booked time stays");
+  ok(callBookedSummaryOf({ call_booked_at: null }, NOW, opts) === "Nothing recorded", "nothing booked, nothing known → Nothing recorded");
+  ok(callBookedSummaryOf({ call_booked_at: null, domain_control: "made_up_value" }, NOW, opts) === "Nothing recorded", "an unknown stored domain value says nothing (never 'Domain: theirs')");
+  ok(callBookedSummaryOf({ call_booked_at: "2026-09-20T09:00:00Z", next_action: null }, NOW, opts) === "Nothing recorded", "a past booking is not drawn (as before)");
+  ok(/callBookedSummaryOf\(lead, Date\.now\(\)/.test(read("src/components/LeadCrmPanel.tsx")) && !/function callBookedSummary\(/.test(read("src/components/LeadCrmPanel.tsx")), "the Work tab draws the line through the one rule");
 }
 
 console.log("\n── pass 2: one folding pattern for the Work tab ──");

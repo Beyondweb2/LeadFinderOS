@@ -100,3 +100,13 @@ entry copied the date to keep the list ordered. All four corrected to 2026-10-01
 `scripts/sales-feedback.test.ts` now refuses an entry dated after today's UK date and an id that does not
 start with its date. (Several docs and memory notes also say "2026-10-02" for the same day's work; left
 as written.)
+
+## Pass 3 (2026-10-01): the meeting time once
+
+The folded "Call booked · website" line pushed the booked time whenever a meeting was current, so a
+Meeting Next Action showed "Meeting · Tomorrow · 15:15" in the bar and "Fri 2 Oct 15:15 · …" again here.
+The line is now `workspaceHeader.callBookedSummaryOf`, using the header's own `meetingIsTheNextAction`
+(same UK day AND time): when it is the Next Action the line says **Booked** (no time); otherwise a current
+booking keeps its time here. Website and domain control follow. Unknown stored domain values say nothing.
+The meeting can never vanish: it is in the bar (as the Next Action) or here (with its time), and the
+header pill still shows it when it is not the Next Action. Fixture state: `docs/qa-fixtures.md`.

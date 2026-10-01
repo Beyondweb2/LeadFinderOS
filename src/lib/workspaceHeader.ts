@@ -10,7 +10,7 @@
    the meeting is still call_booked_at, Meeting booked is still salesStateOf, History and the filters
    are untouched.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import type { SalesStateView } from './leadState.ts';
+import { meetingIsCurrent, type SalesStateView } from './leadState.ts';
 import { hhmmOf, meetingDayTime } from './nextActionView.ts';
 
 type NextActionFacts = { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; call_booked_at?: string | null };
@@ -70,4 +70,24 @@ export function noteBesideTime(note: string | null | undefined, time: string | n
 export const PAYMENT_STAGE_STATUSES: ReadonlySet<string> = new Set(['price_given', 'won_pending_onboarding', 'payment_received', 'in_delivery', 'completed']);
 export function markPaidIsMain(status: string | null | undefined, view: SalesStateView | null | undefined): boolean {
   return PAYMENT_STAGE_STATUSES.has((status ?? '').trim()) || view?.state === 'won';
+}
+
+/** The folded "Call booked · website" line (declutter pass 3, 2026-10-01). The SAME rule as the header: when
+ *  the booked meeting IS the Next Action (meetingIsTheNextAction — same UK day and time), the Next Action bar
+ *  carries its day and time, so this line only says "Booked"; otherwise a current booking keeps its time here
+ *  so it is never lost. Then who controls the website and the domain. Display only. */
+export function callBookedSummaryOf(
+  l: NextActionFacts & { website_control?: string | null; domain_control?: string | null },
+  nowMs: number,
+  labels: { websiteControl: ReadonlyArray<{ value: string; label: string }>; meetingWhen: (iso: string) => string },
+): string {
+  const parts: string[] = [];
+  if (meetingIsCurrent(l.call_booked_at, nowMs)) parts.push(meetingIsTheNextAction(l) ? 'Booked' : labels.meetingWhen(l.call_booked_at!));
+  const site = labels.websiteControl.find((o) => o.value === l.website_control && o.value !== 'unknown');
+  if (site) parts.push(site.label);
+  const dom = (l.domain_control ?? '').trim();
+  /* Enumerated: a stored value this list does not know says nothing, never 'theirs'. */
+  const domWords: Record<string, string> = { client_owns: 'Domain: theirs', client_owns_agency_manages: 'Domain: theirs', third_party_owns: 'Someone else controls the domain', unknown: 'Domain owner unknown' };
+  if (domWords[dom]) parts.push(domWords[dom]);
+  return parts.length ? parts.join(' · ') : 'Nothing recorded';
 }
