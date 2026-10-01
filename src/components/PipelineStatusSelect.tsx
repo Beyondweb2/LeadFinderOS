@@ -3,7 +3,7 @@ import { PipelineStatusBadge, pipelineStatusLabel } from './PipelineStatusBadge'
 import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { maySetStatus } from '@/lib/access';
-import type { SalesStateView } from '@/lib/leadState';
+import { pillStatusOf, type SalesStateView } from '@/lib/leadState';
 
 /**
  * Editable pipeline-status control — the coloured PipelineStatusBadge as a Select
@@ -69,6 +69,7 @@ export function PipelineStatusSelect({
 
 function titleOf(status: string | null | undefined, stage: SalesStateView | null | undefined): string {
   const pipe = pipelineStatusLabel(status);
+  if (pillStatusOf(status, stage) !== (status ?? null)) return `Contacted (a logged contact reached them) · WhatsApp pipeline: ${pipe}`;
   return stage && stage.label !== pipe ? `${pipe} · sales stage: ${stage.label}${stage.detail ? ` (${stage.detail})` : ''}` : pipe;
 }
 
@@ -76,7 +77,7 @@ function titleOf(status: string | null | undefined, stage: SalesStateView | null
 export function OneStatusPill({ status, stage, compact }: { status: string | null | undefined; stage?: SalesStateView | null; compact?: boolean }) {
   return (
     <span className="inline-flex items-center" title={titleOf(status, stage)} data-testid="one-status">
-      <PipelineStatusBadge status={(status as PipelineStatus) ?? undefined} compact={compact} />
+      <PipelineStatusBadge status={(pillStatusOf(status, stage) as PipelineStatus) ?? undefined} compact={compact} />
     </span>
   );
 }
