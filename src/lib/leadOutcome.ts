@@ -8,8 +8,9 @@
        admin too (the Inbox pill's admin path wrote no suppression row — found in this audit);
      · when the sales state reading changed, one 'state_changed' History row says so
        (lead_log_state_change: "Status: Contacted → Interested"), and only then.
-   ⛔ It never sets a chosen Next Action: suggestions are pre-filled on the Work panel for the person to
-   save. Clearing to 'none' on Not interested is the one automatic next-action write the rule allows.
+   ⛔ ONE NEXT ACTION (Paul, 2026-10-02): an outcome that DEFINITELY means a task saves it — Call back → "Call",
+   Meeting booked → "Meeting", with no day (the person adds it) — through lead_set_follow_up (History). Every
+   other suggestion is only pre-filled on the Work panel for the person to save. Not interested clears it.
    Returns the words for what changed, for the Work panel's result line. */
 import { supabase } from '@/integrations/supabase/client';
 import { leadRpc } from '@/lib/leadRpc';
@@ -18,6 +19,9 @@ import { refusalText } from '@/lib/salesCrm';
 import { outcomePlan, salesStateOf, REACHED_OUTCOMES, type LeadStateInput, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
 
 export interface OutcomeLead extends LeadStateInput { id: string; next_action?: string | null }
+
+/** The note the saved task carries (the person can change it). */
+const OUTCOME_TASK_NOTE: Record<'call' | 'meeting', string | null> = { call: 'They asked to be called back', meeting: null };
 
 export interface OutcomeResult { plan: OutcomePlan; said: string[]; failed: string[]; after: SalesStateView }
 
@@ -76,6 +80,7 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
     }
   }
   if (plan.clearNextAction) await step('lead_set_follow_up', { _next_action: 'none', _date: null, _note: null }, 'Next action cleared');
+  if (plan.setNextAction) await step('lead_set_follow_up', { _next_action: plan.setNextAction, _date: null, _note: OUTCOME_TASK_NOTE[plan.setNextAction] }, `Next Action set: ${plan.setNextAction === 'call' ? 'Call' : 'Meeting'} · No date set`);
   if (plan.clearMeeting) await step('lead_set_call_booked', { _at: null }, 'Meeting cancelled');
   if (plan.suppressNumber) await step('lead_mark_wrong_number', {}, 'Number blocked: no templates, queue or automated WhatsApp');
   /* A refused write means the plan did not fully happen: the reading is then the contact alone, and no

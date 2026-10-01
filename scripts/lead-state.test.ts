@@ -74,7 +74,7 @@ console.log("\n── 2. the scenarios (Paul's list) ──");
   ok(st({ ...interested, call_booked_at: at(-11) }) === "meeting_booked" && st({ ...interested, call_booked_at: at(-13) }) === "interested", `a meeting stays current until ${MEETING_KEEP_AFTER_MS / 3600_000}h after it started, then the lead reads Interested again`);
   ok(meetingIsCurrent(at(1), NOW) && !meetingIsCurrent(null, NOW) && !meetingIsCurrent("garbage", NOW), "meetingIsCurrent: upcoming yes, none / garbage no");
   const cb = outcomePlan("call_back", { ...newLead, status: "initial_contact" });
-  ok(cb.askCallBackDay && !cb.star && cb.status === null, "Call back → asks for the day; the state is not rewritten");
+  ok(cb.askCallBackDay && cb.setNextAction === "call" && !cb.star && cb.status === null, "Call back → SAVES the Next Action Call (no day) and offers the day; the state is not rewritten");
   const cbs = suggestNextAction("call", "call_back")!;
   ok(cbs.nextAction === "call" && cbs.days === null, "…the Next Action is Call with NO day chosen for them (the person must pick)");
   const ni = outcomePlan("not_interested", { ...interested, next_action: "call" });
@@ -150,7 +150,9 @@ console.log("\n── 5. outcome → Next Action: suggested, pre-filled, human-s
   for (const v of ["email", "send_info", "meeting"]) ok(new RegExp(`add value if not exists '${v}'`).test(mig), `the enum gains '${v}'`);
   const crm = read("src/components/LeadCrmPanel.tsx");
   const naForm = read("src/components/NextActionForm.tsx");
-  ok(/requireDate: sug\.days === null && res\.plan\.askCallBackDay/.test(crm) && /const needsDay = \(!!preset\?\.requireDate && !date\)/.test(naForm) && /disabled=\{needsDay \|\| busy\}/.test(naForm), "Call back cannot be saved without a day (the one form, NextActionForm)");
+  /* ⛔ ONE NEXT ACTION (Paul, 2026-10-02): Call back is a real Next Action at once ("Call · No date set"), saved by the
+     outcome through the one write — no longer a pre-fill that could not be saved without a day. */
+  ok(/if \(plan\.setNextAction\) await step\('lead_set_follow_up'/.test(read("src/lib/leadOutcome.ts")) && !/requireDate/.test(crm + naForm) && /disabled=\{needsDay \|\| busy\}/.test(naForm), "Call back saves its Next Action (no day); the form only refuses a time with no day");
   const logUi = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
   ok(!/lead_set_follow_up/.test(logUi), "⛔ Log Contact itself never saves a Next Action");
   const naWrite = read("src/lib/nextActionWrite.ts");
@@ -234,7 +236,9 @@ console.log("\n── 9. one reading on every screen ──");
   const table = read("src/components/OutreachTable.tsx");
   /* 2026-10-01 (Paul: "Status means status. Next Action means what should happen next"): the meeting and the
      call-back prompt moved to the Next Action column (nextUpHint); the last contact is the status tooltip. */
-  ok(table.includes('useAllLoggedContacts()') && /data-testid="row-next-up"/.test(table) && !/data-testid="row-meeting"/.test(table), "Outreach rows: what is coming sits in Next Action; the last contact is the status tooltip (logged contacts for every lead)");
+  /* 2026-10-02 (Paul: "There should be ONE kind of Next Action"): the derived line is gone — the meeting and the
+     call-back ARE Next Actions now. */
+  ok(table.includes('useAllLoggedContacts()') && !/data-testid="row-next-up"/.test(table) && !/data-testid="row-meeting"/.test(table), "Outreach rows: the Next Action column draws only the saved Next Action; the last contact is the status tooltip");
   const hooks = read("src/hooks/useLastLoggedContacts.ts");
   ok(/\.order\('id'\)\.range\(from, from \+ 999\)/.test(hooks), "the batch read pages (PostgREST stops at 1,000 silently)");
   const badge = read("src/components/PipelineStatusBadge.tsx");

@@ -33,7 +33,7 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { meetingIsCurrent, meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
@@ -63,12 +63,14 @@ import { WorkSection } from '@/components/WorkSection';
    "no toast-only actions"). In short:
      No answer / Left voicemail / Sent / Spoke to owner → the record itself (the lead reads Contacted if
        it was New) + a suggested Next Action pre-filled below;
-     Interested → the star; Meeting booked → the star + asks when (call_booked_at) and sets the Next
-       Action "Meeting" on that day in the same Save;
-     Call back → asks which day: the Next Action "Call" cannot be saved without one;
+     Interested → the star; Meeting booked → the star + SAVES the Next Action "Meeting" (no date yet) and
+       asks when — Save there puts the day and time on that same Next Action (call_booked_at mirrors it);
+     Call back → SAVES the Next Action "Call · No date set" and offers the day below;
      Not interested → status Not interested, the queue stopped, the Next Action cleared;
      Wrong number → the number suppressed (contact_suppressions).
-   Suggestions are PRE-FILLED, never saved: Next Action stays human-set only (Paul, 2026-09-28).
+   ⛔ ONE NEXT ACTION (Paul, 2026-10-02): Call back and Meeting booked are tasks the rep definitely has, so they
+   are saved as real Next Actions (editable, filterable, completable). Every other suggestion is PRE-FILLED,
+   never saved.
    ⛔ "Agency controls site" is an ATTRIBUTE, not an outcome: the "Agency runs their site" chip sets
    website_control and logs no contact.
    ⛔ Reads come from the caller's OWN source (leadSourceFor): a salesperson reads the sales_leads
@@ -236,8 +238,8 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
 /** What a logged outcome did, for the result line under the buttons. */
 export interface OutcomeResultLine { contact: string | null; state: SalesStateView; change: string | null; said: string[]; failed: string[]; suggestion: string | null }
 type FollowOn = (outcome: string, channel: string, logged: boolean) => Promise<OutcomeResultLine>;
-/** A Next Action the panel pre-fills after an outcome (never saved by itself). requireDate: Call back —
- *  Save stays off until a day is picked. `why` names the outcome that suggested it. */
+/** A Next Action the panel pre-fills after an outcome (never saved by itself). `why` names the outcome that
+ *  suggested it. (Call back and Meeting booked are not pre-fills: they save their Next Action.) */
 type FollowUpPreset = NextActionPreset;
 
 /** logContactOpen: the person came to log a contact (Outreach's Call) — Log a contact starts expanded.
@@ -285,21 +287,27 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
     if (res.plan.suppressNumber) void qc.invalidateQueries({ queryKey: wrongNumberKey(leadId) });
     const sug = suggestNextAction(channel, outcome);
     let suggestion: string | null = null;
-    if (res.plan.askMeeting) { setAskWhen(true); suggestion = 'Add when it is below — it also sets the Next Action “Meeting”'; }
+    const saved = !!res.plan.setNextAction && !res.failed.some((x) => x.includes('Next Action set'));
+    if (res.plan.askMeeting) { setAskWhen(true); suggestion = 'Add when it is below — it goes on the Next Action “Meeting”'; }
+    else if (res.plan.askCallBackDay) {
+      /* The Call is already the Next Action (or was): the form opens on it so the day can be added. */
+      setPreset(null); setEditingNext(true); scrollToNext();
+      suggestion = res.plan.setNextAction ? (saved ? 'Add the day below if you know it' : null) : 'The Next Action is already a Call — change its day below if needed';
+    }
     else if (sug) {
-      setPreset({ nextAction: sug.nextAction, date: sug.days === null ? undefined : londonDayPlus(sug.days), note: sug.note, requireDate: sug.days === null && res.plan.askCallBackDay, why: outcomeLabel(outcome) });
+      setPreset({ nextAction: sug.nextAction, date: sug.days === null ? undefined : londonDayPlus(sug.days), note: sug.note, why: outcomeLabel(outcome) });
       scrollToNext();
       const word = NEXT_ACTION_OPTIONS.find((o) => o.value === sug.nextAction)?.label ?? sug.nextAction;
       suggestion = sug.days === null
-        ? (res.plan.askCallBackDay ? 'Pick the day to call back below, then Save' : `Next Action “${word}” is filled in below — pick a day and Save`)
+        ? `Next Action “${word}” is filled in below — pick a day and Save`
         : `Next Action “${word} · ${sug.days === 0 ? 'today' : sug.days === 1 ? 'tomorrow' : `in ${sug.days} days`}” is filled in below — Save to keep it`;
     }
     return { contact: null, state: res.after, change: stateChangeText(before, res.after), said: res.said, failed: res.failed, suggestion };
   };
 
   /* ⛔ ONE NEXT-ACTION WRITE (src/lib/nextActionWrite.ts, 2026-10-02): this panel, the Outreach row and the phone
-     card save through the same functions. The meeting: ONE Save writes the time (call_booked_at) and the Next
-     Action "Meeting" on that day — a person pressed Save with both shown, so it is still human-set. */
+     card save through the same functions. The meeting: ONE Save puts the day and time on the Next Action
+     "Meeting"; the server sets call_booked_at as its mirror. There is no second meeting-time editor. */
   const afterWrite = (r: WriteResult, okText: string, before?: CrmRow | null) => {
     if (r.ok) { if (r.patch) qc.setQueryData<CrmRow | null>(leadCrmKey(leadId), (row) => (row ? { ...row, ...r.patch } as CrmRow : row)); toast({ title: okText }); }
     else { if (before !== undefined) qc.setQueryData(leadCrmKey(leadId), before); toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' }); }
@@ -374,19 +382,12 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
 
       <InternalNote save={save} />
 
-      {/* Folded to its summary (declutter pass 2): the booked time and who controls the site and domain. */}
-      <WorkSection icon={BriefcaseBusiness} title="Call booked · website" testId="call-booked" summary={callBookedSummary(lead)}>
+      {/* Folded to its summary (declutter pass 2): who controls the site and domain.
+          ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
+          meeting — it could set a booking with no Next Action ("+ Set" over "Meeting · Fri 2 Oct 15:15"). A meeting
+          is booked, moved and completed as the Next Action "Meeting" only. */}
+      <WorkSection icon={BriefcaseBusiness} title="Website · domain" testId="call-booked" summary={callBookedSummary(lead)}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-medium text-muted-foreground">Call booked for (UK time)</label>
-            <Input type="datetime-local" key={lead.call_booked_at ?? 'none'} className="h-9 text-xs"
-              defaultValue={lead.call_booked_at ? londonLocalInput(lead.call_booked_at) : ''}
-              onBlur={async (e) => {
-                const v = e.target.value ? londonInstant(e.target.value.slice(0, 10), e.target.value.slice(11, 16)) : null;
-                if (v === (lead.call_booked_at ? new Date(lead.call_booked_at).toISOString() : null)) return;
-                await save('lead_set_call_booked', { _at: v }, v ? 'Call booked' : 'Call cleared', { call_booked_at: v });
-              }} />
-          </div>
           <div className="space-y-1.5">
             <label className="block text-[11px] font-medium text-muted-foreground">Who controls the website?</label>
             <Select value={lead.website_control ?? ''} onValueChange={(v) => void save('lead_set_website_control', { _value: v, _note: lead.website_control_note }, 'Saved', { website_control: v })}>
@@ -490,10 +491,9 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
   );
 }
 
-/** The Call booked section's folded line: the booked time (while current), who controls the site and the domain. */
+/** The Website section's folded line: who controls the site and the domain. (The meeting is the Next Action.) */
 function callBookedSummary(lead: CrmRow): string {
   const parts: string[] = [];
-  if (meetingIsCurrent(lead.call_booked_at, Date.now())) parts.push(meetingWhen(lead.call_booked_at!));
   const site = WEBSITE_CONTROL_OPTIONS.find((o) => o.value === lead.website_control && o.value !== 'unknown');
   if (site) parts.push(site.label);
   const dom = DOMAIN_CONTROL_OPTIONS.find((o) => o.value === lead.domain_control);

@@ -120,7 +120,6 @@ import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
 import { LeadDetailDialog, type WorkspaceTab } from './LeadDetailDialog';
 import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
-import { nextUpHint } from '@/lib/nextActionView';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
 import { isLiveLeadWithoutTrade, OUTREACH_PRESETS, type OutreachPreset } from '@/lib/leadTrade';
@@ -175,7 +174,7 @@ import { crawlButtonLabel } from '@/lib/crawlBatch';
 import { isColdOutreachTemplate } from '@/lib/coldOutreach';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { shownStatusMatches } from '@/lib/statusFilter';
-import { contactAgo, isStarred, meetingIsCurrent, meetingWhen, salesStateOf, type SalesStateView } from '@/lib/leadState';
+import { contactAgo, isStarred, salesStateOf, type SalesStateView } from '@/lib/leadState';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -2881,14 +2880,10 @@ export function OutreachTable({
                                 the Next Action column. */}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            {/* The one Next Action form and write, the same as the lead workspace (NextActionForm). */}
+                            {/* ⛔ ONE NEXT ACTION (2026-10-02, Paul): "+ Set", or the saved Next Action and its ✓ — nothing
+                                else. A booked meeting and a logged call-back ARE Next Actions now (lead_set_follow_up), so
+                                no derived line is drawn underneath. The one form and write, as the lead workspace. */}
                             <NextActionEditor lead={lead} />
-                            {/* What happens next, when no Next Action is stored: a booked meeting, or a call-back
-                                someone logged without picking a day (nextUpHint — never writes anything). */}
-                            {(() => {
-                              const h = nextUpHint(lead, lastLogged.data?.get(lead.id) ?? null, Date.now());
-                              return h ? <div className={cn('mt-1 whitespace-nowrap text-[10px] font-semibold', h.tone === 'meeting' ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400')} data-testid="row-next-up" title={h.title}>{h.text}</div> : null;
-                            })()}
                           </TableCell>
                         </>
                       )}
