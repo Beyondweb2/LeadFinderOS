@@ -110,10 +110,13 @@ export function pillStatusOf(status: string | null | undefined, stage: Pick<Sale
   if (stage?.state === 'contacted' && PIPELINE_NOT_CONTACTED.has(s)) return 'initial_contact';
   return status ?? null;
 }
+/** Statuses on which a leftover send stamp means nothing was delivered: a failed send, or a lead put back to
+ *  New / Queued after one (a temporary failure re-queues and keeps the stamp — whatsapp-failure.ts). */
+export const STAMP_NOT_CONTACT_STATUSES: ReadonlySet<string> = new Set([...FAILED_SEND_STATUSES, 'not_contacted', 'queued', '']);
 export function openerReallySent(l: Pick<LeadStateInput, 'status' | 'whatsapp_sent_at' | 'whatsapp_ever_delivered'>): boolean {
   if (!l.whatsapp_sent_at) return false;
   if (l.whatsapp_ever_delivered === true) return true;
-  return !FAILED_SEND_STATUSES.has((l.status ?? '').trim());
+  return !STAMP_NOT_CONTACT_STATUSES.has((l.status ?? '').trim());
 }
 
 export interface SalesStateView {

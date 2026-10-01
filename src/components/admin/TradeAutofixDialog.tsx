@@ -34,10 +34,16 @@ async function check(): Promise<Result[]> {
     const { data } = await sb.from('ai_audits').select('lead_id, business_type').in('lead_id', ids.slice(i, i + 200));
     for (const a of (data ?? []) as { lead_id: string; business_type: string | null }[]) if (a.business_type) audits.set(a.lead_id, [...(audits.get(a.lead_id) ?? []), a.business_type]);
   }
+  /* The free crawl cache: the services each business's own website lists (no new crawl here). */
+  const services = new Map<string, string[]>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await sb.from('lead_crawl_checks').select('lead_id, services:result->siteInfo->services').in('lead_id', ids.slice(i, i + 200));
+    for (const r of (data ?? []) as { lead_id: string; services: unknown }[]) if (Array.isArray(r.services)) services.set(r.lead_id, [...(services.get(r.lead_id) ?? []), ...r.services.map(String)]);
+  }
   return leads.map((l) => {
     const c = l.campaign_id ? campById.get(l.campaign_id) : undefined;
     return { leadId: l.id, name: l.business_name ?? 'Unnamed', saved: false,
-      v: inferTrade({ businessName: l.business_name, campaignName: c?.name ?? null, campaignTradeSlug: c?.trade_slug ?? null, auditBusinessTypes: audits.get(l.id) ?? [] }) };
+      v: inferTrade({ businessName: l.business_name, campaignName: c?.name ?? null, campaignTradeSlug: c?.trade_slug ?? null, auditBusinessTypes: audits.get(l.id) ?? [], websiteServices: services.get(l.id) ?? [] }) };
   });
 }
 
@@ -77,7 +83,7 @@ export function TradeAutofixDialog({ open, onOpenChange, onDone }: { open: boole
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5 text-violet-500" />Fill in missing trades</DialogTitle>
           <DialogDescription>
-            Works out each lead&rsquo;s trade from what we already hold: its audit, its campaign&rsquo;s trade or name, and a clear trade word in the business name.
+            Works out each lead&rsquo;s trade from what we already hold: its audit, the services its own website lists, its campaign&rsquo;s trade or name, and a clear trade word in the business name.
           </DialogDescription>
         </DialogHeader>
         {!results ? (

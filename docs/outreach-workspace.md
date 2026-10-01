@@ -118,3 +118,50 @@ Dry run on the live 42: **36 high (33 barbers, 3 plumbers), 5 review, 1 unresolv
   horizontal overflow. The bell no longer counts Test's 9 stale reply notices.
 - Not done: the admin screens were not clicked (no admin session); "Fix automatically" was run through the
   same function from here. Nobody has visually reviewed the screens.
+
+## E. Claimable ≠ WhatsApp-reachable, legacy barbers, the last trades, the sweep (2026-10-01, Paul's decisions)
+
+**Claim rule** (migration `20261001230000` + `230100`): `lead_claim_block(lead, caller)` is THE rule —
+`claim_lead`, `sales_pool` and Find Leads' identity state ('protected' / 'claimable') read it. It blocks:
+owned by someone else, archived, client, opted out, not interested / closed, a wrong number, any
+`contact_suppressions` row, or a genuine contact attempt on record (`lead_contact_attempt_at`). It never
+reads a channel fact (No WhatsApp, line type, a bounced email). `lead_first_contact_at` reads the WhatsApp
+stamp through `lead_opener_really_sent` (the SQL twin of `openerReallySent` — failed-send statuses plus a
+lead put back to New / Queued; ever-delivered still counts). `assign_lead_on_contact`: an automatic queue
+send assigns the lead only once Meta DELIVERS it (a person's own send at once), so a send that then fails
+no longer hands the lead to the book owner.
+
+**The 209 No WhatsApp leads** (all held by Paul — the 2026-09-27 backfill assigned every "contacted" lead to
+the book owner, and its contact date WAS the failed stamp): 171 released to the unowned pool through
+`assign_lead(null)` as admin (History `lead_unassigned`), each with no genuine contact, no human activity, no
+star and no Next Action. **171 claimable now.** Still not claimable: 5 held by Paul (2 had a real delivered
+send, 3 human activity) and 33 archived. They keep status `no_whatsapp` (the fact reps need), not Contacted.
+
+**Legacy barbers:** 45 live leads in the retired barber campaigns (Paul's 33 + 12 more from the same
+campaigns; none had a Findable audit, a reply, a send after 2026-09-16, onboarding, a Next Action or any
+human activity; the 4 "interested" ones were marked in the barber era) were archived via
+`lead_set_archived` with a History note. Nothing deleted; statuses, history and ownership kept; searchable
+under Archived.
+
+**The five reviews:** none had a website, audit, crawl or category except Dogs of Southsea (the unresolved
+one), whose stored page (a Fresha listing, robots.txt allows it) lists its services "Dog Grooming" → saved
+'dog groomers' (source `website_services`, high). `tradeInference` now treats the business's own website
+services (the free crawl cache `lead_crawl_checks.result.siteInfo.services`) as a stored trade. The 3
+barber-campaign ones were archived as legacy. **Left for Paul: SOUL PLUMBING UK LTD, Buddies Dog grooming**
+(their names say it, but no free evidence exists — a Google category would be a paid lookup).
+
+**The sweep** (attempt / contact / WhatsApp still interchangeable): fixed — History downgrade from a later
+no-answer (`stateAfterPlan` keeps `reached`); the stamp on a re-queued lead; the rep cohort's first contact
+(reached only, like the funnel); the cold-opener guards counting `failed_temporary` / `simulated` as prior
+contact (5 unassigned mobiles could never get an opener); follow-up eligibility needing a REAL opener /
+report; the queue's already-sent read (delivered / read too); the WhatsApp panel's "Sent" line; Focus /
+Inbox / useInbox "not failed" → `isRealSend`; `whatsapp_ever_delivered` loaded by admin-overview and
+conversation-triage; stale "mobile = WhatsApp-capable" comments. Left as is (intentional): coverage "worked"
+= attempted; the anti-duplicate opener guards counting attempts; `sales_queue_opener`.
+Still inconsistent (small): the Outreach "status" FILTER reads the stored pipeline status while the pill can
+read Contacted for a lead reached by phone (2 leads) — the filter runs over all leads, the logged contacts
+are read per page; `salesStateOf` in the admin attention labels and the triage AI hint get no logged
+contact, so a lead reached by phone reads New there (labels only, counts unaffected); the wa.me "Open
+App" path from Manage (`handleDialogSent` → `executeContact`) still records an attempt with status
+`initial_contact` (14 legacy, archived leads have only that).
+Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim-rule.sql` 16/16.

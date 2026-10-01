@@ -10,8 +10,8 @@ import type { Country } from '@/types/outreach';
  * (same eligibility rule, same country map). Client and edge can't share a module
  * (npm vs esm.sh imports), same as toWhatsAppNumber / normalizeWaNumber.
  *
- * We only classify the carrier line type; we do NOT probe WhatsApp itself. A mobile
- * is the proxy for "WhatsApp-capable". We block ONLY when we're confident the number
+ * We only classify the line type from the number's FORMAT (offline); we do NOT probe WhatsApp. A mobile
+ * is only "worth trying" on WhatsApp — never proof it is on WhatsApp (whatsAppCapability.ts, 2026-10-01). We block ONLY when we're confident the number
  * is NOT a normal mobile (landline / VoIP / toll-free / etc.). Anything we can't
  * parse or can't type stays ELIGIBLE — so no real mobile is ever wrongly blocked and
  * existing send behaviour for mobiles is unchanged.

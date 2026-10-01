@@ -192,8 +192,8 @@ export interface OutreachLead {
   contact_method?: string | null;
   whatsapp_status?: string | null;
   whatsapp_checked_at?: string | null;
-  // HLR line-type (Twilio Lookup): 'mobile' | 'landline' | 'voip' | 'unknown' | null.
-  // 'mobile' = WhatsApp-capable proxy (legal; no WhatsApp probing).
+  // Line type from the number's format (offline libphonenumber — no network lookup): 'mobile' | 'landline' | 'voip' |
+  // 'unknown' | null. 'mobile' is NOT "on WhatsApp" — read reachability through whatsAppCapability.ts.
   line_type?: string | null;
   line_type_checked_at?: string | null;
   // WhatsApp outreach (queue + processor). whatsapp_template is the chosen approved

@@ -44,7 +44,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // deno-lint-ignore no-explicit-any
 type Service = any;
 interface Pending { id: string; lead_id: string | null; phone: string | null; body: string | null; message_type: string | null; created_at: string }
-interface LeadRow { id: string; status: string | null; amount_paid: number | null; is_potential_work: boolean | null; call_booked_at: string | null; whatsapp_sent_at: string | null; phone: string | null }
+interface LeadRow { id: string; status: string | null; amount_paid: number | null; is_potential_work: boolean | null; call_booked_at: string | null; whatsapp_sent_at: string | null; whatsapp_ever_delivered?: boolean | null; phone: string | null }
 
 const TRIAGE_TOOL = {
   type: "function",
@@ -78,7 +78,7 @@ async function run(service: Service): Promise<Record<string, unknown>> {
   const leadIds = [...new Set(pending.map((p) => p.lead_id).filter((x): x is string => !!x))];
   const leads = new Map<string, LeadRow>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, phone").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, status, amount_paid, is_potential_work, call_booked_at, whatsapp_sent_at, whatsapp_ever_delivered, phone").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(`leads: ${error.message}`);
     for (const l of (data ?? []) as LeadRow[]) leads.set(l.id, l);
   }

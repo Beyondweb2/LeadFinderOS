@@ -40,7 +40,7 @@ export async function hookFollowupEligible(service: any, lead: HookLeadLite, now
     const { data: reports } = await service
       .from("whatsapp_messages")
       .select("created_at")
-      .eq("phone", to).eq("direction", "outbound").eq("template_name", "audit_reply").neq("status", "failed")
+      .eq("phone", to).eq("direction", "outbound").eq("template_name", "audit_reply").in("status", ["sent", "delivered", "read"]) // a REAL report send (2026-10-01): a temporarily failed / simulated one is not
       .order("created_at", { ascending: false }).limit(1);
     const reportAt = reports?.[0]?.created_at ? new Date(reports[0].created_at).getTime() : 0;
     if (!reportAt) return { eligible: false, reason: "no_report" };

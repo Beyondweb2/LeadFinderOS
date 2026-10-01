@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-claim-no-whatsapp', date: '2026-10-01', title: 'No WhatsApp leads can be claimed to call', audience: 'all',
+    body: 'A business that is not on WhatsApp can now be claimed and worked by phone, email or social.',
+    report: {
+      added: ['171 No WhatsApp businesses are back in the unowned pool for salespeople to claim from Find Leads.'],
+      changed: [
+        'Claiming depends only on sales facts: not owned by someone else, not archived, not a client, not opted out / not interested / a wrong number / suppressed, and no real contact yet. No WhatsApp, a landline or a bounced email never blocks it.',
+        'A WhatsApp that Meta rejected is not a contact anywhere: claims, the funnels, rep numbers, follow-ups and the WhatsApp panel all agree.',
+        'An automatic WhatsApp only gives the lead an owner once it is delivered.',
+      ],
+      removed: ['45 retired barber-campaign leads from the active list (archived — kept, searchable under Archived).'],
+      effect: 'Reps can call the businesses WhatsApp could not reach. The No WhatsApp label stays, so they know to use another channel.',
+    } },
   { id: '2026-10-01-outreach-workspace', date: '2026-10-01', title: 'Outreach is the full sales workspace', audience: 'all',
     body: 'Truthful contact status, honest WhatsApp labels, Next Actions in their own column, and the AI audit where you work the call.',
     report: {

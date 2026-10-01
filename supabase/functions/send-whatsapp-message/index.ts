@@ -79,7 +79,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts). */
-const BUILD_ID = "2026-10-01a";
+const BUILD_ID = "2026-10-01b";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -407,7 +407,8 @@ Deno.serve(async (req) => {
           .from("whatsapp_messages")
           .select("id, lead_id")
           .eq("phone", to)
-          .neq("status", "failed")
+          // A send that never left is not prior contact; a NULL status still blocks (sending path).
+          .or("status.is.null,status.not.in.(failed,failed_temporary,simulated)")
           .limit(1);
         if (Array.isArray(priorAny) && priorAny.length > 0) {
           return json({ ok: false, error: "phone_already_contacted", template: templateName }, 200);

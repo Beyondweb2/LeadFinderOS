@@ -28,6 +28,7 @@ import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { logFeatureUse } from '@/lib/featureUsage';
 import { Empty, Panel } from '@/components/salesDash/ui';
 import { cn } from '@/lib/utils';
+import { isRealSend } from '@/lib/realSend';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    FOCUS MODE (Sales Experience release 4, 2026-09-28): one lead at a time, in the order the dashboard
@@ -124,7 +125,7 @@ export default function Focus() {
   const town = lead?.derived_town || lead?.search_location || null;
   /* The newest WhatsApp message either way (the thread below) — Last contact reads it beside the
      logged contacts, so "WhatsApp · Replied · 20m ago" shows when that is the newest touch. */
-  const newestWa = (msgQ.data ?? []).filter((m) => m.status !== 'failed').slice(-1)[0];
+  const newestWa = (msgQ.data ?? []).filter((m) => m.direction === 'inbound' || isRealSend(m.status)).slice(-1)[0];
   const st = useLeadSalesState(item?.leadId ?? '', newestWa ? { direction: newestWa.direction === 'inbound' ? 'inbound' : 'outbound', at: newestWa.created_at } : null);
   const team = useTeamDirectory();
 

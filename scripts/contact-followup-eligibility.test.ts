@@ -34,6 +34,7 @@ function makeService(s: Scenario) {
         select() { return builder; },
         eq(col: string, val: string) { filt[col] = val; return builder; },
         neq() { return builder; },
+        in() { return builder; }, // the opener lookup reads REAL sends only (.in status sent/delivered/read, 2026-10-01)
         order() { return builder; },
         gt() { isInboundGt = true; return builder; },
         limit() {
