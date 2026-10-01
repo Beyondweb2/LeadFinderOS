@@ -249,3 +249,24 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   reads `useAllLoggedContacts` before filtering, and its list pill and filter read the same `listStageOf`.
   Unchanged: the Inbox keeps unassigned and paying conversations always visible, and the hidden
   not-interested and closed rows.
+
+## I. No new 'interested' status; the open Inbox conversation stays pinned (2026-10-02)
+
+- **Routes that could still store 'interested'** (traced in the live database, the edge functions and `src`):
+  `lead_set_stage('interested')` for both roles; any direct row write (the admin's RLS, the service role,
+  SQL); and a queue-cancel restore from `previous_status` (one archived barber row has `interested` there).
+  The other database functions that name it (`lead_log_contact`, `lead_record_call`,
+  `lead_log_state_change`) use it as an outcome or state name, not a status. No edge function or client
+  source writes it (swept by `scripts/no-legacy-interested.test.ts`; `demoLeads.ts` is local demo data).
+- **Normalised, not rejected** (migration `20261002140000`). `lead_set_stage('interested')` →
+  `lead_mark_interested` (the star, History "Starred"). The BEFORE trigger
+  `trg_outreach_leads_no_legacy_interested` turns any new write of it (an insert, or an update from
+  another status) into the star, keeping the real status (an insert gets `not_contacted`). It sorts before
+  the other status triggers. Rows already holding `interested` (2 archived) are history: untouched,
+  rendered through `pillStatusOf` / `salesStateOf`. A raw not_interested → interested write now stays Not
+  interested (+ the star) and lifts no block; only `lead_revive` revives. Live rolled-back test:
+  `supabase/tests/no-legacy-interested.sql` (13 checks).
+- **Inbox, the open conversation.** Not a permission rule: the list drew the empty state when
+  `filteredList` was empty, which replaced the pinned open conversation. The admin always has matches; a
+  salesperson with one conversation had none. The empty state now waits for `shownList`. The marker and
+  select-all (which reads `filteredList`) are unchanged.
