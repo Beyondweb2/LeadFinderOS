@@ -27,11 +27,9 @@ export const SALES_ROUTE_PATTERNS: readonly string[] = [
   /* The Sales Dashboard (2026-09-28): a salesperson's own numbers, scoped by the server
      (fn sales-performance), never by the page. */
   '/sales-dashboard',
-  /* Earnings (2026-09-28): a salesperson's own commission from the payment ledger (fn sales-earnings
-     scopes it server-side). */
+  /* Earnings (now part of Sales) and Focus Mode (retired), 2026-10-01: kept only so their redirects —
+     to Sales, and to Outreach — open for a salesperson. Neither is in any menu. */
   '/earnings',
-  /* Focus Mode (2026-09-28): one of the person's own leads at a time — the same reads and lead
-     functions as the lead workspace. */
   '/focus',
   '/outreach',
   '/inbox',
@@ -57,10 +55,12 @@ function matches(pattern: string, path: string): boolean {
   return p.every((seg, i) => seg.startsWith(':') ? a[i].length > 0 : seg === a[i]);
 }
 
-/** A salesperson's navigation, in the order of the working day (Paul, 2026-09-28): results → find
- *  leads → work the pipeline → market coverage → messages. Order only — canOpenRoute decides what is
- *  shown. The sidebar reads it; the mobile bar follows it (Inbox stays on the bar, see there). */
-export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/earnings', '/focus', '/find-leads', '/outreach', '/coverage', '/inbox'];
+/** A salesperson's main navigation (Paul, 2026-10-01): do the work → handle WhatsApp → find more leads →
+ *  see how it is going. Order only — canOpenRoute decides what is shown. The sidebar reads it; the mobile
+ *  bar follows it. Earnings is part of Sales now and Focus Mode is retired (both old paths redirect). */
+export const SALES_NAV_ORDER: readonly string[] = ['/outreach', '/inbox', '/find-leads', '/sales-dashboard'];
+/** Kept for salespeople, but not a daily destination: shown under "More" (sidebar and phone). */
+export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage'];
 
 /** Sort nav items for a role. Admin: unchanged (the list's own order). Sales: SALES_NAV_ORDER, and any
  *  sales-visible item not named there goes AFTER them, in list order — never jumps to the top. */

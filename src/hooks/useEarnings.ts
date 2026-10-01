@@ -9,7 +9,7 @@ export interface EarningsResponse {
   ok: true;
   scope: { person: string | null; self: boolean; role: string };
   lines: CommissionLine[];
-  clients: (ClientEarnings & { remainingPotential: number; subscriptionStatus: string | null })[];
+  clients: (ClientEarnings & { remainingPotential: number; subscriptionStatus: string | null; package: string | null })[];
   totals: EarningsTotals;
   commissionable: boolean;
   bySeller: { sellerId: string; earned: number; due: number; offset: number; paidOut: number }[];

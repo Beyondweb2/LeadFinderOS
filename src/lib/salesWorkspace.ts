@@ -65,7 +65,7 @@ export interface NextAction { kind: string; leadId: string; name: string; title:
 export interface FeedItem { kind: string; leadId: string; name: string; text: string; at: string; tone: Tone; link: ActionLink }
 export interface HealthWarning { key: string; tone: Tone; text: string; group?: FollowUpGroup }
 export interface Milestone { key: string; label: string; achieved: boolean; achievedAt: string | null; progress: number | null; target: number | null; note?: string }
-export type FollowUpGroup = 'overdue' | 'dueToday' | 'repliedUnanswered' | 'interestedUntouched' | 'signupSent' | 'goingCold' | 'meetings';
+export type FollowUpGroup = 'overdue' | 'dueToday' | 'repliedUnanswered' | 'interestedUntouched' | 'signupSent' | 'goingCold' | 'meetings' | 'warm';
 export type StageKey = 'new' | 'contacted' | 'replied' | 'interested' | 'signup_sent' | 'paid';
 export interface TargetInput { period?: 'week' | 'month'; contacts?: number; replies?: number; interested?: number; wins?: number; commission?: number }
 
@@ -162,7 +162,7 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
   for (const l of actBy.values()) l.sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at));
 
   const pipeline = STAGES.map((s) => ({ ...s, count: 0, leads: [] as PipeLead[] }));
-  const followUps: Record<FollowUpGroup, PipeLead[]> = { overdue: [], dueToday: [], repliedUnanswered: [], interestedUntouched: [], signupSent: [], goingCold: [], meetings: [] };
+  const followUps: Record<FollowUpGroup, PipeLead[]> = { overdue: [], dueToday: [], repliedUnanswered: [], interestedUntouched: [], signupSent: [], goingCold: [], meetings: [], warm: [] };
   const warmth: Record<Warmth, number> = { warm: 0, needs_follow_up: 0, going_cold: 0 };
   const actions: (NextAction & { rank: number })[] = [];
   const waiting: { leadId: string; name: string; since: string; ms: number }[] = [];
@@ -192,6 +192,8 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     // ── The conversation, by the one rule ──
     const st = conversationState({ messages: f.thread, lastReadAt: null, leadStatus: f.lead.status, nextAction: lead?.next_action, nextActionDate: lead?.next_action_date, nowMs: now });
     const out = f.won || f.notInterested;
+    /* Warm (Focus Mode's list, moved to Sales → What to do next, 2026-10-01): the same warmth reading. */
+    if (!out && w === 'warm') followUps.warm.push(pl);
 
     /* ── A booked meeting (lead state audit, 2026-09-30): it outranks everything — prepare for it, then
        log how it went. Every upcoming one is on the Meetings list; the action is for the next 36 hours

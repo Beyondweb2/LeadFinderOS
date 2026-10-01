@@ -230,7 +230,9 @@ console.log('\n── COLLAPSIBLE SECTIONS: ONE PATTERN ──');
   const admin = read('src/pages/Dashboard.tsx') + read('src/components/admin/controlCentre.tsx') + read('src/components/admin/intelligence.tsx') + read('src/components/admin/clientHealth.tsx');
   ok(['admin.cc.attention', 'admin.cc.today', 'admin.cc.team', 'admin.cc.funnel', 'admin.cc.channels', 'admin.cc.calls', 'admin.cc.revenue', 'admin.cc.contribution', 'admin.cc.commission', 'admin.cc.cost', 'admin.cc.clients'].every((k) => admin.includes(`"${k}"`)) && /storageKey="free-checks"/.test(admin) && /storageKey="submissions"/.test(admin), '· every Admin dashboard section collapses');
   const sales = read('src/pages/SalesDashboard.tsx') + read('src/components/salesDash/sections.tsx');
-  ok(['sales.conversion', 'sales.campaigns', 'sales.templates', 'sales.pipeline', 'sales.trends'].every((k) => sales.includes(k)), '· the Sales dashboard sections collapse');
+  /* The Sales page (2026-10-01): the lists, the payments and "More numbers" collapse; the ladder does not. */
+  const salesParts = sales + read('src/components/salesDash/earningsParts.tsx');
+  ok(['sales.next-actions', 'sales.follow-ups', 'sales.payments', 'sales.more'].every((k) => salesParts.includes(k)), '· the Sales page sections collapse');
   const hub = read('src/pages/ClientHub.tsx');
   ok(/<CollapsibleBlock id=\{`hub-\$\{k\}`\} forceOpen=\{focused\} persistKey=\{`hub\.\$\{k\}`\}/.test(hub) && (hub.match(/<Stage k="/g) ?? []).length >= 10, '· every Paid Client hub stage collapses, each with its own key');
   ok(/data-testid="client-summary"/.test(hub), '· the client summary stays visible above the collapsible stages');

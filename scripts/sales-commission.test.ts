@@ -151,9 +151,11 @@ console.log("\n── the one-time celebration ──");
   ok(claim > 0 && show > claim, "the newest commission is CLAIMED before it is shown — a reload or second tab never replays it");
   ok(/l\.kind === 'payment' && l\.commission > 0 && \(l\.status === 'due' \|\| l\.status === 'paid'\)/.test(c), "only real earned commission celebrates — never a reversal, projected or £0 line");
   ok(/prefers-reduced-motion: reduce/.test(c), "reduced motion: no count-up");
-  const dash = read("src/pages/SalesDashboard.tsx"), earn = read("src/pages/Earnings.tsx");
-  ok(/<EarnedCelebration lines=\{earn\.data\?\.lines\} enabled=\{viewingSelf && !!earn\.data\?\.commissionable\} \/>/.test(dash) && /enabled=\{viewingSelf && !!d\?\.commissionable\}/.test(earn), "only on your own numbers (never the admin viewing a rep)");
-  ok(/useEarnings\(isAdmin \? person : 'me'\)/.test(dash), "the dashboard's commission is the Earnings page's number (one function, one rule)");
+  /* 2026-10-01: Earnings is part of the Sales page (one page, one celebration, one earnings read). */
+  const dash = read("src/pages/SalesDashboard.tsx");
+  ok(/<EarnedCelebration lines=\{e\?\.lines\} enabled=\{viewingSelf && !!e\?\.commissionable\} \/>/.test(dash) && (dash.match(/<EarnedCelebration/g) ?? []).length === 1, "once, and only on your own numbers (never the admin viewing a rep)");
+  ok(/useEarnings\(isAdmin \? person : 'me'\)/.test(dash) && (dash.match(/useEarnings\(/g) ?? []).length === 1, "the page's commission comes from one earnings read (one function, one rule)");
+  ok(/<Route path="\/earnings" element=\{<Navigate to="\/sales-dashboard" replace \/>\} \/>/.test(read("src/App.tsx")), "/earnings (old links, notifications) opens the Sales page");
 }
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }

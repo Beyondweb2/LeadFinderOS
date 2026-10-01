@@ -52,7 +52,8 @@ ok(r1.campaigns.find((c) => c.campaignId === "c2")?.lastActivityAt === "2026-07-
 const fold = read("src/lib/salesPerformance.ts"), fn = read("supabase/functions/sales-performance/index.ts");
 ok(!/dashboard_hidden|user_preferences/.test(fold + fn), "the server's numbers never read the preference");
 const page = read("src/pages/SalesDashboard.tsx");
-ok(/<Funnel f=\{d\.funnel\} \/>/.test(page), "the funnel is drawn from the unfiltered totals");
+/* 2026-10-01: the funnel card went in the Sales page merge; its one number (contacted → sale) is drawn from the same unfiltered totals. */
+ok(/rate\(d\.funnel\.won, d\.funnel\.contacted\)/.test(page), "contacted → sale is drawn from the unfiltered totals");
 const mig = read("supabase/migrations/20260928150000_user_preferences.sql");
 ok((mig.match(/user_id = \(select auth\.uid\(\)\)/g) ?? []).length === 4 && /revoke all on public\.user_preferences from public, anon/.test(mig), "one own row per person: read, insert and update only your own; anon has nothing");
 ok(!/for delete|grant[^;]*delete/.test(mig), "…and nobody deletes through the browser");

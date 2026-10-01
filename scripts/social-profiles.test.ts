@@ -171,7 +171,7 @@ const enrich = read("supabase/functions/enrich-business/index.ts");
 ok(/requireAdmin|role !== ["']admin["']/.test(enrich), "paid Enrich is admin-only");
 ok(/coalesce\(btrim|email: null|!hasEmail|leadHasEmail/.test(enrich), "paid Enrich never overwrites an email");
 ok(!/facebook_url:\s*/.test(enrich.slice(enrich.indexOf("Deno.serve"))), "paid Enrich writes socials only through the one save path");
-ok(/SocialProfilesPanel lead=/.test(read("src/components/LeadDetailDialog.tsx")) && /SocialLinks/.test(read("src/pages/Focus.tsx")) && /SocialLinks/.test(read("src/pages/Inbox.tsx")) && /SocialLinks/.test(read("src/components/LeadDetailDialog.tsx")) && /SocialLinks/.test(read("src/components/OutreachTable.tsx")), "one Socials line on the popup, Outreach, Focus and Inbox + the review panel on the Prospect tab");
+ok(/SocialProfilesPanel lead=/.test(read("src/components/LeadDetailDialog.tsx")) && /SocialLinks/.test(read("src/pages/Inbox.tsx")) && /SocialLinks/.test(read("src/components/LeadDetailDialog.tsx")) && /SocialLinks/.test(read("src/components/OutreachTable.tsx")), "one Socials line on the popup, Outreach and Inbox + the review panel on the Prospect tab");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");

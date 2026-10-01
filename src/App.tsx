@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installLeadSync } from "@/lib/leadSync";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { FocusRedirect } from "./components/FocusRedirect";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -36,8 +37,6 @@ const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
-const Earnings = lazy(() => import("./pages/Earnings"));
-const Focus = lazy(() => import("./pages/Focus"));
 const AdminFeedback = lazy(() => import("./pages/AdminFeedback"));
 const AiAudit = lazy(() => import("./pages/AiAudit"));
 const Coverage = lazy(() => import("./pages/Coverage"));
@@ -217,8 +216,10 @@ const App = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/outreach" element={<Outreach />} />
               <Route path="/sales-dashboard" element={<SalesDashboard />} />
-              <Route path="/earnings" element={<Earnings />} />
-              <Route path="/focus" element={<Focus />} />
+              {/* 2026-10-01: Earnings merged into Sales; Focus Mode retired (its stepping, lists and recent messages
+                  moved to the lead popup and Sales). Old links and notifications still land somewhere real. */}
+              <Route path="/earnings" element={<Navigate to="/sales-dashboard" replace />} />
+              <Route path="/focus" element={<FocusRedirect />} />
               <Route path="/feedback" element={<AdminFeedback />} />
               {/* Archive route removed - merged into Outreach */}
               {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}

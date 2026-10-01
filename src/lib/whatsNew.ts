@@ -22,6 +22,41 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-sales-page-monthly', date: '2026-10-01', title: 'One Sales page, a monthly commission ladder', audience: 'sales',
+    body: 'Sales and Earnings are one page. Your commission rate now climbs over the calendar month: sales 1–12 earn 30%, 13–24 earn 40%, 25 onwards 50%.',
+    report: {
+      added: [
+        'A monthly ladder at the top of Sales: one dot per sale, the rate your next sale earns, and how many more sales unlock the next rate. Tap a dot to see the client, the package and what it earned.',
+        'Recent wins, one chart (this month week by week), and "How your commission works" with your own numbers.',
+        'Previous / Next in the lead popup (or the ← → keys) to go through the list you opened it from, and the latest WhatsApp messages on the lead.',
+        'Meetings and Warm lists in Sales → Follow-ups.',
+      ],
+      changed: [
+        'Commission tiers count by the calendar month (UK time) instead of the week. Each sale keeps the rate it earned; the count starts again on the 1st.',
+        'A refunded sale no longer counts towards the rate of the sales after it.',
+        'Your menu is Outreach, WhatsApp, Find Leads and Sales. Coverage is under More.',
+      ],
+      removed: [
+        'The separate Earnings page (old links open Sales).',
+        'Focus Mode. Its useful parts are in the lead popup and on Sales.',
+        'Repeated and decorative cards on the dashboard (Today, pipeline, warmth, health, feed, recap, targets, milestones, trends).',
+      ],
+      effect: 'One page tells you how you are doing, what you have earned and how close the next rate is. Monthly payments still earn 20% of the next three, as before.',
+    } },
+  { id: '2026-10-01-agency-check', date: '2026-10-01', title: 'See which websites an agency runs', audience: 'all',
+    body: 'Find Leads now checks each business’s website for signs that an outside agency runs it, so you can skip the ones that would be a hassle.',
+    report: {
+      added: [
+        'A Site management column in Find Leads: "Agency likely · 92%", "No agency evidence · 78%", "Checking…" or "Unknown". Tap it to see why.',
+        'A Site management filter (No agency evidence, Agency likely, Unknown, No website).',
+        'On an added lead: "Detected: Agency likely" with Confirm agency / Not agency.',
+      ],
+      changed: [
+        'Sites an agency very likely runs sort to the bottom once the checks finish, and are left out of Select all and Add all shown. You can still add them one by one.',
+      ],
+      removed: [],
+      effect: 'Less time on businesses whose website another agency controls. It is a machine check, not a certainty: "No agency evidence" does not mean they run it themselves.',
+    } },
   { id: '2026-10-01-why-they-said-no', date: '2026-10-01', title: 'Record why they said no', audience: 'all',
     body: 'When you mark a lead Not interested, a short box asks why. Pick a reason, add a note if useful, Save. Or Skip.',
     report: {

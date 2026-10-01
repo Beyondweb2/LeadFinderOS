@@ -37,6 +37,7 @@ import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority
 import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { askLostReason } from '@/lib/lostReasonAsk';
+import { DetectedAgency } from '@/components/DetectedAgency';
 import { LOST_REASON_UNRECORDED, lostReasonLabel } from '@/lib/lostReason';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
@@ -385,6 +386,10 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
           onClick={() => void save('lead_set_website_control', { _value: agency ? 'unknown' : 'agency_controls', _note: lead.website_control_note }, agency ? 'Website control: unknown' : 'Saved: an agency runs their site', { website_control: agency ? 'unknown' : 'agency_controls' })}>
           <Globe className="h-3 w-3" />{agency ? 'Agency runs their site ✓' : 'Agency runs their site'}
         </button>
+        {/* The machine's answer (Find Leads' agency check), until the person decides. Never set by it. */}
+        <DetectedAgency website={lead.website} websiteControl={lead.website_control}
+          onConfirm={() => void save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency runs their site', { website_control: 'agency_controls' })}
+          onReject={() => void save('lead_set_website_control', { _value: 'client_controls', _note: lead.website_control_note }, 'Saved: they control the website', { website_control: 'client_controls' })} />
       </section>
 
       <section className={cn(CARD, preset && 'border-amber-500/50', !(editingNext || preset) && 'py-2.5')} ref={nextRef} data-testid="next-action-section">

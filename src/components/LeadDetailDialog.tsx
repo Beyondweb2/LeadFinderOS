@@ -53,7 +53,8 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { markLeadInterested } from '@/lib/leadQuickActions';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
-import { Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { RecentWhatsApp } from '@/components/RecentWhatsApp';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SalesStatePill } from '@/components/SalesStatePill';
 import { useLeadSalesState } from '@/hooks/useLeadSalesState';
@@ -147,6 +148,28 @@ interface LeadDetailDialogProps {
   initialTab?: WorkspaceTab;
   /** The person came to log a contact (Outreach's Call button): the Work tab opens with Log a contact expanded. */
   openLogContact?: boolean;
+  /** Previous / Next through the list the popup was opened from (Focus Mode's stepping, moved here
+   *  2026-10-01). Omitted = no stepping. ← / → step too, except while typing. */
+  stepper?: LeadStepper | null;
+}
+
+export interface LeadStepper { index: number; total: number; onPrev?: () => void; onNext?: () => void }
+
+/** True when a key press belongs to a field (typing), not to the popup. */
+function typingIn(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  if (!el) return false;
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || !!el.closest('[role="listbox"],[role="menu"],[role="dialog"] [role="dialog"]');
+}
+
+function StepperBar({ s }: { s: LeadStepper }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5 pr-12 text-xs" data-testid="lead-stepper">
+      <button type="button" onClick={s.onPrev} disabled={!s.onPrev} className="inline-flex h-7 items-center gap-1 rounded-md px-2 font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Previous lead"><ChevronLeft className="h-4 w-4" />Previous</button>
+      <span className="tabular-nums text-muted-foreground">{s.index + 1} of {s.total}</span>
+      <button type="button" onClick={s.onNext} disabled={!s.onNext} className="inline-flex h-7 items-center gap-1 rounded-md px-2 font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Next lead">Next<ChevronRight className="h-4 w-4" /></button>
+    </div>
+  );
 }
 
 export type WorkspaceTab = 'work' | 'scripts' | 'prospect' | 'history' | 'client';
@@ -168,6 +191,7 @@ export function LeadDetailDialog({
   onAddCustomStatus,
   context = 'outreach',
   initialTab,
+  stepper,
   openLogContact = false,
 }: LeadDetailDialogProps) {
   const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
@@ -193,7 +217,13 @@ export function LeadDetailDialog({
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0">
+      <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0"
+        onKeyDown={(e) => {
+          if (!stepper || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
+          if (e.key === 'ArrowRight' && stepper.onNext) { e.preventDefault(); stepper.onNext(); }
+          else if (e.key === 'ArrowLeft' && stepper.onPrev) { e.preventDefault(); stepper.onPrev(); }
+        }}>
+        {stepper && stepper.total > 1 && <StepperBar s={stepper} />}
         <LeadDetailBody
           initialTab={initialTab}
           openLogContact={openLogContact}
@@ -529,6 +559,8 @@ function LeadDetailBody({
             {/* ⛔ THE AUDIT IS WHERE THE CALL IS WORKED (2026-10-01): score, who AI names instead, the report,
                 re-run and previous checks — the SAME card and the same create-ai-audit hook path as the Inbox. */}
             {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
+            {/* The latest WhatsApp messages (moved from Focus Mode). Not in the Inbox, which shows the thread itself. */}
+            {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
             {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact} editNextRequested={editNextRequested} onEditNextHandled={() => setEditNextRequested(false)} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}

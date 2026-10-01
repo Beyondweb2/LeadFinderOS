@@ -118,7 +118,7 @@ import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
-import { LeadDetailDialog, type WorkspaceTab } from './LeadDetailDialog';
+import { LeadDetailDialog, type LeadStepper, type WorkspaceTab } from './LeadDetailDialog';
 import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
@@ -1907,6 +1907,21 @@ export function OutreachTable({
     if (currentPage > safeTotal) setCurrentPage(safeTotal);
   }, [currentPage, totalPages]);
 
+  /* ══ PREVIOUS / NEXT IN THE POPUP (Focus Mode's stepping, moved here 2026-10-01) ══
+     Through the whole filtered, sorted list (every page), in the order shown. A lead that drops out of the
+     list while open (marked Not interested, say) keeps its place: Next opens whatever took that place. */
+  const stepPlace = useRef(0);
+  const detailIdx = detailLead ? filteredAndSortedLeads.findIndex((l) => l.id === detailLead.id) : -1;
+  if (detailIdx >= 0) stepPlace.current = detailIdx;
+  const openStep = (l: OutreachLead | undefined) => { if (!l) return; setDetailTab(undefined); setDetailLogContact(false); setDetailLead(l); };
+  const detailStepper: LeadStepper | null = !detailLead || filteredAndSortedLeads.length === 0 ? null : detailIdx >= 0
+    ? { index: detailIdx, total: filteredAndSortedLeads.length,
+        onPrev: detailIdx > 0 ? () => openStep(filteredAndSortedLeads[detailIdx - 1]) : undefined,
+        onNext: detailIdx < filteredAndSortedLeads.length - 1 ? () => openStep(filteredAndSortedLeads[detailIdx + 1]) : undefined }
+    : { index: Math.min(stepPlace.current, filteredAndSortedLeads.length - 1), total: filteredAndSortedLeads.length,
+        onPrev: stepPlace.current > 0 ? () => openStep(filteredAndSortedLeads[stepPlace.current - 1]) : undefined,
+        onNext: stepPlace.current < filteredAndSortedLeads.length ? () => openStep(filteredAndSortedLeads[stepPlace.current]) : undefined };
+
   const paginatedLeads = filteredAndSortedLeads.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
@@ -3369,6 +3384,7 @@ export function OutreachTable({
         fetchActivities={fetchActivities}
         userId={user?.id}
         campaignDefaultSaleType={detailLead && campaignDefaultSaleTypeByLead ? campaignDefaultSaleTypeByLead[detailLead.id] ?? null : null}
+        stepper={detailStepper}
       />
 
       <ColdCallPlaybookSheet
