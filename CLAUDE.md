@@ -272,6 +272,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **An authed page cannot load the normal way** (no session at localhost:8080; RLS blocks anon). If
   you must render one: a throwaway Vite harness patching `fetch` with the service key for Supabase
   URLs only, real hook + component in a `MemoryRouter`, read-only, deleted before commit, and tell him.
+- **Live tests use `ZZ QA` fixture leads** — no contact details, a `metric_exclusions` row each, ARCHIVED at the end, then the check query in `docs/qa-fixtures.md`. Never leave one active in Outreach.
 - **Report faithfully.** Tests failing → say so with output. Step skipped → say that. Done and
   verified → state it plainly.
 

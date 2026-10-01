@@ -19,6 +19,7 @@ import { REPORT_CHANNEL_LABEL, REPORT_SEND_CHANNELS } from '@/lib/reportShare';
 import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCampaigns } from '@/hooks/useCampaigns';
+import { callBookedSummaryOf } from '@/lib/workspaceHeader';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
@@ -33,7 +34,7 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/components/NextActionForm';
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
@@ -369,7 +370,10 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
           </div>
           <NextActionForm key={`${lead.next_action}|${lead.next_action_date}|${lead.next_action_time}|${lead.next_action_note}|${preset ? JSON.stringify(preset) : ''}`} lead={lead} preset={preset} onDismiss={() => setPreset(null)}
             onSave={async (a) => {
-              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.note });
+              /* A Meeting with a day and time also books it — shown at once too, so the folded Call booked line
+                 never reads "Nothing recorded" while the bar already shows the meeting. */
+              const bookedAt = a.nextAction === 'meeting' && a.date && a.time ? londonInstant(a.date, a.time.slice(0, 5)) : null;
+              const before = showAtOnce({ next_action: a.nextAction, next_action_date: a.nextAction === 'none' ? null : a.date, next_action_time: a.nextAction === 'none' || !a.date ? null : (a.time ?? null), next_action_note: a.nextAction === 'none' ? null : a.note, call_booked_at: bookedAt });
               const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
               if (r.ok) { setPreset(null); setEditingNext(false); } return r; }} />
         </>) : (
@@ -391,7 +395,7 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
           ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
           meeting — it could set a booking with no Next Action ("+ Set" over "Meeting · Fri 2 Oct 15:15"). A meeting
           is booked, moved and completed as the Next Action "Meeting" only. */}
-      <WorkSection icon={BriefcaseBusiness} title="Website · domain" testId="call-booked" summary={callBookedSummary(lead)}>
+      <WorkSection icon={BriefcaseBusiness} title="Call booked · website" testId="call-booked" summary={callBookedSummary(lead)}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="block text-[11px] font-medium text-muted-foreground">Who controls the website?</label>
@@ -496,15 +500,8 @@ function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
   );
 }
 
-/** The Website section's folded line: who controls the site and the domain. (The meeting is the Next Action.) */
-function callBookedSummary(lead: CrmRow): string {
-  const parts: string[] = [];
-  const site = WEBSITE_CONTROL_OPTIONS.find((o) => o.value === lead.website_control && o.value !== 'unknown');
-  if (site) parts.push(site.label);
-  const dom = DOMAIN_CONTROL_OPTIONS.find((o) => o.value === lead.domain_control);
-  if (dom) parts.push(dom.value === 'unknown' ? 'Domain owner unknown' : dom.value === 'third_party_owns' ? 'Someone else controls the domain' : 'Domain: theirs');
-  return parts.length ? parts.join(' · ') : 'Nothing recorded';
-}
+/** The Call booked section's folded line — the one rule in src/lib/workspaceHeader.ts (no time when the Next Action bar shows it). */
+const callBookedSummary = (lead: CrmRow) => callBookedSummaryOf(lead, Date.now(), { websiteControl: WEBSITE_CONTROL_OPTIONS, meetingWhen });
 
 /** A WhatsApp conversation is recorded by its messages; what CAME of it is still the rep's to say.
  *  These apply the same plan as the logged outcomes, without a second record of the messages. */
