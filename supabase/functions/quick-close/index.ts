@@ -6,10 +6,21 @@ import {
   type QuickCloseAnswers, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import {
+  cleanHandoff, handoffChangedKeys, handoffComplete, handoffMissing, handoffPrefill, handoffWithPrefill, HANDOFF_QUESTIONS, SALES_HANDOFF_SINCE,
+  type SalesHandoffFields, type SalesHandoffRecord,
+} from "../../../src/lib/salesHandoff.ts";
+import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { isPaidLead } from "../../../src/lib/leadPayment.ts";
+import { loadClientSetup, recordLeadEvent, submitForDelivery } from "../_shared/client-setup.ts";
+import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9).
 //
-// Modes: load · save · approve_review (admin) · generate_link.
+// Modes: load · save · approve_review (admin) · generate_link · save_handoff · submit_delivery · my_handoffs.
+// ⛔ THE SALES HANDOFF (2026-10-02, src/lib/salesHandoff.ts) is the one thing a salesperson may still
+//   write AFTER payment, and only on their OWN sale (sold_by_user_id) — it lands on
+//   outreach_leads.sales_handoff through cleanHandoff, never anything else on the lead.
 // ⛔ WHO: a salesperson only on a lead they may work (leadAccess: assigned to them, not a client); the
 //   admin on the book's leads. After payment the seller may still LOAD the state (read-only).
 // ⛔ ONE ONBOARDING ROW per lead (public.quick_close_row, advisory-locked). The answers are also written
@@ -45,13 +56,13 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   checkout_failed: "Stripe did not create the payment page. Try again in a moment.",
 };
 
-const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id";
+const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at";
 
 async function loadAll(service: Service, leadId: string) {
   const [{ data: lead }, { data: rows }] = await Promise.all([
     service.from("outreach_leads").select(LEAD_COLS).eq("id", leadId).maybeSingle(),
     service.from("onboarding_responses")
-      .select("id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close")
+      .select("id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon")
       .eq("lead_id", leadId).order("created_at", { ascending: false }),
   ]);
   if (!lead) return null;
@@ -74,6 +85,22 @@ Deno.serve(async (req) => {
     const actor = who.actor;
     const body = await req.json().catch(() => ({}));
     const mode = typeof body.mode === "string" ? body.mode : "load";
+    /* MY SALES THAT STILL OWE A HANDOFF (2026-10-02): the caller's OWN paid sales since handoffs existed —
+       names and states only, never an amount or anything else of the client's. */
+    if (mode === "my_handoffs") {
+      const { data, error } = await service.from("outreach_leads")
+        .select("id, business_name, payment_date, amount_paid, status, sales_handoff, delivery_submitted_at")
+        .eq("sold_by_user_id", actor.id).gt("amount_paid", 0).gte("payment_date", SALES_HANDOFF_SINCE)
+        .order("payment_date", { ascending: false }).limit(50);
+      if (error) return json({ ok: false, error: "not_loaded" }, 500);
+      const sales = ((data ?? []) as Obj[]).filter((l) => isPaidLead(l)).map((l) => ({
+        id: l.id, business_name: l.business_name, paid_on: (l.payment_date ?? "").slice(0, 10),
+        handoff_complete: handoffComplete(l.sales_handoff as SalesHandoffRecord | null),
+        missing: handoffMissing(l.sales_handoff as SalesHandoffRecord | null).length,
+        submitted: !!l.delivery_submitted_at,
+      }));
+      return json({ ok: true, sales });
+    }
     const leadId = typeof body.lead_id === "string" && UUID_RE.test(body.lead_id) ? body.lead_id : null;
     if (!leadId) return json({ ok: false, error: "bad_request" }, 400);
 
@@ -85,6 +112,10 @@ Deno.serve(async (req) => {
     // still see the outcome (read-only). Nobody else.
     const mayView = access.ok || (actor.role === "sales" && row?.status === "paid" && (lead.sold_by_user_id === actor.id || lead.assigned_to_user_id === actor.id));
     if (!mayView) return json({ ok: false, error: "not_your_lead", detail: "That lead is not assigned to you." }, 403);
+    /* The handoff: the admin; a salesperson working the lead (before payment); the SELLER after payment.
+       ⛔ Never another rep's client — sold_by_user_id is stamped once at payment and never moves. */
+    const paidLead = isPaidLead(lead);
+    const mayHandoff = actor.role === "admin" || (!paidLead && access.ok) || (paidLead && actor.role === "sales" && lead.sold_by_user_id === actor.id);
 
     const qc = (row?.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
     const view = async () => {
@@ -97,8 +128,29 @@ Deno.serve(async (req) => {
       const lastIn = ((msgs ?? []) as Obj[])[0]?.created_at ?? null;
       const cur = (row?.quick_close ?? null) as QuickCloseRecord | null;
       const answers = cleanAnswers(cur?.answers);
+      /* THE HANDOFF, with what we already know pre-filled (saved answers win). After payment, the
+         client's setup checklist too — the same loader Paid Clients uses — so the seller sees what is
+         still missing and may submit for delivery when everything required is in. */
+      const saved = (lead.sales_handoff ?? null) as SalesHandoffRecord | null;
+      const pre = handoffPrefill({
+        quickClose: answers, route: serviceRouteFromRow(row as never), websiteControl: lead.website_control ?? null,
+        hasWebsite: lead.website ? true : null, contactName: row?.contact_name ?? lead.contact_name ?? null,
+      });
+      let setup: Obj | null = null;
+      if (paidLead) {
+        try {
+          const s = (await loadClientSetup(service, leadId))?.setup;
+          if (s) setup = { ready: s.readiness.ready, label: s.readiness.label, done: s.readiness.done, total: s.readiness.total, missing: s.readiness.missing, state_label: s.stage.stateLabel, next: s.stage.next, submitted: !!lead.delivery_submitted_at };
+        } catch (e) { console.error("[quick-close] setup read failed (non-blocking):", e instanceof Error ? e.message : e); }
+      }
       return {
         ok: true,
+        handoff: {
+          canEdit: mayHandoff, fields: handoffWithPrefill(saved, pre.fields), prefilled: saved?.saved_at ? [] : pre.prefilled,
+          saved_at: saved?.saved_at ?? null, completed_at: saved?.completed_at ?? null,
+          complete: handoffComplete(saved), missing: handoffMissing(saved),
+        },
+        setup,
         canEdit: access.ok && row?.status !== "paid",
         lead: {
           id: lead.id, business_name: lead.business_name, phone: lead.phone, email: lead.email, website: lead.website, address: lead.address,
@@ -117,6 +169,56 @@ Deno.serve(async (req) => {
     };
 
     if (mode === "load") return json(await view());
+
+    /* ══ SAVE THE SALES HANDOFF (before or after payment) ═════════════════════════════════════════════
+       A key sent blank CLEARS that answer; a key not sent is left alone. Complete is stamped once, on the
+       first save with every required answer. History: "completed" once, then each material change. */
+    if (mode === "save_handoff") {
+      if (!mayHandoff) {
+        await recordDenial(service, actor.id, "quick-close:save_handoff", leadId);
+        return json({ ok: false, error: "not_your_sale", detail: paidLead ? "Only the salesperson who made this sale can change its handoff." : "That lead is not assigned to you." }, 403);
+      }
+      const raw = (body.handoff && typeof body.handoff === "object" ? body.handoff : {}) as Obj;
+      const prev = (lead.sales_handoff ?? null) as SalesHandoffRecord | null;
+      const incoming = cleanHandoff(raw);
+      const merged: Obj = { ...cleanHandoff(prev) };
+      for (const q of HANDOFF_QUESTIONS) {
+        if (!(q.key in raw)) continue;
+        const v = (incoming as Obj)[q.key];
+        if (v) merged[q.key] = v; else delete merged[q.key];
+      }
+      const fields = cleanHandoff(merged) as SalesHandoffFields;
+      const changed = handoffChangedKeys(prev, fields);
+      const now = new Date().toISOString();
+      const firstComplete = handoffMissing(fields).length === 0 && !prev?.completed_at;
+      const next: SalesHandoffRecord = {
+        ...fields, saved_at: now, saved_by: actor.id,
+        completed_at: prev?.completed_at ?? (firstComplete ? now : null), completed_by: prev?.completed_by ?? (firstComplete ? actor.id : null),
+      };
+      const { error } = await service.from("outreach_leads").update({ sales_handoff: next }).eq("id", leadId);
+      if (error) return json({ ok: false, error: "not_saved", detail: error.message }, 500);
+      if (firstComplete || (changed.length && prev?.completed_at)) {
+        await recordLeadEvent(service, leadId, "handoff_saved", {
+          actor: actor.id, source: actor.role === "admin" ? "admin" : "sales",
+          body: firstComplete ? "Sales handoff completed" : "Sales handoff updated",
+          data: { changed, after_submission: !!lead.delivery_submitted_at },
+        });
+      }
+      lead.sales_handoff = next;
+      return json(await view());
+    }
+
+    /* ══ SUBMIT FOR DELIVERY (the seller, once everything required is in) ═════════════════════════════ */
+    if (mode === "submit_delivery") {
+      if (!paidLead) return json({ ok: false, error: "not_paid", detail: "The client has not paid yet." }, 409);
+      if (!mayHandoff) return json({ ok: false, error: "not_your_sale", detail: "Only the salesperson who made this sale can submit it." }, 403);
+      const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+      const out = await submitForDelivery(service, leadId, { id: actor.id, source: actor.role === "admin" ? "admin" : "sales", name: (me?.display_name as string | undefined) ?? null }, sendOperatorAlert);
+      if (!out.ok) return json({ ok: false, error: out.error, detail: out.error === "not_ready" ? `Still missing: ${(out.missing ?? []).join(", ")}` : "Not submitted — try again." }, out.error === "not_ready" ? 409 : 500);
+      lead.delivery_submitted_at = lead.delivery_submitted_at ?? new Date().toISOString();
+      return json(await view());
+    }
+
     if (!access.ok) return json({ ok: false, error: "not_your_lead", detail: "That lead is not assigned to you." }, 403);
     if (row?.status === "paid") return json({ ok: false, error: "already_paid", detail: "This client has already paid." }, 409);
 

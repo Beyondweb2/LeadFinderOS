@@ -25,6 +25,10 @@ import { HOOK_SCORE_QUESTIONS, HOOK_ENGINES } from "../src/lib/hookScore.ts";
 import { SALES_VIEW_COLUMNS } from "../src/lib/outreachLeadColumns.ts";
 import { foldSalesPerformance, type FoldInput } from "../src/lib/salesPerformance.ts";
 
+/* The checklist's evidence (2026-10-02): a crawl one day old when there is one; the sale is Paul's own, so
+   no sales handoff is owed — scripts/paid-client-automation.test.ts drives the handoff and freshness. */
+const ev = (crawl: boolean, hookAudit: boolean) => ({ crawl, hookAudit, crawlAgeDays: crawl ? 1 : null, salesHandoff: { applies: "not_needed_own_sale" as const, complete: false, missing: 0 } });
+
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 const root = path.resolve(import.meta.dirname, "..");
@@ -34,52 +38,53 @@ const MIG = read("supabase/migrations/20260928160000_self_sourced_handoff.sql");
 /* ── READY / MISSING ─────────────────────────────────────────────────────────────────────────── */
 const paidLead: HandoffLead = { business_name: "QA Plumbing", phone: "07700900401", website: "https://qa.example", amount_paid: 99, status: "payment_received" };
 const fullOnboarding: HandoffOnboarding = {
-  services_list: ["Boiler repair"], areas_list: ["Wakefield"], business_website: "https://qa.example",
+  services_list: ["Boiler repair"], areas_list: ["Wakefield"], business_website: "https://qa.example", confirmed_location: "Wakefield",
   website_route: "optimise_existing", website_manager: "direct_access", gbp_status: "done",
 };
 {
-  const r = handoffReadiness(paidLead, fullOnboarding, { crawl: true, hookAudit: true });
-  ok(r.ready && r.label === "READY TO START" && r.missing.length === 0, "complete onboarding + crawl → READY TO START");
+  const r = handoffReadiness(paidLead, fullOnboarding, ev(true, true));
+  ok(r.ready && r.label === "READY FOR DELIVERY" && r.missing.length === 0, "complete onboarding + crawl → READY FOR DELIVERY");
   ok(r.items.find((i) => i.key === "services")?.source === "onboarding", "…services read from the client's answers");
 }
 {
   // Sales-entered equivalents satisfy readiness with NO onboarding row at all.
   const salesLead: HandoffLead = { ...paidLead, services_included: ["Boiler repair"], service_areas: ["Wakefield", "Ossett"], website_control: "client_controls",
     delivery_checklist: { [HANDOFF_GBP_CHECKLIST_KEY]: true } };
-  const r = handoffReadiness(salesLead, null, { crawl: true, hookAudit: true });
+  const r = handoffReadiness(salesLead, null, ev(true, true));
   /* 2026-09-28 (the domain rule): with no onboarding the client has not confirmed the domain / authority
      themselves, so the ONLY thing missing is that — everything Sales collected still counts. */
-  ok(!r.ready && r.missing.join() === "Domain / authority", "Sales-entered services, areas, website control + Findable's GBP tick satisfy everything except the client's own domain confirmation");
+  /* 2026-10-02: the client's own onboarding is a checklist item too — with no row it is missing beside the domain. */
+  ok(!r.ready && r.missing.join() === "Domain / authority,Client onboarding", "Sales-entered services, areas, website control + Findable's GBP tick satisfy everything except the client's own domain confirmation and their onboarding");
   ok(["services", "service_areas", "website_access"].every((k) => r.items.find((i) => i.key === k)?.source === "sales"), "…and each item says it came from Sales");
 }
 {
   // Onboarding outranks Sales when both exist (no merge).
-  const r = handoffReadiness({ ...paidLead, services_included: ["Roofing"] }, fullOnboarding, { crawl: true, hookAudit: false });
+  const r = handoffReadiness({ ...paidLead, services_included: ["Roofing"] }, fullOnboarding, ev(true, false));
   ok(r.items.find((i) => i.key === "services")?.detail === "Boiler repair", "onboarding outranks Sales for services (lists never merged)");
   ok(r.ready, "a missing hook audit never blocks READY (informational)");
 }
 {
-  const r = handoffReadiness(paidLead, null, { crawl: false, hookAudit: false });
-  ok(!r.ready && r.label === "MISSING INFORMATION", "nothing collected → MISSING INFORMATION");
-  for (const m of ["Main services", "Service areas", "Website access / control", "Google Business Profile access", "Website crawl"]) ok(r.missing.includes(m), `…names "${m}"`);
+  const r = handoffReadiness(paidLead, null, ev(false, false));
+  ok(!r.ready && r.label === "WAITING FOR INFORMATION", "nothing collected → WAITING FOR INFORMATION");
+  for (const m of ["Services", "Service areas", "Website access / control", "Google Business Profile access", "Website crawled"]) ok(r.missing.includes(m), `…names "${m}"`);
   ok(!r.missing.includes("Hook Audit"), "…never lists the hook audit as missing");
-  ok(handoffLine(r).startsWith("MISSING INFORMATION: "), "the email line names what is missing");
+  ok(handoffLine(r).startsWith("WAITING FOR INFORMATION: "), "the email line names what is missing");
 }
 {
   // Positive matches only: unknown / later / no access are missing.
-  const r1 = handoffReadiness({ ...paidLead, website_control: "unknown" }, { ...fullOnboarding, website_route: null, website_manager: null }, { crawl: true, hookAudit: true });
+  const r1 = handoffReadiness({ ...paidLead, website_control: "unknown" }, { ...fullOnboarding, website_route: null, website_manager: null }, ev(true, true));
   ok(r1.missing.includes("Website access / control"), "website control 'unknown' is missing, not an answer");
   for (const g of ["will_do", "no_access", null]) {
-    const r = handoffReadiness(paidLead, { ...fullOnboarding, gbp_status: g }, { crawl: true, hookAudit: true });
+    const r = handoffReadiness(paidLead, { ...fullOnboarding, gbp_status: g }, ev(true, true));
     ok(r.missing.includes("Google Business Profile access"), `GBP '${g}' is missing`);
   }
-  const noSite = handoffReadiness({ ...paidLead, website: null }, { ...fullOnboarding, business_website: null, website_route: "new_site", domain_status: "new", dns_permission: true, materials_confirmed: true }, { crawl: false, hookAudit: false });
+  const noSite = handoffReadiness({ ...paidLead, website: null }, { ...fullOnboarding, business_website: null, website_route: "new_site", domain_status: "new", dns_permission: true, materials_confirmed: true }, ev(false, false));
   ok(noSite.ready, "a new-site client needs no crawl and no website access");
-  const unpaid = handoffReadiness({ ...paidLead, amount_paid: null }, fullOnboarding, { crawl: true, hookAudit: true });
-  ok(!unpaid.ready && unpaid.missing[0] === "Payment confirmed", "no recorded amount → not ready (paid means amount_paid > 0)");
-  const refunded = handoffReadiness({ ...paidLead, status: "refunded" }, fullOnboarding, { crawl: true, hookAudit: true });
+  const unpaid = handoffReadiness({ ...paidLead, amount_paid: null }, fullOnboarding, ev(true, true));
+  ok(!unpaid.ready && unpaid.missing[0] === "Payment received", "no recorded amount → not ready (paid means amount_paid > 0)");
+  const refunded = handoffReadiness({ ...paidLead, status: "refunded" }, fullOnboarding, ev(true, true));
   ok(!refunded.ready, "a refunded client is not ready");
-  const blank = handoffReadiness(null, null, { crawl: false, hookAudit: false });
+  const blank = handoffReadiness(null, null, ev(false, false));
   ok(!blank.ready && blank.missing.includes("Business name"), "an absent lead is never ready");
 }
 ok(HANDOFF_GBP_CHECKLIST_KEY === GBP_ACCESS_CHECKLIST_KEY, "the handoff's GBP tick is the delivery cockpit's key (one key)");
@@ -201,10 +206,14 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(r.won.map((w) => w.name).sort().join() === "legacy,mine", "a win counts for the seller, never for a later holder (legacy rows fall back)");
   ok(!JSON.stringify(r.won).match(/amount|99/), "…and carries no amount");
   const hook = read("supabase/functions/stripe-webhook/index.ts");
-  ok(/const handoff = await paymentHandoff\(service, findableLeadId \|\| null, onboardingId \|\| null\);/.test(hook) && /line\("Sold by:"/.test(hook), "the PAID email names the seller and the handoff line");
+  ok(/const handoff = await paymentHandoff\(service, findableLeadId \|\| null, onboardingId \|\| null, amountGbp,/.test(hook) && /line\("Sold by:"/.test(hook), "the PAID email names the seller and the handoff line");
   ok(/async function paymentHandoff[\s\S]*?catch \(e\) \{[\s\S]*?return none;/.test(hook), "…and a failed handoff read never blocks the email");
   const hub = read("supabase/functions/paid-client-hub/index.ts");
-  ok(/requireAdmin\(req/.test(hub) && /handoffReadiness\(/.test(hub), "Paid Clients (admin only) derives the same readiness");
+  /* 2026-10-02: the readiness is loaded by ONE shared loader (_shared/client-setup.ts) for the list, the page,
+     Submit and the email — the hub calls the loader, the loader calls handoffReadiness. */
+  const setupLoader = read("supabase/functions/_shared/client-setup.ts");
+  ok(/requireAdmin\(req/.test(hub) && /loadClientSetups\(service, members\)/.test(hub) && /loadClientSetup\(service, leadId\)/.test(hub) && /handoffReadiness\(/.test(setupLoader), "Paid Clients (admin only) derives the same readiness");
+  ok(/loadClientSetup\(service, leadId\)/.test(hook), "…and the new-client email reads it from the same loader");
   ok(/if \(body\.handoff === false\)/.test(hub), "the hub's baseline poller does not re-read the handoff every tick");
 }
 

@@ -19,6 +19,9 @@ import {
 } from '@/lib/quickClose';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
+import { SalesHandoffForm } from '@/components/SalesHandoffForm';
+import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
+import type { NextStep } from '@/lib/deliveryStage';
 
 /* ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
    Built for a phone call on a phone: one question at a time, big buttons, every tap SAVED (so a dropped
@@ -34,6 +37,10 @@ interface View {
   link: { url: string; generated_at: string | null } | null;
   windowOpen: boolean;
   events: { kind: string; at: string; by_me: boolean }[];
+  /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
+  handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[] };
+  /** After payment: the client's setup checklist, so the seller sees what is missing. */
+  setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean } | null;
 }
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
 const STATE_TONE: Record<QuickCloseState, string> = {
@@ -121,6 +128,8 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
     toast({ title: data.simulated ? 'Sent (test mode)' : 'Sent on WhatsApp' });
   };
 
+  const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
+  const submitDelivery = async () => { const r = await run('submit', { mode: 'submit_delivery' }); if (r) toast({ title: 'Submitted for delivery', description: 'Paul has been told.' }); };
   const answeredCount = shownQs.filter((x) => answers[x.key] && !(x.key === 'authority' && answers.authority === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party'))).length;
   const known: [string, string | null | undefined][] = v ? [
     ['Business', v.lead.business_name], ['Trade', v.lead.trade], ['Town', v.lead.town], ['Phone', v.onboarding?.confirmed_phone || v.lead.phone],
@@ -150,6 +159,25 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
               <p className="mt-2 text-xl font-bold">Paid — your part is done.</p>
               <p className="mt-1 text-sm text-emerald-50/90">Paul takes it from here. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.</p>
             </section>
+          )}
+
+          {v && v.state === 'paid' && v.setup && (
+            <section className="rounded-xl border border-border/60 p-3 text-sm" data-testid="qc-client-setup">
+              <p className="font-semibold">Client setup · {v.setup.done}/{v.setup.total} complete</p>
+              <p className="text-xs text-muted-foreground">{v.setup.state_label}{v.setup.submitted ? ' · submitted for delivery' : ''}</p>
+              {v.setup.missing.length > 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Still missing: {v.setup.missing.join(' · ')}</p>}
+              {v.setup.ready && !v.setup.submitted && v.handoff?.canEdit && (
+                <Button className="mt-2 h-11 w-full" onClick={() => void submitDelivery()} disabled={busy === 'submit'}>{busy === 'submit' && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Submit for delivery</Button>
+              )}
+            </section>
+          )}
+
+          {v?.handoff && v.handoff.canEdit && v.state !== 'not_started' && v.state !== 'blocked' && (
+            <details className="rounded-xl border border-emerald-500/40 p-3" open={!v.handoff.complete && (v.state === 'ready' || v.state === 'link_generated' || v.state === 'paid')} data-testid="qc-handoff">
+              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">Handoff for Paul<span className={cn('text-xs font-normal', v.handoff.complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300')}>{v.handoff.complete ? 'complete' : v.handoff.saved_at ? `${v.handoff.missing.length} still to answer` : 'not started'}</span></summary>
+              <p className="mt-1 text-xs text-muted-foreground">Six quick answers so Paul does not have to ask again. Fill it in before you send the link if you can — it can also be finished after they pay.</p>
+              <div className="mt-3"><SalesHandoffForm fields={v.handoff.fields} prefilled={v.handoff.prefilled} route={route} onSave={saveHandoff} busy={busy === 'handoff'} compact /></div>
+            </details>
           )}
 
           {v && (

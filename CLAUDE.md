@@ -126,8 +126,16 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   WARNING (`site_match`, chains share domains), never a refusal. A hand-added lead with no place id is
   not town-gated (`handTypedTown`). Sales crawls only a lead they work, its own site. In-app report
   opens carry `preview=1` and are never counted. **The seller is `sold_by_user_id`, stamped once at
-  payment by trigger — never read the current owner as "who sold it".** READY TO START / MISSING
-  INFORMATION is `handoffReadiness` (one rule: Paid Clients + the PAID email).
+  payment by trigger — never read the current owner as "who sold it".** READY FOR DELIVERY / WAITING
+  FOR INFORMATION is `handoffReadiness` (one rule: Paid Clients, the client page, the new-client email, Submit —
+  all through `_shared/client-setup.ts`). ⛔ **Paid client setup (2026-10-02, `docs/paid-client-automation.md`)**:
+  the stage + ONE next step is `deliveryStage` (derived; never draw a second "what's next"); not-needed items
+  never block (no GBP = `gbp_exists='no'` only; no site; Paul's own sale / pre-`SALES_HANDOFF_SINCE` clients owe
+  no handoff — never fabricated); the crawl is reused while fresh, payment never crawls and drafts NO questions
+  (crawl → Discovery manual → approve & freeze → Run baseline manual); ONE new-client email per lead (claim on
+  `new_client_email_at`); the sales handoff is `outreach_leads.sales_handoff`, written only by quick-close
+  `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
+  live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
 - **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
   never switch branches in the primary checkout while another session may be open.

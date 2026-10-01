@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { cleanAuditQuestions } from '@/components/AuditQuestionEditor';
 import { useToast } from '@/hooks/use-toast';
 import { remeasureStatus } from '@/lib/deliveryCockpit';
-import { REPORT_PUBLIC_ORIGIN } from '@/lib/findableOffer';
+import { REPORT_PUBLIC_ORIGIN, serviceRouteFromRow } from '@/lib/findableOffer';
 import { formatBaselineProgress } from '@/lib/baselineProgress';
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from '@/lib/auditQuestionCounts';
 import { hubBaselineStatus, isFrozenBaselineStatus, isStartedBaselineStatus, paidBaselineStatusLabel } from '@/lib/paidBaselineState';
@@ -23,6 +23,7 @@ import { templateById } from '@/lib/websiteTemplates';
 import { resolveClientFacts, clientConfirmationsNeeded } from '@/lib/clientFacts';
 import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
 import { ClientHandoffCard, type ClientHandoff } from '@/components/ClientHandoffCard';
+import { ClientSetupCard, type SetupHandoff } from '@/components/ClientSetupCard';
 import { DISCOVERY_PLAN_RUNS, DiscoverySection, HookAuditStep, nearDuplicateCount, RecommendationStep, useDiscoveryPoll } from '@/components/BaselineDiscovery';
 import { OfficialBaseline } from '@/components/OfficialBaseline';
 import { OpportunityBacklog, useOpportunities } from '@/components/OpportunityBacklog';
@@ -529,6 +530,7 @@ export default function ClientHub() {
   return <HubSection.Provider value={section}><div className="mx-auto max-w-7xl space-y-4 py-6"><Link to="/paid-clients" className="text-xs text-muted-foreground">← Paid clients</Link>
   {errorPanel}
   <Card id="hub-payment" className={section === 'payment' ? 'ring-2 ring-primary/50' : undefined}><CardContent className="p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">{lead.business_name}</h1><p className="text-sm text-muted-foreground">{onboarding?.confirmed_location || lead.derived_town || lead.search_location} · {lead.website || 'No website recorded'}</p><p className="mt-2 text-sm">{lead.contact_name || 'No contact name'} · {lead.email || onboarding?.contact_email || 'No email'} · {lead.phone || 'No phone'}</p></div><div className="text-right text-sm"><div>Paid {lead.payment_date || 'date not recorded'}</div><div>{onboarding?.website_route?.replaceAll('_',' ') || 'Website route not set'}</div>{hub.contract && <ContractSummary c={hub.contract}/>}<div className="font-medium">Remeasure: {lead.remeasure_due_date || 'after baseline'} · {rm.label}</div></div></div><div className="mt-4 flex flex-wrap gap-2">{lead.website && <Button asChild variant="outline" size="sm"><a href={lead.website} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4"/>Open website</a></Button>}<ClientDetailsDialog lead={lead} onboarding={onboarding}/>{audit && <Dialog><DialogTrigger asChild><Button size="sm"><FileText className="mr-1 h-4 w-4"/>View Baseline Report</Button></DialogTrigger><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Baseline report</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Client URL contains the client-safe report only. Internal report remains operator-only.</p><div className="flex flex-wrap gap-2"><Button asChild size="sm"><a href={reportUrl} target="_blank" rel="noreferrer">Client view</a></Button><Button asChild size="sm" variant="outline"><Link to={`/baseline/${audit.id}`}>Internal view / download</Link></Button><Button size="sm" variant="outline" onClick={() => void copy(reportUrl)}>Copy client URL</Button></div></DialogContent></Dialog>}</div></CardContent></Card>
+  {hub.handoff?.setup && <ClientSetupCard leadId={lead.id} h={hub.handoff as SetupHandoff} route={serviceRouteFromRow(onboarding)} onChanged={() => void refresh()} onOpenBaseline={() => setBaselineOpen(true)}/>}
   <ClientSummary hub={hub} bs={bs} remeasure={`${lead.remeasure_due_date || 'after baseline'}${lead.remeasure_due_date ? ` · ${rm.label}` : ''}`} opps={opps.data ? oppCounts : null}/>
   {hub.handoff && <ClientHandoffCard handoff={hub.handoff} leadId={lead.id} onChanged={refresh}/>}
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>

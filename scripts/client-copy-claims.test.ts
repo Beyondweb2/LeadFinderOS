@@ -49,6 +49,8 @@ function renderedText(src: string): string {
 
 const RENDERERS: Array<[string, string]> = [
   ["welcome pack (paying client)", "src/lib/welcomePackHtml.ts"],
+  /* 2026-10-02: the lines above the paid form's pre-filled services / towns (findable.live renders them). */
+  ["post-payment form prefill lines (paying client)", "src/lib/setupPrefill.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
   ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
   ["four-week results words (client)", "src/lib/remeasureResults.ts"],

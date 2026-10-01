@@ -24,6 +24,7 @@ import { useDashboardPrefs } from '@/hooks/useDashboardPrefs';
 import { campaignKey, templateKey, visibleRows } from '@/lib/dashboardVisibility';
 import { KpiCard, Panel } from '@/components/salesDash/ui';
 import { TeamBoard } from '@/components/team/TeamBoard';
+import { MyHandoffs } from '@/components/salesDash/MyHandoffs';
 import { FollowUpQueue, NextActions, FOLLOW_UP_GROUPS } from '@/components/salesDash/sections';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -121,6 +122,8 @@ export default function SalesDashboard() {
 
       {/* The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
       {role === 'sales' && <TeamBoard />}
+      {/* Their own paid sales that still owe the handoff (2026-10-02). */}
+      {role === 'sales' && <MyHandoffs />}
 
       {/* ── 1. The month: sales, the next sale's rate, what was earned ── */}
       {earn.isLoading && <div className="h-56 animate-pulse rounded-2xl bg-muted/60 motion-reduce:animate-none" aria-busy="true" />}

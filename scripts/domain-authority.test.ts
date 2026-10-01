@@ -13,6 +13,10 @@ import { handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../s
 import { assetsToDownload, executionBlockers } from "../src/lib/buildExecution.ts";
 import { leadPermissions } from "../src/lib/access.ts";
 
+/* The checklist's evidence (2026-10-02): a crawl one day old when there is one; the sale is Paul's own, so
+   no sales handoff is owed — scripts/paid-client-automation.test.ts drives the handoff and freshness. */
+const ev = (crawl: boolean, hookAudit: boolean) => ({ crawl, hookAudit, crawlAgeDays: crawl ? 1 : null, salesHandoff: { applies: "not_needed_own_sale" as const, complete: false, missing: 0 } });
+
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
 const root = path.resolve(import.meta.dirname, "..");
@@ -53,19 +57,19 @@ ok(DOMAIN_QUESTIONS.authority.startsWith("I have checked that my business is ent
 
 /* ── PAID CLIENTS ── */
 const lead: HandoffLead = { business_name: "QA", phone: "0770", website: "https://qa.example", amount_paid: 99, status: "payment_received", delivery_checklist: { gbp_access: true } };
-const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], business_website: "https://qa.example", website_route: "rebuild_existing", website_manager: "web_company", website_addon: true,
+const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], business_website: "https://qa.example", confirmed_location: "z", website_route: "rebuild_existing", website_manager: "web_company", website_addon: true,
   domain_status: "existing", domain_owned: "yes", domain_access: "agency", domain_third_party: "no", authority_confirmed: true, dns_permission: true, materials_confirmed: true, site_rights: "no" };
 {
-  const r = handoffReadiness(lead, ob, { crawl: true, hookAudit: true });
-  ok(r.ready && r.domain.label === "DOMAIN READY", "Paid Clients: agency-managed but client-owned domain, all confirmed → READY TO START");
-  const bad = handoffReadiness(lead, { ...ob, domain_third_party: "yes" }, { crawl: true, hookAudit: true });
-  ok(!bad.ready && bad.missing.includes("Domain / authority") && bad.domain.label === "DOMAIN / AGENCY ISSUE", "a third-party-owned domain → MISSING INFORMATION: Domain / authority (DOMAIN / AGENCY ISSUE)");
+  const r = handoffReadiness(lead, ob, ev(true, true));
+  ok(r.ready && r.domain.label === "DOMAIN READY", "Paid Clients: agency-managed but client-owned domain, all confirmed → READY FOR DELIVERY");
+  const bad = handoffReadiness(lead, { ...ob, domain_third_party: "yes" }, ev(true, true));
+  ok(!bad.ready && bad.missing.includes("Domain / authority") && bad.domain.label === "DOMAIN / AGENCY ISSUE", "a third-party-owned domain → WAITING FOR INFORMATION: Domain / authority (DOMAIN / AGENCY ISSUE)");
   ok(/A third party owns or controls the domain/.test(bad.items.find((i) => i.key === "domain")!.detail), "…with the reason");
-  const optimise = handoffReadiness(lead, { ...ob, website_route: "optimise_existing", website_addon: false, website_manager: "direct_access", domain_owned: null, domain_access: null, domain_third_party: null, dns_permission: null, materials_confirmed: null, authority_confirmed: null }, { crawl: true, hookAudit: true });
+  const optimise = handoffReadiness(lead, { ...ob, website_route: "optimise_existing", website_addon: false, website_manager: "direct_access", domain_owned: null, domain_access: null, domain_third_party: null, dns_permission: null, materials_confirmed: null, authority_confirmed: null }, ev(true, true));
   ok(optimise.ready && optimise.domain.label === "NOT NEEDED", "optimising their own site → the domain rule does not block READY");
-  const none = handoffReadiness({ ...lead, services_included: ["x"], service_areas: ["y"], website_control: "client_controls" }, null, { crawl: true, hookAudit: true });
+  const none = handoffReadiness({ ...lead, services_included: ["x"], service_areas: ["y"], website_control: "client_controls" }, null, ev(true, true));
   ok(!none.ready && none.missing.includes("Domain / authority"), "no onboarding at all → never READY (the client's own confirmation is required; Sales data cannot satisfy it)");
-  const ended = handoffReadiness({ ...lead, service_terminated_at: "2026-09-28T00:00:00Z" }, ob, { crawl: true, hookAudit: true });
+  const ended = handoffReadiness({ ...lead, service_terminated_at: "2026-09-28T00:00:00Z" }, ob, ev(true, true));
   ok(!ended.ready && ended.missing.includes("Service active"), "a terminated service is never READY");
 }
 
