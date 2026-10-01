@@ -155,6 +155,8 @@ export interface OutreachLead {
   status: LeadStatus;
   next_action: NextActionType | null;
   next_action_date: string | null;
+  /** What to do, in words (at most 500 characters). Written only through src/lib/nextActionWrite.ts. */
+  next_action_note?: string | null;
   notes: string | null;
   country: Country | null;
   list_type: ListType;

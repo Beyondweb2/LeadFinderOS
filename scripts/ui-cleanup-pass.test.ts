@@ -50,7 +50,7 @@ console.log("\n── one pill, every screen ──");
   ok(/onlyFollowUp/.test(read("src/components/ConvStateChip.tsx")), "the Inbox chip no longer repeats \"Follow-up due\" beside the pill");
   ok(/<NextActionPill lead=\{crm\.data\} \/>/.test(read("src/pages/Focus.tsx")), "Focus Mode: the pill on the lead card");
   const editor = read("src/components/NextActionEditor.tsx");
-  ok(/nextActionViewOf\(action, date\)/.test(editor) && /NEXT_ACTION_OPTIONS \} from '@\/lib\/salesCrm'/.test(editor), "Outreach cell: the same words and the same four choices as the popup");
+  ok(/const v = nextActionView\(lead\);/.test(editor) && /<NextActionForm compact/.test(editor) && /NEXT_ACTION_OPTIONS \} from '@\/lib\/salesCrm'/.test(read("src/components/NextActionForm.tsx")), "Outreach cell: the same words and the same form (every choice) as the popup (2026-10-02)");
   ok(!has("src/hooks/useCustomNextActions.ts") && !has("src/components/NextActionBadge.tsx") && !/custom::|CUSTOM_PREFIX|setLeadCustomAction/.test(editor), "the device-only custom action labels are gone (a second, invisible next-action system)");
   const pill = read("src/components/NextActionPill.tsx");
   ok(/overdue: 'border-red/.test(pill) && /today: 'border-amber/.test(pill) && /upcoming: 'border-border/.test(pill), "overdue red, today amber, later quiet");

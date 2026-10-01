@@ -6,6 +6,7 @@ import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetCom
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
 import { markLeadInterested } from '@/lib/leadQuickActions';
+import { saveNextAction } from '@/lib/nextActionWrite';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -1307,28 +1308,28 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     return result;
   }, [leads, archivedLeads, updateLead, user]);
 
+  /* ⛔ THE ONE NEXT-ACTION WRITE, both roles (src/lib/nextActionWrite.ts → lead_set_follow_up, History
+     "Follow-up set"), 2026-10-02. Used by the bulk "Set Action" menu and the Inbox's lead popup. A value not
+     given keeps what the lead has (the bulk menu sets only the type: its day and note stay). It used to write
+     the admin's row directly with no History line. */
   const updateNextAction = useCallback(async (
     leadId: string,
     nextAction: NextActionType,
-    nextActionDate?: string
-  ) => {
-    const updates: Partial<OutreachLead> = { next_action: nextAction };
-    if (nextAction === 'none') {
-      updates.next_action_date = null;
-    } else if (nextActionDate) {
-      updates.next_action_date = nextActionDate;
+    nextActionDate?: string,
+    note?: string | null,
+  ): Promise<OutreachLead | null> => {
+    const lead = leads.find((l) => l.id === leadId) ?? archivedLeads.find((l) => l.id === leadId);
+    const r = await saveNextAction(leadId, {
+      nextAction,
+      date: nextAction === 'none' ? null : (nextActionDate ?? lead?.next_action_date ?? null),
+      note: note === undefined ? (lead?.next_action_note ?? null) : note,
+    });
+    if (!r.ok) {
+      toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
+      return null;
     }
-    
-    const lead = leads.find((l) => l.id === leadId);
-    const result = await updateLead(leadId, updates);
-    
-    if (result && lead && !isSales()) { // a salesperson's change is logged in lead_activity by the server
-      const dateStr = nextActionDate ? ` for ${nextActionDate}` : '';
-      await logActivity(leadId, 'action_scheduled', `Next action: ${nextAction.replace('_', ' ')}${dateStr}`);
-    }
-    
-    return result;
-  }, [leads, updateLead]);
+    return lead ? ({ ...lead, ...(r.patch ?? {}) } as OutreachLead) : null;
+  }, [leads, archivedLeads]);
 
   const updateNotes = useCallback(async (leadId: string, notes: string) => {
     return updateLead(leadId, { notes });

@@ -80,6 +80,10 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
     "src/lib/leadRpc.ts": "runs that plan (lead_set_follow_up)",
     "src/components/LeadCrmPanel.tsx": "the manual Next action control (and the meeting's one Save: time + 'Meeting')",
     "src/lib/leadOutcome.ts": "Not interested clears the Next Action — 'none' only",
+    /* 2026-10-02: ONE write for every screen (src/lib/nextActionWrite.ts), ONE form (NextActionForm). */
+    "src/lib/nextActionWrite.ts": "THE one next-action write (lead_set_follow_up / lead_set_call_booked), both roles",
+    "src/components/NextActionForm.tsx": "the one form: hands the person's pick to the write on Save / Clear",
+    "src/components/NextActionEditor.tsx": "the Outreach cell: the form, and its ✓ Done ('none')",
   };
   const files = walk("src").filter((p) => !p.startsWith("src/integrations/") && !p.startsWith("src/types/"));
   const writers = files.filter((p) => WRITE.test(strip(read(p))));
@@ -88,11 +92,12 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
   const hook = strip(read("src/hooks/useOutreach.ts"));
   const inserts = [...hook.matchAll(/next_action:\s*([^,\n]+)/g)].map((m) => m[1].trim());
   ok(inserts.length >= 2 && inserts.every((v) => /^'none'/.test(v) || v.startsWith("nextAction")), `useOutreach writes a chosen action only in updateNextAction; its inserts write 'none' (${inserts.join(" | ")})`);
-  ok(/const updates: Partial<OutreachLead> = \{ next_action: nextAction \};/.test(hook), "updateNextAction writes exactly what the person picked");
+  ok(/const r = await saveNextAction\(leadId, \{\n\s+nextAction,/.test(hook), "updateNextAction writes exactly what the person picked (through the one write)");
   const dash = strip(read("src/pages/Dashboard.tsx"));
   ok([...dash.matchAll(/next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "the Dashboard only clears");
   const editor = strip(read("src/components/NextActionEditor.tsx"));
-  ok(/const shouldAutoSave = hasAction && hasDate && \(actionPicked \|\| datePicked\);/.test(editor), "the table's editor saves only after the person picked an action or a date");
+  const form = strip(read("src/components/NextActionForm.tsx"));
+  ok(!/useEffect|setTimeout/.test(editor) && !/useEffect|setTimeout/.test(form) && /onClick=\{\(\) => void save\(\)\}/.test(form), "nothing auto-saves: the cell and the form save only when the person presses Save (or Clear / Done)");
   const outcome = strip(read("src/lib/leadOutcome.ts"));
   ok([...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].length === 1 && [...outcome.matchAll(/_next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "a logged outcome only ever CLEARS the next action (leadOutcome writes 'none', once)");
   const dialog = strip(read("src/components/LeadDetailDialog.tsx"));
@@ -126,7 +131,7 @@ console.log("\n── 5. manual editing stays, for both roles ──");
   const plan = planSalesPatch({ next_action: "call", next_action_date: "2026-10-02" });
   ok(plan.steps.length === 1 && plan.steps[0].fn === "lead_set_follow_up", "a salesperson's manual pick → lead_set_follow_up");
   ok(planSalesPatch({ next_action: "none", next_action_date: null }).steps[0]?.fn === "lead_set_follow_up", "…and a clear");
-  ok(/save\('lead_set_follow_up', \{ _next_action: a\.nextAction, _date: a\.date, _note: a\.note \}/.test(read("src/components/LeadCrmPanel.tsx")), "the CRM panel's Next action control saves what was picked (both roles)");
+  ok(/const r = afterWrite\(await saveNextAction\(leadId, a, stateLead\(\)\)/.test(read("src/components/LeadCrmPanel.tsx")), "the CRM panel's Next action control saves what was picked (both roles, the one write)");
   ok(/<NextActionEditor/.test(read("src/components/OutreachTable.tsx")), "the Outreach table keeps its Next Action column editor");
 }
 

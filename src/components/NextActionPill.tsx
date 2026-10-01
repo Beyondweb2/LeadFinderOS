@@ -14,7 +14,7 @@ const TONE: Record<NextActionView['bucket'], string> = {
   none: 'border-border/70 bg-muted/40 text-muted-foreground',
 };
 
-type Lead = { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null };
+type Lead = { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null; call_booked_at?: string | null };
 
 /**
  * size 'md' — the popup: "Call · Tomorrow", the note after it (truncated, full text on hover/long-press).
@@ -37,7 +37,7 @@ export function NextActionPill({ lead, size = 'md', onClick, className }: { lead
     <Comp type={onClick ? 'button' : undefined} onClick={onClick} title={title} data-testid="next-action-pill"
       className={cn('inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold', TONE[v.bucket], onClick && 'hover:brightness-95', className)}>
       <CalendarClock className="h-3 w-3 shrink-0" />
-      <span className="shrink-0">{v.label}{v.when ? ` · ${v.when}` : ''}</span>
+      <span className="shrink-0">{v.label}{v.when ? ` · ${v.when}` : ''}{v.time ? ` · ${v.time}` : ''}</span>
       {v.note && <span className="min-w-0 truncate font-normal opacity-90">· {v.note}</span>}
     </Comp>
   );

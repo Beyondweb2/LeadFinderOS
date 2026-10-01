@@ -12,7 +12,7 @@ import {
   newClientKey, useAssignLeadWithBrief, useLeadBrief, useLeadSearch, useRecipientsPreview, useTeamBoardAdmin, type AdminPost,
 } from '@/hooks/useTeamBoard';
 import { WHATSAPP_TEMPLATES } from '@/types/outreach';
-import { NEXT_ACTION_LABEL } from '@/lib/nextActionView';
+import { nextActionText, nextActionViewOf } from '@/lib/nextActionView';
 import {
   CHANNEL_LINK, COMPOSER_KINDS, KIND_HINT, KIND_LABEL, TEMPLATE_CHANNELS, boardRefusalText, isTaskKind,
   type TeamPostKind, type TeamPriority, type TemplateChannel,
@@ -192,7 +192,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
                   <div className="flex items-center justify-between gap-2"><span className="font-semibold">{lead.name ?? 'Lead'}</span>
                     <button type="button" className="text-primary hover:underline" onClick={() => setLead(null)}>Change</button></div>
                   {seed?.reason && <p className="text-muted-foreground">Why: {seed.reason}</p>}
-                  <p className="text-muted-foreground">Now with: {ownerName(lead.owner)}{lead.action && lead.action !== 'none' ? ` · Next action: ${NEXT_ACTION_LABEL[lead.action] ?? lead.action}${lead.actionDate ? ` ${lead.actionDate}` : ''}` : ' · No next action'}</p>
+                  <p className="text-muted-foreground">Now with: {ownerName(lead.owner)}{(() => { const na = nextActionViewOf(lead.action, lead.actionDate); return na ? ` · Next action: ${nextActionText(na)}` : ' · No next action'; })()}</p>
                 </div>
               ) : (
                 <div>

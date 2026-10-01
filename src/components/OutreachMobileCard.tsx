@@ -235,12 +235,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
               {/* Row 2: Next Action (always below) */}
               {onNextActionChange && (
                 <div>
-                  <NextActionEditor
-                    action={lead.next_action as NextActionType | null}
-                    date={lead.next_action_date}
-                    onUpdate={(action, date) => onNextActionChange(action, date)}
-                    leadId={lead.id}
-                  />
+                  <NextActionEditor lead={lead} />
                 </div>
               )}
             </div>
