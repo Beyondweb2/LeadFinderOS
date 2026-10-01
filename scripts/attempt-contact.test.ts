@@ -41,7 +41,7 @@ ok(q.split(NOTSENT).length - 1 === 2 && !/\.neq\("status", "failed"\)\n\s+\/\*/.
 ok(read('supabase/functions/send-whatsapp-message/index.ts').includes(NOTSENT), 'the Inbox cold guard too');
 ok(/template_name", "initial_contact"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/contact-followup-eligibility.ts'))
   && /template_name", "audit_reply"\)\.in\("status", \["sent", "delivered", "read"\]\)/.test(read('supabase/functions/_shared/hook-followup-eligibility.ts')), 'a follow-up needs a REAL opener / report before it');
-ok(/openerReallySent\(lead\) \?/.test(read('src/components/WhatsAppLeadControls.tsx')), 'the WhatsApp panel never says "Sent" for a refused send');
+ok(/openerReallySent\(lead\) \?|if \(openerReallySent\(lead\)\)/.test(read('src/components/WhatsAppLeadControls.tsx')), 'the WhatsApp panel never says "Sent" for a refused send');
 for (const f of ['src/pages/Focus.tsx', 'src/hooks/useInbox.ts']) ok(read(f).includes('isRealSend('), `${f}: a real send is isRealSend, not "not failed"`);
 ok(!/'mobile' = WhatsApp-capable proxy/.test(read('src/types/outreach.ts')) && !/is the proxy for "WhatsApp-capable"/.test(read('src/lib/lineType.ts')), 'no comment still calls a mobile WhatsApp-capable');
 

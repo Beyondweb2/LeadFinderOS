@@ -60,3 +60,43 @@ Next Action on "ZZ QA meeting booked" (tomorrow 08:30), an overdue Call on "ZZ Q
 - The sign-up link card's three buttons overflow its card at 390 px (pre-existing, `OnboardingLinkCard`).
 - The Test salesperson's Outreach list shows 0 leads although the QA leads are assigned to it (the popup
   opens by `?lead=`); not investigated here.
+
+## Pass 2 (2026-10-01, same day)
+
+**One folding pattern.** `src/components/WorkSection.tsx`: icon, label, one-line summary, one chevron.
+Warnings (`alert`) show while folded; the body stays mounted (`hidden`) so a picked template or a typed
+note survives a fold; no body → no toggle. Used by Log a contact, Campaign, Call booked · website,
+Sign-up link and WhatsApp outreach. The old `<details>` for Call booked is gone.
+
+| Section | Folded summary | Shown while folded | Open by default |
+|---|---|---|---|
+| Log a contact | channels it covers | the result line after a log | from Outreach's Call |
+| Campaign | the campaign's name / "No campaign" | — | no |
+| Call booked · website | booked time (while current), who controls the site, the domain | — | no |
+| Sign-up link | Not sent yet / Copied, not sent / Sent 1 Oct · opened | a BLOCKING gap (no trade) | no |
+| WhatsApp outreach | Not queued / Queued · template / Last send failed | failed send, paused queue | no |
+
+Settled states are one line with nothing to open: Sign-up link for a paid client ("Not needed — they
+have signed up and paid"; the status pill already says Paid, the footer has no Mark Paid), WhatsApp for No
+WhatsApp, a landline, or an opener already sent. Payment logic untouched.
+
+**390 px sign-up card:** the three buttons were in a non-wrapping row. Now `flex-wrap`: Copy takes the
+first line on a phone, Preview + Sent another way share the second; 36 px tall below `sm`. Measured: card
+12–378 px, buttons 27–363 px at 390; 12–418 / 27–403 at 430; no horizontal scroll.
+
+**Height (Work tab scrollHeight, same leads, live before vs this build):** admin 863 → 601 px at 1440,
+921 → 625 at 390; Test salesperson 937 → 675 at 1440, 995 → 699 at 390 (about 30% shorter).
+
+**The Test salesperson's empty Outreach list is EXPECTED.** All five leads assigned to
+`sales-test@leadfinder.invalid` are `ZZ QA` fixtures, and every `ZZ QA` fixture was archived by the session
+that created it (an `archived_set` activity at the creation instant). The list is the caller's own source
+(`sales_leads`, own leads only) with `is_archived = false`; archived leads are under Filters → Archived.
+Proved live: one fixture un-archived for a minute appeared in Test's list (1 lead, Contacted, Call ·
+Tomorrow), then re-archived. Pinned in `scripts/workspace-declutter.test.ts`. Not a visibility bug.
+
+**What's New dates.** Four entries shipped on 1 Oct 2026 (commits 14:24–16:34 +07:00, 07:24–09:34 UK) were
+dated 2 Oct; there was no timezone convention, they were written a day ahead, and the first declutter
+entry copied the date to keep the list ordered. All four corrected to 2026-10-01 (date and id).
+`scripts/sales-feedback.test.ts` now refuses an entry dated after today's UK date and an id that does not
+start with its date. (Several docs and memory notes also say "2026-10-02" for the same day's work; left
+as written.)

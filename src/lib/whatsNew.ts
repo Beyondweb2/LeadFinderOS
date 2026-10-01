@@ -22,7 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
-  { id: '2026-10-02-workspace-declutter', date: '2026-10-02', title: 'A calmer lead workspace', audience: 'all',
+  { id: '2026-10-01-work-tab-folds', date: '2026-10-01', title: 'A shorter Work tab', audience: 'all',
+    body: 'Campaign, Call booked, the sign-up link and WhatsApp outreach fold to one line each that says where things stand. Tap a line to open it.',
+    report: {
+      added: ['A one-line summary on each folded section, for example "Campaign · Plumbers Leeds", "Sign-up link · Sent 1 Oct · opened", "WhatsApp outreach · Queued".'],
+      changed: [
+        'Campaign, Call booked · website, Sign-up link and WhatsApp outreach start folded. Log a contact uses the same look.',
+        'Warnings still show while folded: a sign-up link that cannot start a baseline (no trade), a failed WhatsApp send, a paused queue.',
+        'Folding keeps what you picked or typed inside.',
+        'On a phone the sign-up link buttons wrap onto two lines instead of running off the card, and they are a little taller to tap.',
+        'A client who has paid shows one line for the sign-up link ("Not needed"), nothing to open.',
+        'A lead that cannot get WhatsApp, a landline, or one whose opener has gone shows WhatsApp outreach as one line.',
+      ],
+      removed: ['Nothing. Every control is inside its section.'],
+      effect: 'The Work tab is about a third shorter, and you can read every section\'s state without opening it.',
+    } },
+  { id: '2026-10-01-workspace-declutter', date: '2026-10-01', title: 'A calmer lead workspace', audience: 'all',
     body: 'The lead popup shows each thing once: the status, who owns it, the Next Action, the last contact. Everything else is one tap away.',
     report: {
       added: [
@@ -43,7 +58,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['Nothing that does anything. Only repeated pills and always-open panels.'],
       effect: 'Open a lead and see in a second what state it is in, what to do next and how to do it, with every tool still there.',
     } },
-  { id: '2026-10-02-next-action-one-flow', date: '2026-10-02', title: 'One Next Action form everywhere', audience: 'all',
+  { id: '2026-10-01-next-action-one-flow', date: '2026-10-01', title: 'One Next Action form everywhere', audience: 'all',
     body: 'The Next Action column now opens the same form as the lead workspace, with the note, the day and a meeting time.',
     report: {
       added: [
@@ -60,7 +75,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['The separate lighter Next Action popup in the Outreach table.'],
       effect: 'One way to set, edit, reschedule, complete or remove a Next Action, with the same types and fields on every screen.',
     } },
-  { id: '2026-10-02-no-legacy-interested', date: '2026-10-02', title: 'The open conversation stays in the Inbox list', audience: 'all',
+  { id: '2026-10-01-no-legacy-interested', date: '2026-10-01', title: 'The open conversation stays in the Inbox list', audience: 'all',
     body: 'The conversation you have open stays in the Inbox list even when no conversation matches your filters.',
     report: {
       added: [],
@@ -71,7 +86,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: [],
       effect: 'Admin and salespeople see the same Inbox list, and the star stays the only sign of interest.',
     } },
-  { id: '2026-10-02-revive-and-inbox-filters', date: '2026-10-02', title: 'Inbox filters match the status pill', audience: 'all',
+  { id: '2026-10-01-revive-and-inbox-filters', date: '2026-10-01', title: 'Inbox filters match the status pill', audience: 'all',
     body: 'Inbox status filters now use the status each conversation shows, and a lead that said no then yes moves on normally.',
     report: {
       added: [],

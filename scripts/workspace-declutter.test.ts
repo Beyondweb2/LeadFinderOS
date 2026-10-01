@@ -103,11 +103,11 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   ok(!/onSave|lead_set_follow_up|saveNextAction/.test(pill.slice(pill.indexOf("export function NextActionBar"))), "…and never writes: its Edit only opens the editor");
   ok(/editNextRequested=\{editNextRequested\} onEditNextHandled=/.test(dlg) && /setEditingNext\(true\);\n\s*onEditNextHandled\?\.\(\);/.test(crm), "Edit on the bar opens the Work tab's ONE editor (requested once, then cleared)");
   ok((crm.match(/<NextActionForm /g) ?? []).length === 1 && /editingNext \|\| preset \?/.test(crm) && /if \(r\.ok\) \{ setPreset\(null\); setEditingNext\(false\); \}/.test(crm), "the editor opens on demand or on an outcome's suggestion, and closes after Save");
-  ok(/const \[open, setOpen\] = useState\(defaultOpen\);/.test(crm) && /defaultOpen=\{logContactOpen\}/.test(crm) && /aria-expanded=\{open\}/.test(crm), "Log a contact is collapsed by default and opens on tap");
+  ok(/const \[open, setOpen\] = useState\(defaultOpen\);/.test(crm) && /defaultOpen=\{logContactOpen\}/.test(crm) && /open=\{open\} onOpenChange=\{setOpen\} testId="log-contact"/.test(crm) && /aria-expanded=\{open\}/.test(read("src/components/WorkSection.tsx")),"Log a contact is collapsed by default and opens on tap");
   const tap = crm.slice(crm.indexOf("const tap = async"), crm.indexOf("const outcomeButton"));
   ok(/if \(!r\.ok\) return;/.test(tap) && tap.indexOf("setOpen(false)") > tap.indexOf("followOn(outcome"), "…it closes only after the log succeeded (a refusal leaves it open)");
   const lc = crm.slice(crm.indexOf("function LogContact("), crm.indexOf("function InternalNote("));
-  ok(lc.indexOf('data-testid="logged-line"') > lc.lastIndexOf("</>)}"), "…and the result line stays visible under the closed header");
+  ok(/after=\{resultLine\}/.test(lc) && /\{after && <div/.test(read("src/components/WorkSection.tsx")), "…and the result line stays visible under the closed header");
   ok(/offeredOutcomes\(outcomesFor\(channel\)\)/.test(lc) && /WHATSAPP_RESULT_OUTCOMES\.map/.test(lc) && /SOCIAL_CONTACT_METHODS\.map/.test(lc) && /more\.map/.test(lc), "…with every channel and every outcome still inside");
   ok(/setDetailLogContact\(true\);\n\s*setDetailLead\(lead\);/.test(table) && /openLogContact=\{detailLogContact\}/.test(table) && /setDetailLogContact\(false\)/.test(table), "Outreach's Call opens the workspace with Log a contact expanded");
   ok(/data-testid="hook-not-run"/.test(crm) && /data-testid="hook-propose"/.test(crm) && /<HookVisibilityCard /.test(crm) && /data-testid="hook-history"/.test(crm), "the AI check: compact when not run; result, re-run and history unchanged");
@@ -120,8 +120,39 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
     ["the star", /<StarToggle /], ["edit name", /setEditingName\(true\)/], ["WhatsApp link", /whatsAppLinkForLead\(lead\.id\)/], ["tabs", /<TabsTrigger value="client"/],
   ] as const) ok(re.test(dlg), `still there: ${what}`);
   ok(/data-testid="more-tools-toggle"/.test(dlg) && /\{moreTools && !isDemoLead\(lead\.id\) && \(/.test(dlg) && !/DropdownMenu/.test(dlg), "the less frequent tools reveal IN PLACE (not a menu), so their own dialogs stay mounted");
-  for (const id of ["learned-agency", "lead-campaign", "domain-control", "meeting-when"]) ok(crm.includes(`data-testid="${id}"`), `Work tab keeps ${id}`);
+  for (const id of ["learned-agency", "lead-campaign", "domain-control", "meeting-when"]) ok(crm.includes(`data-testid="${id}"`) || crm.includes(`testId="${id}"`), `Work tab keeps ${id}`);
   ok(/<LeadOwnerControl leadId=\{leadId\} \/>/.test(strip) && /<LastContactLine/.test(strip) && /wrong-number-pill/.test(strip), "owner, last contact and Wrong number stay in the header");
+}
+
+console.log("\n── pass 2: one folding pattern for the Work tab ──");
+{
+  const ws = read("src/components/WorkSection.tsx");
+  const crm = read("src/components/LeadCrmPanel.tsx");
+  const card = read("src/components/OnboardingLinkCard.tsx");
+  const wa = read("src/components/WhatsAppLeadControls.tsx");
+  ok(/hidden=\{!open\}/.test(ws) && /\{alert && <div/.test(ws) && /const expandable = children !== undefined/.test(ws), "WorkSection: the body stays mounted while folded (state survives), warnings show folded, no body → no toggle");
+  for (const [what, src, id] of [["Log a contact", crm, "log-contact"], ["Campaign", crm, "lead-campaign"], ["Call booked", crm, "call-booked"], ["Sign-up link", card, "signup-link"], ["WhatsApp outreach", wa, "whatsapp-outreach"]] as const) {
+    ok(src.includes(`<WorkSection `) && src.includes(`testId="${id}"`), `${what} uses the one WorkSection pattern`);
+  }
+  ok(!/<details/.test(crm), "no second folding pattern (<details>) left on the Work tab");
+  ok(/summary=\{name\}/.test(crm) && /summary=\{callBookedSummary\(lead\)\}/.test(crm) && /summary=\{summary\}/.test(card) && /summary=\{summary\}/.test(wa), "every folded section says its state in its summary");
+  ok(/alert=\{blocking \? warningLine : null\}/.test(card), "Sign-up link: a blocking gap (no trade) stays visible while folded");
+  ok(/flex flex-wrap gap-1\.5" data-testid="onboarding-buttons"/.test(card) && /h-9 /.test(card), "Sign-up link: the buttons wrap (no 390 px overflow) with phone-sized touch targets");
+  ok(/if \(paid\) \{\s*\n\s*return <WorkSection [^>]*summary="Not needed — they have signed up and paid" \/>/.test(card), "a paid client: one line, nothing to open (the status pill already says Paid)");
+  ok(/lead\.status === 'whatsapp_failed' && !queued \?/.test(wa) && /queueLine\.tone === 'paused'/.test(wa), "WhatsApp: a failed send and a paused queue show while folded");
+  ok(/\{queued && \(\s*\n\s*<p className=\{`mt-1\.5 text-center text-\[10px\]/.test(wa) && /Add to WhatsApp queue/.test(wa) && /<RequestTemplateButton/.test(wa) && /<TemplatePreviewButton/.test(wa), "…and every WhatsApp control is still inside");
+}
+
+console.log("\n── Test salesperson with 0 leads in Outreach: EXPECTED, not a bug (2026-10-01) ──");
+{
+  /* Every "ZZ QA" fixture was archived by the session that made it (an archived_set activity at the
+     creation time), so a salesperson whose only leads are those fixtures has an EMPTY active list. Proved
+     live: one fixture un-archived for a minute showed in the Test salesperson's list, then re-archived.
+     The active list is the caller's own source with is_archived = false — archived leads are under
+     Filters → Archived. Do not "fix" the list query for this. */
+  const hook = read("src/hooks/useOutreach.ts");
+  ok(/sb\.from\(src\.table\)\.select\(src\.listSelect, \{ count: 'exact' \}\)\.eq\('is_archived', false\)/.test(hook) && /\.eq\('is_archived', true\)/.test(hook), "the active list excludes archived leads; the archived list has them");
+  ok(/const src = leadSourceFor\(roleRef\.current\);/.test(hook), "…read from the caller's own source (a salesperson: sales_leads, their own leads only)");
 }
 
 console.log(`\n${f ? `${f} FAILED` : "all passed"}`);

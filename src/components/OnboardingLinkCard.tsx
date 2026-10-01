@@ -8,6 +8,7 @@ import { useOnboardingLink, recordOnboardingLinkEvent } from '@/hooks/useOnboard
 import { MANUAL_SEND_CHANNELS, LINK_CHANNEL_LABEL, previewUrl, type OnboardingLinkStatus } from '@/lib/onboardingLinkStatus';
 import { refusalText } from '@/lib/salesCrm';
 import { isDemoLead } from '@/lib/demoLeads';
+import { WorkSection } from '@/components/WorkSection';
 
 /**
  * Exactly the fields this card reads — nothing more. Declared structurally rather than as
@@ -113,46 +114,62 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
     else toast({ title: 'Not recorded', description: refusalText(r.error), variant: 'destructive' });
   };
 
-  return (
-    <section className="rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm">
-      <div className="mb-2 flex items-center gap-1.5">
-        <Link2 className="h-3.5 w-3.5 text-sky-400" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">Sign-up link</span>
-      </div>
+  const st = link.data?.status;
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+  /* The folded line (declutter pass 2, 2026-10-01): where the link stands, in a few words. */
+  const summary = demo ? 'Not sent yet'
+    : !st ? '…'
+    : st.sentCount === 0 ? (st.generatedAt ? 'Copied, not sent yet' : 'Not sent yet')
+    : `Sent ${day(st.firstSentAt!)} · ${st.opened ? 'opened' : 'not opened yet'}`;
+  const warningLine = warnings.length > 0 && (
+    /* Told BEFORE sending, not after. Amber rather than red when nothing is blocking:
+       these links still work, they just cost something downstream. */
+    <div className={`flex items-start gap-1.5 text-[11px] leading-relaxed ${blocking ? 'text-orange-400' : 'text-amber-400/90'}`} data-testid="onboarding-warning">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>
+        {warnings.length === 1 ? 'Heads up: ' : 'Heads up — '}
+        {warnings.join('; ')}.
+      </span>
+    </div>
+  );
 
-      {paid ? (
-        /* Already paid: no button at all. Sending an existing client back to checkout wastes their
-           time and ours — findable-checkout would refuse it anyway with already_client. */
-        <div className="flex items-start gap-1.5 text-[11px] leading-relaxed text-emerald-400">
-          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>Already signed up and paid — they don&apos;t need this link.</span>
-        </div>
-      ) : (
-        <>
+  /* Already paid: one line, nothing to open. Sending an existing client back to checkout wastes their
+     time and ours — findable-checkout would refuse it anyway with already_client. */
+  if (paid) {
+    return <WorkSection icon={CheckCircle2} iconClass="text-emerald-500" title="Sign-up link" testId="signup-link" summary="Not needed — they have signed up and paid" />;
+  }
+  return (
+    /* ⛔ A BLOCKING GAP (no trade → no baseline after they pay) stays visible while folded; the softer
+       heads-ups are inside, next to the link they are about. */
+    <WorkSection icon={Link2} iconClass="text-sky-400" title="Sign-up link" testId="signup-link" summary={summary}
+      summaryClass={st && st.sentCount > 0 && st.opened ? 'text-emerald-600 dark:text-emerald-400' : undefined}
+      alert={blocking ? warningLine : null}>
           {/* The link, visible before it goes anywhere. Shown scheme-less because the https:// is
               noise, and break-all so a long uuid wraps rather than stretching the dialog. */}
           <p className="mb-2 break-all rounded-md bg-muted/40 px-2 py-1.5 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
             {onboardingUrlLabel(lead.id, lead.business_name)}
           </p>
 
-          <div className="flex gap-1.5">
+          {/* ⛔ WRAPS (2026-10-01): at 390 px the three buttons ran past the card. Copy takes the first line on a
+              phone, Preview and Sent another way share the next; taller touch targets below sm. */}
+          <div className="flex flex-wrap gap-1.5" data-testid="onboarding-buttons">
             <Button
               size="sm"
               variant="outline"
-              className="h-8 flex-1 gap-1.5 text-xs"
+              className="h-9 min-w-[11rem] flex-[2_1_11rem] gap-1.5 text-xs sm:h-8"
               onClick={copy}
             >
               {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied' : 'Copy sign-up link'}
             </Button>
             {/* ⛔ PREVIEW = preview=1, so our own look is recorded as a preview and never as their open. */}
-            <Button asChild size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs" title="Open it yourself. Your visit is not counted as their open.">
+            <Button asChild size="sm" variant="outline" className="h-9 flex-1 gap-1 px-2.5 text-xs sm:h-8 sm:flex-none" title="Open it yourself. Your visit is not counted as their open.">
               <a href={previewUrl(url)} target="_blank" rel="noopener noreferrer"><Eye className="h-3.5 w-3.5" />Preview</a>
             </Button>
             {!demo && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs" title="Sent it by email, LinkedIn or in person? Record it here. WhatsApp is recorded automatically."><Send className="h-3.5 w-3.5" />Sent another way</Button>
+                  <Button size="sm" variant="outline" className="h-9 flex-1 gap-1 whitespace-nowrap px-2.5 text-xs sm:h-8 sm:flex-none" title="Sent it by email, LinkedIn or in person? Record it here. WhatsApp is recorded automatically."><Send className="h-3.5 w-3.5" />Sent another way</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel className="text-xs">I sent the link by…</DropdownMenuLabel>
@@ -162,20 +179,7 @@ export function OnboardingLinkCard({ lead }: { lead: OnboardingLinkLead }) {
             )}
           </div>
           <div className="mt-2"><OnboardingLinkStatusLine status={link.data?.status} /></div>
-
-          {warnings.length > 0 && (
-            /* Told BEFORE sending, not after. Amber rather than red when nothing is blocking:
-               these links still work, they just cost something downstream. */
-            <div className={`mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed ${blocking ? 'text-orange-400' : 'text-amber-400/90'}`}>
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                {warnings.length === 1 ? 'Heads up: ' : 'Heads up — '}
-                {warnings.join('; ')}.
-              </span>
-            </div>
-          )}
-        </>
-      )}
-    </section>
+          {!blocking && warningLine && <div className="mt-2">{warningLine}</div>}
+    </WorkSection>
   );
 }

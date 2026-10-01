@@ -46,6 +46,14 @@ ok(/set_template_request_status/.test(read("src/pages/AdminFeedback.tsx")), "the
 console.log("\n── What's New ──");
 ok(WHATS_NEW.length > 0 && new Set(WHATS_NEW.map((e) => e.id)).size === WHATS_NEW.length, "entries have unique ids");
 ok(WHATS_NEW.every((e, i, a) => i === 0 || a[i - 1].date >= e.date), "newest first");
+/* ⛔ NEVER FUTURE-DATED (2026-10-01): four entries shipped on 1 Oct had been dated 2 Oct, and the next session
+   copied the date to keep the list in order. An entry's date is the UK day it shipped — never after today. */
+{
+  const ukToday = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const ahead = WHATS_NEW.filter((e) => e.date > ukToday);
+  ok(ahead.length === 0, `no entry dated after today in the UK (${ukToday})${ahead.length ? `: ${ahead.map((e) => e.id).join(", ")}` : ""}`);
+  ok(WHATS_NEW.every((e) => e.id.startsWith(e.date)), "each id starts with its own date");
+}
 ok(!whatsNewFor("admin").some((e) => e.audience === "sales") && whatsNewFor("sales").some((e) => e.id === "2026-09-28-earnings"), "each role sees its own entries");
 /* ⛔ Paul, 2026-10-01: every update carries a full report — what was added, changed, removed, and what it means. */
 for (const e of WHATS_NEW.filter((x) => x.date >= WHATS_NEW_REPORT_FROM)) {

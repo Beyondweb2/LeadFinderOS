@@ -808,7 +808,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **The lead workspace header draws each fact once** (`src/lib/workspaceHeader.ts`): status pill +
   owner, then the Next Action BAR (display; Edit opens the Work tab's ONE `NextActionForm`), then a quiet
   last contact. A sales-state pill joins the status only through `headerStateShown` — never "Meeting
-  booked" above the same meeting in the bar. Log a contact is collapsed by default. `docs/workspace-declutter.md`.
+  booked" above the same meeting in the bar. Work-tab sections fold through ONE component, `WorkSection` (summary line, warnings visible folded, body kept mounted). `docs/workspace-declutter.md`.
 - **`useOutreach` is the one hook not on React Query** — its own piece of work; do not tack it on.
 - ⛔ **Outreach loads progressively** (newest 1,000 first, `src/lib/outreachLoad.ts`): anything that
   needs the WHOLE list gates on `datasetComplete(leadLoad)` (positive match on `'complete'`) — a new
