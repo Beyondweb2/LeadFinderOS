@@ -21,7 +21,7 @@ create temp table t_fx as select
 grant select on t_fx to authenticated, anon;
 insert into t_results (name, ok, detail) select 'fixtures', mine is not null and pauls is not null and client is not null and admin_id is not null, null from t_fx;
 insert into t_results (name, ok, detail) select 'anon cannot execute ' || f, not has_function_privilege('anon', f, 'execute'), null
-  from unnest(array['public.lead_mark_interested(uuid, boolean)', 'public.lead_set_details(uuid, text, text, text)', 'public.lead_set_archived(uuid, boolean)', 'public.sales_queue_opener(uuid[], text)', 'public.lead_set_follow_up(uuid, text, date, text)']) f;
+  from unnest(array['public.lead_mark_interested(uuid, boolean)', 'public.lead_set_details(uuid, text, text, text)', 'public.lead_set_archived(uuid, boolean)', 'public.sales_queue_opener(uuid[], text)', 'public.lead_set_follow_up(uuid, text, date, text, text, boolean)']) f;
 
 -- ── as Sales A ──
 set local role authenticated;

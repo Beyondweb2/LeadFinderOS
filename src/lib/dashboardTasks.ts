@@ -1,5 +1,6 @@
 import type { OutreachLead } from '@/types/outreach';
 import { looksAutomated } from '@/lib/inboundClassify';
+import { hhmmOf, nextActionWords } from '@/lib/salesCrm';
 
 /* ============================================================
    NEXT ACTIONS, WORKED OUT LIVE
@@ -262,7 +263,8 @@ export function buildDashTasks(input: TaskInputs): DashTask[] {
       tasks.push({
         key: `manual:${l.id}`, kind: 'manual', leadId: l.id, business: l.business_name,
         label: 'Your task', priority: 5, clearable: true, jump: jumpFor(l, true),
-        reason: `${l.business_name} — task you set${l.next_action_date ? `, due ${l.next_action_date}` : ''}`,
+        /* The type in words, never the stored value (2026-10-02), and its day + optional UK time. */
+        reason: `${l.business_name} — task you set: ${nextActionWords(l.next_action)}${l.next_action_date ? `, due ${l.next_action_date}${hhmmOf(l.next_action_time) ? ` at ${hhmmOf(l.next_action_time)}` : ''}` : ''}`,
         campaignId: l.campaign_id ?? null, contactMethod: l.contact_method ?? null,
       });
     }

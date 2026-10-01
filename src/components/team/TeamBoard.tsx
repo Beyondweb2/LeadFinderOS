@@ -5,7 +5,7 @@ import { Panel, Empty, ago } from '@/components/salesDash/ui';
 import { useToast } from '@/hooks/use-toast';
 import { useMyTeamBoard } from '@/hooks/useTeamBoard';
 import { londonToday } from '@/lib/salesCrm';
-import { NEXT_ACTION_LABEL } from '@/lib/nextActionView';
+import { NEXT_ACTION_LABEL, nextActionText, nextActionViewOf } from '@/lib/nextActionView';
 import {
   CANCEL_REASON_LABEL, KIND_LABEL, PRIORITY_LABEL, TASK_STATUS_LABEL, TEMPLATE_CHANNELS,
   boardRefusalText, dueText, isOverdue, itemDueDate, itemTarget, sortBoard, tabOf, unreadCount,
@@ -159,7 +159,7 @@ function BoardRow({ i, today, busy, onOpen, onStatus, onRead }: {
         )}
         {task && openTask && due && <span className={cn(late ? 'font-medium text-red-700 dark:text-red-300' : 'text-muted-foreground')}>{dueText(due, today)}</span>}
         {i.kind === 'lead_assignment' && i.lead?.mine && i.lead.next_action && i.lead.next_action !== 'none' && (
-          <span className="text-muted-foreground">Next action: {NEXT_ACTION_LABEL[i.lead.next_action] ?? i.lead.next_action.replace(/_/g, ' ')}</span>
+          <span className="text-muted-foreground">Next action: {(() => { const na = nextActionViewOf(i.lead.next_action, i.lead.next_action_date, null, undefined, i.lead.next_action_time); return na ? nextActionText(na) : (NEXT_ACTION_LABEL[i.lead.next_action] ?? i.lead.next_action.replace(/_/g, ' ')); })()}</span>
         )}
         {i.priority === 'high' && openTask && <span className="font-medium text-amber-700 dark:text-amber-300">{PRIORITY_LABEL.high} priority</span>}
         <span className="ml-auto flex flex-wrap items-center gap-1.5">

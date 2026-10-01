@@ -53,7 +53,7 @@ export const TEMPLATE_CHANNELS: readonly { value: TemplateChannel; label: string
 /** Where each channel's template is used — the recipient's "open" button. */
 export const CHANNEL_LINK: Record<TemplateChannel, string> = { whatsapp: '/inbox', linkedin: '/outreach', email: '/outreach', call: '/outreach' };
 
-export interface BoardLead { id: string | null; name: string | null; mine: boolean; next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null }
+export interface BoardLead { id: string | null; name: string | null; mine: boolean; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; next_action_note?: string | null }
 export interface BoardItem {
   id: string; kind: TeamPostKind; title: string; body: string | null; details: Record<string, unknown>; link: string | null;
   due_date: string | null; priority: TeamPriority | null; published_at: string; edited_at: string | null; author: string;

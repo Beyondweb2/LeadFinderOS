@@ -303,3 +303,38 @@ Tests: `scripts/attempt-contact.test.ts`; live rolled back `supabase/tests/claim
   booked 08:30 UK, while every screen shows UK time. All three now use `londonInstant` / `londonLocalInput`
   (`nextActionView.ts`; BST and GMT tested) and are labelled "(UK time)". This overturns the 2026-09-30 test
   rule "the meeting box does not claim UK time": it reads UK time now, so the label is true.
+
+## K. An optional UK time for every Next Action; Send proposal and Chase payment (2026-10-02)
+
+- **The field:** `outreach_leads.next_action_time` (`time`, nullable). It is a UK wall-clock time on
+  `next_action_date` (a UK day); a check means a time needs a day. Read together as Europe/London:
+  `public.next_action_due_at(date, time)` in SQL, `londonInstant(day, hhmm)` in TypeScript (`salesCrm.ts`), both
+  DST-correct and tested either side of 29 Mar and 25 Oct 2026. Null means no time: every old row reads exactly
+  as before. Migration: 0 rows (no lead had a Meeting next action; the only two booked meetings were on archived
+  QA leads).
+- **Meetings, one time:** `call_booked_at` stays the "Meeting booked" fact (`salesStateOf`). It is not the
+  general time, because a call at 14:30 must not make a lead "Meeting booked". A Meeting saved with a time
+  books `call_booked_at` from that time inside `lead_set_follow_up`. `lead_set_call_booked` moves an existing
+  Meeting's day and time with the booking. Displays read only `next_action_time`. The note no longer gains
+  "Meeting at HH:MM" (old notes keep it).
+- **The write:** `lead_set_follow_up(_lead_id, _next_action, _date, _note, _time default null, _done default
+  false)` replaced the four-argument version, which was dropped. Old four-argument calls still resolve. History
+  `follow_up_set` now carries `change` (set / rescheduled / changed / updated / completed / cleared), `time`
+  and `from`, and an identical save writes nothing. `activityDetail` says it in words. The team brief keeps a
+  time while it keeps the day, and the bulk menu and a salesperson's patch keep it too.
+- **Due:** `followUpBucket(date, today, time?, nowMs)`. Untimed actions keep the day rule (today all day,
+  overdue from the next UK day). Timed actions are overdue once the UK time has passed. The filters, sort,
+  admin counts and sales workspace all read it; "Next 7 days" leaves out overdue ones. The reminder
+  (`notify_due_follow_ups`, daily 06:00 UTC) stays day-based and now prints `next_action_label` (the SQL twin
+  of `NEXT_ACTION_LABEL`, held equal by the suite) and the time.
+- **Types:** `send_proposal`, `chase_payment` (enum migration `20261002160000`, its own step). They are offered
+  in the form and the bulk menu, and each has its own Type filter. No agreement / signature type: that will
+  come from the contract workflow.
+- **onboarding-audit-fields (the last red suite): B, environment.** It read the working tree of whichever
+  findable-site copy was on disk (a stale worktree or the stale primary checkout). It now reads
+  `origin/master` (what findable-site deploys) through git and prints the revision; it passes from every
+  copy. The full suite is 273/273 with `FINDABLE_SITE_DIR` on a clean origin/master worktree.
+- Tests: `scripts/next-action-one-flow.test.ts` (rewritten); live rolled-back
+  `supabase/tests/next-action-one-flow.sql` (29 checks). `next-action-human-only.sql` (19) and
+  `sales-shared-workflow.sql` (37) were updated to the new signature and the Meeting sync. `sales-team-board.sql`
+  passes 41/41.

@@ -59,13 +59,74 @@ export function londonToday(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
-export function followUpBucket(date: string | null | undefined, today: string): FollowUpBucket {
+/** 'HH:MM' from a stored time ('14:30:00', '14:30') — null when absent or not a time. */
+export function hhmmOf(t: string | null | undefined): string | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)/.exec((t ?? '').trim());
+  return m ? `${m[1]}:${m[2]}` : null;
+}
+
+/** ⛔ A NEXT ACTION'S TIME IS UK TIME (2026-10-02). The instant of `day` + `hhmm` in Europe/London — BST or GMT
+ *  as that day has it — whatever clock this computer runs on (Paul's is Asia/Bangkok). Null without both. */
+export function londonInstant(day: string, hhmm: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+  const guess = Date.parse(`${day}T${hhmm}:00Z`);
+  if (!Number.isFinite(guess)) return null;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
+  const shown = Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`);
+  return new Date(guess - (shown - guess)).toISOString();
+}
+
+/** The due bucket of a Next Action. ⛔ DAY-BASED unless it has a time (2026-10-02, Paul): a date-only action is
+ *  "today" all day and overdue from the next UK day, as before; a timed one is overdue the moment its UK time
+ *  has passed ("Call · Today · 16:00" is due at 13:00 UK, overdue at 16:01). */
+export function followUpBucket(date: string | null | undefined, today: string, time?: string | null, nowMs: number = Date.now()): FollowUpBucket {
   if (!date) return 'none';
   const d = date.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'none';
   if (d < today) return 'overdue';
-  if (d === today) return 'today';
+  if (d === today) {
+    const t = hhmmOf(time);
+    const at = t ? londonInstant(d, t) : null;
+    return at && nowMs > Date.parse(at) ? 'overdue' : 'today';
+  }
   return 'upcoming';
+}
+
+/** The words for each stored next_action value. The first eight are the ones the form offers today
+ *  (NEXT_ACTION_OPTIONS); the rest are older values that can still be on a row (read, never offered).
+ *  ⛔ The SQL twin is public.next_action_label (the reminders) — the suite holds the two equal. */
+export const NEXT_ACTION_LABEL: Record<string, string> = {
+  call: 'Call',
+  send_follow_up: 'WhatsApp follow-up',
+  email: 'Email',
+  follow_up: 'Follow up',
+  send_info: 'Send information',
+  send_proposal: 'Send proposal',
+  chase_payment: 'Chase payment',
+  meeting: 'Meeting',
+  send_voice_note: 'Voice note',
+  send_initial_text: 'Send opener',
+  '2nd_follow_up': 'Second follow-up',
+  send_draft: 'Send link',
+  check_3_day_removal: 'Check in',
+  remove_if_no_reply: 'Close if no reply',
+};
+
+/** A stored type in words (an unknown one as itself, never dropped). */
+export function nextActionWords(v: unknown): string {
+  const s = String(v ?? '').trim();
+  return NEXT_ACTION_LABEL[s] ?? s.replace(/_/g, ' ');
+}
+
+/** "Thu 2 Oct" — a stored UK day in History. */
+function historyDay(d: unknown): string | null {
+  const s = String(d ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).replace(',', '') : null;
+}
+/** "Call · Thu 2 Oct · 14:30" from a follow_up_set row's values. */
+function historyAction(na: unknown, date: unknown, time: unknown): string {
+  return [nextActionWords(na), historyDay(date), hhmmOf(time as string | null)].filter(Boolean).join(' · ');
 }
 
 /** Owner initials for the avatar fallback: "Paul Smith" → "PS", "Sumi" → "SU", "" → "?". */
@@ -225,6 +286,9 @@ export const NEXT_ACTION_OPTIONS = [
   { value: 'email', label: 'Email' },
   { value: 'follow_up', label: 'Follow up (other)' },
   { value: 'send_info', label: 'Send information' },
+  /* 2026-10-02 (Paul): commercially distinct work — a proposal / offer to send; money outstanding on a sale. */
+  { value: 'send_proposal', label: 'Send proposal' },
+  { value: 'chase_payment', label: 'Chase payment' },
   { value: 'meeting', label: 'Meeting' },
   { value: 'none', label: 'Nothing planned' },
 ] as const;
@@ -237,7 +301,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   note: 'Internal note',
   stage_changed: 'Pipeline status changed',
   state_changed: 'Status changed',
-  follow_up_set: 'Follow-up set',
+  follow_up_set: 'Next action',
   call_booked: 'Call booked',
   call_outcome: 'Call',
   contact_logged: 'Contact',
@@ -282,8 +346,23 @@ export function activityDetail(
     /* leadState.stateChangedWords is the full-label version the lead History uses; this one is the same
        words for the states that have no qualifier (scripts/lead-state.test.ts compares them). */
     case 'state_changed': { const w = (v: unknown) => { const t = String(v ?? '—').replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); }; return `Status: ${w(d.from)} → ${w(d.to)}`; }
-    case 'follow_up_set': if (!d.next_action || d.next_action === 'none') return 'Next action cleared';
-      return `${String(d.next_action ?? '').replace(/_/g, ' ')}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
+    /* ⛔ WHAT HAPPENED, IN WORDS (2026-10-02): lead_set_follow_up records the change and what it was before.
+       Older rows (no "change") read as before, in the type's words. */
+    case 'follow_up_set': {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const now = historyAction(d.next_action, d.date, d.time);
+      const note = d.note ? ` — ${String(d.note)}` : '';
+      switch (d.change) {
+        case 'completed': return `Completed: ${historyAction(from.next_action, from.date, from.time)}`;
+        case 'cleared': return from.next_action && from.next_action !== 'none' ? `Cleared: ${historyAction(from.next_action, from.date, from.time)}` : 'Next action cleared';
+        case 'set': return `Set: ${now}${note}`;
+        case 'rescheduled': return `Rescheduled: ${now} (was ${[historyDay(from.date) ?? 'no date', hhmmOf(from.time as string | null)].filter(Boolean).join(' · ')})${note}`;
+        case 'changed': return `Changed: ${nextActionWords(from.next_action)} → ${now}${note}`;
+        case 'updated': return `Note changed: ${now}${note}`;
+      }
+      if (!d.next_action || d.next_action === 'none') return 'Next action cleared';
+      return `${nextActionWords(d.next_action)}${d.date ? ` on ${String(d.date)}` : ''}${d.note ? ` — ${String(d.note)}` : ''}`;
+    }
     /* The meeting's time in London, or "Cancelled" when it was cleared (Not interested cancels it). */
     case 'call_booked': return d.at ? new Date(String(d.at)).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).replace(',', '') : 'Cancelled';
     case 'bulk_queued': return d.template ? String(d.template) : null;

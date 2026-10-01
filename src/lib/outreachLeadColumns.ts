@@ -26,7 +26,7 @@ export const OUTREACH_LIST_COLUMNS = [
   // trade / town (audit eligibility, town badge, "Set trade")
   'category', 'search_keyword', 'search_location', 'derived_town', 'town_fetch_note',
   // pipeline
-  'status', 'previous_status', 'next_action', 'next_action_date', 'next_action_note', 'notes', 'is_potential_work',
+  'status', 'previous_status', 'next_action', 'next_action_date', 'next_action_time', 'next_action_note', 'notes', 'is_potential_work',
   'amount_paid', 'product', 'contact_method', 'outreach_attempts', 'last_outreach_attempt_at',
   'call_booked_at', // the row's Meeting line (lead state audit, 2026-09-30)
   'instantly_pushed_at',
@@ -72,6 +72,8 @@ export const SALES_VIEW_COLUMNS = [
   'town_fetch_note',
   // 2026-09-30 (migration 20260930140000): the LinkedIn link and how sure each profile is.
   'linkedin_url', 'facebook_status', 'instagram_status', 'linkedin_status',
+  // 2026-10-02 (migration 20261002160100): the Next Action's optional UK time; appended at the view's end.
+  'next_action_time',
 ] as const;
 const SALES_VIEW = new Set<string>(SALES_VIEW_COLUMNS);
 /** The list columns a salesperson's list can have: the admin's list, cut to what the view carries.
@@ -97,7 +99,7 @@ export function leadSourceFor(role: 'admin' | 'sales' | null | undefined): { tab
    read-modify-write, so delivery_checklist MUST be here). scripts/outreach-list-columns.test.ts walks
    the Dashboard the same way it walks the lead list. */
 export const DASHBOARD_LEAD_COLUMNS = [
-  'id', 'business_name', 'status', 'next_action', 'next_action_date', 'notes', 'created_at', 'updated_at',
+  'id', 'business_name', 'status', 'next_action', 'next_action_date', 'next_action_time', 'notes', 'created_at', 'updated_at',
   'is_archived', 'campaign_id', 'amount_paid', 'payment_date', 'subscription_status', 'product',
   'category', 'search_keyword', 'search_location', 'derived_town', 'contact_method', 'whatsapp_status',
   'phone', 'email', 'address', 'website', 'rating', 'user_id', 'assigned_to_user_id',

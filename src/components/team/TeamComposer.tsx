@@ -57,7 +57,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
   const [channel, setChannel] = useState<TemplateChannel>('whatsapp');
   const [templateName, setTemplateName] = useState('');
   const [approval, setApproval] = useState<'approved' | 'draft'>('approved');
-  const [leadPick, setLead] = useState<{ id: string; name: string | null; owner: string | null; action: string | null; actionDate: string | null } | null>(null);
+  const [leadPick, setLead] = useState<{ id: string; name: string | null; owner: string | null; action: string | null; actionDate: string | null; actionTime?: string | null } | null>(null);
   const [leadTerm, setLeadTerm] = useState('');
   const [key, setKey] = useState(newClientKey);
   const [confirming, setConfirming] = useState(false);
@@ -65,7 +65,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
   const draftId = seed?.draft?.id ?? null;
   /* The lead's owner and Next Action are always read LIVE (a seeded or searched copy can be stale). */
   const brief = useLeadBrief(leadPick?.id ?? null);
-  const lead = leadPick && brief.data ? { ...leadPick, name: brief.data.business_name ?? leadPick.name, owner: brief.data.assigned_to_user_id, action: brief.data.next_action ?? null, actionDate: brief.data.next_action_date ?? null } : leadPick;
+  const lead = leadPick && brief.data ? { ...leadPick, name: brief.data.business_name ?? leadPick.name, owner: brief.data.assigned_to_user_id, action: brief.data.next_action ?? null, actionDate: brief.data.next_action_date ?? null, actionTime: brief.data.next_action_time ?? null } : leadPick;
 
   // Every open starts clean (or from the draft / clarification it was opened for), with a new key.
   useEffect(() => {
@@ -78,7 +78,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
     setCategory(String(det.category ?? '')); setLocation(String(det.location ?? ''));
     setChannel((det.channel as TemplateChannel) ?? 'whatsapp'); setTemplateName(String(det.template_name ?? ''));
     setApproval(det.approval === 'draft' ? 'draft' : 'approved');
-    setLead(d?.lead ? { id: d.lead.id, name: d.lead.name, owner: d.lead.owner, action: d.lead.next_action ?? null, actionDate: d.lead.next_action_date ?? null }
+    setLead(d?.lead ? { id: d.lead.id, name: d.lead.name, owner: d.lead.owner, action: d.lead.next_action ?? null, actionDate: d.lead.next_action_date ?? null, actionTime: d.lead.next_action_time ?? null }
       : seed?.lead ? { id: seed.lead.id, name: seed.lead.name, owner: null, action: null, actionDate: null } : null);
     setLeadTerm(''); setKey(newClientKey()); setConfirming(false);
   }, [open, seed]);
@@ -192,7 +192,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
                   <div className="flex items-center justify-between gap-2"><span className="font-semibold">{lead.name ?? 'Lead'}</span>
                     <button type="button" className="text-primary hover:underline" onClick={() => setLead(null)}>Change</button></div>
                   {seed?.reason && <p className="text-muted-foreground">Why: {seed.reason}</p>}
-                  <p className="text-muted-foreground">Now with: {ownerName(lead.owner)}{(() => { const na = nextActionViewOf(lead.action, lead.actionDate); return na ? ` · Next action: ${nextActionText(na)}` : ' · No next action'; })()}</p>
+                  <p className="text-muted-foreground">Now with: {ownerName(lead.owner)}{(() => { const na = nextActionViewOf(lead.action, lead.actionDate, null, undefined, lead.actionTime); return na ? ` · Next action: ${nextActionText(na)}` : ' · No next action'; })()}</p>
                 </div>
               ) : (
                 <div>
@@ -203,7 +203,7 @@ export function TeamComposer({ open, onOpenChange, seed }: { open: boolean; onOp
                     <ul className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-border/60">
                       {(search.data ?? []).map((l) => (
                         <li key={l.id}><button type="button" className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted"
-                          onClick={() => setLead({ id: l.id, name: l.business_name, owner: l.assigned_to_user_id, action: l.next_action ?? null, actionDate: l.next_action_date ?? null })}>
+                          onClick={() => setLead({ id: l.id, name: l.business_name, owner: l.assigned_to_user_id, action: l.next_action ?? null, actionDate: l.next_action_date ?? null, actionTime: l.next_action_time ?? null })}>
                           <span className="truncate font-medium">{l.business_name ?? 'Unnamed'}{l.is_archived ? ' (archived)' : ''}</span><span className="shrink-0 text-muted-foreground">{ownerName(l.assigned_to_user_id)}</span>
                         </button></li>
                       ))}

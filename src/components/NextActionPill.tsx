@@ -15,7 +15,7 @@ const TONE: Record<NextActionView['bucket'], string> = {
   none: 'border-border/70 bg-muted/40 text-muted-foreground',
 };
 
-type Lead = { next_action?: string | null; next_action_date?: string | null; next_action_note?: string | null; call_booked_at?: string | null };
+type Lead = { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; next_action_note?: string | null; call_booked_at?: string | null };
 
 /**
  * size 'md' — the popup: "Call · Tomorrow", the note after it (truncated, full text on hover/long-press).

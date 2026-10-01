@@ -29,6 +29,7 @@
    Pure and edge-safe (relative imports with .ts).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { isRealSend } from './realSend.ts';
+import { followUpBucket } from './salesCrm.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
 import { salesStateOf, openerReallySent, CONVERSATION_OUTCOMES, REACHED_OUTCOMES, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './leadState.ts';
@@ -63,6 +64,7 @@ export interface AdminLead {
   whatsapp_ever_delivered?: boolean | null;
   next_action: string | null;
   next_action_date: string | null;
+  next_action_time?: string | null;
   is_archived: boolean | null;
   phone: string | null;
   email: string | null;
@@ -545,7 +547,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
       if (st !== 'client' && st !== 'won' && st !== 'not_interested') {
         const due = f.lead.next_action_date.slice(0, 10);
         const r = rowFor(f.holder);
-        if (r && due <= todayDay) { r.followUpsDue += 1; if (due < todayDay) r.followUpsOverdue += 1; }
+        /* Overdue: an earlier UK day, or today past its UK time (followUpBucket, 2026-10-02). */
+        if (r && due <= todayDay) { r.followUpsDue += 1; if (followUpBucket(due, todayDay, f.lead.next_action_time ?? null, input.nowMs) === 'overdue') r.followUpsOverdue += 1; }
       }
     }
   }

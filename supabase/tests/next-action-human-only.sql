@@ -31,9 +31,13 @@ insert into t_results (name, ok, detail) select 'no trigger on outreach_leads wr
 insert into t_results (name, ok, detail) select 'no scheduled job mentions next_action', not exists (select 1 from cron.job where command ~* 'next_action'), null;
 insert into t_results (name, ok, detail) select 'only lead_set_follow_up sets a chosen next action',
   (select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')') = array['lead_set_follow_up'],
+    where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')') = array['lead_set_call_booked', 'lead_set_follow_up'],
   (select string_agg(p.proname::text, ', ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prokind = 'f' and pg_get_functiondef(p.oid) ~* 'next_action\s*=\s*(?!''none'')');
+/* 2026-10-02: lead_set_call_booked moves an EXISTING Meeting's day + time with the booking; it never sets a type
+   (its next_action = 'meeting' is the WHERE clause). */
+insert into t_results (name, ok, detail) select 'lead_set_call_booked never sets a type',
+  pg_get_functiondef('public.lead_set_call_booked'::regproc) !~* 'set\s+next_action\s*=' and pg_get_functiondef('public.lead_set_call_booked'::regproc) ~* 'where id = _lead_id and next_action = ''meeting''', null;
 
 -- ── as Sales A ──
 set local role authenticated;

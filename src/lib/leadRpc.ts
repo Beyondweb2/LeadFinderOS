@@ -54,12 +54,14 @@ export async function salesPatchLead(leadId: string, patch: Record<string, unkno
         /* lead_set_follow_up writes all three follow-up columns at once. The table's editor holds only
            the action or the date — the list does not download the note — so the current values are
            READ first rather than sent as blanks, which would wipe the note. */
-        const { data, error } = await sb.from('sales_leads').select('next_action, next_action_date, next_action_note').eq('id', leadId).maybeSingle();
+        const { data, error } = await sb.from('sales_leads').select('next_action, next_action_date, next_action_time, next_action_note').eq('id', leadId).maybeSingle();
         if (error || !data) { r = { ok: false, error: error ? String(error.message ?? error) : 'not_your_lead' }; break; }
-        const cur = data as { next_action: string | null; next_action_date: string | null; next_action_note: string | null };
+        const cur = data as { next_action: string | null; next_action_date: string | null; next_action_time: string | null; next_action_note: string | null };
         const nextAction = step.hasNextAction ? (step.nextAction ?? 'none') : (cur.next_action ?? 'none');
         const date = step.hasDate ? (step.date ?? null) : cur.next_action_date;
-        r = await leadRpc(step.fn, { _lead_id: leadId, _next_action: nextAction, _date: nextAction === 'none' ? null : date, _note: cur.next_action_note });
+        /* The time stays with its day (2026-10-02): kept while the day is, dropped when the day changes. */
+        const time = nextAction !== 'none' && date && date === cur.next_action_date ? (cur.next_action_time ?? '').slice(0, 5) || null : null;
+        r = await leadRpc(step.fn, { _lead_id: leadId, _next_action: nextAction, _date: nextAction === 'none' ? null : date, _note: cur.next_action_note, _time: time });
         break;
       }
     }

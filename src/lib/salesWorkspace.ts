@@ -14,7 +14,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { LeadFacts, PerfActivity } from './salesPerformance.ts';
 import { conversationState, londonToday } from './conversationState.ts';
-import { NEXT_ACTION_OPTIONS } from './salesCrm.ts';
+import { NEXT_ACTION_OPTIONS, followUpBucket } from './salesCrm.ts';
 import type { QuickCloseState } from './quickClose.ts';
 import { meetingWhen } from './leadState.ts';
 import { WHATSAPP_NEXT_ACTIONS } from './nextActionView.ts';
@@ -46,6 +46,7 @@ export interface WorkspaceLead {
   status: string | null;
   next_action: string | null;
   next_action_date: string | null;
+  next_action_time?: string | null;
   next_action_note: string | null;
   sold_at?: string | null;
   /** A booked call / meeting (lead_set_call_booked) — the Meetings list and the top of Next best actions. */
@@ -212,7 +213,8 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     if (na && naDate && naDate <= today) {
       todayC.followUpsDue += 1;
       const item: PipeLead = { ...pl, detail: `${nextActionWord(na)}${lead?.next_action_note ? ` — ${lead.next_action_note}` : ''}`, link: WHATSAPP_ACTIONS.has(na) ? 'whatsapp' : 'lead' };
-      (naDate < today ? followUps.overdue : followUps.dueToday).push(item);
+      /* Overdue: an earlier UK day, or today past its UK time (followUpBucket, 2026-10-02). */
+      (followUpBucket(naDate, today, lead?.next_action_time ?? null, now) === 'overdue' ? followUps.overdue : followUps.dueToday).push(item);
       actions.push({ kind: naDate < today ? 'follow_up_overdue' : 'follow_up_due', leadId: f.lead.id, name,
         title: naDate < today ? 'Follow-up overdue' : 'Follow-up due today', detail: item.detail!,
         at: `${naDate}T09:00:00Z`, tone: naDate < today ? 'red' : 'amber', link: WHATSAPP_ACTIONS.has(na) ? 'whatsapp' : 'lead', rank: naDate < today ? 1 : 2 });
