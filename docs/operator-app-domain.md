@@ -71,7 +71,8 @@ is proven by the deployed bundle and the unit test.
 
 ## Found along the way
 - The Dashboard Submissions card navigates to `/outreach?leadId=`, but Outreach reads `?lead=`.
-  The lead never opens. This bug predates the move and is not fixed here.
+  The lead never opens. This bug predates the move. **Fixed later on 2026-10-01** (main `518183ad`,
+  `outreachLeadLink`); see `docs/r-profile-pages-audit.md`.
 - `functions/r/[slug].ts` is live: it serves 1,295 published business-profile pages (the newest is
   from 2026-09-30) on every host, with a `yoursites.uk` canonical. It is left alone. Whether to
   retire it is still Paul's decision (`report-origin.test.ts`).
