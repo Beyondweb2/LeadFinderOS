@@ -31,7 +31,7 @@
 import { isRealSend } from './realSend.ts';
 import { looksAutomated } from './inboundClassify.ts';
 import { isPaidLead } from './leadPayment.ts';
-import { salesStateOf, openerReallySent, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './leadState.ts';
+import { salesStateOf, openerReallySent, CONVERSATION_OUTCOMES, REACHED_OUTCOMES, NOT_INTERESTED_STATUSES, INTERESTED_STATUSES } from './leadState.ts';
 import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 import { DISPUTE_LOST, DISPUTE_RELEASED, type CommissionLine, type EarningsTotals } from './commission.ts';
 import { inPeriod, londonDay, type ReportingPeriod } from './reportingPeriod.ts';
@@ -140,7 +140,6 @@ const DECLINE_REASONS: ReadonlySet<string> = new Set(['replied_no', 'not_interes
 const LIVE_SUBSCRIPTION: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
 const INTERESTED_STATES: ReadonlySet<string> = new Set(['interested', 'meeting_booked', 'won']);
 const INTERESTED_OUTCOMES: ReadonlySet<string> = new Set(['interested', 'meeting_booked']);
-const CONVERSATION_OUTCOMES: ReadonlySet<string> = new Set(['spoke_to_owner', 'interested', 'call_back', 'meeting_booked', 'not_interested', 'agency_controls_site']);
 const CONTACT_KINDS: ReadonlySet<string> = new Set(['call_outcome', 'contact_logged']);
 const DEAD_STATUSES: ReadonlySet<string> = new Set(['not_interested', 'opted_out', 'closed', 'refunded']);
 /** The dashboard's channel groups over the one contact-method list (contactMethods.ts) — grouped, never
@@ -591,7 +590,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
 
   /* Funnel: the leads ADDED in the period (all time = the whole book), how far each has got. */
   const cohortLeads = facts.filter((f) => p.fromMs === null || inPeriod(f.lead.created_at, p));
-  const contactedEver = (f: LeadFacts) => f.contacts.some((c) => !isExcludedUser(ex, c.who)) || openerReallySent(f.lead);
+  /* Contacted (funnel) = a real send or a logged contact that REACHED them — never a no-answer attempt (2026-10-01). */
+  const contactedEver = (f: LeadFacts) => f.contacts.some((c) => !isExcludedUser(ex, c.who) && (c.kind === 'whatsapp' || REACHED_OUTCOMES.has(String(c.outcome ?? '')))) || openerReallySent(f.lead);
   const funnel: Funnel = {
     basis: p.fromMs === null ? 'Every lead in the book' : `Leads added ${p.label.toLowerCase() === 'today' ? 'today' : `in ${p.label.toLowerCase()}`}`,
     stages: [

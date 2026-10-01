@@ -63,7 +63,7 @@ function base(): FoldInput {
     activity: [
       { lead_id: "a", actor_user_id: REP, kind: "marked_interested", data: { on: true }, created_at: "2026-09-10T10:00:00Z" },
       { lead_id: "e", actor_user_id: REP, kind: "call_outcome", data: { outcome: "spoke_to_owner" }, created_at: "2026-09-12T10:00:00Z" },
-      { lead_id: "e", actor_user_id: REP, kind: "contact_logged", data: { outcome: "no_answer", channel: "linkedin" }, created_at: "2026-09-13T10:00:00Z" },
+      { lead_id: "e", actor_user_id: REP, kind: "contact_logged", data: { outcome: "message_sent", channel: "linkedin" }, created_at: "2026-09-13T10:00:00Z" }, // a LinkedIn message really sent (a no-answer is only an attempt since 2026-10-01)
       { lead_id: "d", actor_user_id: OTHER, kind: "call_outcome", data: { outcome: "interested" }, created_at: "2026-09-12T10:00:00Z" },
     ],
     linkEvents: [

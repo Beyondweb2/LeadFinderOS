@@ -23,6 +23,11 @@ included, and restored a re-queued failed lead to `initial_contact` (2 leads).
   (`whatsapp_ever_delivered`). Used by `salesStateOf`, the admin funnel (`adminMetrics`) and the popup's
   last-contact fallback (`useLeadSalesState`). Queued is New; a failed send is not Contacted; a logged
   contact (any outcome, the existing rule) is Contacted and its detail stays in History.
+- **An attempt is not a contact** (found in the live test: a logged no-answer read "New → Contacted"):
+  `leadState.REACHED_OUTCOMES` = the conversation outcomes (THE list, was copied in salesPerformance and
+  adminMetrics) + `message_sent`. No answer, voicemail, a connection request and wrong number are attempts.
+  `LastContactView.everReached` keeps an earlier real conversation counting after a later no-answer. The sales
+  funnel and the admin funnel count only reached contacts; the call stats still count every call.
 - The queue's already-sent guard ignores `failed / failed_temporary / simulated` sends; a NULL delivery
   status still blocks (sending path: absent means do not). That matches the guard's own comment.
 - **Not changed (decision for Paul):** SQL `lead_first_contact_at` still counts the stamp as a "legacy"

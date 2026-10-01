@@ -1910,7 +1910,7 @@ export function OutreachTable({
      control, which draws the ONE solid pipeline pill and uses the stage only for its tooltip. */
   const rowSalesState = (lead: OutreachLead): SalesStateView => {
     const lc = lastLogged.data?.get(lead.id);
-    return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
+    return salesStateOf({ ...lead, lastLogged: lc ? { outcome: lc.outcomeValue ?? '', at: lc.at, reached: lc.everReached } : null, wrongNumber: wrongNums.data?.has(lead.id) ?? null });
   };
 
   // Always point walkthrough Step 5 to a visible, actionable track button
