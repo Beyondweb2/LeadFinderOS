@@ -11,17 +11,20 @@
    are untouched.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import type { SalesStateView } from './leadState.ts';
-import { meetingDayTime } from './nextActionView.ts';
+import { hhmmOf, meetingDayTime } from './nextActionView.ts';
 
-type NextActionFacts = { next_action?: string | null; next_action_date?: string | null; call_booked_at?: string | null };
+type NextActionFacts = { next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; call_booked_at?: string | null };
 
-/** Is the booked meeting the SAME thing as the stored Next Action — a "Meeting" on the meeting's own
- *  London day? Then the Next Action bar shows it (with its time) and the header draws no second pill. */
+/** Is the booked meeting the SAME thing as the stored Next Action — a "Meeting" at the meeting's own UK day
+ *  AND time? Then the Next Action bar shows it (with its time) and the header draws no second pill.
+ *  ⛔ 2026-10-02: the time must match too. A Meeting whose time was removed (or differs) does not show the
+ *  booked time, so the header keeps "Meeting booked · 15:15" rather than hiding the booking. */
 export function meetingIsTheNextAction(l: NextActionFacts | null | undefined): boolean {
   if (!l || (l.next_action ?? '').trim() !== 'meeting' || !l.call_booked_at) return false;
   if (!Number.isFinite(Date.parse(l.call_booked_at))) return false;
   const day = (l.next_action_date ?? '').slice(0, 10);
-  return !!day && meetingDayTime(l.call_booked_at).day === day;
+  const booked = meetingDayTime(l.call_booked_at);
+  return !!day && booked.day === day && hhmmOf(l.next_action_time) === booked.time;
 }
 
 /** The status pill words that already say "client". */

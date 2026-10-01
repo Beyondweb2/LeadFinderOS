@@ -56,6 +56,11 @@ console.log("── the ten states Paul named: the header is never repetitive �
   ok(h5b.extra === "Meeting booked · Fri 2 Oct 08:30" && h5b.bar?.label === "Send information", "5b a meeting that is NOT the Next Action keeps its pill (two different facts)");
   const h5c = header({ ...meeting, next_action: null, next_action_date: null, next_action_note: null });
   ok(h5c.extra !== null && h5c.bar === null, "5c a meeting with no Next Action keeps its pill");
+  /* Found live 2026-10-02: a Meeting whose time was removed hid the booked 15:15 — the bar had no time and the
+     header dropped the pill. Same day is not enough; the time must match too. */
+  const h5e = header({ ...meeting, next_action_time: null });
+  ok(h5e.extra !== null && /08:30/.test(h5e.extra) && h5e.bar?.time === null, `5e a Meeting with its time removed keeps the booked time visible ("${h5e.extra}")`);
+  ok(!!header({ ...meeting, next_action_time: "09:00" }).extra, "5f a Meeting at a different time than the booking keeps the booking's pill");
   const h5d = header({ ...meeting, call_booked_at: "2026-10-09T07:30:00Z", next_action_date: "2026-10-09", next_action_time: "08:30" });
   ok(h5d.extra === null && h5d.bar?.when === "9 Oct" && h5d.bar?.time === "08:30", "5d a meeting on a later date, as the Next Action: still one display");
   const h6 = header({ status: "initial_contact", next_action: "call", next_action_date: "2026-10-02" });
