@@ -18,6 +18,7 @@ import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../
 import { cleanAnswers as cleanQuickClose } from "../../../src/lib/quickClose.ts";
 import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
 import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgreement.ts";
+import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
@@ -502,6 +503,23 @@ Deno.serve(async (req) => {
          ⛔ Refused once the client has signed on the agreement page: the signed text names the route.
        agreement_send_link: emails the client their agreement link (Resend), stamps last_sent_*.
        ⛔ The acceptances table is write-once and is never written here. */
+    /* agreement_pdf: the signed PDF, REBUILT FROM THE STORED RECORD (the same builder the client's email
+       used), for the latest agreement-page acceptance, else the latest checkout one. Read only. */
+    if (action === "agreement_pdf") {
+      const leadId = text(body.lead_id);
+      const { data: owned } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!owned) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const { data: rows, error: accErr } = await service.from("client_agreement_acceptances").select(ACCEPTANCE_COLUMNS)
+        .eq("lead_id", leadId).order("accepted_at", { ascending: false });
+      if (accErr) throw accErr;
+      const list = (rows ?? []) as Array<Parameters<typeof agreementPdfForRow>[0]>;
+      const row = list.find((r) => r.method === "agree_page") ?? list[0] ?? null;
+      if (!row) return json({ ok: false, error: "not_signed", detail: "There is no signed agreement for this client yet." }, 404);
+      const pdf = await agreementPdfForRow(row);
+      let bin = ""; for (let i = 0; i < pdf.length; i += 0x8000) bin += String.fromCharCode(...pdf.subarray(i, i + 0x8000));
+      return json({ ok: true, filename: `Findable Client Service Agreement - ${String(row.business_name).replace(/[\\/:*?"<>|]/g, "")}.pdf`, pdf_base64: btoa(bin), method: row.method, accepted_at: row.accepted_at });
+    }
+
     if (action === "agreement_status" || action === "agreement_set_route" || action === "agreement_send_link") {
       const leadId = text(body.lead_id);
       const { data: lead, error: leadErr } = await service.from("outreach_leads")

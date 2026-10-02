@@ -65,6 +65,18 @@ async function main() {
   const blank = agreementPageHtml({ mode: 'blank' });
   ok(blank.includes('5.3') && !blank.includes('I agree and sign</button>'), 'the general version carries the whole agreement and no signature form');
 
+  console.log('\n── VIEWING A CLIENT NEVER PUTS THEM ON THE CURRENT AGREEMENT ──');
+  {
+    const hub = (await import('node:fs')).readFileSync(new URL('../supabase/functions/paid-client-hub/index.ts', import.meta.url), 'utf8');
+    const linkWrites = [...hub.matchAll(/from\("client_agreement_links"\)\s*\.upsert\(/g)].length;
+    const setRoute = hub.slice(hub.indexOf('if (action === "agreement_set_route") {'), hub.indexOf('if (action === "agreement_send_link") {'));
+    ok(linkWrites === 1 && /from\("client_agreement_links"\)\s*\.upsert\(\{ lead_id: L\.id, service_route: route \}/.test(setRoute),
+      'the hub writes a route in exactly one place: Paul’s Build / Optimise click');
+    ok(!/client_agreement_acceptances"\)\s*\.(insert|update|upsert|delete)\(/.test(hub), 'the hub never writes an acceptance');
+    const render = (await import('node:fs')).readFileSync(new URL('../supabase/functions/_shared/welcome-pack-render.ts', import.meta.url), 'utf8');
+    ok(!/client_agreement_(links|acceptances)"\)\s*\.(insert|update|upsert|delete)\(/.test(render), 'the public pack route only reads the agreement');
+  }
+
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
   process.exit(failures ? 1 : 0);
 }

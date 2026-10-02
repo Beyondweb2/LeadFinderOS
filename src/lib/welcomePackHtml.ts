@@ -8,6 +8,7 @@ import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, 
 import type { BaselineSummary } from './baselineSummary.ts';
 import { qrSvg } from './qrSvg.ts';
 import { ukDate } from './clientAgreement.ts';
+import { storedRemeasureWeeks } from './remeasureFill.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -304,14 +305,11 @@ function agreedCurrentOffer(totalPayments: number | null | undefined, amountPaid
    remeasure_due_date minus the baseline's completed day, in UTC days. Only a whole number of weeks is
    stated as weeks; anything else, or a missing date, returns null and the standard wording is used. */
 function recordedRemeasure(dueDate: string | null | undefined, baselineCompletedAt: string | null | undefined): { weeks: number; label: string } | null {
-  if (!dueDate || !baselineCompletedAt) return null;
-  const due = Date.parse(String(dueDate).slice(0, 10) + 'T00:00:00Z');
-  const start = Date.parse(String(baselineCompletedAt).slice(0, 10) + 'T00:00:00Z');
-  if (!Number.isFinite(due) || !Number.isFinite(start)) return null;
-  const days = Math.round((due - start) / 86400000);
-  if (days <= 0 || days % 7 !== 0) return null;
-  const label = new Date(due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return { weeks: days / 7, label };
+  /* The same stored-interval rule the results email and document use (remeasureFill.ts). */
+  const weeks = storedRemeasureWeeks(dueDate, baselineCompletedAt);
+  if (weeks === null) return null;
+  const label = new Date(String(dueDate).slice(0, 10) + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return { weeks, label };
 }
 const WEEK_WORDS: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 10: 'ten', 12: 'twelve' };
 function weeksWord(n: number): string { return WEEK_WORDS[n] ?? String(n); }

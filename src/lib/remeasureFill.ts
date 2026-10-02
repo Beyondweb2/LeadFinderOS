@@ -31,6 +31,21 @@ export function remeasureDueFill(existing: string | null | undefined, frozenAt: 
   return defaultRemeasureDue(frozenAt, remeasureOffsetDays(weeks));
 }
 
+/* 🔴 THE CLIENT'S OWN CLOCK, FROM THEIR STORED DATE (Paul, 2026-10-02). Every word that says how long
+   the re-measure took — the results email, the results document, the Welcome Pack — reads THIS, so a
+   pinned client (RG 6 Oct and Ronnie 13 Oct, both 56 days after their baseline day) is told "eight
+   weeks", never the standard four. Whole weeks between the baseline's UTC day and the stored due
+   date; anything that is not a positive whole number of weeks (or a missing date) returns null and
+   the caller uses the standard clock. ⛔ Reads the stored date only; it never writes or derives one. */
+export function storedRemeasureWeeks(dueDate: string | null | undefined, baselineCompletedAt: string | null | undefined): number | null {
+  const due = String(dueDate ?? '').trim().slice(0, 10);
+  const start = String(baselineCompletedAt ?? '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return null;
+  const days = Math.round((Date.parse(due + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86_400_000);
+  if (!Number.isFinite(days) || days <= 0 || days % 7 !== 0) return null;
+  return days / 7;
+}
+
 /** Which of the four delivery milestones (everything except the re-measure tick itself) are
  *  unticked. Fire-and-stamp (Paul, 2026-09-12): an unfinished delivery does not delay the replay
  *  — the promise is calendar-based — it is RECORDED on the replay so the number tells the truth

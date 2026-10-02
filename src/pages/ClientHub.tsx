@@ -347,6 +347,20 @@ function AgreementStage({ lead }: { lead: AnyRecord }) {
 
   const signed = view?.acceptances.find((a) => a.method === 'agree_page') ?? null;
   const checkout = view?.acceptances.find((a) => a.method === 'checkout') ?? null;
+  /* The signed PDF, rebuilt server-side from the stored record (the same builder the emailed copy used). */
+  const downloadPdf = async () => {
+    setBusy('agreement_pdf');
+    try {
+      const res = await call({ action: 'agreement_pdf', lead_id: lead.id });
+      const bytes = Uint8Array.from(atob(String(res.pdf_base64 ?? '')), (c) => c.charCodeAt(0));
+      if (!bytes.length) throw new Error('The server returned no PDF.');
+      const href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = href; a.download = String(res.filename ?? 'Findable Client Service Agreement.pdf');
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(href), 10_000);
+    } catch (e) {
+      toast({ title: 'Could not download the agreement', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+    } finally { setBusy(''); }
+  };
   const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : 'Not accepted yet';
   return <Stage k="agreement" title="Client Service Agreement" summary={summary}>
     {!view ? <p className="text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Loading…</p> : <>
@@ -354,6 +368,11 @@ function AgreementStage({ lead }: { lead: AnyRecord }) {
         ? <p className="font-medium text-emerald-600">Signed on the agreement page on {ukWhen(signed.accepted_at)} by {signed.typed_name}{signed.typed_role ? `, ${signed.typed_role}` : ''}{signed.email ? ` (${signed.email})` : ''}. Version {signed.agreement_version}.</p>
         : <p className="font-medium text-muted-foreground">Not signed on the agreement page yet.</p>}
       {checkout && <p className="text-sm">Accepted at checkout on {ukWhen(checkout.accepted_at)}{checkout.typed_name ? ` by ${checkout.typed_name}` : ''}{checkout.email ? ` (${checkout.email})` : ''}. Binding on its own.</p>}
+      {(signed || checkout) && <div className="pt-1">
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void downloadPdf()}>
+          {busy === 'agreement_pdf' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <FileText className="mr-1 h-4 w-4"/>}Download signed PDF
+        </Button>
+      </div>}
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <span className="text-sm text-muted-foreground">Service:</span>
         {(['build', 'optimise'] as const).map((r) => (

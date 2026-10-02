@@ -12,7 +12,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
 import { isRemeasureDue, utcDateISO, REMEASURE_STOP_STATUS, type RemeasureCandidate } from "../src/lib/remeasureDue.ts";
-import { remeasureDueFill, workIncompleteFor, WORK_MILESTONES } from "../src/lib/remeasureFill.ts";
+import { remeasureDueFill, storedRemeasureWeeks, workIncompleteFor, WORK_MILESTONES } from "../src/lib/remeasureFill.ts";
 import { REMEASURE_OFFSET_DAYS } from "../src/lib/deliveryCockpit.ts";
 
 let f = 0;
@@ -118,6 +118,18 @@ ok(/code === "23505"/.test(server) && /already_remeasured/.test(server), "a dupl
 ok(/refuse\("already_remeasured"/.test(server) && /refuse\("no_baseline_recorded"/.test(server) && /refuse\("baseline_not_frozen"/.test(server), "the three named refusals exist and are recorded");
 ok(/measurementFlagFor\(isMeasurement \|\| isRemeasure\)/.test(server), "a replay is flagged is_measurement, so it can never be mistaken for a baseline");
 ok(/questions: plan\.questions,/.test(tick) && /purpose: "remeasure",/.test(tick), "the tick sends the baseline's ASKED set verbatim with purpose 'remeasure'");
+
+console.log("\n── THE RESULTS WORDING READS THE CLIENT'S STORED DATE (Paul, 2026-10-02) ──");
+ok(storedRemeasureWeeks("2026-10-06", "2026-08-11T15:26:28.878Z") === 8, "RG: baseline 11 Aug → stored 6 Oct = eight weeks");
+ok(storedRemeasureWeeks("2026-10-13", "2026-08-18T13:41:55.789Z") === 8, "Ronnie: baseline 18 Aug → stored 13 Oct = eight weeks");
+ok(storedRemeasureWeeks("2026-10-20", "2026-09-22T03:24:58.072Z") === 4, "MCLocksmiths: baseline 22 Sep → stored 20 Oct = four weeks");
+ok(storedRemeasureWeeks(null, "2026-09-22T03:24:58Z") === null && storedRemeasureWeeks("2026-10-21", "2026-09-22T03:24:58Z") === null,
+  "no date, or not a whole number of weeks → null (the caller uses the standard clock)");
+{
+  const sender = readFileSync(new URL("../supabase/functions/_shared/remeasure-results.ts", import.meta.url), "utf8");
+  ok(/const weeks = storedRemeasureWeeks\(lead\.remeasure_due_date,[\s\S]{0,200}\?\? remeasureWeeksFor\(/.test(sender),
+    "the results email and document take the stored interval first, the standard clock second");
+}
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);
