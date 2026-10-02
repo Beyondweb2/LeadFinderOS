@@ -77,6 +77,31 @@ reply is the holder's; a sale is the ledger's `sold_by_user_id`, else the lead's
 - The page prints the exclusion line under the team table and at the foot of the page.
 - Nothing is deleted. To exclude a QA lead, insert a `lead` row — do not delete the lead.
 
+## My activity: hidden / included (2026-10-02)
+
+Paul: "hide my personal sales/outreach activity from team performance and sales intelligence" — not
+"hide everything connected to Paul". One toggle, `admin.hideMyActivity` (default hidden, per person).
+
+- **Hidden excludes admin outreach/sales activity from every team-performance and Sales intelligence
+  aggregate:** the team table and its totals, contacted → sale, Why prospects say no, WhatsApp
+  templates, Outreach channels, Niches, the bottleneck checks, the funnel's Contacted and later stages,
+  calls, today / yesterday activity. **Interested leads with no next step** follows the same filter.
+- **Server-side, so counts and rates recalculate** (never subtracted in the browser): the page sends
+  `hideMine` to fn admin-overview; the loader hides the caller + every `user_roles` admin (resolved on
+  the server); `foldAdminOverview` takes `hideActivityOf`. fn business-summary never passes it.
+- **Attribution is each metric's own WHO:** a send = its sender, else whoever held the lead then
+  (holderTimeline); a reply = the holder when it arrived; an outcome = its actor; a template reply
+  credited to a hidden send is dropped, never re-credited; a bare-status "no" = whoever recorded it,
+  else the holder; interested-with-no-next-step = the current holder. A lead is never hidden because
+  of who added, owns or delivers it.
+- **Test accounts are excluded in both states** — templates, niches and interested-with-no-next-step
+  now apply the rule too (live: 40 sends on leads test1 held, and test1's quote, were showing).
+- **Business-wide in both states:** money, paid clients, new sales & handoffs, What needs you,
+  inventory, costs, website and feature usage (tested byte-identical; confirmed live).
+- Live on main at `87eeee60`; admin-overview v37, business-summary v31; 286/286 test suites passed.
+  Test: `scripts/admin-my-activity.test.ts`. Live, hidden is empty because every live lead is Paul's
+  and the only other accounts are test accounts.
+
 ## Needs your attention (release 1 — deterministic items)
 
 | Group | Item | Rule |
