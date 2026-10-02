@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileText, Loader2, Lock, MessageSquareQuote, Play, RefreshCw, Save } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Clipboard, ClipboardEdit, ExternalLink, FileCode2, FileText, Loader2, Lock, Play, RefreshCw, Save } from 'lucide-react';
 import { invokePaidBaseline, type PaidBaseline } from '@/lib/paidBaseline';
 import { EdgeAuthError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { Button } from '@/components/ui/button';
@@ -632,10 +632,11 @@ export default function ClientHub() {
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
     <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
-    <Stage k="reviews" title="5. Review Replies"><Button asChild variant="outline"><Link to="/review-replies"><MessageSquareQuote className="mr-1 h-4 w-4"/>Open Review Reply Setup</Link></Button></Stage>
-    <Stage k="remeasure" title="6. Remeasure" summary={lead.remeasure_due_date ? `due ${lead.remeasure_due_date}` : 'after baseline'}><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>
-    <Stage k="results" title="7. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
-    <div className="lg:col-span-2"><Stage k="opportunities" title="8. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
+    {/* ⛔ REMOVED 2026-10-02 (closeout): "5. Review Replies". Review replies are NOT a Findable deliverable (Paul,
+        2026-09-28) and the delivery stages are the deliverables. The admin drafting tool stays in the sidebar. */}
+    <Stage k="remeasure" title="5. Remeasure" summary={lead.remeasure_due_date ? `due ${lead.remeasure_due_date}` : 'after baseline'}><p>Due: {lead.remeasure_due_date || 'scheduled after baseline'} · {rm.label}</p><p className="text-xs text-muted-foreground">The server replays the frozen baseline queue questions exactly; it never regenerates a remeasure set.</p>{lead.remeasure_audit_id ? <Button asChild variant="outline"><Link to={`/compare/${lead.remeasure_audit_id}`}>View Comparison</Link></Button> : <p className="text-muted-foreground">Runs automatically when due.</p>}</Stage>
+    <Stage k="results" title="6. Results">{lead.remeasure_audit_id ? <Button asChild><Link to={`/compare/${lead.remeasure_audit_id}`}>View final comparison</Link></Button> : <p>Available after remeasure.</p>}</Stage>
+    <div className="lg:col-span-2"><Stage k="opportunities" title="7. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
       {hub.onboarding ? <OpportunityBacklog leadId={lead.id} state={opps}/> : <p className="text-muted-foreground">Available once onboarding exists.</p>}
     </Stage></div>
   </div></div></HubSection.Provider>;

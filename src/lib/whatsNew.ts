@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-no-review-replies-stage', date: '2026-10-02', title: 'Review replies are no longer a delivery step', audience: 'admin',
+    body: 'The paid client page no longer lists Review Replies among its delivery steps, because replying to reviews is not part of what Findable delivers.',
+    report: {
+      added: [],
+      changed: ['The delivery steps on a paid client page are renumbered: 5. Remeasure, 6. Results, 7. Ongoing opportunities.'],
+      removed: ['The "5. Review Replies" step and its button on the paid client page. The Review replies tool itself is still in the sidebar.'],
+      effect: 'The client page now only lists work Findable actually delivers.',
+    } },
   { id: '2026-10-02-lead-sync-gaps', date: '2026-10-02', title: 'A “Not interested” now clears the Next Action wherever you set it', audience: 'all',
     body: 'Setting Not interested from the status pill or the status menu now clears the lead’s Next Action, the same as logging it as a call outcome. Screens also stay in step more reliably.',
     report: {
