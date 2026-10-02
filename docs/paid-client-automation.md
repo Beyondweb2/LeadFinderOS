@@ -1,7 +1,9 @@
 # Paid client automation, sales handoff, delivery readiness (2026-10-02)
 
 Branch `feat/paid-client-automation` (LeadFinderOS) + `feat/paid-client-setup-prefill` (findable-site).
-**Built, not merged, not deployed** — waiting for Paul's review.
+**SHIPPED 2026-10-02** (Paul approved, with the READY TO SUBMIT split and the reminder under the next step):
+SQL applied and read back, 9 functions deployed and bundle-checked, LeadFinderOS main `740964b9`,
+findable-site master `a33b165` deployed to findable.live. Live check at the end of this file.
 
 ## What was there already (the map, re-derived 2026-10-02)
 
@@ -77,3 +79,13 @@ password field by design. Gap reported, nothing invented.
    `paid-client-hub` BEFORE the SPA (the list shape changed).
 3. SPA: merge to main (auto-deploys).
 4. findable-site: `npm run deploy --branch=master` from a clean worktree of the merged branch (no CI).
+
+## Live check (2026-10-02, fixture ZZ QA8 `10200000-0000-4000-8000-0000000002a1`, archived + excluded afterwards)
+- `q2_prefill` returned the salesperson's services and towns with the 'on the phone' line; `complete_q2` saved;
+  `onboarding_submitted` recorded once (a second submit added nothing).
+- Admin `list`: 6 clients, each with a state, n/m and one next step; the real clients are placed by their progress
+  (in delivery / ended), none sent back to waiting.
+- `save_handoff` (admin): complete; History 'completed' then 'updated'; a no-change save wrote nothing.
+  `submit_delivery` refused (409) naming the missing items.
+- Not exercised live: a real Stripe payment (the new-client email, its claim, 'Payment received'). The first real
+  payment is that proof.
