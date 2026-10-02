@@ -22,6 +22,7 @@ import {
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
+import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -1001,6 +1002,21 @@ Deno.serve(async (req) => {
                 }
               } catch (e) {
                 console.error(`[stripe-webhook] payer email capture failed (non-fatal, onboarding=${onboardingId}):`, (e as Error).message);
+              }
+            }
+            /* ══ THE CLIENT SERVICE AGREEMENT, ACCEPTED AT CHECKOUT (Paul, 2026-10-02) ══════════════
+               findable-checkout made the terms tick REQUIRED, so a completed session carries
+               consent.terms_of_service === "accepted". That tick is binding on its own: one write-once
+               evidence row (method checkout, keyed by this session id, so a Stripe retry is a no-op
+               and never a second email), then the signed PDF to the payer and to Paul.
+               ⛔ NON-FATAL, like the payer-email capture above: it must never be the reason a recorded
+               payment gets retried. Every failure lands in client_error_reports instead. */
+            if (findableLeadId) {
+              try {
+                const { data: agreeLead } = await service.from("outreach_leads").select("id, business_name").eq("id", findableLeadId).maybeSingle();
+                if (agreeLead) await recordCheckoutAcceptance(service, s as unknown as Parameters<typeof recordCheckoutAcceptance>[1], agreeLead as { id: string; business_name: string | null });
+              } catch (e) {
+                console.error("[stripe-webhook] checkout agreement record failed (non-fatal):", (e as Error).message);
               }
             }
             /* Read-only pre-check, purely so the email can be sent once. Stripe RETRIES webhooks,

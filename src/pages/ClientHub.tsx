@@ -318,6 +318,65 @@ const STEPS = ['Hook Audit', 'Discovery', 'Recommendation', 'Review', 'Freeze + 
    ⛔ THE DOWNLOAD IS THE PUBLIC DOCUMENT. It asks the hub for the HTML that
    _shared/welcome-pack-render.ts produced and prints that; there is no second builder to drift.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+/* ══ CLIENT SERVICE AGREEMENT (Paul, 2026-10-02) ═══════════════════════════════════════════════════
+   Whether the client has accepted, when, by whom and how; the Build / Optimise route the agreement
+   page shows (the page refuses until it is set); Copy and Resend the client's own link.
+   ⛔ Read and set through paid-client-hub only — the agreement tables are server-only. */
+type AgreementView = {
+  url: string | null; route: 'build' | 'optimise' | null; route_source: 'set' | 'checkout' | null;
+  last_sent_at: string | null; last_sent_to: string | null;
+  acceptances: Array<{ method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string }>;
+};
+const ukWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+
+function AgreementStage({ lead }: { lead: AnyRecord }) {
+  const { toast } = useToast();
+  const [view, setView] = useState<AgreementView | null>(null);
+  const [busy, setBusy] = useState<string>('');
+  const run = useCallback(async (body: Record<string, unknown>, done?: string) => {
+    setBusy(String(body.action));
+    try {
+      const res = await call({ ...body, lead_id: lead.id });
+      setView(res.agreement as AgreementView);
+      if (done) toast({ title: done });
+    } catch (e) {
+      toast({ title: 'Agreement', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
+    } finally { setBusy(''); }
+  }, [lead.id, toast]);
+  useEffect(() => { void run({ action: 'agreement_status' }); }, [run]);
+
+  const signed = view?.acceptances.find((a) => a.method === 'agree_page') ?? null;
+  const checkout = view?.acceptances.find((a) => a.method === 'checkout') ?? null;
+  const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : 'Not accepted yet';
+  return <Stage k="agreement" title="Client Service Agreement" summary={summary}>
+    {!view ? <p className="text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Loading…</p> : <>
+      {signed
+        ? <p className="font-medium text-emerald-600">Signed on the agreement page on {ukWhen(signed.accepted_at)} by {signed.typed_name}{signed.typed_role ? `, ${signed.typed_role}` : ''}{signed.email ? ` (${signed.email})` : ''}. Version {signed.agreement_version}.</p>
+        : <p className="font-medium text-muted-foreground">Not signed on the agreement page yet.</p>}
+      {checkout && <p className="text-sm">Accepted at checkout on {ukWhen(checkout.accepted_at)}{checkout.typed_name ? ` by ${checkout.typed_name}` : ''}{checkout.email ? ` (${checkout.email})` : ''}. Binding on its own.</p>}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <span className="text-sm text-muted-foreground">Service:</span>
+        {(['build', 'optimise'] as const).map((r) => (
+          <Button key={r} size="sm" variant={view.route === r ? 'default' : 'outline'} disabled={!!busy || (!!signed && view.route !== r)}
+            onClick={() => void run({ action: 'agreement_set_route', route: r }, r === 'build' ? 'Route set to Build' : 'Route set to Optimise')}>
+            {r === 'build' ? 'Build' : 'Optimise'}
+          </Button>
+        ))}
+        {!view.route && <span className="text-xs text-amber-600">Set the route first: the agreement page will not open until it is set.</span>}
+        {view.route_source === 'checkout' && <span className="text-xs text-muted-foreground">(from their checkout)</span>}
+      </div>
+      {view.url && <div className="flex flex-wrap gap-2 pt-1">
+        <Button size="sm" variant="outline" onClick={() => { void copy(view.url!); toast({ title: 'Agreement link copied' }); }}><Clipboard className="mr-1 h-4 w-4"/>Copy agreement link</Button>
+        <Button size="sm" disabled={!!busy || !view.route} onClick={() => void run({ action: 'agreement_send_link' }, 'Agreement link sent')}>
+          {busy === 'agreement_send_link' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <ExternalLink className="mr-1 h-4 w-4"/>}{view.last_sent_at ? 'Resend agreement link' : 'Send agreement link'}
+        </Button>
+      </div>}
+      {view.last_sent_at && <p className="text-xs text-muted-foreground">Last sent {ukWhen(view.last_sent_at)} to {view.last_sent_to}.</p>}
+      {view.url && <p className="break-all text-xs text-muted-foreground">{view.url}</p>}
+    </>}
+  </Stage>;
+}
+
 function WelcomePackStage({ lead, audit }: { lead: AnyRecord; audit: AnyRecord | null }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -549,6 +608,7 @@ export default function ClientHub() {
       {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} frozen questions × {BASELINE_RUNS} runs · ChatGPT + Gemini</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
     </Stage>
     <WelcomePackStage lead={lead} audit={audit}/>
+    <AgreementStage lead={lead}/>
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
     <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>

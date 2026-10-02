@@ -168,5 +168,32 @@ console.log('\n── THE CLIENT’S OWN TERMS AND SCHEDULE (Paul, 2026-10-02) �
   ok(opt.includes('hosting and maintenance if your site is with us'), 'Optimise route keeps the cautious hosting wording');
 }
 
+console.log('\n── YOUR AGREEMENT: THE KEY POINTS (Paul, 2026-10-02) ──');
+{
+  const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/\s+/g, ' ');
+  const base = { businessName: 'MCLocksmiths centre', reviewLink: '', report: { ...report }, baseline: summary };
+  const url = 'https://findable.live/agree/' + 'ab'.repeat(32);
+  const none = buildWelcomePackHtml({ ...base });
+  ok(!none.includes('Your agreement: the key points'), 'no agreement link on record → no agreement page');
+  const open = buildWelcomePackHtml({ ...base, agreement: { url } });
+  const ot = text(open);
+  ok(ot.includes('Your agreement: the key points') && ot.includes('Your agreement The key points, and where to review and sign it.'), 'the page is in the pack and on the contents list');
+  for (const line of [
+    'Your service has a minimum term: 12 payments (Build) or 6 (Optimise). The remaining payments are owed even if you stop early.',
+    'Monthly payments start six weeks after your first payment.',
+    'We own the website and our work until your final payment. Then it’s yours.',
+    'If a payment is 14 days late, we can take the site down until it’s paid.',
+    'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.',
+    'Your domain, logo and photos are always yours.',
+  ]) ok(ot.includes(line), `key point: "${line.slice(0, 48)}…"`);
+  ok(open.includes(`class="wp-agreebtn" href="${url}"`) && /Review and agree to your agreement/.test(open), 'the button links to the client’s own page');
+  ok(/<svg[^>]+aria-label="QR code for your agreement page"/.test(open), 'and a QR code sits beside it');
+  ok(!/brand-new domain|eight if/i.test(ot.replace(/Eight weeks after/g, '')), 'no new-domain eight-week wording anywhere in the pack');
+  const signed = text(buildWelcomePackHtml({ ...base, agreement: { url, acceptedAtIso: '2026-10-05T10:00:00Z', acceptedBy: 'Mark Smith' } }));
+  ok(signed.includes('Agreement accepted on 5 October 2026 by Mark Smith.') && !signed.includes('Review and agree to your agreement'), 'once signed, the button is replaced by the accepted line');
+  const legacy = text(buildWelcomePackHtml({ ...base, agreement: { url: null } }));
+  ok(legacy.includes('Your agreement link will be sent separately.') && !legacy.includes('Review and agree'), 'no link available → it says the link comes separately, never a dead button');
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
 process.exit(failures ? 1 : 0);

@@ -7,6 +7,7 @@ import {
   acceptanceRowFrom, agreePageMissing, fillFromAcceptanceRow, renderAgreementText, sha256Hex, versionTemplateText,
   AGREEMENT_COPY_TO_PAUL, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, type AgreementFill,
 } from '../src/lib/clientAgreement.ts';
+import { agreementPageHtml } from '../src/lib/agreementPageHtml.ts';
 
 let failures = 0;
 const ok = (c: boolean, m: string) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) failures++; };
@@ -47,6 +48,22 @@ async function main() {
   ok(AGREEMENT_COPY_TO_PAUL === 'paul@findable.live', 'Paul’s copy goes to the canonical business email');
   ok(!/move37/i.test(renderAgreementText(full)) && !/move37/.test(String(AGREEMENT_COPY_TO_PAUL)), 'the legacy inbox is never a recipient or on the agreement');
   ok(t.includes('Email for notices: paul@findable.live'), 'the agreement still DISPLAYS paul@findable.live');
+
+  console.log('\n── THE AGREEMENT PAGE ──');
+  const sign = agreementPageHtml({ mode: 'sign', businessName: 'Test Co', route: 'build', values: {}, errors: [] });
+  const consent = "By ticking this box and clicking &#39;I agree and sign&#39;, I confirm that I have read the Findable Client Service Agreement, that I agree to it on behalf of Test Co, that I am authorised to do so, and that I intend this to be my electronic signature.";
+  ok(sign.includes(consent), 'the consent sentence is Paul’s, verbatim, with the business name');
+  ok(/<button type="submit">I agree and sign<\/button>/.test(sign) && /name="agree" value="yes"[^>]*required/.test(sign), 'one "I agree and sign" button behind a required tick');
+  for (const f of ['legalName', 'contactName', 'role', 'address', 'email', 'phone']) ok(new RegExp(`name="${f}"[^>]*required`).test(sign), `the form requires ${f}`);
+  ok(!/name="companyNumber"[^>]*required/.test(sign) && !/name="websiteDomain"[^>]*required/.test(sign), 'company number and website domain are optional');
+  ok(/<div class="svc on"><div class="box">&#10003;<\/div><div><b>Findable Build/.test(sign), 'the recorded route is shown ticked');
+  ok(sign.includes('four weeks after the baseline') && !/eight weeks|eight if/i.test(sign), 'the page shows the agreement’s four weeks, never eight');
+  ok(/noindex/.test(sign), 'the page is never indexed');
+  const done = agreementPageHtml({ mode: 'accepted', businessName: 'Test Co', acceptedAtIso: '2026-10-02T13:42:07Z', acceptedBy: 'Sam', pdfHref: '?pdf=1' });
+  ok(done.includes('Accepted on 2 October 2026, 14:42 (UK time) by Sam') && !done.includes('I agree and sign</button>'), 'already accepted → "Accepted on … by …" instead of the button');
+  ok(agreementPageHtml({ mode: 'not_ready', businessName: 'Test Co' }).includes('not ready yet'), 'no route → the page refuses to show the agreement');
+  const blank = agreementPageHtml({ mode: 'blank' });
+  ok(blank.includes('5.3') && !blank.includes('I agree and sign</button>'), 'the general version carries the whole agreement and no signature form');
 
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
   process.exit(failures ? 1 : 0);

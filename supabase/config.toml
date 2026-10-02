@@ -85,6 +85,10 @@ verify_jwt = false
 [functions.render-welcome-pack]
 verify_jwt = false
 
+# Public agreement page + e-signature (findable.live/agree/<token> proxies here with the anon key).
+[functions.client-agreement]
+verify_jwt = false
+
 [functions.findable-onboarding]
 verify_jwt = false
 

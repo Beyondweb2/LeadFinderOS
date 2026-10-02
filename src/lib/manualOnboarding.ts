@@ -42,7 +42,7 @@ export const ONBOARDING_COPY = {
   trade: { label: 'What you do', helper: 'One word is plenty.', placeholder: 'e.g. locksmith' },
   town: { label: 'Your town', placeholder: 'e.g. Huntingdon' },
   websiteStep: { headline: 'Your website', sub: 'Where the work gets published, and who can let us in.' },
-  domain: { question: 'Are we using an existing domain?', newNote: 'If we build your site on a brand-new domain, we re-measure after eight weeks instead of four, because a new domain needs longer to be discovered. Same questions, same engines, and the guarantee applies to those results.' },
+  domain: { question: 'Are we using an existing domain?' },
   agency: { question: 'Does an agency or web company look after your website?' },
   access: { question: 'Will you be able to get us access to edit it?', helper: 'Your pages have to go on your own site, so we need editing access to it. Never send us a password here.' },
   managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can send them exactly what we need. Your agreement with them stays yours to manage.' },

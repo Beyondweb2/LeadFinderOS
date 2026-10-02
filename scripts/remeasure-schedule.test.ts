@@ -88,7 +88,7 @@ const filled = remeasureDueFill(null, "2026-09-12T14:00:00Z", 4);
 ok(filled === "2026-10-10", `a NULL date fills to frozen + ${REMEASURE_OFFSET_DAYS} = 2026-10-10 (got ${filled})`);
 ok(remeasureDueFill(undefined, "2026-09-12T14:00:00Z", 4) === "2026-10-10", "undefined behaves as NULL");
 ok(remeasureDueFill(null, "not a date", 4) === null, "an unreadable freeze instant writes nothing");
-ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 8) === "2026-11-07", "a site we build on a brand-new domain fills to frozen + 56 (eight weeks)");
+ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 8) === "2026-11-07", "an explicit eight-week clock still fills to frozen + 56 (the arithmetic; no new client is on it)");
 ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 0) === null, "an unreadable clock writes nothing");
 ok(REMEASURE_OFFSET_DAYS === 28, "the offset is 28 (RG's +56 is stored by hand, never derived)");
 /* The write side: the update carries the NULL guard in the database too. */

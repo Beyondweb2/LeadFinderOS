@@ -16,7 +16,7 @@ import {
   answersFromRecords, buildOnboardingPatch, cleanAnswers, answerProblems, leadPatchFromAnswers, onboardingStatus,
   type OnboardingAnswers,
 } from '../src/lib/manualOnboarding';
-import { remeasureWeeksFor, REMEASURE_WEEKS_NEW_DOMAIN, REMEASURE_WEEKS_STANDARD } from '../src/lib/findableOffer';
+import { remeasureWeeksFor, REMEASURE_WEEKS_STANDARD } from '../src/lib/findableOffer';
 import { candidateFacts } from '../src/lib/buildFacts';
 import { mergeClientContext, verifiedBuildFacts, selectClientCrawlContext } from '../src/lib/clientContext';
 import { buildAuditPreviewRequest } from '../src/lib/auditQuestionContext';
@@ -152,12 +152,12 @@ console.log('\n── 10/11. PARTIAL ONBOARDING CAN BE COMPLETED; ANSWERS PERSIS
     '11. the lead gets the same updates the customer\'s submit makes (town, trade, fill-empty contacts, website with a note)');
 }
 
-console.log('\n── 12. DOMAIN / BUILD ANSWERS DRIVE THE SAME 4/8-WEEK RULE ──');
+console.log('\n── 12. EVERY DOMAIN / BUILD ANSWER IS FOUR WEEKS (Paul, 2026-10-02) ──');
 {
   const weeks = (a: Partial<OnboardingAnswers>) => remeasureWeeksFor(buildOnboardingPatch({ ...full, ...a }, OP, NOW) as never);
-  ok(weeks({ agency_manages: 'no', self_site: 'rebuild', domain_status: 'new' }) === REMEASURE_WEEKS_NEW_DOMAIN, '12. a rebuild on a brand-new domain → 8 weeks');
-  ok(weeks({ agency_manages: 'no', self_site: 'none', domain_status: 'new' }) === REMEASURE_WEEKS_NEW_DOMAIN, '12. no website + new domain → 8 weeks');
-  ok(weeks({ agency_manages: 'yes', can_get_access: 'no', domain_status: 'new' }) === REMEASURE_WEEKS_NEW_DOMAIN, '12. cannot get access + new domain → 8 weeks');
+  ok(weeks({ agency_manages: 'no', self_site: 'rebuild', domain_status: 'new' }) === REMEASURE_WEEKS_STANDARD, '12. a rebuild on a brand-new domain → 4 weeks');
+  ok(weeks({ agency_manages: 'no', self_site: 'none', domain_status: 'new' }) === REMEASURE_WEEKS_STANDARD, '12. no website + new domain → 4 weeks');
+  ok(weeks({ agency_manages: 'yes', can_get_access: 'no', domain_status: 'new' }) === REMEASURE_WEEKS_STANDARD, '12. cannot get access + new domain → 4 weeks');
   ok(weeks({ agency_manages: 'no', self_site: 'rebuild', domain_status: 'existing' }) === REMEASURE_WEEKS_STANDARD, '12. a rebuild on their existing domain → 4 weeks');
   ok(weeks({ agency_manages: 'no', self_site: 'access', domain_status: 'new' }) === REMEASURE_WEEKS_STANDARD, '12. optimising their own site → 4 weeks');
   ok(weeks({ agency_manages: null, domain_status: 'new' }) === REMEASURE_WEEKS_STANDARD, '12. an unanswered website question → the standard 4 weeks');

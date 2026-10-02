@@ -13,7 +13,16 @@
    ⚠️ EXPLICIT .ts ON EVERY RELATIVE IMPORT — this module is reached from edge functions.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
+
 export const CLIENT_AGREEMENT_VERSION = 'v1';
+
+/** A client's own agreement page: findable.live/agree/<token> (findable-site proxies it). */
+export function agreementUrl(token: string): string {
+  return `${REPORT_PUBLIC_ORIGIN}/agree/${token}`;
+}
+/** The general (blank) agreement — the URL Paul sets as Stripe's Terms of Service link. */
+export const AGREEMENT_BLANK_URL = `${REPORT_PUBLIC_ORIGIN}/agreement`;
 export const CLIENT_AGREEMENT_TITLE = 'Client Service Agreement';
 
 export type AgreementRoute = 'build' | 'optimise';

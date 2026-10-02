@@ -3,6 +3,7 @@ import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
 import { mayGenerateLink, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
+import { AGREEMENT_BLANK_URL, agreementUrl, checkoutConsentText, CLIENT_AGREEMENT_VERSION } from "../../../src/lib/clientAgreement.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
    host filter that keeps a preview domain out of a customer-facing URL. A second copy of that
@@ -379,6 +380,33 @@ Deno.serve(async (req) => {
        saying so is the indefensible part of this, and Stripe's submit message is the only place
        the words sit beside the card field itself. */
     form.set("custom_text[submit][message]", cardSavedNoticeFor(route));
+    /* ══ THE CLIENT SERVICE AGREEMENT — A REQUIRED TICK BEFORE PAYING (Paul, 2026-10-02) ══════════
+       Stripe will not let the payer pay without ticking it, and that tick is binding on its own
+       (stripe-webhook records it). The words link to THIS client's own agreement page, with their
+       business and THIS route filled in; the link row is created here if it does not exist and its
+       route is set to the route this page charges for.
+       ⚠️ Stripe also needs a Terms of Service URL in Dashboard → Settings → Public details, or it
+       refuses to create the session — AGREEMENT_BLANK_URL is that address.
+       ⛔ A failed link write never blocks the payment page: the tick then links to the general
+       agreement, and the failure is recorded. */
+    let agreementLink = AGREEMENT_BLANK_URL;
+    if (effectiveLeadId) {
+      try {
+        const { data: link, error: linkErr } = await service.from("client_agreement_links")
+          .upsert({ lead_id: effectiveLeadId, service_route: route }, { onConflict: "lead_id" })
+          .select("token").single();
+        if (linkErr) throw linkErr;
+        if (link?.token) agreementLink = agreementUrl(String(link.token));
+      } catch (e) {
+        await recordRefusal("checkout_agreement_link_failed", {
+          onboarding_id: onboardingId, lead_id: effectiveLeadId,
+          error: (e as { message?: string })?.message ?? String(e),
+        });
+      }
+    }
+    form.set("consent_collection[terms_of_service]", "required");
+    form.set("custom_text[terms_of_service_acceptance][message]", checkoutConsentText(agreementLink));
+    form.set("metadata[agreement_version]", CLIENT_AGREEMENT_VERSION);
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */

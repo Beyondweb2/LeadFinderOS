@@ -477,7 +477,7 @@ export async function onBaselineFrozen(service: Client, audit: FrozenBaseline): 
   try {
     const { data: lr } = await service
       .from("outreach_leads").select("remeasure_due_date").eq("id", audit.lead_id).maybeSingle();
-    /* The clock: four weeks, or eight for a site we build on a brand-new domain (remeasureWeeksFor,
+    /* The clock: four weeks for every new client since 2026-10-02 (remeasureWeeksFor,
        read from the paid onboarding row first). An unreadable row is the standard four weeks. */
     const { data: obRows } = await service.from("onboarding_responses")
       .select("plan_tier, website_route, domain_status, status, created_at").eq("lead_id", audit.lead_id)

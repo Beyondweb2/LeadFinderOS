@@ -6,6 +6,8 @@ import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, 
   FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
+import { qrSvg } from './qrSvg.ts';
+import { ukDate } from './clientAgreement.ts';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    WELCOME PACK — ONE printable document for a client who has just paid:
@@ -54,6 +56,18 @@ export interface WelcomePackInput {
   /** outreach_leads.remeasure_due_date — the client's RECORDED re-measure date (RG and Ronnie are
    *  pinned at 56 days by hand). Absent → the standard four-week wording. */
   remeasureDueDate?: string | null;
+  /** The client's Service Agreement (Paul, 2026-10-02). Absent → no agreement page (a client with no
+   *  agreement link: never paid, or refunded). url null → the page says the link comes separately (the
+   *  legacy in-browser button cannot read the link). acceptedAtIso set → the button is replaced by
+   *  "Agreement accepted on … by …". ⛔ Only an AGREEMENT-PAGE acceptance counts here: the checkout tick
+   *  is binding, but Paul still asks every client to sign on the page for the fuller record. */
+  agreement?: WelcomePackAgreement | null;
+}
+
+export interface WelcomePackAgreement {
+  url: string | null;
+  acceptedAtIso?: string | null;
+  acceptedBy?: string | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -160,13 +174,31 @@ const PACK_CSS = `
     border-left:3px solid var(--gold-line); padding:2px 0 2px 12px; margin:6px 0 10px; }
   /* a box is already a narrow measure; the body's 70ch cap left a third of every box empty */
   .wp-box p, .wp-box-navy p{ max-width:none; }
-  .wp-rows-tight{ gap:6px; }
+  .wp-rows-tight{ gap:4px; }
+  /* the cover lists up to eight sections; smaller squares keep it to one printed page */
+  .wp-rows-tight .wp-num{ width:26px; height:26px; font-size:13.5px; border-radius:7px; }
+  .wp-rows-tight .wp-rowline{ margin-top:0; }
+  .wp-rows-tight .wp-row{ align-items:flex-start; }
+  .wp-rows-tight .wp-rowtitle, .wp-rows-tight .wp-rowline{ line-height:26px; }
+  .wp-rows-tight .wp-rowbody{ display:flex; flex-wrap:wrap; align-items:baseline; column-gap:8px; }
   .wp-points{ margin:4px 0 8px; padding-left:18px; }
   .wp-points li{ font-size:13.5px; color:var(--ink); line-height:1.5; margin:0 0 4px; }
   .wp-ticks li b{ color:var(--ink); }
   /* the time label on each "what happens next" step */
   .wp-when{ display:inline-block; font-size:10.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
     color:var(--blue-2); margin-right:8px; }
+
+  /* the agreement page: the one button in the pack, and its QR code */
+  .wp-keys{ margin:6px 0 10px; padding-left:20px; }
+  .wp-keys li{ font-size:13.5px; color:var(--ink); line-height:1.5; margin:0 0 7px; }
+  .wp-agree{ display:flex; gap:18px; align-items:center; flex-wrap:wrap; margin:16px 0 4px; padding:16px;
+    border:1px solid var(--line); border-left:4px solid var(--gold-line); border-radius:0 10px 10px 0; background:var(--gold-tint); }
+  .wp-agree-main{ flex:1 1 260px; min-width:0; }
+  a.wp-agreebtn{ display:inline-block; background:var(--gold); color:var(--on-gold); font-weight:900; font-size:15px;
+    text-decoration:none; padding:12px 18px; border-radius:10px; }
+  .wp-agreeurl{ font-size:11px; color:var(--muted); word-break:break-all; margin:8px 0 0; }
+  .wp-qr{ flex:0 0 auto; background:#fff; padding:6px; border-radius:8px; border:1px solid var(--line); line-height:0; }
+  @media print{ .wp-agree{ break-inside:avoid; page-break-inside:avoid; } }
 
   @media (max-width:520px){ .wp-wrap{ padding:14px 18px 18px; } }
 `;
@@ -202,7 +234,7 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
    position. A hardcoded list was fine while the pack had one shape; it now has two (with and
    without the client's own details and baseline result), and a contents page that promises a
    section the document does not contain is a worse fault than no contents page at all. */
-function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): string {
+function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasAgreement: boolean): string {
   /* ⚠️ SAME ORDER AS packPages IN buildWelcomePackHtml (Paul, 2026-10-02): what we're doing → why it
      works → where you are now → what happens next → your part → the report. */
   const contents = [
@@ -212,6 +244,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
       { title: 'Where you stand today', line: 'Your starting result, explained in plain English.' },
       { title: 'What happens next', line: 'The steps from today to your before and after.' },
     ] : []),
+    ...(hasAgreement ? [{ title: 'Your agreement', line: 'The key points, and where to review and sign it.' }] : []),
     ...(hasDetails ? [{ title: 'What we have on file', line: 'The details everything is built on. Please check them.' }] : []),
     { title: 'Get more reviews', line: 'A five-minute setup for the part only you can do.' },
     { title: 'Your baseline report', line: 'Every question we asked and what AI said, in full.' },
@@ -409,6 +442,46 @@ Thanks,
           </div>
         </div>
       </div>`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   YOUR AGREEMENT: THE KEY POINTS (Paul, 2026-10-02) — his five lines and the ownership line, verbatim,
+   then ONE prominent button + a QR code to the client's own agreement page. Not the full text: the
+   page itself shows that. ⛔ The link is printed verbatim or not at all; a pack with no link says it
+   comes separately rather than printing a dead button.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+const AGREEMENT_KEY_POINTS = [
+  'Your service has a minimum term: 12 payments (Build) or 6 (Optimise). The remaining payments are owed even if you stop early.',
+  'Monthly payments start six weeks after your first payment.',
+  'We own the website and our work until your final payment. Then it\u2019s yours.',
+  'If a payment is 14 days late, we can take the site down until it\u2019s paid.',
+  'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.',
+];
+const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
+
+function agreementPage(a: WelcomePackAgreement): string {
+  const accepted = a.acceptedAtIso
+    ? `<div class="wp-box-navy"><p><b>Agreement accepted on ${esc(ukDate(a.acceptedAtIso))} by ${esc(a.acceptedBy || 'you')}.</b></p></div>`
+    : '';
+  const action = accepted || (a.url
+    ? `<div class="wp-agree">
+        <div class="wp-agree-main">
+          <a class="wp-agreebtn" href="${esc(a.url)}">Review and agree to your agreement</a>
+          <p class="wp-note">Or scan the code with your phone camera. This link is yours alone.</p>
+          <p class="wp-agreeurl">${esc(a.url)}</p>
+        </div>
+        <div class="wp-qr">${qrSvg(a.url, 124, 'QR code for your agreement page')}</div>
+      </div>`
+    : `<p class="wp-note">Your agreement link will be sent separately.</p>`);
+  return `
+      <div class="wp-eyebrow">Your agreement</div>
+      <h1 class="wp-h1">Your agreement: the key points</h1>
+      <p>Your Findable Client Service Agreement sets out exactly what we do and what you pay. In short:</p>
+      <ul class="wp-keys">
+        ${AGREEMENT_KEY_POINTS.map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
+      </ul>
+      <p><b>${esc(AGREEMENT_ALWAYS_YOURS)}</b></p>
+      ${action}`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -660,7 +733,7 @@ function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: 
         ${step(2, 'The next few weeks', 'We do the work', 'Clearer pages on your website, your Google Business Profile corrected, and your directory listings added and fixed.')}
         ${step(3, `At ${W} weeks`, 'Your first re-measure', remeasure
           ? `The same frozen questions, the same AI tools, the same method, the same towns. Due ${remeasure.label}.`
-          : 'The same frozen questions, the same AI tools, the same method, the same towns. A brand-new domain is measured later, as your guarantee explains.')}
+          : 'The same frozen questions, the same AI tools, the same method, the same towns.')}
         ${step(4, 'Then', 'You get your before and after', 'Side by side, with every answer shown. If the number has not gone up, your guarantee applies.')}
         ${step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments)}. A short update tells you what changed.`)}
       </div>
@@ -721,10 +794,11 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
      absent the pack is exactly the document it has always been. */
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
-    coverPage(name, !!input.facts, !!input.baseline),
+    coverPage(name, !!input.facts, !!input.baseline, !!input.agreement),
     planPage1(name, input.totalPayments, input.amountPaid, remeasure),
     planPage2(name),
     ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
+    ...(input.agreement ? [agreementPage(input.agreement)] : []),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),
     reviewsPage2(),

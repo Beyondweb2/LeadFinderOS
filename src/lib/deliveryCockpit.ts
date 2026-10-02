@@ -122,7 +122,7 @@ export function addDaysISO(dateStr: string, days: number): string {
 }
 
 /** The default re-measure due date: baseline + REMEASURE_OFFSET_DAYS (28), or the offset for the
- *  client's clock (remeasureOffsetDays — eight weeks for a site we build on a brand-new domain).
+ *  client's clock (remeasureOffsetDays — four weeks for every new client since 2026-10-02).
  *  Written ONCE, where remeasure_due_date IS NULL (remeasureFill.ts); a stored date is never touched. */
 export function defaultRemeasureDue(baselineDate: string, offsetDays: number = REMEASURE_OFFSET_DAYS): string {
   return addDaysISO(baselineDate, offsetDays);

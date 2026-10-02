@@ -79,6 +79,10 @@ const live: Record<string, string[]> = {
   crawl_urls: ['id','url','status','skip_reason','http_status','final_url','source','depth','evidence'],
   /* The contract summary counts payments made (migration 20260929130000_payment_ledger.sql). */
   payment_ledger: ['lead_id','kind','status','amount_gbp'],
+  /* The Client Service Agreement (Paul ran the SQL 2026-10-02; read back from information_schema that
+     day). client_agreement_links.service_route is the follow-up column (SQL_FOR_PAUL, same day). */
+  client_agreement_links: ['lead_id','token','created_at','last_sent_at','last_sent_to','service_route'],
+  client_agreement_acceptances: ['method','accepted_at','typed_name','typed_role','email','agreement_version','service_route','stripe_session_id'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */
