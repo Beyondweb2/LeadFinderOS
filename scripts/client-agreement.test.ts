@@ -65,6 +65,13 @@ async function main() {
   const blank = agreementPageHtml({ mode: 'blank' });
   ok(blank.includes('5.3') && !blank.includes('I agree and sign</button>'), 'the general version carries the whole agreement and no signature form');
 
+  console.log('\n── ADDRESSES SURVIVE CLOUDFLARE EMAIL OBFUSCATION (findable.live) ──');
+  const blankPage = agreementPageHtml({ mode: 'blank' });
+  ok(blankPage.includes('<td><!--email_off-->paul@findable.live<!--/email_off--></td>'), 'the agreement’s "Email for notices" is kept out of obfuscation');
+  const confirm = agreementPageHtml({ mode: 'accepted', businessName: 'X', acceptedAtIso: '2026-10-02T13:00:00Z', acceptedBy: 'Y', pdfHref: '?pdf=1', justSigned: true, emailedTo: 'a@b.co' });
+  ok(confirm.includes('to <!--email_off-->a@b.co<!--/email_off-->.'), 'the confirmation names the client’s address as typed');
+  ok(!/[^>]paul@findable\.live/.test(blankPage.replace(/<!--email_off-->paul@findable\.live/g, '')), 'no unprotected address left on the page');
+
   console.log('\n── VIEWING A CLIENT NEVER PUTS THEM ON THE CURRENT AGREEMENT ──');
   {
     const hub = (await import('node:fs')).readFileSync(new URL('../supabase/functions/paid-client-hub/index.ts', import.meta.url), 'utf8');
