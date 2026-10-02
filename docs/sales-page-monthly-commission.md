@@ -122,11 +122,23 @@ SQL `20261003100000` (read back: functions, trigger swap, columns) → redeploy 
   update or delete it). Rules: the link's actor is the seller, it was made while they were engaged, before
   the payment. No link (a self-checkout, a link made by someone else, a link made after the end) → 0%. A
   non-earning first payment is not a sale on their ladder.
-- ⚠️ Not fixed here (out of scope, flagged): signed-in users hold TRUNCATE on `quick_close_events` (and the
-  revoke there named only insert / update / delete). A wipe can only REMOVE closing proof — a seller can
-  never fabricate or backdate one — so it fails closed for commission, but it is a hole to close.
+- The TRUNCATE hole first recorded here is closed — §7.
 - Tests: `scripts/commission-six-trailing.test.ts` §3 (closed before → earned; not closed → £0; recurring
   while disabled → £0; re-enabled → the disabled-period payments still £0; after the re-enable → earns
   inside the six; earned never disappears).
 - Deploy: SQL `20261005100000` first (read back), then `admin-users` and the earnings closure
   (`sales-earnings`, `sales-performance`, `admin-overview`, `business-summary`, `stripe-webhook`).
+
+## 7. Quick Close events locked down (Paul, 2026-10-02; migration `20261005120000`, applied and read back)
+
+- `quick_close_events` is commission evidence, so: anon / authenticated hold NO privilege (not even select — every
+  reader and writer is server-side: fn `quick-close`, fn `stripe-webhook`, `_shared/earnings.ts`, the security-definer
+  `admin_feature_usage`); the database sets `created_at` on every insert; update, delete and truncate are refused for
+  every role — except a lead delete's own cascade (`pg_trigger_depth() > 1`), so purges still work. The 2 existing
+  rows are untouched. The select policy stays as a second wall.
+- Proven by a rolled-back run of the whole migration (Test salesperson: insert / backdate / update / delete / truncate /
+  read all 42501; service role: insert ok with the time forced to now, proof lookup finds it, update / delete / truncate
+  refused, lead-delete cascade ok), then live through PostgREST as the Test salesperson (all 403) and fn
+  `sales-earnings` (200). Pinned by `scripts/quick-close-events-locked.test.ts`.
+- A separate session (branch `claude/revoke-truncate-grants`, not merged on 2026-10-02) had already revoked
+  TRUNCATE / TRIGGER / REFERENCES from anon and authenticated on every public table, live.
