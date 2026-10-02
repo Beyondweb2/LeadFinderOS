@@ -3,7 +3,7 @@
    cannot be undone by pressing Back. Never fires while the person is typing. */
 
 export const GO_SHORTCUTS: readonly { keys: string; to: string; label: string; adminOnly?: boolean }[] = [
-  { keys: 'g d', to: '/sales-dashboard', label: 'Sales' },
+  { keys: 'g d', to: '/sales-dashboard', label: 'Sales dashboard' },
   { keys: 'g w', to: '/inbox', label: 'WhatsApp' },
   { keys: 'g o', to: '/outreach', label: 'Outreach' },
   { keys: 'g l', to: '/find-leads', label: 'Find Leads' },

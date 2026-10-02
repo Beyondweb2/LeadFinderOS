@@ -166,7 +166,7 @@ export function BottlenecksPanel({ o }: { o: O }) {
     <Panel collapseKey="admin.cc.bottlenecks" title="Where it is getting stuck" icon={Activity} tone={flagged.length ? 'amber' : 'grey'} defaultOpen={false}
       hint={`${o.period.label} · fixed checks with the numbers they used. Not judged until there is enough data.`}
       summary={flagged.length ? `${flagged.length} flagged: ${flagged.map((b) => b.title.toLowerCase()).join(' · ')}` : 'Nothing flagged'}>
-      <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+      <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
         {[...o.bottlenecks].sort((a, b) => order[a.status] - order[b.status]).map((b) => (
           <li key={b.key} className="flex min-w-0 items-start gap-3 px-3 py-2.5">
             <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', b.status === 'flag' ? TONE.amber.dot : b.status === 'ok' ? TONE.green.dot : TONE.grey.dot)} />

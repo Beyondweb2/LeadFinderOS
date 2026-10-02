@@ -44,7 +44,8 @@ export const SALES_ROUTE_PATTERNS: readonly string[] = [
 /** Where each role lands after sign-in, and where a refused route sends them. */
 export function homeFor(role: AppRole | null): string {
   if (role === 'admin') return '/';
-  if (role === 'sales') return '/outreach';
+  /* 2026-10-02 (Paul): a salesperson lands on their Sales dashboard — the first item in their menu. */
+  if (role === 'sales') return '/sales-dashboard';
   return '/auth';
 }
 
@@ -55,10 +56,11 @@ function matches(pattern: string, path: string): boolean {
   return p.every((seg, i) => seg.startsWith(':') ? a[i].length > 0 : seg === a[i]);
 }
 
-/** A salesperson's main navigation (Paul, 2026-10-01): do the work → handle WhatsApp → find more leads →
- *  see how it is going. Order only — canOpenRoute decides what is shown. The sidebar reads it; the mobile
- *  bar follows it. Earnings is part of Sales now and Focus Mode is retired (both old paths redirect). */
-export const SALES_NAV_ORDER: readonly string[] = ['/outreach', '/inbox', '/find-leads', '/sales-dashboard'];
+/** A salesperson's main navigation (Paul, 2026-10-02): their Sales dashboard first (where they land),
+ *  then do the work → handle WhatsApp → find more leads. Order only — canOpenRoute decides what is shown.
+ *  The sidebar reads it; the mobile bar follows it. Earnings is part of the Sales dashboard and Focus Mode
+ *  is retired (both old paths redirect). */
+export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/outreach', '/inbox', '/find-leads'];
 /** Kept for salespeople, but not a daily destination: shown under "More" (sidebar and phone). */
 export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage'];
 

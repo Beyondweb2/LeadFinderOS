@@ -46,7 +46,7 @@ export function LostReasonsPanel({ o }: { o: O }) {
       {lr.saidNo === 0 ? <Empty icon={ThumbsDown}>No lead was marked Not interested in this period.</Empty> : (
         <div className="space-y-3">
           {lr.rows.length > 0 ? (
-            <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60" data-testid="lost-reason-rows">
+            <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10" data-testid="lost-reason-rows">
               {lr.rows.map((r) => (
                 <li key={r.key}>
                   <button type="button" onClick={() => toggle(r.key)} aria-expanded={open === r.key} data-reason={r.key}

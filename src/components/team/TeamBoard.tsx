@@ -82,12 +82,12 @@ export function TeamBoard() {
     <Panel id="team-board" collapseKey="sales.teamBoard" title="Your team board" icon={Megaphone} tone="blue" summary={summary}
       hint="Updates and tasks from Paul. Your own leads and conversations stay in Outreach and the Inbox."
       action={unread ? <span className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white" aria-label={`${unread} unread`}>{unread}</span> : undefined}>
-      <div className="mb-3 flex gap-1 rounded-xl bg-muted/60 p-1" role="tablist" aria-label="Team board">
+      <div className="mb-3 flex gap-1 rounded-full bg-muted/70 p-1 ring-1 ring-inset ring-border/50" role="tablist" aria-label="Team board">
         {TABS.map((t) => {
           const n = t.key === 'updates' ? unreadUpdates : by[t.key].length;
           return (
             <button key={t.key} type="button" role="tab" aria-selected={shown === t.key} onClick={() => { setTouched(true); setTab(t.key); }}
-              className={cn('flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition', shown === t.key ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn('flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition', shown === t.key ? 'bg-card text-foreground shadow-sm ring-1 ring-border/60' : 'text-muted-foreground hover:text-foreground')}>
               {t.label}{n ? <span className="ml-1 tabular-nums text-muted-foreground">· {n}{t.key === 'updates' ? ' new' : ''}</span> : null}
             </button>
           );
@@ -97,7 +97,7 @@ export function TeamBoard() {
         : b.isError ? <p className="text-sm text-destructive">Could not load your board. <button type="button" className="underline" onClick={() => void b.refetch()}>Try again</button></p>
         : by[shown].length === 0 ? <Empty icon={shown === 'completed' ? CheckCircle2 : ClipboardList}>{shown === 'todo' ? 'No tasks from Paul right now.' : shown === 'updates' ? 'No updates yet.' : 'Nothing completed yet.'}</Empty>
         : (
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+          <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
             {by[shown].map((i) => (
               <li key={i.id} ref={(el) => { if (el) refs.current.set(i.id, el); else refs.current.delete(i.id); }}
                 className={cn('px-3 py-2.5 transition-colors', flash === i.id && 'bg-blue-500/10', !i.read_at && tabOf(i) !== 'completed' && 'border-l-2 border-l-blue-500')}>

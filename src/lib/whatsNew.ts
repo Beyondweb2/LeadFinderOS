@@ -22,6 +22,27 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-dashboards-redesign', date: '2026-10-02', title: 'A new Sales dashboard, and a cleaner Admin dashboard', audience: 'all',
+    body: 'The Sales dashboard is redesigned and is now first in the sales menu. Both dashboards share one cleaner, more colourful look.',
+    report: {
+      added: [
+        'A big green "this month" card at the top of the Sales dashboard: your sales, how many more to unlock the next rate, what your next sale earns, and what you have earned this month.',
+        'The three rates (30% / 40% / 50%) now show as steps: ticked when unlocked, bright for the one you are on, locked for the ones to come.',
+        '"Your earnings": total earned to date, this month, and what is expected over the next six months, with the six months drawn as one bar chart (collected solid green, expected pale purple). Tap a month to see the clients behind it.',
+      ],
+      changed: [
+        'Sales: the page is called "Sales dashboard", it is first in your menu (then Outreach, WhatsApp, Find Leads) and it is where you land when you sign in.',
+        'The order of the Sales dashboard: your month, your work numbers, what to do next, your earnings, then recent wins and how commission works.',
+        '"How your commission works" is now a short list of the rules; the rates and money live in the cards above it.',
+        'Admin: the page is called "Admin dashboard", with coloured section headings that say what each part is for. Traffic and System are one section, "Website & usage".',
+        'Both dashboards share the same header, cards, figures, colours and buttons, so they look like one product.',
+      ],
+      removed: [
+        '"This month, week by week" on the Sales dashboard — it counted the same sales the top card already shows.',
+        'The repeat of your rate, the tiers and the totals inside "How your commission works".',
+      ],
+      effect: 'You can see in a few seconds how your month is going, what your next sale is worth and what is coming in — with less on the page to read. Every number is the same as before; only the layout changed.',
+    } },
   { id: '2026-10-02-find-leads-age-agency-filter', date: '2026-10-02', title: 'Find Leads: business age works on every search, a sharper agency check', audience: 'all',
     body: 'Business age now runs on every new search, the agency check reads more of each site, and the Filter menu fits on your screen.',
     report: {
