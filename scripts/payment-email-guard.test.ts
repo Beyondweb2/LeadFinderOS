@@ -31,7 +31,9 @@ let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
 
 console.log('-- the branch reads the EMAIL record, not the money --');
-ok(/if \(!paidEmailAlreadySent\) \{/.test(src),
+/* 2026-10-02: the gate is the claim, which STARTS from the trace answer — so the email record still
+   decides first, and the claim only narrows it to one delivery. */
+ok(/let claimedEmail = !paidEmailAlreadySent;/.test(src) && /if \(claimedEmail\) \{/.test(src),
    'the send is gated on paidEmailAlreadySent');
 /* 🔴 THE REGRESSION IN ONE LINE. If this ever reads `if (!alreadyPaid)` again, a crash between the
    money write and the Resend call silently loses the notification for ever. */
@@ -86,7 +88,8 @@ console.log('\n-- a LINKED payment can never produce a no-lead subject --');
    NORMAL state of every first payment, so every real customer's PAID email was subject-tagged as
    unlinked when it was linked perfectly well. A tag describing a different condition from the one
    that produced it is worse than no tag. */
-ok(/subject: `PAID \$\{amount\} — \$\{name\}\$\{opts\.noLead \? " \(NO LEAD\)" : ""\}`/.test(src),
+/* 2026-10-02: a linked payment is "New Findable client: …"; the NO LEAD tag still reads its own fact. */
+ok(/subject: opts\.noLead \? `PAID \$\{amount\} — \$\{name\} \(NO LEAD\)` : newClientSubject\(name, opts\.amountGbp\)/.test(src),
    'the tag reads opts.noLead, its own fact');
 ok(!/opts\.note \? " \(NOT LINKED\)"/.test(src),
    'it is NOT inferred from whether a note exists');

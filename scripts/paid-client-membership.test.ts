@@ -57,7 +57,9 @@ ok(!/\.gt\("amount_paid"/.test(list), "list no longer filters on amount_paid alo
 ok(/\.or\(PAID_CLIENT_OR_FILTER\)/.test(list) && /\.filter\(isPaidClient\)/.test(list), "list uses PAID_CLIENT_OR_FILTER + isPaidClient");
 ok((list.match(/service\.from\(/g) ?? []).length === 1 && /from\("outreach_leads"\)/.test(list), "reads outreach_leads only — one row per lead, no second client table to duplicate");
 ok(!/\.(insert|update|upsert|delete)\(/.test(list), "list performs no writes (no fabricated payment data)");
-ok(/\.\.\.l, payment_source/.test(list), "every lead field is passed through unchanged, payment_source added");
+/* 2026-10-02: the two jsonb blobs the setup rule reads (website_build, sales_handoff) are left off the list's
+   wire; every other lead field is passed through unchanged. */
+ok(/const \{ website_build: _wb, sales_handoff: _sh, \.\.\.rest \} = l;/.test(list) && /\.\.\.rest, payment_source/.test(list), "every lead field is passed through unchanged, payment_source added");
 ok(/\.from\("\.\.\/\.\.\/\.\.\/src\/lib\/paidClient\.ts"\)|from "\.\.\/\.\.\/\.\.\/src\/lib\/paidClient\.ts"/.test(hub), "edge import is relative with .ts");
 const leaf = readFileSync("src/lib/paidClient.ts", "utf8");
 ok(!/from ['"]@\//.test(leaf) && /from '\.\/leadPayment\.ts'/.test(leaf), "paidClient.ts imports relatively with an explicit .ts (edge-safe)");

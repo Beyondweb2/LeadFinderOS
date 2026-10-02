@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleDashed, ExternalLink, Loader2, UserRound } from 'lucide-react';
+import { ExternalLink, Loader2, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { ACTIVITY_LABEL, activityDetail } from '@/lib/salesCrm';
 import { leadSourceLabel } from '@/lib/salesPerformance';
 import { shortReportUrl } from '@/lib/reportSlug';
-import type { HandoffReadiness, HandoffSource } from '@/lib/handoffReadiness';
+import type { HandoffReadiness } from '@/lib/handoffReadiness';
+import type { SetupHandoff } from '@/components/ClientSetupCard';
 import { cn } from '@/lib/utils';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils';
    same rule the payment email uses. Nothing here is a second copy of any data.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export interface ClientHandoff {
+export interface ClientHandoff extends Partial<Omit<SetupHandoff, 'readiness'>> {
   readiness: HandoffReadiness;
   sold_by: string | null;
   sold_by_recorded: boolean;
@@ -38,9 +39,6 @@ export interface ClientHandoff {
   activity: Array<{ id: string; kind: string; body: string | null; data: Record<string, unknown> | null; actor: string; created_at: string }>;
 }
 
-const SOURCE_LABEL: Record<Exclude<HandoffSource, null>, string> = {
-  onboarding: 'client', sales: 'Sales', findable: 'Findable', payment: 'Stripe / marked paid',
-};
 const day = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : '';
 
@@ -89,17 +87,14 @@ function DomainBlock({ leadId, handoff, onChanged }: { leadId: string; handoff: 
 }
 
 export function ClientHandoffCard({ handoff, leadId, onChanged }: { handoff: ClientHandoff; leadId?: string; onChanged?: () => void }) {
-  const r = handoff.readiness;
   const audit = handoff.prospect_audit;
   const auditUrl = audit ? (audit.short_code ? shortReportUrl(audit.short_code) : `https://findable.live/report/${audit.id}`) : null;
   return (
     <Card data-testid="client-handoff">
       <CardContent className="space-y-4 p-5">
+        {/* The checklist and READY TO SUBMIT / READY FOR DELIVERY / WAITING moved to ClientSetupCard (2026-10-02) — drawn once. */}
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <Badge className={cn('text-xs', r.ready ? 'bg-emerald-600 hover:bg-emerald-600' : 'bg-amber-600 hover:bg-amber-600')} data-testid="handoff-label">{r.label}</Badge>
-            {!r.ready && <p className="text-sm text-amber-700 dark:text-amber-300">Missing: {r.missing.join(', ')}</p>}
-          </div>
+          <p className="text-sm font-semibold">Who sold it · domain · the conversation</p>
           <div className="text-right text-sm">
             <div className="flex items-center justify-end gap-1.5"><UserRound className="h-4 w-4 text-muted-foreground" />Sold by <span className="font-medium">{handoff.sold_by ?? 'Not recorded'}</span></div>
             <div className="text-xs text-muted-foreground">
@@ -109,20 +104,6 @@ export function ClientHandoffCard({ handoff, leadId, onChanged }: { handoff: Cli
             <div className="text-xs text-muted-foreground">Found via {leadSourceLabel(handoff.lead_source)}{handoff.added_by ? ` · added by ${handoff.added_by}` : ''}</div>
           </div>
         </div>
-        <ul className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-          {r.items.map((i) => (
-            <li key={i.key} className="flex min-w-0 items-start gap-2" data-testid={`handoff-${i.key}`}>
-              {i.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                : i.required ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                : <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
-              <div className="min-w-0">
-                <span className="font-medium">{i.label}</span>
-                {i.source && <span className="ml-1 text-xs text-muted-foreground">({SOURCE_LABEL[i.source]})</span>}
-                <div className="break-words text-xs text-muted-foreground">{i.detail}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
         {leadId && <DomainBlock leadId={leadId} handoff={handoff} onChanged={onChanged} />}
         {auditUrl && (
           <p className="text-sm">

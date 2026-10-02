@@ -3,7 +3,9 @@ import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from ".
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { createFreeCheckLead } from "../_shared/free-check-lead.ts";
 import { shouldAutoAudit, fireFreeCheckAudit } from "../_shared/free-check-audit.ts";
-import { missingQuestionnaireFields } from "../../../src/lib/questionnaireComplete.ts";
+import { missingQuestionnaireFields, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
+import { clientKnown, KNOWN_SOURCE_LINE } from "../../../src/lib/setupPrefill.ts";
+import { recordLeadEvent } from "../_shared/client-setup.ts";
 import { readWebsite, sameWebsite } from "../../../src/lib/websiteUrl.ts";
 
 // findable-onboarding — the PUBLIC backend for findable-site's /onboarding flow
@@ -393,29 +395,44 @@ Deno.serve(async (req) => {
        comment promises it never exposes phone/email to the public page (that action is callable by
        anyone holding a report link; this one only by a payer).
        Returns { ok, phone } — phone null when the row has no lead or the lead has no number, and
-       the form simply asks. Absence is an empty box, never a guess. */
+       the form simply asks. Absence is an empty box, never a guess.
+       + `known` (2026-10-02, src/lib/setupPrefill.ts): the services and towns we already hold, ONE
+       source each (their own answer, else Sales, else found on their website), with the line that says
+       where they came from — so the form asks them to confirm, not to retype. Same paid-row gate. */
     if (action === "q2_prefill") {
       const onboardingId = typeof body.onboarding_id === "string" ? body.onboarding_id : "";
       if (!UUID_RE.test(onboardingId)) return json({ ok: false, error: "bad_onboarding_id" }, 400);
       const { data: row } = await service
         .from("onboarding_responses")
-        .select("id, status, lead_id")
+        .select("id, status, lead_id, services, services_list, areas_list, areas_wanted")
         .eq("id", onboardingId).maybeSingle();
       if (!row) return json({ ok: false, error: "unknown_onboarding" }, 404);
       if (!PAID_OR_BEYOND.has((row.status as string) ?? "") && (row.status as string) !== "paid") {
         return json({ ok: false, error: "not_paid" }, 403);
       }
       let phone: string | null = null;
+      let known: Record<string, unknown> | null = null;
       if (row.lead_id) {
         /* ⚠️ THIS ONE IS DELIBERATELY LEFT ALONE. A failed read here means the phone box arrives
            empty instead of filled, which is a missing convenience rather than a refusal — the
            caller already gets `ok: true` and the customer can simply type it. There is no dead end
            to remove, so adding a 503 would turn a working degradation into a blocked screen. */
-        const { data: lead } = await service
-          .from("outreach_leads").select("phone").eq("id", row.lead_id as string).maybeSingle();
+        const [{ data: lead }, { data: crawl }] = await Promise.all([
+          service.from("outreach_leads").select("phone, services_included, service_areas").eq("id", row.lead_id as string).maybeSingle(),
+          service.from("lead_crawl_checks").select("result").eq("lead_id", row.lead_id as string).maybeSingle(),
+        ]);
         phone = (lead as { phone: string | null } | null)?.phone ?? null;
+        /* Same degradation rule as the phone: a failed read is an empty list, and the form just asks. */
+        const k = clientKnown({
+          onboarding: row as never, lead: (lead ?? null) as never,
+          crawlSiteInfo: ((crawl as { result?: { siteInfo?: unknown } } | null)?.result?.siteInfo ?? null) as never,
+        });
+        known = {
+          services: k.services ? { items: k.services.items, source: k.services.source, line: KNOWN_SOURCE_LINE[k.services.source] } : null,
+          areas: k.areas ? { items: k.areas.items, source: k.areas.source, line: KNOWN_SOURCE_LINE[k.areas.source] } : null,
+        };
       }
-      return json({ ok: true, phone });
+      return json({ ok: true, phone, known });
     }
 
     /* ── complete_q2 ────────────────────────────────────────────────────────────────────────────
@@ -448,7 +465,7 @@ Deno.serve(async (req) => {
 
       const { data: existing } = await service
         .from("onboarding_responses")
-        .select("id, status")
+        .select("id, status, lead_id, confirmed_location, services, services_list")
         .eq("id", onboardingId).maybeSingle();
       if (!existing) return json({ ok: false, error: "unknown_onboarding" }, 404);
       if (!PAID_OR_BEYOND.has((existing.status as string) ?? "") && (existing.status as string) !== "paid") {
@@ -555,6 +572,10 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "q2_save_failed" }, 500);
       }
       console.log(`[findable-onboarding] complete_q2 saved for ${onboardingId} (${Object.keys(payload).length} columns)`);
+      /* History (2026-10-02): the client's FIRST complete submission — a later correction is not a new event. */
+      if (existing.lead_id && !questionnaireComplete(existing as never)) {
+        await recordLeadEvent(service, String(existing.lead_id), "onboarding_submitted", { source: "client", body: "Client submitted their details", data: { onboarding_id: onboardingId } });
+      }
       /* The baseline is NOT started here. process-ai-audit-queue's ensureBaselinesForPaidOnboardings
          sweeps every tick for any paid row whose lead has no baseline, and startPaidBaseline defers
          with awaiting_questionnaire_2 until exactly the two fields this action just wrote. So the

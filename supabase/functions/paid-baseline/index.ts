@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordLeadEvent } from "../_shared/client-setup.ts";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
 import { refusalBody, requireAdmin } from "../_shared/access.ts";
@@ -397,6 +398,8 @@ Deno.serve(async (req) => {
       const { error: e } = await service.from("onboarding_responses").update({ baseline_discovery: nextStore }).eq("id", row.id).eq("status", "paid");
       if (e) throw e;
       const state = await discoveryState(service, nextStore, String(row.lead_id), biz);
+      /* History (2026-10-02): Discovery is a manual, paid step — record who ran it and on how much. */
+      await recordLeadEvent(service, String(row.lead_id), "discovery_run", { actor: user.id, source: "admin", body: "Discovery run", data: { audit_id: auditId, pool_version: version, questions: pool.length } });
       return json({ ok: true, baseline: { ...details, discovery: state } });
     }
 
@@ -530,6 +533,8 @@ Deno.serve(async (req) => {
           }
         }
       } catch (e) { backlogError = errMsg(e); console.error("[paid-baseline] backlog seed", backlogError); }
+      /* History: the exact set was approved and frozen (its wording lives on baseline_questions / baseline_meta). */
+      await recordLeadEvent(service, String(row.lead_id), "baseline_approved", { actor: user.id, source: "admin", body: "Baseline questions approved & frozen", data: { questions: next.length, version: (meta as { version?: unknown } | null)?.version ?? null } });
       return json({ ok: true, baseline: { ...details, status: "approved", questions: next, meta }, backlog_added: backlogAdded, backlog_error: backlogError });
     }
 
@@ -553,6 +558,7 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "baseline_start_refused", detail: describeStartSkip(started.skipped) }, 409);
     }
     const runState = paidBaselineRunState(started);
+    if (started.audit_id && !started.skipped) await recordLeadEvent(service, String(row.lead_id), "baseline_run", { actor: user.id, source: "admin", body: "Baseline started", data: { audit_id: started.audit_id } });
     return json({ ok: true, baseline: { ...details, ...runState }, skipped: started.skipped || null });
   } catch (e) {
     console.error("[paid-baseline]", errMsg(e));

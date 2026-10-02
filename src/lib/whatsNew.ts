@@ -22,6 +22,38 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-01-paid-client-setup', date: '2026-10-01', title: 'Paid Clients: one checklist, one next step', audience: 'admin',
+    body: 'A payment now lands as a Paid Client with its setup checklist worked out, one next step, and one "New Findable client" email to you.',
+    report: {
+      added: [
+        'Every paid client shows where it is (Setup, Ready for delivery, Discovery, Baseline questions, Baseline, Build / optimise, Launched, Remeasure) and ONE next step.',
+        'A setup checklist on each client: what is in, what is not needed for them (no Google profile, no website, your own sale), what is missing and who owes it — sales, the client or you.',
+        'Filters on Paid Clients: Needs attention, Ready, In delivery, All.',
+        'The sales handoff (what we are doing, the website situation, what they want, anything promised, why they bought, the decision maker, notes for you) — filled in by the salesperson, pre-filled from what we already know.',
+        'Submit for delivery, Confirm GBP access, and Copy client setup link on the client page.',
+        'History on the client page: payment, handoff, client details, ready for delivery, Discovery, questions frozen, baseline, build started, launched.',
+      ],
+      changed: [
+        'The payment email is now "New Findable client: …" with the package, salesperson, website, site management, services found, the handoff, setup n/m, what you are waiting for, the next step and a link to the client. It is sent once per client, whatever Stripe retries.',
+        'READY TO START / MISSING INFORMATION is now three states: WAITING FOR INFORMATION (something required is missing), READY TO SUBMIT (everything is in) and READY FOR DELIVERY (submitted). A client with no Google profile is no longer blocked.',
+        "The client's post-payment form arrives with the services and towns we already have, for them to confirm.",
+      ],
+      removed: [
+        'Payment no longer drafts baseline questions. Questions come after Discovery, which you still start yourself.',
+      ],
+      effect: 'Open Paid Clients and you can see who needs you, what is missing and the one thing to do next, without copying anything between pages.',
+    } },
+  { id: '2026-10-01-sales-handoff', date: '2026-10-01', title: 'The sales handoff', audience: 'sales',
+    body: 'When you close a client, give Paul six quick answers so he never has to ask again.',
+    report: {
+      added: [
+        'A "Handoff for Paul" section in Quick Close: what we are doing, the website situation, what they want, anything promised, why they bought, and the decision maker. What we already know is filled in for you.',
+        'Your sales — finish the handoff, on your Sales page: your own paid clients that still need it. You can finish it after they pay, and submit it for delivery once everything is in.',
+      ],
+      changed: ['A client who pays before the handoff is done is still a client — the handoff just shows as missing until you finish it.'],
+      removed: [],
+      effect: 'Fill it in before you send the payment link if you can; if not, finish it from your Sales page after they pay.',
+    } },
   { id: '2026-10-01-sales-page-monthly', date: '2026-10-01', title: 'One Sales page, a monthly commission ladder', audience: 'sales',
     body: 'Sales and Earnings are one page. Your commission rate now climbs over the calendar month: sales 1–12 earn 30%, 13–24 earn 40%, 25 onwards 50%.',
     report: {

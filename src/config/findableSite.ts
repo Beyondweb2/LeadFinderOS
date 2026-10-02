@@ -54,6 +54,14 @@ export const onboardingUrl = (leadId: string, businessName?: string | null) => {
   return `${FINDABLE_SITE_ORIGIN}/onboarding/${segment}?lead=${leadId}`;
 };
 
+/**
+ * The PAID client's own setup link (2026-10-02): the post-payment details form, re-entered by the
+ * onboarding id (findable-site's `?q2=` boot). The server is the gate — it answers only for a PAID row
+ * — so this is the link Paul sends when a client still owes their services / areas / GBP access.
+ */
+export const clientSetupUrl = (onboardingId: string, leadId?: string | null) =>
+  FINDABLE_SITE_ORIGIN + '/onboarding/?q2=' + onboardingId + (leadId ? '&lead=' + leadId : '');
+
 /** Same link without the scheme, for showing on screen where the https:// is just noise. */
 export const onboardingUrlLabel = (leadId: string, businessName?: string | null) =>
   onboardingUrl(leadId, businessName).replace(/^https?:\/\//, "");

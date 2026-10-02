@@ -326,6 +326,16 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   transfer_requested: 'Transfer requested',
   /* lead_set_lost_reason (2026-10-01): why a Not interested lead said no; a correction keeps the old one. */
   lost_reason_set: 'Why they said no',
+  /* The delivery workflow (2026-10-02, _shared/client-setup.ts recordLeadEvent) — meaningful events only. */
+  payment_received: 'Payment received',
+  handoff_saved: 'Sales handoff',
+  onboarding_submitted: 'Client submitted onboarding',
+  delivery_submitted: 'Ready for delivery',
+  discovery_run: 'Discovery run',
+  baseline_approved: 'Questions approved & frozen',
+  baseline_run: 'Baseline run',
+  build_started: 'Build started',
+  launched: 'Launched',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */

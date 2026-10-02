@@ -11,8 +11,13 @@ import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../
 import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
-import { handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
+import { loadClientSetup, loadClientSetups, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
+import { sendOperatorAlert } from "../_shared/operator-alert.ts";
+import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
+import { cleanAnswers as cleanQuickClose } from "../../../src/lib/quickClose.ts";
+import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
@@ -200,6 +205,18 @@ async function ledgerFor(service: any, leadIds: string[]): Promise<Map<string, A
   return out;
 }
 
+/** The setup checklist + stage, in the shape the list card and the client page draw (one shape). */
+function setupView(s: ClientSetup) {
+  const r = s.readiness;
+  return {
+    ready: r.ready, label: r.label, missing: r.missing, done: r.done, total: r.total, waiting_on: r.waitingOn,
+    stage: s.stage.stage, stage_label: s.stage.stageLabel, state: s.stage.state, state_label: s.stage.stateLabel, next: s.stage.next,
+  };
+}
+
+/* The delivery workflow's History on the client page: the handoff kinds above plus the delivery events. */
+const DELIVERY_ACTIVITY_KINDS = ["payment_received", "handoff_saved", "onboarding_submitted", "delivery_submitted", "discovery_run", "baseline_approved", "baseline_run", "build_started", "launched", "crawl_run", "audit_run"];
+
 // deno-lint-ignore no-explicit-any
 async function teamNames(service: any): Promise<Map<string, string>> {
   const { data } = await service.from("team_members").select("user_id,display_name");
@@ -222,23 +239,26 @@ Deno.serve(async (req) => {
 
     if (action === "list") {
       const { data: leads, error } = await service.from("outreach_leads")
-        .select(HUB_LIST_COLUMNS)
+        .select(HUB_LIST_COLUMNS + "," + SETUP_LEAD_COLUMNS)
         .eq("user_id", user.id).or(PAID_CLIENT_OR_FILTER).order("payment_date", { ascending: false });
       if (error) throw error;
       /* Membership is isPaidClient (src/lib/paidClient.ts): a recorded amount OR a status Paul set by
          hand. payment_source says which, so a hand-marked client is never shown as Stripe-paid. */
       const members = (leads ?? []).filter(isPaidClient) as Array<Record<string, unknown>>;
-      const [ev, names, ledger] = await Promise.all([handoffEvidenceFor(service, members.map((l) => String(l.id))), teamNames(service), ledgerFor(service, members.map((l) => String(l.id)))]);
+      /* THE SETUP CHECKLIST + STAGE + ONE NEXT STEP (src/lib/handoffReadiness.ts + deliveryStage.ts, loaded
+         by _shared/client-setup.ts — the same loader the new-client email uses). */
+      const [setups, names, ledger] = await Promise.all([loadClientSetups(service, members), teamNames(service), ledgerFor(service, members.map((l) => String(l.id)))]);
       const clients = members.map((l) => {
         const id = String(l.id);
-        const readiness = handoffReadiness(l as HandoffLead, (ev.onboardingByLead.get(id) ?? null) as HandoffOnboarding | null,
-          { crawl: ev.crawled.has(id), hookAudit: ev.auditByLead.has(id) });
+        const s = setups.get(id)!;
         const soldBy = (l.sold_by_user_id ?? l.assigned_to_user_id) as string | null;
+        // The list never ships the big jsonb blobs it only needed for the rule.
+        const { website_build: _wb, sales_handoff: _sh, ...rest } = l;
         return {
-          ...l, payment_source: paidClientSource(l),
-          handoff: { ready: readiness.ready, label: readiness.label, missing: readiness.missing },
+          ...rest, payment_source: paidClientSource(l),
+          handoff: setupView(s),
           sold_by_name: soldBy ? names.get(soldBy) ?? "A teammate" : null,
-          contract: clientContract({ lead: l as Record<string, never>, onboarding: (ev.onboardingByLead.get(id) ?? null) as Record<string, unknown> | null, ledger: ledger.get(id) ?? [] }),
+          contract: clientContract({ lead: l as Record<string, never>, onboarding: s.onboarding, ledger: ledger.get(id) ?? [] }),
         };
       });
       return json({ ok: true, clients });
@@ -319,18 +339,44 @@ Deno.serve(async (req) => {
       /* What they bought: Findable Build / Optimise, payments made and remaining, the next charge. */
       const contract = clientContract({ lead: lead as Record<string, never>, onboarding: (onboarding ?? null) as Record<string, unknown> | null, ledger: (await ledgerFor(service, [leadId])).get(leadId) ?? [] });
       const L = lead as Record<string, unknown>;
-      const [ev, names, act] = await Promise.all([
+      const [ev, names, act, hist, loaded] = await Promise.all([
         handoffEvidenceFor(service, [leadId]),
         teamNames(service),
         service.from("lead_activity").select("id,kind,body,data,actor_user_id,created_at").eq("lead_id", leadId)
           .in("kind", HANDOFF_ACTIVITY_KINDS).order("created_at", { ascending: false }).limit(25),
+        service.from("lead_activity").select("id,kind,body,data,actor_user_id,created_at").eq("lead_id", leadId)
+          .in("kind", DELIVERY_ACTIVITY_KINDS).order("created_at", { ascending: false }).limit(40),
+        loadClientSetup(service, leadId),
       ]);
       if (act.error) throw act.error;
-      const readiness = handoffReadiness(L as HandoffLead, (ev.onboardingByLead.get(leadId) ?? null) as HandoffOnboarding | null,
-        { crawl: !!crawlRow, hookAudit: ev.auditByLead.has(leadId) });
+      if (hist.error) throw hist.error;
+      /* ONE checklist rule for the list, this page, the email and Submit (_shared/client-setup.ts). */
+      const setup = loaded!.setup;
+      const readiness = setup.readiness;
       const nameOf = (id: unknown) => (typeof id === "string" && id ? names.get(id) ?? "A teammate" : null);
+      /* The salesperson's handoff, with what the system already knew pre-filled (salesHandoff.ts). The
+         saved answers win; the prefill is shown as a suggestion until the salesperson saves it. */
+      const saved = (loaded!.lead.sales_handoff ?? null) as SalesHandoffRecord | null;
+      const ob = setup.onboarding;
+      const pre = handoffPrefill({
+        quickClose: cleanQuickClose((ob?.quick_close as { answers?: unknown } | null)?.answers),
+        route: serviceRouteFromRow(ob as never), websiteControl: (L.website_control as string | null) ?? null,
+        hasWebsite: L.website ? true : null, contactName: (ob?.contact_name as string | null) ?? (L.contact_name as string | null) ?? null,
+      });
+      const salesHandoff = {
+        applies: setup.handoffApplies,
+        saved, fields: handoffWithPrefill(saved, pre.fields), prefilled: saved?.saved_at ? [] : pre.prefilled,
+        saved_by: nameOf(saved?.saved_by), completed_at: saved?.completed_at ?? null,
+      };
       const handoff = {
         readiness,
+        setup: setupView(setup),
+        sales_handoff: salesHandoff,
+        submitted_at: loaded!.lead.delivery_submitted_at ?? null,
+        submitted_by: nameOf(loaded!.lead.delivery_submitted_by),
+        onboarding_id: (ob?.id as string | undefined) ?? null,
+        crawl_age_days: setup.crawlAgeDays,
+        history: ((hist.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? ((a.data as { source?: string } | null)?.source === "client" ? "Client" : "System") })),
         sold_by: nameOf(L.sold_by_user_id ?? L.assigned_to_user_id),
         sold_by_recorded: !!L.sold_by_user_id,
         sold_at: L.sold_at ?? null,
@@ -406,12 +452,47 @@ Deno.serve(async (req) => {
     if (action === "save_website_build") {
       const leadId = text(body.lead_id);
       const patch = normaliseWebsiteBuild(body.website_build);
+      const { data: before } = await service.from("outreach_leads").select("website_build").eq("id", leadId).eq("user_id", user.id).maybeSingle();
       const { data: updated, error: saveErr } = await service.from("outreach_leads")
         .update({ website_build: patch }).eq("id", leadId).eq("user_id", user.id)
         .select("id,website_build").maybeSingle();
       if (saveErr) throw saveErr;
       if (!updated) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
-      return json({ ok: true, website_build: (updated as { website_build?: unknown }).website_build ?? {} });
+      /* HISTORY (2026-10-02): the first save of a build is "Build started"; the new site becoming live by
+         the shared rule (weeklyCheck.weeklyStart, Build route) is "Launched" — once per lead (unique index). */
+      const after = (updated as { website_build?: Record<string, unknown> | null }).website_build ?? null;
+      const prev = ((before as { website_build?: Record<string, unknown> | null } | null)?.website_build) ?? null;
+      if (!prev || Object.keys(prev).length === 0) await recordLeadEvent(service, leadId, "build_started", { actor: user.id, source: "admin", body: "Website build started" });
+      const liveNow = weeklyStart({ route: "build", websiteBuild: after as never, checklist: null, implementedOpportunities: 0 }).ok;
+      const liveBefore = weeklyStart({ route: "build", websiteBuild: prev as never, checklist: null, implementedOpportunities: 0 }).ok;
+      if (liveNow && !liveBefore) await recordLeadEvent(service, leadId, "launched", { actor: user.id, source: "admin", body: "Launched" + (after?.production_url ? " · " + String(after.production_url) : "") });
+      return json({ ok: true, website_build: after ?? {} });
+    }
+
+    /* ══ SUBMIT FOR DELIVERY (2026-10-02) ════════════════════════════════════════════════════════════
+       The checklist is re-derived on the server; refused unless every REQUIRED item is in. Stamped once,
+       snapshot into History. Paul's own submit sends no email (he is the one it would tell). */
+    if (action === "submit_delivery") {
+      const leadId = text(body.lead_id);
+      const { data: own } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const out = await submitForDelivery(service, leadId, { id: user.id, source: "admin" }, sendOperatorAlert);
+      if (!out.ok) {
+        return json({ ok: false, error: out.error, detail: out.error === "not_ready" ? `Still missing: ${(out.missing ?? []).join(", ")}` : "Not submitted — try again." }, out.error === "not_ready" ? 409 : 500);
+      }
+      return json({ ok: true, already: out.already, setup: setupView(out.setup) });
+    }
+
+    /* ══ CONFIRM GBP ACCESS: Findable's own tick (the third GBP state, docs/sales-readiness.md §4) ═════
+       The same delivery_checklist key the lead popup's cockpit ticks (HANDOFF_GBP_CHECKLIST_KEY). */
+    if (action === "confirm_gbp") {
+      const leadId = text(body.lead_id);
+      const { data: row } = await service.from("outreach_leads").select("delivery_checklist").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!row) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const list = { ...(((row as { delivery_checklist?: Record<string, unknown> | null }).delivery_checklist) ?? {}), gbp_access: true };
+      const { error: upErr } = await service.from("outreach_leads").update({ delivery_checklist: list }).eq("id", leadId).eq("user_id", user.id);
+      if (upErr) throw upErr;
+      return json({ ok: true });
     }
 
     /* ══ WELCOME PACK — the operator's Download button ════════════════════════════════════════════

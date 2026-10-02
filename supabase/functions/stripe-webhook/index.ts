@@ -1,11 +1,15 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { preparePaidBaselineQuestions, startPaidBaseline } from "../_shared/audit-baseline.ts";
+import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments } from "../_shared/delayed-subscription.ts";
-import { questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
-import { handoffLine, handoffReadiness, type HandoffLead, type HandoffOnboarding } from "../../../src/lib/handoffReadiness.ts";
-import { DOMAIN_ROW_COLUMNS } from "../../../src/lib/domainAuthority.ts";
-import { FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, SERVICE_ROUTE_NAME, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, serviceRouteFromRow, subscriptionEndedEmail, termCompleteEmail, totalPaymentsFor, type FindableSiteKind, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
+import { handoffLine } from "../../../src/lib/handoffReadiness.ts";
+import { loadClientSetup, recordLeadEvent } from "../_shared/client-setup.ts";
+import { newClientSetupLines, newClientSubject } from "../../../src/lib/newClientEmail.ts";
+import { handoffSummaryLines } from "../../../src/lib/salesHandoff.ts";
+import { agencyCellText, agencyCheckDomain } from "../../../src/lib/agencyCheck.ts";
+import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
+import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, SERVICE_ROUTE_NAME, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, serviceRouteFromRow, subscriptionEndedEmail, termCompleteEmail, totalPaymentsFor, type FindableSiteKind, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -141,33 +145,60 @@ const TEMPLATE_PAYMENT_CONFIRM = "payment_recieved";
  *
  * Admin only. No customer email is sent on this path.
  */
-/** The handoff lines for the PAID email: who sold it, READY TO START / MISSING INFORMATION, and whether
- *  onboarding is complete — the same rule Paid Clients shows (src/lib/handoffReadiness.ts). Read AFTER
- *  the payment write. ⛔ NEVER THROWS and never blocks the email: any failure returns nulls and the
- *  email goes without these lines. No payment detail is read here beyond what the email already has. */
+/** The handoff + SETUP lines for the new-client email (2026-10-02): who sold it, the setup checklist
+ *  (READY TO SUBMIT / WAITING FOR INFORMATION, done/total, what is missing and who owes it), the one
+ *  next step and the link to the client — from _shared/client-setup.ts, the SAME loader Paid Clients
+ *  uses, so the email and the screen cannot disagree. Read AFTER the payment write.
+ *  ⛔ NEVER THROWS and never blocks the email: any failure returns nulls and the email goes without
+ *  these lines. No payment detail is read here beyond what the email already has. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function paymentHandoff(service: any, leadId: string | null, onboardingId: string | null): Promise<{ soldBy: string | null; handoff: string | null; onboardingDone: boolean | null; quickClose: string[] | null }> {
-  const none = { soldBy: null, handoff: null, onboardingDone: null, quickClose: null };
+async function paymentHandoff(service: any, leadId: string | null, onboardingId: string | null, amountGbp: number, packageName: string | null): Promise<{ soldBy: string | null; handoff: string | null; onboardingDone: boolean | null; quickClose: string[] | null; setupLines: string[] | null }> {
+  const none = { soldBy: null, handoff: null, onboardingDone: null, quickClose: null, setupLines: null };
   if (!leadId) return none;
   try {
-    const [l, ob, crawl, audit] = await Promise.all([
-      service.from("outreach_leads").select("business_name,phone,email,website,amount_paid,status,services_included,service_areas,website_control,delivery_checklist,sold_by_user_id,assigned_to_user_id").eq("id", leadId).maybeSingle(),
-      onboardingId
-        ? service.from("onboarding_responses").select("services,services_list,areas_list,areas_wanted,confirmed_phone,contact_email,website_manager,gbp_status,confirmed_location," + DOMAIN_ROW_COLUMNS).eq("id", onboardingId).maybeSingle()
-        : Promise.resolve({ data: null }),
-      service.from("lead_crawl_checks").select("lead_id").eq("lead_id", leadId).maybeSingle(),
-      service.from("ai_audits").select("id").eq("lead_id", leadId).or("audit_purpose.is.null,audit_purpose.eq.audit,audit_purpose.eq.free_check").limit(1).maybeSingle(),
-    ]);
-    const lead = (l?.data ?? null) as HandoffLead & { sold_by_user_id?: string | null; assigned_to_user_id?: string | null } | null;
-    if (!lead) return none;
-    const seller = lead.sold_by_user_id ?? lead.assigned_to_user_id ?? null;
+    const loaded = await loadClientSetup(service, leadId);
+    if (!loaded) return none;
+    const { lead, setup } = loaded;
+    const seller = setup.sellerId;
     let soldBy: string | null = null;
     if (seller) {
       const { data: tm } = await service.from("team_members").select("display_name").eq("user_id", seller).maybeSingle();
       soldBy = (tm?.display_name as string | undefined) ?? "A teammate";
     }
-    const onboarding = (ob?.data ?? null) as (HandoffOnboarding & { confirmed_location?: string | null }) | null;
-    const r = handoffReadiness(lead, onboarding, { crawl: !!crawl?.data, hookAudit: !!audit?.data });
+    const ob = setup.onboarding;
+    /* What we already know, for the email (each labelled by where it came from). */
+    let setupLines: string[] | null = null;
+    try {
+      const website = ((ob?.business_website as string | null) || (lead.website as string | null) || "").trim() || null;
+      const domain = agencyCheckDomain(website);
+      const [agency, crawl, ctl] = await Promise.all([
+        domain ? service.from("website_agency_checks").select("classification, confidence, status").eq("domain", domain).maybeSingle() : Promise.resolve({ data: null }),
+        service.from("lead_crawl_checks").select("result").eq("lead_id", leadId).maybeSingle(),
+        service.from("outreach_leads").select("website_control").eq("id", leadId).maybeSingle(),
+      ]);
+      const control = String((ctl?.data as { website_control?: string | null } | null)?.website_control ?? "");
+      const a = agency?.data as { classification?: string; confidence?: number; status?: string } | null;
+      const siteManagement = control === "agency_controls" ? "Sales: an agency controls it"
+        : control === "client_controls" ? "Sales: the client controls it"
+        : a && a.status === "ok" && a.classification && a.classification !== "unknown"
+          ? `${agencyCellText({ classification: a.classification as never, confidence: Number(a.confidence ?? 0) })} (automatic check — not confirmed)`
+          : null;
+      const obServices = effectiveQuestionnaireServices(ob as never);
+      const salesServices = Array.isArray(lead.services_included) ? (lead.services_included as string[]).filter(Boolean) : [];
+      const crawlServices = (((crawl?.data as { result?: { siteInfo?: { services?: unknown } } } | null)?.result?.siteInfo?.services ?? []) as unknown[])
+        .map((s) => (typeof s === "string" ? s : (s && typeof s === "object" && typeof (s as { name?: unknown }).name === "string" ? (s as { name: string }).name : ""))).filter(Boolean);
+      const services = obServices.length ? { list: obServices, source: "client" as const }
+        : salesServices.length ? { list: salesServices, source: "sales" as const }
+        : crawlServices.length ? { list: crawlServices, source: "crawl" as const } : null;
+      const origin = (Deno.env.get("FINDABLE_SITE_ORIGIN") ?? "https://findable.live").replace(/\/$/, "");
+      setupLines = newClientSetupLines({
+        packageName, salesperson: soldBy, amountGbp, website, siteManagement, services,
+        handoff: { applies: setup.handoffApplies, complete: setup.readiness.items.some((i) => i.key === "sales_handoff" && i.ok && !i.notNeeded) },
+        readiness: setup.readiness, stage: setup.stage,
+        clientLink: operatorAppUrl("/paid-clients/" + leadId),
+        setupLink: ob?.id ? origin + "/onboarding/?q2=" + String(ob.id) + "&lead=" + leadId : null,
+      });
+    } catch (e) { console.error("[stripe-webhook] setup lines failed (non-blocking):", (e as Error).message); }
     /* QUICK CLOSE (2026-09-29): when a salesperson closed this client on the phone, the handoff carries
        their answers, any domain / agency flag, the contact they confirmed, campaign / source, the
        latest sales note and the latest messages — and the audit trail records the payment. Non-fatal. */
@@ -193,7 +224,10 @@ async function paymentHandoff(service: any, leadId: string | null, onboardingId:
         }
       } catch (e) { console.error("[stripe-webhook] quick close handoff failed (non-blocking):", (e as Error).message); }
     }
-    return { soldBy, handoff: handoffLine(r), onboardingDone: onboarding ? questionnaireComplete(onboarding) : false, quickClose };
+    /* The salesperson's own handoff answers, when they gave them before the payment landed. */
+    const sh = handoffSummaryLines(lead.sales_handoff as never);
+    if (sh.length) quickClose = [...(quickClose ?? []), "SALES HANDOFF:", ...sh.map((l) => "  " + l)];
+    return { soldBy, handoff: handoffLine(setup.readiness), onboardingDone: ob ? questionnaireComplete(ob as never) : false, quickClose, setupLines };
   } catch (e) {
     console.error("[stripe-webhook] handoff read failed (non-blocking):", (e as Error).message);
     return none;
@@ -216,6 +250,10 @@ async function notifyOfFindablePayment(opts: {
   onboardingDone?: boolean | null;
   /* The Quick Close handoff lines (src/lib/quickClose.ts), when a salesperson closed the client. */
   quickClose?: string[] | null;
+  /* THE SETUP LINES (2026-10-02, src/lib/newClientEmail.ts): package, salesperson, website, site
+     management, services found, the handoff, done/total, what is missing and who owes it, the next step
+     and the links. Null = could not be read; the block is left out, never guessed. */
+  setupLines?: string[] | null;
   /* 🔴 THE SUBJECT TAG HAS ITS OWN FACT NOW (2026-09-14). It used to read `opts.note ? " (NOT
      LINKED)" : ""` — one tag inferred from whether ANY note existed, while `note` carries two
      unrelated things: a payment with no CRM lead, and a linked payment whose post-payment details
@@ -229,7 +267,7 @@ async function notifyOfFindablePayment(opts: {
      from the operator's inbox. `record` is the webhook's own recorder (event id attached). */
   onboardingId?: string | null; leadId?: string | null;
   record?: (errorId: string, ctx: Record<string, unknown>) => Promise<void>;
-}): Promise<void> {
+}): Promise<boolean> {
   const trace = async (errorId: string, ctx: Record<string, unknown>) => {
     try { await opts.record?.(errorId, { onboarding_id: opts.onboardingId ?? null, lead_id: opts.leadId ?? null, amount_gbp: opts.amountGbp, ...ctx }); } catch { /* never affects the 200 */ }
   };
@@ -245,6 +283,7 @@ async function notifyOfFindablePayment(opts: {
       /* The job first: it is what decides whether there is anything you can do today. */
       (opts.job ? `  ${opts.job}\n\n` : "") +
       (opts.handoff ? `  ${opts.handoff}\n\n` : "") +
+      (opts.setupLines?.length ? opts.setupLines.map((l) => "  " + l).join("\n") + "\n\n" : "") +
       line("Sold by:", opts.soldBy ?? null) +
       (opts.onboardingDone === true ? "  Onboarding: complete\n" : opts.onboardingDone === false ? "  Onboarding: not complete yet\n" : "") +
       `  Amount: ${amount}\n` +
@@ -262,6 +301,7 @@ async function notifyOfFindablePayment(opts: {
       `<h2 style="margin:0 0 12px">${esc(name)} has paid</h2>` +
       (opts.job ? `<p style="margin:0 0 12px;padding:8px 10px;background:#f1f5f9;border-left:3px solid #0f172a;font-weight:700">${esc(opts.job)}</p>` : "") +
       (opts.handoff ? `<p style="margin:0 0 12px;padding:8px 10px;background:${opts.handoff.startsWith("READY") ? "#ecfdf5;border-left:3px solid #047857" : "#fffbeb;border-left:3px solid #b45309"};font-weight:700">${esc(opts.handoff)}</p>` : "") +
+      (opts.setupLines?.length ? '<div style="margin:0 0 12px;padding:8px 10px;background:#f8fafc;border-left:3px solid #334155">' + opts.setupLines.map((l) => (l.trim() === "" ? '<p style="margin:0 0 6px">&nbsp;</p>' : '<p style="margin:0 0 2px">' + esc(l).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1">$1</a>') + "</p>")).join("") + "</div>" : "") +
       row("Sold by:", opts.soldBy ?? null) +
       (opts.onboardingDone === true ? row("Onboarding:", "complete") : opts.onboardingDone === false ? row("Onboarding:", "not complete yet") : "") +
       row("Amount:", amount) + row("For:", opts.paidFor) +
@@ -276,7 +316,8 @@ async function notifyOfFindablePayment(opts: {
       to: [ADMIN_EMAIL],
       /* Only the genuinely unattributed payment earns a tag: it is the one that needs a hand.
          Outstanding details are normal and are explained in the BODY, where the sentence already is. */
-      subject: `PAID ${amount} — ${name}${opts.noLead ? " (NO LEAD)" : ""}`,
+      /* A linked first payment is a NEW CLIENT (2026-10-02); an unlinked one stays the PAID alarm. */
+      subject: opts.noLead ? `PAID ${amount} — ${name} (NO LEAD)` : newClientSubject(name, opts.amountGbp),
       text, html,
     });
     if (out.ok) {
@@ -285,10 +326,12 @@ async function notifyOfFindablePayment(opts: {
     } else {
       await trace("payment_email_failed", { to: ADMIN_EMAIL, http_status: out.status, error: out.error });
     }
+    return out.ok;
   } catch (e) {
     // NEVER affects the webhook's 200. The money is already written by the time this runs.
     console.error("[stripe-webhook] notifyOfFindablePayment failed (non-blocking):", (e as Error).message);
     await trace("payment_email_failed", { error: (e as Error).message });
+    return false;
   }
 }
 
@@ -818,11 +861,12 @@ Deno.serve(async (req) => {
             await service.from("onboarding_responses")
               .update({ baseline_status: "needs_questions", updated_at: new Date().toISOString() })
               .eq("id", onboardingId).is("baseline_status", null);
-            /* Draft generation is preview-only: it creates no ai_audits row and queues no AI
-               answers. A failure remains visible to the operator as Needs Baseline, where the
-               explicit Generate action can retry it. */
-            const draft = await preparePaidBaselineQuestions(service, onboardingId);
-            if (!draft.ok) console.warn(`[stripe-webhook] baseline draft deferred for ${onboardingId}: ${draft.error}`);
+            /* ⛔ NO QUESTION DRAFT AT PAYMENT ANY MORE (Paul, 2026-10-02): the order is crawl → Discovery →
+               proposed questions → approve & freeze → baseline, and the proposed set is built FROM Discovery
+               (baselineRecommendation.ts). A draft made here, before Discovery, from the plain generator,
+               would be the one set that ignored Discovery's findings — and it spent a model call on every
+               payment. Discovery stays manual (Paul controls the spend); the Paid Client's next step says
+               when to run it. */
             /* ⛔ RETIRE THE SAME PERSON'S OTHER UNPAID SUBMISSIONS (2026-09-13). A restarted form
                leaves an older row behind, and notify-onboarding-submit judged rows one at a time —
                so on 12 Sep the 12:35 attempt was reported "not paid" one minute before the 12:54
@@ -1183,9 +1227,41 @@ Deno.serve(async (req) => {
                Resend being up. Suppressed ONLY when this onboarding row already has a
                `payment_email_sent` trace, which is what makes a Stripe retry quiet without letting a
                crash between the write and the send lose the notification for ever. */
-            if (!paidEmailAlreadySent) {
-              const handoff = await paymentHandoff(service, findableLeadId || null, onboardingId || null);
-              await notifyOfFindablePayment({
+            /* ══ HISTORY: "Payment received" — ONE per lead, ever (partial unique index; a retry is a no-op). */
+            if (findableLeadId) {
+              await recordLeadEvent(service, findableLeadId, "payment_received", {
+                source: "system", body: `Payment received · £${amountGbp.toFixed(2)} · became a Paid Client`,
+                data: { amount_gbp: amountGbp, route: paid.route, onboarding_id: onboardingId, stripe_event_id: event.id },
+              });
+            }
+
+            /* ══ ONE NEW-CLIENT EMAIL PER LEAD (2026-10-02) ════════════════════════════════════════════
+               The CLAIM decides: a conditional write of new_client_email_at that only one delivery of this
+               event can win (CLAUDE.md §4 — never read-then-send). The trace check above still applies, so a
+               client emailed before the claim column existed is never emailed again. A send Resend refused
+               RELEASES the claim, so the next delivery may try again rather than going silent for ever.
+               ⚠️ If the claim write itself errors (the column not migrated yet) the old trace rule decides
+               alone — exactly the behaviour before this change. */
+            let claimedEmail = !paidEmailAlreadySent;
+            if (claimedEmail && findableLeadId) {
+              const { data: won, error: claimErr } = await service.from("outreach_leads")
+                .update({ new_client_email_at: new Date().toISOString() })
+                .eq("id", findableLeadId).is("new_client_email_at", null).select("id");
+              if (!claimErr) claimedEmail = Array.isArray(won) && won.length > 0;
+              else console.error("[stripe-webhook] new-client email claim failed — falling back to the trace rule:", claimErr.message);
+            }
+            if (!claimedEmail && !paidEmailAlreadySent) {
+              await recordPaymentFailure("payment_email_skipped", {
+                onboarding_id: onboardingId, lead_id: findableLeadId || null,
+                reason: "the new-client email for this lead was already claimed (a Stripe retry, or a second payment)",
+                amount_on_lead_gbp: Number(leadForEmail?.amount_paid ?? 0) || null,
+                amount_gbp: amountGbp, at: new Date().toISOString(),
+              });
+            }
+            if (claimedEmail) {
+              const handoff = await paymentHandoff(service, findableLeadId || null, onboardingId || null, amountGbp,
+                paid.route ? `${SERVICE_ROUTE_NAME[paid.route]} · £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month (${totalPaymentsFor(paid.route)} payments in total)` : null);
+              const sent = await notifyOfFindablePayment({
                 onboardingId, leadId: findableLeadId || null, record: recordPaymentFailure,
                 ...handoff,
                 /* The subject's own fact — never inferred from whether a note exists. */
@@ -1245,7 +1321,11 @@ Deno.serve(async (req) => {
                       }
                     })()),
               });
-            } else {
+              /* Resend refused: release the claim so the next delivery of this event may send it. */
+              if (!sent && findableLeadId) {
+                await service.from("outreach_leads").update({ new_client_email_at: null }).eq("id", findableLeadId);
+              }
+            } else if (paidEmailAlreadySent) {
               /* 🔴 THE SKIP IS RECORDED NOW. It used to reach console.log alone — and the CLI has no
                  `functions logs`, so "no PAID email and no trace" had two readings that could not be
                  told apart: the webhook never arrived, or it arrived and chose not to send. That
