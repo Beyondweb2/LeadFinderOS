@@ -504,3 +504,10 @@ Branch `feat/welcome-pack-copy`. Paul's direction, two rounds; every claim rule 
 - **Delivery paths:** `render-welcome-pack` (findable.live/w/<code>, proxied by findable-site
   `functions/w/[code].ts`) and `paid-client-hub` (`welcome_pack_html`) render server-side and need a
   redeploy; the legacy `WelcomePackButton` (lead dialog, Inbox) builds in the browser and ships with main.
+- **Terms and timing are the client's own (2026-10-02, second pass).** Today's £99 guarantee and payments
+  wording prints only when the record proves the agreement: `contract_total_payments` (stamped only by
+  today's checkout) AND `amount_paid` = £99 (`agreedCurrentOffer`). Anything else gets "Your agreed payment
+  schedule continues under the terms you signed up to." and "Your money-back guarantee applies on the terms
+  you signed up to." — none of the six live baseline clients qualified on the day (MCLocksmiths paid £99 on
+  17 Sep, before routes). Re-measure timing is `remeasure_due_date` minus the baseline day in whole weeks
+  (`recordedRemeasure`): RG and Ronnie read eight weeks with their dates; a missing date keeps four weeks.

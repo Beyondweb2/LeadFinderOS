@@ -144,5 +144,29 @@ ok(html.includes('Where you stand today'), 'and the baseline page');
   ok(legacy.includes('Your plan'), 'and the original pages are untouched');
 }
 
+console.log('\n── THE CLIENT’S OWN TERMS AND SCHEDULE (Paul, 2026-10-02) ──');
+{
+  const text = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/\s+/g, ' ');
+  const base = { businessName: 'MCLocksmiths centre', reviewLink: '', report: { ...report }, baseline: summary };
+  /* RG: £19.99, no route, re-measure pinned 56 days after the baseline day. */
+  const rg = text(buildWelcomePackHtml({ ...base, amountPaid: 19.99, totalPayments: null, remeasureDueDate: '2026-11-17' }));
+  ok(!/£\s?99/.test(rg), 'an older client is shown no £99 anywhere (guarantee or payments)');
+  ok(rg.includes('Your agreed payment schedule continues under the terms you signed up to.'), 'and gets the neutral payments line');
+  ok(rg.includes('Your money-back guarantee applies on the terms you signed up to.'), 'and a neutral guarantee line');
+  ok(rg.includes('Eight weeks after your starting point, due 17 Nov 2026') && rg.includes('At eight weeks'), 'a 56-day record reads eight weeks, with its date');
+  ok(!/At four weeks/.test(rg), 'and never four');
+  /* A £99 client from before routes: still not provably today's offer. */
+  const pre = text(buildWelcomePackHtml({ ...base, amountPaid: 99, totalPayments: null }));
+  ok(!/£\s?99 a month/.test(pre) && pre.includes('terms you signed up to'), 'a £99 payment with no recorded route is not assumed to be today’s offer');
+  ok(pre.includes('Four weeks after your starting point') && pre.includes('At four weeks'), 'no recorded date → the standard four weeks');
+  /* Today’s offer, recorded: route stamped + £99. */
+  const cur = text(buildWelcomePackHtml({ ...base, amountPaid: 99, totalPayments: 12, remeasureDueDate: '2026-10-20' }));
+  ok(cur.includes('refund your £99') && cur.includes('Six weeks after your first payment, £99 a month begins'), 'a recorded current client gets today’s guarantee and payments');
+  ok(cur.includes('Four weeks after your starting point, due 20 Oct 2026'), 'and their own 28-day date');
+  ok(cur.includes('hosting and maintenance of your website'), 'Build route: hosting of the website we built');
+  const opt = text(buildWelcomePackHtml({ ...base, amountPaid: 99, totalPayments: 6 }));
+  ok(opt.includes('hosting and maintenance if your site is with us'), 'Optimise route keeps the cautious hosting wording');
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
 process.exit(failures ? 1 : 0);

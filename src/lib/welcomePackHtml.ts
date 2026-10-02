@@ -48,6 +48,12 @@ export interface WelcomePackInput {
   /** The client's contracted payment count (outreach_leads.contract_total_payments: Build 12,
    *  Optimise 6). Absent/unknown → the pack names no count, never a guessed one. */
   totalPayments?: number | null;
+  /** outreach_leads.amount_paid — what the client actually paid at sign-up. Absent/unknown → the pack
+   *  names no price at all (see agreedCurrentOffer). */
+  amountPaid?: number | null;
+  /** outreach_leads.remeasure_due_date — the client's RECORDED re-measure date (RG and Ronnie are
+   *  pinned at 56 days by hand). Absent → the standard four-week wording. */
+  remeasureDueDate?: string | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -245,6 +251,33 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
 }
 
 /* 🔴 PER ROUTE (2026-09-29): the client's own count; an unknown one names none. */
+/* 🔴 TODAY'S OFFER IS PRINTED ONLY TO A CLIENT WHOSE RECORD PROVES THEY AGREED TO IT (Paul,
+   2026-10-02). Proof = a route stamped by today's checkout (contract_total_payments, written only by
+   stripe-webhook from the route) AND a £99 first payment. Anything else — an older £19.99 / £49.99
+   client, a £99 client from before routes, a pack built with no payment data — gets neutral wording.
+   ⛔ Never guessed, never filled in with the standard offer: the guarantee sentence names "£99" and
+   the payments line names the monthly, and both would be false for an older client. */
+function agreedCurrentOffer(totalPayments: number | null | undefined, amountPaid: number | null | undefined): boolean {
+  return serviceRouteForTotal(totalPayments) !== null
+    && amountPaid !== null && amountPaid !== undefined && Number(amountPaid) === FINDABLE_SETUP_PRICE_GBP;
+}
+
+/* 🔴 THE RE-MEASURE TIMING IS THE CLIENT'S RECORDED DATE, NOT THE DEFAULT (Paul, 2026-10-02). Weeks =
+   remeasure_due_date minus the baseline's completed day, in UTC days. Only a whole number of weeks is
+   stated as weeks; anything else, or a missing date, returns null and the standard wording is used. */
+function recordedRemeasure(dueDate: string | null | undefined, baselineCompletedAt: string | null | undefined): { weeks: number; label: string } | null {
+  if (!dueDate || !baselineCompletedAt) return null;
+  const due = Date.parse(String(dueDate).slice(0, 10) + 'T00:00:00Z');
+  const start = Date.parse(String(baselineCompletedAt).slice(0, 10) + 'T00:00:00Z');
+  if (!Number.isFinite(due) || !Number.isFinite(start)) return null;
+  const days = Math.round((due - start) / 86400000);
+  if (days <= 0 || days % 7 !== 0) return null;
+  const label = new Date(due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return { weeks: days / 7, label };
+}
+const WEEK_WORDS: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 10: 'ten', 12: 'twelve' };
+function weeksWord(n: number): string { return WEEK_WORDS[n] ?? String(n); }
+
 /* 🔴 WHAT THE MONTHLY PAYS FOR (Paul, 2026-10-02): a new page each month, a monthly AI visibility
    check, adjustments over time, and hosting + maintenance. HOSTING IS PER ROUTE: on Build we host the
    site we built; on Optimise we host it only if they moved it to us, so an unknown or Optimise route
@@ -423,8 +456,11 @@ function detailsPage(name: string, facts: WelcomePackFacts): string {
    2026-10-02). The work improves the public evidence about the business; the measurement says
    whether it is named more often. The engine observations are stated as what OUR MEASUREMENTS have
    often shown, never as a rule about how a model works. */
-function planPage1(name: string, totalPayments: number | null | undefined): string {
+function planPage1(name: string, totalPayments: number | null | undefined, amountPaid: number | null | undefined,
+  remeasure: { weeks: number; label: string } | null): string {
   const n = esc(name);
+  const current = agreedCurrentOffer(totalPayments, amountPaid);
+  const W = remeasure ? weeksWord(remeasure.weeks) : '';
   return `
       <div class="wp-eyebrow">Your plan</div>
       <h1 class="wp-h1">Your Findable plan</h1>
@@ -453,13 +489,19 @@ function planPage1(name: string, totalPayments: number | null | undefined): stri
       <div class="wp-box-navy">
         <p class="wp-boxtitle">Timeline &amp; guarantee</p>
         ${lead('When work starts.', 'Straight away. The first improvements go live within the first few weeks.')}
-        ${lead('Your first re-measure.', 'Four weeks after your starting point, same questions, same AI tools. The first check, not the finish line.')}
+        ${remeasure
+          ? lead('Your first re-measure.', `${W.charAt(0).toUpperCase() + W.slice(1)} weeks after your starting point, due ${remeasure.label}. Same questions, same AI tools. The first check, not the finish line.`)
+          : lead('Your first re-measure.', 'Four weeks after your starting point, same questions, same AI tools. The first check, not the finish line.')}
         ${/* ⛔ ESCAPED ONCE, HERE. It used to go through lead(), which escapes its second argument
               again, so the apostrophe in "we'll" reached the PDF as the six characters &#39; . */''}
-        <p><b>Your guarantee.</b> ${esc(FINDABLE_GUARANTEE)}</p>
+        ${current
+          ? `<p><b>Your guarantee.</b> ${esc(FINDABLE_GUARANTEE)}</p>`
+          : lead('Your guarantee.', 'Your money-back guarantee applies on the terms you signed up to.')}
         ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
+        ${!current
+          ? lead('Payments.', 'Your agreed payment schedule continues under the terms you signed up to.')
+          : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
       </div>`;
 }
 
@@ -603,7 +645,8 @@ function baselinePage(name: string, b: BaselineSummary): string {
 /* ⛔ THE STEPS NAME THE REAL ORDER: frozen baseline → work → the same questions again → before and
    after. "same frozen questions, the same AI tools, the same method" is pinned by
    welcome-pack-content.test.ts. The guarantee itself is printed once, on the plan page. */
-function nextPage(totalPayments: number | null | undefined): string {
+function nextPage(totalPayments: number | null | undefined, remeasure: { weeks: number; label: string } | null): string {
+  const W = remeasure ? weeksWord(remeasure.weeks) : 'four';
   const step = (i: number, when: string, title: string, line: string) => `
         <div class="wp-row"><div class="wp-num">${i}</div><div class="wp-rowbody">
           <div class="wp-rowtitle"><span class="wp-when">${when}</span>${title}</div>
@@ -611,11 +654,13 @@ function nextPage(totalPayments: number | null | undefined): string {
   return `
       <div class="wp-eyebrow">What happens next</div>
       <h1 class="wp-h1">From today to your before and after</h1>
-      <p>Week four is your first check, not the end. Nothing about the test changes along the way.</p>
+      <p>Week ${W} is your first check, not the end. Nothing about the test changes along the way.</p>
       <div class="wp-rows">
         ${step(1, 'Today', 'Your baseline is locked', 'These exact questions are frozen, so the before and after is like for like. No moved goalposts.')}
         ${step(2, 'The next few weeks', 'We do the work', 'Clearer pages on your website, your Google Business Profile corrected, and your directory listings added and fixed.')}
-        ${step(3, 'At four weeks', 'Your first re-measure', 'The same frozen questions, the same AI tools, the same method, the same towns. A brand-new domain is measured later, as your guarantee explains.')}
+        ${step(3, `At ${W} weeks`, 'Your first re-measure', remeasure
+          ? `The same frozen questions, the same AI tools, the same method, the same towns. Due ${remeasure.label}.`
+          : 'The same frozen questions, the same AI tools, the same method, the same towns. A brand-new domain is measured later, as your guarantee explains.')}
         ${step(4, 'Then', 'You get your before and after', 'Side by side, with every answer shown. If the number has not gone up, your guarantee applies.')}
         ${step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments)}. A short update tells you what changed.`)}
       </div>
@@ -674,11 +719,12 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   /* ⛔ A PAGE WITH NO DATA IS OMITTED, NEVER RENDERED EMPTY. `facts` and `baseline` are optional
      because the legacy Outreach/Inbox button still builds a pack from a report alone; when they are
      absent the pack is exactly the document it has always been. */
+  const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
     coverPage(name, !!input.facts, !!input.baseline),
-    planPage1(name, input.totalPayments),
+    planPage1(name, input.totalPayments, input.amountPaid, remeasure),
     planPage2(name),
-    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments)] : []),
+    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
     ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),
     reviewsPage2(),
