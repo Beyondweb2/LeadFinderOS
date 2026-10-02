@@ -32,7 +32,7 @@ import { isShortCode } from "../../../src/lib/reportSlug.ts";
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
-  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id,contract_total_payments";
+  "id,business_name,website,contact_name,email,phone,address,derived_town,search_location,category,search_keyword,services_included,payment_date,place_id,amount_paid,baseline_audit_id,contract_total_payments,remeasure_due_date";
 
 /** ⛔ CLIENT-SAFE ONBOARDING COLUMNS. `must_not_say` is read because it is a CONSTRAINT on what we
  *  may write, never rendered; it is dropped before the pack input is built. */
@@ -187,6 +187,10 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     baseline: buildBaselineSummary(report, (audit as { baseline_completed_at?: string | null }).baseline_completed_at ?? null),
     /* The client's own contracted payment count (stamped at payment; null for a client who paid before routes). */
     totalPayments: (lead as { contract_total_payments?: number | null } | null)?.contract_total_payments ?? null,
+    /* The client's own recorded first payment and re-measure date — the pack prints today's offer only
+       when these prove it, and the re-measure timing from the stored date (RG is pinned at 56 days). */
+    amountPaid: (lead as { amount_paid?: number | null } | null)?.amount_paid ?? null,
+    remeasureDueDate: (lead as { remeasure_due_date?: string | null } | null)?.remeasure_due_date ?? null,
   });
 
   return { ok: true, html };
