@@ -135,7 +135,8 @@ ok(/LOST_REASONS\.map/.test(prompt) && /Why did they say no\?/.test(prompt) && /
 const load = read('supabase/functions/_shared/admin-overview-load.ts');
 ok(/lost_reason, lost_reason_note, lost_reason_recorded_at, lost_reason_recorded_by";/.test(load), 'the dashboard\'s load reads the four columns');
 const dash = read('src/pages/Dashboard.tsx');
-ok(/<BottlenecksPanel o=\{o\} \/>\s*<LostReasonsPanel o=\{o\} \/>/.test(dash), 'the Admin dashboard shows "Why prospects say no" in Sales intelligence, on the dashboard\'s period');
+/* 2026-10-02 (the control-centre restructure): "Why prospects say no" now LEADS Sales intelligence. */
+ok(/<Section title="Sales intelligence"[^>]*>\s*<LostReasonsPanel o=\{o\} \/>/.test(dash), 'the Admin dashboard shows "Why prospects say no" in Sales intelligence, on the dashboard\'s period');
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall passed');
 process.exit(fails ? 1 : 0);

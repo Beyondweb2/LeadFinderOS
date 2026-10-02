@@ -74,7 +74,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
   const b = triage?.byBucket;
   const sorted = b ? b.urgent_admin + b.admin_action + b.rep_action + b.no_action + b.review : 0;
   return (
-    <Panel collapseKey="admin.cc.attention" title="Needs your attention" icon={AlertTriangle} tone={urgent ? 'red' : 'amber'}
+    <Panel collapseKey="admin.cc.attention" title="Your actions" icon={AlertTriangle} tone={urgent ? 'red' : 'amber'}
       hint="Only what needs you. A reply alone is not a task: replies a salesperson can handle, or that need nobody, are not here."
       summary={items.length ? `${items.length} item${items.length === 1 ? '' : 's'}${urgent ? ` · ${urgent} urgent` : ''}` : 'Nothing needs you'}>
       {!triage ? <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Reply sorting is unavailable just now, so replies are not included below — check the Inbox.</p>
@@ -92,8 +92,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
       )}
       {delegated && delegated.count > 0 && (
         <p className="mb-3 text-xs text-muted-foreground">
-          {num(delegated.count)} follow-up{delegated.count === 1 ? ' is' : 's are'} with the team as board tasks ({delegated.items.slice(0, 3).map((d) => `${d.business} · ${d.owner}`).join(', ')}{delegated.count > 3 ? '…' : ''}) — not listed here while they are open.{' '}
-          <button type="button" className="text-primary hover:underline" onClick={() => document.getElementById('team-oversight')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>See the team board</button>
+          {num(delegated.count)} follow-up{delegated.count === 1 ? ' is' : 's are'} with the team as board tasks ({delegated.items.slice(0, 3).map((d) => `${d.business} · ${d.owner}`).join(', ')}{delegated.count > 3 ? '…' : ''}) — not listed here while they are open.
         </p>
       )}
       {!items.length ? <Empty>Nothing needs you right now.</Empty> : (
@@ -103,7 +102,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
               <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide', TONE[GROUP_META[g].tone].text)}>{GROUP_META[g].label} · {rows.length}</p>
               <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
                 {rows.map((i) => (
-                  <li key={i.key} className="flex min-w-0 items-stretch">
+                  <li key={i.key} className="flex min-w-0 flex-col sm:flex-row sm:items-stretch">
                     <button type="button" onClick={() => onOpen(i)} className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                       <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', TONE[GROUP_META[g].tone].dot)} />
                       <span className="min-w-0 flex-1">
@@ -116,6 +115,9 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
                       </span>
                       <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </button>
+                    {/* Phone (2026-10-02): the row's actions sit in one even strip UNDER the text, never squeezing it; from sm they
+                        are the columns on the right again. empty:hidden — a row with no actions draws no strip. */}
+                    <div className="flex border-t border-border/60 empty:hidden sm:border-t-0 [&>*:first-child]:border-l-0 sm:[&>*:first-child]:border-l [&>*]:flex-1 [&>*]:justify-center [&>*]:py-2.5 sm:[&>*]:flex-none sm:[&>*]:py-0" data-testid="attention-actions">
                     {i.external && (
                       <a href={i.external.url} target="_blank" rel="noreferrer" title={i.external.label}
                         className="flex shrink-0 items-center gap-1 border-l border-border/60 px-3 text-[11px] font-medium text-primary transition hover:bg-muted/50">
@@ -152,6 +154,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
                         {busy === i.triageId ? '…' : 'Handled'}
                       </button>
                     )}
+                    </div>
                   </li>
                 ))}
               </ul>

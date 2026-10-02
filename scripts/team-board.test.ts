@@ -120,7 +120,7 @@ console.log('\n── the shape: server-decided, one canonical move ──');
   const sd = read('src/pages/SalesDashboard.tsx');
   ok(/\{role === 'sales' && <TeamBoard \/>\}/.test(sd), 'the board is on the Sales dashboard for a salesperson (their own only)');
   const dash = read('src/pages/Dashboard.tsx');
-  ok(/Send to sales team/.test(dash) && /<TeamOversight enabled=\{isAdmin\}/.test(dash) && /onAssign=\{\(i\) => setCompose\(\{ kind: 'lead_assignment'/.test(dash), 'Admin dashboard: one Send to sales team, the oversight panel, Assign from Needs your attention');
+  ok(/Send to sales team/.test(dash) && !/TeamOversight/.test(dash) && /onAssign=\{\(i\) => setCompose\(\{ kind: 'lead_assignment'/.test(dash), 'Admin dashboard (2026-10-02: the board panel removed): one Send to sales team, no oversight panel, Assign from Needs your attention');
   const notif = read('src/hooks/useNotifications.ts');
   ok(/TEAM_BOARD_KINDS\.has\(p\.new\.kind\)/.test(notif) && /queryKey: \['team-board'\]/.test(notif), 'a team notice re-reads the board at once (no second realtime channel, no second notification centre)');
 }

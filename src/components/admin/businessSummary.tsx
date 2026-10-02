@@ -18,10 +18,10 @@ export function BusinessSummaryPanel({ o, onRefresh }: { o: O; onRefresh: () => 
   const fresh = s ? (Date.now() - Date.parse(s.created_at)) / 60_000 < SUMMARY_MIN_INTERVAL_MINUTES : false;
   const refresh = async () => { setBusy(true); setNote(null); try { setNote(await onRefresh()); } finally { setBusy(false); } };
   return (
-    <Panel collapseKey="admin.cc.summary" title="This week in plain English" icon={Sparkles} tone="purple"
+    <Panel collapseKey="admin.cc.summary" title="This week in plain English" icon={Sparkles} tone="purple" stackAction
       hint="An AI briefing written only from the numbers on this page. Every number in it was checked against them; it changes nothing."
       summary={s ? `${s.period_label} · written ${ago(s.created_at)}` : 'No briefing yet'}
-      action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => void refresh()} disabled={busy || fresh} title={fresh ? `One refresh an hour` : 'Write a briefing for the last 7 days'}>
+      action={<Button variant="outline" size="sm" className="h-8 gap-1 rounded-full text-xs" onClick={() => void refresh()} disabled={busy || fresh} title={fresh ? `One refresh an hour` : 'Write a briefing for the last 7 days'}>
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}{busy ? 'Writing…' : 'Write one now'}
       </Button>}>
       {note && <p className="mb-2 text-xs text-muted-foreground">{note}</p>}

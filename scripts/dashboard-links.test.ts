@@ -112,7 +112,6 @@ console.log('\n── one lead-link convention: ?lead=, built only by the helper
      ⚠️ /ai-audit?leadId= is NOT this bug: it is the AI Audit page's own deep link and that page
      reads 'leadId' (AiAudit.tsx). Only /outreach and /inbox are swept here. */
   ok(/navigate\(outreachLeadLink\(r\.lead_id!\)\)/.test(read('src/components/dashboard/SubmissionsCard.tsx')), 'a dashboard submission opens /outreach?lead= through outreachLeadLink');
-  ok(/to=\{whatsAppLinkForLead\(p\.lead\.id\)\}/.test(read('src/components/team/TeamOversight.tsx')), 'Team oversight "Open the lead" uses whatsAppLinkForLead');
   const walk = (d: string): string[] => readdirSync(new URL(`../${d}`, import.meta.url)).flatMap((n) => {
     const p = `${d}/${n}`; return statSync(new URL(`../${p}`, import.meta.url)).isDirectory() ? walk(p) : /\.tsx?$/.test(n) ? [p] : [];
   });

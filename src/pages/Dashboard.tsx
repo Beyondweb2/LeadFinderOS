@@ -17,19 +17,19 @@ import { PageHeader, Segmented, ago } from '@/components/salesDash/ui';
 import { DashboardSection } from '@/components/dashboard/DashboardSection';
 import { SubmissionsCard } from '@/components/dashboard/SubmissionsCard';
 import { FreeCheckProgressCard } from '@/components/dashboard/FreeCheckProgressCard';
-import {
-  AttentionQueue, CallsPanel, ChannelsPanel, CommissionPanel, ContributionPanel, CostPanel,
-  FunnelPanel, RevenuePanel, Section, SinceYesterday, TeamComparison,
-} from '@/components/admin/controlCentre';
+import { AttentionQueue, ChannelsPanel, CostPanel, Section } from '@/components/admin/controlCentre';
+import { BusinessGlance, HandoffsPanel, MoneyPanel, TeamPerformanceTable } from '@/components/admin/teamControl';
+import { usePaidClientList, useTeamLastActivity } from '@/hooks/useAdminTeamControl';
+import { useEarnings } from '@/hooks/useEarnings';
+import { handoffClients, needsYouItems } from '@/lib/adminControl';
 import { BottlenecksPanel, FeatureUsagePanel, NichesPanel, TemplatesPanel } from '@/components/admin/intelligence';
 import { LostReasonsPanel } from '@/components/admin/lostReasons';
 import { ClientHealthPanel } from '@/components/admin/clientHealth';
 import { ClientSearchPanel, FindableFunnelPanel } from '@/components/admin/traffic';
 import { BusinessSummaryPanel } from '@/components/admin/businessSummary';
 import { TeamComposer, type ComposerSeed } from '@/components/team/TeamComposer';
-import { TeamOversight } from '@/components/team/TeamOversight';
 import { TradeAutofixDialog } from '@/components/admin/TradeAutofixDialog';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE ADMIN CONTROL CENTRE (rebuilt 2026-09-30, Paul: "my daily business control centre — not a
@@ -76,12 +76,25 @@ const Dashboard = () => {
      team board panel, and Assign on a Needs your attention item all open it. */
   const [compose, setCompose] = useState<ComposerSeed | null>(null);
   const [fixTrades, setFixTrades] = useState(false);
+  /* HIDE MY ACTIVITY (Paul, 2026-10-02: "my old outreach volume distorts the salesperson views"). Default
+     hidden; remembered per person on this device. It affects the team table ONLY — never money, clients,
+     delivery or admin actions. An admin's row (and the signed-in person's) is the one it hides. */
+  const [hideMine, setHideMine] = usePersistedState<boolean>('admin.hideMyActivity', true, { tier: 'local', scope: user?.id ?? null });
+  const clientsQ = usePaidClientList(isAdmin);
+  const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
+  const earn = useEarnings('all', isAdmin);
+  const teamRows = useMemo(() => (o?.team ?? []).filter((r) => !(hideMine && (r.role === 'admin' || r.userId === user?.id))), [o?.team, hideMine, user?.id]);
+  const lastActivity = useTeamLastActivity(teamRows.map((r) => r.userId), isAdmin);
+  const needs = useMemo(() => (o ? needsYouItems(o.attention, clients, Date.now()) : []), [o, clients]);
+  const handoffIds = useMemo(() => new Set(handoffClients(clients, Date.now()).map((c) => c.id)), [clients]);
+  const routeOf = (id: string) => o?.clients.find((c) => c.leadId === id)?.route ?? null;
 
   /* ⛔ Every item opens WHERE ITS ACTION IS DONE (2026-09-30, docs/sales-workflow-nav.md has the audit):
      a WhatsApp chase → that Inbox conversation; a client task → the hub at its stage; a list problem →
      Outreach showing that list; a lead → its workspace. All are URLs, so Back and a refresh work. */
   const openItem = (i: AttentionItem) => {
     if (i.open === 'signups') document.getElementById('signup-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (i.kind === 'handoffs_ready') document.getElementById('new-sales')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else navigate(attentionPath(i));
   };
 
@@ -115,6 +128,11 @@ const Dashboard = () => {
           </div>
         )}
         {o && <span className="text-xs text-muted-foreground">{o.period.fromDay ? `${o.period.fromDay} → ${o.period.toDay}` : 'Everything recorded'} · UK time</span>}
+        <button type="button" onClick={() => setHideMine(!hideMine)} aria-pressed={hideMine} data-testid="hide-my-activity"
+          title="Your own outreach in the Sales team table. Money, clients and your actions always show."
+          className={cn('ml-auto rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition', hideMine ? 'bg-muted/60 text-foreground ring-border' : 'bg-blue-500/15 text-blue-700 ring-blue-400/30 dark:text-blue-200')}>
+          {hideMine ? 'My activity: hidden' : 'My activity: included'}
+        </button>
       </div>
 
       {q.isError && (
@@ -127,15 +145,53 @@ const Dashboard = () => {
 
       {o && (
         <>
-          <Section title="Start here" tone="amber" hint="What needs you, and how today compares with yesterday.">
-            <AttentionQueue items={o.attention} onOpen={openItem} triage={o.triage} period={o.period.label}
-              sorter={o.jobs?.find((j) => j.job === 'conversation-triage') ?? null} waitingInInbox={o.triageWaitingInInbox}
-              delegated={o.delegated ?? null}
-              onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
-              onFixTrades={() => setFixTrades(true)}
-              onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
-              onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
-            <SinceYesterday o={o} attention={o.attention.length} />
+          {/* 1. The four figures, each with one home on this page. */}
+          <Section title="Business at a glance" tone="green" hint="This month's money and clients, what needs you, and the next commission payout.">
+            <BusinessGlance o={o} clients={clients} needs={needs.length} urgent={needs.filter((i) => i.group === 'urgent').length} meId={user?.id ?? null}
+              onNeeds={() => document.getElementById('needs-you')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+          </Section>
+
+          {/* 2. Paul's own actions: the server's list (minus the two client kinds the canonical delivery view
+              replaces) + his in-delivery client steps + handoffs a salesperson has left too long. */}
+          <div id="needs-you">
+            <Section title="What needs you" tone="amber" hint="Only things that need your action — one line each, most urgent first.">
+              <AttentionQueue items={needs} onOpen={openItem} triage={o.triage} period={o.period.label}
+                sorter={o.jobs?.find((j) => j.job === 'conversation-triage') ?? null} waitingInInbox={o.triageWaitingInInbox}
+                delegated={o.delegated ?? null}
+                onAssign={(i) => setCompose({ kind: 'lead_assignment', lead: { id: i.leadId!, name: i.business }, reason: i.why })}
+                onFixTrades={() => setFixTrades(true)}
+                onSuppress={async (id) => { await invokeEdge('conversation-triage', { action: 'suppress', id }); await q.refetch(); }}
+                onResolve={async (id) => { await invokeEdge('conversation-triage', { action: 'resolve', id }); await q.refetch(); }} />
+            </Section>
+          </div>
+
+          {/* 3. New sales and handoffs: a view INTO the Paid Clients workflow (paid-client-hub list). */}
+          <Section title="Clients" tone="blue" hint="New sales being handed over to you, and how clients in delivery are doing.">
+            {clientsQ.isError && <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">Could not load the paid clients: {edgeErrorMessage(clientsQ.error)}</p>}
+            <HandoffsPanel clients={clients} routeOf={routeOf} onOpen={(id, section) => navigate(clientHubLink(id, section))} />
+            <ClientHealthPanel o={o} exclude={handoffIds} onOpen={(id, section) => navigate(clientHubLink(id, section))} />
+          </Section>
+
+          {/* 4. The team: one salesperson per row (replaces Team comparison, the funnel, the calls panel and the
+              team-status idea). ⛔ The old Sales team board panel is REMOVED (Paul, 2026-10-02: "a wasted
+              feature"); Send to sales team stays in the header and Assign stays on Your actions. */}
+          <Section title="Sales team" tone="purple" hint="How each salesperson is doing.">
+            <TeamPerformanceTable o={o} rows={teamRows} lines={earn.data?.lines ?? null} lastActivity={lastActivity.data ?? {}} hidden={hideMine}
+              onOpenPerson={(id) => navigate(`/sales-dashboard?person=${encodeURIComponent(id)}`)} />
+          </Section>
+
+          <Section title="Money" tone="green" hint="What came in, what went back, and what commission it added.">
+            <MoneyPanel o={o} />
+          </Section>
+
+          <Section title="Sales intelligence" tone="purple" hint="Why prospects say no, and which messages, channels and niches work.">
+            <LostReasonsPanel o={o} />
+            <TemplatesPanel o={o} />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <ChannelsPanel o={o} />
+              <NichesPanel o={o} />
+            </div>
+            <BottlenecksPanel o={o} />
             <BusinessSummaryPanel o={o} onRefresh={async () => {
               const r = await invokeEdge<{ ok: boolean; skipped?: string; status?: string; detail?: string }>('business-summary', {});
               await q.refetch();
@@ -143,44 +199,14 @@ const Dashboard = () => {
             }} />
           </Section>
 
-          <Section title="Team" tone="blue" hint="How each salesperson is doing, and what you have asked of them.">
-            <TeamOversight enabled={isAdmin} onCompose={setCompose} />
-            <TeamComparison o={o} />
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <FunnelPanel o={o} />
-              <ChannelsPanel o={o} />
-            </div>
-            <CallsPanel o={o} />
-          </Section>
-
-          <Section title="Sales intelligence" tone="purple" hint="What is working, and where deals are lost.">
-            <BottlenecksPanel o={o} />
-            <LostReasonsPanel o={o} />
-            <TemplatesPanel o={o} />
-            <NichesPanel o={o} />
-          </Section>
-
-          <Section title="Money" tone="green" hint="Revenue, commission and what it costs to run.">
-            <RevenuePanel o={o} />
-            <ContributionPanel o={o} />
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <CommissionPanel o={o} />
-              <CostPanel o={o} onDetail={() => navigate('/admin/api-usage')} />
-            </div>
-          </Section>
-
-          <Section title="Clients" tone="green" hint="How each paying client's delivery is going.">
-            <ClientHealthPanel o={o} onOpen={(id, section) => navigate(clientHubLink(id, section))} />
-          </Section>
-
-          <Section title="Website & usage" tone="grey" hint="findable.live visitors, client search traffic, and which parts of the app get used.">
+          <Section title="Website & system" tone="grey" hint="findable.live visitors, client search traffic, what the app is used for and what it costs to run.">
             <FindableFunnelPanel o={o} />
             <ClientSearchPanel o={o} />
             <FeatureUsagePanel o={o} />
+            <CostPanel o={o} onDetail={() => navigate('/admin/api-usage')} />
           </Section>
         </>
       )}
-
       {/* The sign-up desk: the two working cards kept from the old page (their buttons act). Folded. */}
       <div id="signup-desk">
         <Section title="Sign-ups & free checks" tone="grey" hint="The two working desks: new sign-ups and free checks in progress.">

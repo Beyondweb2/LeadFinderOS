@@ -66,23 +66,25 @@ function Detail({ c }: { c: ClientRow }) {
   );
 }
 
-export function ClientHealthPanel({ o, onOpen }: { o: O; onOpen: (leadId: string, section?: string) => void }) {
+/** `exclude` (2026-10-02): clients the Admin dashboard already shows under New sales & handoffs — one home each. */
+export function ClientHealthPanel({ o, onOpen, exclude }: { o: O; onOpen: (leadId: string, section?: string) => void; exclude?: ReadonlySet<string> }) {
   const [open, setOpen] = useState<string | null>(null);
-  const live = o.clients.filter((c) => !c.refunded);
+  const live = o.clients.filter((c) => !c.refunded && !exclude?.has(c.leadId));
   const blocked = live.filter((c) => (c.health?.blockers.length ?? 0) > 0).length;
+  const shown = o.clients.filter((c) => !exclude?.has(c.leadId));
   const healthRead = o.clients.some((c) => !!c.health);
   return (
-    <Panel collapseKey="admin.cc.clients" title="Paid client health" icon={HeartPulse} tone="green"
+    <Panel collapseKey="admin.cc.clients" defaultOpen={false} title="Clients in delivery" icon={HeartPulse} tone="green"
       hint="Real statuses only — no health score. The weekly check is Paul's directional monitoring, separate from the official baseline, the guarantee and the four-week re-measure."
       summary={`${live.length} active client${live.length === 1 ? '' : 's'}${blocked ? ` · ${blocked} with a blocker` : ''}`}>
-      {!o.clients.length ? <Empty>No paid clients yet.</Empty> : (
+      {!shown.length ? <Empty>{o.clients.length ? 'Every paid client is still being handed over — see New sales & handoffs above.' : 'No paid clients yet.'}</Empty> : (
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {!healthRead && <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">The weekly check and improvement items could not be read just now — only the basics are shown.</p>}
           <table className="w-full min-w-[980px] text-sm">
             <thead><tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
               {['', 'Client', 'Route', 'Site live', 'Baseline', 'Weekly AI visibility', 'Official re-measure', 'Open items', 'Directory issues', 'Payment', 'Blockers'].map((h, i) => <th key={h + i} className={cn('py-2 font-semibold', i <= 1 ? 'pr-2' : 'px-2')}>{h}</th>)}
             </tr></thead>
-            <tbody>{o.clients.map((c) => {
+            <tbody>{shown.map((c) => {
               const h = c.health;
               const isOpen = open === c.leadId;
               return (

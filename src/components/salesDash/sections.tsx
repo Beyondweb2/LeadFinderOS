@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRight, CalendarCheck, CalendarClock, CheckCircle2, Clock, Flame, MessageCircle, MessageCircleReply, PoundSterling, Send, Snowflake, Sparkles, Star, Target } from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { FollowUpGroup, NextAction, SalesWorkspace } from '@/lib/salesWorkspace';
 import type { LeadLink } from '@/lib/salesLinks';
@@ -17,11 +18,14 @@ const ACTION_ICON: Record<string, typeof Clock> = {
   quick_close_finish: PoundSterling, quick_close_link: PoundSterling, quick_close_review: AlertTriangle,
 };
 export function NextActions({ items, go, title = "Your next best actions", hint = "The most useful thing to do for each lead, most urgent first. Tap to open it." , collapseKey = 'sales.next-actions' }: { items: NextAction[]; go: Go; title?: string; hint?: string; collapseKey?: string }) {
+  /* 2026-10-02: the most urgent NEXT_ACTIONS_SHOWN first, the rest one tap away — a long list buried the page. */
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, NEXT_ACTIONS_SHOWN);
   return (
     <Panel collapseKey={collapseKey} title={title} icon={Target} tone="blue" hint={hint}>
       {items.length === 0 ? <Empty icon={CheckCircle2}>Nothing waiting on you right now. New replies, due follow-ups and warm leads will show here.</Empty> : (
         <ul className="space-y-2">
-          {items.map((a) => {
+          {shown.map((a) => {
             const I = ACTION_ICON[a.kind] ?? ArrowRight;
             return (
               <li key={`${a.kind}:${a.leadId}`}>
@@ -41,9 +45,16 @@ export function NextActions({ items, go, title = "Your next best actions", hint 
           })}
         </ul>
       )}
+      {items.length > NEXT_ACTIONS_SHOWN && (
+        <button type="button" onClick={() => setAll(!all)} className="mt-3 w-full rounded-xl border border-border/60 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/50 hover:text-foreground">
+          {all ? 'Show fewer' : `Show all ${items.length}`}
+        </button>
+      )}
     </Panel>
   );
 }
+/** How many next actions show before "Show all". */
+const NEXT_ACTIONS_SHOWN = 6;
 
 /* ── Follow-up queue ────────────────────────────────────────────────────────────────────────────── */
 export const FOLLOW_UP_GROUPS: { key: FollowUpGroup; label: string; tone: Tone; link: LeadLink }[] = [
@@ -63,7 +74,7 @@ export function FollowUpQueue({ fu, go, group, setGroup, hint = "Your own Next A
   return (
     <Panel collapseKey={collapseKey} id="follow-ups" title="Follow-ups" icon={CalendarCheck} tone="amber" hint={hint}>
       <div className="mb-3">
-        <Segmented label="Follow-up lists" value={g.key} onChange={setGroup}
+        <Segmented label="Follow-up lists" wrapOnPhone value={g.key} onChange={setGroup}
           options={FOLLOW_UP_GROUPS.map((x) => ({ key: x.key, label: x.label, count: fu[x.key].length, tone: x.tone }))} />
       </div>
       {rows.length === 0 ? <Empty>Nothing in “{g.label}”.</Empty> : (

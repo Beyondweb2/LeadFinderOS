@@ -46,7 +46,42 @@ admin-overview / sales-performance / sales-earnings (one-off admin session, sign
 with the Supabase client stubbed — no token in a browser. The "Test" salesperson's real numbers are all
 zero, so the full layout was also checked with a demo month built by `commissionLines`.
 
+## Phone polish + deeper green (2026-10-02, branch feat/dashboard-mobile-polish)
+- Paul: "green on green with white text looks washed out". The hero is now deep green (emerald-800 → #03261d); the current
+  rate step and the earned box are WHITE cards with dark green text; done steps solid dark green, locked steps darker and
+  muted; no white washes or faded white text. Solid green (TONE.green.solid) is emerald-600 → 800 (white text readable).
+- Phone (< sm): attention-row actions in an even strip under the row (data-testid attention-actions); Panel gained
+  `stackAction` (action on its own row; used by This week in plain English); Segmented gained `wrapOnPhone` (follow-up
+  lists wrap); the three work KPIs stay one row (KpiCard drops icon and sub-line below sm).
+- Checked at 390×844 and 430×932 with the same harness method.
+
+## Dark card direction (2026-10-02, same branch)
+Paul: no green hero; the reference is the work tiles (dark navy card, deep coloured wash, coloured edge, solid
+icon tile, white number). The money tone (key `green`) is drawn TEAL. Sales hero = dark indigo card, current
+rate amber, unlocked teal, locked muted; EarningsStats (earned this month / to date / expected 6 months) beside
+it; CommissionForecastCard is the six-month chart only, beside Recent wins; What to do next shows 6 + Show all;
+How your commission works is folded.
+
+## Admin = business / sales control centre (2026-10-02, same branch — awaiting Paul's approval)
+Paul no longer does most outreach. Order: Business at a glance (revenue this month, new clients this month,
+needs you, commission due) → What needs you → Clients (New sales & handoffs; Clients in delivery folded) →
+Sales team (Sales team performance — the old Sales team board panel, TeamOversight, was then REMOVED at Paul's request) → Money (one panel) → Sales
+intelligence → Website & system → Sign-ups & free checks.
+- Rules: `src/lib/adminControl.ts` (`scripts/admin-control.test.ts`). New sales & handoffs = pre-delivery
+  (setup / ready) + sold within NEW_SALE_DAYS, from paid-client-hub `list` (the Paid Clients page's own call —
+  the canonical setupView: state, done/total, missing, ONE next step). What needs you = the server's attention
+  list MINUS `setup_not_started` / `remeasure_overdue` (they contradict Setup → Ready → Discovery → questions →
+  baseline) + in-delivery client steps that are Paul's + ONE pointer line for the handoff clients. A handoff
+  left HANDOFF_CHASE_DAYS becomes "Chase {seller}" on that client's card.
+- Hide my activity: usePersistedState `admin.hideMyActivity` (default true, per person, this device). It filters
+  ONLY the team table rows (role admin or the signed-in user). Funnel / channel numbers stay whole-business.
+- Team table: `o.team` (period) + sales this month and rate from fn sales-earnings `all` lines (monthlyTracker
+  per sellerId) + last activity = the newest lead_activity / whatsapp_messages row per person (admin RLS) →
+  activityStatus (Active within 24 h, Quiet within 3 days, else Inactive). Derived, never stored.
+- Removed from the page: SinceYesterday, TeamComparison, FunnelPanel, CallsPanel, RevenuePanel,
+  ContributionPanel, CommissionPanel (the components stay in controlCentre.tsx, unrendered).
+- No server change, so no backend deploy. Both live salespeople are test accounts (excluded from metrics), so
+  the real team table is empty with Paul hidden; the review screenshots used reps named "(demo)".
+
 ## Open
-- Nobody but Claude has looked at it — Paul to review live.
-- On a phone the admin attention rows' action buttons (Assign / Handled) are cramped (pre-existing).
-- "This week in plain English" header squeezes beside its button on a phone (pre-existing).
+- Paul to review live.

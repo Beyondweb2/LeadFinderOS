@@ -134,7 +134,6 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["team board wording (operator)", "src/lib/teamBoard.ts"],
   ["team board (salesperson)", "src/components/team/TeamBoard.tsx"],
   ["send to sales team composer (admin)", "src/components/team/TeamComposer.tsx"],
-  ["sales team board oversight (admin)", "src/components/team/TeamOversight.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",
