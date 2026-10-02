@@ -2,26 +2,96 @@ import type { ComponentType, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { SectionToggle, useSectionOpen } from '@/components/CollapsibleSection';
 
-/* ══ THE SALES DASHBOARD'S DESIGN TOKENS (Sales Experience, 2026-09-28) ═════════════════════════════
-   One place for the colour system, so a visual correction after Paul's review is one edit here:
+/* ══ THE DASHBOARDS' DESIGN SYSTEM (Sales Experience 2026-09-28; redesigned 2026-10-02) ════════════
+   ONE file for both dashboards — the Sales dashboard and the Admin dashboard draw every surface,
+   heading, figure and colour from here, so they read as one product and a visual correction after
+   Paul's review is one edit. (The admin panels in components/admin import from here too.)
+   Colour carries meaning, the same on both pages:
    GREEN money / earned / won · BLUE replies / conversations / activity · AMBER follow-up / attention ·
-   PURPLE audits / AI · RED blocked / overdue / failed · GREY secondary. */
+   PURPLE audits / AI / forecasts · RED blocked / overdue / failed · GREY secondary.
+   2026-10-02 (Paul: "more modern, more colourful but tasteful, more solid, softer"): panel icons sit
+   on SOLID colour tiles, figures get a soft tinted wash, corners are rounder, the shadow is softer and
+   deeper, and both pages share one page header, one section heading and one segmented control. */
 export type Tone = 'green' | 'blue' | 'amber' | 'purple' | 'red' | 'grey';
 
-export const TONE: Record<Tone, { text: string; soft: string; ring: string; icon: string; dot: string; bar: string }> = {
-  green:  { text: 'text-emerald-700 dark:text-emerald-300', soft: 'bg-emerald-500/10', ring: 'ring-emerald-500/25', icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', dot: 'bg-emerald-500', bar: 'bg-emerald-500' },
-  blue:   { text: 'text-blue-700 dark:text-blue-300',       soft: 'bg-blue-500/10',    ring: 'ring-blue-500/25',    icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-300',          dot: 'bg-blue-500',    bar: 'bg-blue-500' },
-  amber:  { text: 'text-amber-700 dark:text-amber-300',     soft: 'bg-amber-500/10',   ring: 'ring-amber-500/25',   icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300',       dot: 'bg-amber-500',   bar: 'bg-amber-500' },
-  purple: { text: 'text-violet-700 dark:text-violet-300',   soft: 'bg-violet-500/10',  ring: 'ring-violet-500/25',  icon: 'bg-violet-500/15 text-violet-600 dark:text-violet-300',    dot: 'bg-violet-500',  bar: 'bg-violet-500' },
-  red:    { text: 'text-red-700 dark:text-red-300',         soft: 'bg-red-500/10',     ring: 'ring-red-500/25',     icon: 'bg-red-500/15 text-red-600 dark:text-red-300',             dot: 'bg-red-500',     bar: 'bg-red-500' },
-  grey:   { text: 'text-muted-foreground',                  soft: 'bg-muted/60',       ring: 'ring-border',         icon: 'bg-muted text-muted-foreground',                           dot: 'bg-muted-foreground/60', bar: 'bg-muted-foreground/50' },
+export const TONE: Record<Tone, { text: string; soft: string; ring: string; icon: string; dot: string; bar: string; solid: string; tint: string }> = {
+  green:  { text: 'text-emerald-700 dark:text-emerald-300', soft: 'bg-emerald-500/10', ring: 'ring-emerald-500/25', icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', dot: 'bg-emerald-500', bar: 'bg-emerald-500',
+            solid: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-600/30', tint: 'bg-gradient-to-br from-emerald-500/[0.13] via-emerald-500/[0.05] to-transparent ring-1 ring-inset ring-emerald-500/20' },
+  blue:   { text: 'text-blue-700 dark:text-blue-300',       soft: 'bg-blue-500/10',    ring: 'ring-blue-500/25',    icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-300',          dot: 'bg-blue-500',    bar: 'bg-blue-500',
+            solid: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm shadow-blue-600/30',        tint: 'bg-gradient-to-br from-blue-500/[0.13] via-blue-500/[0.05] to-transparent ring-1 ring-inset ring-blue-500/20' },
+  amber:  { text: 'text-amber-700 dark:text-amber-300',     soft: 'bg-amber-500/10',   ring: 'ring-amber-500/25',   icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300',       dot: 'bg-amber-500',   bar: 'bg-amber-500',
+            solid: 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm shadow-orange-500/30',  tint: 'bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.05] to-transparent ring-1 ring-inset ring-amber-500/20' },
+  purple: { text: 'text-violet-700 dark:text-violet-300',   soft: 'bg-violet-500/10',  ring: 'ring-violet-500/25',  icon: 'bg-violet-500/15 text-violet-600 dark:text-violet-300',    dot: 'bg-violet-500',  bar: 'bg-violet-500',
+            solid: 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm shadow-violet-600/30', tint: 'bg-gradient-to-br from-violet-500/[0.13] via-violet-500/[0.05] to-transparent ring-1 ring-inset ring-violet-500/20' },
+  red:    { text: 'text-red-700 dark:text-red-300',         soft: 'bg-red-500/10',     ring: 'ring-red-500/25',     icon: 'bg-red-500/15 text-red-600 dark:text-red-300',             dot: 'bg-red-500',     bar: 'bg-red-500',
+            solid: 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-sm shadow-red-600/30',         tint: 'bg-gradient-to-br from-red-500/[0.13] via-red-500/[0.05] to-transparent ring-1 ring-inset ring-red-500/20' },
+  grey:   { text: 'text-muted-foreground',                  soft: 'bg-muted/60',       ring: 'ring-border',         icon: 'bg-muted text-muted-foreground',                           dot: 'bg-muted-foreground/60', bar: 'bg-muted-foreground/50',
+            solid: 'bg-gradient-to-br from-slate-500 to-slate-600 text-white shadow-sm shadow-slate-600/20',     tint: 'bg-muted/50 ring-1 ring-inset ring-border/60' },
 };
+
+/** The one card surface. Every panel, hero and table on both dashboards sits on it. */
+export const SURFACE = 'rounded-[1.25rem] border border-border/70 bg-card shadow-[0_1px_2px_hsl(0_0%_0%/0.06),0_12px_32px_-18px_hsl(0_0%_0%/0.35)]';
 
 type Icon = ComponentType<{ className?: string }>;
 
-/** A dashboard surface: rounded, soft border, a clear title row. With `collapseKey` it gets the
- *  shared collapse control (src/components/CollapsibleSection.tsx): the body folds away, the title and
- *  `summary` (or the hint) stay. */
+/* ── Page header and section headings (both dashboards) ─────────────────────────────────────────── */
+
+/** The top of a dashboard: a small greeting, the page name, one line of purpose, and the actions. */
+export function PageHeader({ eyebrow, title, subtitle, actions }: { eyebrow?: ReactNode; title: string; subtitle?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-1">
+      <div className="min-w-0">
+        {eyebrow && <p className="text-sm font-medium text-muted-foreground">{eyebrow}</p>}
+        <h1 className="mt-0.5 text-[1.75rem] font-extrabold leading-tight tracking-tight sm:text-[2rem]">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </header>
+  );
+}
+
+/** A group of panels under one heading: a coloured marker, a clear title, one line of what it is for. */
+export function SectionHeading({ title, hint, tone = 'grey', id }: { title: string; hint?: ReactNode; tone?: Tone; id?: string }) {
+  return (
+    <div id={id} className="flex items-center gap-3 px-1 pt-2">
+      <span className={cn('h-6 w-1.5 shrink-0 rounded-full', TONE[tone].bar)} aria-hidden />
+      <div className="min-w-0">
+        <h2 className="text-lg font-bold leading-tight tracking-tight">{title}</h2>
+        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** A pill-shaped segmented control (the admin's period picker, the sales follow-up lists). */
+export function Segmented<K extends string>({ options, value, onChange, label }: {
+  options: { key: K; label: ReactNode; count?: number; tone?: Tone }[]; value: K; onChange: (k: K) => void; label: string;
+}) {
+  return (
+    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+      <div className="inline-flex gap-1 rounded-full bg-muted/70 p-1 ring-1 ring-inset ring-border/50" role="group" aria-label={label}>
+        {options.map((o) => {
+          const on = o.key === value;
+          return (
+            <button key={o.key} type="button" onClick={() => onChange(o.key)} aria-pressed={on}
+              className={cn('flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition',
+                on ? 'bg-card text-foreground shadow-sm ring-1 ring-border/60' : 'text-muted-foreground hover:text-foreground')}>
+              {o.tone && on && <span className={cn('h-1.5 w-1.5 rounded-full', TONE[o.tone].dot)} />}
+              {o.label}
+              {o.count !== undefined && <span className={cn('rounded-full px-1.5 text-[10px] tabular-nums', on && o.tone ? cn(TONE[o.tone].soft, TONE[o.tone].text) : 'bg-background/60')}>{o.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────────────────────────────── */
+
+/** A dashboard surface: rounded, soft shadow, a solid colour icon tile and a clear title row. With
+ *  `collapseKey` it gets the shared collapse control (src/components/CollapsibleSection.tsx): the body
+ *  folds away, the title and `summary` (or the hint) stay. */
 export function Panel({ title, icon: I, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary }: {
   title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string;
   /** Stable key — makes the panel collapsible and remembers it per person. Never derived from the title. */
@@ -29,7 +99,7 @@ export function Panel({ title, icon: I, tone = 'grey', hint, action, children, c
 }) {
   if (collapseKey) return <CollapsiblePanel {...{ title, icon: I, tone, hint, action, children, className, id, collapseKey, defaultOpen, summary }} />;
   return (
-    <section id={id} className={cn('min-w-0 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', className)}>
+    <section id={id} className={cn('min-w-0 p-4 sm:p-5', SURFACE, className)}>
       <PanelHeader title={title} icon={I} tone={tone} hint={hint} action={action} />
       {children}
     </section>
@@ -38,12 +108,12 @@ export function Panel({ title, icon: I, tone = 'grey', hint, action, children, c
 
 function PanelHeader({ title, icon: I, tone, hint, action, toggle, shut }: { title: string; icon?: Icon; tone: Tone; hint?: ReactNode; action?: ReactNode; toggle?: ReactNode; shut?: boolean }) {
   return (
-    <header className={cn('flex items-start justify-between gap-3', shut ? 'mb-0' : 'mb-3')}>
-      <div className="flex min-w-0 items-center gap-2.5">
-        {I && <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE[tone].icon)}><I className="h-4 w-4" /></span>}
+    <header className={cn('flex items-start justify-between gap-3', shut ? 'mb-0' : 'mb-4')}>
+      <div className="flex min-w-0 items-center gap-3">
+        {I && <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', TONE[tone].solid)}><I className="h-[18px] w-[18px]" /></span>}
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold leading-tight tracking-tight">{title}</h2>
-          {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+          <h2 className="text-base font-bold leading-tight tracking-tight">{title}</h2>
+          {hint && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{hint}</p>}
         </div>
       </div>
       {(action || toggle) && <div className="flex shrink-0 items-center gap-1">{!shut && action}{toggle}</div>}
@@ -56,7 +126,7 @@ function CollapsiblePanel({ title, icon, tone = 'grey', hint, action, children, 
 }) {
   const [open, setOpen] = useSectionOpen(collapseKey, defaultOpen);
   return (
-    <section id={id} className={cn('min-w-0 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', !open && 'py-3 sm:py-3', className)}>
+    <section id={id} className={cn('min-w-0 p-4 sm:p-5', SURFACE, !open && 'py-3.5 sm:py-3.5', className)}>
       <PanelHeader title={title} icon={icon} tone={tone} hint={open ? hint : (summary ?? hint)} action={action} shut={!open}
         toggle={<SectionToggle open={open} onToggle={() => setOpen(!open)} label={title} />} />
       {open && children}
@@ -64,48 +134,46 @@ function CollapsiblePanel({ title, icon, tone = 'grey', hint, action, children, 
   );
 }
 
-/** A headline number. `hero` is the money card: filled, the strongest surface on the page. */
+/* ── Figures ────────────────────────────────────────────────────────────────────────────────────── */
+
+/** A headline number on its own card: a tinted wash in its colour, a solid icon tile, the figure big.
+ *  `hero` is the money card: solid colour, the strongest surface on the page. */
 export function KpiCard({ label, value, sub, icon: I, tone, hero = false, onClick, children }: {
   label: string; value: ReactNode; sub?: ReactNode; icon: Icon; tone: Tone; hero?: boolean; onClick?: () => void; children?: ReactNode;
 }) {
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp type={onClick ? 'button' : undefined} onClick={onClick}
-      className={cn('group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl p-3 text-left shadow-sm transition sm:p-5',
-        hero ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white ring-1 ring-emerald-400/30 dark:from-emerald-600 dark:to-emerald-800'
-             : cn('border border-border/60 bg-card'),
+      className={cn('group relative flex h-full w-full min-w-0 flex-col overflow-hidden p-4 text-left transition sm:p-5',
+        hero ? cn('rounded-[1.25rem]', TONE[tone].solid) : cn(SURFACE),
         onClick && 'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none')}>
-      <div className="flex items-center justify-between gap-2">
-        <span className={cn('min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide sm:text-xs', hero ? 'text-emerald-50/90' : 'text-muted-foreground')}>{label}</span>
-        <span className={cn('hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:flex', hero && '!flex', hero ? 'bg-white/15 text-white' : TONE[tone].icon)}><I className="h-4 w-4" /></span>
+      {!hero && <span className={cn('pointer-events-none absolute inset-0 rounded-[1.25rem]', TONE[tone].tint)} aria-hidden />}
+      <div className="relative flex items-center justify-between gap-2">
+        <span className={cn('min-w-0 truncate text-xs font-semibold', hero ? 'text-white/85' : 'text-muted-foreground')}>{label}</span>
+        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', hero ? 'bg-white/20 text-white' : TONE[tone].solid)}><I className="h-4 w-4" /></span>
       </div>
-      <div className={cn('mt-2 font-bold tabular-nums tracking-tight', hero ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl', !hero && TONE[tone].text)}>{value}</div>
-      {sub && <div className={cn('mt-1 text-[11px] leading-snug sm:text-xs', hero ? 'text-emerald-50/85' : 'text-muted-foreground')}>{sub}</div>}
+      <div className={cn('relative mt-2 text-3xl font-extrabold tabular-nums tracking-tight', hero && 'text-4xl')}>{value}</div>
+      {sub && <div className={cn('relative mt-1 text-xs leading-snug', hero ? 'text-white/80' : 'text-muted-foreground')}>{sub}</div>}
       {children}
     </Comp>
   );
 }
 
-/** A compact figure for the Today strip. */
-export function StatTile({ label, value, icon: I, tone, onClick, title }: { label: string; value: ReactNode; icon: Icon; tone: Tone; onClick?: () => void; title?: string }) {
-  const Comp = onClick ? 'button' : 'div';
+/** A compact figure inside a panel. `strong` gives it its colour's tinted wash and coloured number. */
+export function Figure({ label, value, sub, tone = 'grey', strong }: { label: string; value: ReactNode; sub?: ReactNode; tone?: Tone; strong?: boolean }) {
   return (
-    <Comp type={onClick ? 'button' : undefined} onClick={onClick} title={title}
-      className={cn('flex min-w-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left', TONE[tone].soft,
-        onClick && 'transition hover:ring-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', onClick && TONE[tone].ring)}>
-      <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', TONE[tone].icon)}><I className="h-3.5 w-3.5" /></span>
-      <span className="min-w-0">
-        <span className={cn('block text-lg font-bold leading-none tabular-nums', TONE[tone].text)}>{value}</span>
-        <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-foreground">{label}</span>
-      </span>
-    </Comp>
+    <div className={cn('min-w-0 rounded-2xl px-3.5 py-3', strong ? TONE[tone].tint : 'bg-muted/40 ring-1 ring-inset ring-border/40')}>
+      <p className="truncate text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className={cn('mt-0.5 text-xl font-extrabold tabular-nums leading-tight tracking-tight', strong && TONE[tone].text)}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sub}</p>}
+    </div>
   );
 }
 
 export function Empty({ children, icon: I }: { children: ReactNode; icon?: Icon }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/70 px-4 py-6 text-center text-xs text-muted-foreground">
-      {I && <I className="h-5 w-5 opacity-50" />}
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-7 text-center text-xs text-muted-foreground">
+      {I && <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted"><I className="h-4 w-4 opacity-70" /></span>}
       {children}
     </div>
   );
@@ -125,4 +193,5 @@ export function ago(iso: string | null | undefined, now = Date.now()): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-export const gbp = (n: number | null | undefined) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `£${n.toFixed(2)}`);
+/** £1,335.60 — pence always shown, thousands separated (a long money figure is read at a glance). */
+export const gbp = (n: number | null | undefined) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);

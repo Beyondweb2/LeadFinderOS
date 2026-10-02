@@ -199,8 +199,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Sales page** (`/sales-dashboard`, 2026-10-01): the Sales dashboard and Earnings are ONE page (`/earnings`
   redirects); the month's ladder is the top card. **Focus Mode is retired** (`/focus` → Outreach): its
   Previous / Next is in the lead popup, its lists are Sales → What to do next, its recent WhatsApp messages are
-  in the popup. Salesperson menu: Outreach, WhatsApp, Find Leads, Sales; Coverage under More (`SALES_NAV_ORDER`,
-  `SALES_SECONDARY_NAV`).
+  in the popup. Salesperson menu (2026-10-02): **Sales dashboard first** (and their landing page, `homeFor`),
+  then Outreach, WhatsApp, Find Leads; Coverage under More (`SALES_NAV_ORDER`, `SALES_SECONDARY_NAV`).
+- **Both dashboards draw from ONE design system** — `src/components/salesDash/ui.tsx` (PageHeader, SectionHeading,
+  Segmented, Panel, KpiCard, Figure, TONE solid/tint, SURFACE). Never style a dashboard surface locally; never bring
+  back "week by week" (`docs/dashboards-redesign.md`, `scripts/dashboard-design.test.ts`).
 - **Agency check** (`docs/agency-detection.md`): Find Leads checks each result's own website (fn
   `agency-check`, a sitemap-guided sample, ≤`AGENCY_MAX_REQUESTS` requests, no AI) → `website_agency_checks` per
   domain, 30 days. Crawler name `LeadFinderOS-SiteCheck/1.0 (+https://findable.live)` — ⛔ no "Mozilla

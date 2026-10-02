@@ -34,15 +34,16 @@ export function AppSidebar() {
   const unread = useWhatsAppUnread();
 
   const allNavItems = [
-    { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
-    { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
-    { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
+    { title: 'Admin dashboard', url: '/', icon: LayoutDashboard, description: 'The business at a glance' },
+    { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: role === 'sales' ? 'Search for new businesses' : t('nav.findLeadsDesc') },
+    { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: role === 'sales' ? 'Your leads and pipeline' : t('nav.outreachCRMDesc') },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
     /* ⛔ Sales: the item SAYS WhatsApp (Paul, 2026-09-28: "I should not have to know that Inbox means
        WhatsApp"). Same route, same page, same conversations — one conversation system. */
     { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },
-    /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup). */
-    { title: 'Sales', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your sales and commission' : 'Sales and commission' },
+    /* Sales + Earnings are one page (2026-10-01); Focus Mode is retired (its parts are in the lead popup).
+       2026-10-02: named "Sales dashboard" everywhere, beside the "Admin dashboard" — two dashboards, one product. */
+    { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3, description: role === 'sales' ? 'Your month, commission and next steps' : "Each salesperson's month and commission" },
     { title: 'Paid clients', url: '/paid-clients', icon: UsersRound, description: 'Client fulfilment hubs' },
     { title: 'AI Audit', url: '/ai-audit', icon: Sparkles, description: 'AI visibility audit' },
     { title: 'Review replies', url: '/review-replies', icon: MessageSquareQuote, description: 'Draft replies to client Google reviews' },
@@ -53,9 +54,9 @@ export function AppSidebar() {
     { title: 'Feedback inbox', url: '/feedback', icon: MessageSquarePlus, description: 'Team feedback and template requests' },
   ];
   /* ⛔ The matrix decides WHAT is shown (src/lib/access.ts); this decides the ORDER. The admin keeps
-     every item in the list order above (Dashboard, Find Leads, Outreach, Coverage directly below it,
-     then Inbox…). A salesperson's order is the working day, Paul 2026-09-28: results → find leads →
-     work the pipeline → market coverage → messages (SALES_NAV_ORDER). Presentation only. */
+     every item in the list order above (Admin dashboard, Find Leads, Outreach, Coverage directly below it,
+     then Inbox…). A salesperson's order, Paul 2026-10-02: Sales dashboard → Outreach → WhatsApp → Find
+     Leads, Coverage under More (SALES_NAV_ORDER). Presentation only. */
   const ordered = orderNavForRole(allNavItems.filter((item) => canOpenRoute(role, item.url)), role);
   /* A salesperson's secondary items (Coverage) sit under "More", after the main list. */
   const isSecondary = (url: string) => role === 'sales' && SALES_SECONDARY_NAV.includes(url);

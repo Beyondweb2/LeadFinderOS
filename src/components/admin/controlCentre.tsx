@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { COST_BASIS, COST_OWNERS, COST_OWNER_LABEL, COST_OWNER_RULE, COST_PROJECT_LABEL, PROVIDER_MIGRATIONS, type CostAccounting, type CostProject } from '@/lib/apiCostAccounting';
 import { AlertTriangle, ArrowRight, Banknote, ExternalLink, CalendarCheck, Coins, Filter, Megaphone, PhoneCall, Receipt, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Panel, Empty, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
+import { Panel, Empty, Figure, SectionHeading, TONE, gbp, ago, type Tone } from '@/components/salesDash/ui';
 import type { AdminOverviewResponse } from '@/hooks/useAdminOverview';
 import type { AttentionGroup, AttentionItem, Cohort, DelegatedSummary, TeamRow, Totals, TriageSummary } from '@/lib/adminMetrics';
 import { attentionAssignable } from '@/lib/teamBoard';
@@ -34,10 +34,11 @@ export function Rate({ n, of: base }: { n: number; of: number }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/** A group of panels under the shared section heading (the same one the Sales dashboard uses). */
+function Section({ title, hint, tone, children }: { title: string; hint?: ReactNode; tone?: Tone; children: ReactNode }) {
   return (
     <div className="space-y-3">
-      <h2 className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</h2>
+      <SectionHeading title={title} hint={hint} tone={tone} />
       {children}
     </div>
   );
@@ -100,7 +101,7 @@ export function AttentionQueue({ items, onOpen, triage, period, onResolve, onSup
           {groups.map(({ g, rows }) => (
             <div key={g}>
               <p className={cn('mb-1.5 text-[11px] font-semibold uppercase tracking-wide', TONE[GROUP_META[g].tone].text)}>{GROUP_META[g].label} · {rows.length}</p>
-              <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+              <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
                 {rows.map((i) => (
                   <li key={i.key} className="flex min-w-0 items-stretch">
                     <button type="button" onClick={() => onOpen(i)} className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -181,10 +182,10 @@ export function SinceYesterday({ o, attention }: { o: O; attention: number }) {
       summary={`${num(o.today.whatsappSent)} sent · ${num(o.today.replies)} replies · ${num(o.today.interested)} interested · ${gbp(o.today.revenue)}`}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         {cells.map((c) => (
-          <div key={c.label} className={cn('min-w-0 rounded-xl px-3 py-2.5', TONE[c.tone].soft)}>
-            <p className="truncate text-[11px] font-medium text-muted-foreground">{c.label}</p>
-            <p className={cn('text-xl font-bold tabular-nums leading-tight', TONE[c.tone].text)}>{c.t}</p>
-            <p className="text-[11px] tabular-nums text-muted-foreground">yesterday {c.y}</p>
+          <div key={c.label} className={cn('min-w-0 rounded-2xl px-3.5 py-3', TONE[c.tone].tint)}>
+            <p className="truncate text-[11px] font-semibold text-muted-foreground">{c.label}</p>
+            <p className={cn('mt-0.5 text-2xl font-extrabold tabular-nums leading-tight tracking-tight', TONE[c.tone].text)}>{c.t}</p>
+            <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">Yesterday {c.y}</p>
           </div>
         ))}
       </div>
@@ -392,16 +393,6 @@ export function CallsPanel({ o }: { o: O }) {
 }
 
 /* ── Money ──────────────────────────────────────────────────────────────────────────────────────── */
-
-function Figure({ label, value, sub, tone = 'grey', strong }: { label: string; value: ReactNode; sub?: ReactNode; tone?: Tone; strong?: boolean }) {
-  return (
-    <div className={cn('min-w-0 rounded-xl px-3 py-2.5', strong ? TONE[tone].soft : 'bg-muted/40')}>
-      <p className="truncate text-[11px] font-medium text-muted-foreground">{label}</p>
-      <p className={cn('text-lg font-bold tabular-nums leading-tight', strong && TONE[tone].text)}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
 
 export function RevenuePanel({ o }: { o: O }) {
   const m = o.money;

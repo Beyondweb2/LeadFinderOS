@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Info, PiggyBank, Trophy } from 'lucide-react';
+import { CalendarCheck2, Info, Layers3, PiggyBank, Repeat, ShieldCheck, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,15 +11,15 @@ import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
 import {
-  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf, monthName, monthlyTracker,
-  type CommissionLine, type EarningsTotals,
+  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, londonDayOf,
+  type CommissionLine,
 } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
 /* ══ THE SALES PAGE'S MONEY PARTS (2026-10-01) ═════════════════════════════════════════════════════
    Moved from the old Earnings page (which now redirects to the Sales page): the payments table, the
-   admin's payout record, the per-salesperson table; plus the page's recent wins, its one chart and the
-   plain commission explanation. Every figure is a commission line (src/lib/commission.ts) — nothing
+   admin's payout record, the per-salesperson table; plus the page's recent wins and the
+   plain commission rules (the week-by-week chart went 2026-10-02). Every figure is a commission line (src/lib/commission.ts) — nothing
    here is counted a second way. */
 
 const pct = (r: number) => `${Math.round(r * 100)}%`;
@@ -45,19 +45,20 @@ export function RecentWins({ lines, clients, todayIso = new Date().toISOString()
   const clientOf = new Map(clients.map((c) => [c.leadId, c]));
   const wins = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && !l.testSale).slice(0, max);
   return (
-    <Panel title="Recent wins" icon={Trophy} tone="green">
+    <Panel title="Recent wins" icon={Trophy} tone="amber" hint="Your newest sales and what each one earned you.">
       {wins.length === 0 ? <Empty icon={Trophy}>Your first sale will show here the day the client pays.</Empty> : (
-        <ul className="divide-y divide-border/50" data-testid="recent-wins">
+        <ul className="space-y-1.5" data-testid="recent-wins">
           {wins.map((l) => {
             const c = clientOf.get(l.leadId);
             return (
-              <li key={l.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{c?.business ?? 'Client'}</span>
+              <li key={l.id} className="flex items-center gap-3 rounded-xl bg-muted/30 px-3 py-2.5 ring-1 ring-inset ring-border/40">
+                <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', l.commission > 0 ? TONE.amber.solid : TONE.grey.icon)}><Trophy className="h-3.5 w-3.5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{c?.business ?? 'Client'}</span>
                   <span className="block text-xs text-muted-foreground">{c?.package ?? 'Findable'} · {whenWords(l.occurredAt, todayIso)}</span>
                 </span>
-                <span className={cn('shrink-0 text-sm font-semibold tabular-nums', l.commission > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-muted-foreground')}>
-                  {l.status === 'not_commissionable' ? 'No commission' : `${gbp(l.commission)}`}
+                <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums', l.commission > 0 ? cn(TONE.green.soft, TONE.green.text) : 'text-muted-foreground')}>
+                  {l.status === 'not_commissionable' ? 'No commission' : `+${gbp(l.commission)}`}
                 </span>
               </li>
             );
@@ -68,69 +69,29 @@ export function RecentWins({ lines, clients, todayIso = new Date().toISOString()
   );
 }
 
-/** The one chart: this month's sales, Monday-start week by week (London). */
-export function SalesByWeek({ lines, todayIso = new Date().toISOString() }: { lines: CommissionLine[]; todayIso?: string }) {
-  const t = monthlyTracker(lines, todayIso);
-  const first = new Date(`${t.monthStart}T12:00:00Z`);
-  const next = new Date(first); next.setUTCMonth(next.getUTCMonth() + 1);
-  const weeks: { label: string; from: string; to: string; n: number }[] = [];
-  for (let d = new Date(first); d < next; ) {
-    const from = d.toISOString().slice(0, 10);
-    const end = new Date(d); end.setUTCDate(end.getUTCDate() + ((7 - ((d.getUTCDay() + 6) % 7)) - 1));
-    const to = (end >= next ? new Date(next.getTime() - 86_400_000) : end).toISOString().slice(0, 10);
-    weeks.push({ label: `${Number(from.slice(8))}–${Number(to.slice(8))}`, from, to, n: 0 });
-    d = new Date(`${to}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1);
-  }
-  for (const s of t.sales) { if (!s.counted) continue; const dd = londonDayOf(s.occurredAt); const w = weeks.find((x) => dd >= x.from && dd <= x.to); if (w) w.n += 1; }
-  const max = Math.max(1, ...weeks.map((w) => w.n));
-  const today = londonDayOf(todayIso);
+/** How commission works, in plain words. The rates themselves are on the month's ladder (the hero) and
+ *  the money on Your earnings, so this card holds only the rules — nothing drawn twice. ⛔ REMOVED
+ *  2026-10-02 (Paul): "This month, week by week" — a bar per week of a month already counted on the
+ *  ladder, which told a salesperson nothing they could act on; and this card's own repeat of the rate,
+ *  the tiers, the next rate and the recurring totals. */
+export function CommissionExplainer() {
+  const rules: { icon: typeof Info; text: ReactNode }[] = [
+    { icon: Layers3, text: <>Each sale keeps the rate it earned — reaching sale 13 never changes sales 1–12. The count starts again on the 1st of each month (UK time).</> },
+    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments a client makes after their first payment. A failed, refunded or charged-back payment earns nothing.</> },
+    { icon: CalendarCheck2, text: <>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money, and a refunded sale stops counting towards your rate.</> },
+    { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
+  ];
   return (
-    <Panel title="This month, week by week" icon={BarChart3} tone="green" hint="Sales that count, by week.">
-      <div className="flex h-36 items-end gap-2" data-testid="sales-by-week">
-        {weeks.map((w) => {
-          const now = today >= w.from && today <= w.to;
-          return (
-            <div key={w.from} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <span className="text-xs font-semibold tabular-nums">{w.n}</span>
-              <span className={cn('w-full rounded-t', now ? 'bg-emerald-500' : 'bg-emerald-500/50')} style={{ height: `${w.n ? Math.max(8, (w.n / max) * 96) : 2}px` }} />
-              <span className={cn('truncate text-[11px]', now ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{w.label}</span>
-            </div>
-          );
-        })}
-      </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">{monthName(t.monthStart)} · days of the month, Monday to Sunday.</p>
+    <Panel title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page.">
+      <ul className="space-y-2.5" data-testid="commission-explainer">
+        {rules.map((r, i) => (
+          <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">
+            <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', TONE.blue.icon)}><r.icon className="h-3.5 w-3.5" /></span>
+            <span className="text-muted-foreground">{r.text}</span>
+          </li>
+        ))}
+      </ul>
     </Panel>
-  );
-}
-
-/** How commission works, in plain words, with this month's own numbers. Folded by default. */
-export function CommissionExplainer({ lines, totals, todayIso = new Date().toISOString() }: { lines: CommissionLine[]; totals: EarningsTotals; todayIso?: string }) {
-  const t = monthlyTracker(lines, todayIso);
-  const current = t.counted === 0 ? MONTHLY_TIERS[0].rate : t.sales.filter((s) => s.counted).slice(-1)[0].rate;
-  const collected = lines.filter((l) => l.paymentNumber >= 2 && l.status !== 'not_commissionable').reduce((s, l) => s + l.commission, 0);
-  return (
-    <details className="rounded-2xl border border-border/60 bg-card p-4 text-sm" data-testid="commission-explainer">
-      <summary className="flex cursor-pointer select-none items-center gap-1.5 font-semibold"><Info className="h-4 w-4 text-muted-foreground" />How your commission works</summary>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        <dl className="space-y-1.5">
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Your rate this month</dt><dd className="font-semibold">{pct(current)}</dd></div>
-          {MONTHLY_TIERS.map((z, i) => {
-            const from = i === 0 ? 1 : MONTHLY_TIERS[i - 1].upTo + 1;
-            return <div key={i} className="flex justify-between gap-3"><dt className="text-muted-foreground">{Number.isFinite(z.upTo) ? `Sales ${from}–${z.upTo}` : `Sale ${from} onwards`}</dt><dd>{pct(z.rate)} of the first payment</dd></div>;
-          })}
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Next rate</dt><dd className="font-semibold">{t.topTier ? 'You are on the top rate' : `${t.salesToNextTier} sale${t.salesToNextTier === 1 ? '' : 's'} away`}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Recurring commission</dt><dd>{gbp(totals.projected)} expected · {gbp(collected)} collected</dd></div>
-        </dl>
-        <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
-          <li>Each sale keeps the rate it earned: reaching sale 13 does not change sales 1–12. The count starts again on the 1st of each month (UK time).</li>
-          <li>A sale that is refunded no longer counts towards your rate for the sales after it.</li>
-          <li>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments a client makes after their first payment. A failed, refunded or charged-back payment earns nothing.</li>
-          <li>Monthly commission is earned while you work with Findable. If that ends, everything you earned before stays yours; client payments after it earn no new commission.</li>
-          <li>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money.</li>
-          <li>Only money the client actually paid counts.</li>
-        </ul>
-      </div>
-    </details>
   );
 }
 

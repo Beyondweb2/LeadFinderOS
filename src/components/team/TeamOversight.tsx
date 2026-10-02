@@ -107,7 +107,7 @@ export function TeamOversight({ enabled, onCompose }: { enabled: boolean; onComp
         : a.isError ? <p className="text-sm text-destructive">Could not load the team board. <button type="button" className="underline" onClick={() => void a.refetch()}>Try again</button></p>
         : rows.length === 0 ? <Empty>{a.posts.length ? 'Nothing matches these filters.' : 'Nothing sent yet. "Send to sales team" posts an update, a task or a lead with instructions.'}</Empty>
         : (
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+          <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
             {rows.map((p) => {
               const d = postDue(p);
               const shownRecs = person === 'all' ? p.recipients : p.recipients.filter((r) => r.user_id === person);

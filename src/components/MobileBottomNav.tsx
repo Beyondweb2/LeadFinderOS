@@ -62,15 +62,15 @@ export function MobileBottomNav() {
 
   /* ⛔ Sales uses the SAME Outreach and Inbox as the admin (src/lib/access.ts, 2026-09-27); the
      admin's items are unchanged. */
-  /* Sales, 2026-10-01: the sidebar's order (SALES_NAV_ORDER) — Outreach, WhatsApp, Find Leads, Sales
+  /* Sales, 2026-10-02: the sidebar's order (SALES_NAV_ORDER) — Dashboard, Outreach, WhatsApp, Find Leads
      (four items + More fit a 320 px phone), Coverage under More (SALES_SECONDARY_NAV). Earnings is part of
-     Sales; Focus Mode is retired. Admin: unchanged bar; Coverage joins More, next to the Inbox. */
+     the Sales dashboard; Focus Mode is retired. Admin: unchanged bar; Coverage joins More, next to the Inbox. */
   const mainNavItems = role === 'sales'
     ? [
+        { title: 'Dashboard', url: '/sales-dashboard', icon: BarChart3 },
         { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
         { title: 'WhatsApp', url: '/inbox', icon: MessageSquare },
         { title: t('nav.search'), url: '/find-leads', icon: Search },
-        { title: 'Sales', url: '/sales-dashboard', icon: BarChart3 },
       ]
     : [
         { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -83,7 +83,7 @@ export function MobileBottomNav() {
     : [
         { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
-        { title: 'Sales', url: '/sales-dashboard', icon: BarChart3 },
+        { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3 },
         { title: 'AI Audit', url: '/ai-audit', icon: Sparkles },
         { title: t('nav.templates'), url: '/templates', icon: FileText },
       ];

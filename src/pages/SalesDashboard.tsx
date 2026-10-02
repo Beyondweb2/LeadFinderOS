@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Layers, Loader2, Megaphone, MessageCircleReply, PhoneCall, Radio, RefreshCw, Sprout, Target, Users } from 'lucide-react';
+import { AlertTriangle, Info, Layers, Megaphone, MessageCircleReply, PhoneCall, Radio, RefreshCw, Sprout, Target, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -11,7 +11,7 @@ import { useEarnings } from '@/hooks/useEarnings';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
 import { CommissionForecastCard } from '@/components/salesDash/CommissionForecastCard';
-import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins, SalesByWeek } from '@/components/salesDash/earningsParts';
+import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins } from '@/components/salesDash/earningsParts';
 import { CampaignCards, ChannelBars, ManageRows, SimpleTable, TemplateTable } from '@/components/salesDash/breakdown';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { templateLabel } from '@/types/outreach';
@@ -23,21 +23,26 @@ import { writeCampaignFilter } from '@/lib/outreachPrefs';
 import { cn } from '@/lib/utils';
 import { useDashboardPrefs } from '@/hooks/useDashboardPrefs';
 import { campaignKey, templateKey, visibleRows } from '@/lib/dashboardVisibility';
-import { KpiCard, Panel } from '@/components/salesDash/ui';
+import { KpiCard, PageHeader, Panel } from '@/components/salesDash/ui';
 import { TeamBoard } from '@/components/team/TeamBoard';
 import { MyHandoffs } from '@/components/salesDash/MyHandoffs';
 import { FollowUpQueue, NextActions, FOLLOW_UP_GROUPS } from '@/components/salesDash/sections';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   SALES — ONE PAGE (2026-10-01; the Sales dashboard and the Earnings page merged).
-   It answers, in this order: how many sales this month and what the next one earns (the ladder), what
-   was earned, how the work is going (calls, people reached, contacted → sale), what to do next, the
-   recent wins, and how commission is worked out. Each fact is drawn ONCE. Both roles; a salesperson
+   THE SALES DASHBOARD — ONE PAGE (2026-10-01, Sales + Earnings merged; redesigned 2026-10-02).
+   A salesperson's home: it is first in their menu and where they land after sign-in. It answers, in this
+   order: how the month is going and what the next sale earns (the hero ladder), how the work is going
+   (calls, people reached, contacted → sale), what to do next, the money (earned to date, this month,
+   the next six months), the recent wins and the commission rules. Each fact is drawn ONCE.
+   Drawn entirely from the shared dashboard design system (components/salesDash/ui.tsx), the same one
+   the Admin dashboard uses — the two pages are one product, built for two jobs. Both roles; a salesperson
    sees their own numbers only — decided by the servers (fn sales-performance, fn sales-earnings),
    never by this page. The admin picks a person (or everyone) and records payouts.
    ⛔ Removed in the merge (each repeated another card or helped no decision): the KPI row, Today strip,
    pipeline strip, waiting / warmth / health panels, activity feed, recap, targets, milestones, trends,
    the conversion funnel, the calls and won panels, the clients cards, the weekly tier and its audit.
+   ⛔ Removed 2026-10-02 (Paul): "This month, week by week" (a chart of a count the hero already shows),
+   and the commission card's repeat of the rate, tiers and totals (the hero and Your earnings hold them).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 type Perf = SalesPerformance & { ok: true; scope: { person: string | null; self: boolean; role: string }; ms: number; workspace: SalesWorkspace };
@@ -88,18 +93,16 @@ export default function SalesDashboard() {
   const oneSeller = !isAdmin || person !== 'all';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-6">
+    <div className="mx-auto max-w-6xl space-y-6 pb-8">
       <EarnedCelebration lines={e?.lines} enabled={viewingSelf && !!e?.commissionable} />
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">{greeting()}{personName ? `, ${personName}` : ''}</p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Sales</h1>
-          {isAdmin && <p className="mt-0.5 text-sm text-muted-foreground">Showing: {scopeLabel}.</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow={`${greeting()}${personName ? `, ${personName}` : ''}`}
+        title="Sales dashboard"
+        subtitle={isAdmin ? <>Showing <span className="font-semibold text-foreground">{scopeLabel}</span> · this month, UK time</> : 'Your month, your money and what to do next.'}
+        actions={<>
           {isAdmin && (
             <Select value={person} onValueChange={setPerson}>
-              <SelectTrigger className="h-9 w-44" aria-label="Whose numbers"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-44 rounded-full" aria-label="Whose numbers"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Everyone</SelectItem>
                 <SelectItem value="me">Me</SelectItem>
@@ -108,39 +111,37 @@ export default function SalesDashboard() {
               </SelectContent>
             </Select>
           )}
-          {isAdmin && <Button size="sm" variant="outline" className="h-9" onClick={() => setPayoutOpen(true)}>Record a payout</Button>}
-          <Button variant="outline" size="sm" className="h-9 gap-1" onClick={() => { void q.refetch(); void earn.refetch(); }} disabled={q.isFetching || earn.isFetching} aria-label="Refresh">
+          {isAdmin && <Button size="sm" variant="outline" className="h-9 rounded-full" onClick={() => setPayoutOpen(true)}>Record a payout</Button>}
+          <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-full" onClick={() => { void q.refetch(); void earn.refetch(); }} disabled={q.isFetching || earn.isFetching} aria-label="Refresh">
             <RefreshCw className={cn('h-4 w-4', (q.isFetching || earn.isFetching) && 'animate-spin')} /><span className="hidden sm:inline">Refresh</span>
           </Button>
-        </div>
-      </header>
+        </>}
+      />
 
       {(q.isError || earn.isError) && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-destructive" />Could not load {q.isError ? 'your numbers' : 'your earnings'}: {edgeErrorMessage(q.error ?? earn.error)}
-          <Button size="sm" variant="outline" onClick={() => { void q.refetch(); void earn.refetch(); }}>Try again</Button>
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => { void q.refetch(); void earn.refetch(); }}>Try again</Button>
         </div>
       )}
 
-      {/* The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
+      {/* ── 1. The month: the hero — sales, the progress line, the next sale's rate, what was earned ── */}
+      {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.5rem] bg-emerald-500/10 motion-reduce:animate-none" aria-busy="true" />}
+      {e && oneSeller && e.commissionable && <MonthlyLadder lines={e.lines} clients={e.clients} totals={e.totals} />}
+      {e && oneSeller && !e.commissionable && <Notice>Commission is paid to salespeople. Clients you sell yourself show here at £0.</Notice>}
+      {e && !oneSeller && <Notice>Pick a salesperson at the top to see their month and commission. The table below has everyone's.</Notice>}
+
+      {/* Under the hero (2026-10-02): the month first, then what Paul sent and any handoff owed. The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
       {role === 'sales' && <TeamBoard />}
       {/* Their own paid sales that still owe the handoff (2026-10-02). */}
       {role === 'sales' && <MyHandoffs />}
 
-      {/* ── 1. The month: sales, the next sale's rate, what was earned ── */}
-      {earn.isLoading && <div className="h-56 animate-pulse rounded-2xl bg-muted/60 motion-reduce:animate-none" aria-busy="true" />}
-      {e && oneSeller && e.commissionable && <MonthlyLadder lines={e.lines} clients={e.clients} totals={e.totals} />}
-      {/* The next six months (2026-10-02): collected + expected from clients already sold, by London month. */}
-      {e && oneSeller && e.commissionable && e.forecast && <CommissionForecastCard forecast={e.forecast} totals={e.totals} engagement={e.engagement ?? null} />}
-      {e && oneSeller && !e.commissionable && <p className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Commission is paid to salespeople. Clients you sell yourself show here at £0.</p>}
-      {e && !oneSeller && <p className="rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Pick a salesperson to see their month and commission. The table below has everyone's.</p>}
-
       {/* ── 2. The work this month: three numbers, each with its base ── */}
-      {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Counting…</p>}
+      {q.isLoading && <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-[1.25rem] bg-muted/60 motion-reduce:animate-none" />)}</div>}
       {d && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="work-numbers">
           <KpiCard label="Calls made" icon={PhoneCall} tone="blue" value={d.calls.total} sub="Logged this month" />
-          <KpiCard label="People reached" icon={Users} tone="blue" value={reached} sub="Calls where you spoke to someone" />
+          <KpiCard label="People reached" icon={Users} tone="purple" value={reached} sub="Calls where you spoke to someone" />
           <KpiCard label="Contacted → sale" icon={Target} tone="green" value={conversion === null ? '—' : `${conversion}%`}
             sub={d.funnel.contacted ? `${d.funnel.won} sale${d.funnel.won === 1 ? '' : 's'} from ${d.funnel.contacted} people first contacted this month` : 'Nobody contacted this month yet'} />
         </div>
@@ -149,25 +150,25 @@ export default function SalesDashboard() {
       {/* ── 3. What to do next (the ranked list, and the lists Focus Mode used to hold) ── */}
       {w && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-          <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" /></div>
+          <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" hint="Most urgent first. Tap a lead to open it." /></div>
           <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} /></div>
         </div>
       )}
 
-      {/* ── 4. Wins and the month's shape ── */}
+      {/* ── 4. The money: earned to date, this month, the next six months ── */}
+      {e && oneSeller && e.commissionable && e.forecast && <CommissionForecastCard forecast={e.forecast} totals={e.totals} engagement={e.engagement ?? null} />}
+
+      {/* ── 5. Wins, and the rules behind the numbers ── */}
       {e && oneSeller && e.commissionable && (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <RecentWins lines={e.lines} clients={e.clients} />
-          <SalesByWeek lines={e.lines} />
+          <CommissionExplainer />
         </div>
       )}
 
-      {/* ── 5. Commission, explained; the payments behind it ── */}
-      {e && oneSeller && e.commissionable && <CommissionExplainer lines={e.lines} totals={e.totals} />}
+      {/* ── 6. The detail, folded: every payment, everyone's commission, and the outreach numbers ── */}
       {e && isAdmin && person === 'all' && <BySellerTable rows={e.bySeller} nameOf={(id) => nameOf.get(id) ?? 'Salesperson'} />}
       {e && <PaymentsTable lines={e.lines} bizOf={bizOf} sellerOf={isAdmin ? (id) => (id ? nameOf.get(id) ?? 'Former member' : '—') : undefined} />}
-
-      {/* ── 6. More numbers, folded: which campaigns, messages, channels and sources work ── */}
       {d && (
         <Panel collapseKey="sales.more" defaultOpen={false} title="More numbers" icon={Layers} tone="grey" hint="This month: campaigns, WhatsApp messages, channels and where leads came from.">
           <div className="space-y-5">
@@ -194,4 +195,9 @@ export default function SalesDashboard() {
       {isAdmin && <PayoutDialog open={payoutOpen} onOpenChange={setPayoutOpen} sellers={(team.data ?? []).filter((m) => m.user_id !== user?.id).map((m) => ({ id: m.user_id, name: m.display_name }))} />}
     </div>
   );
+}
+
+/** A quiet one-line note where a card would otherwise be (admin viewing everyone; a non-earning seller). */
+function Notice({ children }: { children: ReactNode }) {
+  return <p className="flex items-center gap-2.5 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground ring-1 ring-inset ring-border/60"><Info className="h-4 w-4 shrink-0" />{children}</p>;
 }

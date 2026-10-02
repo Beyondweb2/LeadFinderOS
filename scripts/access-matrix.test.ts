@@ -72,7 +72,8 @@ const stage = readFileSync(new URL("../supabase/migrations/20260927100100_multi_
 ok(/if _status not in \('interested', 'price_given', 'not_interested', 'won_pending_onboarding'\)/.test(stage), "…the same four the server's lead_set_stage allows");
 
 console.log("\n── homes ──");
-ok(homeFor("admin") === "/" && homeFor("sales") === "/outreach" && homeFor(null) === "/auth", "admin → /, sales → /outreach, none → /auth");
+/* 2026-10-02 (Paul): a salesperson lands on their Sales dashboard, the first item in their menu. */
+ok(homeFor("admin") === "/" && homeFor("sales") === "/sales-dashboard" && homeFor(null) === "/auth", "admin → /, sales → /sales-dashboard, none → /auth");
 ok(canOpenRoute("sales", homeFor("sales")), "sales can open its own home (no redirect loop)");
 
 console.log("\n── the matrix names the brief's rows ──");

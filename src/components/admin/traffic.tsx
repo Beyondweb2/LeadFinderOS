@@ -45,7 +45,7 @@ export function ClientSearchPanel({ o }: { o: O }) {
         <p className="mb-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">No Google service account is set up yet, so no client can be connected. Setting one up is a one-off: a Google Cloud service account, added as a user on each client's Search Console property.</p>
       )}
       {!s ? <Empty>Search Console data could not be read just now.</Empty> : !clients.length ? <Empty>No paid clients yet.</Empty> : (
-        <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-muted/10">
           {clients.map((c) => {
             const x = s[c.leadId] ?? { state: 'not_connected' as const };
             return (
