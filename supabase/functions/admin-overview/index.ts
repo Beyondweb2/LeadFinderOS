@@ -18,7 +18,7 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 /** Marker only the new code produces — the deploy check reads it from the response. */
-const BUILD_ID = "admin-overview-2026-10-01-lost-reasons";
+const BUILD_ID = "admin-overview-2026-10-02-my-activity-scope";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: { ...corsHeaders, "x-build": BUILD_ID } });
@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const nowMs = Date.now();
     const period = resolvePeriod(body.period ?? "30d", nowMs, { from: body.from, to: body.to });
-    const overview = await loadAdminOverview(service, period, nowMs);
+    // "My activity: hidden" — only an explicit true hides; anything else (an older page, a blank) counts everyone.
+    const overview = await loadAdminOverview(service, period, nowMs, { hideAdminActivityFor: body.hideMine === true ? who.actor.id : null });
     return json({ ok: true, build: BUILD_ID, ...overview, ms: Date.now() - started });
   } catch (e) {
     console.error("[admin-overview]", e instanceof Error ? e.message : e);

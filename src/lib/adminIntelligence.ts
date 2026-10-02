@@ -42,7 +42,7 @@ export interface IntelFact {
   notInterested: { at: number }[];
   optOut: { at: number }[];
 }
-export interface IntelMessage { id?: string; lead_id: string; direction: string | null; status: string | null; created_at: string; body: string | null; template_name: string | null; test_mode: boolean | null }
+export interface IntelMessage { id?: string; lead_id: string; direction: string | null; status: string | null; created_at: string; body: string | null; template_name: string | null; test_mode: boolean | null; sent_by_user_id?: string | null }
 
 export type TemplateFlag = 'high_reply' | 'weak_reply' | 'high_rejection' | 'tiny_sample' | 'no_replies';
 export interface TemplateRow {
@@ -93,8 +93,14 @@ export function foldTemplates(input: {
   /** message id → the reply sorter's category (only where triage has filed it). */
   triageByMessage: Map<string, string>;
   paidAtOf: Map<string, number>;
+  /** A send that is LEFT OUT (2026-10-02): a test account's, or a hidden person's under "My activity:
+   *  hidden" — adminMetrics.ts decides who sent it (the sender, else whoever held the lead). Such sends are
+   *  not counted, and a reply credited to one is not counted either (it is never re-credited to an older
+   *  send). Absent = every send counts. */
+  hiddenSend?: (leadId: string, m: IntelMessage) => boolean;
 }): TemplatesBlock {
   const { period: p } = input;
+  const hiddenSend = input.hiddenSend ?? (() => false);
   const rows = new Map<string, TemplateRow & { _leads: Set<string> }>();
   const row = (name: string) => {
     let r = rows.get(name);
@@ -106,7 +112,7 @@ export function foldTemplates(input: {
     const msgs = (input.msgsBy.get(f.lead.id) ?? []).filter((m) => !isTest(m));
     const firstSend = new Map<string, number>();
     for (const m of msgs) {
-      if (m.direction !== 'outbound' || !isRealSend(m.status)) continue;
+      if (m.direction !== 'outbound' || !isRealSend(m.status) || hiddenSend(f.lead.id, m)) continue;
       const at = t(m.created_at);
       if (!m.template_name) { if (inP(at, p)) { free.sends += 1; free.leads.add(f.lead.id); if (m.status === 'delivered' || m.status === 'read') free.delivered += 1; } continue; }
       if (!firstSend.has(m.template_name)) firstSend.set(m.template_name, at);
@@ -120,7 +126,7 @@ export function foldTemplates(input: {
     }
     for (const c of creditRepliesToSends(msgs)) {
       const send = msgs[c.sendIndex];
-      if (!inP(t(send.created_at), p)) continue;
+      if (!inP(t(send.created_at), p) || hiddenSend(f.lead.id, send)) continue;
       const r = row(c.template);
       r.replies += 1; if (c.ambiguous) r.repliesContested += 1;
       // The reply itself: the first human inbound after the credited send.
@@ -166,8 +172,12 @@ export function nicheOf(lead: { search_keyword: string | null; category: string 
 }
 const NO_WHATSAPP: ReadonlySet<string> = new Set(['no_whatsapp', 'no_whatsapp_needs_sms']);
 
-export function foldNiches(input: { period: ReportingPeriod; facts: IntelFact[]; paidAtOf: Map<string, number> }): { rows: NicheRow[]; bookReplyRate: number | null } {
+/** `hidden` (2026-10-02: a test account, or a hidden person under "My activity: hidden"): their WhatsApp send does not put the lead
+ *  in the messaged cohort — the cohort starts at the first send by someone shown. The niche's inventory
+ *  columns (leads added, in the book, contactable) are the book, never anyone's activity. */
+export function foldNiches(input: { period: ReportingPeriod; facts: IntelFact[]; paidAtOf: Map<string, number>; hidden?: (who: string | null) => boolean }): { rows: NicheRow[]; bookReplyRate: number | null } {
   const p = input.period;
+  const hidden = input.hidden ?? (() => false);
   const by = new Map<string, NicheRow>();
   for (const f of input.facts) {
     const n = nicheOf(f.lead);
@@ -176,7 +186,7 @@ export function foldNiches(input: { period: ReportingPeriod; facts: IntelFact[];
     r.leadsInBook += 1;
     if (inP(t(f.lead.created_at), p)) r.leadsAdded += 1;
     if (f.lead.phone && !NO_WHATSAPP.has(String(f.lead.status))) r.contactable += 1;
-    const waSends = f.contacts.filter((c) => c.kind === 'whatsapp');
+    const waSends = f.contacts.filter((c) => c.kind === 'whatsapp' && !hidden(c.who));
     const firstInPeriod = waSends.find((c) => inP(c.at, p));
     if (!firstInPeriod) continue;
     // Cohort: leads messaged in the period, and what they have done since that first message.

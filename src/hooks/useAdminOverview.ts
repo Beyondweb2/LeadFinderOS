@@ -70,11 +70,13 @@ export interface SiteFunnel {
 
 /** The Admin control centre's numbers — server-folded (fn admin-overview), never the whole book in
  *  the browser. Cached for five minutes; Refresh refetches. */
-export function useAdminOverview(choice: PeriodChoice, enabled: boolean) {
+/** `hideMine` = "My activity: hidden": the SERVER leaves the signed-in admin's (and every admin account's)
+ *  outreach out of every activity figure, so counts and rates are recomputed, never subtracted here. */
+export function useAdminOverview(choice: PeriodChoice, enabled: boolean, hideMine: boolean) {
   return useQuery({
-    queryKey: ['admin-overview', choice.key, choice.from ?? null, choice.to ?? null],
+    queryKey: ['admin-overview', choice.key, choice.from ?? null, choice.to ?? null, hideMine],
     enabled,
     staleTime: 5 * 60_000,
-    queryFn: () => invokeEdge<AdminOverviewResponse>('admin-overview', { period: choice.key, from: choice.from, to: choice.to }),
+    queryFn: () => invokeEdge<AdminOverviewResponse>('admin-overview', { period: choice.key, from: choice.from, to: choice.to, hideMine }),
   });
 }

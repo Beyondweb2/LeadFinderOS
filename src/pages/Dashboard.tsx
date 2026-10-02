@@ -68,7 +68,14 @@ const Dashboard = () => {
   const navigate = useNavigate();
   // HOW the page is configured (not what is being looked at): persisted per person on this device.
   const [choice, setChoice] = usePersistedState<PeriodChoice>('admin.period', { key: '30d' }, { tier: 'local', scope: user?.id ?? null, validate: validChoice });
-  const q = useAdminOverview(choice, isAdmin);
+  /* HIDE MY ACTIVITY (Paul, 2026-10-02: "hide my personal sales/outreach activity from team performance and
+     sales intelligence"). Default hidden; remembered per person on this device. ONE toggle, one meaning:
+     it is sent to fn admin-overview, which leaves your (and every admin account's) outreach out of the team
+     table, why prospects say no, templates, channels, niches, bottlenecks and the cohort rates — recomputed
+     at the source, never subtracted here. Money, clients, delivery, What needs you, costs and the website
+     never change with it. */
+  const [hideMine, setHideMine] = usePersistedState<boolean>('admin.hideMyActivity', true, { tier: 'local', scope: user?.id ?? null });
+  const q = useAdminOverview(choice, isAdmin, hideMine);
   const o = q.data;
   const firstName = (team.data ?? []).find((m) => m.user_id === user?.id)?.display_name?.split(' ')[0];
   const today = londonDay(Date.now());
@@ -76,14 +83,13 @@ const Dashboard = () => {
      team board panel, and Assign on a Needs your attention item all open it. */
   const [compose, setCompose] = useState<ComposerSeed | null>(null);
   const [fixTrades, setFixTrades] = useState(false);
-  /* HIDE MY ACTIVITY (Paul, 2026-10-02: "my old outreach volume distorts the salesperson views"). Default
-     hidden; remembered per person on this device. It affects the team table ONLY — never money, clients,
-     delivery or admin actions. An admin's row (and the signed-in person's) is the one it hides. */
-  const [hideMine, setHideMine] = usePersistedState<boolean>('admin.hideMyActivity', true, { tier: 'local', scope: user?.id ?? null });
   const clientsQ = usePaidClientList(isAdmin);
   const clients = useMemo(() => clientsQ.data ?? [], [clientsQ.data]);
   const earn = useEarnings('all', isAdmin);
-  const teamRows = useMemo(() => (o?.team ?? []).filter((r) => !(hideMine && (r.role === 'admin' || r.userId === user?.id))), [o?.team, hideMine, user?.id]);
+  /* The server already left the hidden rows out. ⛔ The filter below is ONLY for an older admin-overview
+     deploy that does not know the setting (no activityScope) — never a second rule. */
+  const scoped = !!o?.activityScope;
+  const teamRows = useMemo(() => (o?.team ?? []).filter((r) => scoped || !(hideMine && (r.role === 'admin' || r.userId === user?.id))), [o?.team, scoped, hideMine, user?.id]);
   const lastActivity = useTeamLastActivity(teamRows.map((r) => r.userId), isAdmin);
   const needs = useMemo(() => (o ? needsYouItems(o.attention, clients, Date.now()) : []), [o, clients]);
   const handoffIds = useMemo(() => new Set(handoffClients(clients, Date.now()).map((c) => c.id)), [clients]);
@@ -129,7 +135,7 @@ const Dashboard = () => {
         )}
         {o && <span className="text-xs text-muted-foreground">{o.period.fromDay ? `${o.period.fromDay} → ${o.period.toDay}` : 'Everything recorded'} · UK time</span>}
         <button type="button" onClick={() => setHideMine(!hideMine)} aria-pressed={hideMine} data-testid="hide-my-activity"
-          title="Your own outreach in the Sales team table. Money, clients and your actions always show."
+          title="Your own outreach in the Sales team table and Sales intelligence (reasons, templates, channels, niches). Money, clients and your actions always show."
           className={cn('ml-auto rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition', hideMine ? 'bg-muted/60 text-foreground ring-border' : 'bg-blue-500/15 text-blue-700 ring-blue-400/30 dark:text-blue-200')}>
           {hideMine ? 'My activity: hidden' : 'My activity: included'}
         </button>
@@ -185,6 +191,7 @@ const Dashboard = () => {
           </Section>
 
           <Section title="Sales intelligence" tone="purple" hint="Why prospects say no, and which messages, channels and niches work.">
+            {o.activityScope?.hidden && <p className="px-1 text-xs text-muted-foreground" data-testid="intel-scope">Your own outreach is left out of these figures (My activity: hidden).</p>}
             <LostReasonsPanel o={o} />
             <TemplatesPanel o={o} />
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
