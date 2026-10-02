@@ -101,7 +101,7 @@ const fakeFetch = (routes: Record<string, Route>, calls: string[]) => async (url
   ok(calls[0] === 'https://www.acmeplumbing.co.uk/', 'starts at the homepage, without the deep path or tracking codes');
   ok(calls.includes('https://www.acmeplumbing.co.uk/robots.txt') && calls.includes('https://www.acmeplumbing.co.uk/page-sitemap.xml'), 'reads robots.txt, then the declared sitemap index and its page sitemap');
   ok(r.stats.requests <= AGENCY_MAX_REQUESTS && calls.length === r.stats.requests, `never more than ${AGENCY_MAX_REQUESTS} requests (${r.stats.requests})`);
-  ok(calls.some((u) => u.endsWith('/contact')) && calls.some((u) => u.endsWith('/about-us')) && calls.some((u) => u.endsWith('/services')) && !calls.some((u) => /privacy/.test(u)), 'samples contact, about and a service page; skips privacy');
+  ok(calls.some((u) => u.endsWith('/contact')) && calls.some((u) => u.endsWith('/about-us')) && calls.some((u) => u.endsWith('/services')) && calls.filter((u) => /privacy|terms|legal|credits/.test(u)).length <= 1, 'samples contact, about and a service page, and at most ONE legal / credits page (v2, read for "this website was designed by")');
   ok(r.verdict.classification === 'agency_likely' && r.verdict.confidence >= 90, 'and reaches the verdict');
 }
 {
@@ -161,6 +161,57 @@ const crm = read('src/components/LeadCrmPanel.tsx');
 ok(/onConfirm=\{\(\) => void save\('lead_set_website_control', \{ _value: 'agency_controls'/.test(crm) && /onReject=\{\(\) => void save\('lead_set_website_control', \{ _value: 'client_controls'/.test(crm), 'Confirm agency / Not agency save through the one website-control write (History)');
 const mig = read('supabase/migrations/20261003100100_website_agency_checks.sql');
 ok(/enable row level security/.test(mig) && /for select to authenticated using \(\(select public\.my_role\(\)\) is not null\)/.test(mig) && /revoke insert, update, delete, truncate on public\.website_agency_checks from anon, authenticated/.test(mig), 'the cache: team members read it; only the function writes it');
+
+console.log('── v2 (2026-10-02): BETTER EVIDENCE, SAME CAUTION ──');
+{
+  ok(AGENCY_CHECK_VERSION === 2, 'the rules version is 2 — every v1 result is checked again under the new rules');
+  // The FIRST <footer> is a testimonial's; the site footer (with the credit) comes after it.
+  const twoFooters = { url: SITE, html: body('<blockquote>Great job<footer>— Mrs Smith, Leeds</footer></blockquote>', '© 2026 Acme. Website by Bright Digital') };
+  ok(classifyAgency([twoFooters], SITE).agency === 'Bright Digital', 'a credit in the SITE footer is found when an earlier <footer> (a testimonial) comes first');
+  const bar = { url: SITE, html: body('', '© 2026 Acme Plumbing').replace('</body>', '<div class="bottom-bar">Website by Bright Digital</div></body>') };
+  ok(classifyAgency([bar], SITE).classification === 'agency_likely', 'a credit in a bottom bar after the footer is found');
+  ok(classifyAgency([page('/', 'Theme by Astra. Website by Bright Digital.')], SITE).agency === 'Bright Digital', 'every credit is tried: a rejected first one ("by Astra") no longer hides the real one');
+  const wrapped = classifyAgency([page('/', '© Acme <a href="https://www.brightdigital.co.uk/">Website by Bright Digital</a>')], SITE);
+  ok(wrapped.classification === 'agency_likely' && wrapped.agencyDomain === 'brightdigital.co.uk' && wrapped.confidence >= 88, `a link that IS the credit carries its domain (${wrapped.confidence}%)`);
+  const titled = classifyAgency([page('/', '<a href="https://brightdigital.co.uk" title="Web design by Bright Digital"><img src="/logo.png" alt="Bright Digital"></a>')], SITE);
+  ok(titled.classification === 'agency_likely' && titled.agencyDomain === 'brightdigital.co.uk', 'a logo link whose title says "Web design by …" counts');
+  const logoOnly = classifyAgency([page('/', '<a href="https://www.seoexperts.co.uk"><img src="/seo.png" alt="SEO Experts"></a>')], SITE);
+  ok(logoOnly.classification === 'no_evidence', 'a logo-only link with no credit words is still never enough (the known miss stays a miss)');
+  ok(classifyAgency([page('/', 'Website by <a href="https://wordpress.org">WordPress</a>')], SITE).classification === 'no_evidence', 'a link credit to the platform is still the platform');
+  const sentence = classifyAgency([page('/', '© Acme', '', '<p>This website was designed and built by Bright Digital.</p>')], SITE);
+  ok(sentence.classification === 'agency_likely' && sentence.agency === 'Bright Digital', '"This website was designed and built by …" in the page counts');
+  ok(classifyAgency([page('/', '© Acme', '', '<p>Every kitchen is designed by our team and built by Acme Joinery.</p>')], SITE).classification === 'no_evidence', 'but "designed by our team" about their work never does');
+  ok(classifyAgency([page('/', '© Acme', '', '<p>Our website is managed by Acme Plumbing.</p>')], SITE).classification === 'no_evidence', '…nor the business naming itself');
+  const noisy = classifyAgency([page('/', 'Website design and SEO by Thisworks 68 64 CLICK TO CALL')], SITE);
+  ok(noisy.agency === 'Thisworks', `a credit's name stops before footer noise (got "${noisy.agency}")`);
+  const slash = classifyAgency([page('/', '<p>Website built by Lab Creative / Digi Guru</p><ul class="social"><li>twitter</li></ul>')], SITE);
+  ok(slash.agency === 'Lab Creative', `"Website built by Lab Creative / Digi Guru" names Lab Creative (got "${slash.agency}")`);
+  const noFooterEl = { url: SITE, html: body('', '').replace(/<footer><\/footer>/, '<div id="footer-right"><p>Website hosted and managed by <br> <a href="https://www.zestandpunch.com">Zest &amp; Punch</a></p></div>').replace('</body>', `<script>${'var x=1;'.repeat(4000)}</script><style>${'.a{b:c}'.repeat(3000)}</style></body>`) };
+  ok(classifyAgency([noFooterEl], SITE).agencyDomain === 'zestandpunch.com', 'no <footer> element and big scripts after the footer: the credit is still found (the tail is measured without scripts)');
+  const dup = classifyAgency([page('/', '<a href="https://thisworks.co.uk">Website design and SEO by Thisworks</a>'), page('/about', 'Website design and SEO by Thisworks')], SITE);
+  ok(dup.evidence.filter((e) => /^Footer:/.test(e)).length === 1, 'one footer-credit line in the evidence, not one per wording');
+  const legal = selectSamplePages(SITE, ['/privacy-policy', '/terms', '/site-credits', '/contact', '/about', '/services', '/gallery'].map((p) => `https://www.acmeplumbing.co.uk${p}`), 7);
+  ok(legal.filter((u) => /privacy|terms|credits/.test(u)).length === 1 && legal.some((u) => /site-credits/.test(u)), 'ONE legal-type page is read, a credits page first');
+  ok(!selectSamplePages(SITE, ['/privacy-policy', '/terms', '/cookies'].map((p) => `https://www.acmeplumbing.co.uk${p}`), 7).some((u) => /cookies/.test(u)), 'never the cookie page');
+  ok(/^LeadFinderOS-SiteCheck\/1\.0 \(\+https:\/\/findable\.live\)$/.test(AGENCY_CRAWLER_UA) && !/Mozilla/.test(AGENCY_CRAWLER_UA), 'the crawler name is the bare honest name — no borrowed "Mozilla" wrapper');
+}
+{
+  // The www / bare-domain twin, once, only when the homepage gives no answer at all.
+  const calls: string[] = [];
+  const fake = async (url: string) => {
+    calls.push(url);
+    if (url.startsWith('https://acme-twin.co.uk')) throw new Error('ECONNREFUSED');
+    if (url === 'https://www.acme-twin.co.uk/') return new Response(body('', '© Acme. Website by Bright Digital'), { status: 200, headers: { 'content-type': 'text/html' } });
+    return new Response('nope', { status: 404, headers: { 'content-type': 'text/html' } });
+  };
+  const r = await crawlForAgency('https://acme-twin.co.uk/', fake as typeof fetch);
+  ok(r.verdict.classification === 'agency_likely' && calls.includes('https://www.acme-twin.co.uk/'), 'no answer on the bare domain → the www twin is tried once, and read');
+  const c404: string[] = [];
+  await crawlForAgency('https://acme404.co.uk/', (async (url: string) => { c404.push(url); return new Response('<html><body>Not found</body></html>', { status: 404, headers: { 'content-type': 'text/html' } }); }) as typeof fetch);
+  ok(!c404.some((u) => u.includes('www.acme404')), 'a 404 is an answer — no twin');
+  const sgc = await crawlForAgency('https://acme-sg.co.uk/', (async () => new Response('<html><head><meta http-equiv="refresh" content="0;/.well-known/sgcaptcha/?r=%2F"></meta></head></html>', { status: 202, headers: { 'content-type': 'text/html' } })) as typeof fetch);
+  ok(sgc.verdict.classification === 'unknown' && /blocked/.test(sgc.verdict.failure ?? ''), 'a SiteGround bot challenge reads "blocked", never "built by script" — and is never worked around');
+}
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 process.exit(f === 0 ? 0 : 1);

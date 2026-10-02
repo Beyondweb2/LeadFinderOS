@@ -427,7 +427,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Filter className="h-3.5 w-3.5 mr-1.5" />Filter
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="bg-popover border-border">
+      {/* ⛔ NEVER TALLER THAN THE SCREEN (2026-10-02): Site management + Business age made the menu run off a
+          laptop screen. It is capped at the space Radix measures beside the trigger (minus collisionPadding)
+          and at the viewport, and the CONTENT scrolls inside it — the page never has to. Fixed width. */}
+      <DropdownMenuContent align={align} collisionPadding={8} data-testid="find-leads-filter-menu"
+        className="w-64 max-w-[calc(100vw-1rem)] max-h-[min(var(--radix-dropdown-menu-content-available-height,100dvh),calc(100dvh-1rem))] overflow-x-hidden overflow-y-auto overscroll-contain bg-popover border-border">
         {statusFilterOptions.map((status) => (
           <DropdownMenuCheckboxItem
             key={status}
@@ -454,14 +458,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <span className="flex items-center gap-1.5 text-sm"><Facebook className="h-3.5 w-3.5 text-blue-600" /> Listing = Facebook</span>
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Site management</DropdownMenuLabel>
+        <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Website · site management</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={siteFilter} onValueChange={(v) => setSiteFilter(v as SiteFilter)}>
-          {SITE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
+          {SITE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Business age (no website)</DropdownMenuLabel>
+        <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Business age (no website)</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={ageFilter} onValueChange={(v) => setAgeFilter(v as AgeFilter)}>
-          {AGE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="text-sm" data-testid={`age-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
+          {AGE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="py-1 text-sm" data-testid={`age-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -31,7 +31,9 @@ type EditorLead = LeadStateInput & {
 
 const BUCKET_TEXT = { overdue: 'text-red-600 dark:text-red-400', today: 'text-amber-600 dark:text-amber-400', upcoming: 'text-muted-foreground', none: 'text-muted-foreground' } as const;
 
-export function NextActionEditor({ lead }: { lead: EditorLead }) {
+/** `pill` (the Inbox conversation header, 2026-10-02): one line — "Call · Tomorrow · 14:30", or "+ Set next action" —
+ *  in place of the old "Find email" there; the same popover form and the same one write as the Outreach cell. */
+export function NextActionEditor({ lead, variant = 'cell' }: { lead: EditorLead; variant?: 'cell' | 'pill' }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const v = nextActionView(lead);
@@ -47,6 +49,14 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
     <div className="flex items-center gap-1" data-walkthrough-step="follow-up" data-walkthrough="next-action">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
+          {variant === 'pill' ? (
+            <button type="button" title={title} aria-label={title} data-testid="header-next-action"
+              className={cn('inline-flex max-w-[16rem] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                v ? cn('border-border/70 bg-muted/40 hover:bg-muted', BUCKET_TEXT[v.bucket]) : 'border-dashed border-primary/50 text-primary hover:bg-primary/10')}>
+              {v ? <><CalendarClock className="h-3 w-3 shrink-0" /><span className="truncate">{[v.label, v.when ?? 'No date set', v.time].filter(Boolean).join(' · ')}</span></>
+                : <><Plus className="h-3 w-3" />Set next action</>}
+            </button>
+          ) : (
           <Button variant="ghost" className="flex h-auto max-w-[13rem] flex-col items-start gap-0.5 p-1 hover:bg-muted/50" title={title} aria-label={title} data-testid="row-next-action">
             {v ? (
               <>
@@ -58,6 +68,7 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
               <span className="flex items-center gap-1 text-xs text-muted-foreground"><Plus className="h-3 w-3" />Set</span>
             )}
           </Button>
+          )}
         </PopoverTrigger>
         <PopoverContent className="w-auto p-4" align="start">
           {open && (
@@ -68,7 +79,7 @@ export function NextActionEditor({ lead }: { lead: EditorLead }) {
         </PopoverContent>
       </Popover>
       {v && (
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500 hover:bg-green-500/10 hover:text-green-400"
+        <Button variant="ghost" size="icon" className={cn(variant === 'pill' ? 'h-6 w-6' : 'h-7 w-7', 'text-green-500 hover:bg-green-500/10 hover:text-green-400')}
           onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })} title="Complete next action" aria-label="Complete next action" data-testid="complete-next-action">
           <CheckCircle2 className="h-4 w-4" />
         </Button>

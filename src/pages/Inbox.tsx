@@ -44,7 +44,7 @@ import { useLeadSalesState } from '@/hooks/useLeadSalesState';
 import { salesStateOf } from '@/lib/leadState';
 import { useAllLoggedContacts } from '@/hooks/useLastLoggedContacts';
 import { shownStatusMatches } from '@/lib/statusFilter';
-import { FindEmailButton } from '@/components/FindEmailButton';
+import { NextActionEditor } from '@/components/NextActionEditor';
 import { SocialLinks } from '@/components/SocialLinks';
 import { RequestTemplateButton } from '@/components/RequestTemplateButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -2147,8 +2147,10 @@ const Inbox = () => {
                     {/* ⛔ ONE STATUS PILL (2026-10-01, Paul: "its still showing 2 of the same status pills"): the status
                         control above is the one solid pipeline pill; interested is the star — the separate
                         sales-state pill that repeated it ("Replied" beside "Replied") is gone. */}
-                    {/* The ONE next action (src/lib/nextActionView.ts), set by a person. Tap → the prospect. */}
-                    <NextActionPill lead={activeLead} onClick={() => setDetailLeadId(active.leadId)} />
+                    {/* The ONE next action (src/lib/nextActionView.ts), set by a person — shown AND set here (2026-10-02,
+                        in place of "Find email": email outreach is not used). "+ Set next action", or the saved
+                        action ("Call · Tomorrow"); the shared editor and the one write (lead_set_follow_up). */}
+                    {activeLead && <NextActionEditor lead={activeLead} variant="pill" />}
                     <EngagementPills reportOpenedAt={active.reportOpenedAt} siteVisitedAt={active.siteVisitedAt} geminiNamed={active.geminiNamed} geminiAnswers={active.geminiAnswers} />
                     <ConvStateChip state={activeState} hideQueued />
                     {/* The status pill already says Queued; this adds only what it cannot — the queue is paused. */}
@@ -2157,8 +2159,6 @@ const Inbox = () => {
                         <Timer className="h-3 w-3" />Queue paused
                       </span>
                     )}
-                    {/* No email on file → find one (our records first, then their website). */}
-                    {activeLead && !activeLead.email && <FindEmailButton leadId={activeLead.id} website={activeLead.website} className="text-[11px]" />}
                     {/* The one Socials line (2026-09-30): the canonical profiles, confirmed vs likely. */}
                     {activeLead && <SocialLinks lead={activeLead} size="xs" />}
                   </div>

@@ -450,6 +450,11 @@ interface SearchLead {
      and absence must stay unmarkable: see market-view. */
   primaryType?: string;
   primaryTypeLabel?: string;
+  /* THE ADDRESS (2026-10-02). places.formattedAddress — a Pro field, FREE for the same reason as
+     primaryType (the mask already bills at Text Search Enterprise for websiteUri). Find Leads' business
+     age needs it: a result is looked up on Companies House only when it is a UK address
+     (isCompaniesHouseTarget), and without it NO search result ever was. Absent on rows cached before. */
+  address?: string;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -498,7 +503,7 @@ async function textSearchPlaces(
   let pageToken: string | undefined;
   const MAX_PAGES = Math.max(1, maxPages);
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
   // Google Places API (New) max radius is 50,000m
   const clampedRadius = Math.min(radius, 50000);
 
@@ -613,6 +618,7 @@ async function textSearchPlaces(
         reason,
         primaryType: place.primaryType || undefined,
         primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
+        address: place.formattedAddress || undefined,
       });
 
       if (status === 'NO_WEBSITE') {
@@ -725,7 +731,7 @@ async function expandSearch(
 
     try {
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
       // Fetch 1 page per expansion centre to limit API spend
@@ -783,6 +789,7 @@ async function expandSearch(
             reason,
             primaryType: place.primaryType || undefined,
             primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
+            address: place.formattedAddress || undefined,
             isExpanded: true,
           });
           totalNoWebsite++;
@@ -1063,7 +1070,7 @@ async function fetchTile(
   keyword: string, lat: number, lng: number, radiusM: number, apiKey: string, debug: DebugMeta,
 ): Promise<SearchLead[]> {
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,nextPageToken';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,places.primaryType,places.primaryTypeDisplayName,places.formattedAddress,nextPageToken';
   const out: SearchLead[] = [];
   let pageToken: string | undefined;
 
@@ -1100,6 +1107,7 @@ async function fetchTile(
         reason,
         primaryType: place.primaryType || undefined,
         primaryTypeLabel: place.primaryTypeDisplayName?.text || undefined,
+        address: place.formattedAddress || undefined,
       });
     }
     pageToken = data.nextPageToken;
@@ -1403,9 +1411,18 @@ Deno.serve(async (req) => {
       .gte('created_at', cutoff)
       .maybeSingle();
 
-    if (cached?.results) {
+    // Region blobs are stored as { leads, region }; normal as a bare leads array.
+    const cachedRaw = cached?.results as unknown;
+    const cachedList = (!!cachedRaw && !Array.isArray(cachedRaw) && Array.isArray((cachedRaw as { leads?: unknown }).leads)
+      ? (cachedRaw as { leads: SearchLead[] }).leads : Array.isArray(cachedRaw) ? cachedRaw as SearchLead[] : []);
+    /* ⛔ A SET CACHED BEFORE THE ADDRESS WAS ASKED FOR (2026-10-02) IS STALE: not one row carries an address,
+       so Find Leads' business age could never check any of it for up to CACHE_TTL_MS. It is fetched fresh
+       ONCE (the upsert below replaces it); a set where any row has an address is served as before. */
+    const cachedWithoutAddresses = cachedList.length > 0 && !cachedList.some((l) => typeof l?.address === 'string' && l.address.trim() !== '');
+    if (cachedWithoutAddresses) console.log(`Cache STALE (no addresses) for "${keyword}" in "${location}" — fetching fresh`);
+
+    if (cached?.results && !cachedWithoutAddresses) {
       debug.cached = true;
-      // Region blobs are stored as { leads, region }; normal as a bare leads array.
       const raw = cached.results as unknown;
       const isRegionBlob = !!raw && !Array.isArray(raw) && Array.isArray((raw as { leads?: unknown }).leads);
       const cachedLeads = (isRegionBlob ? (raw as { leads: SearchLead[] }).leads : raw) as SearchLead[];

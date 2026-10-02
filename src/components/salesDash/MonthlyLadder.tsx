@@ -2,7 +2,7 @@ import { CalendarDays, Undo2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { gbp } from '@/components/salesDash/ui';
-import { MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type EarningsTotals, type LadderSale } from '@/lib/commission';
+import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type EarningsTotals, type LadderSale } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
 /* ══ THE MONTH'S LADDER (2026-10-01) ═══════════════════════════════════════════════════════════════
@@ -15,6 +15,9 @@ const pct = (r: number) => `${Math.round(r * 100)}%`;
 const dayMonth = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
 /** How many empty dots the open-ended top tier draws before it says "and every sale after". */
 const TOP_TIER_DOTS = 3;
+/** "1–12 sales this month = 30% · 13–24 = 40% · 25+ = 50%" from the tier table. */
+const zoneWords = (zones: { rate: number; from: number; to: number | null }[]) =>
+  zones.map((z, i) => `${z.to !== null ? `${z.from}–${z.to}` : `${z.from}+`}${i === 0 ? ' sales this month' : ''} = ${pct(z.rate)}`).join(' · ');
 
 type Client = EarningsResponse['clients'][number];
 
@@ -56,11 +59,10 @@ export function MonthlyLadder({ lines, clients, totals, todayIso = new Date().to
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />{monthName(t.monthStart)}</p>
           <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums" data-testid="ladder-count">{t.counted} sale{t.counted === 1 ? '' : 's'} <span className="text-lg font-semibold text-muted-foreground">this month</span></p>
-          <p className="mt-1 text-sm"><span className="font-semibold">Next sale earns {pct(t.nextSaleRate)}</span>
-            {!t.topTier && t.salesToNextTier !== 0 && <span className="text-muted-foreground"> · {monthlyTrackerNextLine(t)}</span>}
-            {!t.topTier && t.salesToNextTier === 0 && <span className="text-muted-foreground"> · a new rate starts with it</span>}
-            {t.topTier && <span className="text-muted-foreground"> · top rate</span>}
-          </p>
+          {/* ⛔ THE PROGRESS LINE IS THE HEADLINE (Paul, 2026-10-02): "1 more sale to unlock 40%", then
+              "40% unlocked · 12 more sales to unlock 50%". */}
+          <p className="mt-1 text-lg font-semibold text-emerald-700 dark:text-emerald-300" data-testid="ladder-next-line">{monthlyTrackerNextLine(t)}</p>
+          <p className="text-sm text-muted-foreground">Your next sale earns <span className="font-semibold text-foreground">{pct(t.nextSaleRate)}</span> of its first payment</p>
         </div>
         <div className="sm:text-right">
           <p className="text-xs text-muted-foreground">Earned this month</p>
@@ -88,7 +90,7 @@ export function MonthlyLadder({ lines, clients, totals, todayIso = new Date().to
                   return <span key={k} aria-hidden className={cn('h-4 w-4 rounded-full border-2', idx === nextIndex ? 'border-emerald-500 border-dashed' : 'border-border')} />;
                 })}
               </div>
-              {here && <p className="mt-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">{t.salesToNextTier === 0 || z.to === null ? 'Your next sale is here' : `${(z.to ?? 0) - counted.length} to go at ${pct(z.rate)}`}</p>}
+              {here && <p className="mt-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">{z.to === null ? 'Your next sale is here' : `${(z.to ?? 0) - counted.length} to go at ${pct(z.rate)}`}</p>}
               {z.to === null && <p className="mt-2 text-[11px] text-muted-foreground">and every sale after</p>}
             </div>
           );
@@ -98,7 +100,11 @@ export function MonthlyLadder({ lines, clients, totals, todayIso = new Date().to
         <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="ladder-refunded"><Undo2 className="h-3.5 w-3.5" />
           {gone.length} sale{gone.length === 1 ? '' : 's'} refunded this month — {gone.length === 1 ? 'it no longer counts' : 'they no longer count'} towards your rate.</p>
       )}
-      <p className="mt-3 text-[11px] text-muted-foreground">Each sale keeps the rate it earned. The count starts again on the 1st.</p>
+      {/* The whole scheme in one line, from the same constants that pay it. */}
+      <p className="mt-3 text-sm" data-testid="ladder-scheme">
+        {zoneWords(zones)} of the first payment, <span className="font-semibold">plus {pct(COMMISSION_RECURRING_RATE)} of the next {COMMISSION_RECURRING_COUNT} successful monthly payments</span> from each client.
+      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">Each sale keeps the rate it earned. The count starts again on the 1st (UK time).</p>
     </section>
   );
 }

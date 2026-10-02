@@ -67,3 +67,51 @@ consent tool by OMD Websites". Both read "No agency evidence" with the weak sign
 SQL `20261003100100` (read back table, RLS, grants) → deploy fn `agency-check` (new; `config.toml` has it) →
 push main. The SPA before the SQL shows "Not checked" (the read fails safe); before the function, every cell
 stays "Not checked".
+
+
+## 5. v2 — accuracy over a few seconds (Paul, 2026-10-02, branch `feat/commission-six-trailing`; `AGENCY_CHECK_VERSION` 2)
+
+What changed, each kept only because the measurement below showed it found real evidence and no false one:
+- **Every `<footer>` element, plus the page tail measured WITHOUT scripts / styles** (`creditRegions`).
+  `footerHtml()` took the FIRST `<footer>` (a testimonial's or a card's) despite its comment, and on a site
+  with no `<footer>` element the raw-character tail missed footers sitting before big script blocks. Footer
+  LINKS (a weak sign) are still read from footer elements only. Regions are joined with a hard stop.
+- **Every credit match is tried**, not just the first ("Theme by Astra · Website by X" stopped at Astra).
+- **A link that IS the credit** (`<a href=agency>Website by X</a>`, or its title / aria-label / alt says so)
+  carries the agency's domain. A logo-only link with no credit words is still never enough.
+- **"This/Our website was designed/built/… by X"** in a page's own words (about / legal pages). Narrow: it
+  must say THIS/OUR website; "designed by our team" never counts.
+- **One legal-type page** (a credits page first, else privacy / terms / legal / accessibility; never cookies),
+  never as a filler page.
+- Credit names stop at "/", a digit, and footer noise words (click, back, follow, menu, home, top).
+- **Crawler name** `LeadFinderOS-SiteCheck/1.0 (+https://findable.live)` — the "Mozilla/5.0 (compatible; …)"
+  wrapper is gone. 9 UK hosts 403'd the wrapper (a bad-bot rule) and accepted the bare honest name; 5 of
+  those answer it with SiteGround's challenge (`/.well-known/sgcaptcha/`), now labelled "blocked" — ⛔ never
+  worked around. Still a named crawler, never a browser identity.
+- **Budget:** ≤ 13 requests (was 10), ≤ 7 sample pages (was 6), 4 at a time (was 3), 8 s per request (was 6),
+  10 s for the homepage, 35 s per site (was 25); the www / bare-domain twin tried once only when the homepage
+  gives no answer at all (a 4xx is an answer).
+- v1 cached rows are re-checked (version bump) — one crawl per domain, inside the free `site_scrape` guard.
+
+**Measured 2026-10-02** (this machine, Thailand; the same deterministic 100 distinct lead-book domains, old
+and new crawl each run on every site, 8 sites at a time, order alternated per site):
+
+| | old (v1) | new (v2) |
+|---|---|---|
+| Agency likely | 12 | **16** |
+| No agency evidence | 58 | 56 |
+| Unknown | 30 | 28 |
+| median / p90 / slowest per site | 1.6 s / 6.6 s / 21.8 s | 1.8 s / 6.9 s / 27.2 s |
+| requests, average / max | 6.3 / 10 | 7.1 / 11 |
+| pages read, average | 4.0 | 4.5 |
+
+The 5 changes (Zest & Punch and Lab Creative checked in the page source by hand; the others from their
+evidence lines, each a linked credit): Thisworks (linked "Website design and SEO by", was blocked), Zest &
+Punch (linked "Website hosted and managed by", no `<footer>`), adaptable (linked "Site by"), Lab Creative
+("Website built by Lab Creative / Digi Guru"), and one blocked site now read as No agency evidence (7 pages).
+Every v1 agency result is unchanged; no new false positive. A raw-HTML scan of the remaining No-evidence
+homepages found no further credit. Unknown 28 (old 30): 10 blocked (old 4 — bot challenges the old rules
+mislabelled "built by script" are now called blocked), 10 offline (dead domains; twin tried), 6 script-built
+(old 14), 1 not found, 1 moved to another domain. None can honestly be read without posing as a browser.
+
+Deploy: `agency-check` (closure: `_shared/agency-crawl.ts`, `src/lib/agencyDetect.ts`) and the SPA.

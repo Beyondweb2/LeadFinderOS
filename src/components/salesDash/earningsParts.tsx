@@ -118,13 +118,14 @@ export function CommissionExplainer({ lines, totals, todayIso = new Date().toISO
             const from = i === 0 ? 1 : MONTHLY_TIERS[i - 1].upTo + 1;
             return <div key={i} className="flex justify-between gap-3"><dt className="text-muted-foreground">{Number.isFinite(z.upTo) ? `Sales ${from}–${z.upTo}` : `Sale ${from} onwards`}</dt><dd>{pct(z.rate)} of the first payment</dd></div>;
           })}
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Next rate</dt><dd className="font-semibold">{t.topTier ? 'You are on the top rate' : t.salesToNextTier === 0 ? 'Starts with your next sale' : `${t.salesToNextTier} sale${t.salesToNextTier === 1 ? '' : 's'} away`}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Next rate</dt><dd className="font-semibold">{t.topTier ? 'You are on the top rate' : `${t.salesToNextTier} sale${t.salesToNextTier === 1 ? '' : 's'} away`}</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Recurring commission</dt><dd>{gbp(totals.projected)} expected · {gbp(collected)} collected</dd></div>
         </dl>
         <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
           <li>Each sale keeps the rate it earned: reaching sale 13 does not change sales 1–12. The count starts again on the 1st of each month (UK time).</li>
           <li>A sale that is refunded no longer counts towards your rate for the sales after it.</li>
-          <li>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} monthly payments a client actually makes.</li>
+          <li>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments a client makes after their first payment. A failed, refunded or charged-back payment earns nothing.</li>
+          <li>Monthly commission is earned while you work with Findable. If that ends, everything you earned before stays yours; client payments after it earn no new commission.</li>
           <li>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money.</li>
           <li>Only money the client actually paid counts.</li>
         </ul>

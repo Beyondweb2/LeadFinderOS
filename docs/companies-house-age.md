@@ -90,3 +90,28 @@ a bill.
    Functions → Secrets).
 3. SQL `20261004130000` (read back table, RLS, grants) → deploy fn `companies-house-check` (new; config.toml
    has it) → push main. Before the SQL or the function, every no-website cell reads "Not checked".
+
+
+## 7. "Not starting on new searches" — root cause and fix (2026-10-02, branch `feat/commission-six-trailing`)
+
+- **Root cause:** `search-leads` never asked Google for the address (its three Text Search field masks were
+  id / displayName / googleMapsUri / websiteUri / primaryType). Every Find Leads result arrived with no
+  address, `isCompaniesHouseTarget` (UK address + no website) was false for ALL of them, and the checker was
+  handed nothing. Live proof: the only 40 stored checks were the verification run; the later UI searches
+  ("plumbers, Exeter", 16 no-website; "gym, Sheffield", 11 no-website) made agency-check calls but zero
+  Companies House calls, with no guard refusals. It never worked on a real search.
+- **Fix:** `places.formattedAddress` on all three masks and `address` on every result — FREE (a Pro field;
+  the mask already bills at Text Search Enterprise for `websiteUri`). A cached result set with no address on
+  any row (cached before the fix) is treated as stale and fetched fresh once (the upsert replaces it), so it
+  is not served address-less for `CACHE_TTL_MS` (72 h). Side effect: lead score +5 for an address
+  (`leadUtils`), and `salesAddPayload` now gets the address from the result (same Google value).
+- **Checker hardened** (`src/lib/companiesHouseRunner.ts`, React-free, one runner per page session):
+  "Checking…" at once for every eligible row (no "Not checked" flash while the stored checks are read); a
+  lookup that lands after a newer search started is kept and shown (it used to be saved, then skipped as done
+  and never drawn); a place in flight is awaited, never looked up twice; an empty result set resets the last
+  run (it used to leave `pending > 0`, holding back the final reorder).
+- **Proof:** `scripts/companies-house-runner.test.ts` (Search A → Search B with different ids; B with cached +
+  stored + new; a new search mid-run; empty set; not connected). The real `LeadsTable` in a throwaway harness
+  (fake DB + fake Companies House): A's 5 eligible rows Checking… → filled (5 lookups); B, no reload: its 4 new
+  rows Checking… at once, the stored one and the one checked in A shown at once with no lookup, 4 lookups.
+- **Deploy:** `search-leads` (and the SPA). No SQL.

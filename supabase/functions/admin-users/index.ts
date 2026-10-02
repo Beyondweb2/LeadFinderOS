@@ -480,12 +480,34 @@ serve(async (req) => {
       const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
       if (isAdminRow) return jsonResponse({ ok: false, error: 'cannot_change_admin' }, 400, corsHeaders, rlHeaders);
       if (action === 'team_disable') {
+        /* ⛔ DISABLE = THE ENGAGEMENT ENDS (2026-10-02, src/lib/commission.ts). disabled_at is the end instant:
+           monthly payments from then on earn them no new commission; what they earned stays. So the end is
+           written FIRST and checked — removing the role without it would leave them neither a salesperson
+           nor an ended one, and their earned commission would read as £0 — and a second Disable keeps the
+           FIRST end date (a later one would quietly widen what they earn). */
+        const { data: cur } = await serviceClient.from('team_members').select('status, disabled_at').eq('user_id', uid).maybeSingle();
+        if (!(cur?.status === 'disabled' && cur?.disabled_at)) {
+          /* The engagement log first (append-only, the database sets the time): this is what commission
+             judges every payment against, so if it cannot be written nothing else changes. */
+          const { error: eErr } = await serviceClient.from('team_engagement_events').insert({ user_id: uid, kind: 'ended', actor_user_id: adminUserId });
+          if (eErr) return jsonResponse({ ok: false, error: 'write_failed', detail: eErr.message }, 500, corsHeaders, rlHeaders);
+          const { error: tErr } = await serviceClient.from('team_members').update({ status: 'disabled', disabled_at: new Date().toISOString(), disabled_by: adminUserId }).eq('user_id', uid);
+          if (tErr) return jsonResponse({ ok: false, error: 'write_failed', detail: tErr.message }, 500, corsHeaders, rlHeaders);
+        }
         const { error: dErr } = await serviceClient.from('user_roles').delete().eq('user_id', uid).eq('role', 'sales');
         if (dErr) return jsonResponse({ ok: false, error: 'role_remove_failed', detail: dErr.message }, 500, corsHeaders, rlHeaders);
-        await serviceClient.from('team_members').update({ status: 'disabled', disabled_at: new Date().toISOString(), disabled_by: adminUserId }).eq('user_id', uid);
         const { error: bErr } = await serviceClient.auth.admin.updateUserById(uid, { ban_duration: '876000h' });
         console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, ban_error: bErr?.message ?? null, timestamp: new Date().toISOString() }));
         return jsonResponse({ ok: true, banned: !bErr }, 200, corsHeaders, rlHeaders);
+      }
+      /* ⛔ RE-ENABLE NEVER REACHES BACK (2026-10-02): it APPENDS 'resumed' at now (the database sets the time);
+         the 'ended' event stays, so a payment that landed while they were disabled stays non-commissionable
+         for good. Written first and checked — a failed write stops here and changes nothing. Only a member who
+         is disabled now gets the event (re-enabling an active member is a no-op for the history). */
+      const { data: was } = await serviceClient.from('team_members').select('status').eq('user_id', uid).maybeSingle();
+      if (was?.status === 'disabled') {
+        const { error: rErr } = await serviceClient.from('team_engagement_events').insert({ user_id: uid, kind: 'resumed', actor_user_id: adminUserId });
+        if (rErr) return jsonResponse({ ok: false, error: 'write_failed', detail: rErr.message }, 500, corsHeaders, rlHeaders);
       }
       const { error: iErr } = await serviceClient.from('user_roles').upsert({ user_id: uid, role: 'sales' }, { onConflict: 'user_id,role' });
       if (iErr) return jsonResponse({ ok: false, error: 'role_write_failed', detail: iErr.message }, 500, corsHeaders, rlHeaders);

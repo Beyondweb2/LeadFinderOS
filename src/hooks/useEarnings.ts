@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSubscription } from '@/hooks/useSubscription';
 import { invokeEdge } from '@/lib/edgeInvoke';
-import type { ClientEarnings, CommissionLine, EarningsTotals } from '@/lib/commission';
+import type { ClientEarnings, CommissionForecast, CommissionLine, EarningsTotals } from '@/lib/commission';
 
 /* Commission from the payment ledger (fn sales-earnings). A salesperson always gets their own — the
    server decides; `person` only matters for the admin ('all' | 'me' | a user id). */
@@ -13,6 +13,10 @@ export interface EarningsResponse {
   totals: EarningsTotals;
   commissionable: boolean;
   bySeller: { sellerId: string; earned: number; due: number; offset: number; paidOut: number }[];
+  /** The next six London months (absent from a server deployed before 2026-10-02). */
+  forecast?: CommissionForecast;
+  /** The viewed person's engagement; null for everyone (absent from an older server). */
+  engagement?: { status: 'active' | 'ended'; endedAt: string | null } | null;
   ms: number;
 }
 
