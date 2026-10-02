@@ -784,7 +784,9 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const paidSignupLeads = new Set(prospectSignups.filter((o) => o.status === 'paid' || (o.lead_id && isPaidLead(leadById.get(o.lead_id)))).map((o) => o.lead_id ?? `row:${o.created_at}`));
   const interestedNoNext = facts.filter((f) => {
     const st = salesStateOf({ status: f.lead.status, is_potential_work: f.lead.is_potential_work, amount_paid: f.lead.amount_paid, call_booked_at: f.lead.call_booked_at, whatsapp_sent_at: f.lead.whatsapp_sent_at }, input.nowMs).state;
-    return (st === 'interested' || st === 'meeting_booked') && !f.lead.is_archived && (!f.lead.next_action || f.lead.next_action === 'none');
+    /* My activity: hidden (Paul, 2026-10-02) — present-tense work, so the WHO is whoever holds the lead NOW
+       (the follow-ups rule). A paid client is never here (client / won states), so delivery is untouched. */
+    return (st === 'interested' || st === 'meeting_booked') && !f.lead.is_archived && (!f.lead.next_action || f.lead.next_action === 'none') && !mine(f.holder);
   }).length;
   const features = input.usage ? foldFeatureUsage({
     now: input.usage.now, previous: input.usage.previous, costByFeature: money.cost.period.byFeature,

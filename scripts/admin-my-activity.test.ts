@@ -159,6 +159,21 @@ const niche = (o: typeof inc, k: string) => o.niches.find((x) => x.key === k);
     "a send on a lead a TEST account held is left out of templates and niches in BOTH states (the header's test rule)");
 }
 
+/* ── C3. "Interested leads with no next step" follows the toggle (Paul, 2026-10-02) ──────────────────── */
+{
+  // H: interested, no Next Action, Paul holds it. B (in the base book) is the same on Sumi's lead.
+  // E (base book) is Paul's PAID client — never in this count either way.
+  const H = lead({ assigned_to_user_id: PAUL, status: 'interested', is_potential_work: true });
+  const withH = (hide?: ReadonlySet<string>) => { const b = input(hide); return foldAdminOverview({ ...b, leads: [...b.leads, H] }); };
+  const count = (o: typeof inc) => {
+    const b = o.bottlenecks.find((x) => x.key === 'interested_no_next_action')!;
+    return Number(/^(\d+)/.exec(b.evidence)?.[1] ?? NaN);
+  };
+  ok(count(withH()) === 2, `included: 2 interested leads with no next step (Sumi's B + Paul's H) (got ${count(withH())})`);
+  ok(count(withH(new Set([PAUL]))) === 1, `hidden: 1 — only Sumi's B; Paul's H is his open workload (got ${count(withH(new Set([PAUL])))})`);
+  ok(count(foldAdminOverview(input())) === 1 && count(foldAdminOverview(input(new Set([PAUL])))) === 1,"Paul's paid client E is never counted, so it never moves with the toggle");
+}
+
 /* ── D. The wiring: one toggle, sent to the server, admin resolved server-side ───────────────────── */
 {
   const src = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
