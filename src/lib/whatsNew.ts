@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-lead-sync-gaps', date: '2026-10-02', title: 'A “Not interested” now clears the Next Action wherever you set it', audience: 'all',
+    body: 'Setting Not interested from the status pill or the status menu now clears the lead’s Next Action, the same as logging it as a call outcome. Screens also stay in step more reliably.',
+    report: {
+      added: [],
+      changed: [
+        'Not interested chosen from the Inbox status pill or the Outreach status menu clears the lead’s Next Action (and any meeting), exactly as logging “Not interested” already did.',
+        'The Sales dashboard updates within a couple of seconds of you changing a lead, instead of after up to a minute.',
+        'Remove from inbox, and queueing an opener from the lead popup, now update every open screen and tab.',
+      ],
+      removed: [],
+      effect: 'A lead that said no no longer keeps a call or meeting reminder on some screens, and what you see is the same in Inbox, Outreach, the lead popup and your dashboard.',
+    } },
   { id: '2026-10-02-client-agreement', date: '2026-10-02', title: 'Clients now accept the Client Service Agreement online', audience: 'admin',
     body: 'Every client accepts the agreement at checkout, and signs it on their own agreement page from the Welcome Pack. Each acceptance is kept as a permanent record.',
     report: {

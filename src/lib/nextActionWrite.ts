@@ -57,6 +57,15 @@ export async function saveNextAction(leadId: string, a: NextActionInput, stateLe
   return { ...r, patch };
 }
 
+/** A lead just became Not interested by its STATUS (the Inbox pill, the Outreach status menu): its Next Action
+ *  goes, exactly as a logged "Not interested" outcome clears it (leadState.outcomePlan → clearNextAction), so the
+ *  same no never leaves a call or meeting behind on one screen and not another. Clearing is allowed by the
+ *  human-only rule (it removes, never invents); the server answers `unchanged` when there was nothing to clear,
+ *  and clearing a Meeting takes its booking with it (the call_booked_at mirror). */
+export async function clearNextActionOnNo(leadId: string): Promise<WriteResult> {
+  return saveNextAction(leadId, { nextAction: 'none', date: null, note: null });
+}
+
 /** The workspace's "When is the call / meeting?" box: a booked instant → the Meeting on that UK day and time,
  *  through the same write (the server books call_booked_at from it). */
 export async function bookMeeting(leadId: string, iso: string, note: string | null | undefined, stateLead?: LeadStateInput): Promise<WriteResult> {

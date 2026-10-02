@@ -71,14 +71,27 @@ export function leadQueryKeys(leadId: string): readonly (readonly unknown[])[] {
   ];
 }
 
+/** Book-wide queries a lead change makes stale (not keyed by lead). The Sales dashboard's own numbers
+ *  (fn sales-performance) counted a Next Action, an outcome or a status the person had just set only after
+ *  its 60-second staleTime — so they are invalidated too, once per burst (BOOK_WIDE_DEBOUNCE_MS): a bulk
+ *  edit fires one notice per lead, and an interval shorter than the query piles copies up (CLAUDE.md §4). */
+export const BOOK_WIDE_LEAD_KEYS: readonly (readonly unknown[])[] = [['sales-performance']];
+const BOOK_WIDE_DEBOUNCE_MS = 1500;
+
 let installed = false;
 /** Once, at the app root: relay other tabs' notices and invalidate the per-lead queries. */
 export function installLeadSync(qc: QueryClient): () => void {
   if (installed || typeof window === 'undefined') return () => {};
   installed = true;
+  let bookWideTimer: ReturnType<typeof setTimeout> | null = null;
   const off = onLeadChanged(({ leadId, optimistic }) => {
     if (optimistic) return; // nothing to re-read until the server has answered
     for (const key of leadQueryKeys(leadId)) void qc.invalidateQueries({ queryKey: key as unknown[] });
+    if (bookWideTimer) clearTimeout(bookWideTimer);
+    bookWideTimer = setTimeout(() => {
+      bookWideTimer = null;
+      for (const key of BOOK_WIDE_LEAD_KEYS) void qc.invalidateQueries({ queryKey: key as unknown[] });
+    }, BOOK_WIDE_DEBOUNCE_MS);
   });
   const ch = bc();
   const onMsg = (m: MessageEvent) => {
@@ -86,5 +99,5 @@ export function installLeadSync(qc: QueryClient): () => void {
     if (d?.leadId) window.dispatchEvent(new CustomEvent<LeadChangedDetail>(LEAD_CHANGED_EVENT, { detail: { leadId: d.leadId, patch: d.patch, optimistic: d.optimistic, remote: true } }));
   };
   ch?.addEventListener('message', onMsg);
-  return () => { off(); ch?.removeEventListener('message', onMsg); installed = false; };
+  return () => { off(); if (bookWideTimer) clearTimeout(bookWideTimer); ch?.removeEventListener('message', onMsg); installed = false; };
 }
