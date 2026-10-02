@@ -198,6 +198,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   `agency-check`, a sitemap-guided sample, ≤10 requests, no AI) → `website_agency_checks` per domain, 30 days.
   ⛔ The machine never sets `website_control`; the lead shows "Detected: …" with Confirm agency / Not agency.
   ⛔ Platform (WordPress, Wix…) is context only; one weak sign is never "Agency likely".
+- **Business age** (`docs/companies-house-age.md`): Find Leads looks up UK results with NO website on
+  Companies House (fn `companies-house-check`, secret `COMPANIES_HOUSE_API_KEY`, ≤3 requests, no AI) →
+  `companies_house_checks` per place id. Rules live only in `src/lib/companiesHouse.ts`. ⛔ "Not found", never
+  "not registered"; ⛔ a non-trading company is never a match; ⛔ the machine match never writes a lead.
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_BUILD_TOTAL_PAYMENTS` / `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site

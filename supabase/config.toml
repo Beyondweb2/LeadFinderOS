@@ -186,6 +186,13 @@ verify_jwt = true
 [functions.agency-check]
 verify_jwt = true
 
+# companies-house-check: how old a no-website business is (2026-10-02). SPA-only caller with the
+# operator's JWT (admin or sales); the handler does resolveActor itself. Free: Companies House's public
+# API (secret COMPANIES_HOUSE_API_KEY), cached per Google place id in companies_house_checks. Writes
+# nothing else.
+[functions.companies-house-check]
+verify_jwt = true
+
 # social-profiles: Find socials / add / confirm / not them (2026-09-30). SPA-only caller with the operator's
 # JWT (admin or sales); the handler does resolveActor + leadAccess itself. Free: our records, then the
 # lead's own website. Never fetches LinkedIn, never spends money, never writes an email.

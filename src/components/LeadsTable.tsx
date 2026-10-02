@@ -22,6 +22,9 @@ import {
 import { useAgencyChecks } from '@/hooks/useAgencyChecks';
 import { SiteManagementCell } from './SiteManagementCell';
 import { agencyCheckDomain, isHighConfidenceAgency, passesSiteFilter, siteStateOf, SITE_FILTERS, type SiteFilter } from '@/lib/agencyCheck';
+import { useCompaniesHouseChecks, CH_UNAVAILABLE_WORDS } from '@/hooks/useCompaniesHouseChecks';
+import { BusinessAgeCell } from './BusinessAgeCell';
+import { AGE_FILTERS, ageStateOf, isCompaniesHouseTarget, isNewStrongMatch, passesAgeFilter, type AgeFilter } from '@/lib/companiesHouse';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -156,11 +159,20 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   /* ══ WHO RUNS THEIR WEBSITE? (2026-10-01) ══ Every result with its own website is checked as soon as
      the results arrive (useAgencyChecks, a few at a time; each row fills in as it finishes). */
   const [siteFilter, setSiteFilter] = useState<SiteFilter>('all');
-  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilter('all'); }, [ALL_STATUSES]);
+  /* ══ HOW OLD IS THIS BUSINESS? (2026-10-02) ══ Every UK result with NO website is looked up on Companies
+     House as the results arrive (useCompaniesHouseChecks); a result with a website never is. Age is
+     context: the filter narrows the view, it never removes a result. */
+  const [ageFilter, setAgeFilter] = useState<AgeFilter>('all');
+  const clearFilters = useCallback(() => { setStatusFilters(ALL_STATUSES); setSocialFilters([]); setSiteFilter('all'); setAgeFilter('all'); }, [ALL_STATUSES]);
   const hasOwnSite = useCallback((l: Lead) => l.websiteStatus === 'HAS_OWN_WEBSITE' && !!agencyCheckDomain(l.websiteUrl), []);
   const agencyItems = useMemo(() => leads.map((l) => ({ websiteUrl: l.websiteUrl, hasOwnWebsite: hasOwnSite(l) })), [leads, hasOwnSite]);
   const agency = useAgencyChecks(agencyItems);
   const highAgency = useCallback((l: Lead) => hasOwnSite(l) && isHighConfidenceAgency(agency.rowFor(l.websiteUrl)), [agency, hasOwnSite]);
+  const chItems = useMemo(() => leads.map((l) => ({ id: l.id, name: l.name, address: l.address ?? null, isTarget: isCompaniesHouseTarget(l) })), [leads]);
+  const ch = useCompaniesHouseChecks(chItems);
+  const ageState = useCallback((l: Lead) => ageStateOf(isCompaniesHouseTarget(l), ch.rowFor(l.id), ch.isChecking(l.id), new Date()), [ch]);
+  const newStrong = useCallback((l: Lead) => isNewStrongMatch(isCompaniesHouseTarget(l), ch.rowFor(l.id), new Date()), [ch]);
+  const chWhy = ch.stoppedBecause ? CH_UNAVAILABLE_WORDS[ch.stoppedBecause] : null;
 
   const filteredLeads = useMemo(() => {
     const shown = leads.filter((lead) => {
@@ -171,13 +183,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         if (!kind || !socialFilters.includes(kind)) return false;
       }
       if (!passesSiteFilter(siteFilter, siteStateOf(hasOwnSite(lead), agency.rowFor(lead.websiteUrl)))) return false;
+      if (!passesAgeFilter(ageFilter, ageState(lead))) return false;
       return true;
     });
     /* High-confidence agency sites go to the bottom (kept, never hidden) once every check has finished —
        rows never jump under the cursor while results are still arriving. The rest keep their order. */
-    if (agency.pending > 0) return shown;
-    return [...shown.filter((l) => !highAgency(l)), ...shown.filter((l) => highAgency(l))];
-  }, [leads, statusFilters, socialFilters, siteFilter, agency, hasOwnSite, highAgency]);
+    /* The small boost (2026-10-02): no website + a STRONG Companies House match + NEW moves to the top, the
+       same way — only once every check has finished. Nothing is added or contacted; nothing is hidden. */
+    if (agency.pending > 0 || ch.pending > 0) return shown;
+    const last = shown.filter((l) => highAgency(l));
+    const rest = shown.filter((l) => !highAgency(l));
+    return [...rest.filter((l) => newStrong(l)), ...rest.filter((l) => !newStrong(l)), ...last];
+  }, [leads, statusFilters, socialFilters, siteFilter, ageFilter, agency, ch, hasOwnSite, highAgency, ageState, newStrong]);
 
   const visible = visibleResults(leads.length, filteredLeads.length);
   const filterNotice = visible.filtered ? (
@@ -441,9 +458,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         <DropdownMenuRadioGroup value={siteFilter} onValueChange={(v) => setSiteFilter(v as SiteFilter)}>
           {SITE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="text-sm" data-testid={`site-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Business age (no website)</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={ageFilter} onValueChange={(v) => setAgeFilter(v as AgeFilter)}>
+          {AGE_FILTERS.map((f) => <DropdownMenuRadioItem key={f.value} value={f.value} onSelect={(e) => e.preventDefault()} className="text-sm" data-testid={`age-filter-${f.value}`}>{f.label}</DropdownMenuRadioItem>)}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilter]);
+  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter, siteFilter, ageFilter]);
 
   // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
   // Outreach pattern: appear with a selection; "Add all shown" when none selected.
@@ -659,6 +681,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
                     {hasOwnSite(lead) && <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite compact />}
+                    {isCompaniesHouseTarget(lead) && <BusinessAgeCell state={ageState(lead)} row={ch.rowFor(lead.id)} unavailableWhy={chWhy} compact />}
                   </div>
                   {onEnrichPatch && (
                     <div className="mt-1.5">
@@ -773,17 +796,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     />
                   </TableHead>
                 )}
-                <TableHead className="w-[25%] pl-2">Business Name</TableHead>
-                <TableHead className="w-[15%]">Website Status</TableHead>
-                <TableHead className="w-[17%]" title="Who runs their website — a machine check of the site">Site management</TableHead>
-                <TableHead className="w-[25%]">More Details</TableHead>
+                <TableHead className="w-[23%] pl-2">Business Name</TableHead>
+                <TableHead className="w-[14%]">Website Status</TableHead>
+                <TableHead className="w-[15%]" title="Who runs their website — a machine check of the site">Site management</TableHead>
+                <TableHead className="w-[12%]" title="How long ago the company was incorporated — Companies House, checked only for businesses with no website">Business age</TableHead>
+                <TableHead className="w-[18%]">More Details</TableHead>
                 <TableHead className="w-[18%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={bulkAllowed ? 6 : 5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={bulkAllowed ? 7 : 6} className="h-24 text-center text-muted-foreground">
                     {emptyRows}
                   </TableCell>
                 </TableRow>
@@ -831,6 +855,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     <SiteManagementCell row={agency.rowFor(lead.websiteUrl)} checking={agency.isChecking(lead.websiteUrl)} hasWebsite={hasOwnSite(lead)} />
+                  </TableCell>
+                  <TableCell>
+                    <BusinessAgeCell state={ageState(lead)} row={ch.rowFor(lead.id)} unavailableWhy={chWhy} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
