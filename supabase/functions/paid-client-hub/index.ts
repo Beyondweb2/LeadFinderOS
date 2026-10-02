@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
         try {
           const r = await fetch("https://api.resend.com/emails", {
             method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ from: "Findable alerts <alerts@findable.live>", to: ["paul@move37.fun"],
+            body: JSON.stringify({ from: "Findable alerts <alerts@findable.live>", to: ["paul@findable.live"],
               subject: `SERVICE ENDED — ${live ? "cancel the monthly in Stripe" : "check Stripe"} — ${String(lead.business_name ?? "")}`,
               html: lines.map((l) => `<p>${l}</p>`).join("") }),
           });

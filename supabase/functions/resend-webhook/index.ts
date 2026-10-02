@@ -41,7 +41,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { verifySvix } from "../_shared/svix-verify.ts";
 
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 const FROM_OPERATOR = "Findable <alerts@findable.live>";
 /** Svix's own replay tolerance. */
 const TOLERANCE_MS = 5 * 60 * 1000;

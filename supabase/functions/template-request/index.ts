@@ -12,7 +12,7 @@ import { checkTemplateRequest, replyToAddress, templateRequestEmail } from "../.
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 /* The same alert route as request-call / notify-onboarding-submit. */
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
 
 const corsHeaders = {

@@ -675,8 +675,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   "Pune UK"). Money is still GBP-only (checkout, webhook, report offer panel): India can PROSPECT, not
   CLOSE — `docs/india-readiness.md` §6.
 - **Owner-scoped rows are owned by the DATA account** `pauljsales455@outlook.com` (`9d5a7629…`),
-  resolved from the data (newest lead's `user_id`), never from `ADMIN_EMAIL` (`paul@move37.fun`, owns
-  nothing) and never hardcoded. A row under the wrong owner is invisible, not wrong.
+  resolved from the data (newest lead's `user_id`), never from the operator login (`paul@move37.fun`,
+  owns nothing) and never hardcoded. A row under the wrong owner is invisible, not wrong.
+- **Paul's addresses (2026-10-02):** every alert recipient, reply-to and client-facing contact is
+  `paul@findable.live` (forwards to him). ⛔ `GBP_MANAGER_EMAIL` stays `paul@move37.fun` — Google only
+  accepts a manager invite on a Google account and findable.live is a forward; move it only when Paul
+  has a Google account on the new address. The login account is not an alert address.
 
 **Auth, RLS, `user_id`**
 - **`user_id` stays on every table.** `anon` and `authenticated` hold full DML GRANTS on all 56

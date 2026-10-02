@@ -11,7 +11,7 @@ import { replyToAddress } from "../../../src/lib/templateRequest.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
 /** A person may send at most this many in an hour — a stuck button cannot flood the inbox. */
 const MAX_PER_HOUR = 20;

@@ -28,7 +28,7 @@ approve. Branch `feat/template-requests`. Migration `20260928220000_template_req
   common rejection reasons).
 - Edge function `template-request` (verify_jwt true, role required — admin or sales): validates again
   (`checkTemplateRequest`, `src/lib/templateRequest.ts`), SAVES the request first (service role), then
-  emails Paul via Resend (`alerts@findable.live` → `paul@move37.fun`, the request-call route), then
+  emails Paul via Resend (`alerts@findable.live` → `paul@findable.live`, the request-call route), then
   writes `email_status` (`sent` / `failed` / `not_configured`) + `email_error` back. A failed email never
   loses the request; the form says "Request saved" instead of "sent" when the email did not go.
 - The email (`templateRequestEmail`, plain text): who (name, role, email), when (UK time), suggested name,

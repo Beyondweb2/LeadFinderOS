@@ -494,7 +494,7 @@ export function checkoutLineNameFor(route: ServiceRoute): string {
   return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum)`;
 }
 
-export const FINDABLE_CONTACT_EMAIL = "paul@move37.fun";
+export const FINDABLE_CONTACT_EMAIL = "paul@findable.live";
 
 export const FINDABLE_CONTACT_WHATSAPP = "447943262742";
 
