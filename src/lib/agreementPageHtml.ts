@@ -14,6 +14,8 @@ import {
 } from './clientAgreement.ts';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+/** Escaped text with any email address kept out of Cloudflare's obfuscation (see the note below). */
+const escMail = (s: unknown) => esc(s).replace(/([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g, '<!--email_off-->$1<!--/email_off-->');
 
 /** What the form holds (typed values, kept on a failed submit). */
 export interface AgreementFormValues {
@@ -27,6 +29,8 @@ export type AgreementPageModel =
   | { mode: 'not_ready'; businessName: string }
   | { mode: 'blank' };
 
+/* ⚠️ findable.live runs Cloudflare email obfuscation: an address in the HTML becomes "[email protected]" plus a
+   decoder script. Every address this page prints sits inside <!--email_off--> markers so it reads as typed. */
 const CSS = `
   :root{ --ink:#0f172a; --muted:#475569; --line:#d7dce5; --tint:#f4f6f9; --navy:#0b1730; --gold:#f5b301; --bad:#b42318; --good:#0f766e; }
   *{ box-sizing:border-box; }
@@ -95,9 +99,9 @@ function agreementHtml(fill: AgreementFill | null): string {
     <h1>${esc(CLIENT_AGREEMENT_TITLE)}</h1>
     <p>${esc(v.intro)}</p>
     <h2>Findable details</h2>
-    <table>${v.findableDetails.map(([k, val]) => `<tr><th>${esc(k)}</th><td>${esc(val)}</td></tr>`).join('')}</table>
+    <table>${v.findableDetails.map(([k, val]) => `<tr><th>${esc(k)}</th><td>${escMail(val)}</td></tr>`).join('')}</table>
     <h2>Client details</h2>
-    <table>${rows.map(([k, val]) => `<tr><th>${esc(k)}</th><td>${esc(val === NOT_PROVIDED && fill ? 'Filled in from the form below' : val)}</td></tr>`).join('')}</table>
+    <table>${rows.map(([k, val]) => `<tr><th>${esc(k)}</th><td>${escMail(val === NOT_PROVIDED && fill ? 'Filled in from the form below' : val)}</td></tr>`).join('')}</table>
     <h2>Your service</h2>
     ${svc('build')}${svc('optimise')}
     <p class="muted">${esc(v.serviceNote)}</p>
@@ -123,16 +127,16 @@ export function agreementPageHtml(m: AgreementPageModel): string {
   if (m.mode === 'not_ready') {
     return shell('Your agreement is not ready yet', `<div class="card"><h1>Your agreement is not ready yet</h1>
       <p>We are still setting up the agreement for ${esc(m.businessName)}. We will send you the link as soon as it is ready.</p>
-      <p class="muted">Any questions, email paul@findable.live.</p></div>`);
+      <p class="muted">Any questions, email <!--email_off-->paul@findable.live<!--/email_off-->.</p></div>`);
   }
   if (m.mode === 'accepted') {
     return shell('Agreement accepted', `<div class="card">
       ${m.justSigned ? '<div class="ok">Thank you. Your agreement is signed.</div>' : ''}
       <h1>Agreement accepted</h1>
       <p>Accepted on ${esc(ukDateTime(m.acceptedAtIso))} by ${esc(m.acceptedBy)}, for ${esc(m.businessName)}.</p>
-      ${m.justSigned ? (m.emailedTo ? `<p>We have emailed a copy of exactly what you agreed to, to ${esc(m.emailedTo)}.</p>` : '<p>Please download your copy below and keep it safe.</p>') : ''}
+      ${m.justSigned ? (m.emailedTo ? `<p>We have emailed a copy of exactly what you agreed to, to <!--email_off-->${esc(m.emailedTo)}<!--/email_off-->.</p>` : '<p>Please download your copy below and keep it safe.</p>') : ''}
       <p><a class="btn" href="${esc(m.pdfHref)}">Download your signed copy (PDF)</a></p>
-      <p class="muted">Any questions, email paul@findable.live.</p></div>`);
+      <p class="muted">Any questions, email <!--email_off-->paul@findable.live<!--/email_off-->.</p></div>`);
   }
   const v = m.values;
   const fill: AgreementFill = { businessName: m.businessName, route: m.route };
@@ -158,5 +162,5 @@ export function agreementPageHtml(m: AgreementPageModel): string {
 /** The one refusal page for a token that does not exist (never says why). */
 export function agreementUnavailableHtml(): string {
   return shell('Agreement unavailable', `<div class="card"><h1>Agreement unavailable</h1>
-    <p>This link isn&rsquo;t valid. If you were expecting an agreement from Findable, email paul@findable.live.</p></div>`);
+    <p>This link isn&rsquo;t valid. If you were expecting an agreement from Findable, email <!--email_off-->paul@findable.live<!--/email_off-->.</p></div>`);
 }
