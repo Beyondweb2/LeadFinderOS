@@ -65,7 +65,8 @@ console.log('── 3. THE LADDER AND ITS WORDS ──');
 const tr = (k: number) => monthlyTracker(linesOf(month.slice(0, k)), TODAY);
 const words: [number, number, string][] = [
   [0, 0.3, '12 more sales to unlock 40%'], [9, 0.3, '3 more sales to unlock 40%'], [11, 0.3, '1 more sale to unlock 40%'],
-  [12, 0.4, 'Next sale earns 40%'], [13, 0.4, '11 more sales to unlock 50%'], [24, 0.5, 'Next sale earns 50%'], [25, 0.5, 'Top rate: every sale earns 50%'],
+  [12, 0.4, '40% unlocked · 12 more sales to unlock 50%'], [13, 0.4, '40% unlocked · 11 more sales to unlock 50%'], [23, 0.4, '40% unlocked · 1 more sale to unlock 50%'],
+  [24, 0.5, '50% unlocked · every sale earns 50%'], [25, 0.5, '50% unlocked · every sale earns 50%'],
 ];
 for (const [k, next, line] of words) {
   const x = k === 0 ? monthlyTracker([], TODAY) : tr(k);
@@ -100,11 +101,11 @@ ok(initLine(linesOf([legacy]), legacy.lead_id!).commission === 29.7 && initLine(
 const unstamped = initial(OCT(1), null);
 ok(initLine(linesOf([unstamped]), unstamped.lead_id!).rate === COMMISSION_INITIAL_RATE && monthlyTracker(linesOf([unstamped]), TODAY).counted === 0, 'an unstamped row falls back to the flat 30% and is never counted on the ladder');
 
-console.log('── 6. TRAILING COMMISSION UNCHANGED ──');
+console.log('── 6. TRAILING COMMISSION: 20% × THE NEXT SIX, WHATEVER THE TIER ──');
 const c25 = month[24];
 const rec = (i: number): LedgerRow => ({ id: `rc${i}`, lead_id: c25.lead_id, kind: 'recurring', status: 'succeeded', amount_gbp: 29.99, occurred_at: `2026-11-${10 + i}T10:00:00Z`, stripe_object_id: `in_${i}`, stripe_payment_intent_id: null, stripe_charge_id: null, stripe_invoice_id: `in_${i}`, sold_by_user_id: REP });
-const lrec = linesOf([c25, rec(0), rec(1), rec(2), rec(3)]).filter((l) => l.leadId === c25.lead_id && l.kind === 'payment').sort((a, b) => a.paymentNumber - b.paymentNumber);
-ok(lrec[0].commission === 49.5 && lrec.slice(1, 4).every((l) => l.commission === 6) && lrec[4].commission === 0, 'a 50% sale: its monthly payments still earn 20% × the next 3 (£29.99 → £6.00), then nothing');
+const lrec = linesOf([c25, rec(0), rec(1), rec(2), rec(3), rec(4), rec(5), rec(6)]).filter((l) => l.leadId === c25.lead_id && l.kind === 'payment').sort((a, b) => a.paymentNumber - b.paymentNumber);
+ok(lrec[0].commission === 49.5 && lrec.slice(1, 7).every((l) => l.commission === 6) && lrec[7].commission === 0, 'a 50% sale: its monthly payments still earn 20% × the next 6 (£29.99 → £6.00), then nothing');
 
 console.log('── 7. WHERE IT IS READ, AND THE SALES PAGE ──');
 ok(/commission_rule, commission_month_start, commission_month_seq, commission_rate/.test(read('supabase/functions/_shared/earnings.ts')), 'the earnings loader reads the stamped columns');

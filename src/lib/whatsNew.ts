@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-commission-six-forecast', date: '2026-10-02', title: 'Monthly commission on six payments, and your next six months', audience: 'sales',
+    body: 'You now earn 20% of the next six monthly payments from each client (it was three), and Sales shows what you have earned and what your clients are expected to pay you over the next six months.',
+    report: {
+      added: [
+        '"Your next 6 months" on Sales: this month and the next five, each split into collected and expected. Tap a month to see which clients and payments are in it.',
+        'Total earned to date, this month, and the total expected over the six months.',
+        '"+ Set next action" in a WhatsApp conversation\'s header (or the action itself, like "Call · Tomorrow") — the same Next Action as everywhere else.',
+      ],
+      changed: [
+        'Monthly commission: 20% of each of the next six successful monthly payments from a client (not the first payment). Payment seven onwards earns nothing. A failed, refunded or charged-back payment earns nothing.',
+        'The ladder says where you are: "1 more sale to unlock 40%", then "40% unlocked · 12 more sales to unlock 50%". The 30% / 40% / 50% rates are unchanged.',
+        'Monthly commission is earned while you work with Findable. If that ends, what you earned stays yours; payments after it earn no new commission.',
+      ],
+      removed: [
+        'Find email in the WhatsApp header and on the lead popup. Email addresses already on a lead still show.',
+      ],
+      effect: 'Each client you sell can now pay you on seven payments instead of four, and you can see what is coming in before it lands. Expected is not earned until the client pays.',
+    } },
   { id: '2026-10-01-paid-client-setup', date: '2026-10-01', title: 'Paid Clients: one checklist, one next step', audience: 'admin',
     body: 'A payment now lands as a Paid Client with its setup checklist worked out, one next step, and one "New Findable client" email to you.',
     report: {

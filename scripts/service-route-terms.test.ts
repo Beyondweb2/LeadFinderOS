@@ -188,13 +188,13 @@ const L = (id: string, kind: string, amount: number, at: string, status = 'succe
 const optLedger = [L('p1', 'initial', 99, '2026-09-29T10:00:00Z'), L('p2', 'recurring', 99, '2026-11-10T10:00:00Z'), L('p3', 'recurring', 99, '2026-12-10T10:00:00Z'), L('p4', 'recurring', 99, '2027-01-10T10:00:00Z')];
 const run = (ledger: LedgerRow[], total: number | null) => commissionLines({ ledger, payouts: [], isCommissionable: (u) => u === 'rep', contractTotalOf: new Map([['opt', total]]) });
 const c0 = run([optLedger[0]], 6).clients[0];
-ok(c0.commissionablePaymentsLeft === 3, 'Optimise after payment 1: 3 commissionable recurring left (the rule: next three), within its 5');
+ok(c0.commissionablePaymentsLeft === 5, 'Optimise after payment 1: 5 commissionable recurring left — the next six, capped by its 5 remaining');
 const lines4 = run(optLedger, 6).lines.filter((l) => l.kind === 'payment');
-ok(lines4.find((l) => l.paymentNumber === 1)!.commission === 29.7 && lines4.filter((l) => l.paymentNumber > 1).every((l) => l.commission === 19.8), 'commission unchanged: 30% of the initial (£29.70), 20% of the next three (£19.80 each)');
-ok(run(optLedger, 6).clients[0].commissionablePaymentsLeft === 0, 'after three recurring: nothing more projected');
-/* A hypothetical shorter contract proves the cap is real, not just the 3-payment rule. */
+ok(lines4.find((l) => l.paymentNumber === 1)!.commission === 29.7 && lines4.filter((l) => l.paymentNumber > 1).every((l) => l.commission === 19.8), 'commission unchanged: 30% of the initial (£29.70), 20% of each monthly payment (£19.80 each)');
+ok(run(optLedger, 6).clients[0].commissionablePaymentsLeft === 2, 'after three recurring: the 2 left in the Optimise contract (not the 3 the six-rule alone would allow)');
+/* A hypothetical shorter contract proves the cap is real, not just the six-payment rule. */
 ok(run([optLedger[0], optLedger[1]], 3).clients[0].commissionablePaymentsLeft === 1, 'a contract with only 2 recurring payments projects at most what is left of it (cap is the contract)');
-ok(run([optLedger[0]], null).clients[0].commissionablePaymentsLeft === 3, 'unknown contract → the existing rule, unchanged');
+ok(run([optLedger[0]], null).clients[0].commissionablePaymentsLeft === 6, 'unknown contract → the rule alone: the next six');
 const proj = earningsTotals([], [], [{ leadId: 'opt', paymentsLeft: run([optLedger[0], optLedger[1]], 3).clients[0].commissionablePaymentsLeft, monthlyGbp: 99, active: true }], '2026-10-01');
 ok(proj.projected === 19.8, 'the projection counts only payments inside the contract');
 const refunded = run([...optLedger.slice(0, 2), L('r1', 'refund', 99, '2026-11-12T10:00:00Z', 'succeeded', { stripe_payment_intent_id: 'pi_p1', stripe_charge_id: 'ch_p1' })], 6);

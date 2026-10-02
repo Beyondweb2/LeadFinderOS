@@ -480,9 +480,18 @@ serve(async (req) => {
       const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
       if (isAdminRow) return jsonResponse({ ok: false, error: 'cannot_change_admin' }, 400, corsHeaders, rlHeaders);
       if (action === 'team_disable') {
+        /* ⛔ DISABLE = THE ENGAGEMENT ENDS (2026-10-02, src/lib/commission.ts). disabled_at is the end instant:
+           monthly payments from then on earn them no new commission; what they earned stays. So the end is
+           written FIRST and checked — removing the role without it would leave them neither a salesperson
+           nor an ended one, and their earned commission would read as £0 — and a second Disable keeps the
+           FIRST end date (a later one would quietly widen what they earn). */
+        const { data: cur } = await serviceClient.from('team_members').select('status, disabled_at').eq('user_id', uid).maybeSingle();
+        if (!(cur?.status === 'disabled' && cur?.disabled_at)) {
+          const { error: tErr } = await serviceClient.from('team_members').update({ status: 'disabled', disabled_at: new Date().toISOString(), disabled_by: adminUserId }).eq('user_id', uid);
+          if (tErr) return jsonResponse({ ok: false, error: 'write_failed', detail: tErr.message }, 500, corsHeaders, rlHeaders);
+        }
         const { error: dErr } = await serviceClient.from('user_roles').delete().eq('user_id', uid).eq('role', 'sales');
         if (dErr) return jsonResponse({ ok: false, error: 'role_remove_failed', detail: dErr.message }, 500, corsHeaders, rlHeaders);
-        await serviceClient.from('team_members').update({ status: 'disabled', disabled_at: new Date().toISOString(), disabled_by: adminUserId }).eq('user_id', uid);
         const { error: bErr } = await serviceClient.auth.admin.updateUserById(uid, { ban_duration: '876000h' });
         console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, ban_error: bErr?.message ?? null, timestamp: new Date().toISOString() }));
         return jsonResponse({ ok: true, banned: !bErr }, 200, corsHeaders, rlHeaders);

@@ -20,6 +20,8 @@ interface Member {
   email: string | null; last_sign_in_at: string | null; has_signed_in: boolean; banned: boolean; assigned_leads: number;
   /** 2026-09-29: set = suspended (reads work, every protected action refuses). Null = not suspended. */
   suspended_at?: string | null;
+  /** When Disable ended their engagement (the commission end date). Null while active. */
+  disabled_at?: string | null;
 }
 
 async function call(action: string, body: Record<string, unknown> = {}) {
@@ -120,7 +122,7 @@ export default function Team() {
                     {m.email ?? '—'} · {m.last_sign_in_at ? `last active ${new Date(m.last_sign_in_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}` : 'has not signed in yet'} · {m.assigned_leads} leads
                   </div>
                 </div>
-                <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : 'disabled'}</Badge>
+                <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</Badge>
                 {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -146,7 +148,7 @@ export default function Team() {
                     ))}
                     {m.status === 'active' ? (
                       <Button size="sm" variant="destructive" onClick={async () => {
-                        if (!window.confirm(`Disable ${m.display_name}? They are signed out of everything at once. Their notes and history stay; their ${m.assigned_leads} leads stay assigned until you move them.`)) return;
+                        if (!window.confirm(`Disable ${m.display_name}? This ends their engagement. They are signed out of everything at once. Their notes, history and sales stay; their ${m.assigned_leads} leads stay assigned until you move them.\n\nCommission they have already earned stays payable. Client payments from now on earn them no new commission.`)) return;
                         const r = await call('team_disable', { user_id: m.user_id }); if (!r.ok) fail(r); else { toast({ title: `${m.display_name} disabled` }); void refresh(); }
                       }}>Disable</Button>
                     ) : (

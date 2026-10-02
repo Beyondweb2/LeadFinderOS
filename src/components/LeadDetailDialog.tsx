@@ -503,7 +503,9 @@ function LeadDetailBody({
               </button>
             </span>
           )}
-          {!lead.email && !isDemoLead(lead.id) && <FindEmailButton leadId={lead.id} website={lead.website} />}
+          {/* Admin only (2026-10-02): email outreach is not used, so a salesperson's tools row carries no Find email —
+              their next step is the Next Action above. The email itself still shows when there is one. */}
+          {!lead.email && !isDemoLead(lead.id) && perms.enrichLeads && <FindEmailButton leadId={lead.id} website={lead.website} />}
           {!isDemoLead(lead.id) && <SocialLinks lead={lead} withFind />}
           {!isDemoLead(lead.id) && (
             <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 font-medium text-sky-700 hover:underline dark:text-sky-300">
