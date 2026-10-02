@@ -13,7 +13,7 @@ high-volume calling and WhatsApp — without a second CRM. Built on branch `feat
 - Campaigns (`campaigns` table, `outreach_leads.campaign_id`; 19 live) and last-touch template
   attribution (`templateAttribution.ts`, `creditRepliesByTemplate`).
 - Onboarding page loads: `lead_page_hits`, written by `findable-onboarding` prefill (32 rows then).
-- `GBP_MANAGER_EMAIL` (`paul@move37.fun`), one constant in both repos, synced by
+- `GBP_MANAGER_EMAIL` (`paul@findable.live`), one constant in both repos, synced by
   `check-cross-repo-sync`; `onboarding_responses.gbp_status` (done / will_do / no_access).
 - Payment: `findable-checkout` → Stripe → `stripe-webhook` (idempotent by terminal writes,
   `alreadyPaid`, a stored subscription id). No event-id table.
@@ -70,7 +70,7 @@ high-volume calling and WhatsApp — without a second CRM. Built on branch `feat
   READS the row the webhook wrote. Confirmed → "Payment confirmed", and `gbp_access` `shown` stamps
   `gbp_access_requested_at`. Not confirmed → "We're still confirming your payment. Please don't pay
   again." It never says paid on its own.
-- Step 1: "Add paul@move37.fun as a manager…" (`GBP_ACCESS_COPY`, Manager = the least privilege that
+- Step 1: "Add paul@findable.live as a manager…" (`GBP_ACCESS_COPY`, Manager = the least privilege that
   lets us edit the profile; owner-adds-us, never request-access), "We never ask for your Google
   password". Buttons: I've sent the invite / I can't get into my profile / I'll do it later →
   `gbp_access` (paid rows only) → `gbp_status` + `gbp_status_at`. Step 2: the existing details form.

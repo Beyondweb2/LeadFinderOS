@@ -290,7 +290,7 @@ export const reportPublicUrl = (auditId: string) => `${REPORT_PUBLIC_ORIGIN}/rep
    ⚠️ THE QUESTIONNAIRE (findable-site, separate repo) MUST SHOW THE SAME ADDRESS. Two documents
    describing one mechanism was the whole point of standardising; two documents naming different
    addresses would be worse than the inconsistency it replaced. */
-export const GBP_MANAGER_EMAIL = "paul@move37.fun";
+export const GBP_MANAGER_EMAIL = "paul@findable.live";
 
 /* 🔴 THIS CONSTANT HAD ZERO CONSUMERS UNTIL 2026-09-14, and its own comment said "Both documents
    render this rather than describing it twice". Neither document rendered it: the welcome pack
