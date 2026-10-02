@@ -84,9 +84,9 @@ import {
   FIRST_REPLY_MODE_HINTS,
   FIRST_REPLY_MODE_LABELS,
   FIRST_REPLY_MODE_QUESTION,
-  parseFirstReplyMode,
   type FirstReplyMode,
 } from '@/lib/firstReplyMode';
+import { effectiveFirstReplyMode } from '@/lib/firstReplyAutomation';
 
 // Shared style for the compact thread-header quick-action icon buttons/links.
 const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
@@ -275,7 +275,7 @@ function AutoReplyToggle() {
       /* The rule is OFF unless the boolean says so; the stored mode only chooses between the two
          working behaviours. Reading it the other way round would paint "Run audit only" over a
          rule the trigger treats as paused. */
-      setMode(data.autoReplyEnabled === true ? parseFirstReplyMode(data.firstReplyMode) : 'off');
+      setMode(effectiveFirstReplyMode(data.autoReplyEnabled, data.firstReplyMode)); // the one reading the server arms by
       setEnvOn(data.autoReplyEnvOn === true);
       setReadyCount(typeof data.auditOnlyReadyCount === 'number' ? data.auditOnlyReadyCount : null);
       setReplyTemplate((data.firstReplyTemplate as string | null) ?? DEFAULT_FIRST_REPLY_TEMPLATE);
@@ -851,6 +851,7 @@ const Inbox = () => {
     try {
       const { error } = await updateLeadStatus(c.leadId, 'closed');
       if (error) { toast({ title: 'Could not remove', description: error, variant: 'destructive' }); return; }
+      notifyLeadChanged(c.leadId); // Outreach, the lead popup and other tabs re-read the Closed row
       setRemovedKeys((prev) => new Set(prev).add(c.key)); // optimistic hide
       if (activeKey === c.key) setActiveKey(null);
       toast({ title: 'Removed from inbox', description: 'Marked Closed — reappears if they reply.' });

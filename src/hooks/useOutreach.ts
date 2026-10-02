@@ -6,7 +6,7 @@ import { OUTREACH_FIRST_BATCH, LEAD_LOAD_INITIAL, LEAD_LOAD_COMPLETE, datasetCom
 import { guardListRows, leadSourceFor } from '@/lib/outreachLeadColumns';
 import { leadsSetCampaign, salesPatchLead, salesRemoveLeads } from '@/lib/leadRpc';
 import { markLeadInterested } from '@/lib/leadQuickActions';
-import { saveNextAction } from '@/lib/nextActionWrite';
+import { saveNextAction, clearNextActionOnNo } from '@/lib/nextActionWrite';
 import { coverageQueryKey, coverageSignature } from '@/lib/coverageFreshness';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -1235,6 +1235,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
   }, [user]);
 
   const updateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
+    if (status === 'not_interested') await clearNextActionOnNo(leadId); // both roles, before the archive
     /* Sales: the same patch, through the lead functions; not-interested also archives, as below. */
     if (isSales()) return salesUpdateLead(leadId, { ...statusUpdatePatch(status), ...(status === 'not_interested' ? { is_archived: true } : {}) });
     const lead = leads.find((l) => l.id === leadId);
