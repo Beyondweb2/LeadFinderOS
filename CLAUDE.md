@@ -677,10 +677,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - **Owner-scoped rows are owned by the DATA account** `pauljsales455@outlook.com` (`9d5a7629…`),
   resolved from the data (newest lead's `user_id`), never from the operator login (`paul@move37.fun`,
   owns nothing) and never hardcoded. A row under the wrong owner is invisible, not wrong.
-- **Paul's addresses (2026-10-02):** every alert recipient, reply-to and client-facing contact is
-  `paul@findable.live` (forwards to him), and since 2026-10-02 so is `GBP_MANAGER_EMAIL` (Paul made a
-  Google account on it — Google only accepts a manager invite on a Google account). Clients who added
-  the old address before then keep it; nothing re-invites them. The login account is not an alert address.
+- ⛔ **Canonical Findable business/contact/GBP email = `paul@findable.live`. move37 is
+  legacy/non-client-facing only** (Paul, 2026-10-02). It is a real Zoho mailbox (send + receive,
+  MX/SPF/DKIM set) with a Google account on it. Every alert, reply-to, client contact, onboarding
+  step, GBP manager invite (`GBP_MANAGER_EMAIL`), welcome pack, report, PDF and support line uses it
+  (`FINDABLE_CONTACT_EMAIL`, `OPERATOR_ALERT_TO`; findable-site `CONTACT_EMAIL`). **Never reintroduce
+  `paul@move37.fun` in any of those.** It survives only as a login/account identifier (operator and
+  Cloudflare login), in historical records, test fixtures and old notes. Clients who added it as GBP
+  manager before 2026-10-02 keep that grant; nothing re-invites them. Live code or copy still naming
+  it → flag it and change it.
 
 **Auth, RLS, `user_id`**
 - **`user_id` stays on every table.** `anon` and `authenticated` hold full DML GRANTS on all 56
