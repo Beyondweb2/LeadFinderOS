@@ -186,9 +186,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   offset once paid out), from the **payment ledger** (`payment_ledger`, written by `stripe-webhook` + the
   admin backfill) — never from a CRM status. A salesperson earns — current (role `sales`) OR **ended**
   (Team → Disable: `team_members.status 'disabled'`, `disabled_at` = the end). ⛔ Never key "who earns" on the
-  sales role alone (Disable deletes it — that would zero earned commission). Recurring payments on/after the
-  end earn them 0% and nothing more is forecast; what they earned stays (`docs/sales-page-monthly-commission.md`
-  §5). ⚠️ Re-enable clears `disabled_at` (gap payments would count again). ⛔ **The place and rate are STAMPED by
+  sales role alone (Disable deletes it — that would zero earned commission). Each payment is judged at ITS
+  OWN time against `team_engagement_events` (append-only, server-timed ended / resumed): a recurring payment
+  while not engaged is 0% forever — a re-enable never reaches back; a first payment while not engaged earns
+  only if the seller generated its payment link (`quick_close_events` link_generated / link_reused) while
+  engaged. What they earned stays (`docs/sales-page-monthly-commission.md` §5–6). ⛔ **The place and rate are STAMPED by
   the database ONCE** (`stamp_monthly_commission_for`, a trigger on the ledger, per-seller-month lock) into
   `commission_month_seq` / `commission_rate`, and the code READS them — never recompute a rate in code; a
   stamped row is never renumbered or re-rated. Rows stamped under an older rule (`flat_30_v0`,

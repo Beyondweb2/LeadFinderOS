@@ -8,10 +8,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   commissionForecast, commissionLines, earningsTotals, londonMonthStart, monthlyTierRate, monthlyTracker, monthlyTrackerNextLine,
-  receivedAfterEngagement, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, MONTHLY_TIER_RULE,
-  type CommissionLine, type ForecastClient, type LedgerRow,
+  engagedAt, COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, MONTHLY_TIER_RULE,
+  type CommissionLine, type EngagementEvent, type ForecastClient, type LedgerRow, type SaleClosing,
 } from '../src/lib/commission.ts';
-import { engagementEnds } from '../supabase/functions/_shared/earnings.ts';
+import { engagementOf, engagementTimelines } from '../supabase/functions/_shared/earnings.ts';
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' : 'FAIL'} ${l}`); };
@@ -29,8 +29,8 @@ const row = (lead: string, kind: string, amount: number, at: string, extra: Part
 const sale = (lead: string, at: string, seq: number, extra: Partial<LedgerRow> = {}) => row(lead, 'initial', 99, at, {
   commission_rule: MONTHLY_TIER_RULE, commission_month_start: londonMonthStart(at), commission_month_seq: seq, commission_rate: String(monthlyTierRate(seq)), ...extra,
 });
-const run = (ledger: LedgerRow[], ended?: Map<string, string>, sellers = new Set([REP, OTHER])) =>
-  commissionLines({ ledger, payouts: [], isCommissionable: (u) => !!u && sellers.has(u), engagementEndedAt: ended });
+const run = (ledger: LedgerRow[], engagement?: Map<string, EngagementEvent[]>, sellers = new Set([REP, OTHER]), closings?: Map<string, SaleClosing[]>) =>
+  commissionLines({ ledger, payouts: [], isCommissionable: (u) => !!u && sellers.has(u), engagement, closings });
 const paysOf = (lines: CommissionLine[], lead: string) => lines.filter((l) => l.leadId === lead && l.kind === 'payment').sort((a, b) => a.paymentNumber - b.paymentNumber);
 /** Monthly payment k (1-based) of a client first paid in `y-m`, on the 10th of each later month. */
 const monthly = (lead: string, y: number, m: number, k: number, extra: Partial<LedgerRow> = {}) => {
@@ -95,27 +95,60 @@ ok(COMMISSION_RECURRING_COUNT === 6 && COMMISSION_RECURRING_RATE === 0.2, 'the r
 }
 ok(/No transition rule: on 2026-10-02 the ledger held one payment/.test(read('src/lib/commission.ts')), 'no transition rule — the live ledger had no recurring payment to re-rate (recorded in the rule)');
 
-console.log('── 3. THE ENGAGEMENT END ──');
+console.log('── 3. THE ENGAGEMENT: ENDS, RE-ENABLES, AND THE SALE CLOSED BEFORE THE END ──');
 {
   const END = '2027-01-01T00:00:00.000Z';
+  const ended = new Map([[REP, [{ kind: 'ended' as const, at: END }]]]);
   const L = [sale('e', '2026-10-05T10:00:00Z', 1), ...Array.from({ length: 6 }, (_, i) => monthly('e', 2026, 10, i + 1))]; // monthly 10 Nov … 10 Apr
-  const ended = new Map([[REP, END]]);
   const before = run(L).lines; const after = run(L, ended).lines;
   const p = paysOf(after, 'e');
   ok(p[0].commission === 29.7 && p[1].commission === 19.8 && p[2].commission === 19.8, 'commission earned BEFORE the end stays (first payment, Nov and Dec monthly)');
-  ok(p.slice(3).every((l) => l.commission === 0 && l.afterEngagementEnded && l.status === 'not_commissionable'), 'monthly payments received after the end earn nothing (shown as No commission)');
-  ok(/after the engagement ended/.test(p[3].label), '…and say why on the payments table');
+  ok(p.slice(3).every((l) => l.commission === 0 && l.afterEngagementEnded && l.status === 'not_commissionable'), 'REGRESSION: a monthly payment received while disabled earns nothing (shown as No commission)');
+  ok(/after the engagement ended/.test(p[3].label), '…and says why on the payments table');
   ok(after.every((l) => l.sellerId === REP), 'attribution stays: every line is still theirs');
   const tB = earningsTotals(before.filter((l) => l.occurredAt < END), [], [], '2027-05-01');
   const tA = earningsTotals(after, [], [], '2027-05-01');
-  ok(tA.earned === tB.earned && tA.earned === r2(29.7 + 2 * 19.8), 'total earned after the end = exactly what was earned before it (nothing clawed back)');
+  ok(tA.earned === tB.earned && tA.earned === r2(29.7 + 2 * 19.8), 'REGRESSION: already-earned commission never disappears (total after the end = exactly what was earned before it)');
   const c = run(L.slice(0, 3), ended).clients[0];
-  ok(c.commissionablePaymentsLeft === 0 && c.engagementEnded === true && c.sellerId === REP, 'nothing more projected for an ended seller; the client stays attributed');
-  ok(paysOf(run(L, new Map([[OTHER, END]])).lines, 'e').slice(1).every((l) => l.commission === 19.8), "another seller's end changes nothing for this one");
-  ok(!receivedAfterEngagement('2026-12-31T23:59:59Z', END) && receivedAfterEngagement(END, END) && !receivedAfterEngagement(END, null), 'the boundary: before the end earns, at/after does not; no end = engaged');
-  ok(receivedAfterEngagement('2026-12-01T00:00:00Z', 'not a date'), 'an unreadable end date fails closed');
-  const late = run([sale('e2', '2027-02-01T10:00:00Z', 1)], ended).lines[0];
-  ok(late.commission === 29.7, 'a first payment is not affected by the end date (the rule is trailing commission only)');
+  ok(c.commissionablePaymentsLeft === 0 && c.engagementEnded === true && c.sellerId === REP, 'nothing more projected while ended; the client stays attributed');
+  ok(paysOf(run(L, new Map([[OTHER, [{ kind: 'ended' as const, at: END }]]])).lines, 'e').slice(1).every((l) => l.commission === 19.8), "another seller's end changes nothing for this one");
+  ok(engagedAt([], END) && engagedAt([{ kind: 'ended', at: END }], '2026-12-31T23:59:59Z') && !engagedAt([{ kind: 'ended', at: END }], END), 'the boundary: before the end engaged, at/after not; no history = engaged');
+  ok(!engagedAt([{ kind: 'ended', at: 'not a date' }], '2027-02-01T00:00:00Z') && !engagedAt([{ kind: 'ended', at: END }], 'nope'), 'an unreadable time fails closed (not engaged)');
+}
+{
+  // FIRST PAYMENT AFTER THE END: earns only if the seller closed the sale (a payment link) while engaged.
+  const END = '2027-01-10T00:00:00.000Z';
+  const ended = new Map([[REP, [{ kind: 'ended' as const, at: END }]]]);
+  const pay = sale('f1', '2027-01-12T10:00:00Z', 3);
+  const closedBefore = new Map([['f1', [{ actorUserId: REP, at: '2027-01-08T15:00:00Z' }]]]);
+  const yes = paysOf(run([pay], ended, undefined, closedBefore).lines, 'f1')[0];
+  ok(yes.commission === 29.7 && yes.rate === 0.3 && /closed before the engagement ended/.test(yes.label), 'REGRESSION: sale closed before disable, first payment after it → the first-payment commission is still earned (its stamped rate)');
+  const forty = paysOf(run([sale('f4', '2027-01-12T10:00:00Z', 13)], ended, undefined, new Map([['f4', [{ actorUserId: REP, at: '2027-01-05T10:00:00Z' }]]])).lines, 'f4')[0];
+  ok(forty.commission === 39.6, '…at whatever tier it was stamped (sale 13 → 40%)');
+  const no = paysOf(run([pay], ended).lines, 'f1')[0];
+  ok(no.commission === 0 && no.afterEngagementEnded && no.status === 'not_commissionable' && /not closed before it/.test(no.label), 'REGRESSION: sale NOT closed before disable, first payment after it → no commission');
+  const linkAfter = paysOf(run([pay], ended, undefined, new Map([['f1', [{ actorUserId: REP, at: '2027-01-11T09:00:00Z' }]]])).lines, 'f1')[0];
+  ok(linkAfter.commission === 0, 'a payment link made AFTER the end does not count (the closing must be while engaged)');
+  const byAdmin = paysOf(run([pay], ended, undefined, new Map([['f1', [{ actorUserId: 'admin-1', at: '2027-01-08T15:00:00Z' }]]])).lines, 'f1')[0];
+  ok(byAdmin.commission === 0, "a link generated by someone else is not the seller's closing");
+  ok(monthlyTracker(run([pay], ended).lines, '2027-01-20').counted === 0, 'a first payment that earns nothing is not a sale on their ladder');
+  const recAfter = paysOf(run([pay, monthly('f1', 2027, 1, 1)], ended, undefined, closedBefore).lines, 'f1');
+  ok(recAfter[1].commission === 0, 'the closing proves the FIRST payment only — the monthly after the end still earns nothing');
+}
+{
+  // RE-ENABLE: active → disabled 1 Jan → client pays 15 Jan and 15 Feb → re-enabled 1 Mar → pays 15 Mar.
+  const tl = new Map([[REP, [{ kind: 'ended' as const, at: '2027-01-01T00:00:00Z' }, { kind: 'resumed' as const, at: '2027-03-01T00:00:00Z' }]]]);
+  const at = (d: string) => row('r', 'recurring', 99, d);
+  const L = [sale('r', '2026-11-20T10:00:00Z', 1), at('2026-12-15T10:00:00Z'), at('2027-01-15T10:00:00Z'), at('2027-02-15T10:00:00Z'), at('2027-03-15T10:00:00Z'), at('2027-04-15T10:00:00Z'), at('2027-05-15T10:00:00Z'), at('2027-06-15T10:00:00Z')];
+  const p = paysOf(run(L, tl).lines, 'r');
+  ok(p[1].commission === 19.8, 'Dec (before the disable) earned');
+  ok(p[2].commission === 0 && p[3].commission === 0, 'REGRESSION: rep re-enabled later → the Jan and Feb payments (disabled period) are still £0');
+  ok(p[4].commission === 19.8 && p[5].commission === 19.8 && p[6].commission === 19.8, 'REGRESSION: new payments after the re-enable earn again (Mar, Apr, May — months 4–6 of the six)');
+  ok(p[7].commission === 0 && p[7].label === 'Month 7', '…and the six-payment limit still applies (Jun is month 7: nothing)');
+  const onlyEnded = paysOf(run(L, new Map([[REP, [{ kind: 'ended' as const, at: '2027-01-01T00:00:00Z' }]]])).lines, 'r');
+  ok(onlyEnded[2].commission === p[2].commission && onlyEnded[3].commission === p[3].commission && onlyEnded[1].commission === p[1].commission,
+    'appending the re-enable changes NOTHING before it (the same lines as without it)');
+  ok(run(L.slice(0, 5), tl).clients[0].commissionablePaymentsLeft === 2 && !run(L.slice(0, 5), tl).clients[0].engagementEnded, 'once re-enabled, the rest of the tail is projected again (2 of the six left)');
 }
 {
   const team = [
@@ -123,23 +156,39 @@ console.log('── 3. THE ENGAGEMENT END ──');
     { user_id: 'b', status: 'disabled', disabled_at: '2027-01-01T00:00:00Z', is_book_owner: false },
     { user_id: 'c', status: 'disabled', disabled_at: null, is_book_owner: false },
     { user_id: 'd', status: 'disabled', disabled_at: '2027-01-01T00:00:00Z', is_book_owner: true },
-    { user_id: 'e', status: null, disabled_at: null, is_book_owner: false },
+    { user_id: 'g', status: 'active', disabled_at: null, is_book_owner: false },
+    { user_id: 'h', status: 'disabled', disabled_at: '2027-04-01T00:00:00Z', is_book_owner: false },
   ];
-  const ends = engagementEnds(team);
-  ok(!ends.has('a') && !ends.has('e'), 'ACTIVE (and an unknown status) is engaged');
-  ok(ends.get('b') === '2027-01-01T00:00:00Z', 'ENDED = status disabled; the end is disabled_at');
-  ok(ends.get('c') === ENGAGEMENT_END_UNKNOWN, 'disabled with no date fails closed (no new trailing commission at all)');
-  ok(!ends.has('d'), 'the book owner never has an engagement end (and never earns)');
+  const log = [
+    { user_id: 'g', kind: 'ended', at: '2027-01-01T00:00:00Z' }, { user_id: 'g', kind: 'resumed', at: '2027-03-01T00:00:00Z' },
+    { user_id: 'h', kind: 'ended', at: '2027-01-01T00:00:00Z' }, { user_id: 'h', kind: 'resumed', at: '2027-03-01T00:00:00Z' },
+  ];
+  const tl = engagementTimelines(team, log);
+  ok(!tl.has('a'), 'active, never ended: no history (engaged)');
+  ok(JSON.stringify(tl.get('b')) === JSON.stringify([{ kind: 'ended', at: '2027-01-01T00:00:00Z' }]), 'disabled before the log existed: ended at disabled_at');
+  ok(tl.get('c')?.[0].at === ENGAGEMENT_END_UNKNOWN, 'disabled with no date fails closed (never engaged)');
+  ok(!tl.has('d'), 'the book owner has no history (and never earns)');
+  ok(tl.get('g')?.length === 2 && engagedAt(tl.get('g'), '2027-03-02T00:00:00Z') && !engagedAt(tl.get('g'), '2027-02-01T00:00:00Z'), 'ended then re-enabled: engaged again only from the re-enable');
+  ok(!engagedAt(tl.get('h'), '2027-05-01T00:00:00Z') && engagedAt(tl.get('h'), '2027-03-15T00:00:00Z'), 'disabled again after a re-enable: ended from the new disable');
+  ok(engagementOf(tl.get('g')).status === 'active' && engagementOf(tl.get('b')).status === 'ended' && engagementOf(tl.get('b')).endedAt === '2027-01-01T00:00:00Z', 'the Sales page reads ended / active from the newest event');
 }
 {
   const loader = read('supabase/functions/_shared/earnings.ts');
-  ok(/from\("team_members"\)\.select\("user_id, status, disabled_at, is_book_owner"\)/.test(loader) && /engagementEndedAt: ended/.test(loader), 'the loader reads the team status and passes the end dates');
-  ok(/const sales = new Set\(\[\.\.\.roles\.filter\(\(r\) => r\.role === "sales"\)\.map\(\(r\) => r\.user_id\), \.\.\.ended\.keys\(\)\]\)/.test(loader), 'an ended salesperson (role removed by Disable) still counts as commissionable — their earned commission is not zeroed');
+  ok(/from\("team_engagement_events"\)\.select\("user_id, kind, at"\)/.test(loader) && /engagement: timelines, closings,/.test(loader), 'the loader reads the engagement log and the payment links, and passes both');
+  ok(/\.in\("kind", \["link_generated", "link_reused"\]\)/.test(loader), 'a closing is a payment link the server recorded (generated or re-sent) — never a note');
+  ok(/const sales = new Set\(\[\.\.\.roles\.filter\(\(r\) => r\.role === "sales"\)\.map\(\(r\) => r\.user_id\), \.\.\.disabledNow\]\)/.test(loader), 'an ended salesperson (role removed by Disable) still counts as commissionable — their earned commission is not zeroed');
   ok(/for \(const a of admins\) sales\.delete\(a\)/.test(loader), 'the admin never earns');
+  const mig = read('supabase/migrations/20261005100000_team_engagement_events.sql');
+  ok(/new\.at := now\(\);/.test(mig) && /before update or delete on public\.team_engagement_events/.test(mig) && /before truncate on public\.team_engagement_events/.test(mig) && /revoke all on public\.team_engagement_events from anon, authenticated;/.test(mig),
+    'the log is append-only and server-timed: the database sets the time, refuses update / delete / truncate, and no signed-in role can touch it');
+  const qc = read('supabase/migrations/20260929160000_quick_close.sql');
+  ok(/revoke insert, update, delete on public\.quick_close_events from authenticated;/.test(qc) && /created_at timestamptz not null default now\(\)/.test(qc), 'payment-link events: signed-in users cannot write them; the database times them');
   const users = read('supabase/functions/admin-users/index.ts');
   const dis = users.slice(users.indexOf("if (action === 'team_disable') {"), users.indexOf("const { error: iErr }"));
-  ok(dis.indexOf("update({ status: 'disabled', disabled_at") > -1 && dis.indexOf("update({ status: 'disabled', disabled_at") < dis.indexOf("from('user_roles').delete()"), 'Disable writes the end BEFORE removing the role');
-  ok(/if \(tErr\) return jsonResponse/.test(dis) && /cur\?\.status === 'disabled' && cur\?\.disabled_at/.test(dis), '…checks that write, and a second Disable keeps the first end date');
+  ok(dis.indexOf("insert({ user_id: uid, kind: 'ended'") > -1 && dis.indexOf("insert({ user_id: uid, kind: 'ended'") < dis.indexOf("from('user_roles').delete()") && /if \(eErr\) return jsonResponse/.test(dis), 'Disable logs the end FIRST (checked), before removing the role');
+  ok(/cur\?\.status === 'disabled' && cur\?\.disabled_at/.test(dis), '…and a second Disable logs nothing new (the first end stands)');
+  const re = users.slice(users.indexOf("RE-ENABLE NEVER REACHES BACK"), users.indexOf("const { error: iErr }") + 400);
+  ok(/insert\(\{ user_id: uid, kind: 'resumed'/.test(re) && /if \(rErr\) return jsonResponse/.test(re) && re.indexOf("kind: 'resumed'") < re.indexOf("user_roles').upsert"), 'Re-enable APPENDS resumed first (checked); the end stays in the history');
   ok(!/suspended_at/.test(loader), 'suspension is not an end (the loader never reads it)');
   const page = read('src/pages/SalesDashboard.tsx');
   ok(/m\.status === 'active' \|\| m\.status === 'disabled'/.test(page) && /\(ended\)/.test(page), 'the admin can still pick an ended salesperson on Sales');
@@ -171,7 +220,7 @@ console.log('── 4. THE SIX-MONTH FORECAST ──');
   ok(past.expectedTotal === 0, 'a past-due / cancelled subscription expects nothing (a failed payment drops out)');
   const undated = commissionForecast(lines, [fc({ leadId: 'f1' })], TODAY);
   ok(undated.expectedTotal === 0 && undated.undated.length === 1 && undated.undated[0].amount === r2(5 * 19.8), 'no billing date yet → counted in no month, listed so nothing is hidden');
-  const endedRun = run(L, new Map([[REP, '2026-12-03T00:00:00Z']]));
+  const endedRun = run(L, new Map([[REP, [{ kind: 'ended' as const, at: '2026-12-03T00:00:00Z' }]]]));
   const fe = commissionForecast(endedRun.lines, endedRun.clients.map((c) => ({ leadId: c.leadId, business: c.leadId, nextPaymentAt: '2026-12-10T10:00:00Z', paymentsLeft: c.commissionablePaymentsLeft, monthlyGbp: 99, live: true })), TODAY);
   ok(fe.expectedTotal === 0 && fe.months[0].earnedNewSale === 29.7, 'an ended seller: what they earned shows, nothing more is expected');
   const loader = read('supabase/functions/_shared/earnings.ts');

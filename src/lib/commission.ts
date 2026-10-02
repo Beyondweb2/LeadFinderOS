@@ -18,11 +18,16 @@
      recurring payment had ever been received, so no history is re-rated by the change.
      Always a percentage of the REAL amount — a £29.99 monthly earns £6.00, a £99 monthly £19.80.
      Never a hard-coded figure.
-   - 🔴 ONLY WHILE ENGAGED (Paul, 2026-10-02): a monthly payment received ON OR AFTER the salesperson's
-     engagement ended (team_members.status 'disabled', disabled_at = the end) earns them nothing, and
-     nothing more is projected for them. What they earned before the end STAYS — it is never clawed back,
-     and the client stays attributed to them. Suspension is not an end (still engaged). The initial
-     payment is not affected by the end date (the brief covers trailing commission only).
+   - 🔴 ONLY WHILE ENGAGED (Paul, 2026-10-02): whether a payment earns is decided by ITS OWN time against
+     the seller's engagement history (team_engagement_events: append-only, server-timed 'ended' / 'resumed'
+     — engagedAt). A MONTHLY payment received while the seller was not engaged earns 0%, permanently: a
+     later re-enable appends a 'resumed' event and changes nothing before it. Monthly payments after a
+     genuine re-enable earn again inside the next-six limit (the client's payment count runs on regardless).
+     The FIRST payment received while not engaged earns its stamped 30/40/50 only if the seller CLOSED the
+     sale while engaged: a payment link they generated for that lead (quick_close_events 'link_generated' /
+     'link_reused', server-written and server-timed, signed-in roles cannot write it) at a moment they were
+     engaged, before the payment. Otherwise 0%. Nothing earned is ever clawed back; the client stays
+     attributed. Suspension is not an end.
    - EARNED the moment the payment is received (NOT held for the refund window).
    - DISPUTES (Paul, 2026-09-29): while a dispute / inquiry is OPEN the commission on that money is
      HELD (it comes off what is due, it is not a permanent reversal); WON, or an inquiry that closed with
@@ -175,21 +180,41 @@ export interface CommissionInput {
   /** The client's contracted payment count (outreach_leads.contract_total_payments: Build 12,
    *  Optimise 6; null = not recorded). Caps what a projection may count — never adds to it. */
   contractTotalOf?: Map<string, number | null>;
-  /** When each seller's engagement ended (ISO instant). Absent = still engaged. A seller who is ended
-   *  but whose end instant is unknown must be passed as ENGAGEMENT_END_UNKNOWN — never left out. */
-  engagementEndedAt?: Map<string, string>;
+  /** Each seller's engagement history, oldest first. Absent / empty = engaged throughout. */
+  engagement?: Map<string, EngagementEvent[]>;
+  /** Per lead: the payment links generated for it (who, when) — the proof a sale was closed. */
+  closings?: Map<string, SaleClosing[]>;
 }
 
-/** The end instant for an ended seller whose date was not recorded: fails closed (no new trailing
- *  commission at all). The app always writes the date with the status, so this is a guard, not a path. */
+export interface EngagementEvent { kind: 'ended' | 'resumed'; at: string }
+export interface SaleClosing { actorUserId: string | null; at: string }
+
+/** The end instant for an ended seller whose date was not recorded: fails closed (not engaged at any
+ *  time). The app always writes the date with the status, so this is a guard, not a path. */
 export const ENGAGEMENT_END_UNKNOWN = '1970-01-01T00:00:00.000Z';
 
-/** Was this payment received on or after the seller's engagement ended? Absent end = engaged. */
-export function receivedAfterEngagement(occurredAt: string, endedAt: string | null | undefined): boolean {
-  if (endedAt === null || endedAt === undefined) return false;
-  const end = Date.parse(endedAt);
-  if (!Number.isFinite(end)) return true; // an unreadable end date fails closed
-  return Date.parse(occurredAt) >= end;
+/** Was the seller engaged at this instant? The newest event at or before it decides; none = engaged.
+ *  ⛔ An unreadable instant or event time fails closed (not engaged). */
+export function engagedAt(events: readonly EngagementEvent[] | null | undefined, iso: string): boolean {
+  if (!events || events.length === 0) return true;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return false;
+  let engaged = true;
+  for (const e of events) {
+    const at = Date.parse(e.at);
+    if (!Number.isFinite(at)) return false;
+    if (at <= t) engaged = e.kind !== 'ended';
+  }
+  return engaged;
+}
+/** Is the seller's engagement ended now (the newest event is an end)? */
+export function engagementEndedNow(events: readonly EngagementEvent[] | null | undefined): boolean {
+  return !!events && events.length > 0 && events[events.length - 1].kind === 'ended';
+}
+/** Did this seller close this sale while engaged, before the payment? (A payment link they generated.) */
+export function closedWhileEngaged(closings: readonly SaleClosing[] | null | undefined, seller: string, events: readonly EngagementEvent[] | null | undefined, paymentAt: string): boolean {
+  const pay = Date.parse(paymentAt);
+  return (closings ?? []).some((c) => c.actorUserId === seller && Date.parse(c.at) < pay && engagedAt(events, c.at));
 }
 
 export interface ClientEarnings {
@@ -218,7 +243,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const payments = rows.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded' && r.amount_gbp > 0);
     const seller = payments.find((p) => p.sold_by_user_id)?.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null;
     const earns = input.isCommissionable(seller);
-    const endedAt = seller ? input.engagementEndedAt?.get(seller) ?? null : null;
+    const events = seller ? input.engagement?.get(seller) ?? null : null;
     const business = input.businessName?.get(leadId) ?? 'Client';
     const rateOf = new Map<string, { rate: number; n: number }>(); // payment row id → its rate and number
     let initialSeen = false; let recurringSeen = 0;
@@ -235,11 +260,16 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         monthSeq = p.commission_rule === MONTHLY_TIER_RULE && typeof p.commission_month_seq === 'number' ? p.commission_month_seq : null;
         monthStart = p.commission_month_start ? String(p.commission_month_start).slice(0, 10) : null;
         label = testSale ? 'Initial payment · test sale (not counted)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
+        /* Received while the seller was not engaged: earns only if they closed it while engaged. */
+        if (earns && !testSale && seller && !engagedAt(events, p.occurred_at)) {
+          if (closedWhileEngaged(input.closings?.get(leadId), seller, events, p.occurred_at)) label += ' · closed before the engagement ended';
+          else { afterEnd = true; rate = 0; label += ' · after the engagement ended, not closed before it'; }
+        }
       }
       else if (p.kind === 'recurring') {
         recurringSeen += 1; n = 1 + recurringSeen;
         /* It still takes its place in the count (month 4 is month 4 whoever it pays). */
-        afterEnd = earns && recurringSeen <= COMMISSION_RECURRING_COUNT && receivedAfterEngagement(p.occurred_at, endedAt);
+        afterEnd = earns && recurringSeen <= COMMISSION_RECURRING_COUNT && !engagedAt(events, p.occurred_at);
         rate = recurringSeen <= COMMISSION_RECURRING_COUNT && !afterEnd ? COMMISSION_RECURRING_RATE : 0;
         label = afterEnd ? `Month ${recurringSeen} · after the engagement ended` : `Month ${recurringSeen}`;
       }
@@ -292,8 +322,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
        shorter, so the recurring payments still to come are also capped by it where it is known. */
     const contractTotal = input.contractTotalOf?.get(leadId) ?? null;
     const contractRecurringLeft = typeof contractTotal === 'number' && contractTotal > 0 ? Math.max(0, contractTotal - 1 - recurringSeen) : Infinity;
-    /* An ended seller: every payment still to come lands after the end, so none is projected. */
-    const ended = endedAt !== null;
+    /* Ended NOW: every payment still to come lands while not engaged, so none is projected. */
+    const ended = engagementEndedNow(events);
     clients.push({
       leadId, business, sellerId: seller, payments: payments.length, earned: round2(earned), reversed: round2(reversedTotal),
       commissionablePaymentsLeft: earns && !ended ? Math.max(0, Math.min(COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT), contractRecurringLeft)) : 0,
@@ -384,7 +414,7 @@ export interface MonthlyTracker {
 
 export function monthlyTracker(lines: CommissionLine[], todayIso: string): MonthlyTracker {
   const monthStart = londonMonthStart(todayIso);
-  const initials = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && l.monthStart === monthStart && l.monthSeq && !l.testSale);
+  const initials = lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1 && l.monthStart === monthStart && l.monthSeq && !l.testSale && !l.afterEngagementEnded);
   const sales: LadderSale[] = initials.map((l) => {
     const revs = lines.filter((r) => r.kind === 'reversal' && r.paymentNumber === 1 && r.leadId === l.leadId && !r.held);
     const back = revs.reduce((s, r) => s + r.commission, 0);
