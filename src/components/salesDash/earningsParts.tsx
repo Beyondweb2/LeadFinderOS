@@ -11,7 +11,7 @@ import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
 import {
-  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, londonDayOf,
+  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
   type CommissionLine,
 } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
@@ -82,7 +82,7 @@ export function CommissionExplainer() {
     { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
   ];
   return (
-    <Panel title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page.">
+    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments — open for the rules.`}>
       <ul className="space-y-2.5" data-testid="commission-explainer">
         {rules.map((r, i) => (
           <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">

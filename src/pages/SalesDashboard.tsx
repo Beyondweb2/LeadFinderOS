@@ -10,7 +10,7 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useEarnings } from '@/hooks/useEarnings';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
-import { CommissionForecastCard } from '@/components/salesDash/CommissionForecastCard';
+import { CommissionForecastCard, EarningsStats } from '@/components/salesDash/CommissionForecastCard';
 import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins } from '@/components/salesDash/earningsParts';
 import { CampaignCards, ChannelBars, ManageRows, SimpleTable, TemplateTable } from '@/components/salesDash/breakdown';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
@@ -125,48 +125,52 @@ export default function SalesDashboard() {
         </div>
       )}
 
-      {/* ── 1. The month: the hero — sales, the progress line, the next sale's rate, what was earned ── */}
-      {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.5rem] bg-emerald-500/10 motion-reduce:animate-none" aria-busy="true" />}
-      {e && oneSeller && e.commissionable && <MonthlyLadder lines={e.lines} clients={e.clients} totals={e.totals} />}
+      {/* ── 1. The month: the ladder (sales, the progress line, the rates) with the three money figures beside it ── */}
+      {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.25rem] bg-muted/50 motion-reduce:animate-none" aria-busy="true" />}
+      {e && oneSeller && e.commissionable && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2"><MonthlyLadder lines={e.lines} clients={e.clients} /></div>
+          <EarningsStats totals={e.totals} forecast={e.forecast ?? null} />
+        </div>
+      )}
       {e && oneSeller && !e.commissionable && <Notice>Commission is paid to salespeople. Clients you sell yourself show here at £0.</Notice>}
       {e && !oneSeller && <Notice>Pick a salesperson at the top to see their month and commission. The table below has everyone's.</Notice>}
 
-      {/* Under the hero (2026-10-02): the month first, then what Paul sent and any handoff owed. The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
+      {/* Under the month (2026-10-02): what Paul sent and any handoff owed. The Team board (2026-10-01): what Paul sent THIS salesperson — their own, never another's. */}
       {role === 'sales' && <TeamBoard />}
       {/* Their own paid sales that still owe the handoff (2026-10-02). */}
       {role === 'sales' && <MyHandoffs />}
 
-      {/* ── 2. The work this month: three numbers, each with its base ── */}
-      {q.isLoading && <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-[1.25rem] bg-muted/60 motion-reduce:animate-none" />)}</div>}
-      {d && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="work-numbers">
-          <KpiCard label="Calls made" icon={PhoneCall} tone="blue" value={d.calls.total} sub="Logged this month" />
-          <KpiCard label="People reached" icon={Users} tone="purple" value={reached} sub="Calls where you spoke to someone" />
-          <KpiCard label="Contacted → sale" icon={Target} tone="green" value={conversion === null ? '—' : `${conversion}%`}
-            sub={d.funnel.contacted ? `${d.funnel.won} sale${d.funnel.won === 1 ? '' : 's'} from ${d.funnel.contacted} people first contacted this month` : 'Nobody contacted this month yet'} />
-        </div>
-      )}
-
-      {/* ── 3. What to do next (the ranked list, and the lists Focus Mode used to hold) ── */}
+      {/* ── 2. What to do next (the ranked list, and the lists Focus Mode used to hold) ── */}
       {w && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" hint="Most urgent first. Tap a lead to open it." /></div>
           <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} /></div>
         </div>
       )}
 
-      {/* ── 4. The money: earned to date, this month, the next six months ── */}
-      {e && oneSeller && e.commissionable && e.forecast && <CommissionForecastCard forecast={e.forecast} totals={e.totals} engagement={e.engagement ?? null} />}
-
-      {/* ── 5. Wins, and the rules behind the numbers ── */}
-      {e && oneSeller && e.commissionable && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <RecentWins lines={e.lines} clients={e.clients} />
-          <CommissionExplainer />
+      {/* ── 3. The work this month: three numbers, each with its base ── */}
+      {q.isLoading && <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-24 sm:h-32 animate-pulse rounded-[1.25rem] bg-muted/60 motion-reduce:animate-none" />)}</div>}
+      {/* Phone (2026-10-02): the three stay in one compact row (KpiCard drops its icon and sub-line below sm). */}
+      {d && (
+        <div className="grid grid-cols-3 gap-2 sm:gap-3" data-testid="work-numbers">
+          <KpiCard label="Calls made" icon={PhoneCall} tone="blue" value={d.calls.total} sub="Logged this month" />
+          <KpiCard label="People reached" icon={Users} tone="purple" value={reached} sub="Calls where you spoke to someone" />
+          <KpiCard label="Contacted → sale" icon={Target} tone="amber" value={conversion === null ? '—' : `${conversion}%`}
+            sub={d.funnel.contacted ? `${d.funnel.won} sale${d.funnel.won === 1 ? '' : 's'} from ${d.funnel.contacted} people first contacted this month` : 'Nobody contacted this month yet'} />
         </div>
       )}
 
-      {/* ── 6. The detail, folded: every payment, everyone's commission, and the outreach numbers ── */}
+      {/* ── 4. The next six months, beside the recent wins ── */}
+      {e && oneSeller && e.commissionable && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {e.forecast && <div className="min-w-0 lg:col-span-2"><CommissionForecastCard forecast={e.forecast} engagement={e.engagement ?? null} /></div>}
+          <div className={cn('min-w-0', !e.forecast && 'lg:col-span-3')}><RecentWins lines={e.lines} clients={e.clients} /></div>
+        </div>
+      )}
+
+      {/* ── 5. The detail, folded: the commission rules, every payment, everyone's commission, the outreach numbers ── */}
+      {e && oneSeller && e.commissionable && <CommissionExplainer />}
       {e && isAdmin && person === 'all' && <BySellerTable rows={e.bySeller} nameOf={(id) => nameOf.get(id) ?? 'Salesperson'} />}
       {e && <PaymentsTable lines={e.lines} bizOf={bizOf} sellerOf={isAdmin ? (id) => (id ? nameOf.get(id) ?? 'Former member' : '—') : undefined} />}
       {d && (

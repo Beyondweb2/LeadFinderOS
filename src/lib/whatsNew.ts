@@ -22,6 +22,49 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-admin-control-centre', date: '2026-10-02', title: 'The Admin dashboard is now a sales control centre', audience: 'admin',
+    body: 'The Admin dashboard is rebuilt around running the team: new sales and handoffs, your actions, one table of salespeople, and simple money.',
+    report: {
+      added: [
+        'New sales & handoffs: every paid client still being handed over or set up, and anything sold in the last two weeks — who sold it, what was paid, Build or Optimise, setup progress, what is missing, and the one next step (from the same rules as Paid Clients). Tap a client to open their Paid Client record.',
+        'Sales team performance: one salesperson per row — active / quiet / inactive and when they were last active, sales this month and their commission rate, WhatsApps, calls, replies, interested, not interested, meetings, sales, contacted → sale and overdue follow-ups.',
+        '"My activity: hidden / included" at the top: hides your own outreach from the team table (hidden to start with). Money, clients and your actions always show.',
+        'Business at a glance: revenue this month, new clients this month, how many things need you, commission due.',
+      ],
+      changed: [
+        'What needs you: only your actions. New clients show as one line pointing at New sales & handoffs; client steps follow the Paid Clients workflow (no more "Start the baseline" before Discovery).',
+        'A salesperson who leaves a handoff for two days or more becomes yours to chase, on that client\'s card.',
+        'Money is one panel: collected, paying clients, refunds and disputes, commission added, after commission.',
+        'Clients in delivery (folded) no longer repeats clients that are in New sales & handoffs.',
+      ],
+      removed: [
+        'The Today tiles, Team comparison, the sales funnel and the calls panel — the team table holds their numbers once.',
+        'The old Sales team board panel (what you sent the team). Send to sales team stays at the top, and Assign stays on Your actions.',
+        'The separate Revenue, Money overview and Commission panels — one Money panel and the glance figures replace them. Commission by salesperson stays on the Sales dashboard (Everyone).',
+      ],
+      effect: 'You can see in one screen who on the team is doing well or falling behind, which new clients need you, and what to do next — without your own old outreach skewing the team numbers.',
+    } },
+  { id: '2026-10-02-dashboards-dark-cards', date: '2026-10-02', title: 'Dashboards: richer dark cards, money at a glance, tidier on a phone', audience: 'all',
+    body: 'The Sales dashboard has a new dark look with your money beside your month, and both dashboards fit a phone better.',
+    report: {
+      added: [
+        'Beside your month: three money cards — earned this month (with when it is paid), total earned to date, and expected over the next six months.',
+        '"Show all" on What to do next: the six most urgent show first, the rest are one tap away.',
+      ],
+      changed: [
+        'The "this month" card is a dark indigo card instead of solid green: the rate you are on glows amber, unlocked rates are teal and ticked, locked ones are muted.',
+        'Money is shown in teal across both dashboards (it was green).',
+        'Your next 6 months is its own chart, next to your recent wins.',
+        'The order: your month and money, then what to do next and follow-ups, then your work numbers, then the next six months and recent wins.',
+        '"How your commission works" is folded away at the bottom — the rates are on the month card.',
+        'On a phone: the three work numbers sit in one row, the follow-up lists wrap instead of scrolling sideways.',
+        'Admin: today\'s figures come first, then Needs your attention. On a phone, the Assign / Handled / Suppress buttons sit under each item instead of squeezing it, and "Write one now" has its own line.',
+      ],
+      removed: [
+        'The money figures inside the six-month chart (they now sit once, beside your month).',
+      ],
+      effect: 'The things that matter — your month, your next rate and your money — are all on the first screen, in colours that are easy to read. Every number is the same as before.',
+    } },
   { id: '2026-10-02-dashboards-redesign', date: '2026-10-02', title: 'A new Sales dashboard, and a cleaner Admin dashboard', audience: 'all',
     body: 'The Sales dashboard is redesigned and is now first in the sales menu. Both dashboards share one cleaner, more colourful look.',
     report: {

@@ -153,7 +153,8 @@ console.log("\n── the Admin dashboard ──");
   ok(/from '@\/components\/salesDash\/ui'/.test(dash), "still drawn in the Sales dashboard's visual language");
   ok(/useAdminOverview/.test(dash) && !/useDashboardMetrics/.test(dash), "numbers come server-folded (fn admin-overview), never the whole book in the browser");
   for (const gone of ["TipBar", "AdminZone", "CampaignStatsSection", "ChannelPerformanceCard", "PipelineCard", "Quick Actions", "<NextActions ", "<FollowUpQueue", "<WaitingPanel", "<ActivityFeed", "<ClientDeliveryCard", "<NextActionsCard", "<AuditFunnelCard"]) ok(!dash.includes(gone), `removed: ${gone}`);
-  for (const kept of ["FreeCheckProgressCard", "SubmissionsCard", "AttentionQueue", "TeamComparison", "RevenuePanel"]) ok(dash.includes(`<${kept}`), `kept/added: ${kept}`);
+  /* 2026-10-02 (control-centre restructure): TeamComparison → TeamPerformanceTable, RevenuePanel → MoneyPanel. */
+  for (const kept of ["FreeCheckProgressCard", "SubmissionsCard", "AttentionQueue", "TeamPerformanceTable", "MoneyPanel"]) ok(dash.includes(`<${kept}`), `kept/added: ${kept}`);
   ok(/\/admin\/api-usage/.test(dash), "API usage stays reachable (the cost panel's detail link)");
   ok(!/next_action:/.test(dash) && !/supabase\.from\(/.test(dash), "the dashboard writes nothing from the browser");
 }

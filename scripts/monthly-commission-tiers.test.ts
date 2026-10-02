@@ -113,12 +113,14 @@ ok(/commission_rule, commission_month_start, commission_month_seq, commission_ra
 const page = read('src/pages/SalesDashboard.tsx');
 const ladder = read('src/components/salesDash/MonthlyLadder.tsx');
 ok((page.match(/<MonthlyLadder /g) ?? []).length === 1 && /monthlyTracker\(lines, todayIso\)/.test(ladder) && /MONTHLY_TIERS\.map/.test(ladder), 'one ladder, built from the same lines and the one tier table');
-ok(/lg:grid-cols-\[12fr_12fr_5fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_12fr_5fr\]/, '')), 'the tiers sit side by side from lg and stack on a phone (no squeezed line)');
+ok(/lg:grid-cols-\[12fr_12fr_7fr\]/.test(ladder) && !/grid-cols-\[12fr/.test(ladder.replace(/lg:grid-cols-\[12fr_12fr_7fr\]/, '')), 'the tiers sit side by side from lg and stack on a phone (no squeezed line)');
 ok(/data-testid="ladder-sale"/.test(ladder) && /PopoverContent/.test(ladder) && /client\?\.package/.test(ladder) && /remainingPotential/.test(ladder), 'each sale dot opens the client, date, package, commission and what monthly payments may still earn');
 const labels = [...page.matchAll(/<KpiCard label="([^"]+)"/g)].map((m) => m[1]);
 ok(JSON.stringify(labels) === JSON.stringify(['Calls made', 'People reached', 'Contacted → sale']), `three work numbers, none repeating the ladder (got ${labels.join(', ')})`);
 ok(!/Commission earned|WeeklyTierTracker|TodayStrip|PipelineStrip|TrendsPanel|MilestonesPanel|RecapPanel|TargetsPanel/.test(page), 'the duplicate and decorative cards are gone from the page');
-ok((page + ladder).match(/earnedThisMonth/g)?.length === 1, 'earned this month is drawn once (on the ladder)');
+/* 2026-10-02: earned this month moved beside the ladder (EarningsStats) — still drawn once. */
+const stats = read('src/components/salesDash/CommissionForecastCard.tsx');
+ok((page + ladder + stats).match(/earnedThisMonth/g)?.length === 1, 'earned this month is drawn once (beside the ladder)');
 ok(!existsSync(new URL('../src/pages/Earnings.tsx', import.meta.url)) && !existsSync(new URL('../src/components/salesDash/WeeklyTracker.tsx', import.meta.url)), 'the Earnings page and the weekly tracker are deleted');
 ok(!/Pipeline efficiency|Sales velocity|MRR|disposition/i.test(page + ladder + read('src/components/salesDash/earningsParts.tsx')), 'no jargon on the Sales page');
 

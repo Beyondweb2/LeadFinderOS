@@ -257,12 +257,13 @@ console.log('── 6. THE SALES PAGE ──');
   const ladder = read('src/components/salesDash/MonthlyLadder.tsx');
   const parts = read('src/components/salesDash/earningsParts.tsx');
   ok((page.match(/<CommissionForecastCard /g) ?? []).length === 1 && page.indexOf('<MonthlyLadder ') < page.indexOf('<CommissionForecastCard '), 'one forecast card, under the ladder');
-  ok(/Total earned to date/.test(card) && /label="This month"/.test(card) && /Expected over \$\{FORECAST_MONTHS\} months/.test(card), 'it shows total earned to date, this month, and expected over the six months');
+  /* 2026-10-02 redesign: the three money figures sit beside the ladder (EarningsStats); "this month" = earned this month. */
+  ok(/Total earned to date/.test(card) && /label="Earned this month"/.test(card) && /Expected over \$\{FORECAST_MONTHS\} months/.test(card), 'it shows total earned to date, this month, and expected over the six months');
   ok(/forecast-month-collected/.test(card) && /forecast-month-expected/.test(card) && /forecast-month-detail/.test(card), 'each month shows collected and expected apart, and opens the clients behind it');
   ok(/not earned until they pay/.test(card) && /New sales are never guessed/.test(card), 'it says plainly that expected is not earned and no sales are guessed');
   ok(/forecast-engagement-ended/.test(card), 'an ended engagement says what it means');
   /* 2026-10-02 redesign: the ladder is a solid green hero; the progress line is its biggest line of words. */
-  ok(/className="mt-3 text-xl font-bold leading-snug" data-testid="ladder-next-line"/.test(ladder), 'the progress line is the headline of the ladder');
+  ok(/className="mt-3 text-xl font-bold leading-snug text-amber-200" data-testid="ladder-next-line"/.test(ladder), 'the progress line is the headline of the ladder');
   ok(/data-testid="ladder-scheme"/.test(ladder) && /COMMISSION_RECURRING_COUNT/.test(ladder) && /zoneWords\(zones\)/.test(ladder), 'the scheme in one line, from the constants: 1–12 = 30% · 13–24 = 40% · 25+ = 50%, plus 20% of the next 6');
   ok(/of each of the next \{COMMISSION_RECURRING_COUNT\} successful monthly payments/.test(parts) && !/next 3|next three/i.test(parts + ladder + card), 'the explainer says six (from the constant); nothing still says three');
   const wn = read('src/lib/whatsNew.ts');

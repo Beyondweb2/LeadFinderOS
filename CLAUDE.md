@@ -204,6 +204,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Both dashboards draw from ONE design system** — `src/components/salesDash/ui.tsx` (PageHeader, SectionHeading,
   Segmented, Panel, KpiCard, Figure, TONE solid/tint, SURFACE). Never style a dashboard surface locally; never bring
   back "week by week" (`docs/dashboards-redesign.md`, `scripts/dashboard-design.test.ts`).
+- **The Admin dashboard is Paul's sales control centre** (2026-10-02): one metric, one home. New sales & handoffs reads
+  paid-client-hub `list` (never a second status); What needs you = server attention minus the two kinds the canonical
+  delivery flow replaces + ONE pointer line for handoff clients (`src/lib/adminControl.ts`). Hide my activity filters the
+  team table only. The old Sales team board panel is deleted — do not bring it back.
 - **Agency check** (`docs/agency-detection.md`): Find Leads checks each result's own website (fn
   `agency-check`, a sitemap-guided sample, ≤`AGENCY_MAX_REQUESTS` requests, no AI) → `website_agency_checks` per
   domain, 30 days. Crawler name `LeadFinderOS-SiteCheck/1.0 (+https://findable.live)` — ⛔ no "Mozilla

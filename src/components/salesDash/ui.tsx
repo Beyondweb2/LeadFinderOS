@@ -7,7 +7,7 @@ import { SectionToggle, useSectionOpen } from '@/components/CollapsibleSection';
    heading, figure and colour from here, so they read as one product and a visual correction after
    Paul's review is one edit. (The admin panels in components/admin import from here too.)
    Colour carries meaning, the same on both pages:
-   GREEN money / earned / won · BLUE replies / conversations / activity · AMBER follow-up / attention ·
+   GREEN (drawn teal) money / earned / won · BLUE replies / conversations / activity · AMBER follow-up / attention ·
    PURPLE audits / AI / forecasts · RED blocked / overdue / failed · GREY secondary.
    2026-10-02 (Paul: "more modern, more colourful but tasteful, more solid, softer"): panel icons sit
    on SOLID colour tiles, figures get a soft tinted wash, corners are rounder, the shadow is softer and
@@ -15,8 +15,9 @@ import { SectionToggle, useSectionOpen } from '@/components/CollapsibleSection';
 export type Tone = 'green' | 'blue' | 'amber' | 'purple' | 'red' | 'grey';
 
 export const TONE: Record<Tone, { text: string; soft: string; ring: string; icon: string; dot: string; bar: string; solid: string; tint: string }> = {
-  green:  { text: 'text-emerald-700 dark:text-emerald-300', soft: 'bg-emerald-500/10', ring: 'ring-emerald-500/25', icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300', dot: 'bg-emerald-500', bar: 'bg-emerald-500',
-            solid: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-600/30', tint: 'bg-gradient-to-br from-emerald-500/[0.13] via-emerald-500/[0.05] to-transparent ring-1 ring-inset ring-emerald-500/20' },
+  /* 'green' is the MONEY tone; since 2026-10-02 it is drawn in TEAL (Paul: no green-on-green). The key stays 'green'. */
+  green:  { text: 'text-teal-700 dark:text-teal-300', soft: 'bg-teal-500/10', ring: 'ring-teal-500/25', icon: 'bg-teal-500/15 text-teal-600 dark:text-teal-300', dot: 'bg-teal-400', bar: 'bg-teal-400',
+            solid: 'bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm shadow-teal-900/40', tint: 'bg-gradient-to-br from-teal-500/[0.16] via-teal-500/[0.06] to-transparent ring-1 ring-inset ring-teal-400/25' },
   blue:   { text: 'text-blue-700 dark:text-blue-300',       soft: 'bg-blue-500/10',    ring: 'ring-blue-500/25',    icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-300',          dot: 'bg-blue-500',    bar: 'bg-blue-500',
             solid: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm shadow-blue-600/30',        tint: 'bg-gradient-to-br from-blue-500/[0.13] via-blue-500/[0.05] to-transparent ring-1 ring-inset ring-blue-500/20' },
   amber:  { text: 'text-amber-700 dark:text-amber-300',     soft: 'bg-amber-500/10',   ring: 'ring-amber-500/25',   icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-300',       dot: 'bg-amber-500',   bar: 'bg-amber-500',
@@ -64,12 +65,14 @@ export function SectionHeading({ title, hint, tone = 'grey', id }: { title: stri
 }
 
 /** A pill-shaped segmented control (the admin's period picker, the sales follow-up lists). */
-export function Segmented<K extends string>({ options, value, onChange, label }: {
+export function Segmented<K extends string>({ options, value, onChange, label, wrapOnPhone = false }: {
   options: { key: K; label: ReactNode; count?: number; tone?: Tone }[]; value: K; onChange: (k: K) => void; label: string;
+  /** Phone only: the pills wrap onto rows instead of scrolling sideways (long lists, e.g. the follow-ups). */
+  wrapOnPhone?: boolean;
 }) {
   return (
-    <div className="-mx-1 overflow-x-auto px-1 pb-1">
-      <div className="inline-flex gap-1 rounded-full bg-muted/70 p-1 ring-1 ring-inset ring-border/50" role="group" aria-label={label}>
+    <div className={cn('-mx-1 px-1 pb-1', wrapOnPhone ? 'sm:overflow-x-auto' : 'overflow-x-auto')}>
+      <div className={cn('gap-1 p-1', wrapOnPhone ? 'flex flex-wrap rounded-2xl bg-muted/50 sm:inline-flex sm:flex-nowrap sm:rounded-full sm:bg-muted/70 sm:ring-1 sm:ring-inset sm:ring-border/50' : 'inline-flex rounded-full bg-muted/70 ring-1 ring-inset ring-border/50')} role="group" aria-label={label}>
         {options.map((o) => {
           const on = o.key === value;
           return (
@@ -92,21 +95,38 @@ export function Segmented<K extends string>({ options, value, onChange, label }:
 /** A dashboard surface: rounded, soft shadow, a solid colour icon tile and a clear title row. With
  *  `collapseKey` it gets the shared collapse control (src/components/CollapsibleSection.tsx): the body
  *  folds away, the title and `summary` (or the hint) stay. */
-export function Panel({ title, icon: I, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary }: {
+export function Panel({ title, icon: I, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary, stackAction }: {
   title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string;
+  /** Phone only: put the action on its own row under the title (a wide button would squeeze the title). */
+  stackAction?: boolean;
   /** Stable key — makes the panel collapsible and remembers it per person. Never derived from the title. */
   collapseKey?: string; defaultOpen?: boolean; summary?: ReactNode;
 }) {
-  if (collapseKey) return <CollapsiblePanel {...{ title, icon: I, tone, hint, action, children, className, id, collapseKey, defaultOpen, summary }} />;
+  if (collapseKey) return <CollapsiblePanel {...{ title, icon: I, tone, hint, action, children, className, id, collapseKey, defaultOpen, summary, stackAction }} />;
   return (
     <section id={id} className={cn('min-w-0 p-4 sm:p-5', SURFACE, className)}>
-      <PanelHeader title={title} icon={I} tone={tone} hint={hint} action={action} />
+      <PanelHeader title={title} icon={I} tone={tone} hint={hint} action={action} stackAction={stackAction} />
       {children}
     </section>
   );
 }
 
-function PanelHeader({ title, icon: I, tone, hint, action, toggle, shut }: { title: string; icon?: Icon; tone: Tone; hint?: ReactNode; action?: ReactNode; toggle?: ReactNode; shut?: boolean }) {
+function PanelHeader({ title, icon: I, tone, hint, action, toggle, shut, stackAction }: { title: string; icon?: Icon; tone: Tone; hint?: ReactNode; action?: ReactNode; toggle?: ReactNode; shut?: boolean; stackAction?: boolean }) {
+  /* stackAction (phone only): the action drops to its own row under the title instead of squeezing it;
+     the collapse chevron stays top-right. From sm it sits beside the chevron as before. */
+  if (stackAction) return (
+    <header className={cn('flex flex-wrap items-start gap-3', shut ? 'mb-0' : 'mb-4')}>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {I && <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', TONE[tone].solid)}><I className="h-[18px] w-[18px]" /></span>}
+        <div className="min-w-0">
+          <h2 className="text-base font-bold leading-tight tracking-tight">{title}</h2>
+          {hint && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{hint}</p>}
+        </div>
+      </div>
+      {toggle && <div className="flex shrink-0 items-center sm:order-last">{toggle}</div>}
+      {action && !shut && <div className="order-last flex basis-full items-center sm:order-none sm:basis-auto sm:shrink-0">{action}</div>}
+    </header>
+  );
   return (
     <header className={cn('flex items-start justify-between gap-3', shut ? 'mb-0' : 'mb-4')}>
       <div className="flex min-w-0 items-center gap-3">
@@ -121,13 +141,13 @@ function PanelHeader({ title, icon: I, tone, hint, action, toggle, shut }: { tit
   );
 }
 
-function CollapsiblePanel({ title, icon, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary }: {
-  title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string; collapseKey: string; defaultOpen?: boolean; summary?: ReactNode;
+function CollapsiblePanel({ title, icon, tone = 'grey', hint, action, children, className, id, collapseKey, defaultOpen = true, summary, stackAction }: {
+  title: string; icon?: Icon; tone?: Tone; hint?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; id?: string; collapseKey: string; defaultOpen?: boolean; summary?: ReactNode; stackAction?: boolean;
 }) {
   const [open, setOpen] = useSectionOpen(collapseKey, defaultOpen);
   return (
     <section id={id} className={cn('min-w-0 p-4 sm:p-5', SURFACE, !open && 'py-3.5 sm:py-3.5', className)}>
-      <PanelHeader title={title} icon={icon} tone={tone} hint={open ? hint : (summary ?? hint)} action={action} shut={!open}
+      <PanelHeader title={title} icon={icon} tone={tone} hint={open ? hint : (summary ?? hint)} action={action} shut={!open} stackAction={stackAction}
         toggle={<SectionToggle open={open} onToggle={() => setOpen(!open)} label={title} />} />
       {open && children}
     </section>
@@ -144,16 +164,16 @@ export function KpiCard({ label, value, sub, icon: I, tone, hero = false, onClic
   const Comp = onClick ? 'button' : 'div';
   return (
     <Comp type={onClick ? 'button' : undefined} onClick={onClick}
-      className={cn('group relative flex h-full w-full min-w-0 flex-col overflow-hidden p-4 text-left transition sm:p-5',
+      className={cn('group relative flex h-full w-full min-w-0 flex-col overflow-hidden p-3 text-left transition sm:p-5',
         hero ? cn('rounded-[1.25rem]', TONE[tone].solid) : cn(SURFACE),
         onClick && 'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none')}>
       {!hero && <span className={cn('pointer-events-none absolute inset-0 rounded-[1.25rem]', TONE[tone].tint)} aria-hidden />}
       <div className="relative flex items-center justify-between gap-2">
-        <span className={cn('min-w-0 truncate text-xs font-semibold', hero ? 'text-white/85' : 'text-muted-foreground')}>{label}</span>
-        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', hero ? 'bg-white/20 text-white' : TONE[tone].solid)}><I className="h-4 w-4" /></span>
+        <span className={cn('min-w-0 text-[11px] font-semibold leading-tight sm:truncate sm:text-xs', hero ? 'text-white/85' : 'text-muted-foreground')}>{label}</span>
+        <span className={cn('hidden h-8 w-8 shrink-0 sm:flex items-center justify-center rounded-xl', hero ? 'bg-white/20 text-white' : TONE[tone].solid)}><I className="h-4 w-4" /></span>
       </div>
-      <div className={cn('relative mt-2 text-3xl font-extrabold tabular-nums tracking-tight', hero && 'text-4xl')}>{value}</div>
-      {sub && <div className={cn('relative mt-1 text-xs leading-snug', hero ? 'text-white/80' : 'text-muted-foreground')}>{sub}</div>}
+      <div className={cn('relative mt-auto pt-1.5 text-2xl font-extrabold tabular-nums tracking-tight sm:mt-2 sm:pt-0 sm:text-3xl', hero && 'text-4xl')}>{value}</div>
+      {sub && <div className={cn('relative mt-1 hidden text-xs leading-snug sm:block', hero ? 'text-white/80' : 'text-muted-foreground')}>{sub}</div>}
       {children}
     </Comp>
   );
