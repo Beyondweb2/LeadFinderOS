@@ -11,6 +11,7 @@ import type { LeadStatus } from '@/types/outreach';
 import { salesPatchLead } from '@/lib/leadRpc';
 import { refusalText } from '@/lib/salesCrm';
 import { notifyLeadChanged } from '@/lib/leadSync';
+import { clearNextActionOnNo } from '@/lib/nextActionWrite';
 
 export type QuickResult = { ok: boolean; error?: string };
 
@@ -31,6 +32,9 @@ export async function markLeadInterested(leadId: string, _isAdmin: boolean, on =
 export async function setLeadPipelineStatus(leadId: string, status: string, isAdmin: boolean): Promise<QuickResult> {
   /* "Interested" is the star, never a status: the one write (lead_mark_interested), for both roles. */
   if (status === 'interested') return markLeadInterested(leadId, isAdmin, true);
+  /* A no clears the Next Action BEFORE the status write (the same rule as a logged outcome; a salesperson's
+     not-interested also archives, and the clear must land while the lead is still theirs to work). */
+  if (status === 'not_interested') await clearNextActionOnNo(leadId);
   const { error } = isAdmin
     ? await updateLeadStatus(leadId, status as LeadStatus)
     : await salesPatchLead(leadId, { status }).then((r) => ({ error: r.ok ? null : refusalText(r.error) }));
