@@ -73,8 +73,9 @@ intelligence → Website & system → Sign-ups & free checks.
   list MINUS `setup_not_started` / `remeasure_overdue` (they contradict Setup → Ready → Discovery → questions →
   baseline) + in-delivery client steps that are Paul's + ONE pointer line for the handoff clients. A handoff
   left HANDOFF_CHASE_DAYS becomes "Chase {seller}" on that client's card.
-- Hide my activity: usePersistedState `admin.hideMyActivity` (default true, per person, this device). It filters
-  ONLY the team table rows (role admin or the signed-in user). Funnel / channel numbers stay whole-business.
+- Hide my activity: usePersistedState `admin.hideMyActivity` (default true, per person, this device). It filtered
+  ONLY the team table rows at first. **Superseded 2026-10-02:** it now scopes every activity figure on the server —
+  docs/admin-control-centre.md "My activity: hidden / included".
 - Team table: `o.team` (period) + sales this month and rate from fn sales-earnings `all` lines (monthlyTracker
   per sellerId) + last activity = the newest lead_activity / whatsapp_messages row per person (admin RLS) →
   activityStatus (Active within 24 h, Quiet within 3 days, else Inactive). Derived, never stored.
