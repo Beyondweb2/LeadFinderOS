@@ -171,7 +171,10 @@ const niche = (o: typeof inc, k: string) => o.niches.find((x) => x.key === k);
   };
   ok(count(withH()) === 2, `included: 2 interested leads with no next step (Sumi's B + Paul's H) (got ${count(withH())})`);
   ok(count(withH(new Set([PAUL]))) === 1, `hidden: 1 — only Sumi's B; Paul's H is his open workload (got ${count(withH(new Set([PAUL])))})`);
-  ok(count(foldAdminOverview(input())) === 1 && count(foldAdminOverview(input(new Set([PAUL])))) === 1,"Paul's paid client E is never counted, so it never moves with the toggle");
+  const X = lead({ assigned_to_user_id: TEST, status: 'interested', is_potential_work: true });
+  const withX = (hide?: ReadonlySet<string>) => { const b = input(hide); return foldAdminOverview({ ...b, leads: [...b.leads, X] }); };
+  ok(count(withX()) === 1 && count(withX(new Set([PAUL]))) === 1, "a TEST account's interested lead is never counted, in either state");
+  ok(count(foldAdminOverview(input())) === 1 && count(foldAdminOverview(input(new Set([PAUL])))) === 1, "Paul's paid client E is never counted, so it never moves with the toggle");
 }
 
 /* ── D. The wiring: one toggle, sent to the server, admin resolved server-side ───────────────────── */
