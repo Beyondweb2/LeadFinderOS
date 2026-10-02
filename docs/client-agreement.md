@@ -80,3 +80,35 @@ Welcome Pack. `remeasureWeeksFor` returns four. No onboarding row had ever answe
 
 Stripe refuses a Checkout Session with a required terms tick unless **Dashboard → Settings → Business →
 Public details → Terms of service** is set (live and test mode). It is `https://findable.live/agreement`.
+
+## Live (2026-10-02 / 03) and the end-to-end test
+
+**Deployed** from `main` (`2d77e39a`, then `ade0bda8` for the email-obfuscation fix), each checked by a
+marker in its live bundle: `stripe-webhook`, `client-agreement`, `render-welcome-pack`,
+`paid-client-hub`, `render-audit-report`, `render-remeasure-results`, `process-ai-audit-queue`,
+`paid-baseline`, then findable.live (`4486079`, `--branch=master`), then `findable-checkout` last.
+Stripe Public details → Terms of service = `https://findable.live/terms` (Paul); each client's tick
+links to their own `/agree/<token>` through `custom_text.terms_of_service_acceptance`.
+
+**The test client** (permanent by design): lead `bfd5f261-9630-4664-b354-f9372f36d50e`, "TEST - Findable
+agreement check (internal, do not contact)", archived, no phone, no amount paid, email paul@move37.fun;
+acceptance `5e08a9d8-c3c9-4c22-92a1-97736876c342` (Build, v1, fingerprint `06dae3ac…`). It also has one
+onboarding row (contact email blank, notify suppressed) and one unpaid Stripe Checkout Session created to
+prove Stripe accepts the required tick.
+
+Verified live, through findable.live and the hub (a one-off admin session, revoked after): viewing writes
+no route; Build ticks Build with 12 payments, Optimise ticks Optimise with 6; an incomplete form is
+refused; signing stores one row whose SHA-256 matches its text, with IP and user agent; the route then
+locks (409 `already_signed`); the PDF downloads from the page and from Paid Clients, fully filled, with
+the evidence line; no email failure or bounce was logged; update / delete of the row are refused for the
+owner and the server (rolled-back test), and the lead cannot be deleted; MCLocksmiths' and Ronnie's live
+packs show the neutral wording and their own stored dates; viewing MCLocksmiths writes no route and their
+page refuses.
+
+**Found and fixed during the test**: Cloudflare email obfuscation on findable.live turned every address on
+the agreement page into "[email protected]" (plus a decoder script) — the page now wraps them in
+`<!--email_off-->`. **Results wording**: `storedRemeasureWeeks` (remeasureFill.ts) — RG and Ronnie are
+told "eight weeks", from their stored dates, which were not touched.
+
+**Noted, not changed**: a revoked admin session gets 503 (auth unavailable) from paid-client-hub rather
+than 401 — it is refused either way.
