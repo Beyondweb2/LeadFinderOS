@@ -35,7 +35,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       changed: [
         'The payment email is now "New Findable client: …" with the package, salesperson, website, site management, services found, the handoff, setup n/m, what you are waiting for, the next step and a link to the client. It is sent once per client, whatever Stripe retries.',
-        'READY TO START / MISSING INFORMATION is now READY FOR DELIVERY / WAITING FOR INFORMATION, and a client with no Google profile is no longer blocked by it.',
+        'READY TO START / MISSING INFORMATION is now three states: WAITING FOR INFORMATION (something required is missing), READY TO SUBMIT (everything is in) and READY FOR DELIVERY (submitted). A client with no Google profile is no longer blocked.',
         "The client's post-payment form arrives with the services and towns we already have, for them to confirm.",
       ],
       removed: [

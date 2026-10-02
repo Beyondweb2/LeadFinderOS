@@ -37,7 +37,7 @@ export interface SetupHandoff {
 
 export const STATE_TONE: Record<DeliveryState, string> = {
   waiting_sales: 'bg-amber-700 text-white hover:bg-amber-700', waiting_client: 'bg-amber-700 text-white hover:bg-amber-700', waiting_findable: 'bg-sky-700 text-white hover:bg-sky-700',
-  ready: 'bg-emerald-700 text-white hover:bg-emerald-700', in_delivery: 'bg-indigo-600 text-white hover:bg-indigo-600', ended: 'bg-slate-600 text-white hover:bg-slate-600',
+  ready_to_submit: 'bg-teal-700 text-white hover:bg-teal-700', ready: 'bg-emerald-700 text-white hover:bg-emerald-700', in_delivery: 'bg-indigo-600 text-white hover:bg-indigo-600', ended: 'bg-slate-600 text-white hover:bg-slate-600',
 };
 const WHO: Record<HandoffWho, string> = { sales: 'Sales', client: 'Client', findable: 'Findable' };
 const day = (iso: string | null | undefined) =>

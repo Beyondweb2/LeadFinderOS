@@ -45,7 +45,7 @@ function ManualClient({ done }: { done: (id: string) => void }) {
    Who needs attention, what is missing, and the ONE next step — per client, from paid-client-hub
    (_shared/client-setup.ts). Filters are how the page is configured (usePersistedState), never the URL. */
 const FILTERS: { value: ClientFilter; label: string }[] = [
-  { value: 'attention', label: 'Needs attention' }, { value: 'ready', label: 'Ready' }, { value: 'in_delivery', label: 'In delivery' }, { value: 'all', label: 'All' },
+  { value: 'attention', label: 'Needs attention' }, { value: 'ready_to_submit', label: 'Ready to submit' }, { value: 'ready', label: 'Ready for delivery' }, { value: 'in_delivery', label: 'In delivery' }, { value: 'all', label: 'All' },
 ];
 
 function paymentLine(c: Client): string {
@@ -76,7 +76,7 @@ function ClientCard({ c }: { c: Client }) {
             <div className={cn('break-words font-semibold', s?.next.action ? 'text-foreground' : 'text-muted-foreground')}>{s?.next.label ?? '—'}</div>
             {s && s.stage === 'setup' && s.missing.length > 0 && <div className="break-words text-xs text-amber-700 dark:text-amber-300">Missing: {s.missing.join(' · ')}</div>}
             {/* A reminder Paul set by hand (the human Next Action) is his own note, never replaced by the derived step. */}
-            {(() => { const na = nextActionViewOf(c.next_action, c.next_action_date, null, undefined, c.next_action_time); return na ? <div className="break-words text-xs text-muted-foreground">Your reminder: {nextActionText(na)}</div> : null; })()}
+            {(() => { const na = nextActionViewOf(c.next_action, c.next_action_date, null, undefined, c.next_action_time); return na ? <div className="mt-1.5"><div className="text-[11px] text-muted-foreground/80">Your reminder</div><div className="break-words text-xs text-muted-foreground">{nextActionText(na)}</div></div> : null; })()}
           </div>
         </CardContent>
       </Card>

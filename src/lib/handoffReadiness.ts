@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   PAID-CLIENT SETUP: READY FOR DELIVERY, or WAITING FOR INFORMATION  (2026-09-28, docs/self-sourced-handoff.md;
+   PAID-CLIENT SETUP: READY TO SUBMIT, or WAITING FOR INFORMATION  (2026-09-28, docs/self-sourced-handoff.md;
    the setup checklist since 2026-10-02, docs/paid-client-automation.md)
 
    ONE RULE, read by Paid Clients (list + client page, via paid-client-hub), the new-client email
@@ -80,7 +80,7 @@ export interface HandoffItem {
   key: HandoffKey;
   label: string;
   ok: boolean;
-  /** Required for READY FOR DELIVERY. hook_audit is informational; a not-needed item is never required. */
+  /** Required for READY TO SUBMIT. hook_audit is informational; a not-needed item is never required. */
   required: boolean;
   /** Does not apply to this client (no GBP, no website, Paul's own sale…). Shown as "not needed". */
   notNeeded?: boolean;
@@ -90,12 +90,14 @@ export interface HandoffItem {
   detail: string;
 }
 
-export const READY_LABEL = 'READY FOR DELIVERY';
+/* ⛔ THREE STATES, NOT TWO (Paul, 2026-10-02): every required item in is READY TO SUBMIT; READY FOR
+   DELIVERY needs the Submit for delivery act too, so it is deliveryStage's word, never this rule's. */
+export const READY_LABEL = 'READY TO SUBMIT';
 export const WAITING_LABEL = 'WAITING FOR INFORMATION';
 
 export interface HandoffReadiness {
   ready: boolean;
-  /** READY FOR DELIVERY / WAITING FOR INFORMATION — the two words Paul reads. */
+  /** READY TO SUBMIT / WAITING FOR INFORMATION — whether every required item is in. */
   label: typeof READY_LABEL | typeof WAITING_LABEL;
   items: HandoffItem[];
   /** The labels of the required items that are not ok, in order. Empty when ready. */
@@ -292,7 +294,7 @@ export function handoffReadiness(
   return { ready, label: ready ? READY_LABEL : WAITING_LABEL, items, missing, waitingOn, done: req.length - missingItems.length, total: req.length, domain };
 }
 
-/** One line for an email or a list cell: "READY FOR DELIVERY" or "WAITING FOR INFORMATION: Services, GBP access". */
+/** One line for an email or a list cell: "READY TO SUBMIT" or "WAITING FOR INFORMATION: Services, GBP access". */
 export function handoffLine(r: HandoffReadiness): string {
   return r.ready ? r.label : `${r.label}: ${r.missing.join(', ')}`;
 }

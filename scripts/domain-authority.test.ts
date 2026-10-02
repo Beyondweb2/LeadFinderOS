@@ -61,7 +61,7 @@ const ob: HandoffOnboarding = { services_list: ["x"], areas_list: ["y"], busines
   domain_status: "existing", domain_owned: "yes", domain_access: "agency", domain_third_party: "no", authority_confirmed: true, dns_permission: true, materials_confirmed: true, site_rights: "no" };
 {
   const r = handoffReadiness(lead, ob, ev(true, true));
-  ok(r.ready && r.domain.label === "DOMAIN READY", "Paid Clients: agency-managed but client-owned domain, all confirmed → READY FOR DELIVERY");
+  ok(r.ready && r.domain.label === "DOMAIN READY", "Paid Clients: agency-managed but client-owned domain, all confirmed → READY TO SUBMIT");
   const bad = handoffReadiness(lead, { ...ob, domain_third_party: "yes" }, ev(true, true));
   ok(!bad.ready && bad.missing.includes("Domain / authority") && bad.domain.label === "DOMAIN / AGENCY ISSUE", "a third-party-owned domain → WAITING FOR INFORMATION: Domain / authority (DOMAIN / AGENCY ISSUE)");
   ok(/A third party owns or controls the domain/.test(bad.items.find((i) => i.key === "domain")!.detail), "…with the reason");

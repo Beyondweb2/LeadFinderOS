@@ -92,7 +92,7 @@ export function ClientHandoffCard({ handoff, leadId, onChanged }: { handoff: Cli
   return (
     <Card data-testid="client-handoff">
       <CardContent className="space-y-4 p-5">
-        {/* The checklist and READY FOR DELIVERY / WAITING moved to ClientSetupCard (2026-10-02) — drawn once. */}
+        {/* The checklist and READY TO SUBMIT / READY FOR DELIVERY / WAITING moved to ClientSetupCard (2026-10-02) — drawn once. */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="text-sm font-semibold">Who sold it · domain · the conversation</p>
           <div className="text-right text-sm">

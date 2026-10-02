@@ -24,7 +24,7 @@ Branch `feat/paid-client-automation` (LeadFinderOS) + `feat/paid-client-setup-pr
 
 | Piece | Where |
 |---|---|
-| The checklist (READY FOR DELIVERY / WAITING FOR INFORMATION, who owes each item, done/total, not-needed items) | `src/lib/handoffReadiness.ts` |
+| The checklist (WAITING FOR INFORMATION / READY TO SUBMIT — READY FOR DELIVERY only after Submit, in deliveryStage; who owes each item, done/total, not-needed items) | `src/lib/handoffReadiness.ts` |
 | The sales handoff (fields, prefill, completeness, who owes one) | `src/lib/salesHandoff.ts`, column `outreach_leads.sales_handoff` |
 | Stage + ONE next step, filters | `src/lib/deliveryStage.ts` |
 | One loader for list / page / email / submit; History writer; Submit for delivery | `supabase/functions/_shared/client-setup.ts` |

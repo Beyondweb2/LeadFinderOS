@@ -146,7 +146,7 @@ const TEMPLATE_PAYMENT_CONFIRM = "payment_recieved";
  * Admin only. No customer email is sent on this path.
  */
 /** The handoff + SETUP lines for the new-client email (2026-10-02): who sold it, the setup checklist
- *  (READY FOR DELIVERY / WAITING FOR INFORMATION, done/total, what is missing and who owes it), the one
+ *  (READY TO SUBMIT / WAITING FOR INFORMATION, done/total, what is missing and who owes it), the one
  *  next step and the link to the client — from _shared/client-setup.ts, the SAME loader Paid Clients
  *  uses, so the email and the screen cannot disagree. Read AFTER the payment write.
  *  ⛔ NEVER THROWS and never blocks the email: any failure returns nulls and the email goes without

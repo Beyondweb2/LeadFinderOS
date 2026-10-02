@@ -43,7 +43,7 @@ const fullOnboarding: HandoffOnboarding = {
 };
 {
   const r = handoffReadiness(paidLead, fullOnboarding, ev(true, true));
-  ok(r.ready && r.label === "READY FOR DELIVERY" && r.missing.length === 0, "complete onboarding + crawl → READY FOR DELIVERY");
+  ok(r.ready && r.label === "READY TO SUBMIT" && r.missing.length === 0, "complete onboarding + crawl → READY TO SUBMIT");
   ok(r.items.find((i) => i.key === "services")?.source === "onboarding", "…services read from the client's answers");
 }
 {

@@ -37,8 +37,9 @@ export interface NextStep {
   section: HubSection;
 }
 
-/** What the badge says: who it waits on, READY FOR DELIVERY, or IN DELIVERY · <stage>. */
-export type DeliveryState = 'waiting_sales' | 'waiting_client' | 'waiting_findable' | 'ready' | 'in_delivery' | 'ended';
+/** What the badge says: who it waits on, READY TO SUBMIT (everything in, not yet submitted), READY FOR
+ *  DELIVERY (submitted — the snapshot is recorded), or IN DELIVERY · <stage>. */
+export type DeliveryState = 'waiting_sales' | 'waiting_client' | 'waiting_findable' | 'ready_to_submit' | 'ready' | 'in_delivery' | 'ended';
 
 export interface DiscoverySummary {
   /** A question pool was generated (baseline_discovery.pool). */
@@ -108,7 +109,7 @@ export function deliveryStage(i: StageInput): StageResult {
   const L = i.lead;
   const result = (stage: DeliveryStage, next: NextStep, state?: DeliveryState): StageResult => {
     const st: DeliveryState = state ?? (stage === 'ended' ? 'ended' : 'in_delivery');
-    const stateLabel = st === 'ended' ? 'ENDED' : st === 'ready' ? 'READY FOR DELIVERY' : st === 'in_delivery' ? `IN DELIVERY · ${DELIVERY_STAGE_LABEL[stage].toUpperCase()}`
+    const stateLabel = st === 'ended' ? 'ENDED' : st === 'ready' ? 'READY FOR DELIVERY' : st === 'ready_to_submit' ? 'READY TO SUBMIT' : st === 'in_delivery' ? `IN DELIVERY · ${DELIVERY_STAGE_LABEL[stage].toUpperCase()}`
       : st === 'waiting_sales' ? WAITING_ON_LABEL.sales : st === 'waiting_client' ? WAITING_ON_LABEL.client : WAITING_ON_LABEL.findable;
     return { stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
   };
@@ -143,19 +144,20 @@ export function deliveryStage(i: StageInput): StageResult {
 
   // Setup until every required item is in AND the client is submitted for delivery.
   if (r.ready && L.delivery_submitted_at) return result('ready', step('run_discovery', 'Run Discovery', true, 'baseline'), 'ready');
-  if (r.ready) return result('setup', step('submit', 'Submit for delivery', true, 'setup'), 'ready');
+  if (r.ready) return result('setup', step('submit', 'Submit for delivery', true, 'setup'), 'ready_to_submit');
   const waiting: DeliveryState = r.waitingOn === 'sales' ? 'waiting_sales' : r.waitingOn === 'client' ? 'waiting_client' : 'waiting_findable';
   return result('setup', setupStep(r), waiting);
 }
 
 /** Paid Clients filter buckets. */
-export type ClientFilter = 'all' | 'attention' | 'ready' | 'in_delivery';
+export type ClientFilter = 'all' | 'attention' | 'ready_to_submit' | 'ready' | 'in_delivery';
 export function matchesFilter(s: Pick<StageResult, 'state' | 'next'>, f: ClientFilter): boolean {
   if (f === 'all') return true;
   if (f === 'ready') return s.state === 'ready';
+  if (f === 'ready_to_submit') return s.state === 'ready_to_submit';
   if (f === 'in_delivery') return s.state === 'in_delivery';
-  // Needs attention: Paul has an action to take, or the client is stuck waiting on someone.
-  return s.state === 'waiting_sales' || s.state === 'waiting_client' || s.state === 'waiting_findable' || (s.state === 'in_delivery' && s.next.action);
+  // Needs attention: Paul has an action to take (incl. Submit), or the client is stuck waiting on someone.
+  return s.state === 'ready_to_submit' || s.state === 'waiting_sales' || s.state === 'waiting_client' || s.state === 'waiting_findable' || (s.state === 'in_delivery' && s.next.action);
 }
 
 /** Summarise baseline_discovery (onboarding_responses) + the Discovery audit's run statuses. */

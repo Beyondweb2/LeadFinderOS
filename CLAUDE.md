@@ -126,8 +126,8 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   WARNING (`site_match`, chains share domains), never a refusal. A hand-added lead with no place id is
   not town-gated (`handTypedTown`). Sales crawls only a lead they work, its own site. In-app report
   opens carry `preview=1` and are never counted. **The seller is `sold_by_user_id`, stamped once at
-  payment by trigger — never read the current owner as "who sold it".** READY FOR DELIVERY / WAITING
-  FOR INFORMATION is `handoffReadiness` (one rule: Paid Clients, the client page, the new-client email, Submit —
+  payment by trigger — never read the current owner as "who sold it".** WAITING FOR INFORMATION / READY TO
+  SUBMIT is `handoffReadiness`; READY FOR DELIVERY = that + Submit for delivery (`deliveryStage`, Paul 2026-10-02) (one rule: Paid Clients, the client page, the new-client email, Submit —
   all through `_shared/client-setup.ts`). ⛔ **Paid client setup (2026-10-02, `docs/paid-client-automation.md`)**:
   the stage + ONE next step is `deliveryStage` (derived; never draw a second "what's next"); not-needed items
   never block (no GBP = `gbp_exists='no'` only; no site; Paul's own sale / pre-`SALES_HANDOFF_SINCE` clients owe

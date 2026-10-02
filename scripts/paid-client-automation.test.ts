@@ -111,7 +111,7 @@ console.log("\n── HANDOFF ──");
 console.log("\n── CHECKLIST: required vs not needed ──");
 {
   const r = handoffReadiness(lead, ob, ev());
-  ok(r.ready && r.label === READY_LABEL && r.done === r.total && r.waitingOn === null, "16. everything required in → READY FOR DELIVERY, done = total");
+  ok(r.ready && r.label === READY_LABEL && r.done === r.total && r.waitingOn === null, "16. everything required in → READY TO SUBMIT, done = total");
   const noHandoff = handoffReadiness(lead, ob, ev({ salesHandoff: { applies: "required", complete: false, missing: 2 } }));
   ok(!noHandoff.ready && noHandoff.missing[0] === "Sales handoff" && noHandoff.waitingOn === "sales" && noHandoff.label === WAITING_LABEL, "9. a missing handoff is the first gap and waits on Sales");
   ok(noHandoff.items.find((i) => i.key === "sales_handoff")!.detail === "Not complete — 2 answers missing", "…saying how much is missing");
@@ -147,9 +147,12 @@ console.log("\n── STAGE + ONE NEXT STEP ──");
 {
   ok(DELIVERY_STAGES.join() === "setup,ready,discovery,questions,baseline,build,launched,remeasure", "the pipeline is the real workflow, no extra stages");
   const ready = handoffReadiness(lead, ob, ev());
-  ok(deliveryStage(stageIn({ readiness: ready })).next.key === "submit", "19. everything in, not submitted → 'Submit for delivery'");
+  const toSubmit = deliveryStage(stageIn({ readiness: ready }));
+  ok(toSubmit.state === "ready_to_submit" && toSubmit.stateLabel === "READY TO SUBMIT" && toSubmit.next.label === "Submit for delivery", "19. everything in, not submitted → READY TO SUBMIT, next 'Submit for delivery'");
+  ok(ready.label === READY_LABEL && READY_LABEL === "READY TO SUBMIT", "…the checklist alone never says READY FOR DELIVERY (that needs the submit)");
+  ok(matchesFilter(toSubmit, "ready_to_submit") && matchesFilter(toSubmit, "attention") && !matchesFilter(toSubmit, "ready"), "20. Ready to submit has its own filter, needs attention, and is not Ready for delivery");
   const sub = deliveryStage(stageIn({ readiness: ready, lead: { ...lead, delivery_submitted_at: "2026-10-02T10:00:00Z" } }));
-  ok(sub.stage === "ready" && sub.state === "ready" && sub.next.label === "Run Discovery", "19. submitted → READY FOR DELIVERY, next 'Run Discovery'");
+  ok(sub.stage === "ready" && sub.state === "ready" && sub.stateLabel === "READY FOR DELIVERY" && sub.next.label === "Run Discovery" && matchesFilter(sub, "ready") && !matchesFilter(sub, "ready_to_submit"), "19. submitted → READY FOR DELIVERY, next 'Run Discovery'");
   const waitClient = deliveryStage(stageIn({ readiness: handoffReadiness(lead, { ...ob, gbp_status: "will_do" }, ev()) }));
   ok(waitClient.state === "waiting_client" && /^Waiting for client: Google Business Profile access/.test(waitClient.next.label) && !waitClient.next.action, "19. a client gap → WAITING FOR CLIENT, naming it");
   const waitSales = deliveryStage(stageIn({ readiness: handoffReadiness(lead, ob, ev({ salesHandoff: { applies: "required", complete: false, missing: 6 } })) }));
