@@ -77,7 +77,8 @@ console.log("\n── the Admin dashboard ──");
   const order = ["<BusinessGlance ", "<AttentionQueue items={needs}", "<HandoffsPanel ", "<TeamPerformanceTable ", "<MoneyPanel ", "<LostReasonsPanel ", "<FindableFunnelPanel "];
   ok(order.every((s) => at(s) > -1) && order.every((s, i) => i === 0 || at(order[i - 1]) < at(s)), "order: glance → what needs you → new sales & handoffs → sales team → money → intelligence → website & system");
   for (const gone of ["<SinceYesterday ", "<TeamComparison ", "<FunnelPanel ", "<CallsPanel ", "<RevenuePanel ", "<ContributionPanel ", "<CommissionPanel "]) ok(!admin.includes(gone), `removed from the page: ${gone.trim()}`);
-  ok(/usePersistedState<boolean>\('admin\.hideMyActivity', true/.test(admin) && /r\.role === 'admin' \|\| r\.userId === user\?\.id/.test(admin), "Hide my activity: default hidden, remembered, and it filters ONLY the team table rows");
+  /* 2026-10-02: the toggle now reaches the server (scripts/admin-my-activity.test.ts has the figures). */
+  ok(/usePersistedState<boolean>\('admin\.hideMyActivity', true/.test(admin) && /useAdminOverview\(choice, isAdmin, hideMine\)/.test(admin), "Hide my activity: default hidden, remembered, and sent to the server for every activity figure");
   ok(/usePaidClientList\(isAdmin\)/.test(admin) && /invokeEdge<\{ clients: PaidClientListRow\[\] \}>\('paid-client-hub', \{ action: 'list' \}\)/.test(read("src/hooks/useAdminTeamControl.ts")), "New sales & handoffs reads the Paid Clients page's own list (no second status system)");
   ok(/exclude=\{handoffIds\}/.test(admin), "a client under New sales & handoffs is not repeated in Clients in delivery");
 }

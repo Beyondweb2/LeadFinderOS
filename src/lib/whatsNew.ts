@@ -22,6 +22,18 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-my-activity-scope', date: '2026-10-02', title: '"My activity: hidden" now hides your outreach from Sales intelligence too', audience: 'admin',
+    body: 'The same toggle at the top of the Admin dashboard now leaves your own outreach out of every sales figure, not just the team table.',
+    report: {
+      added: [],
+      changed: [
+        'With "My activity: hidden", your own WhatsApps, calls, replies, interested, not interested and meetings are left out of: Sales team performance, Why prospects say no, WhatsApp templates, Outreach channels, Niches and the bottleneck checks.',
+        'Counts, reply rates and contacted → sale are worked out again on the server without your activity, so the percentages are correct, not just smaller.',
+        'A salesperson\'s work on a lead you added, or a client you now deliver, still counts. Only what you did yourself is left out (including the automatic WhatsApps sent on leads you held).',
+      ],
+      removed: [],
+      effect: 'Hidden shows how the sales team is really doing. Included shows the whole business as before. Money, clients, handoffs, What needs you, costs and the website never change with the toggle.',
+    } },
   { id: '2026-10-02-welcome-pack-copy', date: '2026-10-02', title: 'The Welcome Pack is clearer, and in a better order', audience: 'all',
     body: 'The pack a new client receives is rewritten in plain English and now tells the story in order: what we do, why it works, where they stand, what happens next.',
     report: {
