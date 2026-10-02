@@ -363,6 +363,7 @@ function AgreementStage({ lead }: { lead: AnyRecord }) {
           </Button>
         ))}
         {!view.route && <span className="text-xs text-amber-600">Set the route first: the agreement page will not open until it is set.</span>}
+        {!view.route && <p className="w-full text-xs text-muted-foreground">Choosing Build or Optimise puts this client on the current agreement (£99 to start, then £99 a month, 12 or 6 payments). Only choose it for a client on those terms; until then their pack and agreement page show no prices.</p>}
         {view.route_source === 'checkout' && <span className="text-xs text-muted-foreground">(from their checkout)</span>}
       </div>
       {view.url && <div className="flex flex-wrap gap-2 pt-1">

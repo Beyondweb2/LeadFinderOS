@@ -66,6 +66,11 @@ export interface WelcomePackInput {
 
 export interface WelcomePackAgreement {
   url: string | null;
+  /** ⛔ TRUE ONLY WHEN THE RECORD SAYS THE CURRENT AGREEMENT APPLIES (Paul, 2026-10-02, a general rule
+   *  for older clients): a route on the client's agreement link (set by today's checkout, or by Paul
+   *  choosing Build / Optimise) or a route stamped by today's checkout. Anything else — absent, false —
+   *  prints the neutral wording: no £99, no 12-or-6 payments, no button to a v1 agreement. */
+  termsKnown?: boolean;
   acceptedAtIso?: string | null;
   acceptedBy?: string | null;
 }
@@ -234,7 +239,7 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
    position. A hardcoded list was fine while the pack had one shape; it now has two (with and
    without the client's own details and baseline result), and a contents page that promises a
    section the document does not contain is a worse fault than no contents page at all. */
-function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasAgreement: boolean): string {
+function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasAgreement: boolean, agreementTermsKnown = false): string {
   /* ⚠️ SAME ORDER AS packPages IN buildWelcomePackHtml (Paul, 2026-10-02): what we're doing → why it
      works → where you are now → what happens next → your part → the report. */
   const contents = [
@@ -244,7 +249,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean, hasA
       { title: 'Where you stand today', line: 'Your starting result, explained in plain English.' },
       { title: 'What happens next', line: 'The steps from today to your before and after.' },
     ] : []),
-    ...(hasAgreement ? [{ title: 'Your agreement', line: 'The key points, and where to review and sign it.' }] : []),
+    ...(hasAgreement ? [{ title: 'Your agreement', line: agreementTermsKnown ? 'The key points, and where to review and sign it.' : 'How your agreement works from here.' }] : []),
     ...(hasDetails ? [{ title: 'What we have on file', line: 'The details everything is built on. Please check them.' }] : []),
     { title: 'Get more reviews', line: 'A five-minute setup for the part only you can do.' },
     { title: 'Your baseline report', line: 'Every question we asked and what AI said, in full.' },
@@ -460,6 +465,13 @@ const AGREEMENT_KEY_POINTS = [
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
 function agreementPage(a: WelcomePackAgreement): string {
+  if (!a.termsKnown && !a.acceptedAtIso) {
+    return `
+      <div class="wp-eyebrow">Your agreement</div>
+      <h1 class="wp-h1">Your agreement</h1>
+      <p>${esc('Your agreed payment schedule continues under the terms you signed up to.')}</p>
+      <p class="wp-note">${esc('Your agreement link will be sent separately.')}</p>`;
+  }
   const accepted = a.acceptedAtIso
     ? `<div class="wp-box-navy"><p><b>Agreement accepted on ${esc(ukDate(a.acceptedAtIso))} by ${esc(a.acceptedBy || 'you')}.</b></p></div>`
     : '';
@@ -794,7 +806,7 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
      absent the pack is exactly the document it has always been. */
   const remeasure = recordedRemeasure(input.remeasureDueDate, input.baseline?.completedAt ?? null);
   const packPages = [
-    coverPage(name, !!input.facts, !!input.baseline, !!input.agreement),
+    coverPage(name, !!input.facts, !!input.baseline, !!input.agreement, !!(input.agreement?.termsKnown || input.agreement?.acceptedAtIso)),
     planPage1(name, input.totalPayments, input.amountPaid, remeasure),
     planPage2(name),
     ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments, remeasure)] : []),
