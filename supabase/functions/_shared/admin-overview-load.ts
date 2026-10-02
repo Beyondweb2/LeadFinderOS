@@ -60,7 +60,13 @@ async function costRows(service: Service, p: ReportingPeriod, testUserIds: Reado
 }
 
 
-export async function loadAdminOverview(service: Service, period: ReportingPeriod, nowMs: number): Promise<Record<string, unknown>> {
+/** "My activity: hidden" (2026-10-02): `hideAdminActivityFor` = the signed-in admin asking for it. Their own
+ *  outreach AND every admin account's is left out of the activity figures (adminMetrics.ts hideActivityOf):
+ *  the admin role is resolved HERE from user_roles, never sent by the browser. Absent = everyone counts
+ *  (fn business-summary never passes it, so the weekly summary is the whole business). */
+export interface AdminOverviewOptions { hideAdminActivityFor?: string | null }
+
+export async function loadAdminOverview(service: Service, period: ReportingPeriod, nowMs: number, opts: AdminOverviewOptions = {}): Promise<Record<string, unknown>> {
   const today = resolvePeriod("today", nowMs);
   const yesterday = resolvePeriod("yesterday", nowMs);
   const week = resolvePeriod("week", nowMs);
@@ -82,7 +88,11 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
   ]);
   for (const r of [teamRes, rolesRes, exRes, ledgerRes, onboardingRes]) if (r.error) throw new Error(r.error.message ?? String(r.error));
 
-  const roles = new Map(((rolesRes.data ?? []) as { user_id: string; role: string }[]).map((r) => [r.user_id, r.role]));
+  const roleRows = (rolesRes.data ?? []) as { user_id: string; role: string }[];
+  const roles = new Map(roleRows.map((r) => [r.user_id, r.role]));
+  const hideActivityOf = opts.hideAdminActivityFor
+    ? new Set<string>([opts.hideAdminActivityFor, ...roleRows.filter((r) => r.role === "admin").map((r) => r.user_id)])
+    : null;
   const exclusions = buildExclusions((exRes.data ?? []) as ExclusionRow[]);
   const people: Person[] = ((teamRes.data ?? []) as { user_id: string; display_name: string | null; status: string | null }[])
     .map((m) => ({ userId: m.user_id, name: m.display_name || "Unnamed", role: roles.get(m.user_id) ?? null, excluded: exclusions.users.has(m.user_id) }));
@@ -308,7 +318,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
     commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
     cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-    triage, clientExtras, usage, delegatedTasks,
+    triage, clientExtras, usage, delegatedTasks, hideActivityOf,
   });
 
   return {

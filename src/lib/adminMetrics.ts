@@ -281,6 +281,14 @@ export interface AdminInput {
   /** Sales Team Board (2026-10-01): OPEN lead-assignment tasks. Absent/null = not read → nothing is
    *  treated as delegated (the list shows everything, as before). */
   delegatedTasks?: DelegatedTask[] | null;
+  /** "MY ACTIVITY: HIDDEN" (Paul, 2026-10-02: "hide my personal sales/outreach activity from team performance
+   *  and sales intelligence"). The people whose OUTREACH is left out of every activity figure — the team
+   *  table, channels, calls, templates, niches, why prospects say no, the cohort rates, the funnel's
+   *  Contacted, today / yesterday's activity. Attribution is each metric's own WHO (see the header): a send
+   *  is its sender's, else the holder's at the time; a reply is the holder's when it arrived; an outcome is
+   *  its actor's. ⛔ Never money, clients, delivery, attention, inventory, costs or feature usage — and a
+   *  lead is never dropped because of who added, owns or delivers it. Absent / empty = everyone counts. */
+  hideActivityOf?: ReadonlySet<string> | null;
 }
 /** One open lead-assignment task on the Team board: the lead, who holds the task, its state. */
 /** One reason on "Why prospects say no": how many, the share of the leads WITH a reason, and who they are. */
@@ -330,6 +338,8 @@ export interface AdminOverview {
   clients: ClientRow[];
   inventory: { leads: number; active: number; archived: number; addedByTestAccounts: number };
   lostReasons: LostReasons;
+  /** Whose outreach the activity figures leave out (input.hideActivityOf), by name. */
+  activityScope: { hidden: boolean; people: string[] };
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────────────────────────────── */
@@ -493,6 +503,13 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     if (isExcludedUser(ex, u)) return 'Internal/test';
     return people.find((x) => x.userId === u)?.name ?? 'Former member';
   };
+  /* My activity: hidden. `mine` = a hidden person; `outOf` = left out of an activity figure (a test
+     account OR a hidden person). ⛔ Every place that already dropped test accounts uses outOf; the few new
+     checks use mine alone — so with nobody hidden, every number is what it was, except templates and
+     niches, which now leave test accounts out like everything else (see foldTemplates below). */
+  const hide = input.hideActivityOf ?? new Set<string>();
+  const mine = (u: string | null | undefined) => !!u && hide.has(u);
+  const outOf = (u: string | null | undefined) => isExcludedUser(ex, u) || mine(u);
 
   const msgsBy = groupBy(input.messages, (m) => m.lead_id);
   const actBy = groupBy(input.activity, (a) => a.lead_id);
@@ -505,9 +522,11 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
 
   /* Rows per real (not excluded) person; excluded activity is tallied apart for the note. */
   const rows = new Map<string, TeamRow>();
-  for (const x of people) if (!x.excluded) rows.set(x.userId, { userId: x.userId, name: x.name, role: x.role, ...zeroTotals() });
+  /* A hidden person has NO row: none of their activity is credited anywhere in the team table, and the
+     team totals (summed from the rows) are the rows shown. Their money still counts in Money. */
+  for (const x of people) if (!x.excluded && !mine(x.userId)) rows.set(x.userId, { userId: x.userId, name: x.name, role: x.role, ...zeroTotals() });
   const rowFor = (u: string | null | undefined): TeamRow | null => {
-    if (!u || isExcludedUser(ex, u)) return null;
+    if (!u || isExcludedUser(ex, u) || mine(u)) return null;
     let r = rows.get(u);
     if (!r) { r = { userId: u, name: nameOf(u), role: null, ...zeroTotals() }; rows.set(u, r); }
     return r;
@@ -548,7 +567,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     for (const w of f.wrongNumber) if (inP(w.at, p)) once(w.who, 'wrongNumbers', id);
     for (const o of f.optOut) if (inP(o.at, p)) once(o.who, 'optOuts', id);
 
-    /* Cohort: leads FIRST contacted in the period, credited to whoever made that first contact. */
+    /* Cohort: leads FIRST contacted in the period, credited to whoever made that first contact. A lead a
+       hidden person reached first stays theirs — it is left out, never handed to whoever came second. */
     // The first contact that REACHED them (a real send, or a reached logged outcome) — the funnel's own rule.
     const first = f.contacts.find((c) => !isExcludedUser(ex, c.who) && (c.kind === 'whatsapp' || REACHED_OUTCOMES.has(String(c.outcome ?? ''))));
     if (first && inP(first.at, p)) {
@@ -611,29 +631,35 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   }
   // Distinct-lead metrics must not double count a lead two people touched: recount them book-wide.
   const bookDistinct = (pick: (f: LeadFacts) => boolean) => facts.filter(pick).length;
-  totals.replies = bookDistinct((f) => f.humanReplies.some((t) => inP(t, p) && !isExcludedUser(ex, f.heldBy(t))));
-  totals.interested = bookDistinct((f) => !!f.interested && inP(f.interested.at, p) && !isExcludedUser(ex, f.interested.who));
-  totals.meetings = bookDistinct((f) => f.meetings.some((m) => inP(m.at, p) && !isExcludedUser(ex, m.who)));
-  totals.leadsMessaged = bookDistinct((f) => f.contacts.some((c) => c.kind === 'whatsapp' && inP(c.at, p) && !isExcludedUser(ex, c.who)));
+  totals.replies = bookDistinct((f) => f.humanReplies.some((t) => inP(t, p) && !outOf(f.heldBy(t))));
+  totals.interested = bookDistinct((f) => !!f.interested && inP(f.interested.at, p) && !outOf(f.interested.who));
+  totals.meetings = bookDistinct((f) => f.meetings.some((m) => inP(m.at, p) && !outOf(m.who)));
+  totals.leadsMessaged = bookDistinct((f) => f.contacts.some((c) => c.kind === 'whatsapp' && inP(c.at, p) && !outOf(c.who)));
 
   /* Funnel: the leads ADDED in the period (all time = the whole book), how far each has got. */
   const cohortLeads = facts.filter((f) => p.fromMs === null || inPeriod(f.lead.created_at, p));
   /* Contacted (funnel) = a real send or a logged contact that REACHED them — never a no-answer attempt (2026-10-01). */
-  const contactedEver = (f: LeadFacts) => f.contacts.some((c) => !isExcludedUser(ex, c.who) && (c.kind === 'whatsapp' || REACHED_OUTCOMES.has(String(c.outcome ?? '')))) || openerReallySent(f.lead);
+  /* Hidden: the status-only fallback (an opener with no message row) names nobody, so it cannot be shown
+     to be someone else's — it is not counted while anyone is hidden. */
+  const contactedEver = (f: LeadFacts) => f.contacts.some((c) => !outOf(c.who) && (c.kind === 'whatsapp' || REACHED_OUTCOMES.has(String(c.outcome ?? '')))) || (hide.size === 0 && openerReallySent(f.lead));
+  /* Hidden: every stage after Contacted is OF THE LEADS SOMEONE SHOWN REACHED — a reply to a hidden
+     person's message is their outcome, not the team's. Leads added stays the book's (inventory). */
+  const reachedLeads = hide.size ? cohortLeads.filter(contactedEver) : cohortLeads;
   const funnel: Funnel = {
-    basis: p.fromMs === null ? 'Every lead in the book' : `Leads added ${p.label.toLowerCase() === 'today' ? 'today' : `in ${p.label.toLowerCase()}`}`,
+    basis: (p.fromMs === null ? 'Every lead in the book' : `Leads added ${p.label.toLowerCase() === 'today' ? 'today' : `in ${p.label.toLowerCase()}`}`)
+      + (hide.size ? ' (later stages: only leads reached by someone shown — your own outreach is hidden)' : ''),
     stages: [
       { key: 'added', label: 'Leads added', count: cohortLeads.length },
       { key: 'contacted', label: 'Contacted', count: cohortLeads.filter(contactedEver).length },
-      { key: 'replied', label: 'Replied', count: cohortLeads.filter((f) => f.humanReplies.length > 0).length },
-      { key: 'interested', label: 'Interested', count: cohortLeads.filter((f) => f.interestedEver).length },
-      { key: 'meeting', label: 'Meeting booked', count: cohortLeads.filter((f) => f.meetingEver).length },
-      { key: 'paid', label: 'Paid', count: cohortLeads.filter((f) => isPaidLead(f.lead) || String(f.lead.status) === 'refunded').length },
+      { key: 'replied', label: 'Replied', count: reachedLeads.filter((f) => f.humanReplies.length > 0).length },
+      { key: 'interested', label: 'Interested', count: reachedLeads.filter((f) => f.interestedEver).length },
+      { key: 'meeting', label: 'Meeting booked', count: reachedLeads.filter((f) => f.meetingEver).length },
+      { key: 'paid', label: 'Paid', count: reachedLeads.filter((f) => isPaidLead(f.lead) || String(f.lead.status) === 'refunded').length },
     ],
     losses: [
-      { key: 'not_interested', label: 'Not interested', count: cohortLeads.filter((f) => NOT_INTERESTED_STATUSES.has(String(f.lead.status)) && String(f.lead.status) !== 'opted_out').length },
-      { key: 'wrong_number', label: 'Wrong number', count: cohortLeads.filter((f) => f.wrongNumber.length > 0).length },
-      { key: 'opt_out', label: 'Opted out', count: cohortLeads.filter((f) => String(f.lead.status) === 'opted_out' || f.optOut.length > 0).length },
+      { key: 'not_interested', label: 'Not interested', count: reachedLeads.filter((f) => NOT_INTERESTED_STATUSES.has(String(f.lead.status)) && String(f.lead.status) !== 'opted_out').length },
+      { key: 'wrong_number', label: 'Wrong number', count: reachedLeads.filter((f) => f.wrongNumber.length > 0).length },
+      { key: 'opt_out', label: 'Opted out', count: reachedLeads.filter((f) => String(f.lead.status) === 'opted_out' || f.optOut.length > 0).length },
     ],
   };
 
@@ -645,14 +671,16 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const channels: ChannelRow[] = CHANNELS.map((ch) => {
     let attempts = 0, replies = 0, interested = 0, meetings = 0, sales = 0;
     for (const f of facts) {
-      const on = f.contacts.filter((c) => c.channel === ch && !isExcludedUser(ex, c.who));
+      /* Hidden: a hidden person's contacts do not reach a lead on a channel, and a reply, interest or
+         meeting that is theirs (held by / recorded by them) is not the channel's either. */
+      const on = f.contacts.filter((c) => c.channel === ch && !outOf(c.who));
       if (!on.length) continue;
       const firstAt = on[0].at;
       if (on.some((c) => inP(c.at, p))) attempts += 1;
-      if (ch === 'whatsapp') { if (f.humanReplies.some((t) => inP(t, p) && t >= firstAt)) replies += 1; }
+      if (ch === 'whatsapp') { if (f.humanReplies.some((t) => inP(t, p) && t >= firstAt && !mine(f.heldBy(t)))) replies += 1; }
       else if (on.some((c) => inP(c.at, p) && CONVERSATION_OUTCOMES.has(String(c.outcome)))) replies += 1;
-      if (f.interested && inP(f.interested.at, p) && f.interested.at >= firstAt) interested += 1;
-      if (f.meetings.some((m) => inP(m.at, p) && m.at >= firstAt)) meetings += 1;
+      if (f.interested && inP(f.interested.at, p) && f.interested.at >= firstAt && !mine(f.interested.who)) interested += 1;
+      if (f.meetings.some((m) => inP(m.at, p) && m.at >= firstAt && !mine(m.who))) meetings += 1;
       const paidAt = paidAtOf.get(f.lead.id);
       if (paidAt !== undefined && inP(paidAt, p) && paidAt >= firstAt) sales += 1;
     }
@@ -663,7 +691,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const callRows = new Map<string, CallRow>();
   const callTotal: CallRow = { userId: 'total', name: 'Everyone', total: 0, byOutcome: {} };
   for (const f of facts) for (const c of f.contacts) {
-    if (c.channel !== 'call' || c.kind === 'whatsapp' || !inP(c.at, p) || isExcludedUser(ex, c.who)) continue;
+    if (c.channel !== 'call' || c.kind === 'whatsapp' || !inP(c.at, p) || outOf(c.who)) continue;
     const u = c.who ?? 'unknown';
     let r = callRows.get(u); if (!r) { r = { userId: u, name: nameOf(c.who), total: 0, byOutcome: {} }; callRows.set(u, r); }
     const k = CALL_OUTCOME_COLUMNS.some((x) => x.key === c.outcome) ? String(c.outcome) : 'other';
@@ -722,12 +750,13 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     contribution: { revenueNet: periodMoney.net, commission: commissionPeriod, afterCommission: round2(periodMoney.net - commissionPeriod), apiUsd: round2(periodCost.usd) },
   };
 
-  /* Today / yesterday — the same definitions, book-wide. */
+  /* Today / yesterday — the same definitions, book-wide. The activity four follow My activity; sales,
+     revenue, commission and API spend are the business's and never do. */
   const since = (q: ReportingPeriod, costRows: CostRow[]): SinceBlock => ({
-    whatsappSent: facts.reduce((s, f) => s + f.contacts.filter((c) => c.kind === 'whatsapp' && inP(c.at, q) && !isExcludedUser(ex, c.who)).length, 0),
-    replies: facts.filter((f) => f.humanReplies.some((t) => inP(t, q) && !isExcludedUser(ex, f.heldBy(t)))).length,
-    interested: facts.filter((f) => f.interested && inP(f.interested.at, q) && !isExcludedUser(ex, f.interested.who)).length,
-    meetings: facts.filter((f) => f.meetings.some((m) => inP(m.at, q) && !isExcludedUser(ex, m.who))).length,
+    whatsappSent: facts.reduce((s, f) => s + f.contacts.filter((c) => c.kind === 'whatsapp' && inP(c.at, q) && !outOf(c.who)).length, 0),
+    replies: facts.filter((f) => f.humanReplies.some((t) => inP(t, q) && !outOf(f.heldBy(t)))).length,
+    interested: facts.filter((f) => f.interested && inP(f.interested.at, q) && !outOf(f.interested.who)).length,
+    meetings: facts.filter((f) => f.meetings.some((m) => inP(m.at, q) && !outOf(m.who))).length,
     sales: ledger.filter((r) => r.kind === 'initial' && r.status === 'succeeded' && inPeriod(r.occurred_at, q)).length,
     revenue: moneyBlock(ledger, q).gross,
     commission: round2((input.commissionLines ?? []).filter((l) => l.status !== 'not_commissionable' && inPeriod(l.occurredAt, q)).reduce((s, l) => s + l.commission, 0)),
@@ -740,8 +769,15 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
 
   /* Release 3 — templates, niches, bottlenecks, over the same facts. */
   const triageByMessage = new Map((input.triage ?? []).map((r) => [r.message_id, r.category]));
-  const templates = foldTemplates({ period: p, facts, msgsBy, triageByMessage, paidAtOf });
-  const niches = foldNiches({ period: p, facts, paidAtOf });
+  /* A send is its sender's, else whoever held the lead when it went (the queue working for them) — the same
+     WHO as the team table. Left out: a test account's (2026-10-02 — templates and niches had never applied
+     the header's test rule; measured live, 40 sends on leads a test account held were showing) and, with
+     My activity hidden, a hidden person's. */
+  const factsById = new Map(facts.map((f) => [f.lead.id, f]));
+  const hiddenSend = (leadId: string, m: { sent_by_user_id?: string | null; created_at: string }) =>
+    outOf(m.sent_by_user_id ?? factsById.get(leadId)?.heldBy(ms(m.created_at)) ?? null);
+  const templates = foldTemplates({ period: p, facts, msgsBy, triageByMessage, paidAtOf, hiddenSend });
+  const niches = foldNiches({ period: p, facts, paidAtOf, hidden: outOf });
   const prospectSignups = input.onboarding.filter((o) => inPeriod(o.created_at, p) && !isInternalEmail(ex, o.contact_email)
     && !(o.lead_id && leadById.get(o.lead_id) && isExcludedLead(ex, leadById.get(o.lead_id)!)));
   const signupLeads = new Set(prospectSignups.map((o) => o.lead_id ?? `row:${o.created_at}`));
@@ -784,7 +820,8 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
           baselineStarted: c.baselineStarted, remeasureDue: c.remeasureDue, remeasured: c.remeasured, payment: c.payment, refunded: c.refunded, todayDay,
         }, input.clientExtras) };
       }),
-    lostReasons: foldLostReasons(facts, p, ex, nameOf),
+    lostReasons: foldLostReasons(facts, p, ex, nameOf, mine),
+    activityScope: { hidden: hide.size > 0, people: [...new Set([...hide].map((u) => nameOf(u)))] },
     inventory: {
       leads: input.leads.length,
       active: input.leads.filter((l) => !l.is_archived).length,
@@ -800,16 +837,21 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
    funnel's Not interested count reads), or, for a lead with none, when the reason was recorded. All time =
    every such lead. A "no" made by a test account is excluded like every other test activity. The reason is
    the lead's canonical one (lead_set_lost_reason); a lead without one is "Reason not recorded" — counted,
-   listed, never guessed. Percentages are of the leads WITH a reason. */
-function foldLostReasons(facts: LeadFacts[], p: ReportingPeriod, ex: Exclusions, nameOf: (u: string | null | undefined) => string): LostReasons {
+   listed, never guessed. Percentages are of the leads WITH a reason.
+   My activity: hidden — a "no" whose newest event is a hidden person's is left out (as a test account's
+   is). With no event (measured live 2026-10-02: 256 of 259 all-time "no"s are a bare status), the WHO is
+   the person who recorded the reason, else whoever held the lead then — the header's rule for an event
+   that names no person. */
+function foldLostReasons(facts: LeadFacts[], p: ReportingPeriod, ex: Exclusions, nameOf: (u: string | null | undefined) => string, mine: (u: string | null | undefined) => boolean = () => false): LostReasons {
   const by = new Map<string, LostReasonLead[]>();
   const unrecorded: LostReasonLead[] = [];
   let saidNo = 0;
   for (const f of facts) {
     if (String(f.lead.status ?? '') !== 'not_interested') continue;
     const last = f.notInterested.reduce<{ at: number; who: string | null } | null>((m, n) => (!m || n.at > m.at ? n : m), null);
-    if (last && isExcludedUser(ex, last.who)) continue;
+    if (last && (isExcludedUser(ex, last.who) || mine(last.who))) continue;
     const at = last?.at ?? ms(f.lead.lost_reason_recorded_at);
+    if (!last && mine(f.lead.lost_reason_recorded_by ?? (Number.isFinite(at) ? f.heldBy(at) : f.holder))) continue;
     if (p.fromMs !== null && !inP(at, p)) continue;
     saidNo += 1;
     const item: LostReasonLead = {
