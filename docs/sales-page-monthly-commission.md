@@ -58,3 +58,45 @@ SQL `20261003100000` (read back: functions, trigger swap, columns) → redeploy 
 `src/lib/commission.ts` / `salesCrm.ts` / `salesWorkspace.ts` / `salesPerformance.ts`: `stripe-webhook`,
 `sales-earnings`, `sales-performance`, `admin-overview`, `business-summary`, `conversation-triage` (walk
 `node scripts/check-import-graph.mjs --reached-by <file>` again on the merged tree) → push main.
+
+
+## 5. Six trailing payments, the engagement end, the six-month forecast (Paul, 2026-10-02, branch `feat/commission-six-trailing`)
+
+- **Trailing:** 20% (`COMMISSION_RECURRING_RATE`) of each of the next **six** (`COMMISSION_RECURRING_COUNT`,
+  was three) SUCCEEDED monthly payments. The initial payment is not one of the six; monthly payment 7
+  onwards earns 0% (listed for history). A failed payment is not a payment (it neither earns nor uses up a
+  place); refunds / lost chargebacks reverse; open disputes hold — unchanged. The ladder (30/40/50, stamped,
+  not retrospective, London month) is unchanged.
+- **Transition:** none needed. Live ledger on 2026-10-02: ONE row (MCLocksmiths' £99 initial, sold by the
+  admin → £0), no recurring payment ever, no payout ever. Nothing re-rated, nothing back-dated.
+- **Contract cap still binds the PROJECTION only:** Optimise (6 payments total) can forecast at most 5
+  trailing payments; Build (12) the full six.
+- **Engagement end = Team → Disable** (`team_members.status 'disabled'`, `disabled_at` = the end instant).
+  Monthly payments received on/after it: 0%, "Month N · after the engagement ended", status No commission;
+  nothing more projected or forecast. Everything earned before stays (never clawed back); the client stays
+  attributed (`sellerId` unchanged). Suspension is NOT an end. A disabled row with no date fails closed
+  (`ENGAGEMENT_END_UNKNOWN`: no new trailing at all). The first payment is not affected by the end date
+  (the brief covered trailing only — Paul to confirm).
+- 🔴 **Bug fixed on the way:** the loader keyed "who earns" on the CURRENT `sales` role, and Disable deletes
+  that role — so disabling a salesperson would have zeroed every penny they had earned. Now: sales role OR
+  an ended team member (admins excluded). Disable now writes the end first (checked), then removes the role,
+  and a repeat Disable keeps the FIRST end date.
+- ⚠️ **Known gap:** Re-enable clears `disabled_at`, so payments that landed while someone was disabled would
+  count again after a re-enable. No reactivation has ever happened; a period table is the fix if needed.
+- **Forecast** (`commissionForecast`, server-built in `_shared/earnings.ts`): this London month + the next
+  five. Collected = the month's own commission lines (net of reversals). Expected = each active / trialing
+  subscription's remaining commission-earning payments, from `subscription_renews_at`, a month apart, at 20%
+  of the client's monthly (last recurring amount, else `FINDABLE_MONTHLY_GBP`). A billing date already passed
+  is not expected; past due / cancelled expects nothing; undated is listed, counted in no month. Never a
+  hypothetical sale.
+- **Sales page:** `CommissionForecastCard` (total earned to date · this month collected + expected · expected
+  over six months · six month blocks, tap for clients) under the ladder; the ladder's headline is the progress
+  line ("1 more sale to unlock 40%" → "40% unlocked · 12 more sales to unlock 50%" → "50% unlocked · every
+  sale earns 50%") and the scheme in one line from the constants. Ended salespeople stay pickable for the admin.
+- **Inbox header:** "+ Set next action" / the saved action (`NextActionEditor variant="pill"`, the one form and
+  the one write) in place of Find email. Find email is admin-only on the lead popup and the facts panel; no
+  email field or data touched.
+- **Example pinned** (`scripts/commission-six-trailing.test.ts`, through the real engine): 20 sales/month at
+  £99 → month 1 £673.20, then +£396 a month, month 7 onward £3,049.20.
+- **Redeploy on release:** `sales-earnings`, `sales-performance`, `admin-overview`, `business-summary`,
+  `stripe-webhook` (closure of `commission.ts` / `_shared/earnings.ts`), `admin-users`. No SQL.

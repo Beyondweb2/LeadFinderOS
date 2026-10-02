@@ -50,7 +50,8 @@ console.log('── 1. ONLY NO-WEBSITE UK RESULTS ARE CHECKED ──');
   // The hook only ever sends targets: the table builds its items with isCompaniesHouseTarget.
   const table = code('src/components/LeadsTable.tsx');
   ok(/isTarget: isCompaniesHouseTarget\(l\)/.test(table), 'Find Leads marks targets with isCompaniesHouseTarget');
-  ok(/i\.isTarget && i\.id/.test(code('src/hooks/useCompaniesHouseChecks.ts')), 'the hook drops every non-target before any lookup');
+  ok(/chTargetsOf\(items\.filter\(\(i\) => i\.isTarget\)\)/.test(code('src/hooks/useCompaniesHouseChecks.ts')) && /if \(i\.id && !m\.has\(i\.id\)\)/.test(code('src/lib/companiesHouseRunner.ts')),
+    'the hook drops every non-target (and the runner every id-less row) before any lookup');
 }
 
 console.log('── 2. ADDRESS READING ──');

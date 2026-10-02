@@ -181,9 +181,14 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   calendar month, sales 1–12 30%, 13–24 40%, 25+ 50%, NOT retrospective, reset on the 1st, ordered by payment
   time then payment id; a fully refunded / lost sale stops counting towards LATER sales' places; a test
   account's or test lead's sale (`metric_exclusions`) is stamped `test_excluded` at 0% — plus
-  20% × the next 3 recurring, of the REAL amount, earned on receipt, reversed by refund / chargeback (an
+  20% × the next **6** succeeded recurring (`COMMISSION_RECURRING_COUNT`, 2026-10-02; never the initial),
+  of the REAL amount, earned on receipt, reversed by refund / chargeback (an
   offset once paid out), from the **payment ledger** (`payment_ledger`, written by `stripe-webhook` + the
-  admin backfill) — never from a CRM status. Only role `sales` earns. ⛔ **The place and rate are STAMPED by
+  admin backfill) — never from a CRM status. A salesperson earns — current (role `sales`) OR **ended**
+  (Team → Disable: `team_members.status 'disabled'`, `disabled_at` = the end). ⛔ Never key "who earns" on the
+  sales role alone (Disable deletes it — that would zero earned commission). Recurring payments on/after the
+  end earn them 0% and nothing more is forecast; what they earned stays (`docs/sales-page-monthly-commission.md`
+  §5). ⚠️ Re-enable clears `disabled_at` (gap payments would count again). ⛔ **The place and rate are STAMPED by
   the database ONCE** (`stamp_monthly_commission_for`, a trigger on the ledger, per-seller-month lock) into
   `commission_month_seq` / `commission_rate`, and the code READS them — never recompute a rate in code; a
   stamped row is never renumbered or re-rated. Rows stamped under an older rule (`flat_30_v0`,
@@ -195,13 +200,19 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   in the popup. Salesperson menu: Outreach, WhatsApp, Find Leads, Sales; Coverage under More (`SALES_NAV_ORDER`,
   `SALES_SECONDARY_NAV`).
 - **Agency check** (`docs/agency-detection.md`): Find Leads checks each result's own website (fn
-  `agency-check`, a sitemap-guided sample, ≤10 requests, no AI) → `website_agency_checks` per domain, 30 days.
+  `agency-check`, a sitemap-guided sample, ≤`AGENCY_MAX_REQUESTS` requests, no AI) → `website_agency_checks` per
+  domain, 30 days. Crawler name `LeadFinderOS-SiteCheck/1.0 (+https://findable.live)` — ⛔ no "Mozilla
+  (compatible…)" wrapper (UK hosts 403 it) and never a browser identity; ⛔ a bot challenge is never worked around.
+  Credits are read from EVERY `<footer>` + the script-free page tail (`creditRegions`), not `footerHtml()`.
   ⛔ The machine never sets `website_control`; the lead shows "Detected: …" with Confirm agency / Not agency.
   ⛔ Platform (WordPress, Wix…) is context only; one weak sign is never "Agency likely".
 - **Business age** (`docs/companies-house-age.md`): Find Leads looks up UK results with NO website on
   Companies House (fn `companies-house-check`, secret `COMPANIES_HOUSE_API_KEY`, ≤3 requests, no AI) →
   `companies_house_checks` per place id. Rules live only in `src/lib/companiesHouse.ts`. ⛔ "Not found", never
   "not registered"; ⛔ a non-trading company is never a match; ⛔ the machine match never writes a lead.
+  ⛔ It needs the result's ADDRESS: `search-leads` asks Google for `places.formattedAddress` (free at the tier
+  `websiteUri` already bills) — without it no search result is ever a target (it never ran until 2026-10-02).
+  The run lifecycle lives in `src/lib/companiesHouseRunner.ts` (React-free, tested Search A → Search B).
 - **Constants own the words:** `src/lib/findableOffer.ts` — `FINDABLE_SETUP_PRICE_GBP`,
   `FINDABLE_MONTHLY_GBP`, `FINDABLE_BUILD_TOTAL_PAYMENTS` / `FINDABLE_OPTIMISE_TOTAL_PAYMENTS`, `FINDABLE_OFFER_SUMMARY`,
   `FINDABLE_GUARANTEE` (236 chars), `REMEASURE_CLAIM_SENTENCE`, `CARD_SAVED_NOTICE`. findable-site

@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-find-leads-age-agency-filter', date: '2026-10-02', title: 'Find Leads: business age works on every search, a sharper agency check', audience: 'all',
+    body: 'Business age now runs on every new search, the agency check reads more of each site, and the Filter menu fits on your screen.',
+    report: {
+      added: [
+        'Business age on every Find Leads search: each UK result with no website shows "Checking…" straight away, then its age from Companies House.',
+      ],
+      changed: [
+        'Business age was not running on real searches (the results arrived without their address). It now runs on the first search and every new one, with no refresh.',
+        'The agency check reads a little more of each site (a credits or privacy page, every footer) and finds more real "Website by …" credits. It takes a moment longer per site.',
+        'The Filter menu never runs off the screen: it stays inside the window and scrolls inside itself when it is long.',
+      ],
+      removed: [],
+      effect: 'You can sort and filter by business age on any search, and fewer agency-run sites slip through as "No agency evidence".',
+    } },
   { id: '2026-10-02-commission-six-forecast', date: '2026-10-02', title: 'Monthly commission on six payments, and your next six months', audience: 'sales',
     body: 'You now earn 20% of the next six monthly payments from each client (it was three), and Sales shows what you have earned and what your clients are expected to pay you over the next six months.',
     report: {
