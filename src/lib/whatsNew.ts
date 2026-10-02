@@ -22,6 +22,26 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-welcome-pack-copy', date: '2026-10-02', title: 'The Welcome Pack is clearer, and in a better order', audience: 'all',
+    body: 'The pack a new client receives is rewritten in plain English and now tells the story in order: what we do, why it works, where they stand, what happens next.',
+    report: {
+      added: [
+        'A "What happens next" page: baseline locked, we do the work, first re-measure at four weeks, the before and after, then the monthly work.',
+        'The baseline page explains the numbers: how many questions, asked how many times, what the percentage means ("roughly 1 in every 3 times a customer asks").',
+        'It says what the monthly pays for: a new page each month, a monthly check of AI visibility, adjustments over time, and hosting and maintenance.',
+      ],
+      changed: [
+        'New page order: Your plan, How it works, Where you stand today, What happens next, What we have on file, Get more reviews, then the report.',
+        'No wording promises that AI will recommend or name the client. What ChatGPT and Gemini tend to read is described as what our measurements have often shown.',
+        'The question list adds up: named every time + sometimes + never = all the questions; "only one AI tool" is a separate note.',
+        'Every page of the pack fits on one printed page.',
+      ],
+      removed: [
+        'The stray "&#39;" that printed in the guarantee on the plan page.',
+        'The "be careful of anyone who promises" line.',
+      ],
+      effect: 'A new client can read the pack once and understand what they bought, where they stand today, and that the work carries on every month after week four.',
+    } },
   { id: '2026-10-02-admin-control-centre', date: '2026-10-02', title: 'The Admin dashboard is now a sales control centre', audience: 'admin',
     body: 'The Admin dashboard is rebuilt around running the team: new sales and handoffs, your actions, one table of salespeople, and simple money.',
     report: {

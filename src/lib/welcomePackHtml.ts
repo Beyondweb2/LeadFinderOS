@@ -81,7 +81,7 @@ const PACK_CSS = `
   .wp-sub{ font-size:13.5px; color:var(--muted); font-weight:700; margin:0 0 12px; }
   .wp-h2{ font-size:17px; font-weight:900; color:var(--ink); margin:18px 0 6px; }
   .wp-h3{ font-size:14.5px; font-weight:800; color:var(--blue-2); margin:16px 0 4px; }
-  .wp-wrap p{ font-size:13.5px; color:var(--ink); line-height:1.55; margin:0 0 9px; max-width:70ch; }
+  .wp-wrap p{ font-size:13.5px; color:var(--ink); line-height:1.55; margin:0 0 9px; max-width:82ch; }
   .wp-wrap p.muted{ color:var(--muted); }
   .wp-note{ font-size:12.5px; color:var(--muted); font-style:italic; margin:6px 0 0; }
 
@@ -149,6 +149,19 @@ const PACK_CSS = `
   .wp-statnum{ font-size:24px; font-weight:900; color:var(--ink); line-height:1.1; }
   .wp-statlab{ font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--blue-2); margin:3px 0 0; }
 
+  /* the one-line summaries: the sentence a skimming reader should take away from the page */
+  .wp-wrap p.wp-oneline{ font-size:15px; font-weight:800; color:var(--ink); line-height:1.45;
+    border-left:3px solid var(--gold-line); padding:2px 0 2px 12px; margin:6px 0 10px; }
+  /* a box is already a narrow measure; the body's 70ch cap left a third of every box empty */
+  .wp-box p, .wp-box-navy p{ max-width:none; }
+  .wp-rows-tight{ gap:6px; }
+  .wp-points{ margin:4px 0 8px; padding-left:18px; }
+  .wp-points li{ font-size:13.5px; color:var(--ink); line-height:1.5; margin:0 0 4px; }
+  .wp-ticks li b{ color:var(--ink); }
+  /* the time label on each "what happens next" step */
+  .wp-when{ display:inline-block; font-size:10.5px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--blue-2); margin-right:8px; }
+
   @media (max-width:520px){ .wp-wrap{ padding:14px 18px 18px; } }
 `;
 
@@ -184,20 +197,25 @@ function sheet(bandMeta: string, inner: string, foot: string): string {
    without the client's own details and baseline result), and a contents page that promises a
    section the document does not contain is a worse fault than no contents page at all. */
 function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): string {
+  /* ⚠️ SAME ORDER AS packPages IN buildWelcomePackHtml (Paul, 2026-10-02): what we're doing → why it
+     works → where you are now → what happens next → your part → the report. */
   const contents = [
+    { title: 'Your plan', line: 'What we do, what you get, the timeline and your guarantee.' },
+    { title: 'How it works', line: 'Why many local businesses are hard for AI to read, and what we change.' },
+    ...(hasBaseline ? [
+      { title: 'Where you stand today', line: 'Your starting result, explained in plain English.' },
+      { title: 'What happens next', line: 'The steps from today to your before and after.' },
+    ] : []),
     ...(hasDetails ? [{ title: 'What we have on file', line: 'The details everything is built on. Please check them.' }] : []),
-    ...(hasBaseline ? [{ title: 'Where you stand today', line: 'Your baseline result, how we measured it, and what happens next.' }] : []),
-    { title: 'Your plan', line: 'What we do, how long it takes, and our money-back guarantee.' },
     { title: 'Get more reviews', line: 'A five-minute setup for the part only you can do.' },
-    { title: 'Your baseline report', line: 'Where AI names you today, question by question. Your starting point, and what we measure the before-and-after against.' },
+    { title: 'Your baseline report', line: 'Every question we asked and what AI said, in full.' },
   ];
   return `
       <div class="wp-eyebrow">Welcome pack</div>
       <h1 class="wp-h1">Welcome to Findable</h1>
       <p class="wp-sub">Prepared for ${esc(name)}</p>
-      <p>Thanks for coming on board. This pack is everything in one place: where your business stands
-      with AI today, what we&rsquo;re going to do about it, and the one small part that&rsquo;s yours.
-      Nothing here is technical, and you can come back to it any time.</p>
+      <p>Thanks for coming on board. This pack has everything in one place: what we&rsquo;re doing,
+      where you stand with AI today, and the one small part that&rsquo;s yours.</p>
       <!-- ⛔ THE ASK COMES FIRST, ABOVE THE CONTENTS. The pack already promised "the one small part
            that's yours" in its opening line and then never said what it was — the address appeared
            nowhere in this document. Placed before the timeline so it cannot read as a later step:
@@ -213,7 +231,7 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
         <p class="wp-asksteps">${esc(GBP_ACCESS_REASSURANCE)} ${esc(GBP_ACCESS_CONSEQUENCE)}</p>
       </div>
       <h2 class="wp-h2">What&rsquo;s inside</h2>
-      <div class="wp-rows">
+      <div class="wp-rows wp-rows-tight">
         ${contents.map((c, i) => `<div class="wp-row">
           <div class="wp-num">${i + 1}</div>
           <div class="wp-rowbody">
@@ -222,92 +240,28 @@ function coverPage(name: string, hasDetails: boolean, hasBaseline: boolean): str
           </div>
         </div>`).join('\n        ')}
       </div>
-      <p style="margin-top:16px">Any questions at all, just reply to the email this came with.
-      <b>Glad to have you with us.</b></p>
-      <p class="wp-guar">Backed by our money-back guarantee</p>`;
+      <p style="margin-top:14px">Any questions at all, just reply to the email this came with.
+      <b>Glad to have you with us.</b></p>`;
 }
 
 /* 🔴 PER ROUTE (2026-09-29): the client's own count; an unknown one names none. */
+/* 🔴 WHAT THE MONTHLY PAYS FOR (Paul, 2026-10-02): a new page each month, a monthly AI visibility
+   check, adjustments over time, and hosting + maintenance. HOSTING IS PER ROUTE: on Build we host the
+   site we built; on Optimise we host it only if they moved it to us, so an unknown or Optimise route
+   never claims we host it.
+   ⛔ "a monthly check", NEVER "a monthly audit": /terms says the monthly update is not a full
+   re-audit, and the pack must not promise more than the terms do. */
+function upkeepPhrase(totalPayments: number | null | undefined): string {
+  return serviceRouteForTotal(totalPayments) === 'build'
+    ? 'hosting and maintenance of your website'
+    : 'hosting and maintenance if your site is with us';
+}
+
 function termPhrase(totalPayments: number | null | undefined): string {
   const route = serviceRouteForTotal(totalPayments);
   return route
     ? `, for your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments in total, counting your first)`
     : `, until your agreed payments are complete (counting your first)`;
-}
-
-function planPage1(name: string, totalPayments: number | null | undefined): string {
-  const n = esc(name);
-  return `
-      <div class="wp-eyebrow">Your plan</div>
-      <h1 class="wp-h1">Your Findable plan</h1>
-      <p class="wp-sub">Prepared for ${n}</p>
-      <p>This is your plan for getting ${n} named when people ask AI tools like ChatGPT, Google AI and
-      Gemini to recommend a business like yours. It explains what we do, why it works, what
-      you&rsquo;ll get, and the couple of small things we&rsquo;d like you to do at your end. Nothing
-      here is technical. If anything&rsquo;s unclear, just reply to the email this came with.</p>
-
-      <h2 class="wp-h2">What we do, in one line</h2>
-      <p>AI assistants recommend businesses by reading two things: your own website, and the big
-      directories and review sites. We make sure both are clean, accurate and easy for AI to read, so
-      your business shows up when a customer asks.</p>
-
-      <div class="wp-box">
-        <p class="wp-boxtitle">What you get</p>
-        <ul class="wp-ticks">
-          <li>A full check of whether AI names you right now, and exactly where it doesn&rsquo;t</li>
-          <li>Clean, purpose-built pages on your website that AI can actually read and quote</li>
-          <li>Your listings on the directories AI checks, made consistent and correct</li>
-          <li>Your Google Business Profile improved and kept consistent with your pages</li>
-          <li>A re-check at four weeks that shows your before and after in plain numbers</li>
-        </ul>
-      </div>
-
-      <div class="wp-box-navy">
-        <p class="wp-boxtitle">Timeline &amp; guarantee</p>
-        ${lead('Timeline.', 'The work goes live in the first few weeks. AI tools take a little time to re-read the web, so we re-measure at four weeks from your starting point, on the same questions and the same engines, and send you a clear before-and-after.')}
-        ${lead('Guarantee.', esc(FINDABLE_GUARANTEE))}
-        ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
-              HTML entities — "&pound;" here would print those six letters to a paying client. */''}
-        ${lead('What happens next.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the pages and the work to get you named. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)} — that is the work that keeps you there: more pages every month and an eye on the technical side of your site. We will email you before it starts.`)}
-      </div>`;
-}
-
-function planPage2(name: string): string {
-  const n = esc(name);
-  return `
-      <div class="wp-eyebrow">Your plan</div>
-      <h1 class="wp-h1">How it works</h1>
-
-      <h3 class="wp-h3">The pages we build (this is the main lever)</h3>
-      <p>AI reads business websites directly. The problem is that most local business pages are either
-      too thin for AI to bother with, or stuffed with the same keywords and town names repeated over
-      and over. AI treats those stuffed pages as spam and skips straight past them.</p>
-      <p>We build the opposite. Clean, natural pages that actually answer the questions your customers
-      ask AI, written the way AI expects to see a real, trustworthy business: clear facts, honest
-      wording about the areas you cover, and your name, address and phone kept consistent everywhere.
-      That&rsquo;s the difference. Not more pages, better ones that AI can read, trust, and quote back
-      to a customer.</p>
-
-      <h3 class="wp-h3">The directories AI checks</h3>
-      <p>When AI can&rsquo;t answer from a website, it leans on the big directories and review sites.
-      If you&rsquo;re missing from the ones that matter for your trade, or your details don&rsquo;t line
-      up across them, AI has less reason to trust you and name you.</p>
-      <p>We make sure you&rsquo;re listed and consistent on the ones that count: your Google
-      Business Profile, plus the directories and review sites that
-      matter specifically for your trade. If you&rsquo;re already on them, we tidy them up. If
-      you&rsquo;re not, we get you on.</p>
-
-      <h3 class="wp-h3">Your reviews</h3>
-      <p>Reviews help customers decide whether to trust you, and they add to the public evidence about
-      your business. We don&rsquo;t claim they decide what AI recommends, but they are well worth having.
-      Getting more reviews in, and replying to the ones you get, is the part only you can do. There&rsquo;s a simple five-minute setup for that on
-      the next page.</p>
-
-      <div class="wp-box-navy">
-        <p><b>In short.</b> We make ${n} the clean, clear answer AI can actually read and quote, and we
-        keep your website and listings saying the same thing. That&rsquo;s what turns being
-        named occasionally into being named regularly.</p>
-      </div>`;
 }
 
 function reviewsPage1(reviewLink: string): string {
@@ -465,8 +419,95 @@ function detailsPage(name: string, facts: WelcomePackFacts): string {
       <p class="wp-note">Anything we don&rsquo;t have, we&rsquo;ve left out rather than guessed.</p>`;
 }
 
+/* ⛔ NO SENTENCE ON THESE PAGES PROMISES A RECOMMENDATION, A CITATION OR A RESULT (Paul,
+   2026-10-02). The work improves the public evidence about the business; the measurement says
+   whether it is named more often. The engine observations are stated as what OUR MEASUREMENTS have
+   often shown, never as a rule about how a model works. */
+function planPage1(name: string, totalPayments: number | null | undefined): string {
+  const n = esc(name);
+  return `
+      <div class="wp-eyebrow">Your plan</div>
+      <h1 class="wp-h1">Your Findable plan</h1>
+      <p>More and more customers ask AI tools like ChatGPT and Google&rsquo;s Gemini to recommend a
+      local business, and the answer usually names only a handful.</p>
+      <p>Findable improves the public evidence about ${n}, on your website and the sites AI reads, so
+      AI and search tools can understand you more clearly. Then we measure whether you are named more
+      often. Practical, measured work, not vague SEO talk.</p>
+
+      <h2 class="wp-h2">What we do, in one line</h2>
+      <p class="wp-oneline">We make the facts about your business clear, consistent and easy to check,
+      so you have stronger evidence when customers ask AI who to use.</p>
+
+      <div class="wp-box">
+        <p class="wp-boxtitle">What you get</p>
+        <ul class="wp-ticks">
+          <li><b>Your starting point, measured.</b> Real customer questions, asked several times on ChatGPT and Gemini.</li>
+          <li><b>Clearer website pages.</b> One dedicated page for each key service, answering what customers really ask.</li>
+          <li><b>Your Google Business Profile corrected,</b> so it matches your website.</li>
+          <li><b>The right directories for your trade.</b> Added where you are missing, fixed where you are wrong.</li>
+          <li><b>A before and after.</b> The same questions asked again, shown side by side.</li>
+          <li><b>Every month after that.</b> A new page, a check of your AI visibility, adjustments, and a short update.</li>
+        </ul>
+      </div>
+
+      <div class="wp-box-navy">
+        <p class="wp-boxtitle">Timeline &amp; guarantee</p>
+        ${lead('When work starts.', 'Straight away. The first improvements go live within the first few weeks.')}
+        ${lead('Your first re-measure.', 'Four weeks after your starting point, same questions, same AI tools. The first check, not the finish line.')}
+        ${/* ⛔ ESCAPED ONCE, HERE. It used to go through lead(), which escapes its second argument
+              again, so the apostrophe in "we'll" reached the PDF as the six characters &#39; . */''}
+        <p><b>Your guarantee.</b> ${esc(FINDABLE_GUARANTEE)}</p>
+        ${/* ⚠️ lead() ESCAPES ITS SECOND ARGUMENT, so this string uses real characters and never
+              HTML entities — "&pound;" here would print those six letters to a paying client. */''}
+        ${lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
+      </div>`;
+}
+
+function planPage2(_name: string): string {
+  return `
+      <div class="wp-eyebrow">Your plan</div>
+      <h1 class="wp-h1">How it works</h1>
+      <p class="wp-oneline">AI and search tools can only name a business they can understand and
+      check. Our job is to make yours easy to understand and easy to check.</p>
+      <p>In our measurements so far, ChatGPT has often used a wider mix of directories and other
+      sites, while Gemini has more often used businesses&rsquo; own websites. It varies by trade and
+      question, so we measure rather than assume.</p>
+
+      <h3 class="wp-h3">1. Your website pages (the main part of the work)</h3>
+      <p><b>Where many local websites fall short.</b> Often one page tries to cover everything, so no
+      service has a clear page of its own. Or pages repeat town names and keywords without adding
+      anything useful, which makes them harder to make sense of and weaker evidence, for customers
+      and AI tools alike.</p>
+      <ul class="wp-ticks">
+        <li>Each important service gets one clear, dedicated page.</li>
+        <li>Location pages only where there is real local information to give. No cloned town pages.</li>
+        <li>The questions customers really ask, answered inside the right page. No piles of thin FAQ pages.</li>
+        <li>Plain facts that are easy to check: what you do, where you work, how to reach you.</li>
+        <li>Any price, qualification or promise is checked with you before it goes live.</li>
+      </ul>
+      <p style="margin-top:8px"><b>What this means:</b> not more pages, but clearer ones, each with a job to do.</p>
+
+      <h3 class="wp-h3">2. The directories that matter for your trade</h3>
+      <p>Which directories matter depends on the trade: one vital for plumbers can be irrelevant for
+      accountants. We check which sites AI actually quotes for your trade, then add or correct you there.</p>
+
+      <h3 class="wp-h3">3. Saying the same thing everywhere</h3>
+      <p>If your website, Google and a directory each show a different phone number or address, nobody
+      can be sure which is right. We make your name, address, phone and services match everywhere.</p>
+
+      <h3 class="wp-h3">4. Your reviews</h3>
+      <p>Reviews help customers choose you and add to the public picture of your business. We
+      don&rsquo;t claim they decide what AI recommends on their own, but they are well worth having.
+      Getting them is the part only you can do, and there is a five-minute setup later in this pack.</p>
+
+      <div class="wp-box-navy">
+        <p><b>In short.</b> AI and search tools need clear, consistent, trustworthy information about your
+        business. We make your website and listings provide it, and measure whether you are named more often.</p>
+      </div>`;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   YOUR BASELINE — the measurement result, in a business owner's words, and what happens next.
+   YOUR BASELINE — the measurement result, in a business owner's words.
 
    ⛔ THE SAME FIGURES THE REPORT SHOWS, FROM THE SAME PAYLOAD. This page reads the folded summary of
    the very report appended below it, so the two can never disagree.
@@ -475,9 +516,18 @@ function detailsPage(name: string, facts: WelcomePackFacts): string {
    a promise the engines make, not us.
    ⛔ NO OPERATOR VOCABULARY. "absent", "fragile", "one-engine" and "winnability" do not appear; the
    same facts are stated as sentences a business owner reads once and understands.
-   ⚠️ THE GUARANTEE SENTENCE IS THE SHARED CONSTANT, unhedged (CLAUDE.md §1).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** "roughly 1 in every 3 times" — the percentage as a business owner says it. Derived, never typed. */
+function oneInPhrase(pct: number): string {
+  if (pct >= 60) return 'most times';
+  return `roughly 1 in every ${Math.max(2, Math.round(100 / pct))} times`;
+}
+
 function baselinePage(name: string, b: BaselineSummary): string {
+  const n = esc(name);
+  const runs = b.runs || 3;
+  const tools = esc(b.engineLabels.join(' and ') || 'each AI tool');
   const engines = b.perEngine.length
     ? b.perEngine.map((e) => `${esc(e.label)} named you in ${e.named} of ${e.total} answers`).join(' &middot; ')
     : '';
@@ -486,79 +536,104 @@ function baselinePage(name: string, b: BaselineSummary): string {
   const sometimes = b.fragile.length;
   const oneEngineOnly = b.oneEngine.length;
   const never = b.absent.length;
+  /* ⚠️ every-time + sometimes + never ARE the whole question set; "only one tool" is a SUBSET of the
+     named ones, so it is a separate note, never a fourth line that makes the list add up to more
+     questions than were asked (MCLocksmiths read 15 + 14 + 5 of 20). */
+  const namedQs = consistent + sometimes;
+  const qs = (k: number) => `${k} question${k === 1 ? '' : 's'}`;
 
-  const headline = b.nameNotJudgeable
-    ? `<p>Your business name is close enough to the words people search for that an automatic check
-       can&rsquo;t reliably tell a mention of <b>you</b> from a mention of the trade itself. So we
-       have not put a score on it. Everything else in this pack still applies, and we read your
-       results by hand.</p>`
-    : `<div class="wp-stats">
-        <div class="wp-stat"><div class="wp-statnum">${b.named} of ${b.total}</div><div class="wp-statlab">Answers that named you</div></div>
-        <div class="wp-stat"><div class="wp-statnum">${b.pct}%</div><div class="wp-statlab">Of everything we asked</div></div>
-        <div class="wp-stat"><div class="wp-statnum">${b.questionCount}</div><div class="wp-statlab">Questions, asked ${b.runs || 3}&times; each</div></div>
-      </div>
-      ${engines ? `<p>${engines}.</p>` : ''}`;
+  if (b.nameNotJudgeable) {
+    return `
+      <div class="wp-eyebrow">Your baseline</div>
+      <h1 class="wp-h1">Where you stand today</h1>
+      <p class="wp-sub">Measured ${esc(b.completedLabel || 'on the date shown in your report')}</p>
+      <p>Your business name is close enough to the words people search for that an automatic check
+      can&rsquo;t reliably tell a mention of <b>you</b> from a mention of the trade itself. So we
+      have not put a score on it. Everything else in this pack still applies, and we read your
+      results by hand.</p>
+      <p>We asked ${b.questionCount} questions a real customer in your area might ask, ${runs} times each
+      on ${tools}. The full detail is in the report at the back of this pack.</p>`;
+  }
 
-  const shape = b.nameNotJudgeable ? '' : `
-      <h2 class="wp-h2">What that looks like question by question</h2>
-      <ul class="wp-ticks">
-        ${consistent ? `<li>${consistent} question${consistent === 1 ? '' : 's'} where AI named you every time we asked.</li>` : ''}
-        ${sometimes ? `<li>${sometimes} question${sometimes === 1 ? '' : 's'} where AI named you sometimes but not every time &mdash; you are on the edge of the answer there.</li>` : ''}
-        ${oneEngineOnly ? `<li>${oneEngineOnly} question${oneEngineOnly === 1 ? '' : 's'} where only one of the two AI tools named you.</li>` : ''}
-        ${never ? `<li>${never} question${never === 1 ? '' : 's'} where you were not named at all. These are the openings.</li>` : ''}
-      </ul>`;
+  const meaning = b.named > 0
+    ? `${b.named} of those ${b.total} answers named ${n}. That&rsquo;s ${b.pct}%: ${oneInPhrase(b.pct)} a customer asks, AI mentions you.`
+    : `None of those ${b.total} answers named ${n} yet. That is the starting point we work from.`;
 
   return `
       <div class="wp-eyebrow">Your baseline</div>
       <h1 class="wp-h1">Where you stand today</h1>
       <p class="wp-sub">Measured ${esc(b.completedLabel || 'on the date shown in your report')}</p>
-      <p>We asked ${b.questionCount} questions a real customer in your area might type, and we asked
-      each one ${b.runs || 3} times on each AI tool, so a single lucky or unlucky answer can&rsquo;t
-      move the number. This is your starting point.</p>
-      ${headline}
-      ${shape}
+      <p>Before we change anything, we measure. This is your starting point, and the number we compare
+      against when we measure again.</p>
+      <div class="wp-stats">
+        <div class="wp-stat"><div class="wp-statnum">${b.named} of ${b.total}</div><div class="wp-statlab">Answers that named you</div></div>
+        <div class="wp-stat"><div class="wp-statnum">${b.pct}%</div><div class="wp-statlab">Of all answers</div></div>
+        <div class="wp-stat"><div class="wp-statnum">${b.questionCount}</div><div class="wp-statlab">Questions, asked ${runs}&times; each</div></div>
+      </div>
+
+      <h2 class="wp-h2">What the numbers mean</h2>
+      <ul class="wp-points">
+        <li>We asked <b>${b.questionCount} questions</b> a real customer near you might ask.</li>
+        <li>We asked each one <b>${runs} times on ${tools}</b>. That makes <b>${b.total} answers</b> in total.</li>
+        <li>${meaning}</li>
+        ${engines ? `<li>${engines}.</li>` : ''}
+      </ul>
+
+      <h3 class="wp-h3">Why ask everything ${runs} times?</h3>
+      <p>AI doesn&rsquo;t give the same answer every time. Ask the same question twice and you can get
+      different names. One answer on its own could be luck, good or bad. Asking every question
+      several times, on more than one tool, gives a fair average and a starting point you can rely on.</p>
+
+      <h2 class="wp-h2">Where your openings are</h2>
+      <ul class="wp-ticks">
+        ${consistent ? `<li><b>${qs(consistent)} where AI named you every time.</b> These are already working for you, and we protect them.</li>` : ''}
+        ${sometimes ? `<li><b>${qs(sometimes)} where AI named you sometimes, not every time.</b> You are on the edge of the answer, and these can tip either way.</li>` : ''}
+        ${never ? `<li><b>${qs(never)} where you were not named at all.</b> The biggest openings, and where clearer pages and listings have the most room to help.</li>` : ''}
+      </ul>
+      ${oneEngineOnly ? `<p style="margin-top:8px"><b>Worth knowing:</b> on ${oneEngineOnly} of the ${namedQs} question${namedQs === 1 ? '' : 's'} where you were named, only one of the two AI tools named you. One already finds you, so the work is to make the same facts clear to the other.</p>` : ''}
+
       <div class="wp-box-navy">
         <p class="wp-boxtitle">How we measured it</p>
-        <p>${b.questionCount} questions &middot; asked ${b.runs || 3} times each &middot; scored on
-        ${esc(b.engineLabels.join(' and ') || 'the AI tools named in your report')} &middot; judged on
-        these exact questions. The full question-by-question detail is in the report at the back of this pack.</p>
-      </div>
-      <h2 class="wp-h2">What happens next</h2>
+        <p>${b.questionCount} questions &middot; asked ${runs} times each &middot; on ${tools} &middot;
+        the same questions are used again when we re-measure. Every question and answer is in the
+        report at the back of this pack.</p>
+      </div>`;
+}
+
+/* ⛔ THE STEPS NAME THE REAL ORDER: frozen baseline → work → the same questions again → before and
+   after. "same frozen questions, the same AI tools, the same method" is pinned by
+   welcome-pack-content.test.ts. The guarantee itself is printed once, on the plan page. */
+function nextPage(totalPayments: number | null | undefined): string {
+  const step = (i: number, when: string, title: string, line: string) => `
+        <div class="wp-row"><div class="wp-num">${i}</div><div class="wp-rowbody">
+          <div class="wp-rowtitle"><span class="wp-when">${when}</span>${title}</div>
+          <p class="wp-rowline">${line}</p></div></div>`;
+  return `
+      <div class="wp-eyebrow">What happens next</div>
+      <h1 class="wp-h1">From today to your before and after</h1>
+      <p>Week four is your first check, not the end. Nothing about the test changes along the way.</p>
       <div class="wp-rows">
-        <div class="wp-row"><div class="wp-num">1</div><div class="wp-rowbody">
-          <div class="wp-rowtitle">Your baseline is locked</div>
-          <p class="wp-rowline">These exact questions are frozen. They are what we compare against later,
-          so the before-and-after is a like-for-like comparison and not a moved goalpost.</p></div></div>
-        <div class="wp-row"><div class="wp-num">2</div><div class="wp-rowbody">
-          <div class="wp-rowtitle">We do the work</div>
-          <p class="wp-rowline">Your website and the places AI actually reads, so your business is easy to
-          find, easy to understand and easy to describe correctly.</p></div></div>
-        <div class="wp-row"><div class="wp-num">3</div><div class="wp-rowbody">
-          <div class="wp-rowtitle">We measure again at four weeks</div>
-          <p class="wp-rowline">The same frozen questions, the same AI tools, the same method, the same
-          towns. Nothing about the test changes.</p></div></div>
-        <div class="wp-row"><div class="wp-num">4</div><div class="wp-rowbody">
-          <div class="wp-rowtitle">You get the before-and-after</div>
-          <p class="wp-rowline">Side by side, with the same working shown.</p></div></div>
+        ${step(1, 'Today', 'Your baseline is locked', 'These exact questions are frozen, so the before and after is like for like. No moved goalposts.')}
+        ${step(2, 'The next few weeks', 'We do the work', 'Clearer pages on your website, your Google Business Profile corrected, and your directory listings added and fixed.')}
+        ${step(3, 'At four weeks', 'Your first re-measure', 'The same frozen questions, the same AI tools, the same method, the same towns. A brand-new domain is measured later, as your guarantee explains.')}
+        ${step(4, 'Then', 'You get your before and after', 'Side by side, with every answer shown. If the number has not gone up, your guarantee applies.')}
+        ${step(5, 'Every month after', 'We keep building', `A new page each month, giving customers and AI another clear answer about what you do. We check your AI visibility monthly and adjust as we learn, plus ${upkeepPhrase(totalPayments)}. A short update tells you what changed.`)}
       </div>
       <div class="wp-box">
-        <p class="wp-boxtitle">Being straight with you</p>
-        <p>AI answers are not fixed &mdash; ask the same question twice and the wording can change, which
-        is exactly why we ask everything several times and compare like for like. We can make your
-        business far easier for AI to find, read and describe correctly, and that is what moves the
-        number. What nobody can do is guarantee that a particular AI tool will recommend you or quote
-        your website on a particular day. We don&rsquo;t promise it, and we&rsquo;d be careful of
-        anyone who does.</p>
+        <p class="wp-boxtitle">Why the answers vary</p>
+        <p>AI answers are not fixed. Ask the same question twice and the names can change, which is why
+        we ask everything several times and compare like for like. Our work makes your business easier
+        to find, understand and describe correctly; the re-measure shows whether the number has moved.
+        What nobody can do is guarantee that a particular AI tool will recommend you or quote your
+        website on a particular day.</p>
       </div>
       <div class="wp-box">
         <p class="wp-boxtitle">Your domain and your current website</p>
-        <p>If we&rsquo;re building you a new website, your business needs to own or control its domain and
-        be free to point it at the new site. If an agency or developer looks after your current website,
-        your agreement with them is yours to manage, and we only reuse material your business owns or is
-        allowed to use. If anything about your domain or your current provider changes, tell us straight
-        away. Our terms at findable.live/terms set this out in full.</p>
-      </div>
-      <p class="wp-guar">${esc(FINDABLE_GUARANTEE)}</p>`;
+        <p>If we are building you a new website, your business needs to own or control its web address
+        (its domain). If an agency or developer runs your current site, that agreement stays yours to
+        manage, and we only reuse material your business owns or is allowed to use. If anything changes
+        with your domain or your provider, tell us straight away. Full terms: findable.live/terms.</p>
+      </div>`;
 }
 
 /** Pull one delimited block out of the report's own output, or throw. */
@@ -601,10 +676,10 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
      absent the pack is exactly the document it has always been. */
   const packPages = [
     coverPage(name, !!input.facts, !!input.baseline),
-    ...(input.facts ? [detailsPage(name, input.facts)] : []),
-    ...(input.baseline ? [baselinePage(name, input.baseline)] : []),
     planPage1(name, input.totalPayments),
     planPage2(name),
+    ...(input.baseline ? [baselinePage(name, input.baseline), nextPage(input.totalPayments)] : []),
+    ...(input.facts ? [detailsPage(name, input.facts)] : []),
     reviewsPage1(reviewLink),
     reviewsPage2(),
   ].map((inner) => sheet(tag, inner, foot)).join('\n');

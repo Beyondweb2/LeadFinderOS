@@ -479,3 +479,28 @@ serving Ramsgate"), two to NOT NAMED (break-in Canterbury ChatGPT and auto-locks
 Gemini: the model said named, the answer never mentions the business). Stored evidence unchanged
 (results checksum 6ac1520c… before and after); the `ai_audits.baseline` snapshot still carries the
 verdict-based 34 and was left alone.
+
+## Welcome Pack copy rewrite (2026-10-02)
+
+Branch `feat/welcome-pack-copy`. Paul's direction, two rounds; every claim rule below is his.
+
+- **Order** (`packPages` and the cover's contents list, kept in step): cover → Your plan → How it works →
+  Where you stand today → What happens next (new `nextPage`, baseline packs only) → What we have on file →
+  Get more reviews → the report.
+- **Claims:** no sentence promises a recommendation, a citation or that AI "will name you". The work
+  "improves the public evidence"; the measurement says whether they are named more often. ChatGPT/Gemini
+  source patterns are "in our measurements so far … often", never a rule. No "AI treats it as spam".
+  Pages = one clear page per genuine service, location pages only with real local information, no cloned
+  town pages, no thin FAQ pages.
+- **The monthly** (`upkeepPhrase`): a new page each month, a monthly check of AI visibility, adjustments
+  over time, hosting + maintenance. Hosting is per route (Build → "of your website"; Optimise/unknown →
+  "if your site is with us"). Never "monthly audit" — /terms says the update is not a full re-audit.
+  Week four is the FIRST check, not the end.
+- **Fixed:** the plan page passed `FINDABLE_GUARANTEE` through `lead()`, which escapes again, so every pack
+  printed `we&#39;ll`. The "openings" list summed to more questions than were asked (`oneEngine` is a
+  subset of the named questions) — it is now a separate "Worth knowing" note.
+- **Layout:** every pack page fits one A4 sheet for all six live baseline clients (rendered locally via
+  Chrome print-to-PDF + pypdfium2, read-only data). Box text no longer capped at 70ch.
+- **Delivery paths:** `render-welcome-pack` (findable.live/w/<code>, proxied by findable-site
+  `functions/w/[code].ts`) and `paid-client-hub` (`welcome_pack_html`) render server-side and need a
+  redeploy; the legacy `WelcomePackButton` (lead dialog, Inbox) builds in the browser and ships with main.
