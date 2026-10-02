@@ -154,7 +154,7 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
 
         <Panel headline={C.websiteStep.headline} sub={C.websiteStep.sub}>
           <div><p className="mb-1 font-medium">{C.domain.question}</p><Radio name="domain" value={a.domain_status} options={DOMAIN_OPTIONS} onChange={(v) => set('domain_status', v)} />
-            {a.domain_status === 'new' && <p className="mt-2 text-xs text-muted-foreground">{C.domain.newNote}</p>}</div>
+</div>
           <div><p className="mb-1 font-medium">{C.agency.question}</p><Radio name="agency" value={a.agency_manages} options={AGENCY_OPTIONS} onChange={(v) => setA((p) => p ? { ...p, agency_manages: v, can_get_access: null, self_site: null } : p)} /></div>
           {a.agency_manages === 'yes' && <div><p className="mb-1 font-medium">{C.access.question}</p><p className="mb-1 text-xs text-muted-foreground">{C.access.helper}</p><Radio name="access" value={a.can_get_access} options={ACCESS_OPTIONS} onChange={(v) => set('can_get_access', v)} />
             {a.can_get_access === 'yes' && <div className="mt-2"><Label>{C.managerEmail.label} <span className="font-normal text-muted-foreground">{C.managerEmail.optional}</span></Label><Input aria-label={C.managerEmail.label} value={a.website_manager_email} placeholder={C.managerEmail.placeholder} onChange={(e) => set('website_manager_email', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">{C.managerEmail.helper}</p>{problemFor('website_manager_email') && <p className="text-xs text-destructive">{problemFor('website_manager_email')}</p>}</div>}

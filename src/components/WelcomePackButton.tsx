@@ -134,6 +134,9 @@ export function WelcomePackButton({
         businessName: audit.business_name || businessName,
         reviewLink: reviewLink.trim(),
         report,
+        /* The browser cannot read the client's agreement link (server-only table), so this pack says
+           the link comes separately rather than printing a dead button (Paul, 2026-10-02). */
+        agreement: { url: null },
       });
       setOpen(false);
     } catch (e) {

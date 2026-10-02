@@ -16,7 +16,9 @@ import { loadClientSetup, loadClientSetups, recordLeadEvent, submitForDelivery, 
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
 import { cleanAnswers as cleanQuickClose } from "../../../src/lib/quickClose.ts";
-import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgreement.ts";
+import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
@@ -493,6 +495,122 @@ Deno.serve(async (req) => {
       const { error: upErr } = await service.from("outreach_leads").update({ delivery_checklist: list }).eq("id", leadId).eq("user_id", user.id);
       if (upErr) throw upErr;
       return json({ ok: true });
+    }
+
+    /* ══ CLIENT SERVICE AGREEMENT — Paul's view (2026-10-02) ═══════════════════════════════════════
+       agreement_status: the link, the route it is agreed on, and every acceptance (read only).
+       agreement_set_route: Build / Optimise for the agreement page — creates the link if missing.
+         ⛔ Refused once the client has signed on the agreement page: the signed text names the route.
+       agreement_send_link: emails the client their agreement link (Resend), stamps last_sent_*.
+       ⛔ The acceptances table is write-once and is never written here. */
+    /* agreement_pdf: the signed PDF, REBUILT FROM THE STORED RECORD (the same builder the client's email
+       used), for the latest agreement-page acceptance, else the latest checkout one. Read only. */
+    if (action === "agreement_pdf") {
+      const leadId = text(body.lead_id);
+      const { data: owned } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!owned) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const { data: rows, error: accErr } = await service.from("client_agreement_acceptances").select(ACCEPTANCE_COLUMNS)
+        .eq("lead_id", leadId).order("accepted_at", { ascending: false });
+      if (accErr) throw accErr;
+      const list = (rows ?? []) as Array<Parameters<typeof agreementPdfForRow>[0]>;
+      const row = list.find((r) => r.method === "agree_page") ?? list[0] ?? null;
+      if (!row) return json({ ok: false, error: "not_signed", detail: "There is no signed agreement for this client yet." }, 404);
+      const pdf = await agreementPdfForRow(row);
+      let bin = ""; for (let i = 0; i < pdf.length; i += 0x8000) bin += String.fromCharCode(...pdf.subarray(i, i + 0x8000));
+      return json({ ok: true, filename: `Findable Client Service Agreement - ${String(row.business_name).replace(/[\\/:*?"<>|]/g, "")}.pdf`, pdf_base64: btoa(bin), method: row.method, accepted_at: row.accepted_at });
+    }
+
+    if (action === "agreement_status" || action === "agreement_set_route" || action === "agreement_send_link") {
+      const leadId = text(body.lead_id);
+      const { data: lead, error: leadErr } = await service.from("outreach_leads")
+        .select("id,business_name,email,contract_total_payments").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (leadErr) throw leadErr;
+      if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const L = lead as { id: string; business_name: string | null; email: string | null; contract_total_payments: number | null };
+      const loadLink = async () => {
+        const { data, error } = await service.from("client_agreement_links")
+          .select("token,service_route,created_at,last_sent_at,last_sent_to").eq("lead_id", L.id).maybeSingle();
+        if (error) throw error;
+        return data as { token: string; service_route: string | null; created_at: string; last_sent_at: string | null; last_sent_to: string | null } | null;
+      };
+      const loadAcceptances = async () => {
+        const { data, error } = await service.from("client_agreement_acceptances")
+          .select("method,accepted_at,typed_name,typed_role,email,agreement_version,service_route,stripe_session_id")
+          .eq("lead_id", L.id).order("accepted_at", { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as Array<{ method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string; service_route: string }>;
+      };
+
+      if (action === "agreement_set_route") {
+        const route = text(body.route);
+        if (route !== "build" && route !== "optimise") return json({ ok: false, error: "bad_route", detail: "Choose Build or Optimise." }, 400);
+        const signed = (await loadAcceptances()).find((a) => a.method === "agree_page");
+        if (signed && signed.service_route !== route) {
+          return json({ ok: false, error: "already_signed", detail: `They have already signed the agreement for ${signed.service_route === "build" ? "Build" : "Optimise"}. The route on a signed agreement cannot change.` }, 409);
+        }
+        const { error: upErr } = await service.from("client_agreement_links")
+          .upsert({ lead_id: L.id, service_route: route }, { onConflict: "lead_id" });
+        if (upErr) throw upErr;
+      }
+
+      if (action === "agreement_send_link") {
+        const link = await loadLink();
+        const route = (link?.service_route === "build" || link?.service_route === "optimise") ? link.service_route : serviceRouteForTotal(L.contract_total_payments);
+        if (!link || !route) return json({ ok: false, error: "route_not_set", detail: "Set Build or Optimise first, then send the link." }, 409);
+        const { data: ob } = await service.from("onboarding_responses").select("contact_email")
+          .eq("lead_id", L.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+        const to = (text(body.to) || text((ob as { contact_email?: string | null } | null)?.contact_email) || text(L.email)).toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return json({ ok: false, error: "no_email", detail: "There is no email address on file for this client. Add one first." }, 409);
+        const key = Deno.env.get("RESEND_API_KEY");
+        if (!key) return json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500);
+        const url = agreementUrl(link.token);
+        const name = text(L.business_name) || "your business";
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "Findable <alerts@findable.live>", to: [to], reply_to: AGREEMENT_COPY_TO_PAUL,
+            subject: `Your Findable agreement - ${name}`,
+            text: [
+              "Hello,",
+              "",
+              `Here is your Findable Client Service Agreement for ${name}. Please read it, fill in your details and click "I agree and sign":`,
+              "",
+              url,
+              "",
+              "This link is yours alone. You will get a PDF copy of exactly what you agreed to as soon as you sign.",
+              "",
+              "Any questions, just reply to this email.",
+              "",
+              "Paul",
+              "Findable",
+            ].join("\n"),
+          }),
+        });
+        if (!res.ok) {
+          const detail = (await res.text()).slice(0, 300);
+          await service.from("client_error_reports").insert({ error_id: "agreement_link_email_failed", message: `${res.status} ${detail}`, context: { lead_id: L.id } });
+          return json({ ok: false, error: "email_failed", detail: "The email did not send. Try again in a moment." }, 502);
+        }
+        const { error: stampErr } = await service.from("client_agreement_links")
+          .update({ last_sent_at: new Date().toISOString(), last_sent_to: to }).eq("lead_id", L.id);
+        if (stampErr) throw stampErr;
+      }
+
+      const link = await loadLink();
+      const linkRoute = (link?.service_route === "build" || link?.service_route === "optimise") ? link.service_route : null;
+      const stampedRoute = serviceRouteForTotal(L.contract_total_payments);
+      return json({
+        ok: true,
+        agreement: {
+          url: link ? agreementUrl(link.token) : null,
+          route: linkRoute ?? stampedRoute,
+          route_source: linkRoute ? "set" : stampedRoute ? "checkout" : null,
+          last_sent_at: link?.last_sent_at ?? null,
+          last_sent_to: link?.last_sent_to ?? null,
+          acceptances: await loadAcceptances(),
+        },
+      });
     }
 
     /* ══ WELCOME PACK — the operator's Download button ════════════════════════════════════════════

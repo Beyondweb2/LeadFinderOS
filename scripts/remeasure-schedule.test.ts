@@ -12,7 +12,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync } from "node:fs";
 import { isRemeasureDue, utcDateISO, REMEASURE_STOP_STATUS, type RemeasureCandidate } from "../src/lib/remeasureDue.ts";
-import { remeasureDueFill, workIncompleteFor, WORK_MILESTONES } from "../src/lib/remeasureFill.ts";
+import { remeasureDueFill, storedRemeasureWeeks, workIncompleteFor, WORK_MILESTONES } from "../src/lib/remeasureFill.ts";
 import { REMEASURE_OFFSET_DAYS } from "../src/lib/deliveryCockpit.ts";
 
 let f = 0;
@@ -88,7 +88,7 @@ const filled = remeasureDueFill(null, "2026-09-12T14:00:00Z", 4);
 ok(filled === "2026-10-10", `a NULL date fills to frozen + ${REMEASURE_OFFSET_DAYS} = 2026-10-10 (got ${filled})`);
 ok(remeasureDueFill(undefined, "2026-09-12T14:00:00Z", 4) === "2026-10-10", "undefined behaves as NULL");
 ok(remeasureDueFill(null, "not a date", 4) === null, "an unreadable freeze instant writes nothing");
-ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 8) === "2026-11-07", "a site we build on a brand-new domain fills to frozen + 56 (eight weeks)");
+ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 8) === "2026-11-07", "an explicit eight-week clock still fills to frozen + 56 (the arithmetic; no new client is on it)");
 ok(remeasureDueFill(null, "2026-09-12T14:00:00Z", 0) === null, "an unreadable clock writes nothing");
 ok(REMEASURE_OFFSET_DAYS === 28, "the offset is 28 (RG's +56 is stored by hand, never derived)");
 /* The write side: the update carries the NULL guard in the database too. */
@@ -118,6 +118,18 @@ ok(/code === "23505"/.test(server) && /already_remeasured/.test(server), "a dupl
 ok(/refuse\("already_remeasured"/.test(server) && /refuse\("no_baseline_recorded"/.test(server) && /refuse\("baseline_not_frozen"/.test(server), "the three named refusals exist and are recorded");
 ok(/measurementFlagFor\(isMeasurement \|\| isRemeasure\)/.test(server), "a replay is flagged is_measurement, so it can never be mistaken for a baseline");
 ok(/questions: plan\.questions,/.test(tick) && /purpose: "remeasure",/.test(tick), "the tick sends the baseline's ASKED set verbatim with purpose 'remeasure'");
+
+console.log("\n── THE RESULTS WORDING READS THE CLIENT'S STORED DATE (Paul, 2026-10-02) ──");
+ok(storedRemeasureWeeks("2026-10-06", "2026-08-11T15:26:28.878Z") === 8, "RG: baseline 11 Aug → stored 6 Oct = eight weeks");
+ok(storedRemeasureWeeks("2026-10-13", "2026-08-18T13:41:55.789Z") === 8, "Ronnie: baseline 18 Aug → stored 13 Oct = eight weeks");
+ok(storedRemeasureWeeks("2026-10-20", "2026-09-22T03:24:58.072Z") === 4, "MCLocksmiths: baseline 22 Sep → stored 20 Oct = four weeks");
+ok(storedRemeasureWeeks(null, "2026-09-22T03:24:58Z") === null && storedRemeasureWeeks("2026-10-21", "2026-09-22T03:24:58Z") === null,
+  "no date, or not a whole number of weeks → null (the caller uses the standard clock)");
+{
+  const sender = readFileSync(new URL("../supabase/functions/_shared/remeasure-results.ts", import.meta.url), "utf8");
+  ok(/const weeks = storedRemeasureWeeks\(lead\.remeasure_due_date,[\s\S]{0,200}\?\? remeasureWeeksFor\(/.test(sender),
+    "the results email and document take the stored interval first, the standard clock second");
+}
 
 console.log(f === 0 ? "\nALL PASS" : `\n${f} FAILURES`);
 if (f) process.exit(1);

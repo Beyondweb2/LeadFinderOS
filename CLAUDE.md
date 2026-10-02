@@ -1093,6 +1093,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
+| The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
 
 **When you finish a piece of work:** write the record into the matching `docs/` file (or a new one,
 added to `docs/INDEX.md`), and put here only the rule it taught or the pointer to it.

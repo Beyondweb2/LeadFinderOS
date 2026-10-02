@@ -22,6 +22,25 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-client-agreement', date: '2026-10-02', title: 'Clients now accept the Client Service Agreement online', audience: 'admin',
+    body: 'Every client accepts the agreement at checkout, and signs it on their own agreement page from the Welcome Pack. Each acceptance is kept as a permanent record.',
+    report: {
+      added: [
+        'A required tick on the Stripe payment page: "I agree to the Findable Client Service Agreement, including the minimum term", linked to the client’s own agreement.',
+        'An agreement page for each client at findable.live/agree/…: the full agreement with their business and service filled in, their details, and an "I agree and sign" button.',
+        'A signed PDF of exactly what was agreed, emailed to the client and to paul@findable.live after each acceptance.',
+        'A "Your agreement: the key points" page in the Welcome Pack, with a button and a QR code to the client’s agreement page, or "Agreement accepted on … by …" once signed.',
+        'On the Paid Client screen: whether the agreement is accepted, when, by whom and how, a Build / Optimise selector, and Copy / Send agreement link.',
+      ],
+      changed: [
+        'Re-measurement is four weeks for every new client. The eight weeks for a site on a brand-new domain is gone from the guarantee, the website, the payment receipt and the Welcome Pack. Clients with a recorded date keep it.',
+        'The Welcome Pack contents list fits on one page with the new agreement section.',
+      ],
+      removed: [
+        'The "eight weeks if we build your site on a brand-new domain" note, everywhere.',
+      ],
+      effect: 'Every new client has a binding, dated record of the agreement they accepted, with a PDF copy for both sides, and nobody can edit or delete it.',
+    } },
   { id: '2026-10-02-my-activity-scope', date: '2026-10-02', title: '"My activity: hidden" now hides your outreach from Sales intelligence too', audience: 'admin',
     body: 'The same toggle at the top of the Admin dashboard now leaves your own outreach out of every sales figure, not just the team table.',
     report: {

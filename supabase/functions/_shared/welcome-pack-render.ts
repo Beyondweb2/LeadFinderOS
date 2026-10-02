@@ -29,6 +29,8 @@ import { buildBaselineSummary } from "../../../src/lib/baselineSummary.ts";
 import { resolveClientFacts, toList } from "../../../src/lib/clientFacts.ts";
 import { welcomePackReadiness } from "../../../src/lib/welcomePackData.ts";
 import { isShortCode } from "../../../src/lib/reportSlug.ts";
+import { agreementUrl } from "../../../src/lib/clientAgreement.ts";
+import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
@@ -167,7 +169,34 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     baselineAudit: audit as Record<string, never>,
   });
 
+  /* 6) the Service Agreement (Paul, 2026-10-02): the client's own link and their latest AGREEMENT-PAGE
+        signature. ⛔ READ ONLY like everything here — the link row is created by the checkout or by
+        the client hub, never by this public route; no link means no agreement page in the pack. */
+  const { data: agreeLink, error: agreeLinkErr } = await service.from("client_agreement_links")
+    .select("token,service_route").eq("lead_id", leadId).maybeSingle();
+  if (agreeLinkErr) throw agreeLinkErr;
+  let agreement: { url: string | null; termsKnown: boolean; acceptedAtIso: string | null; acceptedBy: string | null } | null = null;
+  if (agreeLink) {
+    const { data: signed, error: signedErr } = await service.from("client_agreement_acceptances")
+      .select("accepted_at,typed_name").eq("lead_id", leadId).eq("method", "agree_page")
+      .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
+    if (signedErr) throw signedErr;
+    /* ⛔ THE CURRENT AGREEMENT'S TERMS ARE SHOWN ONLY WHEN THE RECORD SAYS THEY APPLY (Paul, a general
+       rule for older clients): a route on the link (today's checkout, or Paul's Build / Optimise) or a
+       route stamped by today's checkout. The same test the agreement page itself uses to open. */
+    const linkRoute = (agreeLink as { service_route?: string | null }).service_route;
+    const termsKnown = linkRoute === "build" || linkRoute === "optimise"
+      || serviceRouteForTotal((lead as { contract_total_payments?: unknown }).contract_total_payments) !== null;
+    agreement = {
+      url: agreementUrl(String((agreeLink as { token: string }).token)),
+      termsKnown,
+      acceptedAtIso: (signed as { accepted_at?: string } | null)?.accepted_at ?? null,
+      acceptedBy: (signed as { typed_name?: string | null } | null)?.typed_name ?? null,
+    };
+  }
+
   const html = buildWelcomePackHtml({
+    agreement,
     businessName: facts.businessName.value || (audit as { business_name?: string }).business_name || "your business",
     /* ⚠️ NO REVIEW LINK IS STORED ANYWHERE IN THE SCHEMA, so there is none to print and none to
        guess. The reviews page explains how the client finds their own — a wrong review link would

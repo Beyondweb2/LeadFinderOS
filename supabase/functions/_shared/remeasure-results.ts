@@ -29,6 +29,7 @@ import {
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
+import { storedRemeasureWeeks } from "../../../src/lib/remeasureFill.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -80,14 +81,17 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
   const { data: bl } = await service.from("ai_audits")
     .select("baseline_contract, baseline_completed_at")
     .eq("id", lead.baseline_audit_id).maybeSingle();
-  /* The client's clock — four weeks, or eight for a site we build on a brand-new domain — from the
-     paid onboarding row first. It sets the expected due date in the terms gate and the words. */
+  /* The client's clock: their STORED interval first (storedRemeasureWeeks), else the standard four
+     weeks (remeasureWeeksFor). It sets the expected due date in the terms gate and the words. */
   const { data: obr } = await service.from("onboarding_responses")
     .select("plan_tier, website_route, domain_status, status, created_at").eq("lead_id", lead.id)
     .order("created_at", { ascending: false }).limit(10);
   const obList = (obr ?? []) as Array<{ status?: string | null }>;
   const obRow = obList.find((r) => ["paid", "payment_received", "in_delivery", "completed"].includes(String(r.status ?? ""))) ?? obList[0] ?? null;
-  const weeks = remeasureWeeksFor(obRow as { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null);
+  /* ⛔ THE STORED DATE WINS (Paul, 2026-10-02): a pinned client's own interval (RG, Ronnie: 56 days →
+     eight weeks) — the standard clock only when no whole-week date is stored. */
+  const weeks = storedRemeasureWeeks(lead.remeasure_due_date, (bl as { baseline_completed_at?: string | null } | null)?.baseline_completed_at ?? null)
+    ?? remeasureWeeksFor(obRow as { plan_tier?: unknown; website_route?: unknown; domain_status?: unknown } | null);
   const terms = currentTermsVerdict({
     contract: (bl as { baseline_contract?: unknown } | null)?.baseline_contract ?? null,
     amountPaid: lead.amount_paid,

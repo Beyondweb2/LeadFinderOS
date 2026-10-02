@@ -174,7 +174,7 @@ console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ─�
   ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
 }
 
-console.log('── NEW DOMAINS: RE-MEASURED LATER, NOT EXCLUDED (Paul, 2026-09-23) ──');
+console.log('── FOUR WEEKS FOR EVERY NEW CLIENT (Paul, 2026-10-02; the 2026-09-23 new-domain eight weeks is gone) ──');
 {
   const frozen = '2026-09-24T11:00:00.000Z';
   const existing = { plan_tier: 'keep', domain_status: 'existing' };
@@ -184,15 +184,15 @@ console.log('── NEW DOMAINS: RE-MEASURED LATER, NOT EXCLUDED (Paul, 2026-09-
   const keepNew = { plan_tier: 'keep', domain_status: 'new' };
   ok(remeasureWeeksFor(existing) === 4 && remeasureDueFill(null, frozen, remeasureWeeksFor(existing)) === '2026-10-22', 'established domain, their own site → four weeks (due 22 Oct)');
   ok(remeasureWeeksFor(builtExisting) === 4, 'a site we build on an EXISTING domain → four weeks');
-  ok(remeasureWeeksFor(builtNew) === 8 && remeasureDueFill(null, frozen, remeasureWeeksFor(builtNew)) === '2026-11-19', 'a site we build on a brand-new domain → eight weeks (due 19 Nov)');
-  ok(remeasureWeeksFor(handBuiltNew) === 8, 'a hand-added rebuild on a new domain → eight weeks');
-  ok(remeasureWeeksFor(keepNew) === 4, 'a client-owned site is never on the new-domain clock');
+  ok(remeasureWeeksFor(builtNew) === 4 && remeasureDueFill(null, frozen, remeasureWeeksFor(builtNew)) === '2026-10-22', 'a site we build on a brand-new domain → four weeks too (due 22 Oct)');
+  ok(remeasureWeeksFor(handBuiltNew) === 4, 'a hand-added rebuild on a new domain → four weeks');
+  ok(remeasureWeeksFor(keepNew) === 4, 'a client-owned site on a new domain → four weeks');
   ok(remeasureWeeksFor(null) === 4 && remeasureWeeksFor({ plan_tier: 'new_site' }) === 4, 'blank domain answer → the standard four weeks');
-  ok(!/excluded|does not apply/i.test(FINDABLE_GUARANTEE) && /four weeks \(eight if we build your site on a brand-new domain\)/.test(FINDABLE_GUARANTEE), 'the contractual guarantee names both clocks and excludes nobody');
+  ok(!/excluded|does not apply/i.test(FINDABLE_GUARANTEE) && /re-measure after four weeks on the same questions/.test(FINDABLE_GUARANTEE) && !/eight/i.test(FINDABLE_GUARANTEE), 'the contractual guarantee names four weeks only and excludes nobody');
   ok(FINDABLE_GUARANTEE.endsWith(REMEASURE_CLAIM_SENTENCE) && /14 days of your results/.test(REMEASURE_CLAIM_SENTENCE), 'the claim window counts from the results, whichever re-measure applies');
-  /* The terms gate accepts each clock only for its own client. */
+  /* The terms gate still accepts a RECORDED eight-week clock for its own client (RG, Ronnie). */
   const facts = { contract: { version: 2 }, amountPaid: 99, baselineFrozenAt: frozen };
-  ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-11-19', remeasureWeeks: 8 }).current === true, 'new-domain build with its +56 date → current terms');
+  ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-11-19', remeasureWeeks: 8 }).current === true, 'a recorded eight-week client with its +56 date → current terms');
   ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-11-19', remeasureWeeks: 4 }).current === false, '+56 on a four-week client → refused (different clock)');
   ok(currentTermsVerdict({ ...facts, remeasureDueDate: '2026-10-22', remeasureWeeks: 4 }).current === true, 'four-week client on +28 → current');
   const w8 = resultsEmailParagraphs({ businessName: 'X', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 1, afterAnswered: 10, questions: 3, wentUp: false, withinNoise: false, documentUrl: 'u', weeks: 8 });
