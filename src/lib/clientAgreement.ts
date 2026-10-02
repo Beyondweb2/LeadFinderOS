@@ -381,11 +381,11 @@ export function fillFromAcceptanceRow(r: AgreementAcceptanceRow): AgreementFill 
   };
 }
 
-/* ⛔ WHERE PAUL'S COPY OF EVERY SIGNED AGREEMENT IS SENT (Paul, 2026-10-02 evening): the inbox that
-   actually receives is paul@move37.fun; paul@findable.live is only the address DISPLAYED to clients
-   (it is printed in the agreement's "Email for notices"). Sending to the displayed address would
-   depend on a mail forward nobody can verify from here. */
-export const AGREEMENT_COPY_TO_PAUL = 'paul@move37.fun';
+/* ⛔ WHERE PAUL'S COPY OF EVERY SIGNED AGREEMENT IS SENT (Paul, 2026-10-02): the canonical Findable
+   business email, the same address the agreement prints as "Email for notices". Cloudflare Email
+   Routing delivers it onward; that underlying inbox is private infrastructure and is never written
+   into code as a recipient. */
+export const AGREEMENT_COPY_TO_PAUL = 'paul@findable.live';
 
 /** How an acceptance was made, in words. */
 export function methodWords(method: 'checkout' | 'agree_page'): string {

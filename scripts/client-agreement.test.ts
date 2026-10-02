@@ -44,7 +44,8 @@ async function main() {
   ok(JSON.stringify(agreePageMissing({ ...full, phone: ' ', legalName: '' })) === '["legalName","phone"]', 'missing legal name and phone are named');
 
   console.log('\n── WHERE PAUL’S COPY GOES ──');
-  ok(AGREEMENT_COPY_TO_PAUL === 'paul@move37.fun', 'the receiving inbox, not the displayed address');
+  ok(AGREEMENT_COPY_TO_PAUL === 'paul@findable.live', 'Paul’s copy goes to the canonical business email');
+  ok(!/move37/i.test(renderAgreementText(full)) && !/move37/.test(String(AGREEMENT_COPY_TO_PAUL)), 'the legacy inbox is never a recipient or on the agreement');
   ok(t.includes('Email for notices: paul@findable.live'), 'the agreement still DISPLAYS paul@findable.live');
 
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll passed.');
