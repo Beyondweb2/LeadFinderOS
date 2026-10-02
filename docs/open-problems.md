@@ -572,7 +572,7 @@
     so no polling), but it is per-account and managed-locations-only. **Both halves need the same
     grant.** The real split is customers vs prospects.
   - Customers are viable, and the grant is **already in the product**: `gbp_status` asks them to add
-    `paul@move37.fun` as a Manager. Prospects are impossible on the official API.
+    `paul@findable.live` as a Manager. Prospects are impossible on the official API.
   - Reviews live **only on v4** (`mybusiness.googleapis.com/v4`), never migrated to the v1 APIs.
   - **The no-approval alternative and its ceiling:** Places API returns reviews for any business —
     but max **5**, sorted by relevance not date, and the review object has **no owner-reply field**.
