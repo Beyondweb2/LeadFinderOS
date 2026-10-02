@@ -11,10 +11,10 @@
 //    action, not spam.
 //
 // verify_jwt=false: it's public by design. Email goes through Resend, the SAME path
-// notify-onboarding-submit uses (RESEND_API_KEY, alerts@findable.live → paul@move37.fun).
+// notify-onboarding-submit uses (RESEND_API_KEY, alerts@findable.live → paul@findable.live).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 const FROM_OPERATOR = "Findable alerts <alerts@findable.live>";
 const DEDUPE_MS = 24 * 60 * 60 * 1000;
 

@@ -6,7 +6,7 @@
 // (the stripe-webhook lesson: a void sender leaves "was it ever sent?" unanswerable).
 
 export const OPERATOR_ALERT_FROM = "Findable alerts <alerts@findable.live>";
-export const OPERATOR_ALERT_TO = "paul@move37.fun";
+export const OPERATOR_ALERT_TO = "paul@findable.live";
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 

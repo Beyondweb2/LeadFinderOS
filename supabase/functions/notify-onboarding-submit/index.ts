@@ -33,9 +33,9 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** ONE address for anything this system sends the operator. The three older functions each
- *  hardcode their own (paul@yoursites.uk, paul@move37.fun, beyondwebcraft@outlook.com); they are
+ *  hardcode their own (paul@yoursites.uk, paul@findable.live, beyondwebcraft@outlook.com); they are
  *  deliberately left alone here — claim-site emails CUSTOMERS and is not worth the risk. */
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 
 /* 🔴 ON findable.live SINCE 2026-09-02, PROVEN BY A REAL SEND. An earlier switch 403'd
    ("The findable.live domain is not verified") because the domain was verified on a different

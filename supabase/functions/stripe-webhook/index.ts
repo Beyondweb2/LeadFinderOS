@@ -109,7 +109,7 @@ const idOfRef = (v: unknown): string | null =>
   typeof v === "string" ? v
     : (v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" ? (v as { id: string }).id : null);
 
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 /* 🔴 THE SENDER, AND IT COST THE "PAID £99" EMAIL ON 2026-09-13. Every operator notification from
    this function went out as `noreply@lead-finder-app.com` — the OLD barber product's domain, which
    is not verified on the Resend account RESEND_API_KEY belongs to. Resend does not degrade on an
@@ -530,7 +530,7 @@ async function notifyOfPayment(service: any, site: PaidSite): Promise<void> {
       try {
         await postResend({
           from: "Paul <noreply@lead-finder-app.com>",
-          reply_to: "paul@move37.fun",
+          reply_to: "paul@findable.live",
           to: [barberEmail],
           subject: `Payment received - your ${productNoun} is upgraded`,
           text:

@@ -33,7 +33,7 @@ once Findable ends the service for it.
 
 | Place | What |
 |---|---|
-| findable-site onboarding | Pages after "Your website", new-site path only: **Who owns your domain?** (owned, then third party) · **Access to your domain** · **Your current website** (site rights, if they have one) · **Before we build your new site** (the confirmations). A stop shows the message, `paul@move37.fun` and "Ask Findable to check my setup with me" (a bail that stamps `domain_escalated_at`). No password is ever asked. |
+| findable-site onboarding | Pages after "Your website", new-site path only: **Who owns your domain?** (owned, then third party) · **Access to your domain** · **Your current website** (site rights, if they have one) · **Before we build your new site** (the confirmations). A stop shows the message, `paul@findable.live` and "Ask Findable to check my setup with me" (a bail that stamps `domain_escalated_at`). No password is ever asked. |
 | `findable-onboarding` | saves the 7 answers + escalation (answers / NEWER_COLS / optional) |
 | `findable-checkout` | refuses `domain_unresolved` (403) after the already-paid checks, re-derived from the ROW |
 | `notify-onboarding-submit` | NEEDS YOU: DOMAIN / AGENCY ISSUE, and the escalation |

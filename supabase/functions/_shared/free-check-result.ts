@@ -71,7 +71,7 @@ export const FREE_CHECK_TEMPLATE = "free_check_result";
 import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
 
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 /* 🔴 THE SENDER. ON findable.live SINCE 2026-09-02, AND IT TOOK TWO ATTEMPTS TO GET HERE.
    Both addresses were `@lead-finder-app.com`, the OLD product's domain, so a Findable prospect got a
    cold automated email from a brand they had never heard of on a domain unrelated to the site they

@@ -33,7 +33,7 @@ import { reportOnceAnHour } from "./audit-baseline.ts";
 // deno-lint-ignore no-explicit-any
 type Client = any;
 
-const ADMIN_EMAIL = "paul@move37.fun";
+const ADMIN_EMAIL = "paul@findable.live";
 /* The client-facing sender, the same address the free-check result uses (verified on this Resend
    account); the operator alert address for holds. */
 const FROM_CLIENT = "Findable <reports@findable.live>";
