@@ -31,7 +31,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       ],
       changed: [
         'An ended client shows COMPLETED (client ended early) or ENDED (dispute) on Paid Clients, with no setup count, no missing list and no next step.',
-        'On an ended client’s page, Remeasure reads “not scheduled” and Monthly update reads “no monthly updates”.',
+        'On an ended client’s page, Remeasure reads “not scheduled”, Monthly update reads “no monthly updates”, and the agreement reads “not needed” (no link to send).',
         'MCLocksmiths is marked Completed: Morgan went back to his previous website. The £99 he paid stays.',
       ],
       removed: [],
