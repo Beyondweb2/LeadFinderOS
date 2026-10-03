@@ -68,7 +68,7 @@ function ClientCard({ c }: { c: Client }) {
           </div>
           <div className="min-w-0">
             {s && <Badge className={cn('max-w-full whitespace-normal text-left text-[11px] leading-tight', STATE_TONE[s.state])} data-testid="paid-client-handoff">{s.state_label}</Badge>}
-            {s && <div className="mt-1 text-xs text-muted-foreground">Setup {s.done}/{s.total} · {s.stage_label}</div>}
+            {s && <div className="mt-1 text-xs text-muted-foreground">{s.state === 'ended' ? s.stage_label : `Setup ${s.done}/${s.total} · ${s.stage_label}`}</div>}
             <div className="text-xs text-muted-foreground">{paymentLine(c)}</div>
           </div>
           <div className="min-w-0" data-testid="paid-client-next">

@@ -18,6 +18,7 @@
 import { WAITING_ON_LABEL, type HandoffReadiness } from './handoffReadiness.ts';
 import { hubBaselineStatus } from './paidBaselineState.ts';
 import { weeklyStart } from './weeklyCheck.ts';
+import { serviceEndView } from './serviceEnd.ts';
 
 export type DeliveryStage = 'setup' | 'ready' | 'discovery' | 'questions' | 'baseline' | 'build' | 'launched' | 'remeasure' | 'ended';
 export const DELIVERY_STAGES: readonly DeliveryStage[] = ['setup', 'ready', 'discovery', 'questions', 'baseline', 'build', 'launched', 'remeasure'];
@@ -60,6 +61,8 @@ export interface StageInput {
     remeasure_audit_id?: string | null;
     remeasure_results_sent_at?: string | null;
     service_terminated_at?: string | null;
+    /** Why it ended (src/lib/serviceEnd.ts): COMPLETED for a client who ended early, ENDED for a dispute. */
+    service_termination_reason?: string | null;
     delivery_checklist?: Record<string, unknown> | null;
     website_build?: { production_url?: string | null; production_status?: string | null; qa?: { production_checked?: boolean | null } | null } | null;
   };
@@ -114,7 +117,14 @@ export function deliveryStage(i: StageInput): StageResult {
     return { stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
   };
 
-  if (L.service_terminated_at || L.status === 'refunded') return result('ended', step('none', L.status === 'refunded' ? 'Refunded — nothing to do' : 'Service ended — nothing to do', false, 'setup'));
+  if (L.status === 'refunded') return result('ended', step('none', 'Refunded — nothing to do', false, 'setup'));
+  /* An ended service: the stage is 'ended' (no delivery stage is marked done) and the words say why — a client
+     who ended early reads COMPLETED, nothing further to do (serviceEnd.ts, 2026-10-03). */
+  const ended = serviceEndView(L);
+  if (ended) {
+    const r0 = result('ended', step('none', ended.next, false, 'setup'));
+    return { ...r0, stageLabel: ended.stageLabel, stateLabel: ended.stateLabel };
+  }
 
   const baseline = hubBaselineStatus(i.onboarding, L.baseline_audit_id ? (i.baselineAudit ?? {}) : null);
   const baselineDone = baseline === 'complete' || !!i.baselineAudit?.baseline_completed_at;

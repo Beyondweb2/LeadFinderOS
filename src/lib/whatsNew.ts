@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-03-client-completed-early', date: '2026-10-03', title: 'Paid clients can be marked Completed when they end early', audience: 'admin',
+    body: 'A paid client who stops before their payments run out can now be marked Completed. Their payment and history stay; re-measure, monthly updates and delivery stop.',
+    report: {
+      added: [
+        '“Mark completed (client ended early)…” on a paid client page, with a required note. It emails you to cancel any live subscription in Stripe; the app never charges or refunds.',
+        'A Completed card at the top of an ended client’s page: nothing further to do, since when, and the note.',
+      ],
+      changed: [
+        'An ended client shows COMPLETED (client ended early) or ENDED (dispute) on Paid Clients, with no setup count, no missing list and no next step.',
+        'On an ended client’s page, Remeasure reads “not scheduled” and Monthly update reads “no monthly updates”.',
+        'MCLocksmiths is marked Completed: Morgan went back to his previous website. The £99 he paid stays.',
+      ],
+      removed: [],
+      effect: 'A client who has finished early no longer looks like unfinished work anywhere, and their payment history is unchanged.',
+    } },
   { id: '2026-10-02-log-this-call', date: '2026-10-02', title: 'Log the call straight from the call script', audience: 'all',
     body: 'The call script now ends in “Log this call”. It opens the lead’s Work tab with Log a contact open, ready for the outcome and the Next Action.',
     report: {

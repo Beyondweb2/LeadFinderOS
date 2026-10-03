@@ -284,6 +284,12 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
   (`GUARANTEE_PAYMENT_TWO_SENTENCE`, locked to findable-site). Record + MCLocksmiths' missing
   subscription: `docs/business-and-offer.md`, "Customer lifecycle cleanup".
+- **A paid client's service ends ONCE: `service_terminated_at` + `service_termination_reason`** (paid-client-hub
+  `terminate_service`; words in `src/lib/serviceEnd.ts`, 2026-10-03). `client_ended_early` = the client stopped before the
+  term ran out (shown COMPLETED, nothing further to do; MCLocksmiths, 2026-10-03); `domain_authority_dispute` = Findable
+  ended it (ENDED). Every future-work reader already skips an ended client (remeasure, results, weekly check, perf sync,
+  admin counts). ⛔ Ending never marks a delivery stage done and never touches money, the ledger or commission; a live
+  subscription is cancelled by Paul in Stripe. Distinct from `refunded` and from a term that ran out (`subscriptionEndedByTerm`).
 - **The monthly client update** (paid client page step 8, `docs/monthly-client-update.md`, 2026-10-02) is prepared and
   sent BY HAND, as /terms says. ⛔ Only the measurement paragraph is generated, from stored `weekly_check_runs`
   counts, comparing only like-for-like checks; work done is the operator's words (stored facts are Add
