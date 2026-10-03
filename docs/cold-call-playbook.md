@@ -1,8 +1,9 @@
 # Cold Call Playbook v1 (2026-09-23)
 
-A read-only call guide for one lead, opened from **Inbox** (the "Cold Call Playbook" pill in the
-selected conversation's header) and **Outreach** (the row's Call options menu, and the lead detail
-dialog). One shared panel: `src/components/ColdCallPlaybook.tsx`.
+A read-only call guide for one lead, opened from the lead workspace's **Scripts** tab (Outreach and the
+Inbox's Prospect popup share it) and the **Outreach** row's script icon (a sheet). One shared panel:
+`src/components/ColdCallPlaybook.tsx`. (Corrected 2026-10-02: the Inbox header pill this line used to
+name no longer exists.)
 
 ## What it is built from — stored evidence only
 
@@ -14,7 +15,7 @@ dialog). One shared panel: `src/components/ColdCallPlaybook.tsx`.
 | Excerpt | quoted only if it passes `isJunkAnswer` AND `isMapCardAnswer` — the report's hook-card rule |
 | Website findings | `resolveFindingsSource` (`siteFindings.ts`) — the SAME loop the `ai_site_findings_v2` {{6}} uses; `resolveSiteFindingsDetailed` is now written in terms of it (behaviour unchanged). Up to `MAX_SITE_FINDINGS`, strongest first, words from `candidateFindings`, proof from the stored signals/evidence |
 | Follow-up | `whatsapp_messages` by lead id or WhatsApp phone; any real send (`isRealSend`) or inbound → FOLLOW-UP; report sent = a `REPORT_LINK_TEMPLATES` send |
-| Offer | `FINDABLE_OFFER_SUMMARY` (£99 to start, then £99/month, 12-month minimum) + `FINDABLE_GUARANTEE` + Paul's build terms line (since 2026-09-23) |
+| Offer | `FINDABLE_OFFER_SUMMARY` (the current Build / Optimise offer — read the constant, never this line) + `FINDABLE_GUARANTEE` + Paul's build terms line (since 2026-09-23) |
 
 The loader (`src/hooks/useColdCallPlaybook.ts`) is SELECTs only through the operator session, and
 loads only while the panel is open. `scripts/cold-call-playbook.test.ts` fails the build if the
@@ -34,7 +35,10 @@ hook, panel or builder gains an invoke, rpc, write or raw fetch.
   quotes `FINDABLE_OFFER_SUMMARY`; see `docs/business-and-offer.md` §0.
 - Deep-crawl evidence (`evidence` on crawl rows) exists on ~1 of 241 stored crawls, so most leads
   show signal findings (thin pages etc.) or none.
-- Stage 2 (not built): call outcome tracking, follow-up scheduling.
+- ~~Stage 2 (not built): call outcome tracking, follow-up scheduling.~~ **Built** — the Work tab's Log a
+  contact (`CALL_OUTCOMES`, `leadOutcome.ts`) and the Next Action. Since 2026-10-02 the script ends in
+  **"Log this call"** (workspace Scripts tab and the Outreach row's sheet), which opens Work with Log a
+  contact open and in view — the script and the record one click apart. Nothing is called or re-run.
 
 ## Simplified for use mid-call (2026-09-27)
 

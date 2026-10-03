@@ -547,6 +547,10 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<OutcomeResultLine | null>(null);
+  /* Opened FOR a call (Outreach's Call, the script's "Log this call"): it sits below the audit card, so it is
+     brought into view — the person came here to record what happened. */
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (defaultOpen) rootRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [defaultOpen]);
   const tap = async (outcome: string, logged: boolean) => {
     setBusy(outcome);
     try {
@@ -597,6 +601,7 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
     </div>
   ) : null;
   return (
+    <div ref={rootRef} data-testid="log-contact">
     <WorkSection icon={PhoneCall} title="Log a contact" summary={open ? null : 'Call, WhatsApp, email, in person, social'} summaryClass="hidden sm:inline"
       open={open} onOpenChange={setOpen} testId="log-contact" className={open ? 'border-primary/30' : undefined} after={resultLine}>
       <div className="mb-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you contacted them">
@@ -637,6 +642,7 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
       </div>
       </>)}
     </WorkSection>
+    </div>
   );
 }
 

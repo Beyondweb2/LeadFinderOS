@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-log-this-call', date: '2026-10-02', title: 'Log the call straight from the call script', audience: 'all',
+    body: 'The call script now ends in “Log this call”. It opens the lead’s Work tab with Log a contact open, ready for the outcome and the Next Action.',
+    report: {
+      added: ['A “Log this call” button at the end of the call script, in the lead’s Scripts tab and in the script you open from an Outreach row.'],
+      changed: ['When Log a contact opens for a call, it scrolls into view instead of sitting below the audit card.'],
+      removed: [],
+      effect: 'You can read the script, make the call and record what happened (and the next step) without hunting for the right tab.',
+    } },
   { id: '2026-10-02-audit-report-copy-recorded', date: '2026-10-02', title: 'Copying a report link on the AI Audit page is now recorded', audience: 'admin',
     body: 'Copy report link on the AI Audit page now records the copy on the lead, the same as the copy button in the lead workspace.',
     report: {

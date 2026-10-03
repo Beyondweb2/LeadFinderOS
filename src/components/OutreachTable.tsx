@@ -3391,6 +3391,13 @@ export function OutreachTable({
         leadId={playbookLeadId}
         open={!!playbookLeadId}
         onOpenChange={(open) => { if (!open) setPlaybookLeadId(null); }}
+        /* The row's script → the lead's workspace on Work with Log a contact open (the same as the Call button). */
+        onLogCall={() => {
+          const l = leads.find((x) => x.id === playbookLeadId);
+          setPlaybookLeadId(null);
+          if (!l) return;
+          setDetailTab('work'); setDetailLogContact(true); setDetailLead(l);
+        }}
       />
     </Card>
   );

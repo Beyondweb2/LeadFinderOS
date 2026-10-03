@@ -295,15 +295,23 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript }: { p: ColdCallP
 
 /** The playbook inline — the prospect workspace's Scripts tab (Inbox and Outreach alike). Same data,
  *  same builder, same call/voice-note switch as the sheet; the script comes first. */
-export function ColdCallPlaybookInline({ leadId, initialScript }: { leadId: string; initialScript?: 'call' | 'voice' }) {
+/** The call's outcome, Next Action and notes are logged on the Work tab (LeadWorkPanel — the ONE outcome rule).
+ *  `onLogCall` takes the person there with Log a contact open, so the script and the record are one click apart. */
+function LogCallBar({ onLogCall }: { onLogCall: () => void }) {
+  return <div className="sticky bottom-0 mt-3 border-t border-border bg-background py-2">
+    <Button type="button" className="w-full" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4" />Log this call: outcome and Next Action</Button>
+  </div>;
+}
+
+export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall }: { leadId: string; initialScript?: 'call' | 'voice'; onLogCall?: () => void }) {
   const q = useColdCallPlaybook(leadId, true);
   if (q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the script…</p>;
   if (q.isError) return <p className="text-sm text-destructive">Couldn't load the script: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>;
   if (!q.data) return <p className="text-sm text-muted-foreground">Lead not found.</p>;
-  return <PlaybookBody p={q.data} leadId={leadId} scriptsFirst initialScript={initialScript} />;
+  return <><PlaybookBody p={q.data} leadId={leadId} scriptsFirst initialScript={initialScript} />{onLogCall && <LogCallBar onLogCall={onLogCall} />}</>;
 }
 
-export function ColdCallPlaybookSheet({ leadId, open, onOpenChange }: { leadId: string | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ColdCallPlaybookSheet({ leadId, open, onOpenChange, onLogCall }: { leadId: string | null; open: boolean; onOpenChange: (open: boolean) => void; onLogCall?: () => void }) {
   const q = useColdCallPlaybook(leadId, open);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -316,8 +324,9 @@ export function ColdCallPlaybookSheet({ leadId, open, onOpenChange }: { leadId: 
         {q.isError && <p className="text-sm text-destructive">Couldn't load the playbook: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>}
         {q.isSuccess && !q.data && <p className="text-sm text-muted-foreground">Lead not found.</p>}
         {q.data && leadId && <PlaybookBody p={q.data} leadId={leadId} />}
-        <div className="sticky bottom-0 -mx-6 border-t border-border bg-background px-6 py-2">
-          <Button type="button" variant="outline" className="w-full" onClick={() => onOpenChange(false)}>Close</Button>
+        <div className="sticky bottom-0 -mx-6 flex gap-2 border-t border-border bg-background px-6 py-2">
+          {onLogCall && leadId && <Button type="button" className="flex-1" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4" />Log this call</Button>}
+          <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Close</Button>
         </div>
       </SheetContent>
     </Sheet>

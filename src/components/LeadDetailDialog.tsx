@@ -282,6 +282,9 @@ function LeadDetailBody({
      clears, so it opens once per tap — not again every time the tab is revisited. */
   const [editNextRequested, setEditNextRequested] = useState(false);
   const editNextAction = () => { setTab('work'); setEditNextRequested(true); };
+  /* The script's "Log this call": Work, with Log a contact open (the Work tab mounts fresh on the switch). */
+  const [logCallRequested, setLogCallRequested] = useState(false);
+  const logThisCall = () => { setLogCallRequested(true); setTab('work'); };
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -563,7 +566,7 @@ function LeadDetailBody({
             {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
             {/* The latest WhatsApp messages (moved from Focus Mode). Not in the Inbox, which shows the thread itself. */}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact} editNextRequested={editNextRequested} onEditNextHandled={() => setEditNextRequested(false)} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact || logCallRequested} editNextRequested={editNextRequested} onEditNextHandled={() => setEditNextRequested(false)} />}
             {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
             {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
             {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
@@ -572,7 +575,7 @@ function LeadDetailBody({
 
           <TabsContent value="scripts" className="mt-0" data-testid="workspace-scripts">
             {/* The call script and the voice-note script, one switch, one lead context. */}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} />}
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} onLogCall={logThisCall} />}
           </TabsContent>
 
           <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">
