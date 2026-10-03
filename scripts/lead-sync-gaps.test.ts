@@ -54,7 +54,7 @@ console.log("\n── 2. every writer notifies every screen ──");
 console.log("\n── 3. the Sales dashboard re-reads after a lead change (debounced) ──");
 {
   const sync = read("src/lib/leadSync.ts");
-  ok(/BOOK_WIDE_LEAD_KEYS[^=]*= \[\['sales-performance'\]\]/.test(sync), "sales-performance is a book-wide key");
+  ok(/BOOK_WIDE_LEAD_KEYS[^=]*= \[\['sales-performance'\](, \['[a-z-]+'\])*\]/.test(sync), "sales-performance is a book-wide key (with the salesperson's queue panel, 2026-10-03)");
   const dash = read("src/pages/SalesDashboard.tsx");
   ok(/queryKey: \['sales-performance'/.test(dash), "the dashboard's query key starts with 'sales-performance' (prefix match)");
 

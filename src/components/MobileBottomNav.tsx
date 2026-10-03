@@ -6,7 +6,6 @@ import {
   MoreHorizontal, Palette, LogOut,
   MessageSquare, Users, ShieldCheck,
   BarChart3, Map as MapIcon, MessageSquarePlus, Gift,
-  Megaphone,
 } from 'lucide-react';
 import { OPEN_FEEDBACK_EVENT, OPEN_WHATS_NEW_EVENT } from '@/components/FeedbackAndNews';
 import { cn } from '@/lib/utils';
@@ -80,9 +79,8 @@ export function MobileBottomNav() {
       ];
 
   const moreNavItems = role === 'sales'
-    ? [{ title: 'Coverage', url: '/coverage', icon: MapIcon }, { title: 'Campaigns', url: '/campaigns', icon: Megaphone }]
+    ? [{ title: 'Coverage', url: '/coverage', icon: MapIcon }]
     : [
-        { title: 'Campaigns', url: '/campaigns', icon: Megaphone },
         { title: 'Coverage', url: '/coverage', icon: MapIcon },
         { title: 'Inbox', url: '/inbox', icon: MessageSquare },
         { title: 'Sales dashboard', url: '/sales-dashboard', icon: BarChart3 },

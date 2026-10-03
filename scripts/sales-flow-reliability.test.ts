@@ -30,12 +30,11 @@ console.log("── nav ──");
   const sales = orderNavForRole(items.filter((i) => canOpenRoute("sales", i.url)), "sales").map((i) => i.url);
   /* Paul, 2026-10-02: Sales dashboard → Outreach → WhatsApp → Find Leads; Coverage under "More"; Earnings
      is part of the Sales dashboard and Focus Mode is retired (neither is a menu item). */
-  /* 2026-10-03: Campaigns joins Coverage under More; the four main items are unchanged. */
-  ok(JSON.stringify(sales) === JSON.stringify(["/sales-dashboard", "/outreach", "/inbox", "/find-leads", "/coverage", "/campaigns"]),
-    `sales sidebar: Sales dashboard, Outreach, WhatsApp, Find Leads, then Coverage and Campaigns (got ${sales.join(", ")})`);
+  ok(JSON.stringify(sales) === JSON.stringify(["/sales-dashboard", "/outreach", "/inbox", "/find-leads", "/coverage"]),
+    `sales sidebar: Sales dashboard, Outreach, WhatsApp, Find Leads, then Coverage (got ${sales.join(", ")})`);
   ok(sales[0] === "/sales-dashboard", "the Sales dashboard is first");
   ok(/title: 'Sales dashboard', url: '\/sales-dashboard'/.test(sidebar), "the item is called Sales dashboard");
-  ok(JSON.stringify(SALES_SECONDARY_NAV) === JSON.stringify(["/coverage", "/campaigns"]) && /idx === firstSecondary && <li[^>]*data-testid="nav-more">More<\/li>/.test(sidebar), "Coverage sits under More in the sidebar");
+  ok(JSON.stringify(SALES_SECONDARY_NAV) === JSON.stringify(["/coverage"]) && /idx === firstSecondary && <li[^>]*data-testid="nav-more">More<\/li>/.test(sidebar), "Coverage sits under More in the sidebar");
   ok(!urls.includes("/earnings") && !urls.includes("/focus"), "no menu item for Earnings or Focus Mode");
   for (const u of urls) if (!SALES_NAV_ORDER.includes(u) && !SALES_SECONDARY_NAV.includes(u)) ok(!canOpenRoute("sales", u), `sales still cannot open the admin page ${u}`);
 
@@ -52,7 +51,7 @@ console.log("── nav ──");
   const salesBar = mobile.slice(mobile.indexOf("const mainNavItems = role === 'sales'"), mobile.indexOf(": [", mobile.indexOf("const mainNavItems = role === 'sales'")));
   const bar = [...salesBar.matchAll(/url: '([^']+)'/g)].map((m) => m[1]);
   ok(JSON.stringify(bar) === JSON.stringify(["/sales-dashboard", "/outreach", "/inbox", "/find-leads"]), `mobile sales bar: Dashboard, Outreach, WhatsApp, Find Leads (got ${bar.join(", ")})`);
-  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Coverage', url: '\/coverage', icon: MapIcon \}, \{ title: 'Campaigns', url: '\/campaigns', icon: Megaphone \}\]/.test(mobile), "mobile sales: Coverage and Campaigns under More");
+  ok(/role === 'sales'\s*\?\s*\[\{ title: 'Coverage', url: '\/coverage', icon: MapIcon \}\]/.test(mobile), "mobile sales: only Coverage under More");
   ok(!/url: '\/(team|paid-clients|ai-audit|templates|admin)'/.test(salesBar), "mobile sales bar has no admin page");
   ok(/icon: MapIcon/.test(mobile) && !/icon: Map \}/.test(mobile), "the mobile nav does not shadow the global Map");
 }
@@ -210,7 +209,9 @@ console.log("\n── campaign on a lead ──");
   ok(/CampaignPicker mode="assign" hideCreate value=\{lead\.campaign_id\}/.test(panel), "pick only — no New / Manage campaigns inside the workspace");
   ok(/\bcampaign_id\b/.test(panel.match(/const CRM_COLUMNS = '[^']+'/)?.[0] ?? ""), "the workspace reads the lead's current campaign");
   const index = read("src/pages/Index.tsx");
-  ok((index.match(/hideCreate=\{viewerRole !== 'admin'\}/g) ?? []).length === 2, "Find Leads: Sales cannot create or manage campaigns from either picker");
+  /* 2026-10-03 (Paul): salespeople create and manage their OWN campaigns from the top-right picker + Campaigns button;
+     the ask-each-time popup stays pick-only. */
+  ok((index.match(/hideCreate=\{viewerRole !== 'admin'\}/g) ?? []).length === 1 && /className="h-8 w-\[180px\]" \/>\s*<CampaignsButton \/>/.test(index), "Find Leads: New / Manage and the Campaigns button top right for both roles; the popup picker pick-only");
   const perf = read("src/lib/salesPerformance.ts");
   ok(/const cKey = f\.lead\.campaign_id \?\? ''/.test(perf), "the Sales dashboard groups by the lead's current campaign_id (so a change shows there)");
   ok(refusalText("unknown_campaign") === "That campaign no longer exists", "a plain refusal for a deleted campaign");

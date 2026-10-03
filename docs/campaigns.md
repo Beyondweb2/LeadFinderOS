@@ -57,6 +57,22 @@ settings.
 - **Side doors closed:** `sales-performance` groups a rep's leads that sit in someone else's campaign as
   "Leads assigned to you"; `quick-close` names a campaign to a rep only if it is theirs.
 
+## Where it lives, and the queue (2026-10-03, Paul's correction)
+
+- **Not a menu item.** Campaigns is reached from the top right of Find Leads and Outreach, for both roles: the
+  `CampaignsButton` beside the campaign dropdown, whose "New campaign…" is a name-only create
+  (`NewCampaignNameDialog` → `campaign_create`) and "Manage campaigns…" opens the page. The workspace picker,
+  bulk Move to campaign, the Inbox filter and Find Leads' ask-each-time popup stay pick-only.
+  `CampaignManagerDialog` is deleted (the page replaces it); the admin's old settings stay under Advanced settings.
+- **The salesperson's WhatsApp queue** (`MyWhatsAppQueuePanel`, Outreach): before, the admin had the full queue
+  panel and a salesperson had nothing but a paused banner. Now: their queued leads (read from `sales_leads`,
+  server-scoped to leads assigned to them), whether the queue is sending (`queue_state`), and remove one through
+  fn `lead_unqueue` (migration `20261006130000`: role + `can_work_lead`, only a lead still `queued`). No pause,
+  tick, cap or team numbers. It re-reads on every sales queue path (bulk queue, the lead popup, campaign launch /
+  stop / add — `announceQueueChanged`), on lead change notices (leadSync), and polls while anything waits (Sales
+  has no outreach_leads realtime). Proven rolled back: A's view holds only A's lead; A removing B's or the admin's
+  queued lead → `not_yours` (both stay queued); A's own goes back to New; again → unchanged.
+
 ## Historical campaigns
 
 Audited 2026-10-03: 19 campaigns, every one with a real `created_by` (18 the admin data account, 1 — "roofers

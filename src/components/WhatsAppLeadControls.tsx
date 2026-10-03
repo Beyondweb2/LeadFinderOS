@@ -17,6 +17,7 @@ import { useQueueState } from '@/hooks/useQueueState';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
 import { WorkSection } from '@/components/WorkSection';
 import { notifyLeadChanged } from '@/lib/leadSync';
+import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
 
 /**
  * Per-lead WhatsApp outreach controls (lead detail dialog): pick the approved
@@ -69,6 +70,7 @@ export function WhatsAppLeadControls({
       const st = await fetchQueueState().catch(() => null);
       toast({ title: 'Queued for WhatsApp', description: `${template} — ${queuedLeadLine(st, lead.phone).text} The queue re-checks it before it sends.` });
       notifyLeadChanged(lead.id); // every screen AND other tabs (the hand-fired event reached this tab only)
+      announceQueueChanged();
     } finally { setBusy(false); }
   };
 

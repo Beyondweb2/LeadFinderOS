@@ -290,7 +290,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   campaign answers `not_found`, never a name). Names: a UNIQUE index on `campaign_name_key` (trim, collapse whitespace,
   lower) → `name_taken`, never whose. A rep's lead goes only into their own campaign (`lead_set_campaign`, `leads_set_campaign`,
   `sales_add_lead`). Launch = `sales_queue_opener` with the approved opener only; Stop = still-queued leads back. The owner in
-  brackets is DISPLAY ONLY (`campaignDisplayName`). Never return another owner's campaign name to a rep (sales-performance
+  brackets is DISPLAY ONLY (`campaignDisplayName`). ⛔ Campaigns is NOT a menu item (Paul): reached top right of Find
+  Leads / Outreach (`CampaignsButton`, the dropdown's New / Manage). A salesperson's queue = `MyWhatsAppQueuePanel`
+  (server-scoped `sales_leads`, remove via `lead_unqueue`). Never return another owner's campaign name to a rep (sales-performance
   groups them as "Leads assigned to you"; quick-close filters).
 - **A paid client's service ends ONCE: `service_terminated_at` + `service_termination_reason`** (paid-client-hub
   `terminate_service`; words in `src/lib/serviceEnd.ts`, 2026-10-03). `client_ended_early` = the client stopped before the

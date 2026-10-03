@@ -17,7 +17,6 @@ import {
   LayoutDashboard, Search, ClipboardList, FileText, FileCode2, ListOrdered, UsersRound,
   MessageSquareQuote, Inbox, Sparkles, Map, Users,
   BarChart3, MessageCircle, MessageSquarePlus,
-  Megaphone,
 } from 'lucide-react';
 import { FeedbackNewsButtons } from '@/components/FeedbackAndNews';
 import { PaletteButton } from '@/components/CommandPalette';
@@ -39,7 +38,6 @@ export function AppSidebar() {
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: role === 'sales' ? 'Search for new businesses' : t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: role === 'sales' ? 'Your leads and pipeline' : t('nav.outreachCRMDesc') },
     { title: 'Coverage', url: '/coverage', icon: Map, description: 'Which towns are done, per trade' },
-    { title: 'Campaigns', url: '/campaigns', icon: Megaphone, description: role === 'sales' ? 'Your campaigns: leads and the first message' : 'Every campaign, and whose it is' },
     /* ⛔ Sales: the item SAYS WhatsApp (Paul, 2026-09-28: "I should not have to know that Inbox means
        WhatsApp"). Same route, same page, same conversations — one conversation system. */
     { title: role === 'sales' ? 'WhatsApp' : 'Inbox', url: '/inbox', icon: role === 'sales' ? MessageCircle : Inbox, description: role === 'sales' ? 'Your WhatsApp conversations' : 'WhatsApp conversations' },

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { leadRpc, type RpcResult } from '@/lib/leadRpc';
 import type { CampaignSummary } from '@/lib/campaignRules';
+import { announceQueueChanged, MY_QUEUE_KEY } from '@/components/MyWhatsAppQueuePanel';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    The Campaigns screens' reads and writes — every one a role-checked database function
@@ -81,7 +82,11 @@ export function useCampaignActions() {
       qc.invalidateQueries({ queryKey: ['campaigns'] }), // the pickers' list (useCampaigns)
       ...(id ? [qc.invalidateQueries({ queryKey: ['campaign-detail', id] }), qc.invalidateQueries({ queryKey: ['campaign-leads', id] })] : []),
       qc.invalidateQueries({ queryKey: ['campaign-candidates'] }),
+      qc.invalidateQueries({ queryKey: MY_QUEUE_KEY }),
     ]);
+    /* Leads changed on the server in bulk: Outreach re-reads its list; the queue panel re-reads at once. */
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('campaign-leads-changed'));
+    announceQueueChanged();
   }, [qc]);
 
   const nameAvailable = useCallback((name: string, except?: string) => leadRpc('campaign_name_available', { _name: name, _except: except ?? null }), []);

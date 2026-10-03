@@ -138,6 +138,7 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
 import { salesQueueOpener } from '@/lib/leadRpc';
+import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerFilterSelect } from '@/components/OwnerFilterSelect';
@@ -1355,6 +1356,7 @@ export function OutreachTable({
     setSelectedIds(new Set());
     setQueueDialogOpen(false);
     onRefreshLeads?.();
+    announceQueueChanged();
   };
 
   const handleQueueForWhatsApp = async (template: string) => {

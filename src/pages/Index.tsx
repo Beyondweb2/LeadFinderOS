@@ -7,6 +7,7 @@ import { LeadsTable } from '@/components/LeadsTable';
 // EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
 // here (email finding is now an in-place scan on the results).
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -459,8 +460,10 @@ const Index = () => {
         <div className="flex flex-col items-center sm:items-end gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
-            {/* Sales picks from the existing campaigns; creating or managing them stays the admin's. */}
-            <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" hideCreate={viewerRole !== 'admin'} />
+            {/* 2026-10-03: both roles create and manage their campaigns from here (New / Manage, and the Campaigns
+                button) — a salesperson sees and adds to only their own; the server decides. */}
+            <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" />
+            <CampaignsButton />
           </div>
           <div className="flex items-center gap-2">
             <Switch id="ask-campaign" checked={askCampaignEachTime} onCheckedChange={handleAskToggle} />
