@@ -1,4 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
+import { campaignDisplayName } from '@/lib/campaignRules';
 import { useCampaigns, type CampaignInput } from '@/hooks/useCampaigns';
 import {
   Select,
@@ -38,6 +43,22 @@ interface CampaignPickerProps {
  */
 export function CampaignPicker({ value, onChange, mode, className, hideCreate = false, triggerLabel }: CampaignPickerProps) {
   const { campaigns, createCampaign, refetch } = useCampaigns();
+  const { user } = useAuth();
+  const { role } = useSubscription();
+  const isAdmin = role === 'admin';
+  /* The admin sees whose campaign it is in brackets (display only; the stored name is unchanged). The names come
+     from team_members, which only the admin may read in full; a salesperson's list is only their own anyway. */
+  const owners = useQuery({
+    queryKey: ['team-member-names'], enabled: isAdmin, staleTime: 300_000,
+    queryFn: async () => {
+      // team_members is not in the generated types; read untyped, as the Team page does.
+      const { data, error } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => Promise<{ data: { user_id: string; display_name: string | null }[] | null; error: { message: string } | null }> } }).from('team_members').select('user_id, display_name');
+      if (error) throw new Error(error.message);
+      return new Map((data ?? []).map((t: { user_id: string; display_name: string | null }) => [t.user_id, t.display_name]));
+    },
+  });
+  const label = useMemo(() => (c: { name: string; created_by: string }) =>
+    campaignDisplayName({ name: c.name, is_mine: c.created_by === user?.id, owner_name: owners.data?.get(c.created_by) ?? null }, isAdmin), [isAdmin, user?.id, owners.data]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
 
@@ -93,7 +114,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
           </SelectItem>
           {campaigns.map((c) => (
             <SelectItem key={c.id} value={c.id}>
-              {c.name}
+              {label(c)}
             </SelectItem>
           ))}
           {!hideCreate && (

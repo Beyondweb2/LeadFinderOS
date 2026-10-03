@@ -22,6 +22,36 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-03-campaigns-for-sales', date: '2026-10-03', title: 'Run your own campaigns', audience: 'sales',
+    body: 'Campaigns is now in your menu. Name a campaign, pick your leads, check the first message and launch. Only you see your campaigns.',
+    report: {
+      added: [
+        'A Campaigns page with your campaigns: status, leads, how many were messaged, replies and what to do next.',
+        'New campaign in four steps: name, leads, message, review and launch. You can also save it as a draft.',
+        'On each campaign: launch or send to new leads, stop sending, add leads, rename, and delete while it is empty.',
+      ],
+      changed: [
+        'Every campaign name is unique. If a name is taken you are told so and pick another.',
+        'You can only put your leads into your own campaigns.',
+      ],
+      removed: ['Campaign settings you never needed (type, trade, sale type, channel): set for you.'],
+      effect: 'You can group your own leads and send them the first message in one go, without any settings, and nobody else sees your campaigns.',
+    } },
+  { id: '2026-10-03-campaigns-admin', date: '2026-10-03', title: 'Campaigns page: every campaign, and whose it is', audience: 'admin',
+    body: 'A Campaigns page lists every campaign. Ones a salesperson created show their name in brackets; yours stay plain. Salespeople now see only their own.',
+    report: {
+      added: [
+        'Campaigns in the menu: every campaign with status, leads, messaged, replies, and an Owner filter.',
+        'Salespeople create and run their own campaigns; the old settings stay yours under Advanced settings.',
+      ],
+      changed: [
+        'Campaign names are unique across LeadFinderOS (ignoring capitals and extra spaces).',
+        'A salesperson no longer sees your campaigns or another salesperson’s anywhere (lists, dashboard, Quick Close).',
+        'In campaign dropdowns, a salesperson’s campaign shows their name in brackets.',
+      ],
+      removed: [],
+      effect: 'You can tell your campaigns from the team’s at a glance, and each salesperson works only in their own.',
+    } },
   { id: '2026-10-03-client-completed-early', date: '2026-10-03', title: 'Paid clients can be marked Completed when they end early', audience: 'admin',
     body: 'A paid client who stops before their payments run out can now be marked Completed. Their payment and history stay; re-measure, monthly updates and delivery stop.',
     report: {

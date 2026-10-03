@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Empty, TONE } from '@/components/salesDash/ui';
 import { templateLabel, WHATSAPP_TEMPLATES } from '@/types/outreach';
 import { STALE_OFFER_TEMPLATES } from '@/lib/findableOffer';
-import { CHANNEL_LABELS, rate, type CampaignRow, type SalesPerformance, type TemplateRow } from '@/lib/salesPerformance';
+import { ASSIGNED_CAMPAIGN_KEY, CHANNEL_LABELS, rate, type CampaignRow, type SalesPerformance, type TemplateRow } from '@/lib/salesPerformance';
 import { campaignKey, toggleHidden, inactiveKeys, INACTIVE_DAYS } from '@/lib/dashboardVisibility';
 
 /* ══ THE BREAKDOWN TABLES (moved out of SalesDashboard.tsx unchanged, 2026-10-01) ══════════════════
@@ -48,10 +48,10 @@ export function CampaignCards({ rows, onOpen }: { rows: CampaignRow[]; onOpen: (
           const tag = r === best ? 'best' : r === worst ? 'lowest' : null;
           return (
             <li key={campaignKey(r)}>
-              <button type="button" onClick={() => onOpen(r.campaignId)} disabled={!r.campaignId}
+              <button type="button" onClick={() => onOpen(r.campaignId)} disabled={!r.campaignId || r.campaignId === ASSIGNED_CAMPAIGN_KEY}
                 className={cn('flex h-full w-full flex-col gap-2.5 rounded-xl border p-3.5 text-left transition',
                   tag === 'best' ? 'border-emerald-500/40 bg-emerald-500/[0.05]' : 'border-border/60',
-                  r.campaignId && 'hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary')}>
+                  r.campaignId && r.campaignId !== ASSIGNED_CAMPAIGN_KEY && 'hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary')}>
                 <span className="flex items-start justify-between gap-2">
                   <span className="min-w-0"><span className="block truncate text-sm font-semibold" title={r.name}>{r.name}</span><span className="text-[11px] text-muted-foreground">{r.leads} {r.leads === 1 ? "lead" : "leads"} · {r.contacted} contacted</span></span>
                   {tag && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold', tag === 'best' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/10 text-red-700 dark:text-red-300')}>{tag === 'best' ? 'Best reply rate' : 'Lowest reply rate'}</span>}

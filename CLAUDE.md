@@ -284,6 +284,14 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
   (`GUARANTEE_PAYMENT_TWO_SENTENCE`, locked to findable-site). Record + MCLocksmiths' missing
   subscription: `docs/business-and-offer.md`, "Customer lifecycle cleanup".
+- ⛔ **Campaigns are OWNED, PRIVATE and GLOBALLY UNIQUE** (2026-10-03, `docs/campaigns.md`, migration `20261006120000`). Owner =
+  `created_by`, set by the server from auth.uid(). RLS: the admin reads every campaign, anyone else only their own; direct
+  writes are admin-only; a salesperson acts only through the `campaign_*` functions (`campaign_usable` first — another owner's
+  campaign answers `not_found`, never a name). Names: a UNIQUE index on `campaign_name_key` (trim, collapse whitespace,
+  lower) → `name_taken`, never whose. A rep's lead goes only into their own campaign (`lead_set_campaign`, `leads_set_campaign`,
+  `sales_add_lead`). Launch = `sales_queue_opener` with the approved opener only; Stop = still-queued leads back. The owner in
+  brackets is DISPLAY ONLY (`campaignDisplayName`). Never return another owner's campaign name to a rep (sales-performance
+  groups them as "Leads assigned to you"; quick-close filters).
 - **A paid client's service ends ONCE: `service_terminated_at` + `service_termination_reason`** (paid-client-hub
   `terminate_service`; words in `src/lib/serviceEnd.ts`, 2026-10-03). `client_ended_early` = the client stopped before the
   term ran out (shown COMPLETED, nothing further to do; MCLocksmiths, 2026-10-03); `domain_authority_dispute` = Findable

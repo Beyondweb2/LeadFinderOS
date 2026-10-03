@@ -32,6 +32,9 @@ export const SALES_ROUTE_PATTERNS: readonly string[] = [
   '/earnings',
   '/focus',
   '/outreach',
+  /* A salesperson's OWN campaigns (2026-10-03): the server returns only theirs (my_campaigns / campaign_*). */
+  '/campaigns',
+  '/campaigns/:campaignId',
   '/inbox',
   '/find-leads',
   '/coverage',
@@ -62,7 +65,8 @@ function matches(pattern: string, path: string): boolean {
  *  is retired (both old paths redirect). */
 export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/outreach', '/inbox', '/find-leads'];
 /** Kept for salespeople, but not a daily destination: shown under "More" (sidebar and phone). */
-export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage'];
+/* 2026-10-03: Campaigns joins Coverage under More — the four-item main menu (Paul, 2026-10-02) is unchanged. */
+export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage', '/campaigns'];
 
 /** Sort nav items for a role. Admin: unchanged (the list's own order). Sales: SALES_NAV_ORDER, and any
  *  sales-visible item not named there goes AFTER them, in list order — never jumps to the top. */

@@ -159,6 +159,12 @@ export interface LeadFacts {
   won: boolean;
 }
 
+/** ⛔ CAMPAIGNS ARE PRIVATE TO THEIR OWNER (2026-10-03). A salesperson's own leads that sit in a campaign they do NOT
+ *  own (the admin assigned them) are grouped under this one key, never under that campaign's name — the edge
+ *  function remaps them before the fold. Not a uuid, so it can never collide with a campaign id; not clickable. */
+export const ASSIGNED_CAMPAIGN_KEY = 'assigned-to-you';
+export const ASSIGNED_CAMPAIGN_LABEL = 'Leads assigned to you';
+
 export interface FoldInput {
   personId: string | null;
   sinceMs: number | null;

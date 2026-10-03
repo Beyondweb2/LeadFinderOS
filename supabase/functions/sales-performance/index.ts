@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor } from "../_shared/access.ts";
 import {
-  foldSalesPerformanceWithFacts, periodSinceMs,
+  foldSalesPerformanceWithFacts, periodSinceMs, ASSIGNED_CAMPAIGN_KEY, ASSIGNED_CAMPAIGN_LABEL,
   type PerfActivity, type PerfHit, type PerfLead, type PerfLinkEvent, type PerfMessage,
 } from "../../../src/lib/salesPerformance.ts";
 import { foldSalesWorkspace, parseTargets, AUDIT_READY_DAYS, FEED_DAYS, type WorkspaceLead } from "../../../src/lib/salesWorkspace.ts";
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       rowsForLeads<PerfActivity>(service, "lead_activity", "id, lead_id, actor_user_id, kind, data, created_at", ids),
       rowsForLeads<PerfLinkEvent>(service, "onboarding_link_events", "id, lead_id, kind, channel, actor_user_id, created_at", ids),
       rowsForLeads<PerfHit>(service, "lead_page_hits", "id, lead_id, page, created_at", ids),
-      allRows<{ id: string; name: string }>((a, b, c) => service.from("campaigns").select("id, name", (c ? { count: "exact" } : undefined)).order("id").range(a, b)),
+      allRows<{ id: string; name: string; created_by: string }>((a, b, c) => service.from("campaigns").select("id, name, created_by", (c ? { count: "exact" } : undefined)).order("id").range(a, b)),
     ]);
 
     /* The workspace's extra read, small: hook audits finished in the feed window (for "audit ready"
@@ -134,9 +134,12 @@ Deno.serve(async (req) => {
 
     const { result, facts } = foldSalesPerformanceWithFacts({
       personId, sinceMs,
-      leads: leads.map((l) => ({ ...l, amount_paid: l.amount_paid == null ? null : Number(l.amount_paid) })),
+      /* ⛔ A salesperson sees only THEIR campaigns' names (campaigns are private, 2026-10-03): their leads in a campaign
+         they do not own are grouped as "Leads assigned to you". The admin sees every name. */
+      leads: leads.map((l) => ({ ...l, amount_paid: l.amount_paid == null ? null : Number(l.amount_paid),
+        campaign_id: actor.role === "sales" && l.campaign_id && !campaigns.some((c) => c.id === l.campaign_id && c.created_by === actor.id) ? ASSIGNED_CAMPAIGN_KEY : l.campaign_id })),
       messages, activity, linkEvents, hits,
-      campaignNames: new Map(campaigns.map((c) => [c.id, c.name])),
+      campaignNames: new Map([...campaigns.filter((c) => actor.role !== "sales" || c.created_by === actor.id).map((c) => [c.id, c.name] as [string, string]), [ASSIGNED_CAMPAIGN_KEY, ASSIGNED_CAMPAIGN_LABEL]]),
     });
     /* Commission from the payment ledger (the ONE path, _shared/earnings.ts). A failure leaves the
        commission parts blank, never zero: the rest of the dashboard still loads. */
