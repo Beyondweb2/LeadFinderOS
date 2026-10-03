@@ -27,6 +27,7 @@ import { ClientSetupCard, type SetupHandoff } from '@/components/ClientSetupCard
 import { DISCOVERY_PLAN_RUNS, DiscoverySection, HookAuditStep, nearDuplicateCount, RecommendationStep, useDiscoveryPoll } from '@/components/BaselineDiscovery';
 import { OfficialBaseline } from '@/components/OfficialBaseline';
 import { OpportunityBacklog, useOpportunities } from '@/components/OpportunityBacklog';
+import { MonthlyUpdatePanel } from '@/components/MonthlyUpdatePanel';
 import { CollapsibleBlock } from '@/components/CollapsibleSection';
 import { hookProtection } from '@/lib/baselineRecommendation';
 import { backlogCounts } from '@/lib/opportunityBacklog';
@@ -639,5 +640,7 @@ export default function ClientHub() {
     <div className="lg:col-span-2"><Stage k="opportunities" title="7. Ongoing opportunities" summary={opps.data ? `${oppCounts.total} open · ${oppCounts.active} active · ${oppCounts.waiting} waiting for recheck` : undefined}>
       {hub.onboarding ? <OpportunityBacklog leadId={lead.id} state={opps}/> : <p className="text-muted-foreground">Available once onboarding exists.</p>}
     </Stage></div>
+    {/* The monthly update findable.live/terms promises, prepared and sent by hand (closeout 2026-10-02). */}
+    <div className="lg:col-span-2"><Stage k="monthly" title="8. Monthly update"><MonthlyUpdatePanel leadId={lead.id} contactName={lead.contact_name ?? null} paymentDate={lead.payment_date ?? null}/></Stage></div>
   </div></div></HubSection.Provider>;
 }

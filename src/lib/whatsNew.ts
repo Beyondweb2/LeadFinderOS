@@ -22,6 +22,19 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-monthly-client-update', date: '2026-10-02', title: 'Prepare and record each client’s monthly update', audience: 'admin',
+    body: 'Every paid client page now has “8. Monthly update”: pick the month, see that month’s AI visibility checks and recorded work, write what was done and what is next, copy it to the client, then mark it sent.',
+    report: {
+      added: [
+        '“8. Monthly update” on every paid client page, one update per client per month.',
+        'A “What we measured” paragraph written from that month’s stored AI visibility checks. It says so when there was no check, only one, or when the checks can’t be compared fairly.',
+        'The pages marked live and the opportunities marked implemented that month, each with an Add button, so you choose what goes in.',
+        'Save draft, Copy text, and Mark as sent (email, WhatsApp or another way). A sent update is kept exactly as sent.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'The monthly update findable.live promises now has a place to be written and a record that it went. Nothing is sent automatically; you still send it yourself.',
+    } },
   { id: '2026-10-02-no-review-replies-stage', date: '2026-10-02', title: 'Review replies are no longer a delivery step', audience: 'admin',
     body: 'The paid client page no longer lists Review Replies among its delivery steps, because replying to reviews is not part of what Findable delivers.',
     report: {
