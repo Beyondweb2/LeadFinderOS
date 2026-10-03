@@ -368,3 +368,19 @@ and leaving it open for everything else.
 exactly `BASELINE_QUESTIONS`; `save` still allows a 1–40 draft while the operator works. Approval
 is what the day-28 replay repeats verbatim, so approving 19 or 80 silently redefines the refund's
 measuring stick. `scripts/discovery-not-baseline.test.ts` drives all of it.
+
+### A signed-out operator was told "you are still signed in" (2026-10-03)
+
+The auth service answers a token whose session no longer exists with **403 `session_not_found`**, but
+**supabase-js rewrites it into `AuthSessionMissingError` (status 400, "Auth session missing!")**.
+`classifyAuthFailure` (`_shared/operator-auth.ts`) matched neither, so all 41 operator functions on the
+shared resolver answered **503 "the sign-in service did not answer — you are still signed in"** to a
+signed-out session. Access was refused either way; the status and the sentence were false. Reproduced
+live with a revoked admin session. Fixed by reading the error NAME and the auth CODE
+(`session_not_found`, `user_not_found`, `bad_jwt`, …), not only the wording; timeouts, fetch failures and
+5xx stay 503. `scripts/paid-client-hub-resilience.test.ts` pins the exact live shapes. Merge `4cb5c45e`;
+all 41 functions redeployed and checked by bundle marker; live: 401 on seven sampled functions.
+**Rule:** classify a library's auth error by its name/code — the library may rename the server's answer.
+**Deploy method that held up:** compare each function's code on `main` against its LIVE bundle line by
+line (decode the source map's JSON escapes; skip `import type`, which never ships) — commit dates both
+over- and under-report what is waiting.
