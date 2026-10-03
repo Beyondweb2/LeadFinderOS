@@ -42,6 +42,17 @@ check('auth: a refused token is 401', classifyAuthFailure({ status: 401, message
 check('auth: a timeout is auth_unavailable', classifyAuthFailure({ status: 0, message: 'auth service timed out after 8000 ms' }) === 'auth_unavailable');
 check('auth: a Cloudflare 522 page is auth_unavailable', classifyAuthFailure({ status: 502, message: '<!DOCTYPE html>… 522: Connection timed out' }) === 'auth_unavailable');
 check('auth: a network failure is auth_unavailable', classifyAuthFailure({ message: 'TypeError: fetch failed' }) === 'auth_unavailable' && classifyAuthFailure(null) === 'auth_unavailable');
+/* 🔴 2026-10-03: the EXACT shapes the live auth service + supabase-js produced for a signed-out session
+   (it was answered 503 "you are still signed in"). A signed-out or expired session is a 401. */
+check('auth: a signed-out session (supabase-js AuthSessionMissingError, status 400) is 401',
+  classifyAuthFailure({ name: 'AuthSessionMissingError', status: 400, message: 'Auth session missing!' }) === 'unauthorized');
+check('auth: the raw session_not_found / user_not_found codes are 401 whatever the status',
+  classifyAuthFailure({ status: 400, code: 'session_not_found', message: 'Session from session_id claim in JWT does not exist' }) === 'unauthorized'
+  && classifyAuthFailure({ code: 'user_not_found', message: 'User from sub claim in JWT does not exist' }) === 'unauthorized');
+check('auth: an expired token is 401', classifyAuthFailure({ name: 'AuthApiError', status: 403, code: 'bad_jwt', message: 'invalid JWT: unable to parse or verify signature, token has invalid claims: token is expired' }) === 'unauthorized');
+check('auth: a retryable fetch failure and a 5xx stay auth_unavailable (never a sign-out)',
+  classifyAuthFailure({ name: 'AuthRetryableFetchError', status: 0, message: 'fetch failed' }) === 'auth_unavailable'
+  && classifyAuthFailure({ name: 'AuthApiError', status: 503, code: 'session_not_found', message: 'upstream' }) === 'auth_unavailable');
 /* Multi-user (2026-09-27): both are now ADMIN-ONLY through requireAdmin, which resolves the caller with the
    same shared operator-auth (so a slow auth service is still a 503, never a 401) and then requires the role. */
 const accessMod = read('supabase/functions/_shared/access.ts');

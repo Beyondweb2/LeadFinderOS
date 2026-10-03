@@ -19,11 +19,23 @@ export type OperatorResolution =
   | { ok: true; user: { id: string; email?: string } }
   | { ok: false; status: 401 | 503; error: "unauthorized" | "auth_unavailable"; detail: string };
 
+/* 🔴 A SIGNED-OUT OR EXPIRED SESSION IS A REFUSAL, NOT AN OUTAGE (2026-10-03). The auth service answers a
+   token whose session no longer exists with 403 `session_not_found` (or `user_not_found`) — but
+   supabase-js REWRITES that into `AuthSessionMissingError`, status 400, message "Auth session missing!",
+   which matched none of the tests below. Every operator function then answered 503 "the sign-in service
+   did not answer — you are still signed in" to someone who had signed out: refused, but with the wrong
+   status and a false sentence. Reproduced live against paid-client-hub with a revoked admin session.
+   ⛔ Recognised by the library's error NAME and the auth service's error CODE, not only the wording.
+   (The code list lives INSIDE the function: scripts/paid-client-hub-resilience.test.ts rebuilds it from its own text.) */
 /** Pure classifier: is this getUser() failure a refusal of the token, or the service not answering? */
-export function classifyAuthFailure(error: { status?: unknown; message?: unknown; name?: unknown } | null | undefined): "unauthorized" | "auth_unavailable" {
+export function classifyAuthFailure(error: { status?: unknown; message?: unknown; name?: unknown; code?: unknown } | null | undefined): "unauthorized" | "auth_unavailable" {
   const status = typeof error?.status === "number" ? error.status : 0;
   if (status === 401 || status === 403) return "unauthorized";
+  const refusedCodes = ["session_not_found", "user_not_found", "bad_jwt", "session_expired", "no_authorization", "not_admin", "user_banned"];
+  if (String(error?.name ?? "") === "AuthSessionMissingError") return "unauthorized";
+  if (refusedCodes.includes(String(error?.code ?? "").toLowerCase()) && status < 500) return "unauthorized";
   const message = String(error?.message ?? "").toLowerCase();
+  if (/auth session missing/.test(message) && status < 500) return "unauthorized";
   if (/invalid|expired|malformed|bad_jwt|jwt|not authenticated|session_not_found|user not found/.test(message) && status < 500 && !/timed out|522|<!doctype|fetch failed|network|econn|socket/.test(message)) {
     return "unauthorized";
   }
