@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
     const view = async () => {
       const [{ data: msgs }, camp, seller, events] = await Promise.all([
         service.from("whatsapp_messages").select("direction, created_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1),
-        lead.campaign_id ? service.from("campaigns").select("name").eq("id", lead.campaign_id).maybeSingle() : Promise.resolve({ data: null }),
+        /* ⛔ Campaigns are private to their owner (2026-10-03): a salesperson is told the name only of a campaign they own. */
+        lead.campaign_id ? (actor.role === "sales" ? service.from("campaigns").select("name").eq("id", lead.campaign_id).eq("created_by", actor.id).maybeSingle() : service.from("campaigns").select("name").eq("id", lead.campaign_id).maybeSingle()) : Promise.resolve({ data: null }),
         (lead.assigned_to_user_id ?? lead.sold_by_user_id) ? service.from("team_members").select("display_name").eq("user_id", lead.assigned_to_user_id ?? lead.sold_by_user_id).maybeSingle() : Promise.resolve({ data: null }),
         service.from("quick_close_events").select("kind, created_at, actor_user_id, data").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(12),
       ]);

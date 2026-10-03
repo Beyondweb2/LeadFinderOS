@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { campaignErrorText } from '@/lib/campaignRules';
 
 // description/method aren't in the generated types until the JOB 1 migration is
 // applied + types regenerated, so campaign reads/writes go through an untyped
@@ -56,10 +57,15 @@ export interface CampaignInput {
 // the honest signal to run the migration.
 const CAMPAIGN_COLS = '*';
 
+/* ⛔ NAMES ARE UNIQUE ACROSS LEADFINDEROS (2026-10-03): a unique index on campaign_name_key(name). A duplicate
+   arrives as Postgres 23505 and is said in the one sentence — never whose the other campaign is. */
+const saveErrorText = (e: { code?: string; message?: string }) =>
+  e.code === '23505' ? campaignErrorText('name_taken') : (e.message ?? 'Not saved');
+
 /**
- * Thin campaigns hook. Campaigns are a team-readable grouping concept:
- * any authenticated user sees the whole list; anyone can create one; only the
- * creator can edit theirs (enforced by RLS).
+ * Thin campaigns hook. ⛔ Since 2026-10-03 campaigns are PRIVATE: RLS returns the admin every campaign and a
+ * salesperson only their own (created_by). Direct writes here are admin-only (restrictive policies); a
+ * salesperson creates and manages through the campaign_* functions (src/hooks/useMyCampaigns.ts).
  */
 /** Stable empty — a fresh array per render re-runs every picker's memo. */
 const EMPTY_CAMPAIGNS: Campaign[] = [];
@@ -79,10 +85,9 @@ export function useCampaigns() {
      for it.
      ⚠️ 'campaign-deleted' STAYS. Outreach.tsx listens for it to refetch its leads and show "No
      campaign" immediately; that is cross-FEATURE signalling, not the self-sync this replaces.
-     ⚠️ NOT keyed by user: campaigns are team-readable by design (any authenticated user sees the
-     whole list; RLS restricts only who may edit). Keying by user would cache the same shared
-     list once per account. */
-  const queryKey = useMemo(() => ['campaigns'] as const, []);
+     ⚠️ KEYED BY USER since 2026-10-03: RLS returns a different list to each person (the admin all, a salesperson
+     their own), so one cache shared across a sign-out/sign-in would show the last person's campaigns. */
+  const queryKey = useMemo(() => ['campaigns', user?.id ?? 'anon'] as const, [user?.id]);
 
   const query = useQuery({
     queryKey,
@@ -138,7 +143,7 @@ export function useCampaigns() {
       .single();
 
     if (error) {
-      toast({ title: 'Could not create campaign', description: error.message, variant: 'destructive' });
+      toast({ title: 'Could not create campaign', description: saveErrorText(error), variant: 'destructive' });
       return null;
     }
 
@@ -171,7 +176,7 @@ export function useCampaigns() {
       .single();
 
     if (error) {
-      toast({ title: 'Could not save campaign', description: error.message, variant: 'destructive' });
+      toast({ title: 'Could not save campaign', description: saveErrorText(error), variant: 'destructive' });
       return null;
     }
 

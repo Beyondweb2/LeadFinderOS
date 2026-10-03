@@ -31,6 +31,8 @@ const Templates = lazy(() => import("./pages/Templates"));
 const BaselinePage = lazy(() => import("./pages/Baseline"));
 const PaidBaselineSetup = lazy(() => import("./pages/PaidBaselineSetup"));
 const PaidClients = lazy(() => import("./pages/PaidClients"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
+const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const ClientHub = lazy(() => import("./pages/ClientHub"));
 const WebsiteBuild = lazy(() => import("./pages/WebsiteBuild"));
 const ComparePage = lazy(() => import("./pages/CompareMeasurements"));
@@ -228,6 +230,8 @@ const App = () => {
               not the working detail. */}
               <Route path="/baseline/:auditId" element={<BaselinePage />} />
               <Route path="/baseline-setup/:leadId" element={<PaidBaselineSetup />} />
+              <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
               <Route path="/paid-clients" element={<PaidClients />} />
               <Route path="/paid-clients/:leadId" element={<ClientHub />} />
               <Route path="/paid-clients/:leadId/website-build" element={<WebsiteBuild />} />

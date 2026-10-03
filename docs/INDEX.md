@@ -78,6 +78,7 @@
 - `docs/market-model-audits.md` — Market-model audits — local / national / hybrid, the national intent mix, the three guards that gave way (2026-09-20)
 
 - `docs/monthly-client-update.md` — The monthly client update on the paid client page: the stored-evidence facts, the words, the admin-only table and functions, what was verified (2026-10-02)
+- `docs/campaigns.md` — Campaigns for salespeople: the audit of the old flow, the four-step flow, ownership / privacy / global name uniqueness, the functions, the live proof (2026-10-03)
 - `docs/closeout-2026-10-02.md` — The 2026-10-02 closeout audit: what was already complete, what was fixed (five merges), the production smoke test, and every item still open with its exact blocker
 - `docs/welcome-pack-and-website-build.md` — The Welcome Pack (baseline-keyed, public /w/ link) and Section 5 Website Build with the generated Claude rebuild prompt (2026-09-22)
 - `docs/website-build-v1.md` — Website Build V1: the command centre (build mode, MCL template profile, client build facts, architecture + redirects, the nine-item Build Pack), verified on production (2026-09-23)
