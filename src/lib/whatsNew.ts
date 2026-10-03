@@ -22,6 +22,20 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-03-campaigns-top-right-and-queue', date: '2026-10-03', title: 'Campaigns from the top right, and your own WhatsApp queue', audience: 'all',
+    body: 'Campaigns opens from the top right of Find Leads and Outreach (not the menu). Salespeople now see their own WhatsApp queue on Outreach.',
+    report: {
+      added: [
+        'A Campaigns button at the top right of Find Leads and Outreach, next to the campaign dropdown.',
+        'For salespeople: a WhatsApp queue card on Outreach showing your queued leads in send order, whether the queue is sending, and a button to take a lead back out.',
+      ],
+      changed: [
+        'New campaign… in the campaign dropdown asks only for a name, for everyone. Manage campaigns… opens the Campaigns page.',
+        'The queue card updates straight away after you queue a lead, launch a campaign or stop one.',
+      ],
+      removed: ['Campaigns from the side menu and the phone menu.'],
+      effect: 'Campaigns are where you already pick them, and a salesperson can see and manage exactly what they have waiting to send.',
+    } },
   { id: '2026-10-03-campaigns-for-sales', date: '2026-10-03', title: 'Run your own campaigns', audience: 'sales',
     body: 'Campaigns is now in your menu. Name a campaign, pick your leads, check the first message and launch. Only you see your campaigns.',
     report: {

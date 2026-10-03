@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { campaignDisplayName } from '@/lib/campaignRules';
-import { useCampaigns, type CampaignInput } from '@/hooks/useCampaigns';
+import { useCampaigns } from '@/hooks/useCampaigns';
 import {
   Select,
   SelectContent,
@@ -13,8 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Settings2 } from 'lucide-react';
-import { CampaignFormDialog } from '@/components/CampaignFormDialog';
-import { CampaignManagerDialog } from '@/components/CampaignManagerDialog';
+import { useNavigate } from 'react-router-dom';
+import { NewCampaignNameDialog } from '@/components/campaigns/NewCampaignNameDialog';
 
 const NEW_CAMPAIGN = '__new__';
 const MANAGE_CAMPAIGNS = '__manage__';
@@ -42,7 +42,7 @@ interface CampaignPickerProps {
  * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
 export function CampaignPicker({ value, onChange, mode, className, hideCreate = false, triggerLabel }: CampaignPickerProps) {
-  const { campaigns, createCampaign, refetch } = useCampaigns();
+  const { campaigns, refetch } = useCampaigns();
   const { user } = useAuth();
   const { role } = useSubscription();
   const isAdmin = role === 'admin';
@@ -60,7 +60,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
   const label = useMemo(() => (c: { name: string; created_by: string }) =>
     campaignDisplayName({ name: c.name, is_mine: c.created_by === user?.id, owner_name: owners.data?.get(c.created_by) ?? null }, isAdmin), [isAdmin, user?.id, owners.data]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [managerOpen, setManagerOpen] = useState(false);
+  const navigate = useNavigate();
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
   const selectValue = value ?? sentinel;
@@ -70,8 +70,10 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
       setDialogOpen(true);
       return;
     }
+    /* Manage = the Campaigns page (2026-10-03): the same page and wizard for both roles, each seeing only what the
+       server returns them (their own; the admin, every campaign). */
     if (v === MANAGE_CAMPAIGNS) {
-      setManagerOpen(true);
+      navigate('/campaigns');
       return;
     }
     if (v === ALL_CAMPAIGNS || v === NO_CAMPAIGN) {
@@ -81,9 +83,11 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
     onChange(v);
   };
 
-  const handleCreate = async (values: CampaignInput) => {
-    const created = await createCampaign(values);
-    if (created) {
+  /* New = a name, through campaign_create (the owner and the defaults are the server's; a taken name is refused
+     there). Both roles. The admin's extra settings live on the campaign page under Advanced settings. */
+  /* The create action has already refreshed the shared list (useCampaignActions awaits it). */
+  const handleCreated = (created: { id: string }) => {
+    {
       // Auto-select the new campaign. createCampaign already added it to the list,
       // so defer the selection by a tick: this lets the new <SelectItem> mount and
       // register in Radix's item collection BEFORE it becomes the value. Selecting
@@ -92,7 +96,6 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
       // which only registers after the commit).
       setTimeout(() => onChange(created.id), 0);
     }
-    return created;
   };
 
   return (
@@ -136,13 +139,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
         </SelectContent>
       </Select>
 
-      <CampaignFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleCreate}
-      />
-
-      <CampaignManagerDialog open={managerOpen} onOpenChange={setManagerOpen} />
+      <NewCampaignNameDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreated={handleCreated} />
     </>
   );
 }

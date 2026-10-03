@@ -65,8 +65,9 @@ function matches(pattern: string, path: string): boolean {
  *  is retired (both old paths redirect). */
 export const SALES_NAV_ORDER: readonly string[] = ['/sales-dashboard', '/outreach', '/inbox', '/find-leads'];
 /** Kept for salespeople, but not a daily destination: shown under "More" (sidebar and phone). */
-/* 2026-10-03: Campaigns joins Coverage under More — the four-item main menu (Paul, 2026-10-02) is unchanged. */
-export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage', '/campaigns'];
+export const SALES_SECONDARY_NAV: readonly string[] = ['/coverage'];
+/* ⛔ Campaigns is NOT a menu item (Paul, 2026-10-03): it is reached from the top right of Find Leads and Outreach
+   (the Campaigns button and the campaign dropdown's New / Manage), for both roles. The routes stay open above. */
 
 /** Sort nav items for a role. Admin: unchanged (the list's own order). Sales: SALES_NAV_ORDER, and any
  *  sales-visible item not named there goes AFTER them, in list order — never jumps to the top. */

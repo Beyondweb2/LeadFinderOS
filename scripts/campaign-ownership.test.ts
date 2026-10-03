@@ -94,7 +94,9 @@ console.log("\n── 3. the screens ──");
   const uc = read("src/hooks/useCampaigns.ts");
   ok(/e\.code === '23505' \? campaignErrorText\('name_taken'\)/.test(uc), "the admin's direct create/edit says a duplicate in the same words");
   ok(/queryKey = useMemo\(\(\) => \['campaigns', user\?\.id \?\? 'anon'\] as const/.test(uc), "the list cache is per person (RLS returns each a different list)");
-  ok(SALES_ROUTE_PATTERNS.includes("/campaigns") && canOpenRoute("sales", "/campaigns/abc") && SALES_SECONDARY_NAV.includes("/campaigns") && !SALES_NAV_ORDER.includes("/campaigns"), "a salesperson can open Campaigns; it sits under More (the four main items unchanged)");
+  ok(SALES_ROUTE_PATTERNS.includes("/campaigns") && canOpenRoute("sales", "/campaigns/abc") && !SALES_SECONDARY_NAV.includes("/campaigns") && !SALES_NAV_ORDER.includes("/campaigns"), "a salesperson can open Campaigns — from the top right of Find Leads / Outreach, never a menu item (Paul, 2026-10-03)");
+  ok(!/url: '\/campaigns'/.test(read("src/components/AppSidebar.tsx")) && !/url: '\/campaigns'/.test(read("src/components/MobileBottomNav.tsx")), "no Campaigns item in the sidebar or the phone menu, for either role");
+  ok(/<CampaignsButton \/>/.test(read("src/pages/Outreach.tsx")) && /<CampaignsButton \/>/.test(read("src/pages/Index.tsx")), "the Campaigns button sits top right of Outreach and Find Leads");
 }
 
 console.log("\n── 4. the side doors ──");

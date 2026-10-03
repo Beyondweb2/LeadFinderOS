@@ -75,7 +75,7 @@ export function leadQueryKeys(leadId: string): readonly (readonly unknown[])[] {
  *  (fn sales-performance) counted a Next Action, an outcome or a status the person had just set only after
  *  its 60-second staleTime — so they are invalidated too, once per burst (BOOK_WIDE_DEBOUNCE_MS): a bulk
  *  edit fires one notice per lead, and an interval shorter than the query piles copies up (CLAUDE.md §4). */
-export const BOOK_WIDE_LEAD_KEYS: readonly (readonly unknown[])[] = [['sales-performance']];
+export const BOOK_WIDE_LEAD_KEYS: readonly (readonly unknown[])[] = [['sales-performance'], ['my-whatsapp-queue']];
 const BOOK_WIDE_DEBOUNCE_MS = 1500;
 
 let installed = false;

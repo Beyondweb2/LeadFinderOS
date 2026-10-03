@@ -108,13 +108,15 @@ console.log("\n── the queued line never promises a send the queue will not m
   const controls = strip(read("src/components/WhatsAppLeadControls.tsx"));
   ok(!/7am–9:30pm UK window \(max 40\/day\)/.test(controls) && /queuedLeadLine\(useQueueState\(queued\)(, lead\.phone)?\)/.test(controls), "the workspace's queued line reads the live state");
   const out = strip(read("src/pages/Outreach.tsx"));
-  ok(/data-testid="queue-paused-banner"/.test(out) && /!perms\.queueControls && queuedMine > 0 && queueState\?\.paused/.test(out), "Sales sees a paused-queue banner when their leads are waiting");
+  /* 2026-10-03: the paused line lives in the salesperson's own queue panel (MyWhatsAppQueuePanel). */
+  const myQueue = strip(read("src/components/MyWhatsAppQueuePanel.tsx"));
+  ok(/!perms\.queueControls && <MyWhatsAppQueuePanel \/>/.test(out) && /data-testid="queue-paused-banner"/.test(myQueue) && /state\?\.paused/.test(myQueue), "Sales sees a paused-queue line when their leads are waiting (in their queue panel)");
 }
 
 console.log("\n── Outreach: the working list, the campaign filter, no claim tab ──");
 {
   const out = strip(read("src/pages/Outreach.tsx"));
-  ok(/<CampaignPicker mode="filter" value=\{campaignFilter\} onChange=\{changeCampaignFilter\} hideCreate=\{!perms\.campaigns\} \/>/.test(out), "the page-level campaign filter shows for both roles, pick-only for Sales");
+  ok(/<CampaignPicker mode="filter" value=\{campaignFilter\} onChange=\{changeCampaignFilter\} \/>\s*<CampaignsButton \/>/.test(out), "the page-level campaign filter shows for both roles, with New / Manage and the Campaigns button (2026-10-03: salespeople run their own)");
   ok(!/perms\.campaigns && \(\s*<>\s*<span/.test(out), "…no longer hidden behind the admin's campaign permission");
   ok(!existsSync(new URL("../src/components/AvailableToClaim.tsx", import.meta.url)) && !/Available to claim|salesTab/.test(out), "no Available to claim tab");
   ok(!("claimPool" in leadPermissions("sales")), "no claim-pool permission");

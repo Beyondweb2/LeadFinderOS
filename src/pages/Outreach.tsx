@@ -23,11 +23,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { datasetComplete, leadLoadNotice } from '@/lib/outreachLoad';
 import { isOutreachPreset } from '@/lib/leadTrade';
 import { prefetchOutreachAuditMap } from '@/lib/outreachAuditMap';
-import { getQueueStatus, QUEUE_PAUSED_LINE } from '@/lib/queueStatus';
-import { useQueueState } from '@/hooks/useQueueState';
+import { getQueueStatus } from '@/lib/queueStatus';
+import { MyWhatsAppQueuePanel } from '@/components/MyWhatsAppQueuePanel';
+import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
-import { PauseCircle, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 
 const Outreach = () => {
   const {
@@ -155,8 +156,6 @@ const Outreach = () => {
     return combined.filter((l) => l.campaign_id === campaignFilter);
   }, [leads, archivedLeads, campaignFilter]);
   /* Sales cannot see the queue panel; when the admin has paused the queue, their queued leads say so. */
-  const queuedMine = !perms.queueControls ? leads.filter((l) => l.status === 'queued').length : 0;
-  const queueState = useQueueState(queuedMine > 0);
 
   const isReadOnly = false;
 
@@ -214,11 +213,13 @@ const Outreach = () => {
   }, [updateLead]);
 
   // A deleted campaign unassigns its leads in the DB (FK ON DELETE SET NULL) — refetch
-  // so those leads show "No campaign" immediately, without a manual refresh.
+  // so those leads show "No campaign" immediately, without a manual refresh. A campaign launch / stop /
+  // add changes many leads on the server at once (2026-10-03): the same re-read.
   useEffect(() => {
     const handler = () => { fetchLeads(); };
     window.addEventListener('campaign-deleted', handler);
-    return () => window.removeEventListener('campaign-deleted', handler);
+    window.addEventListener('campaign-leads-changed', handler);
+    return () => { window.removeEventListener('campaign-deleted', handler); window.removeEventListener('campaign-leads-changed', handler); };
   }, [fetchLeads]);
 
   const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
@@ -273,21 +274,19 @@ const Outreach = () => {
               crawl-check refuses anyone else. */}
           {perms.crawlSite && <CrawlCheckUrlButton />}
           {/* ⛔ THE PAGE-LEVEL CAMPAIGN FILTER, BOTH ROLES (2026-09-28). A VIEW control only — it never
-              moves a lead (that is "Move to campaign" on a selection). Sales picks from the existing
-              campaigns (hideCreate); their rows are still only their own. */}
+              moves a lead (that is "Move to campaign" on a selection). 2026-10-03: its New / Manage open the
+              campaigns flow for both roles, and the Campaigns button beside it is where campaigns live (not the menu). */}
           <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
-          <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} hideCreate={!perms.campaigns} />
+          <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
+          <CampaignsButton />
         </div>
       </div>
 
       {/* WhatsApp outreach queue (admin-only). */}
       {perms.queueControls && <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} listComplete={listComplete} />}
-      {!perms.queueControls && queuedMine > 0 && queueState?.paused && (
-        <div role="status" data-testid="queue-paused-banner" className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
-          <PauseCircle className="h-4 w-4 shrink-0" />
-          <span><span className="font-medium">{QUEUE_PAUSED_LINE}</span> {queuedMine === 1 ? '1 of your leads is' : `${queuedMine} of your leads are`} waiting in the queue.</span>
-        </div>
-      )}
+      {/* Sales (2026-10-03): their own queued leads, the queue's sending state, and remove — the useful half of the
+          admin panel; the list is server-scoped (sales_leads), the controls stay the admin's. */}
+      {!perms.queueControls && <MyWhatsAppQueuePanel />}
 
       {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
           leaving the page/browser. Shows a live job, or a finished-while-away
