@@ -22,6 +22,14 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-02-audit-report-copy-recorded', date: '2026-10-02', title: 'Copying a report link on the AI Audit page is now recorded', audience: 'admin',
+    body: 'Copy report link on the AI Audit page now records the copy on the lead, the same as the copy button in the lead workspace.',
+    report: {
+      added: [],
+      changed: ['Copy report link on the AI Audit page records the copy on the lead, so the lead shows the link was copied.'],
+      removed: [],
+      effect: 'The lead’s report-link history no longer misses links you copied from the AI Audit page.',
+    } },
   { id: '2026-10-02-monthly-client-update', date: '2026-10-02', title: 'Prepare and record each client’s monthly update', audience: 'admin',
     body: 'Every paid client page now has “8. Monthly update”: pick the month, see that month’s AI visibility checks and recorded work, write what was done and what is next, copy it to the client, then mark it sent.',
     report: {

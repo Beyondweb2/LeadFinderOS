@@ -63,6 +63,8 @@ import { MARKET_MODEL_OPTIONS, MARKET_MODEL_QUESTION, audienceUsefulFor, townReq
 import { isAggregatorUrl } from '@/lib/aggregators';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { leadRpc } from '@/lib/leadRpc';
+import { reportShareKey } from '@/hooks/useReportShare';
 import { ToastAction } from '@/components/ui/toast';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -2408,6 +2410,14 @@ const AiAudit = () => {
         reportUrl={openAuditRow?.short_code
           ? shortReportUrl(openAuditRow.short_code)
           : auditId ? `https://findable.live/report/${auditId}` : undefined}
+        /* A copied link is recorded on the lead (lead_report_link_event 'generated', channel null) exactly as the
+           lead workspace's copy is — it used to record nothing from here (closeout 2026-10-02). No lead → nothing to
+           record it on. */
+        onReportCopied={openAuditRow?.lead_id && auditId ? () => {
+          const leadId = openAuditRow.lead_id as string;
+          void leadRpc('lead_report_link_event', { _lead_id: leadId, _audit_id: auditId, _kind: 'generated', _channel: null })
+            .then((r) => { if (r.ok) void queryClient.invalidateQueries({ queryKey: reportShareKey(leadId, auditId) }); });
+        } : undefined}
         connectedBusinessLabel={openAuditRow?.lead_id
           ? (connectedBusiness?.business_name ?? 'an outreach business')
           : undefined}
