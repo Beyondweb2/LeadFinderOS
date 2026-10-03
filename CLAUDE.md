@@ -136,9 +136,11 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `new_client_email_at`); the sales handoff is `outreach_leads.sales_handoff`, written only by quick-close
   `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
   live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
-- **Other Claude sessions may share this checkout.** Do task work in a `git worktree`
+- **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
+  `origin/main` on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
-  never switch branches in the primary checkout while another session may be open.
+  never switch branches in the primary checkout, and never touch another session's branch or worktree
+  (Paul's session rules, 2026-09-25 — ported from the unmerged `claude-md-session-safety` branch 2026-10-02).
 - **Windows host.** PowerShell is primary, Git Bash is available. Working tree is CRLF, repo is LF
   (`core.autocrlf=true`) — match on LF-normalised text when scripting an edit.
 - **SQL:** you can run it yourself (§2). Storage, RLS and crons are NOT locally testable — read back.
@@ -282,6 +284,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
   (`GUARANTEE_PAYMENT_TWO_SENTENCE`, locked to findable-site). Record + MCLocksmiths' missing
   subscription: `docs/business-and-offer.md`, "Customer lifecycle cleanup".
+- **The monthly client update** (paid client page step 8, `docs/monthly-client-update.md`, 2026-10-02) is prepared and
+  sent BY HAND, as /terms says. ⛔ Only the measurement paragraph is generated, from stored `weekly_check_runs`
+  counts, comparing only like-for-like checks; work done is the operator's words (stored facts are Add
+  suggestions). ⛔ `client_monthly_updates` is admin-only through its three functions; a sent row is never edited.
 - **Named = the model's verdict** (`self_named` from `extract-competitors`), string-match fallback,
   one ruler on both sides of a comparison (`src/lib/namedSignal.ts`). A name that is only trade +
   town is **not judgeable** (`nameIsJudgeable`, `_shared/derivable.ts`) — the report replaces its hero
@@ -339,7 +345,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - [ ] Commit with `-F <file>`. **End with `Co-Authored-By: Claude <the model this session is actually
       running, as the harness names it> <noreply@anthropic.com>`** — e.g. today `Claude Fable 5.1`.
       Never copy the trailer from an older commit.
-- [ ] Merge `--no-ff`. Prove `origin` is unmoved immediately before pushing.
+- [ ] Commit only this task's files.
+- [ ] **Before merging:** `git fetch origin`; if `origin/main` moved, bring it into the branch,
+      resolve conflicts deliberately, rerun the relevant tests. Merge only a current, verified branch.
+- [ ] Merge `--no-ff`. Prove `origin` is unmoved immediately before pushing — and if the push is
+      refused because another session landed first, fetch, rebase, retest and merge again (2026-10-02).
 - [ ] **Never stage** `HANDOFF.md`, `ONBOARDING.md`, `HANDOVER_NEXT.md`, `RECON_*.md`,
       `INVENTORY_DEEP_CLEAN.md`, `SQL_FOR_PAUL_*.sql`, `scripts/_*.ts`. Stage files explicitly; never
       `git add -A`.
@@ -361,6 +371,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
       `client-copy-claims.test.ts`; new operator screen → its `OPERATOR_SCREENS`.
 
 **Deploy**
+- [ ] **Production deploys originate from `main` only** — never from a feature branch, never bundling
+      another unfinished branch. If another session moved `main` or changed shared infrastructure,
+      stop and reconcile before deploying. **Backend before frontend** when both changed.
+- [ ] **After every production deploy, verify the live operator app** at `https://app.leadfinderos.com`
+      (and the fallback `https://leadfinderos-next.pages.dev`) by the marker check (§4).
 - [ ] **SQL first, confirmed by read-back, then deploy** anything that reads/writes the new schema.
 - [ ] Edge functions do not auto-deploy. After changing a shared module (`_shared/`, `src/lib/`),
       **walk the transitive import closure and redeploy every function that reaches it — then NAME
@@ -488,8 +503,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The CLI has no `functions logs`, but the Management API does:** `GET /v1/projects/<ref>/analytics/
   endpoints/logs.all?sql=select timestamp, event_message from function_logs …` (same bearer as §2)
   — **retention is under a minute**, so read it WHILE the fault is happening. Otherwise a refusal that
-  is only `console.error`'d is undiagnosable — write it to `client_error_reports` (`error_id` + `context`; ⚠️ **the table has no `message` column**
-  until `SQL_FOR_PAUL_client_error_message.sql` runs, so ten call sites currently record nothing).
+  is only `console.error`'d is undiagnosable — write it to `client_error_reports` (`error_id` + `context` + `message`; the `message` column exists — verified
+  live 2026-10-02).
 - **The non-2xx triage table (`send-whatsapp-message`):** 200 + `ok:false` = a designed refusal with
   its reason · "non-2xx status code" = the handler answered 4xx/500 · **"Failed to send a request"
   = no CORS headers at all, the handler crashed outside its own catch.** Different layers.
@@ -988,7 +1003,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the two AI-Audit ones are the only audit-keyed ones — keep at least one.
 - **Cron jobs live only in the DB** (`cron.job`): `ai-audit-queue-run` (30 s), `bulk-jobs-sweep`,
   `whatsapp-queue-run`, `whatsapp-auto-replies-run`, `notify-onboarding-submit-run` (1 min each),
-  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), and `instantly-poll-run` (dead product — Paul unschedules it).
+  `daily-cron-run` (02:00), `crawl-worker-run` (1 min; only fires while a crawl job runs), `notify-follow-ups-due`, `security-sweep-run`. (`instantly-poll-run` is gone — 13 jobs, read 2026-10-02.)
   Admin control centre (2026-09-30): `conversation-triage-run` (2 min), `weekly-visibility-run` (hourly :15),
   `performance-sync-run` (05:00), `business-summary-weekly` (Mon 06:30); each records last run / status in
   `admin_job_runs`. The
@@ -998,7 +1013,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
-- `client_error_reports` has no `message` column; ten writers record nothing until the SQL runs.
+- ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).
 - ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
   refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction
   succeeded on 8/8 cells and question generation no longer falls back to templates
@@ -1026,11 +1041,13 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   byte-identical to a local build once filename hashes are neutralised; the other two differ only
   by the baked-in Supabase URL/key (a local build has no `.env`) and by Windows CRLF line endings in
   the raw-imported `src/mockup/templates/*.html`. There is no deploy fault.
-- 🔴 **`findable.live/w/<code>` is not live yet.** `findable-site/functions/w/[code].ts` exists but
-  the repo was not deployed — `npm run deploy` ships the working tree and that tree carries two
-  unrelated uncommitted edits (`Footer.astro`, `research.astro`). Download works; the link does not.
+- ✅ **`findable.live/w/<code>` is LIVE** (verified 2026-10-02): a baseline code answers 200 with the pack and
+  `noindex, nofollow, noarchive, nosnippet`, a Discovery code and an unknown code answer 404 "Welcome pack
+  unavailable", `/r/<code>` is unchanged. The stale primary findable-site checkout's two dirty edits are already
+  on `master` (`b9286ad`); nothing unique is left in it.
 - Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
-  lists and Paul's decisions. The `instantly-poll-run` cron is still active until Paul unschedules it.
+  lists and Paul's decisions. (The `instantly-poll-run` cron is gone.) Step 5 is SPA-only but Paul's standing
+  decision is to see the file list before any deletion; step 6 redeploys `stripe-webhook` and eight others.
 
 ---
 
@@ -1057,6 +1074,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
+| What the 2026-10-02 closeout audit found complete / fixed / still open | `docs/closeout-2026-10-02.md` |
 | Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
 | Site-wide speed: the list columns, the detail-on-demand dialog, the pager, the Dashboard/AI Audit/LeadSearch loads, the connection pool, the proposed DB work | `docs/site-wide-speed.md` |
 | WhatsApp media access for Sales, the Inbox height/header layout, sending an image/video/document | `docs/inbox-media-and-layout.md` |
