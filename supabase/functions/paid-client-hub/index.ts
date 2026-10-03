@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isServiceEndReason, type ServiceEndReason } from "../../../src/lib/serviceEnd.ts";
 import { clientContract } from "../../../src/lib/clientContract.ts";
 import { attachPersistedQueueProgress } from "../../../src/lib/baselineProgress.ts";
 import { isUpstreamOutage } from "../_shared/operator-auth.ts";
@@ -405,8 +406,12 @@ Deno.serve(async (req) => {
     if (action === "terminate_service") {
       const leadId = text(body.lead_id);
       const note = text(body.note).slice(0, 1000);
-      if (body.reason !== "domain_authority_dispute") return json({ ok: false, error: "bad_reason" }, 400);
-      if (note.length < 10) return json({ ok: false, error: "note_required", detail: "Say what the dispute is (at least 10 characters)." }, 400);
+      /* Two reasons (src/lib/serviceEnd.ts): Findable ends it over a domain / authority dispute, or the CLIENT
+         ended the engagement early (2026-10-03). Either way: recorded once, money untouched, Paul told. */
+      if (!isServiceEndReason(body.reason)) return json({ ok: false, error: "bad_reason" }, 400);
+      const reason: ServiceEndReason = body.reason;
+      const dispute = reason === "domain_authority_dispute";
+      if (note.length < 10) return json({ ok: false, error: "note_required", detail: dispute ? "Say what the dispute is (at least 10 characters)." : "Say why the engagement ended (at least 10 characters)." }, 400);
       if (body.confirm !== true) return json({ ok: false, error: "confirm_required" }, 400);
       const { data: lead, error } = await service.from("outreach_leads")
         .select("id,business_name,stripe_subscription_id,subscription_status,service_terminated_at")
@@ -416,7 +421,7 @@ Deno.serve(async (req) => {
       if (lead.service_terminated_at) return json({ ok: true, already: true, at: lead.service_terminated_at });
       const at = new Date().toISOString();
       const { data: upd, error: upErr } = await service.from("outreach_leads")
-        .update({ service_terminated_at: at, service_termination_reason: "domain_authority_dispute", service_termination_note: note, service_terminated_by: user.id })
+        .update({ service_terminated_at: at, service_termination_reason: reason, service_termination_note: note, service_terminated_by: user.id })
         .eq("id", leadId).is("service_terminated_at", null).select("id");
       if (upErr) throw upErr;
       if (!upd?.length) return json({ ok: true, already: true });
@@ -426,18 +431,20 @@ Deno.serve(async (req) => {
       if (key) {
         const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         const lines = [
-          `You ended the Findable service for <b>${esc(String(lead.business_name ?? "a client"))}</b> (domain / authority dispute).`,
+          dispute
+            ? `You ended the Findable service for <b>${esc(String(lead.business_name ?? "a client"))}</b> (domain / authority dispute).`
+            : `You marked <b>${esc(String(lead.business_name ?? "a client"))}</b> COMPLETED: the client ended the engagement early. What they paid is kept; no further payments or delivery.`,
           `Note: ${esc(note)}`,
           live
             ? `<b>Cancel their subscription in Stripe now</b> so no further monthly payment is taken: ${esc(String(lead.stripe_subscription_id))} (status ${esc(String(lead.subscription_status ?? "unknown"))}). The app has not moved any money.`
             : "No live subscription is recorded for this client. Check Stripe anyway before closing it.",
-          "Under the terms: the £99 is not refunded for this reason, the money-back guarantee does not cover this interruption, and payments already properly taken are not refunded automatically.",
+          ...(dispute ? ["Under the terms: the £99 is not refunded for this reason, the money-back guarantee does not cover this interruption, and payments already properly taken are not refunded automatically."] : ["Nothing was refunded, removed or charged by the app; the payment history and any commission already earned stay as they are."]),
         ];
         try {
           const r = await fetch("https://api.resend.com/emails", {
             method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
             body: JSON.stringify({ from: "Findable alerts <alerts@findable.live>", to: ["paul@findable.live"],
-              subject: `SERVICE ENDED — ${live ? "cancel the monthly in Stripe" : "check Stripe"} — ${String(lead.business_name ?? "")}`,
+              subject: `${dispute ? "SERVICE ENDED" : "CLIENT COMPLETED (ended early)"} — ${live ? "cancel the monthly in Stripe" : "check Stripe"} — ${String(lead.business_name ?? "")}`,
               html: lines.map((l) => `<p>${l}</p>`).join("") }),
           });
           alerted = r.ok;

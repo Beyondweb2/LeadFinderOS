@@ -94,7 +94,7 @@ console.log("\n── 4. never sends; admin-only; a sent update is the record �
   /* Found driving the real panel: a month switch showed the old month's facts and words under the new name. */
   ok(/setFacts\(null\)/.test(panel) && /if \(ticket !== latest\.current\) return;/.test(panel), "a month switch clears the old month's facts and drops a late reply");
   const hub = read("src/pages/ClientHub.tsx");
-  ok(/<Stage k="monthly" title="8\. Monthly update"><MonthlyUpdatePanel /.test(hub), "mounted on the paid client page as step 8");
+  ok(/<Stage k="monthly" title="8\. Monthly update">(\{ended \? <p[^<]*<\/p> : )?<MonthlyUpdatePanel /.test(hub), "mounted on the paid client page as step 8 (not offered once the engagement has ended)");
 
   const sql = read("supabase/migrations/20261006100000_client_monthly_updates.sql");
   ok(/enable row level security/.test(sql) && !/create policy/i.test(sql) && /revoke all on table public\.client_monthly_updates from anon, authenticated/.test(sql), "table: RLS on, no policy, no grants");

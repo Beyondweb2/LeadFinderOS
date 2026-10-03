@@ -24,6 +24,7 @@ import { effectiveQuestionnaireServices, missingQuestionnaireFields } from './qu
 import { DOMAIN_REASON_TEXT, domainAuthority, domainInputFromRow, type DomainAuthorityVerdict, type DomainRow } from './domainAuthority.ts';
 import { CRAWL_FRESH_MS } from './crawlCheck.ts';
 import type { HandoffApplies } from './salesHandoff.ts';
+import { serviceEndView } from './serviceEnd.ts';
 
 export interface HandoffLead {
   business_name?: string | null;
@@ -36,8 +37,9 @@ export interface HandoffLead {
   service_areas?: string[] | null;
   website_control?: string | null;
   delivery_checklist?: Record<string, unknown> | null;
-  /** Findable ended the service (domain / authority dispute). A terminated client is never ready. */
+  /** The service ended (serviceEnd.ts). A terminated client is never ready — and never "waiting" either. */
   service_terminated_at?: string | null;
+  service_termination_reason?: string | null;
 }
 
 export interface HandoffOnboarding extends DomainRow {
@@ -282,7 +284,7 @@ export function handoffReadiness(
     detail: !O ? 'Not started' : obMissing.length === 0 ? 'Complete' : 'Started — their services and main town are still to come',
   });
   if (L.service_terminated_at) {
-    add({ key: 'service', label: 'Service active', ok: false, required: true, source: 'findable', who: 'findable', detail: 'Findable ended the service (domain / authority dispute)' });
+    add({ key: 'service', label: 'Service active', ok: false, required: true, source: 'findable', who: 'findable', detail: serviceEndView(L)?.summary ?? 'The service has ended' });
   }
 
   const req = items.filter((i) => i.required);

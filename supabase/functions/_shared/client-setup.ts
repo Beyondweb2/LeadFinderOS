@@ -20,7 +20,7 @@ type Row = Record<string, unknown>;
 /** Lead columns the checklist + stage read (outreach_leads; every one read back live 2026-10-02). */
 export const SETUP_LEAD_COLUMNS =
   "id,business_name,phone,email,website,amount_paid,payment_date,status,services_included,service_areas,website_control,delivery_checklist," +
-  "service_terminated_at,sold_by_user_id,sold_at,assigned_to_user_id,baseline_audit_id,remeasure_due_date,remeasure_audit_id," +
+  "service_terminated_at,service_termination_reason,sold_by_user_id,sold_at,assigned_to_user_id,baseline_audit_id,remeasure_due_date,remeasure_audit_id," +
   "remeasure_results_sent_at,website_build,sales_handoff,delivery_submitted_at,delivery_submitted_by";
 
 /** Onboarding columns the checklist + stage read. */

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
+import { serviceEndView } from '@/lib/serviceEnd';
 import { DOMAIN_CONTROL_OPTIONS, DOMAIN_REASON_TEXT } from '@/lib/domainAuthority';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -71,7 +72,7 @@ function DomainBlock({ leadId, handoff, onChanged }: { leadId: string; handoff: 
       {sales && <p className="text-xs text-muted-foreground">Sales heard: {sales.label}</p>}
       {handoff.domain_escalated_at && <p className="text-xs text-amber-700 dark:text-amber-300">They asked us to check their domain setup ({day(handoff.domain_escalated_at)}).</p>}
       {handoff.terminated
-        ? <p className="text-xs font-semibold text-destructive">Service ended {day(handoff.terminated.at)} (domain / authority dispute){handoff.terminated.note ? `: ${handoff.terminated.note}` : ''}. Guarantee re-measure and results are off; cancel the subscription in Stripe if not done.</p>
+        ? <p className={cn('text-xs font-semibold', handoff.terminated.reason === 'client_ended_early' ? 'text-muted-foreground' : 'text-destructive')}>{serviceEndView({ service_terminated_at: handoff.terminated.at, service_termination_reason: handoff.terminated.reason })?.stateLabel === 'COMPLETED' ? `Completed ${day(handoff.terminated.at)}: the client ended the engagement early.` : `Service ended ${day(handoff.terminated.at)} (domain / authority dispute)${handoff.terminated.note ? `: ${handoff.terminated.note}` : ''}. Guarantee re-measure and results are off; cancel the subscription in Stripe if not done.`}</p>
         : !ending
           ? <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEnding(true)}>End service (domain / authority dispute)…</Button>
           : <div className="space-y-2">
