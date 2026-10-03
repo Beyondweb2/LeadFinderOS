@@ -81,6 +81,7 @@ console.log("\n── 5. the client page ──");
   ok(/\{!ended && <div className="flex justify-end"><EndEngagementButton/.test(hubPage), "the control to record an early end shows only while live");
   ok(/ended \? <Stage k="remeasure"[^>]*summary="not scheduled"/.test(hubPage) && /const remeasureLine = ended \? 'not scheduled \(engagement ended\)'/.test(hubPage), "re-measure reads not scheduled (the stored date is untouched)");
   ok(/\{ended \? <p className="text-muted-foreground">No monthly updates: the engagement has ended\.<\/p> : <MonthlyUpdatePanel/.test(hubPage), "no monthly update is offered");
+  ok(hubPage.includes("<AgreementStage lead={lead} ended={!!ended}/>") && hubPage.includes('{!ended && <><div className="flex flex-wrap items-center gap-2 pt-1">'), "an ended client is asked for no agreement: no route, no link, no send (a real acceptance still shows)");
   const btn = read("src/components/EngagementEnd.tsx");
   ok(/reason: 'client_ended_early'/.test(btn) && /note\.trim\(\)\.length < 10/.test(btn), "the control sends the general reason with a required note");
 }

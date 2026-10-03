@@ -332,7 +332,9 @@ type AgreementView = {
 };
 const ukWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
 
-function AgreementStage({ lead }: { lead: AnyRecord }) {
+/* `ended` (serviceEnd.ts): nothing more is asked of the client — no route to choose, no link to copy or send; an
+   agreement they DID accept is still shown with its PDF (2026-10-03). */
+function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: boolean }) {
   const { toast } = useToast();
   const [view, setView] = useState<AgreementView | null>(null);
   const [busy, setBusy] = useState<string>('');
@@ -364,19 +366,19 @@ function AgreementStage({ lead }: { lead: AnyRecord }) {
       toast({ title: 'Could not download the agreement', description: edgeErrorMessage(e, 'Try again'), variant: 'destructive' });
     } finally { setBusy(''); }
   };
-  const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : 'Not accepted yet';
+  const summary = !view ? 'Loading' : signed ? 'Signed' : checkout ? 'Accepted at checkout' : ended ? 'Not needed (engagement ended)' : 'Not accepted yet';
   return <Stage k="agreement" title="Client Service Agreement" summary={summary}>
     {!view ? <p className="text-muted-foreground"><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Loading…</p> : <>
       {signed
         ? <p className="font-medium text-emerald-600">Signed on the agreement page on {ukWhen(signed.accepted_at)} by {signed.typed_name}{signed.typed_role ? `, ${signed.typed_role}` : ''}{signed.email ? ` (${signed.email})` : ''}. Version {signed.agreement_version}.</p>
-        : <p className="font-medium text-muted-foreground">Not signed on the agreement page yet.</p>}
+        : <p className="font-medium text-muted-foreground">{ended ? 'Not needed: the engagement has ended.' : 'Not signed on the agreement page yet.'}</p>}
       {checkout && <p className="text-sm">Accepted at checkout on {ukWhen(checkout.accepted_at)}{checkout.typed_name ? ` by ${checkout.typed_name}` : ''}{checkout.email ? ` (${checkout.email})` : ''}. Binding on its own.</p>}
       {(signed || checkout) && <div className="pt-1">
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void downloadPdf()}>
           {busy === 'agreement_pdf' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <FileText className="mr-1 h-4 w-4"/>}Download signed PDF
         </Button>
       </div>}
-      <div className="flex flex-wrap items-center gap-2 pt-1">
+      {!ended && <><div className="flex flex-wrap items-center gap-2 pt-1">
         <span className="text-sm text-muted-foreground">Service:</span>
         {(['build', 'optimise'] as const).map((r) => (
           <Button key={r} size="sm" variant={view.route === r ? 'default' : 'outline'} disabled={!!busy || (!!signed && view.route !== r)}
@@ -395,7 +397,7 @@ function AgreementStage({ lead }: { lead: AnyRecord }) {
         </Button>
       </div>}
       {view.last_sent_at && <p className="text-xs text-muted-foreground">Last sent {ukWhen(view.last_sent_at)} to {view.last_sent_to}.</p>}
-      {view.url && <p className="break-all text-xs text-muted-foreground">{view.url}</p>}
+      {view.url && <p className="break-all text-xs text-muted-foreground">{view.url}</p>}</>}
     </>}
   </Stage>;
 }
@@ -638,7 +640,7 @@ export default function ClientHub() {
       {(bs === 'running' || bs === 'complete') && <><p>{onboarding?.baseline_questions?.length || 'Saved'} frozen questions × {BASELINE_RUNS} runs · ChatGPT + Gemini</p><p className="text-muted-foreground">{progress}</p>{audit && <Button asChild variant="outline"><Link to={`/baseline/${audit.id}`}>Open internal baseline</Link></Button>}</>}
     </Stage>
     <WelcomePackStage lead={lead} audit={audit}/>
-    <AgreementStage lead={lead}/>
+    <AgreementStage lead={lead} ended={!!ended}/>
     {/* ⛔ REMOVED 2026-09-29 (Paul): "3. Action Plan" — a link into the deprecated Playbook, the last one. Stages renumbered. */}
     <Stage k="directories" title="3. Directories"><p>Directory opportunities are intentionally unverified until checked.</p>{/* REMOVED 2026-09-29 (UI cleanup): a permanently disabled "Directory catalogue integration" button — it could never be pressed. */}</Stage>
     <WebsiteBuildStage lead={lead} onboarding={onboarding} audit={audit} pages={pages}/>
