@@ -57,6 +57,8 @@ const RENDERERS: Array<[string, string]> = [
   ["post-payment form prefill lines (paying client)", "src/lib/setupPrefill.ts"],
   ["audit report (prospect + client)", "src/lib/aiAuditReportHtml.ts"],
   ["four-week results document (client)", "src/lib/remeasureResultsHtml.ts"],
+  /* 2026-10-02: the monthly update Paul copies to a paying client (prepared by hand, sent by him). */
+  ["monthly client update words (client)", "src/lib/monthlyUpdate.ts"],
   ["four-week results words (client)", "src/lib/remeasureResults.ts"],
   ["free-check result email (prospect)", "supabase/functions/_shared/free-check-result.ts"],
   ["onboarding follow-up (prospect)", "supabase/functions/_shared/onboarding-followup.ts"],
@@ -123,6 +125,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["admin control centre: AI business summary (operator)", "src/components/admin/businessSummary.tsx"],
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
+  ["monthly update panel (operator)", "src/components/MonthlyUpdatePanel.tsx"],
   /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */
   ["cold call playbook logic (operator)", "src/lib/coldCallPlaybook.ts"],
   ["cold call playbook panel (operator)", "src/components/ColdCallPlaybook.tsx"],
