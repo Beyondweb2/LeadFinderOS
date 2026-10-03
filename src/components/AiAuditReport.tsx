@@ -16,11 +16,13 @@ import { renderReportHtml, type AiAuditReportData } from '@/lib/aiAuditReportHtm
 // resets to client on every open (the parent gives this component key={reportRunId}, so opening a
 // report remounts it and showInternal falls back to false). onDownload is handed the CURRENT choice
 // so print follows the view. The parent's snapshot may carry internal:true; this override decides.
-export function AiAuditReport({ data, onBack, onDownload, reportUrl, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel }: {
+export function AiAuditReport({ data, onBack, onDownload, reportUrl, onReportCopied, onRegenerate, regenerating, onCompare, onConnectBusiness, connectedBusinessLabel }: {
   data: AiAuditReportData;
   onBack: () => void;
   onDownload: (internal: boolean) => void;
   reportUrl?: string;
+  /** The link was copied (the page records it on the lead, as the workspace's copy does). */
+  onReportCopied?: () => void;
   onRegenerate?: () => void;
   regenerating?: boolean;
   /** Switch to the before/after side-by-side. Absent when there is nothing to compare against, so
@@ -50,6 +52,7 @@ export function AiAuditReport({ data, onBack, onDownload, reportUrl, onRegenerat
     if (!reportUrl) return;
     try {
       await navigator.clipboard.writeText(reportUrl);
+      onReportCopied?.();
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
