@@ -21,6 +21,7 @@ import { acceptanceRowFrom, agreePageMissing, renderAgreementText, sha256Hex, ty
 import { agreementPageHtml, agreementUnavailableHtml, type AgreementFormValues } from "../../../src/lib/agreementPageHtml.ts";
 import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow, reportAgreementError, storeAndSendAcceptance } from "../_shared/client-agreement.ts";
+import { qaEmailHold } from "../_shared/qa-guard.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -124,6 +125,10 @@ Deno.serve(async (req) => {
     const errors = agreePageMissing(fill).map((k) => `${LABELS[k]} is required.`);
     if (values.email && !EMAIL_RE.test(values.email)) errors.push("Email for notices does not look like an email address.");
     if (!values.agree) errors.push("Please tick the box to confirm you agree.");
+    /* ⛔ QA (2026-10-04, src/lib/qaSafety.ts): a test lead's signed copy goes ONLY to the QA sink — refused
+       here, before anything is stored, with the reason on the form. Genuine clients are unaffected. */
+    const qaRefusal = await qaEmailHold(service, ctx.lead.id, values.email ?? null);
+    if (qaRefusal) errors.push(qaRefusal);
     if (errors.length) return html(agreementPageHtml({ mode: "sign", businessName: ctx.businessName, route: ctx.route, values, errors }), 422);
 
     const agreedText = renderAgreementText(fill);

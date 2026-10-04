@@ -21,7 +21,7 @@ import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/find
 import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgreement.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
-import { loadQaExclusions } from "../_shared/qa-guard.ts";
+import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
@@ -577,6 +577,9 @@ Deno.serve(async (req) => {
           .eq("lead_id", L.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
         const to = (text(body.to) || text((ob as { contact_email?: string | null } | null)?.contact_email) || text(L.email)).toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return json({ ok: false, error: "no_email", detail: "There is no email address on file for this client. Add one first." }, 409);
+        /* ⛔ QA (2026-10-04, src/lib/qaSafety.ts): a test lead's agreement link goes ONLY to the QA sink. */
+        const qaRefusal = await qaEmailHold(service, String(L.id), to);
+        if (qaRefusal) return json({ ok: false, error: "qa_email_sink_only", detail: qaRefusal }, 409);
         const key = Deno.env.get("RESEND_API_KEY");
         if (!key) return json({ ok: false, error: "email_unconfigured", detail: "Email is not configured." }, 500);
         const url = agreementUrl(link.token);

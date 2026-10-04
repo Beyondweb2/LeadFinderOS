@@ -10,6 +10,7 @@ import {
   type AgreementAcceptanceRow, type AgreementRoute,
 } from "../../../src/lib/clientAgreement.ts";
 import { buildAgreementPdf } from "../../../src/lib/agreementPdf.ts";
+import { qaEmailHold } from "./qa-guard.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -98,10 +99,18 @@ export async function storeAndSendAcceptance(service: Service, row: AgreementAcc
   const acceptedAt = (saved as { accepted_at: string }).accepted_at;
   let emailedTo: string[] | null = null;
   try {
-    const pdf = await agreementPdfForRow({ ...row, accepted_at: acceptedAt });
-    const sent = await emailSignedAgreement({ clientEmail: row.email, businessName: row.business_name, acceptedAtIso: acceptedAt, pdf, method: row.method });
-    if (sent.ok) emailedTo = sent.to;
-    else await reportAgreementError(service, "agreement_copy_email_failed", sent.detail, { lead_id: row.lead_id, method: row.method });
+    /* ⛔ QA BACKSTOP (2026-10-04): a test lead's signed copy is never emailed to a non-sink address —
+       refused and recorded, not redirected. The agree page refuses earlier; the checkout path is gated by
+       the payment simulation. A failed read throws into the catch below: nothing is sent. */
+    const qaRefusal = await qaEmailHold(service, row.lead_id, row.email ?? null);
+    if (qaRefusal) {
+      await reportAgreementError(service, "agreement_copy_email_qa_refused", qaRefusal, { lead_id: row.lead_id, method: row.method });
+    } else {
+      const pdf = await agreementPdfForRow({ ...row, accepted_at: acceptedAt });
+      const sent = await emailSignedAgreement({ clientEmail: row.email, businessName: row.business_name, acceptedAtIso: acceptedAt, pdf, method: row.method });
+      if (sent.ok) emailedTo = sent.to;
+      else await reportAgreementError(service, "agreement_copy_email_failed", sent.detail, { lead_id: row.lead_id, method: row.method });
+    }
   } catch (e) {
     await reportAgreementError(service, "agreement_copy_email_failed", e instanceof Error ? e.message : JSON.stringify(e), { lead_id: row.lead_id, method: row.method });
   }

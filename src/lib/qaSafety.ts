@@ -65,6 +65,25 @@ export function qaSendVerdict(ex: Exclusions, t: QaSendTarget): QaSendVerdict {
   return { kind: 'live' };
 }
 
+/* ── CLIENT EMAIL TO A QA LEAD (2026-10-04, Paul) ────────────────────────────────────────────────
+   A client-facing email about a QA lead (a fixture, or a lead held by a test account) may go ONLY to the
+   QA sink. Anything else is REFUSED with this sentence — never silently redirected, never sent. Genuine
+   clients are untouched (the rule returns null for them). The public address paul@findable.live is
+   unrelated: it is Paul's own copy, never the client recipient. */
+export const QA_EMAIL_SINK = 'paul@move37.fun';
+export const QA_EMAIL_REFUSAL = `QA only: this is a test lead, so client emails can only go to ${QA_EMAIL_SINK}. Nothing was sent — enter ${QA_EMAIL_SINK}.`;
+
+/** Is this lead QA material (a fixture, or held by a test account)? Same facts as the send rule. */
+export function isQaLead(ex: Exclusions, lead: { id: string; phone?: string | null; assigned_to_user_id?: string | null }): boolean {
+  return qaSendVerdict(ex, { leadId: lead.id, phones: [lead.phone], holderUserId: lead.assigned_to_user_id ?? null }).kind !== 'live';
+}
+
+/** null = allowed. For a QA lead, only the sink address is allowed (case and spaces ignored). */
+export function qaEmailRefusal(isQa: boolean, to: string | null | undefined): string | null {
+  if (!isQa) return null;
+  return String(to ?? '').trim().toLowerCase() === QA_EMAIL_SINK ? null : QA_EMAIL_REFUSAL;
+}
+
 /** The sentence a person sees when a send is refused. No jargon, says what to do. */
 export const QA_REFUSAL_REASON =
   'Not sent: this is a test account or a lead held by one. Test accounts can never message a real business. If this is a real prospect, ask Paul to move the lead to a real salesperson.';

@@ -14,6 +14,7 @@ import path from "node:path";
 import { buildExclusions } from "../src/lib/metricExclusions.ts";
 import {
   isReservedTestNumber, qaSendVerdict, qaPaymentEventShapeRefusal, qaPaymentFactsRefusal, type QaPaymentFacts,
+  isQaLead, qaEmailRefusal, QA_EMAIL_SINK,
 } from "../src/lib/qaSafety.ts";
 
 let f = 0;
@@ -96,6 +97,19 @@ ok(!/\n\s*if \(live\) \{/.test(queue), "the queue has no bare `if (live)` send b
 const webhook = readFileSync(path.join(FN, "stripe-webhook/index.ts"), "utf8");
 ok(/if \(qaHeader\) \{[\s\S]{0,400}sameSecret\(qaHeader, cronSecret\)/.test(webhook), "the payment simulation requires the CRON_SECRET header first");
 ok(/qaPaymentEventShapeRefusal\(parsed\)[\s\S]{0,1200}qaPaymentFactsRefusal\(/.test(webhook), "and checks shape then facts before running the branch");
+
+console.log("── client email to a QA lead goes only to the sink ──");
+ok(QA_EMAIL_SINK === "paul@move37.fun", "the sink is paul@move37.fun");
+ok(isQaLead(ex, { id: FIXTURE }) && isQaLead(ex, { id: "real", phone: "07700 900123" }) && isQaLead(ex, { id: "real", phone: "07911 123456", assigned_to_user_id: TEST_USER }), "fixtures, reserved numbers and test-held leads are QA leads");
+ok(!isQaLead(ex, { id: "real", phone: "07911 123456", assigned_to_user_id: null }), "a genuine client is not a QA lead");
+ok(qaEmailRefusal(false, "owner@realbusiness.co.uk") === null, "a genuine client emails as normal (production behaviour unchanged)");
+ok(qaEmailRefusal(true, " Paul@Move37.fun ") === null, "a QA lead may email the sink (case/space ignored)");
+for (const to of ["owner@realbusiness.co.uk", "paul@findable.live", "", null]) ok(qaEmailRefusal(true, to as string) !== null, `a QA lead to ${JSON.stringify(to)} is REFUSED, not redirected`);
+const read2 = (p: string) => readFileSync(path.join(FN, p), "utf8").replace(/\r\n/g, "\n");
+const hub = read2("paid-client-hub/index.ts");
+ok(/qaEmailHold\(service, String\(L\.id\), to\)[\s\S]{0,200}qa_email_sink_only[\s\S]{0,600}api\.resend\.com/.test(hub), "agreement_send_link asks the email guard before Resend");
+ok(/qaEmailHold\(service, ctx\.lead\.id, values\.email[\s\S]{0,1500}storeAndSendAcceptance\(/.test(read2("client-agreement/index.ts")), "the agree page refuses before anything is stored");
+ok(/qaEmailHold\(service, row\.lead_id, row\.email[\s\S]{0,600}emailSignedAgreement\(/.test(read2("_shared/client-agreement.ts")), "the signed-copy sender has the backstop");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }
 console.log("\nall passed");
