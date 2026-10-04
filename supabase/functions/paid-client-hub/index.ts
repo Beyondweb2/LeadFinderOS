@@ -8,6 +8,9 @@ import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
+import { websiteBuildSaveRefusal } from "../../../src/lib/websiteLaunch.ts";
+import { websiteServiceRoute } from "../../../src/lib/websiteRoute.ts";
+import { domainAuthority, domainInputFromRow, DOMAIN_REASON_TEXT, DOMAIN_ROW_COLUMNS } from "../../../src/lib/domainAuthority.ts";
 import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../src/lib/paidClient.ts";
 import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
@@ -470,7 +473,19 @@ Deno.serve(async (req) => {
     if (action === "save_website_build") {
       const leadId = text(body.lead_id);
       const patch = normaliseWebsiteBuild(body.website_build);
-      const { data: before } = await service.from("outreach_leads").select("website_build").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      const { data: before } = await service.from("outreach_leads").select("website_build,contract_total_payments,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      /* ⛔ LAUNCH GATE (fix workstream 6, src/lib/websiteLaunch.ts): a save that NEWLY records production,
+         ticks "Production checked" or switches the enquiry form on is refused unless the one launch rule
+         allows it — Build client only, preview ready, QA ticked, live gate passed. Never for Optimise. */
+      const { data: routeRow } = await service.from("onboarding_responses").select(DOMAIN_ROW_COLUMNS)
+        .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const rv = websiteServiceRoute(routeRow as never, before as never);
+      const dv = routeRow ? domainAuthority(domainInputFromRow(routeRow as never)) : null;
+      const refusal = websiteBuildSaveRefusal((before as { website_build?: unknown } | null)?.website_build ?? null, patch, {
+        route: rv.route, routeSource: rv.source, ended: !!(before as { service_terminated_at?: unknown } | null)?.service_terminated_at,
+        domain: dv ? { applies: dv.applies, ready: dv.ready, reasons: dv.reasons.map((r) => DOMAIN_REASON_TEXT[r]) } : null,
+      });
+      if (refusal) return json({ ok: false, error: "launch_refused", detail: refusal }, 409);
       const { data: updated, error: saveErr } = await service.from("outreach_leads")
         .update({ website_build: patch }).eq("id", leadId).eq("user_id", user.id)
         .select("id,website_build").maybeSingle();

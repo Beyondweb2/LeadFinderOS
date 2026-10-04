@@ -165,13 +165,16 @@ export interface MappedTown {
   key: string; name: string; isBase: boolean; origin: 'verified' | 'source';
   serves: boolean; page: boolean; servesDecided: boolean; pageDecided: boolean;
   status: 'ready' | 'needs_review'; evidence: string;
+  /** Paul's note of what is genuinely LOCAL about this town (real jobs, access, landmarks). A town
+   *  page without one blocks the build (fix workstream 6, D-10). */
+  note: string;
 }
 export const townKey = (n: string) => norm(n);
 
 export function mapLocations(t: WebsiteTemplate | null, rows: FactRow[], s: WebsiteBuildState): MappedTown[] {
   const base = rows.find((r) => r.key === 'primary_town');
   const areas = rows.find((r) => r.key === 'service_areas');
-  const list = new Map<string, Omit<MappedTown, 'serves' | 'page' | 'servesDecided' | 'pageDecided' | 'status'>>();
+  const list = new Map<string, Omit<MappedTown, 'serves' | 'page' | 'servesDecided' | 'pageDecided' | 'status' | 'note'>>();
   const add = (name: string, origin: 'verified' | 'source', isBase: boolean, evidence: string) => {
     const k = townKey(name);
     if (!k) return;
@@ -182,16 +185,36 @@ export function mapLocations(t: WebsiteTemplate | null, rows: FactRow[], s: Webs
   if (base && base.value && base.status !== 'rejected' && base.status !== 'not_applicable') add(base.value, base.status === 'verified' ? 'verified' : 'source', true, base.status === 'verified' ? 'base location (verified)' : 'base location — needs approval');
   if (areas && areas.value && areas.status !== 'rejected' && areas.status !== 'not_applicable') for (const a of split(areas.value)) add(a, areas.status === 'verified' ? 'verified' : 'source', false, areas.status === 'verified' ? 'verified service area' : 'service area — needs approval');
   for (const c of s.recon.towns) add(c.name, 'source', false, 'source site: ' + (c.context || 'mentioned'));
-  const primaryPage = !!t?.locations.primaryLocationPage;
   return [...list.values()].map((x) => {
     const d = s.mapping.locations[x.key] ?? {};
     const servesDecided = typeof d.serves === 'boolean';
     const pageDecided = typeof d.page === 'boolean';
     const serves = servesDecided ? !!d.serves : x.origin === 'verified';
-    /* ⛔ Default OFF — only the template's own base-location page starts on. */
-    const page = serves && (pageDecided ? !!d.page : (x.isBase && primaryPage));
-    return { ...x, serves, page, servesDecided, pageDecided, status: (servesDecided || x.origin === 'verified' ? 'ready' : 'needs_review') as MappedTown['status'] };
+    /* ⛔ Default OFF — the home town included (fix workstream 6, 2026-10-04; certification D-10). The
+       HOME PAGE owns "<trade> in <home town>"; a default base-location page restated the business with
+       the town name added and competed with it on both certified builds. A town page is Paul's
+       decision, with a local-content note (locationPageProblems). The template's primaryLocationPage
+       flag now only says the template CAN build one. */
+    const page = serves && (pageDecided ? !!d.page : false);
+    return { ...x, serves, page, servesDecided, pageDecided, note: d.note ?? '', status: (servesDecided || x.origin === 'verified' ? 'ready' : 'needs_review') as MappedTown['status'] };
   }).sort((a, b) => Number(b.isBase) - Number(a.isBase) || Number(b.serves) - Number(a.serves) || a.name.localeCompare(b.name));
+}
+
+/**
+ * THE location-page rule, for every route (template town toggles, a bespoke plan's location rows):
+ * a town page exists only with a recorded note of what is GENUINELY LOCAL about it. If the only
+ * difference is the town name, there is no page — the town belongs in the service-area wording.
+ * A page for the HOME town also needs its note to say how it differs from the home page.
+ */
+export const LOCATION_NOTE_MIN_WORDS = 6;
+export function locationPageProblems(pages: ReadonlyArray<{ name: string; note: string; isHome: boolean }>): string[] {
+  const out: string[] = [];
+  for (const p of pages) {
+    const words = p.note.trim().split(/\s+/).filter(Boolean).length;
+    if (words >= LOCATION_NOTE_MIN_WORDS) continue;
+    out.push('Location page "' + p.name + '" has no local-content note (real jobs there, access, travel, landmarks)' + (p.isHome ? ' — and it is the HOME town, which the home page already owns' : '') + ': add the note, or turn the page off');
+  }
+  return out;
 }
 
 /* ── ASSETS ───────────────────────────────────────────────────────────────────────────────────── */
@@ -349,6 +372,7 @@ export function computeMapping(s: WebsiteBuildState, template: WebsiteTemplate |
     needsApproval += services.filter((x) => x.status === 'needs_review').length + towns.filter((x) => x.status === 'needs_review').length + unmapped.filter((x) => !x.byOperator).length;
     if (included < t.minServices) { missingRequired++; blockers.push('At least ' + t.minServices + ' service must be included'); }
     if (!towns.some((x) => x.isBase && x.serves)) notes.push('No base location confirmed as served');
+    blockers.push(...locationPageProblems(towns.filter((x) => x.serves && x.page).map((x) => ({ name: x.name, note: x.note, isHome: x.isBase }))));
   }
   for (const st of slots) {
     if (st.publishable.length) ready++;

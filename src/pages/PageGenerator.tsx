@@ -337,6 +337,8 @@ const PageGenerator = () => {
       if (error) throw new Error(error.message);
       if (!res?.ok) {
         if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [page.key]: { kind: 'no_credits' } })); return; }
+        /* The claim guard (claimRules.ts): the draft kept claiming something nothing verified backs. */
+        if (res?.error === 'unsupported_claim') throw new Error('not handed over. ' + (res.detail || 'The draft made a claim nothing verified backs.'));
         throw new Error(res?.error ?? 'generation failed');
       }
       const done: CachedPage = { page: res.page, naturalness: res.naturalness, applied: res.applied, generatedAt: Date.now() };
@@ -396,6 +398,8 @@ const PageGenerator = () => {
         if (res?.error === 'no_credits') { setTransient((t) => ({ ...t, [key]: { kind: 'no_credits' } })); return; }
         /* The Site Intent Map said another page already owns this intent — nothing was generated or spent. */
         if (res?.error === 'intent_owned') throw new Error('not a new page. ' + (res.detail || 'Another page already owns this intent — improve that page instead.'));
+        /* The scope rule (siteScope.ts): an excluded service or an unverified 24-hour ask — nothing spent. */
+        if (res?.error === 'unsupported_topic') throw new Error('no page for this question. ' + (res.detail || 'It asks about something the client does not offer.'));
         throw new Error(res?.error ?? 'generation failed');
       }
       const done: CachedPage = { page: res.page, draft: true, generatedAt: Date.now() };

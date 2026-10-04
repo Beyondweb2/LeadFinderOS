@@ -8,6 +8,8 @@ import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { qaHeadings, ownershipFor, ownedFromWebsiteBuild, ownedFromQueue } from "../../../src/lib/intentOwnership.ts";
 import { qaModeFor, renderGuarded, confirmCount, confirmReason, confirmMark, type QaMode } from "../../../src/lib/qaAnswerGuard.ts";
+import { claimSupport, scanClaims } from "../../../src/lib/claimRules.ts";
+import { excludedFromText, namesExcluded } from "../../../src/lib/siteScope.ts";
 import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
@@ -150,6 +152,10 @@ ${isHomeTown
   no testimonials, NO certifications, accreditations, memberships, awards or registration numbers of
   ANY kind, and NO local landmarks, street names or area facts you were not given. If a fact was not
   given, do not state it.
+- ⛔ NEVER claim 24/7, 24-hour, round-the-clock, out-of-hours or same-day availability, an arrival
+  time ("within the hour"), insurance ("fully insured"), a number of jobs or customers, a guarantee or
+  warranty, or "cheapest" / "leading" / "No.1". Every draft is scanned for these after you write it and
+  a page that makes one is rejected.
 - ⛔ DO NOT WRITE ANY CREDENTIAL. Never say "Gas Safe", "DBS checked", "fully insured", "certified",
   "accredited", "approved", "registered", "member of", "Which? Trusted Trader" or any award — even if
   you believe it. A credentials line carrying the client's REAL, operator-entered wording is appended
@@ -681,6 +687,11 @@ Deno.serve(async (req) => {
       const qaHome = String(qaObRow?.confirmed_location ?? "").trim();
       const qaTowns = [...new Set([qaHome, ...(Array.isArray(qaObRow?.areas_list) ? qaObRow!.areas_list : []).map((x) => String(x ?? "").trim())].filter(Boolean))];
       const heads = qaHeadings({ question, services: qaServices, towns: qaTowns, homeTown: qaHome, businessName: qaAudit.business_name ?? "", businessType: qaAudit.business_type ?? "" });
+      /* ⛔ FIX WORKSTREAM 6 (D-21): a question naming something the client said they do NOT offer, or
+         asking for 24-hour / out-of-hours work no verified fact backs, never gets a page — refused here,
+         before anything is spent (siteScope.ts, the same scope rule the Website Build intent map uses). */
+      const scopeRefusal = namesExcluded(question, { excluded: excludedFromText(qaMustNotSay), outOfHoursVerified: false });
+      if (scopeRefusal.refused) return json({ ok: false, error: "unsupported_topic", detail: scopeRefusal.reason }, 200);
       if (qaAudit.lead_id) {
         const [{ data: qaLead }, { data: qaQueue }] = await Promise.all([
           service.from("outreach_leads").select("website_build").eq("id", qaAudit.lead_id).maybeSingle(),
@@ -1109,20 +1120,40 @@ Return via return_page.`;
       stuffScore(c) + (dishonest(o.bodyHtml) ? 50 : 0);
     const honestyFeedback = `\n- ⛔ the business is NOT based in ${page.town} — remove every "based here"/"based locally"/premises-style claim; say it SERVES ${page.town}`;
 
+    /* ⛔ CLAIM GUARD (fix workstream 6, D-20): the model's title, meta, H1 and body are scanned for the
+       trust-claim classes (claimRules.ts — 24/7, insured, years, response times, credentials, reviews,
+       awards, counts, guarantees, "cheapest"). The only verified value this path holds is the client's
+       credentials wording (appended verbatim BELOW, never by the model), so any hit in model prose is
+       unsupported: the draft is regenerated with the hit named, and a page still making one after the
+       last attempt is REFUSED — never handed over for pasting with a badge. */
+    const claimFacts = claimSupport(credentials ? [{ key: "accreditations", value: credentials }] : []);
+    const strip = (h: string) => h.replace(/<[^>]+>/g, " ");
+    const unsupportedClaims = (o: { title: string; meta: string; h1: string; bodyHtml: string }) =>
+      scanClaims([o.title, o.meta, o.h1, strip(o.bodyHtml)].join(" . "), claimFacts).filter((h) => !h.supported);
+    const claimFeedback = (o: { title: string; meta: string; h1: string; bodyHtml: string }) => {
+      const hits = unsupportedClaims(o);
+      return hits.length ? "\n- ⛔ REMOVE these claims — nothing verified backs them: " + [...new Set(hits.map((h) => '"' + h.text + '"'))].join(", ") + ". Do not rephrase them into a similar claim." : "";
+    };
+
     let check = stuffingCheck(`${out.h1} ${out.bodyHtml}`, page.service, page.town);
     let best = { out, check };
     let attempts = 1;
-    while ((check.verdict === "stuffed" || dishonest(out.bodyHtml)) && attempts < 3) {
-      const fb = strictFeedback(check, attempts) + (dishonest(out.bodyHtml) ? honestyFeedback : "");
+    const badnessAll = (c: StuffingVerdict, o: { title: string; meta: string; h1: string; bodyHtml: string }) => badness(c, o) + 100 * unsupportedClaims(o).length;
+    while ((check.verdict === "stuffed" || dishonest(out.bodyHtml) || unsupportedClaims(out).length) && attempts < 3) {
+      const fb = (check.verdict === "stuffed" ? strictFeedback(check, attempts) : "Rewrite the page.") + (dishonest(out.bodyHtml) ? honestyFeedback : "") + claimFeedback(out);
       const retry = await callOpenAI(userPrompt(fb));
       attempts++;
       if (retry.kind !== "page") break; // no_credits / error mid-loop → stop, use best so far
       const rc = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
-      if (badness(rc, retry) < badness(best.check, best.out)) best = { out: retry, check: rc };
+      if (badnessAll(rc, retry) < badnessAll(best.check, best.out)) best = { out: retry, check: rc };
       out = retry; check = rc;
-      if (rc.verdict === "ok" && !dishonest(retry.bodyHtml)) { best = { out: retry, check: rc }; break; }
+      if (rc.verdict === "ok" && !dishonest(retry.bodyHtml) && !unsupportedClaims(retry).length) { best = { out: retry, check: rc }; break; }
     }
     out = best.out;
+    const leftClaims = unsupportedClaims(out);
+    if (leftClaims.length) {
+      return json({ ok: false, error: "unsupported_claim", detail: "The draft kept making claims nothing verified backs, so it was not handed over: " + [...new Set(leftClaims.map((h) => '"' + h.text + '" (' + h.label + ')'))].join("; ") + ". Generate again, or add the fact to the client's record first.", claims: leftClaims }, 200);
+    }
 
     /* ⛔ MECHANICAL BACKSTOP — the page handed over is GUARANTEED under the town cap and to name NO
        other towns. Regeneration above does the natural writing (and, with the fixed metric, natural

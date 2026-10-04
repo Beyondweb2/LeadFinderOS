@@ -29,7 +29,7 @@ import { deployInputFor } from './buildPack.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, productionDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
 import {
   capturePrompt, cloudflareProblem, codeConfig, finalQaPrompt, isBespokeRoute, isFaithfulRoute,
-  isTemplateRoute, MARK, masterPrompt, pageLines, seoQaPrompt, winPath, type BuildPackInput,
+  isTemplateRoute, launchProblems, MARK, masterPrompt, pageLines, seoQaPrompt, toolingRefusal, winPath, type BuildPackInput,
 } from './buildPack.ts';
 
 export const STAGE_PROMPT_IDS = ['recon', 'capture', 'architecture', 'asset_download', 'build', 'build_execution', 'preview_deploy', 'visual_compare', 'qa', 'production_deploy'] as const;
@@ -46,6 +46,8 @@ export interface StagePrompt {
   help: string;
   blockedBy: string[];
   text: string;
+  /** No text was generated and the Copy button is disabled (production not cleared; an Optimise client). */
+  refused?: boolean;
 }
 
 const routeLine = (s: WebsiteBuildState) => 'Build route: ' + (s.route ? BUILD_ROUTE_LABELS[s.route] : 'NOT CHOSEN — ask Paul before doing anything');
@@ -201,17 +203,20 @@ function productionDeploy(i: BuildPackInput): StagePrompt {
   const cfg = codeConfig(s, i.template);
   const problem = cloudflareProblem(s);
   const modeProblem = cloudflareModeProblem(s);
-  const blockedBy = [
+  /* ⛔ FIX WORKSTREAM 6 (D-04): the one launch rule (websiteLaunch.ts via launchProblems) — never a
+     recorded preview URL alone. A needs-attention preview, unticked QA or an Optimise client gets no prompt. */
+  const blockedBy = [...new Set([
     ...(problem ? [problem] : []),
     ...(modeProblem ? [modeProblem] : []),
     ...(!s.preview_url ? ['Preview URL (deploy and review a preview first)'] : []),
     ...(!s.canonical_domain ? ['Domain (canonical)'] : []),
     ...(!s.local_repo_path ? ['Local folder'] : []),
-  ];
+    ...launchProblems(i),
+  ])];
   if (blockedBy.length) {
-    return { id: 'production_deploy', label: 'Copy Production Deployment Prompt', short: 'Production', stage: 'live', blockedBy,
-      help: 'Not generated until the Cloudflare project, the preview and the domain are recorded.',
-      text: [routeLine(s), '', 'PRODUCTION IS NOT READY — no prompt has been generated.', '', 'Record these first:', ...blockedBy.map((b) => '- ' + b)].join('\n') };
+    return { id: 'production_deploy', label: 'Copy Production Deployment Prompt', short: 'Production', stage: 'live', blockedBy, refused: true,
+      help: 'Not generated until the site is cleared for production: a Build client, the preview passing every gate, this client\'s project and domain, and every preview QA tick.',
+      text: [routeLine(s), '', 'PRODUCTION IS NOT READY — no prompt has been generated.', '', 'Clear these first:', ...blockedBy.map((b) => '- ' + b)].join('\n') };
   }
   const d = s.canonical_domain.replace(/^www\./, '');
   const fq = finalQaPrompt(i).text.split('\n');
@@ -278,6 +283,10 @@ function buildExecution(i: BuildPackInput): StagePrompt {
 }
 
 export function stagePrompts(i: BuildPackInput): StagePrompt[] {
-  return [recon(i), capture(i), architecture(i), assetDownload(i), build(i), buildExecution(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
+  const all = [recon(i), capture(i), architecture(i), assetDownload(i), build(i), buildExecution(i), previewDeploy(i), visualCompare(i), qa(i), productionDeploy(i)];
+  /* ⛔ An OPTIMISE client keeps their own website (agreement 9.4): no Build prompt of any kind is
+     generated — the Copy buttons are disabled with the reason (fix workstream 6, D-06). */
+  const refusal = toolingRefusal(i);
+  return refusal ? all.map((p) => ({ ...p, blockedBy: [refusal], refused: true, text: refusal })) : all;
 }
 

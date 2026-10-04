@@ -22,7 +22,8 @@ import {
 import { ALL_ROUTE_CHECK_IDS, checkId, routeChecks, templateSuitsTrade } from '../src/lib/buildRoutes.ts';
 import { findForbiddenSeedValues, MCL_TEMPLATE, templateById, templatePageTypes, WEBSITE_TEMPLATES } from '../src/lib/websiteTemplates.ts';
 import { annotate, candidateFacts, decide, mergeFacts, type FactsContext } from '../src/lib/buildFacts.ts';
-import { buildPack, masterPrompt } from '../src/lib/buildPack.ts';
+import { buildPack, masterPrompt, type BuildPackInput } from '../src/lib/buildPack.ts';
+import { clearedForProduction } from './lib/website-launch-ready.ts';
 import { stagePrompts, STAGE_PROMPT_IDS } from '../src/lib/stagePrompts.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 
@@ -54,13 +55,13 @@ const BASE = {
   ],
 };
 
-function inputs(build: Record<string, unknown>, c = ctx(), siteOverride?: string) {
+function inputs(build: Record<string, unknown>, c = ctx(), siteOverride?: string, extra: Partial<BuildPackInput> = {}) {
   const state = parseWebsiteBuild(build);
   const template = state.route === 'template_rebuild' ? templateById(state.template_id) : null;
   const facts = mergeFacts(candidateFacts(c as unknown as FactsContext, state.canonical_domain), state.facts, template);
   const evidence = toRebuildPromptInput(c);
   const existingSiteUrl = siteOverride ?? (state.source_site_url || (evidence.facts.website.value ?? ''));
-  return { state, template, facts, evidence, businessName: 'SC Plumbing & Gas Ltd', existingSiteUrl, mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-25T00:00:00Z' };
+  return { state, template, facts, evidence, businessName: 'SC Plumbing & Gas Ltd', existingSiteUrl, mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-25T00:00:00Z', ...extra };
 }
 const prompts = (build: Record<string, unknown>, c = ctx(), site?: string) => stagePrompts(inputs(build, c, site));
 const P = (build: Record<string, unknown>, id: string, site?: string) => prompts(build, ctx(), site).find((p) => p.id === id)!;
@@ -193,7 +194,11 @@ console.log('\n── STAGE PROMPTS ──');
   ok(P(T, 'preview_deploy').blockedBy.some((b) => /Cloudflare project/.test(b)), 'no project → blocked, never invented');
   const prodNo = P(T, 'production_deploy');
   ok(prodNo.blockedBy.length > 0 && !/wrangler/.test(prodNo.text), 'production deployment is REFUSED until project, preview and domain are recorded');
-  const prod = P({ ...T, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' }, 'production_deploy');
+  /* Fix workstream 6 (D-04): project + preview + domain alone no longer unlock production; a Build client
+     whose preview has cleared every gate does. */
+  const prodUncleared = P({ ...T, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' }, 'production_deploy');
+  ok(prodUncleared.refused === true && prodUncleared.blockedBy.length > 0 && !/wrangler/.test(prodUncleared.text), 'production is still REFUSED with project, preview and domain recorded but no passing preview (D-04)');
+  const prod = stagePrompts(inputs(clearedForProduction({ ...T, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' }, { existingSite: true }), ctx(), undefined, { serviceRoute: 'build' })).find((p) => p.id === 'production_deploy')!;
   ok(prod.blockedBy.length === 0 && /ask Paul in chat/.test(prod.text) && prod.text.includes('--branch main') && /www\.scplumbing\.co\.uk/.test(prod.text), 'then: asks Paul first, deploys main, connects the domain and www');
   ok(/SEED-CLIENT CHECK/.test(P(T, 'qa').text) && !/SEED-CLIENT CHECK/.test(P(F, 'qa').text), 'QA — the seed-client check is on the template route only');
 
