@@ -3,7 +3,7 @@
    exclusion list must stop the send, never wave it through as "not a test". Every caller already
    has a catch that turns a throw into "nothing was sent". */
 import { buildExclusions, isInternalEmail, type Exclusions, type ExclusionRow } from "../../../src/lib/metricExclusions.ts";
-import { qaSendVerdict, type QaPaymentFacts, type QaSendVerdict } from "../../../src/lib/qaSafety.ts";
+import { isQaLead, qaEmailRefusal, qaSendVerdict, type QaPaymentFacts, type QaSendVerdict } from "../../../src/lib/qaSafety.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -31,6 +31,17 @@ export async function qaSendHold(
     stored = (data?.phone as string | null) ?? null;
   }
   return qaSendVerdict(exclusions, { leadId: t.leadId ?? null, phones: [t.to, stored], holderUserId: holder, actorUserId: t.actorUserId ?? null });
+}
+
+/** A client-facing email about this lead: null = send as normal; a sentence = REFUSE (QA lead, address
+ *  is not the QA sink). Throws on a failed read — the caller does not send. */
+export async function qaEmailHold(service: Service, leadId: string | null | undefined, to: string | null | undefined): Promise<string | null> {
+  if (!leadId) return null;
+  const ex = await loadQaExclusions(service);
+  const { data, error } = await service.from("outreach_leads").select("id, phone, assigned_to_user_id").eq("id", leadId).maybeSingle();
+  if (error) throw new Error(`qa_guard_unavailable: ${String((error as { message?: string }).message ?? error)}`);
+  if (!data) return null;
+  return qaEmailRefusal(isQaLead(ex, data as { id: string; phone: string | null; assigned_to_user_id: string | null }), to);
 }
 
 /** The facts qaPaymentFactsRefusal judges, for a simulated checkout.session.completed. Throws on a
