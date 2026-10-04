@@ -188,7 +188,8 @@ from outreach_leads l where l.business_name ilike 'ZZ QA%' order by 1;
 A campaign called `test` already exists (Paul's), and campaign names are globally unique. Session A
 creates **`TEST - PRE SALES CERTIFICATION`** as the Test salesperson and only fixtures go in it. Session E
 may create `TEST - PRE SALES CERTIFICATION E` as test1 for isolation tests. Nobody else creates
-campaigns. Do not delete them at the end (campaign stats are per campaign, so they pollute nothing).
+campaigns. Do not delete them at the end (campaign stats are per campaign, so they pollute nothing; note `_campaign_counts` does not read `metric_exclusions`).
+The Test account already OWNS a campaign `roofers 2` (from Paul's mistaken use of Test, its leads since moved to Paul). Do not launch or edit it: a salesperson's launch only queues leads THEY hold (`campaign_launch`), and the guard refuses any real lead on Test, but it is not a QA campaign.
 
 ---
 
@@ -270,6 +271,7 @@ lead may still earn commission (only the initial is stamped `test_excluded`).
   paul@move37.fun. Nothing in code was changed; the canonical public address stays paul@findable.live.
 - Expect, per simulated payment: the PAID / new-client email (to paul@findable.live, subject names the
   ZZ QA business) and the signed-agreement PDF (to paul@move37.fun + paul@findable.live).
+- ⚠️ **No email guard exists** — the QA layer guards WhatsApp only. Paul's "Send agreement link" on Paid Clients takes an editable address (`body.to`): type **paul@move37.fun**. The Welcome Pack is a page, never emailed. Outreach email is `mailto:` only.
 - The four-week results email is held by `REMEASURE_RESULTS_COPY_APPROVED = false` — do not change it.
 - Sessions cannot read the mailbox; prove an email by its Resend record (`client_error_reports`
   `payment_email_sent`, `new_client_email_at`, etc.) and ask Paul to glance at move37 if wording matters.
