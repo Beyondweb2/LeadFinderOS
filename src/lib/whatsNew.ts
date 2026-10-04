@@ -33,6 +33,7 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'A real business held by a test account can no longer be messaged from anywhere; the sender is told why.',
         'Paid Clients drops a test client once its test is finished and archived.',
         'The whole-team sales performance view leaves out test accounts and test leads.',
+        'Client emails about a test lead (the agreement link, the signed agreement copy) can only go to paul@move37.fun; any other address is refused and nothing is sent. Real clients are unchanged.',
       ],
       removed: [],
       effect: 'The pre-sales certification can run the real sales and payment flow end to end without contacting anyone real or touching the real numbers.',

@@ -530,6 +530,15 @@ Deno.serve(async (req) => {
     const force = forceReq && testMode && isAdmin;
     // send_now works in LIVE too (admin-gated), but skips ONLY pacing (see the not_due guard).
     const sendNow = sendNowReq && isAdmin;
+    /* ⛔ THE QA DRILL (2026-10-04, pre-sales certification). `qa_drill_lead_id` runs THIS tick's real drip
+       for ONE named lead, at any hour, so the send path can be proven without waiting for the window.
+       It skips ONLY the clock (the London window, the lead's local window, the pacing wait) — never pause,
+       the cap, suppression, the town gate or the QA guard — and only cron/admin can ask. It is STRICTER
+       than a normal tick: the drilled lead must get the QA verdict SIMULATE (a fixture), otherwise the
+       tick refuses before anything is built, so a drill can never put a message on the wire. It never
+       moves the real queue's pacing clock and never runs the follow-up lanes. */
+    const qaDrillLeadId = typeof body.qa_drill_lead_id === "string" && /^[0-9a-f-]{36}$/i.test(body.qa_drill_lead_id) ? body.qa_drill_lead_id : null;
+    const qaDrill = !!qaDrillLeadId && (isCron || isAdmin) && mode === "tick";
 
     // --- Shared status numbers ---
     const tStatus = Date.now();
@@ -1254,7 +1263,7 @@ Deno.serve(async (req) => {
     // --- Tick: decide whether to send one ---
     // Pause guard FIRST — a paused queue sends nothing, even on a forced manual tick.
     if (paused) return json({ ok: true, skipped: "paused", ...statusPayload });
-    if (!anyWindowOpen && !force) return json({ ok: true, skipped: "outside_window", ...statusPayload });
+    if (!anyWindowOpen && !force && !qaDrill) return json({ ok: true, skipped: "outside_window", ...statusPayload });
     /* == AUDIT AHEAD OF THE SEND =============================================================
        video_template's {{4}} is the lead's report link, so the audit must exist before the
        message can be built. This starts the audits the drip is about to need, capped at
@@ -1285,7 +1294,7 @@ Deno.serve(async (req) => {
     }
 
     if ((sentToday ?? 0) >= DAILY_CAP) return json({ ok: true, skipped: "cap_reached", ...statusPayload, auditAhead });
-    if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow) {
+    if (nextSendAt && new Date(nextSendAt) > new Date() && !force && !sendNow && !qaDrill) {
       return json({ ok: true, skipped: "not_due", ...statusPayload });
     }
 
@@ -1300,9 +1309,10 @@ Deno.serve(async (req) => {
        has never been checked (null note), OR its note is transient. Only settled-unverifiable is
        held. It stays status='queued' (like archived), visible via the count above and the row
        badge, and re-enters the drip the moment its town verifies. */
-    const { data: queuedRows } = await service
+    const queuedQuery = service
       .from("outreach_leads")
-      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id")
+      .select("id, business_name, phone, email, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, previous_status, user_id, campaign_id, queued_at, assigned_to_user_id");
+    const { data: queuedRows } = await (qaDrill ? queuedQuery.eq("id", qaDrillLeadId as string) : queuedQuery)
       .eq("status", "queued")
       .eq("is_archived", false)
       .not("phone", "is", null)
@@ -1357,7 +1367,7 @@ Deno.serve(async (req) => {
     /* ⛔ HELD, NOT DROPPED: a lead outside its own window is simply not chosen this tick (nothing is
        written) and is filtered out BEFORE the look-ahead slice, so sixty Indian leads at the head at
        22:00 IST can never hide the UK leads behind them. */
-    const scanned = scannedAll.filter(leadWindowOpen);
+    const scanned = qaDrill ? scannedAll : scannedAll.filter(leadWindowOpen);
     const heldForLocalWindow = scannedAll.length - scanned.length;
     if (heldForLocalWindow > 0) console.log(`[queue] ${heldForLocalWindow} queued lead(s) held: outside their own local send window`);
     const candidates = interleaveByCampaign(scanned).slice(0, QUEUE_LOOKAHEAD) as Array<Record<string, unknown>>;
@@ -1389,6 +1399,9 @@ Deno.serve(async (req) => {
     /* "empty_queue", "nothing left but archived leads" and "nothing left but unverifiable towns"
        are different facts, so they get different skip codes. Without this, pulling 17 leads out of
        the queue by archiving them would look identical to having genuinely finished the list. */
+    if (qaDrill && (!lead || String(lead.id) !== qaDrillLeadId)) {
+      return json({ ok: true, skipped: "qa_drill_not_sendable", qa_drill_lead_id: qaDrillLeadId, ...statusPayload });
+    }
     if (!lead) {
       /* ══ HOOK FOLLOW-UP LANE ══════════════════════════════════════════════════════════════════
          Openers have priority; the report follow-up drains only when the opener queue is empty this
@@ -1972,6 +1985,7 @@ Deno.serve(async (req) => {
        a test-account-held real lead was already filtered out above and is re-checked here. */
     const qaVerdict = qaSendVerdict(qaEx, { leadId: lead.id as string, phones: [lead.phone as string | null, toNumber], holderUserId: (lead.assigned_to_user_id as string | null) ?? null });
     if (qaVerdict.kind === "refuse") return json({ ok: true, skipped: `qa_${qaVerdict.reason}`, lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    if (qaDrill && qaVerdict.kind !== "simulate") return json({ ok: false, skipped: "qa_drill_refused_not_a_qa_fixture", lead_id: lead.id, ...statusPayload });
     const sendLive = live && qaVerdict.kind === "live";
     const rowTestMode = testMode || qaVerdict.kind === "simulate";
 
@@ -2090,13 +2104,17 @@ Deno.serve(async (req) => {
     }
 
     // Pace the next send after ANY real/simulated attempt (spread quota + jitter — see nextPacingStamp).
-    await service.from("whatsapp_outreach_state")
-      .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: nowIso }).eq("id", 1);
+    // A QA drill never moves the real queue's clock.
+    if (!qaDrill) {
+      await service.from("whatsapp_outreach_state")
+        .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: nowIso }).eq("id", 1);
+    }
 
     return json({
       ok: true,
       sent: outcome === "sent",
       simulated: !sendLive,
+      ...(qaDrill ? { qa_drill: true } : {}),
       ...(qaVerdict.kind === "simulate" ? { qa_simulated: qaVerdict.reason } : {}),
       outcome,
       lead_id: lead.id,

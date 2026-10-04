@@ -158,8 +158,8 @@ ok(anyWindowOpen(at('2026-09-28T04:30:00Z')) && !anyWindowOpen(at('2026-09-28T22
 {
   const q = read('supabase/functions/process-whatsapp-queue/index.ts');
   ok(/const WINDOW_START = 7;/.test(q) && /const WINDOW_END_MIN = 21 \* 60 \+ 30;/.test(q), 'the London constants are unchanged');
-  ok(/if \(!anyWindowOpen && !force\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate opens for either window');
-  ok(/const scanned = scannedAll\.filter\(leadWindowOpen\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
+  ok(/if \(!anyWindowOpen && !force && !qaDrill\) return json\(\{ ok: true, skipped: "outside_window"/.test(q), 'the outer gate opens for either window (only the QA drill, a single simulated fixture, skips it)');
+  ok(/const scanned = qaDrill \? scannedAll : scannedAll\.filter\(leadWindowOpen\);[\s\S]{0,400}const candidates = interleaveByCampaign\(scanned\)\.slice\(0, QUEUE_LOOKAHEAD\)/.test(q), 'opener lane: held leads are filtered BEFORE the fair order and look-ahead slice');
   ok(/const hookLead = \(\(hookRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q) && /const contactLead = \(\(contactRows \?\? \[\]\)[^\n]*\.find\(leadWindowOpen\)/.test(q), 'hook and contact lanes take the oldest lead whose own window is open');
   // 2026-09-29: the same London-window condition, now also held by the paid-action pause (docs/abuse-cost-protection.md).
   ok(/if \(\(windowOpen \|\| force\) && auditAheadMode === "running"\) try \{/.test(q), 'audit-ahead still runs only in the London window (UK spend unchanged)');
