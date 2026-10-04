@@ -21,6 +21,7 @@ import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/find
 import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgreement.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
+import { loadQaExclusions } from "../_shared/qa-guard.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
@@ -242,12 +243,20 @@ Deno.serve(async (req) => {
 
     if (action === "list") {
       const { data: leads, error } = await service.from("outreach_leads")
-        .select(HUB_LIST_COLUMNS + "," + SETUP_LEAD_COLUMNS)
+        .select(HUB_LIST_COLUMNS + "," + SETUP_LEAD_COLUMNS + ",is_archived")
         .eq("user_id", user.id).or(PAID_CLIENT_OR_FILTER).order("payment_date", { ascending: false });
       if (error) throw error;
+      /* ⛔ A FINISHED QA FIXTURE IS NOT A CLIENT (2026-10-04, pre-sales certification). A QA lead that was
+         paid by the simulated payment shows here while its test runs (session B must see it), and leaves
+         the list the moment the test ends and it is archived — it is in metric_exclusions AND archived.
+         A real archived client is untouched (no exclusion row). Display only: an unreadable exclusion
+         list shows everything rather than hiding a real client. */
+      let qaLeads: ReadonlySet<string> = new Set();
+      try { qaLeads = (await loadQaExclusions(service)).leads; } catch (e) { console.error("[paid-client-hub] exclusions read failed (showing all):", (e as Error).message); }
+      const visible = ((leads ?? []) as unknown as Array<Record<string, unknown>>).filter((l) => !(l.is_archived === true && qaLeads.has(String(l.id))));
       /* Membership is isPaidClient (src/lib/paidClient.ts): a recorded amount OR a status Paul set by
          hand. payment_source says which, so a hand-marked client is never shown as Stripe-paid. */
-      const members = (leads ?? []).filter(isPaidClient) as Array<Record<string, unknown>>;
+      const members = (visible as unknown as Array<Parameters<typeof isPaidClient>[0]>).filter(isPaidClient) as unknown as Array<Record<string, unknown>>;
       /* THE SETUP CHECKLIST + STAGE + ONE NEXT STEP (src/lib/handoffReadiness.ts + deliveryStage.ts, loaded
          by _shared/client-setup.ts — the same loader the new-client email uses). */
       const [setups, names, ledger] = await Promise.all([loadClientSetups(service, members), teamNames(service), ledgerFor(service, members.map((l) => String(l.id)))]);

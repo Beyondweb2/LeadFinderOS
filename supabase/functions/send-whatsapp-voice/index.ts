@@ -17,10 +17,12 @@ import { resolveWhatsAppEnv, toWhatsAppNumber, sendViaGraph } from "../_shared/w
 import { uploadMediaToGraph } from "../_shared/whatsapp-media-upload.ts";
 import { sendVoiceNote } from "../_shared/voice-note-send.ts";
 import { VOICE_NOTE_MAX_UPLOAD_BYTES } from "../../../src/lib/voiceNote.ts";
+import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
+import { qaSendHold } from "../_shared/qa-guard.ts";
 
 /* The deploy marker, on the OPTIONS preflight like send-whatsapp-message's x-swm-build: readable
    with no credential, carries no secret. Bump it with any change worth proving live. */
-const BUILD_ID = "2026-09-25a-voice";
+const BUILD_ID = "2026-10-04a-voice-qa";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,7 +62,13 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
-    const env = resolveWhatsAppEnv();
+    /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts): a QA fixture gets the test-mode env for this one
+       request (simulated, nothing reaches Meta); a real lead held by a test account, or a send pressed by
+       one, is refused. A failed read throws — fail closed. */
+    const qa = await qaSendHold(service, { leadId: str("lead_id") || null, to: str("phone") || null, actorUserId: actor.id });
+    if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
+    const liveEnv = resolveWhatsAppEnv();
+    const env = qa.kind === "simulate" ? { ...liveEnv, live: false, testMode: true } : liveEnv;
     /* ⛔ WHOSE BOOK, WHO PRESSED SEND (2026-09-27, multi-user). admin: unchanged. sales: must name a
        lead assigned to them; the thread is the lead's book, the person goes in sent_by_user_id and
        in whatsapp_sends.user_id (the sender diagnostic). */
@@ -135,6 +143,14 @@ Deno.serve(async (req) => {
           .eq("id", leadId).eq("status", "replied");
       },
     });
+    /* ⛔ QA: a SIMULATED fixture send moves the lead exactly as a live one would — the module above only
+       does it when live. Same scoped update as markAnswered (Replied only). */
+    const qaLeadId = str("lead_id");
+    if (qa.kind === "simulate" && (result.body as { ok?: boolean }).ok === true && qaLeadId) {
+      await service.from("outreach_leads")
+        .update({ status: "awaiting_reply", whatsapp_template: null, whatsapp_sent_at: new Date().toISOString() })
+        .eq("id", qaLeadId).eq("status", "replied");
+    }
     return json(result.body, result.status);
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);

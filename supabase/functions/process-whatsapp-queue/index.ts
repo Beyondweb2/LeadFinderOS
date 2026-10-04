@@ -25,6 +25,8 @@ import { AUDIT_ONLY_STATUS, DEFAULT_FIRST_REPLY_TEMPLATE, FIRST_REPLY_MODES, aut
 import { SETTLED_TOWN_NOTES } from "../_shared/place-details.ts";
 import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapshot.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
+import { qaSendVerdict } from "../../../src/lib/qaSafety.ts";
+import { loadQaExclusions, qaSendHold } from "../_shared/qa-guard.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -1187,7 +1189,12 @@ Deno.serve(async (req) => {
           let sendStatus = "simulated";
           let messageId: string | null = null;
           let sendErr: string | null = null;
-          if (live) {
+          /* ⛔ QA SAFETY (src/lib/qaSafety.ts): a fixture is simulated; a test-account-held real lead is
+             refused and recorded. A failed read throws into this loop's catch (flagged_error) — fail closed. */
+          const arQa = await qaSendHold(service, { leadId: row.lead_id, to: row.phone });
+          if (arQa.kind === "refuse") { await finish("flagged_error", `qa_${arQa.reason}`); results[row.lead_id] = "flagged_error"; continue; }
+          const arLive = live && arQa.kind === "live";
+          if (arLive) {
             const r = await sendViaGraph(accessToken, phoneNumberId, row.phone, payload);
             if (r.ok) { sendStatus = "sent"; messageId = r.messageId; } else { sendStatus = "failed"; sendErr = r.error; }
           } else {
@@ -1197,7 +1204,7 @@ Deno.serve(async (req) => {
           await service.from("whatsapp_messages").insert({
             direction: "outbound", user_id: (lead.user_id as string | null) ?? null, lead_id: row.lead_id,
             phone: row.phone, body: renderedBody, message_type: "template", template_name: templateName,
-            wa_message_id: messageId, status: sendStatus, test_mode: !live, error: sendErr,
+            wa_message_id: messageId, status: sendStatus, test_mode: !arLive, error: sendErr,
             template_snapshot: createTemplateSnapshot({ templateName, language: tmpl.lang, body: renderedBody, payload }),
             ...(replyFindingsShown?.length ? { findings_shown: replyFindingsShown } : {}),
           });
@@ -1208,7 +1215,7 @@ Deno.serve(async (req) => {
           try {
             const { error: sendLogErr } = await service.from("whatsapp_sends").insert({
               lead_id: row.lead_id, user_id: null, template: templateName, phone: row.phone,
-              business_name: businessName || null, claim_url: claimUrl, test_mode: !live,
+              business_name: businessName || null, claim_url: claimUrl, test_mode: !arLive,
               message_id: messageId, delivery_status: sendStatus, error: sendErr,
             });
             if (sendLogErr) console.error(`[auto-reply] send-audit insert failed (non-blocking, ${row.lead_id}):`, sendLogErr.message);
@@ -1309,7 +1316,14 @@ Deno.serve(async (req) => {
     const { data: suspendedRows, error: suspendedErr } = await service.from("team_members").select("user_id").not("suspended_at", "is", null);
     if (suspendedErr) return json({ ok: true, skipped: "team_read_failed", ...statusPayload });
     const suspendedIds = new Set(((suspendedRows ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
-    const leadRows = (queuedRows ?? []).filter((l: { assigned_to_user_id?: string | null }) => !l.assigned_to_user_id || !suspendedIds.has(l.assigned_to_user_id));
+    /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts). A REAL business held by a test account is held
+       exactly like a suspended salesperson's lead: never chosen, nothing written, it stays 'queued'.
+       A QA fixture IS chosen and is simulated at the send below. FAIL CLOSED like the suspended read. */
+    let qaEx: Awaited<ReturnType<typeof loadQaExclusions>>;
+    try { qaEx = await loadQaExclusions(service); } catch { return json({ ok: true, skipped: "qa_guard_read_failed", ...statusPayload }); }
+    const leadRows = (queuedRows ?? []).filter((l: { id: string; phone?: string | null; assigned_to_user_id?: string | null }) =>
+      (!l.assigned_to_user_id || !suspendedIds.has(l.assigned_to_user_id))
+      && qaSendVerdict(qaEx, { leadId: l.id, phones: [l.phone], holderUserId: l.assigned_to_user_id ?? null }).kind !== "refuse");
 
     /* ══ WHICH OF THEM SENDS THIS TICK ═══════════════════════════════════════════════════════════
        🔴 THE BLOCK THIS REPLACES. A lead whose audit was not ready returned the entire tick, so a
@@ -1417,6 +1431,11 @@ Deno.serve(async (req) => {
         // Suppression: one no = suppressed everywhere. Fails closed (service client bypasses RLS).
         const hSupp = await checkSuppressed(service, { phone: `+${to}`, email: hookLead.email ?? null, leadId: hookLead.id });
         if (hSupp.suppressed) { await clearMarker(); return json({ ok: true, skipped: "hook_suppressed", lane: "hook_followup", lead_id: hookLead.id, business: hookLead.business_name, ...statusPayload }); }
+        // ⛔ QA SAFETY (src/lib/qaSafety.ts): a fixture is simulated, a test-account-held real lead is refused.
+        const hQa = await qaSendHold(service, { leadId: hookLead.id, to }, qaEx);
+        if (hQa.kind === "refuse") { await clearMarker(); return json({ ok: true, skipped: `hook_qa_${hQa.reason}`, lane: "hook_followup", lead_id: hookLead.id, business: hookLead.business_name, ...statusPayload }); }
+        const hLive = live && hQa.kind === "live";
+        const hTestMode = testMode || hQa.kind === "simulate";
 
         // {{1}} = owner first name if we have it, else "there" (the template's allowed fallback);
         // {{2}} = business name. Resolved server-side, never trusted from the client.
@@ -1430,7 +1449,7 @@ Deno.serve(async (req) => {
         let hError: string | null = null;
         const hBody = renderTemplateBody("hook_followup", (hookLead.business_name as string) ?? "", "", undefined, undefined, first);
         const hPayload = claimTemplatePayload("hook_followup", hLang, (hookLead.business_name as string) ?? "", "", { contactName: first });
-        if (live) {
+        if (hLive) {
           const payload = hPayload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { hMessageId = r.messageId; hDelivery = "sent"; hOutcome = "sent"; }
@@ -1448,7 +1467,7 @@ Deno.serve(async (req) => {
         // Audit row — an attempt was made, so it counts toward the shared daily cap.
         await service.from("whatsapp_sends").insert({
           lead_id: hookLead.id, user_id: null, template: "hook_followup", phone: to,
-          business_name: hookLead.business_name, claim_url: "", test_mode: testMode,
+          business_name: hookLead.business_name, claim_url: "", test_mode: hTestMode,
           message_id: hMessageId, delivery_status: hDelivery, error: hError,
         });
 
@@ -1461,7 +1480,7 @@ Deno.serve(async (req) => {
               direction: "outbound", user_id: (hookLead.user_id as string | null) ?? null, lead_id: hookLead.id,
               phone: to, body: hBody,
               message_type: "template", template_name: "hook_followup", wa_message_id: hMessageId,
-              status: hDelivery, test_mode: testMode,
+              status: hDelivery, test_mode: hTestMode,
               template_snapshot: createTemplateSnapshot({ templateName: "hook_followup", language: hLang, body: hBody, payload: hPayload }),
             });
           } catch (e) { console.error(`[hook_followup] message-log insert threw (non-blocking, ${hookLead.id}):`, (e as Error).message); }
@@ -1476,7 +1495,7 @@ Deno.serve(async (req) => {
           .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: hNowIso }).eq("id", 1);
 
         return json({
-          ok: true, sent: hOutcome === "sent", simulated: !live, outcome: hOutcome, lane: "hook_followup",
+          ok: true, sent: hOutcome === "sent", simulated: !hLive, outcome: hOutcome, lane: "hook_followup",
           lead_id: hookLead.id, business: hookLead.business_name, template: "hook_followup", to,
           message_id: hMessageId, delivery_status: hDelivery, error: hError,
           ...statusPayload, sentToday: (sentToday ?? 0) + 1,
@@ -1520,6 +1539,11 @@ Deno.serve(async (req) => {
         // Suppression: one no = suppressed everywhere. Fails closed (service client bypasses RLS).
         const cSupp = await checkSuppressed(service, { phone: `+${to}`, email: contactLead.email ?? null, leadId: contactLead.id });
         if (cSupp.suppressed) { await clearMarker(); return json({ ok: true, skipped: "contact_suppressed", lane: "contact_followup", lead_id: contactLead.id, business: contactLead.business_name, ...statusPayload }); }
+        // ⛔ QA SAFETY (src/lib/qaSafety.ts): a fixture is simulated, a test-account-held real lead is refused.
+        const cQa = await qaSendHold(service, { leadId: contactLead.id, to }, qaEx);
+        if (cQa.kind === "refuse") { await clearMarker(); return json({ ok: true, skipped: `contact_qa_${cQa.reason}`, lane: "contact_followup", lead_id: contactLead.id, business: contactLead.business_name, ...statusPayload }); }
+        const cLive = live && cQa.kind === "live";
+        const cTestMode = testMode || cQa.kind === "simulate";
 
         // {{1}} = business name only (contact_followup has a single variable; it opens "Hi," with no
         // first-name greeting, so no owner name is resolved here).
@@ -1531,7 +1555,7 @@ Deno.serve(async (req) => {
         let cError: string | null = null;
         const cBody = renderTemplateBody("contact_followup", (contactLead.business_name as string) ?? "", "");
         const cPayload = claimTemplatePayload("contact_followup", cLang, (contactLead.business_name as string) ?? "", "");
-        if (live) {
+        if (cLive) {
           const payload = cPayload;
           const r = await sendViaGraph(accessToken, phoneNumberId, to, payload);
           if (r.ok) { cMessageId = r.messageId; cDelivery = "sent"; cOutcome = "sent"; }
@@ -1549,7 +1573,7 @@ Deno.serve(async (req) => {
         // Audit row — an attempt was made, so it counts toward the shared daily cap.
         await service.from("whatsapp_sends").insert({
           lead_id: contactLead.id, user_id: null, template: "contact_followup", phone: to,
-          business_name: contactLead.business_name, claim_url: "", test_mode: testMode,
+          business_name: contactLead.business_name, claim_url: "", test_mode: cTestMode,
           message_id: cMessageId, delivery_status: cDelivery, error: cError,
         });
 
@@ -1562,7 +1586,7 @@ Deno.serve(async (req) => {
               direction: "outbound", user_id: (contactLead.user_id as string | null) ?? null, lead_id: contactLead.id,
               phone: to, body: cBody,
               message_type: "template", template_name: "contact_followup", wa_message_id: cMessageId,
-              status: cDelivery, test_mode: testMode,
+              status: cDelivery, test_mode: cTestMode,
               template_snapshot: createTemplateSnapshot({ templateName: "contact_followup", language: cLang, body: cBody, payload: cPayload }),
             });
           } catch (e) { console.error(`[contact_followup] message-log insert threw (non-blocking, ${contactLead.id}):`, (e as Error).message); }
@@ -1577,7 +1601,7 @@ Deno.serve(async (req) => {
           .update({ next_send_at: nextPacingStamp(sentToday ?? 0), updated_at: cNowIso }).eq("id", 1);
 
         return json({
-          ok: true, sent: cOutcome === "sent", simulated: !live, outcome: cOutcome, lane: "contact_followup",
+          ok: true, sent: cOutcome === "sent", simulated: !cLive, outcome: cOutcome, lane: "contact_followup",
           lead_id: contactLead.id, business: contactLead.business_name, template: "contact_followup", to,
           message_id: cMessageId, delivery_status: cDelivery, error: cError,
           ...statusPayload, sentToday: (sentToday ?? 0) + 1,
@@ -1944,7 +1968,14 @@ Deno.serve(async (req) => {
     const campaignBody = renderTemplateBody(templateName, lead.business_name as string, resolvedUrl, templateExtra.trade, templateExtra.competitors, undefined, templateExtra.town, templateExtra.siteFault, templateExtra.siteFindings);
     const campaignSnapshot = createTemplateSnapshot({ templateName, language: lang, body: campaignBody, payload: campaignPayload });
 
-    if (live) {
+    /* ⛔ QA SAFETY: a fixture takes the test-mode branch for THIS send (simulated, test_mode true);
+       a test-account-held real lead was already filtered out above and is re-checked here. */
+    const qaVerdict = qaSendVerdict(qaEx, { leadId: lead.id as string, phones: [lead.phone as string | null, toNumber], holderUserId: (lead.assigned_to_user_id as string | null) ?? null });
+    if (qaVerdict.kind === "refuse") return json({ ok: true, skipped: `qa_${qaVerdict.reason}`, lead_id: lead.id, business: lead.business_name, ...statusPayload });
+    const sendLive = live && qaVerdict.kind === "live";
+    const rowTestMode = testMode || qaVerdict.kind === "simulate";
+
+    if (sendLive) {
       try {
         const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`, {
           method: "POST",
@@ -1998,7 +2029,7 @@ Deno.serve(async (req) => {
     // Audit row (an attempt was made → counts toward the daily cap).
     await service.from("whatsapp_sends").insert({
       lead_id: lead.id, user_id: null, template: templateName, phone: toNumber,
-      business_name: lead.business_name, claim_url: claimUrl, test_mode: testMode,
+      business_name: lead.business_name, claim_url: claimUrl, test_mode: rowTestMode,
       message_id: messageId, delivery_status: deliveryStatus, error: sendError,
     });
 
@@ -2033,7 +2064,7 @@ Deno.serve(async (req) => {
           template_name: templateName,
           wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
           status: deliveryStatus,                            // 'sent' | 'simulated'
-          test_mode: testMode,
+          test_mode: rowTestMode,
           template_snapshot: campaignSnapshot,
           ...(campaignFindingsShown?.length ? { findings_shown: campaignFindingsShown } : {}),
         });
@@ -2065,7 +2096,8 @@ Deno.serve(async (req) => {
     return json({
       ok: true,
       sent: outcome === "sent",
-      simulated: !live,
+      simulated: !sendLive,
+      ...(qaVerdict.kind === "simulate" ? { qa_simulated: qaVerdict.reason } : {}),
       outcome,
       lead_id: lead.id,
       business: lead.business_name,

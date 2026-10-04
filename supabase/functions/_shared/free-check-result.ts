@@ -70,6 +70,7 @@ export const FREE_CHECK_TEMPLATE = "free_check_result";
    would only have been a fourth place for the origin to drift. */
 import { reportPublicUrl } from "../../../src/lib/findableOffer.ts";
 import { shortReportUrl } from "../../../src/lib/reportSlug.ts";
+import { qaSendHold } from "./qa-guard.ts";
 
 const ADMIN_EMAIL = "paul@findable.live";
 /* 🔴 THE SENDER. ON findable.live SINCE 2026-09-02, AND IT TOOK TWO ATTEMPTS TO GET HERE.
@@ -566,7 +567,12 @@ export async function maybeSendFreeCheckResult(
   } else {
     try {
       const supp = await checkSuppressed(service, { leadId: lead.id, phone, email });
-      if (supp.suppressed) {
+      /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts): a QA fixture or a test-account lead is never
+         texted. A failed read throws into this catch — nothing is sent. */
+      const qa = await qaSendHold(service, { leadId: lead.id, to });
+      if (qa.kind !== "live") {
+        textPending = `QA ${qa.kind === "simulate" ? "fixture" : "test account"} (${qa.reason}) — not messaged`;
+      } else if (supp.suppressed) {
         textPending = `suppressed (${supp.reason ?? "no reason recorded"}) — not messaged`;
       } else {
         const payload = claimTemplatePayload(FREE_CHECK_TEMPLATE, WA_TEMPLATES[FREE_CHECK_TEMPLATE].lang, name, "", {
