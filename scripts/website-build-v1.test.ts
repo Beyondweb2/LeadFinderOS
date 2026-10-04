@@ -17,7 +17,8 @@ import { normaliseWebsiteBuild, parseWebsiteBuild, websiteBuildStages, type Webs
 import { MCL_TEMPLATE, WEBSITE_TEMPLATES, templateById } from '../src/lib/websiteTemplates.ts';
 import { candidateFacts, factsSummary, mapTemplateClaims, mergeFacts, parseFactLines, type FactsContext } from '../src/lib/buildFacts.ts';
 import { applyAction, checkArchitecture, parsePageLines, parseRedirectText, redirectsFromPages, seedFromCited, seedFromCrawl, seedFromTemplate } from '../src/lib/buildArchitecture.ts';
-import { buildPack, FORBIDDEN_COMMAND_PATTERNS, MARK, suggestCloudflareProject, suggestRepoName } from '../src/lib/buildPack.ts';
+import { buildPack, FORBIDDEN_COMMAND_PATTERNS, MARK, suggestCloudflareProject, suggestRepoName, type BuildPackInput } from '../src/lib/buildPack.ts';
+import { clearedForProduction } from './lib/website-launch-ready.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 import { PAGE_ACTIONS, PAGE_FAMILIES } from '../src/lib/websiteBuildState.ts';
 
@@ -49,12 +50,12 @@ const ctx = (over: Partial<RebuildContextPayload> = {}): RebuildContextPayload =
 });
 
 const facts = (state: WebsiteBuildState, c = ctx()) => mergeFacts(candidateFacts(c as unknown as FactsContext, state.canonical_domain), state.facts, state.route === 'template_rebuild' ? templateById(state.template_id) : null);
-const pack = (build: Record<string, unknown>, c = ctx()) => {
+const pack = (build: Record<string, unknown>, c = ctx(), extra: Partial<BuildPackInput> = {}) => {
   const state = parseWebsiteBuild(build);
   const rows = facts(state, c);
   const evidence = toRebuildPromptInput(c);
   return buildPack({ state, template: state.route === 'template_rebuild' ? templateById(state.template_id) : null, facts: rows, evidence,
-    businessName: 'SC Plumbing & Gas Ltd', existingSiteUrl: evidence.facts.website.value ?? '', mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-23T00:00:00Z' });
+    businessName: 'SC Plumbing & Gas Ltd', existingSiteUrl: evidence.facts.website.value ?? '', mustNotSay: evidence.facts.mustNotSay.value ?? '', generatedAt: '2026-09-23T00:00:00Z', ...extra });
 };
 const text = (build: Record<string, unknown>, id: string, c = ctx()) => pack(build, c).find((p) => p.id === id)!;
 const section = (t: string, from: string, to: string) => t.slice(t.indexOf(from), t.indexOf(to, t.indexOf(from) + 1));
@@ -232,7 +233,11 @@ console.log('\n── BUILD PACK ──');
   ok(prod.blockedBy.length > 0 && !/wrangler/.test(prod.text), 'production is REFUSED (no command at all) until project, preview and domain exist');
 
   const ready = pack({ ...READY, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' });
-  const pv = ready.find((p) => p.id === 'preview')!, pr = ready.find((p) => p.id === 'production')!;
+  const pv = ready.find((p) => p.id === 'preview')!;
+  /* Fix workstream 6 (D-04): project + preview + domain recorded is NOT permission any more. */
+  const notCleared = ready.find((p) => p.id === 'production')!;
+  ok(notCleared.blockedBy.length > 0 && !/wrangler/.test(notCleared.text) && notCleared.blockedBy.some((b) => /Client route is not Build/.test(b)) && notCleared.blockedBy.some((b) => /No build result imported/.test(b)), 'production stays REFUSED with only project, preview and domain recorded — no route, no passing build result (D-04)');
+  const pr = pack(clearedForProduction({ ...READY, cloudflare_project: 'sc-plumbing-gas', preview_url: 'https://preview.sc-plumbing-gas.pages.dev' }, { existingSite: true }), ctx(), { serviceRoute: 'build' }).find((p) => p.id === 'production')!;
   ok(pv.blockedBy.length === 0 && pv.text.includes('npx wrangler pages deploy dist --project-name sc-plumbing-gas --branch preview'), 'preview deploys to the recorded project on the preview branch');
   ok(pv.text.includes('https://preview.sc-plumbing-gas.pages.dev') && !pv.text.includes('RESEND_API_KEY'), 'preview names the expected URL — and no form secrets: the template ships no server function since 2026-09-23 (forms post to site-enquiry)');
   ok(pr.blockedBy.length === 0 && pr.text.includes('--project-name sc-plumbing-gas --branch main') && pr.text.includes('git status'), 'production is generated once everything is recorded');

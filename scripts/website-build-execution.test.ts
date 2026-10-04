@@ -125,7 +125,7 @@ console.log('\n── C/D/E. THE BUILD EXECUTION PROMPT ──');
   ok(/gh repo create/.test(p.text) && /STOP and report the operator action/.test(p.text), 'no GitHub CLI → stop with the exact operator action');
   const intoTemplate = executionPrompt(input(ready({ ...BASE, repo_name: 'MCLocksmiths-New' })));
   ok(intoTemplate.blockedBy.some((b) => /TEMPLATE\u2019s own repository/.test(b)) && /NOT READY TO BUILD/.test(intoTemplate.text) && !/X1\. DESTINATION/.test(intoTemplate.text), 'a destination that IS the template repository refuses the prompt outright');
-  for (const w of ['Do NOT invent missing claims', 'Selected services ONLY', 'Location pages ONLY for: Whitby', 'Use the template architecture', 'REAL config / content layer', 'build.unsupportedFields', 'Never scatter a client detail into a component'])
+  for (const w of ['Do NOT invent missing claims', 'Selected services ONLY', 'Location pages ONLY for: (none)', 'Use the template architecture', 'REAL config / content layer', 'build.unsupportedFields', 'Never scatter a client detail into a component'])
     ok(p.text.includes(w), `  config / architecture rule: "${w}"`);
   ok(p.text.includes('img/van-hero.jpg') && p.text.includes('img/dan.jpg') && !p.text.includes('img/other.jpg'), 'assets: only USE assets assigned to a slot (the REVIEW stock image is out)');
   for (const w of ['capture/assets/original/', 'never edited', 'safe lowercase filenames', 'each URL once', 'Never hotlink', 'source URL -> local file']) ok(p.text.includes(w), `  asset rule: "${w}"`);

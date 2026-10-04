@@ -158,6 +158,14 @@ export function qaHeadings(p: { question: string; services: readonly string[]; t
   }
   /* ⛔ never the question verbatim */
   if (normQ(h1) === normQ(p.question)) h1 = headingCase(topicOf(p.question) || h1);
+  /* A keyword-style question has no asking words to drop, so its "topic" IS the question (certification
+     D-21: "24 hour locksmith in Cambridge" came back as the H1 and title). Fall back to the trade and an
+     APPROVED town only — never a word of the question the client has not approved. */
+  if (normQ(h1) === normQ(p.question)) {
+    h1 = headingCase((p.businessType || 'Our services').trim()) + (town ? ' in ' + headingCase(town) : '');
+    basis = 'trade';
+    note = 'The question is a keyword string, so the heading uses the trade' + (town ? ' and the approved town' : '') + '; check it does not compete with the home page.';
+  }
   const brand = p.businessName.trim();
   const core = service ? headingCase(service) + (town ? ' ' + headingCase(town) : '') : h1;
   const title = fitTitle(core, brand);

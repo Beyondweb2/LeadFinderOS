@@ -32,8 +32,11 @@ import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD
 import type { BuildPackInput } from './buildPack.ts';
 import { BUILD_STANDARD_LINES, EMPTY_STANDARD, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
-import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, setupProblems, winPath } from './buildPack.ts';
-import { computeMapping, type Mapping } from './templateMapping.ts';
+import { cloudflareProblem, codeConfig, deployInputFor, isBespokeRoute, isFaithfulRoute, isTemplateRoute, MARK, masterPrompt, pageLines, setupProblems, toolingRefusal, verifiedFactLines, winPath } from './buildPack.ts';
+import { computeMapping, locationPageProblems, type Mapping } from './templateMapping.ts';
+import { isPublishable } from './buildFacts.ts';
+import { mentions } from './intentOwnership.ts';
+import { DO_NOT_INVENT_LINES } from './claimRules.ts';
 import { clean, extractJson, safeUrl } from './recon.ts';
 import { oneLine } from './manifestSummary.ts';
 import { pathKey, redirectMatcher, toPath } from './buildArchitecture.ts';
@@ -85,7 +88,7 @@ export function assetsToDownload(i: BuildPackInput, m?: Mapping): AssetPlan {
 /** The X3 / Asset Download lines: assigned by slot, then the additional approved assets. */
 export function assetPlanLines(plan: AssetPlan, name: (a: ManifestAsset, n: number) => string): string[] {
   let n = 0;
-  const line = (a: ManifestAsset, slot: string) => '- ' + (slot ? '[' + slot + '] ' : '') + oneLine(a.source_url, 300) + ' → ' + name(a, n++) + (a.purpose ? '  (' + oneLine(a.purpose, 80) + ')' : '');
+  const line = (a: ManifestAsset, slot: string) => '- ' + (slot ? '[' + slot + '] ' : '') + (a.origin === 'client' ? '[client-supplied] ' : '') + oneLine(a.source_url, 300) + ' → ' + name(a, n++) + (a.purpose ? '  (' + oneLine(a.purpose, 80) + ')' : '');
   return [
     'Assigned to a slot (' + plan.assigned.length + '):',
     ...(plan.assigned.length ? plan.assigned.map((x) => line(x.asset, x.slot)) : ['- (none assigned)']),
@@ -180,6 +183,12 @@ export function executionBlockers(i: BuildPackInput, m: Mapping): string[] {
     ...strengthProblems(s.quality, !!i.existingSiteUrl),
     ...intentProblems(s.quality, []),
     /* ⛔ The destination may never be the template's own repository. */
+    /* ⛔ Location pages (fix workstream 6, D-10): on a bespoke / faithful plan a town page needs its
+       local-content note too (the template's town toggles are checked in the mapping). */
+    ...(!isTemplateRoute(s) ? locationPageProblems(s.pages.filter((p) => p.family === 'location' && (p.action === 'keep' || p.action === 'create'))
+      .map((p) => { const home = i.facts.find((f) => f.key === 'primary_town' && isPublishable(f))?.value ?? ''; return { name: p.title || p.path, note: p.notes, isHome: !!home && mentions(p.title || p.path, home) }; })) : []),
+    /* ⛔ Build tooling is for BUILD clients (fix workstream 6, D-06): never a build for an Optimise client. */
+    ...(toolingRefusal(i) ? [toolingRefusal(i)] : []),
     ...(i.template && isTemplateRoute(s) && s.github_owner && s.repo_name && sameRepo(expectedRemote(s), i.template.sourceRepoUrl)
       ? ['Destination repository is the TEMPLATE’s own repository (' + i.template.sourceRepoUrl + ') — choose a new repository name for this client'] : []),
     ...(s.repo_url && i.template && isTemplateRoute(s) && sameRepo(s.repo_url, i.template.sourceRepoUrl) ? ['Repository URL points at the template’s repository'] : []),
@@ -251,7 +260,10 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     ...H('X3. ASSETS — ' + assets.length + ' approved (USE): ' + plan.assigned.length + ' assigned to a slot, ' + plan.approvedAdditional.length + ' additional'),
     ...(assets.length ? assetPlanLines(plan, safeAssetName) : ['- (none — build without images; never a stock or seed image)', ...(held ? [held + ' asset(s) are still REVIEW in LeadFinderOS — do not download them.'] : [])]),
     '- Originals to capture/assets/original/ (never edited); optimised web copies (WebP/AVIF, longest edge ≤ 2400px; SVG as-is) to public/images/; safe lowercase filenames; each URL once; identical bytes kept once.',
+    ...(plan.list.some((x) => x.asset.origin === 'client') ? ['- CLIENT-SUPPLIED assets (marked "client-supplied" above) came from the client, not an old site: copy a file:/// path from the build machine, or download a shared link; treat them exactly like the others.'] : []),
     '- Never hotlink. Record every "source URL -> local file" in build.assets; a failed download goes in warnings — never substitute another image.',
+    '- ⛔ No stock, AI-generated or seed-client image is ever presented as the client\'s own work, team, van or job, and there is never a before / after you were not given. With no photo for a role, design the section without one (a plain designed block, the text, the verified proof).',
+    '- MAP (areas hub): only a licensed source — an OpenStreetMap-based static render with "© OpenStreetMap contributors" visible, or a map Paul supplied. Never a screenshot of Google Maps (its terms forbid it). No map rather than an unlicensed one; say why in quality.standard.',
     ...(t && m.config.brand.mark !== 'logo' ? ['- Text wordmark: no logo file is downloaded or created.'] : []),
     ...H('X4. SEED-CLIENT SCRUB — blocks the preview'),
     ...(t ? [
@@ -287,9 +299,11 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '',
     ...standardEvidenceLines(s),
     ...H('X5d. ENQUIRY FORM — the Findable site-enquiry backend'),
-    '- If the site has an enquiry / quote form (required where the old site had a working one), it posts to ' + SITE_ENQUIRY_ENDPOINT + '?site=<site key> — JSON from the page script, or a plain form post without JavaScript (answered with a 303 back to the site). Fields: name, phone, email, service, location, message; a hidden honeypot input named company_website; fill_ms = milliseconds from page load to submit (a duration, never a timestamp).',
-    '- The recipient is NEVER in the page: it comes from the site key\'s CLIENT_SITES entry in LeadFinderOS (supabase/functions/_shared/site-enquiry.ts). The preview origin is TEST mode automatically (the Resend test inbox, never the client). Show the real success / failure state; no fake thank-you.',
-    '- If the site key is not registered yet, the form cannot be proven: say so in warnings as an operator step (add the CLIENT_SITES entry for this client\'s production and *.pages.dev origins, redeploy site-enquiry), report formTest "not_run", and do NOT call it preview_ready. Once registered, submit ONE test enquiry from the preview and report formTest "passed" only if it succeeded.',
+    '- If the site has an enquiry / quote form (required where the old site had a working one), it posts to ' + SITE_ENQUIRY_ENDPOINT + '?site=' + (s.form.enabled && s.form.site_key ? s.form.site_key : '<site key>') + ' — JSON from the page script, or a plain form post without JavaScript (answered with a 303 back to the site). Fields: name, phone, email, service, location, message; a hidden honeypot input named company_website; fill_ms = milliseconds from page load to submit (a duration, never a timestamp).',
+    '- The recipient is NEVER in the page: LeadFinderOS holds it on this client\'s Website Build record (Paul switches the form on there — no code change and no deploy). Only https://' + (s.canonical_domain || MARK.domain) + ' delivers to the client; this project\'s *.pages.dev preview is TEST mode automatically (the Resend test inbox, never the client). Show the real success / failure state; no fake thank-you.',
+    ...(s.form.enabled && s.form.site_key
+      ? ['- The form is REGISTERED (site key "' + s.form.site_key + '"). Submit ONE clearly-labelled test enquiry from the preview and report formTest "passed" only if it succeeded.']
+      : ['- The form is NOT switched on in LeadFinderOS yet, so it cannot be proven: build it to the spec above with site key "<site key>" left for Paul, say so in warnings ("switch the enquiry form on in Website Build"), report formTest "not_run", and do NOT call it preview_ready.']),
     '- No form (phone / WhatsApp / email only) is allowed only when the old site had no working form. Never a mailto or text/plain post dressed as a form.',
     ...H('X6. SEO / AI VISIBILITY'),
     '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
@@ -545,6 +559,7 @@ export function builtCoverage(s: WebsiteBuildState): { rows: CoverageRow[]; coun
 
 export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: string[] } {
   const s = i.state, b = s.build_execution;
+  if (toolingRefusal(i)) return { text: toolingRefusal(i), blockedBy: [toolingRefusal(i)] };
   const gate = previewReadyProblems(s, !!i.existingSiteUrl);
   if (!b.result_imported_at || (b.result_status !== 'failed' && b.result_status !== 'needs_attention' && !gate.length))
     return { text: 'No failed or incomplete build to retry.', blockedBy: ['A failed / needs-attention build result'] };
@@ -578,6 +593,54 @@ export function retryPrompt(i: BuildPackInput): { text: string; blockedBy: strin
   return { text: L.join('\n'), blockedBy: [] };
 }
 
+/**
+ * CORRECTIONS — Paul's changes to a GENERATED site before launch (fix workstream 6, operator control):
+ * his own list in words, plus everything the plan now says that the last build did not do — pages he
+ * removed (an unsupported page the build made), titles and meta descriptions he set, the main call to
+ * action. The builder changes ONLY those, re-runs the gate, redeploys the PREVIEW and reports. The
+ * generated output is never final: this is how Paul edits it without a free-form session.
+ * ⛔ Never production. Never Optimise (toolingRefusal).
+ */
+export function correctionPrompt(i: BuildPackInput): { text: string; blockedBy: string[] } {
+  const s = i.state, b = s.build_execution;
+  const refusal = toolingRefusal(i);
+  const built = new Set(b.pages.map((p) => pathKey(p)));
+  const removeNow = s.pages.filter((p) => p.action === 'remove' && p.path && built.has(pathKey(p.path)));
+  /* A template build makes the template's own pages from the config, not from a plan row — only a
+     bespoke / faithful build is compared page by page with its plan. */
+  const notInPlan = isTemplateRoute(s) || !s.pages.length ? [] : b.pages.filter((p) => !s.pages.some((x) => (x.action === 'keep' || x.action === 'create') && pathKey(x.path) === pathKey(p)) && !/404/.test(p));
+  const metas = s.pages.filter((p) => (p.action === 'keep' || p.action === 'create') && p.meta);
+  const blockedBy = [
+    ...(refusal ? [refusal] : []),
+    ...(!b.result_imported_at || b.result_status === 'failed' ? ['A built preview (import a build result first — a failed build uses the Retry prompt)'] : []),
+    ...(!s.corrections.trim() && !removeNow.length && !notInPlan.length && !metas.length && !s.primary_cta ? ['Your corrections (write them in the Corrections box)'] : []),
+  ];
+  if (blockedBy.length) return { text: 'CORRECTIONS ARE NOT READY — no prompt has been generated.\n\n' + blockedBy.map((x) => '- ' + x).join('\n'), blockedBy };
+  const L = [
+    '# CORRECTIONS — ' + (i.businessName || 'this client'),
+    '',
+    'The site exists' + (b.commit_hash ? ' (commit ' + b.commit_hash + ')' : '') + ' in ' + (s.local_repo_path ? winPath(s.local_repo_path) : MARK.path) + (b.preview_url ? ', preview ' + b.preview_url : '') + '. Paul has reviewed it. Make ONLY the changes below — no redesign, no new pages, nothing else rewritten.',
+    '',
+    ...(s.corrections.trim() ? ['PAUL\'S CORRECTIONS (do each exactly; ask one clear question if one is ambiguous):', ...s.corrections.trim().split(/\r?\n/).filter((l) => l.trim()).map((l) => '- ' + l.trim().replace(/^[-*•]\s*/, ''))] : []),
+    ...(removeNow.length ? ['', 'PAGES TO REMOVE (Paul marked them remove — the build still has them). Delete each page, take it out of the sitemap, the navigation and every internal link, and add a 301 to its closest genuine page in public/_redirects:', ...removeNow.map((p) => '- ' + p.path + (p.target ? '  → redirect to ' + p.target : '') + (p.notes ? '  — ' + p.notes : ''))] : []),
+    ...(notInPlan.length ? ['', 'BUILT BUT NOT IN THE APPROVED PLAN — remove each (and redirect it) unless Paul says to keep it:', ...notInPlan.slice(0, 40).map((p) => '- ' + p)] : []),
+    ...(metas.length || s.primary_cta ? ['', 'THE APPROVED PLAN — titles, meta descriptions and the call to action as Paul set them:', ...pageLines(s)] : []),
+    '',
+    ...DO_NOT_INVENT_LINES,
+    '',
+    'VERIFIED FACTS (the only business facts the site may state):', ...verifiedFactLines(i.facts),
+    '',
+    'THEN: the production build, the site quality gate on the build output and the preview (fix the SITE until it passes — never the gate):',
+    ...siteGateLines(b.output_dir || codeConfig(s, i.template).outputDir, s.canonical_domain, stablePreviewUrl(s)),
+    'Commit ("Corrections from Paul"), push, redeploy the PREVIEW only — ' + modeLabel(s) + ':',
+    ...previewDeploySteps({ ...deployInputFor(s, i.template), project: b.cloudflare_project || s.cloudflare_project || MARK.project }),
+    '⛔ Never production, never DNS. Safe git only (no force push / reset / rebase / amend / clean).',
+    '',
+    'End with the build-result JSON:', ...BUILD_RESULT_SCHEMA_LINES, '', ...BUILD_RESULT_RULES,
+  ];
+  return { text: L.join('\n'), blockedBy: [] };
+}
+
 export function reviewPrompt(i: BuildPackInput): { text: string; blockedBy: string[]; kind: 'template' | 'design' } {
   const s = i.state, b = s.build_execution;
   const preview = b.preview_url || s.preview_url;
@@ -606,5 +669,6 @@ export function reviewPrompt(i: BuildPackInput): { text: string; blockedBy: stri
     '',
     'End with the build-result JSON (status preview_ready only if everything passes):', ...BUILD_RESULT_SCHEMA_LINES, '', ...BUILD_RESULT_RULES,
   ];
+  if (toolingRefusal(i)) return { text: toolingRefusal(i), blockedBy: [toolingRefusal(i)], kind };
   return { text: L.join('\n'), blockedBy: preview ? [] : ['Preview URL'], kind };
 }

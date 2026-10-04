@@ -28,6 +28,7 @@ import { buildPack, setupProblems } from '../src/lib/buildPack.ts';
 import { toRebuildPromptInput, type RebuildContextPayload } from '../src/lib/rebuildContext.ts';
 import { serviceAreaView, withAreas, withServes } from '../src/lib/serviceAreaCandidates.ts';
 import { cloudflareBranches, cloudflareModeProblem, stablePreviewUrl } from '../src/lib/cloudflareDeploy.ts';
+import { clearedForProduction } from './lib/website-launch-ready.ts';
 import { MCL_TEMPLATE, recommendedRoute, recommendedTemplates, tradeFit } from '../src/lib/websiteTemplates.ts';
 
 let failures = 0;
@@ -163,8 +164,9 @@ console.log('\n── F17. CLOUDFLARE DEPLOYMENT MODES ──');
   ok(!/npx wrangler/.test(prev) && /git push origin main main:preview/.test(prev), 'the Preview Deployment prompt follows the mode');
   const pack = buildPack(input(s)).find((p) => p.id === 'preview')!.text;
   ok(!/npx wrangler/.test(pack) && /git push origin main main:preview/.test(pack), 'the Cloudflare preview PowerShell follows the mode');
-  const prodState = { ...s, preview_url: 'https://preview.bs4-electrical-services.pages.dev' };
-  const prod = stagePrompts(input(prodState)).find((p) => p.id === 'production_deploy')!.text;
+  /* Fix workstream 6 (D-04): production is generated only once the site has cleared every launch gate, for a Build client. */
+  const prodState = parseWebsiteBuild(clearedForProduction({ ...s, preview_url: 'https://preview.bs4-electrical-services.pages.dev' } as unknown as Record<string, unknown>, { existingSite: true }));
+  const prod = stagePrompts({ ...input(prodState), serviceRoute: 'build' }).find((p) => p.id === 'production_deploy')!.text;
   ok(!/wrangler pages deploy/.test(prod) && /Branch control → Production branch: main/.test(prod) && !/--force|force-with-lease/.test(prod), 'Production (Git): switch the production branch in the dashboard — no Wrangler, no force push');
 }
 

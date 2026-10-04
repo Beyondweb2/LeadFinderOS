@@ -86,7 +86,8 @@ export const INTENT_NEEDS = ['needed', 'not_needed'] as const;
 export type IntentNeed = (typeof INTENT_NEEDS)[number];
 export interface IntentDecision {
   need: IntentNeed | '';
-  /** The ONE primary page for the intent ("/faqs/"), or "section on /" for an intent served by a section. */
+  /** The ONE primary page for the intent ("/faqs/"), or "section on /" for an intent served by a section
+   *  (parseIntentPage turns it into the page path the gate checks). */
   page: string;
   note: string;
 }
@@ -197,6 +198,27 @@ export function strengthProblems(q: QualityState, hasExistingSite: boolean): str
 
 const pathOf = (p: string) => { const m = /^\/[^\s#?]*/.exec(p.trim()); return m ? m[0].replace(/\/?$/, '/') : ''; };
 
+/**
+ * Where an intent lives, as Paul (or the placeholder) wrote it → a real page path the gate can check.
+ *   "/faqs/"               → /faqs/
+ *   "section on /"         → /         (section: true — the intent is served by a SECTION of that page)
+ *   "section on /about/"   → /about/   (section: true)
+ *   "/#reviews"            → /         (section: true)
+ *   "home page" / "homepage section" → /  (section where it says so)
+ * '' when nothing path-like is there. Certification D-03 (fix workstream 6): "section on /", the format
+ * the Website Build screen itself suggests, reached the site gate verbatim and failed EVERY build as
+ * "its page section on / is not in the build" — Preview Ready was unreachable. siteIntentMap (siteGate.ts)
+ * now writes the parsed path, and the gate itself reads an old "section on X" the same way.
+ */
+export function parseIntentPage(raw: string): { path: string; section: boolean } {
+  const t = String(raw ?? '').trim();
+  if (!t) return { path: '', section: false };
+  const section = /\bsection\b|#/i.test(t);
+  const p = /\/[^\s#?"'()]*/.exec(t)?.[0] ?? (/\bhome\s*-?\s*page\b|\bhomepage\b/i.test(t) ? '/' : '');
+  if (!p) return { path: '', section };
+  return { path: p === '/' ? '/' : p.replace(/\/?$/, '/'), section };
+}
+
 /** Content completeness. `paths` = the pages that exist (the build's, else the page plan's). */
 export function intentProblems(q: QualityState, paths: readonly string[]): string[] {
   const out: string[] = [];
@@ -209,8 +231,10 @@ export function intentProblems(q: QualityState, paths: readonly string[]): strin
     if (d.need === 'not_needed' && CORE_INTENTS.includes(k) && !d.note) out.push(CONTENT_INTENT_LABELS[k] + ' marked not needed without a reason');
     if (d.need !== 'needed') continue;
     if (!d.page) { out.push(CONTENT_INTENT_LABELS[k] + ' is needed but has no primary page'); continue; }
-    const p = pathOf(d.page);
-    if (p && have.size && !have.has(p)) out.push(CONTENT_INTENT_LABELS[k] + ' → ' + p + ' is not in the build');
+    const at = parseIntentPage(d.page);
+    if (!at.path) { out.push(CONTENT_INTENT_LABELS[k] + ' → "' + d.page + '" is not a page address — write /path/ or "section on /path/"'); continue; }
+    const p = at.path;
+    if (have.size && !have.has(p)) out.push(CONTENT_INTENT_LABELS[k] + ' → ' + p + (at.section ? ' (the page holding the section)' : '') + ' is not in the build');
   }
   return out;
 }
