@@ -181,7 +181,8 @@ console.log('── 6. WHATSAPP HISTORY = FOLLOW-UP ──');
   const p = buildColdCallPlaybook(base({ messages }));
   const opening = p.opening.join(' ');
   ok(p.mode === 'follow_up', 'existing history → FOLLOW-UP');
-  ok(/I messaged you on WhatsApp on 19 Sep 2026/.test(opening), 'the opening refers to the earlier message');
+  // Days are said the way a person says them (Session A A-04, 2026-10-04): 19 Sep, four days before NOW, is "on Saturday" — never the year.
+  ok(/I messaged you on WhatsApp on Saturday\./.test(opening) && !/2026/.test(opening), 'the opening refers to the earlier message, by weekday, with no year');
   ok(!/I was looking at/.test(opening), 'and does NOT introduce the pitch as though they have never spoken');
   ok(p.followUp?.lastInbound?.text === 'Sorry mate I lost my phone', 'their last reply is surfaced');
   ok(!!p.followUp?.lastOutbound?.text && !/^\[initial_contact\]$/.test(p.followUp.lastOutbound.text), 'what was said is rendered as words, not a template slug');
@@ -276,8 +277,9 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
     'it names the first three competitors from THAT result, no more');
   ok(/I asked Google AI for a locksmith in Tunbridge Wells and it named/.test(script), 'it names the engine that was actually asked (Gemini is said as Google AI), and the search plainly');
   ok(/I had a look at why you weren't coming up and found (something|a few things) that could be holding you back\. (It's that|The main one is that) your sitemap/.test(script) && /\bcan give them conflicting information\b/.test(script) && !/that's why/i.test(script), 'it carries the strongest finding, hedged ("could be holding you back", never "that\'s why")');
-  ok(/We specialise in AI visibility/.test(script), 'the Findable line is inside the script, not a separate block');
-  ok(/Is now OK for a couple of minutes, or shall I ring you back\?/.test(script) && /I'll WhatsApp you the report/.test(script), 'it ends on a natural next step, with the report as the fallback');
+  // Plain words, not "AI visibility" (Session A, 2026-10-04: jargon to a plumber).
+  ok(/We help local businesses get named when people ask AI for a locksmith in Tunbridge Wells\./.test(script) && !/AI visibility/.test(script), 'the Findable line is inside the script, in plain words');
+  ok(/Is now OK for a couple of minutes, or shall I ring you back\?/.test(script) && /I'll WhatsApp you the report/.test(p.fallback) && !/If they'd rather/.test(script), 'it ends on a natural next step; the report fallback is a hint beside the script, not a line to read');
   ok((script.match(/but not you/g) ?? []).length === 1, 'the AI miss is said once, not repeated as a separate explanation');
 
   // Follow-up: picks up where it left off.

@@ -2,7 +2,8 @@ import { leadRpc, type RpcResult } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { recordStateChange } from '@/lib/leadOutcome';
 import { salesStateOf, type LeadStateInput } from '@/lib/leadState';
-import { hhmmOf, londonInstant, meetingDayTime } from '@/lib/nextActionView';
+import { hhmmOf, londonInstant, meetingDayTime, nextActionText, nextActionView } from '@/lib/nextActionView';
+import { isStaleSave, snapshotOf, toSnapshotArg, type NextActionSnapshot } from '@/lib/nextActionStale';
 
 /* ⛔ THE ONE WRITE FOR A NEXT ACTION (2026-10-02, Paul: "ONE shared model and ONE shared set of action types").
  *
@@ -31,7 +32,23 @@ export interface NextActionInput {
   note: string | null;
   /** ✓ Done (History: completed) rather than Clear (cleared). Only with 'none'. */
   done?: boolean;
+  /** What the screen SHOWED when the person opened the editor (NextActionForm captures it). When the stored
+   *  action, day or time has changed since — another tab, another device — the server refuses rather than
+   *  silently replacing it (stale_next_action), and the person is asked first. Absent = no check. */
+  expected?: NextActionSnapshot | null;
 }
+
+/* The snapshot and the stale rule live in the pure leaf (src/lib/nextActionStale.ts); re-exported for the editors. */
+export { snapshotOf, isStaleSave, type NextActionSnapshot };
+
+/** "Replace it?" — asked when the Next Action changed under the person. A function so tests (and a later
+ *  in-app dialog) can answer it; the default is the browser's own confirm, and no browser means no. */
+export type StaleConfirm = (currentText: string) => boolean | Promise<boolean>;
+const browserConfirm: StaleConfirm = (currentText) =>
+  typeof window !== 'undefined' && typeof window.confirm === 'function'
+    ? window.confirm('This Next Action was changed since you opened it.\n\nIt is now: ' + currentText + '\n\nReplace it with yours?')
+    : false;
+
 
 export type WriteResult = RpcResult & { patch?: Record<string, unknown> };
 
@@ -39,7 +56,7 @@ export type WriteResult = RpcResult & { patch?: Record<string, unknown> };
  *  2026-09-28): the chosen values reach every open screen the moment Save is pressed (an optimistic notice —
  *  nobody re-reads yet); a refusal sends a plain notice, so every reader re-reads the true row. With the lead's
  *  state, a Meeting booked here also records "Meeting booked" in History. */
-export async function saveNextAction(leadId: string, a: NextActionInput, stateLead?: LeadStateInput): Promise<WriteResult> {
+export async function saveNextAction(leadId: string, a: NextActionInput, stateLead?: LeadStateInput, confirmReplace: StaleConfirm = browserConfirm): Promise<WriteResult> {
   const none = a.nextAction === 'none';
   /* Done / Clear take the note with the action (the server does the same; History keeps it). */
   const note = none ? null : ((a.note ?? '').trim() || null);
@@ -50,7 +67,17 @@ export async function saveNextAction(leadId: string, a: NextActionInput, stateLe
      so completing, clearing or changing a Meeting takes its booking with it, on every open screen at once. */
   const patch: Record<string, unknown> = { next_action: a.nextAction, next_action_date: date, next_action_time: time, next_action_note: note, call_booked_at: meetingAt };
   notifyLeadChanged(leadId, undefined, patch, true);
-  const r = await leadRpc('lead_set_follow_up', { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) });
+  const args = { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) };
+  let r = await leadRpc('lead_set_follow_up', a.expected ? { ...args, _expected: toSnapshotArg(a.expected) } : args);
+  /* ⛔ NEVER A SILENT REPLACE (Session E E-13): the stored one changed since this screen opened. Say what it is
+     now; only a yes sends again, expecting what is there NOW (so a third change is caught too). */
+  if (!r.ok && r.error === 'stale_next_action' && r.current && typeof r.current === 'object') {
+    const cur = r.current as { next_action?: string | null; date?: string | null; time?: string | null; note?: string | null };
+    const view = nextActionView({ next_action: cur.next_action ?? 'none', next_action_date: cur.date ?? null, next_action_time: cur.time ?? null, next_action_note: cur.note ?? null });
+    if (await confirmReplace(view ? nextActionText(view) : 'nothing planned')) {
+      r = await leadRpc('lead_set_follow_up', { ...args, _expected: { next_action: cur.next_action ?? 'none', date: cur.date ?? null, time: cur.time ?? null } });
+    }
+  }
   if (!r.ok) { notifyLeadChanged(leadId); return r; }
   if (meetingAt && stateLead) await recordStateChange(leadId, salesStateOf(stateLead), salesStateOf({ ...stateLead, call_booked_at: meetingAt }), 'meeting_booked');
   notifyLeadChanged(leadId, undefined, patch);

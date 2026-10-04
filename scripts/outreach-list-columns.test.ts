@@ -32,7 +32,9 @@ const ENTRIES = [
 const COLUMN_LISTS = "src/lib/outreachLeadColumns.ts";
 /* The row audit popup (2026-09-28) takes only id + business_name off the list row; the panel inside it
    reads its own row by id (useLeadCrmRow), exactly as the detail dialog does — the walk stops there. */
-const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", COLUMN_LISTS];
+/* Quick Close (2026-10-04, on the call screen and the Log-a-contact result line): the dialog loads its own state by
+   lead id through quick-close — it takes only the lead id from whoever opens it, never a list row. */
+const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", "src/components/QuickCloseDialog.tsx", COLUMN_LISTS];
 
 /* ── Hand-checked 2026-09-27: these files NAME the column, but never read it off a list row. ──────
    Pinned per FILE: the same column read in any other file still fails. */

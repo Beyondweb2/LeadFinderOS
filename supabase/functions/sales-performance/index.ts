@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
 
     const fetchedLeads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
-        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at", (c ? { count: "exact" } : undefined));
+        .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at, is_archived", (c ? { count: "exact" } : undefined));
       /* The person's leads, plus any client they SOLD that has since been reassigned (the win stays theirs). */
       if (personId) q = q.or(`assigned_to_user_id.eq.${personId},sold_by_user_id.eq.${personId}`);
       return q.order("id").range(a, b);
@@ -163,6 +163,8 @@ Deno.serve(async (req) => {
       const names = new Map(e.clients.map((c) => [c.leadId, c.business]));
       if (e.commissionable) commission = e.lines.filter((l) => l.status !== "not_commissionable").map((l) => ({ at: l.occurredAt, amount: l.commission, leadId: l.leadId, label: l.label, business: names.get(l.leadId) ?? "Client" }));
     } catch (err) { console.error("[sales-performance] earnings", err instanceof Error ? err.message : err); }
+    /* ⛔ is_archived rides on each lead (fix workstream 5, 2026-10-04): the workspace fold keeps an archived lead's
+       HISTORY (counts, feed) and never makes it work (actions, follow-ups, meetings) — salesWorkspace.ts isActiveWork. */
     /* Quick Close states (small: only rows that have one), for "finish it" / "chase the link". */
     const quickClose = new Map<string, { state: ReturnType<typeof quickCloseState>; linkAt: string | null }>();
     try {

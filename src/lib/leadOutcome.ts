@@ -17,8 +17,9 @@ import { leadRpc } from '@/lib/leadRpc';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { refusalText } from '@/lib/salesCrm';
 import { outcomePlan, salesStateOf, REACHED_OUTCOMES, type LeadStateInput, type OutcomePlan, type SalesStateView } from '@/lib/leadState';
+import { snapshotOf, toSnapshotArg } from '@/lib/nextActionStale';
 
-export interface OutcomeLead extends LeadStateInput { id: string; next_action?: string | null }
+export interface OutcomeLead extends LeadStateInput { id: string; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null }
 
 /** The note the saved task carries (the person can change it). */
 const OUTCOME_TASK_NOTE: Record<'call' | 'meeting', string | null> = { call: 'They asked to be called back', meeting: null };
@@ -80,7 +81,11 @@ export async function applyOutcome(lead: OutcomeLead, outcome: string, before: S
     }
   }
   if (plan.clearNextAction) await step('lead_set_follow_up', { _next_action: 'none', _date: null, _note: null }, 'Next action cleared');
-  if (plan.setNextAction) await step('lead_set_follow_up', { _next_action: plan.setNextAction, _date: null, _note: OUTCOME_TASK_NOTE[plan.setNextAction] }, `Next Action set: ${plan.setNextAction === 'call' ? 'Call' : 'Meeting'} · No date set`);
+  /* ⛔ The task an outcome saves never silently replaces one changed on another screen meanwhile (E-13): it
+     expects what this screen showed; a stale screen is refused and said in the result line. */
+  if (plan.setNextAction) await step('lead_set_follow_up', { _next_action: plan.setNextAction, _date: null, _note: OUTCOME_TASK_NOTE[plan.setNextAction],
+    _expected: toSnapshotArg(snapshotOf(lead)) },
+    `Next Action set: ${plan.setNextAction === 'call' ? 'Call' : 'Meeting'} · No date set`);
   if (plan.clearMeeting) await step('lead_set_call_booked', { _at: null }, 'Meeting cancelled');
   if (plan.suppressNumber) await step('lead_mark_wrong_number', {}, 'Number blocked: no templates, queue or automated WhatsApp');
   /* A refused write means the plan did not fully happen: the reading is then the contact alone, and no

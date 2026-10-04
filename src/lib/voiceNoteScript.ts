@@ -54,11 +54,12 @@ import { findingMentioned, sayableDetails, findingSourceLabel, selectReplyFindin
 import type { ResearchFinding, WarmLeadResearch } from './warmLeadResearch.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { SALES_STYLE_RULES, salesStyleProblems } from './salesStyle.ts';
+import { callerFirstName } from './callerName.ts';
 
 /** Bump when the prompt, the pick or the checks change in a way worth telling apart in stored rows.
  *  v4 (2026-09-30): the shared house style (salesStyle.ts) in the prompt and the checks, one beat per
  *  line so it reads aloud with a breath between, and the derived short version (shortVoiceNote). */
-export const VOICE_NOTE_GENERATOR_VERSION = 4;
+export const VOICE_NOTE_GENERATOR_VERSION = 5;
 /** The stronger writing model (Paul, 2026-09-26: tone matters, ~1–2p a script is fine). */
 export const VOICE_NOTE_MODEL = 'gpt-4o';
 /** The spoken target, ~30–45 seconds at Paul's pace (Paul, 2026-09-27: shorter is better). */
@@ -267,6 +268,7 @@ export function findingRecord(f: ResearchFinding): VoiceNoteFindingRecord {
 export const VOICE_NOTE_SYSTEM_PROMPT = `You write WhatsApp voice-note scripts for Paul, a British guy who helps local trades businesses get named by AI search (ChatGPT and Google AI). Paul reads the script out loud and records it himself. You return ONLY the script, via the return_script tool.
 
 THE SHAPE, five short beats, in this order. Every sentence has to earn its place:
+0. WHO IS SPEAKING, first, in a few words: "hi mate, it's Paul from Findable." Use the name given under WHO IS SPEAKING (Paul when none is given). Never skip it: the owner has to know who is talking before anything else.
 1. SEARCH CONTEXT, one short sentence: the trade, the town and the engine, nothing else. "hi mate, i asked Google AI for an electrician in Shrewsbury" or "hi mate, i was looking for an electrician in Shrewsbury, so i asked Google AI". No adjective on the trade ("a reliable electrician", "a trusted electrician") and no reason for the search. Do NOT read the search back and do NOT narrate its qualifiers ("who can come out today", "near me", "for a same-day job", "UK"). At most ONE word of the search may colour the trade, and only if it is the heart of it (an "emergency locksmith"); usually leave it out.
 2. THE MISS, one sentence: "it came up with [the competitors], but you didn't come up." Name every competitor given, exactly, and no others.
 3. THE FINDING: "i had a look at why you weren't coming up and found something that could be holding you back:" (or "a few things that could be holding you back" ONLY when you are given two website points) + the website point, in very plain English, keeping its concrete details. Use a second point only if it is the same kind of problem and fits in the same sentence. The conclusion stays hedged: "could be holding you back", never "this is why".
@@ -321,6 +323,8 @@ export interface VoiceNotePromptInput {
   avoid?: string | null;
   /** Problems with the previous attempt, on the one automatic rewrite. */
   rewriteProblems?: string[] | null;
+  /** Who records it: the signed-in person's first name (callerName.ts). Absent = the book owner's. */
+  caller?: string | null;
 }
 
 const NO_POINT_LINES: Record<Exclude<VoiceNoteSiteMode, 'findings'>, string> = {
@@ -374,6 +378,8 @@ export function spokenTrade(trade: string): string {
 export function shortVoiceNote(i: {
   engineLabel: string; competitors: readonly string[]; trade: string | null | undefined; area: string | null | undefined;
   site: Pick<VoiceNoteSite, 'mode' | 'source' | 'sourceLabel'>;
+  /** Who records it (callerName.ts); absent = the book owner. Said first (fix workstream 5, 2026-10-04). */
+  caller?: string | null;
 }): string | null {
   const names = i.competitors.map((c) => c.trim()).filter(Boolean).slice(0, 3);
   const t = articleTrade(i.trade ?? '');
@@ -381,13 +387,14 @@ export function shortVoiceNote(i: {
   if (!names.length || !t.ok || !i.engineLabel.trim()) return null;
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   const label = i.site.sourceLabel ?? 'directory';
+  /* No "quick one" (filler, Session A A-21). With no website on file it confirms rather than interrogates. */
   const ask = voiceNoteCtaKind(i.site) === 'own_site'
-    ? 'quick one, do you look after the website yourself, or is it managed by an agency?'
+    ? 'do you look after the website yourself, or is it managed by an agency?'
     : voiceNoteCtaKind(i.site) === 'profile'
-      ? `quick one, have you got a website of your own, or is ${label} mainly what you're using?`
-      : 'quick one, have you got a website at the moment, or not yet?';
+      ? `have you got a website of your own, or is ${label} mainly what you're using?`
+      : "have you got a website i missed, or is it something you've not got round to?";
   return [
-    `hi mate, i asked ${i.engineLabel} for ${t.value}${town ? ` in ${town}` : ''} and it came up with ${list}, but you didn't come up.`,
+    `hi mate, it's ${callerFirstName(i.caller)} from Findable. i asked ${i.engineLabel} for ${t.value}${town ? ` in ${town}` : ''} and it came up with ${list}, but you didn't come up.`,
     'i specialise in AI visibility for local businesses.',
     ask,
   ].join('\n');
@@ -396,6 +403,7 @@ export function shortVoiceNote(i: {
 export function buildVoiceNotePrompt(input: VoiceNotePromptInput): string {
   const e = input.evidence;
   const lines: string[] = [
+    `WHO IS SPEAKING (open with it, e.g. "hi mate, it's ${callerFirstName(input.caller)} from Findable"): ${callerFirstName(input.caller)} from Findable`,
     `BUSINESS (you are talking TO them; never say this name in the script): ${input.business}`,
     `TRADE: ${input.trade} (say it like "${spokenTrade(input.trade)}")`,
     `AREA: ${input.area}`,
@@ -481,7 +489,9 @@ const CAUSATION: RegExp[] = [
   /\bwhy (google( ai)?|chatgpt|ai|it|they) (recommended|picked|chose|went with|named)\b/,
 ];
 const PRICE = /£\s?\d|\b\d+\s?(quid|pounds|pence)\b|\bprice|\bpricing\b|\bper month\b|\bmonthly\b|\b(a|per) year\b|\bfee\b|\bdiscount/;
-const LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(co\.uk|com|uk|live|net|org|io)\b|\bfindable\b/i;
+/* ⛔ "from Findable" is the speaker saying who they are (fix workstream 5, 2026-10-04: a voice note must say who is
+   talking) — the bare brand word is allowed; the ADDRESS, written or said ("findable dot live"), is still a link. */
+const LINK = /https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(co\.uk|com|uk|live|net|org|io)\b|\bfindable\s+dot\s+live\b/i;
 /* The general filler ("hope this finds you", "unlock", "leverage", "digital presence", "revolutionise"…)
    is salesStyle.ts's list, checked below; these two are the voice note's own. */
 const BANNED: Array<[RegExp, string]> = [
@@ -622,7 +632,7 @@ export function readsSearchVerbatim(script: string, question: string): boolean {
 const VERDICT = /\b(weak|poor|lacking|insufficient) (evidence|proof|credentials|qualifications|content|site|website)\b|\bno (real )?evidence\b|\byour (site|website) is (poor|weak|bad|rubbish)\b/;
 const POLISHED_ENDING = /\bjust let me know\b|\bif youd like\b|\bfeel free to (reach out|get in touch)\b|\bdont hesitate\b|\blook forward to hearing\b/;
 
-export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null; business?: string | null }): VoiceNoteCheck {
+export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvidence; site: VoiceNoteSite; town?: string | null; trade?: string | null; business?: string | null; caller?: string | null }): VoiceNoteCheck {
   const script = tidyScript(raw);
   const t = norm(script);
   /* The claim, link and phrase checks read the script WITHOUT the competitor names: "Block Paving Co"
@@ -715,6 +725,8 @@ export function checkVoiceNoteScript(raw: string, ctx: { evidence: VoiceNoteEvid
   else if (words > VOICE_NOTE_HARD_WORDS.max) problems.push(`Far too long (${words} words, aim for ${VOICE_NOTE_TARGET_WORDS.min}–${VOICE_NOTE_TARGET_WORDS.max}).`);
   else if (words < VOICE_NOTE_NOTE_WORDS.min || words > VOICE_NOTE_NOTE_WORDS.max) warnings.push(`${words} words, a little outside the ${VOICE_NOTE_TARGET_WORDS.min}–${VOICE_NOTE_TARGET_WORDS.max} target.`);
   if (!/\bai visibility\b/.test(t)) warnings.push('Does not say Paul specialises in AI visibility.');
+  /* Who is speaking (fix workstream 5, 2026-10-04): checked when the caller is known (the function passes it). */
+  if (ctx.caller && !/\bfrom findable\b/.test(t)) warnings.push(`Does not say who is speaking ("it's ${callerFirstName(ctx.caller)} from Findable").`);
   if (/[—–]/.test(raw)) warnings.push('A dash was replaced with a comma.');
   return { script, wordCount: words, problems, warnings };
 }
