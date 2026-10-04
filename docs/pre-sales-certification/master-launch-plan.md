@@ -22,6 +22,13 @@
   M-003, M-005, M-010 and M-017 on `origin/main`, and corrected two contradictions between this plan's sections:
   **M-003 now sits in Gate 1** (the security section already said "before any real login"), and **M-015 is now a
   Gate 3 blocker** (the call-first section already listed it in the minimum). Counts unchanged.
+- **Amendment — Paul's business decision on Ronnie (4 October 2026):** Ronnie is **no longer an active client**.
+  He paid the initial £99 but never sent the services / information needed to continue, and has gone quiet. The
+  engagement is **closed / completed early**: no refund, the £99 and its revenue kept, no further payments, no
+  further work, **no 13 October re-measure**, and **no attempt to repair or re-run the wrong locksmith question
+  set**. M-004 changes from "hold, then re-run his real questions" to **"close Ronnie with the existing
+  ended-client mechanism before 13 October"**. Ronnie's live record was **not** changed by this planning session.
+  The SQL facts above about his baseline stay as history; they no longer drive any action.
 
 ---
 
@@ -43,10 +50,11 @@ What blocks launch is a short list of specific breaks, and most are one-line or 
 | **M-001** | A Build sale cannot reach a payment link | Quick Close throws away the last Build answer. Every no-website prospect, the hottest call-first lead, cannot be closed. | one line + a test |
 | **M-002** | Every salesperson can read and send Paul's private saved texts | Paul's personal AI prompt with his login email and account id, two old live Stripe Payment Links, and an old "£19.99 / eight weeks" offer. | one policy + Paul deactivates two links |
 | **M-003** | Anyone on the internet can post fake customer WhatsApp replies | Proved live. Forged replies move leads, suppress prospects and can start paid audits. | Paul sets one secret, then a one-line fail-closed change |
-| **M-004** | Ronnie's only re-measure (13 Oct) will be spent on three locksmith questions | One re-measure per lead, ever. It fires automatically. **TIME CRITICAL.** | a decision by Paul, then a hold or a small replay change |
+| **M-004** | Ronnie is no longer an active client, but the system still treats him as one: an automatic re-measure fires on 13 Oct (on a wrong locksmith question set) | Paul has closed the engagement. Unless the record is closed, the cron spends and claims a re-measure for a client we have stopped serving. **TIME CRITICAL.** | no code: one existing admin action (Completed / client ended early) + read-back |
 
-M-001 to M-003 block the launch. M-004 blocks nothing else, but it has a hard date, and the damage cannot be
-reversed.
+M-001 to M-003 block the launch. M-004 blocks nothing else, but it has a hard date: **close Ronnie using the
+existing ended-client mechanism, and make sure his 13 October re-measure and all future billing and work are
+off, before 13 October.**
 
 **The call-first workflow is not usable end to end today.** Only one path works from start to finish: an
 Optimise close where the prospect messaged in the last 24 hours. Five things are missing or broken:
@@ -105,7 +113,7 @@ WS-1 … WS-7 are defined under *Engineering workstreams*.
 | **M-001** | **P0** | Quick Close cleans the single incoming answer before merging, so `build_consents` is always dropped; Build never reaches "ready" | A-01, B-01 (D, C cross-ref) | Quick Close | Call, Pay, Build | WS-2 | Dialog-shaped test: save the 7 Build answers one call each → state `ready`; live on a fixture: Generate link appears, £99 session created |
 | **M-002** | **P0** | `sales_select_templates` lets every rep read (and send) all 15 of Paul's private saved texts | A-02, E (Saved Quick Reply, role matrix) | RLS / Inbox | Login | WS-1 + Paul | As a rep: `templates` returns only the rep's own rows; Quick reply shows none of Paul's; the two old Payment Links show "inactive" in Stripe |
 | **M-003** | **P0** | `whatsapp-status` verifies Meta's signature only if `WHATSAPP_APP_SECRET` is set; it is not, so unsigned posts are accepted | E-01, README §5 | Webhook | Login, Call | WS-1 + Paul | Unsigned post → 401, nothing stored; a genuine Meta delivery still lands; secret missing → 401 (fail closed) |
-| **M-004** | **P0 — TIME CRITICAL (13 Oct)** | Ronnie's day-28 replay reads baseline run 1 = three wrong-category locksmith questions; the one-replay index makes it permanent | C-01 (E notes; confirmed today) | Re-measure | Existing (Ronnie) | WS-4 + Paul | Before 13 Oct: Paul's decision recorded, and either the hold is in place (read back) or the replay reads the approved shoe-repair set (dry-run proof); no `remeasure` audit exists for Ronnie on 13 Oct unless it is the approved set |
+| **M-004** | **P0 — TIME CRITICAL (13 Oct)** | Ronnie has disengaged (Paul, 4 Oct: closed / completed early) but his record is still a live paid client, so the day-28 replay will fire on 13 Oct (on run 1's wrong locksmith set) and future work stays scheduled | C-01 (E notes; Paul's decision 4 Oct) | Client lifecycle | Existing (Ronnie) | Paul (the close) + WS-3 (read-back and the ended-client tests) | Before 13 Oct: `service_terminated_at` set with reason `client_ended_early` (read back); `fireDueRemeasures`' query does not return him; no `remeasure` audit for him on or after 13 Oct; `amount_paid` 99, ledger, revenue and commission rows unchanged; no live Stripe subscription or schedule; Paid Clients shows COMPLETED |
 | M-005 | P1 | Inbound WhatsApp from a lead never messaged by the system is not matched (spaced phones; owner grouped by `user_id`) | E-07 | Inbound | Call | WS-1 | Inbound from a fixture with a spaced phone and no outbound → linked to the lead, holder (`assigned_to_user_id`) gets unread + a notification |
 | M-006 | P1 | `crawl-check` lets a rep read another job's result (`job_id`) and write a crawl into any run (`run_id`) | E-06 | Crawl | Call (security) | WS-1 | As a rep: `job_id` / `run_id` not belonging to the rep's own lead → 403; own lead unchanged |
 | M-007 | P1 | Live service-role and anon JWTs stored as vault secret **names** | A-31, E-08 | Secrets | — (hygiene) | WS-1 + Paul | `select name from vault.secrets` shows no JWT-shaped names; rotation decision recorded |
@@ -199,16 +207,46 @@ WS-1 … WS-7 are defined under *Engineering workstreams*.
   4. Replace QA inbound simulation with a `CRON_SECRET`-gated, fixture-only path. This mirrors the payment
      simulation and is needed by the final regression.
 
-### M-004 — Ronnie's 13 October re-measure (TIME CRITICAL, existing client)
-- **Source:** C-01. Confirmed again today by read-only SQL (see header).
-- **What happens on 13 Oct if nothing changes:**
-  - `fireDueRemeasures` replays run 1 (three "Locksmiths in Halifax" questions × 3 runs, about $0.13).
-  - It claims Ronnie's one-and-only re-measure slot, and the pointer is immutable.
-  - It compares those three questions against an 18-question before side.
-  - Nothing is sent to Ronnie (he has no contract, so his results are held), but his genuine before-and-after can
-    never be produced by the system.
-- **Real severity: P0, existing client only, dated.** It blocks no other gate.
-- **Owner:** Paul decides; WS-4 executes. See *Existing client actions*.
+### M-004 — Close Ronnie before his 13 October re-measure (TIME CRITICAL, existing client)
+- **Source:** C-01 found the replay and its wrong question set. **Paul's decision (4 Oct)** replaces the original
+  fix: Ronnie paid £99, never sent the services / information needed to continue, and has gone quiet. The
+  engagement is **closed / completed early**. No refund; the £99 and its revenue are kept; no further payments; no
+  further work; **no 13 October re-measure**; **no repair or re-run of the locksmith question set**.
+- **What happens on 13 Oct if nothing changes:** `fireDueRemeasures` replays his run 1 (three "Locksmiths in
+  Halifax" questions × 3 runs, about $0.13 of Apify), claims a re-measure slot and creates a comparison for a
+  client we no longer serve. Weekly checks and other paid-client work also stay switched on for him.
+- **The required pre-13-October action:** **"Close Ronnie using the existing ended-client mechanism and ensure
+  his scheduled 13 October remeasurement and all future billing/work are disabled."**
+  - **The mechanism (exists, live since 3 Oct, used for MCLocksmiths):** Paid Clients → the client page → end the
+    engagement with reason **`client_ended_early`**, which is paid-client-hub `terminate_service` (a note of at
+    least 10 characters plus an explicit confirm). It writes `outreach_leads.service_terminated_at` (+ reason,
+    note, by), the ONE terminal mark (`src/lib/serviceEnd.ts`). Paid Clients then shows **COMPLETED** —
+    "Engagement ended early by the client. What they paid is kept; no further payments, delivery, re-measure or
+    monthly updates." It is the legitimate terminal state; it never marks a delivery stage done, so no
+    successful delivery is fabricated.
+  - **What it already stops (code-checked on `origin/main`):** the re-measure firer (`audit-baseline.ts:646`
+    filters `service_terminated_at is null`), the results sender (`remeasure-results.ts:149`), weekly visibility
+    checks (`weekly-visibility:76`), performance sync (`performance-sync:121`), the admin paid-client counts and
+    "needs you" actions (`adminMetrics.ts:721, 920`), and the delivery stage (shown as Completed).
+  - **What it never touches, by design:** money. No refund, no ledger row, no commission change. If a Stripe
+    subscription is live, the action emails Paul to cancel it in Stripe himself (the app never moves money).
+  - **Who:** Paul presses it, or a session runs the same action with his explicit yes. Either way, a session then
+    reads the record back (acceptance in the master table) and records the result in `docs/`.
+  - **Do NOT:** move or clear `remeasure_due_date` (the firer already skips an ended client; clearing dates is
+    exactly the C-09 hazard), archive him instead (archiving is not a client state and hides the history), set
+    `status='refunded'`, delete or re-extract his baseline `1a0603aa`, or generate a new question set.
+- **Gaps the closing tests must cover (found while checking the mechanism):**
+  - **A payment replay after the close** (M-016 / E-02, proved live on an ended fixture): status goes back to
+    `payment_received` and the onboarding row back to `paid`. `service_terminated_at` survives, so no work
+    restarts, but the label regresses. M-016's fix must keep an ended client ended.
+  - **`invoice.paid` after the close** (E-17): would mark the subscription active and earn commission. Ronnie
+    paid in August, before delayed subscriptions existed, so he should have none — **verify, do not assume**.
+  - **Monthly updates:** `client_monthly_updates` / `monthlyUpdate.ts` never read `service_terminated_at`. Nothing
+    sends one automatically, but nothing stops Paul starting one for an ended client. Add a refusal (WS-3).
+- **Real severity: P0, existing client only, dated.** It blocks no other gate. No product code is needed for the
+  close itself; the tests and the three small guards above belong to WS-3.
+- **Owner:** Paul (the close, by Friday 9 October; last safe day Monday 12 October), WS-3 (read-back and tests).
+  See *Existing client actions*.
 
 ---
 
@@ -249,9 +287,10 @@ Grouped by the workstream that fixes them. Full rows are in the master table.
 - **M-010 — the shared audit budget.** Two different caps:
   - **$12 rolling 24 h** (`process-ai-audit-queue/index.ts:98`), keyed on the data account that owns every audit,
     including baselines and re-measures.
-  - **Apify $40 / month**: about 72% used on 4 Oct, the cycle ends 16 Oct, and Ronnie's replay is on 13 Oct.
+  - **Apify $40 / month**: about 72% used on 4 Oct; the cycle ends 16 Oct. (Ronnie's 13 Oct replay no longer
+    needs budget: he is being closed, M-004.)
   - **Severity: P1, but its interim half is a Gate 2 requirement.** Real reps running hook audits from now on are
-    the most likely way Ronnie's day, or a client's baseline, ends `capped`.
+    the most likely way a paying client's baseline or re-measure ends `capped`.
 
 **Quick Close and the payment link (WS-2)**
 - **M-011 — terms before the link.** Disputes over the minimum term are money. The checkout and agreement already
@@ -334,7 +373,7 @@ Grouped by theme. Each is real, none blocks a controlled launch.
 | M-060 | Measurement hygiene: competitor variants not merged and the client as its own rival; cleaning gives up under OpenAI 429; raw citations, `.org` = authority; model-first "named" on internal surfaces; OpenAI spend untracked | C-16, C-17, C-18, C-29, C-32 | WS-4 |
 | M-061 | Baseline workflow details: backlog/guarantee overlap after reopen; stage skipping and stale labels; monthly update judgeability; selection details; opportunity check has no claim; run-pooling differs by surface; **pointer triggers and one-replay index not in migrations**; legacy rows regenerable server-side; hook precision and engine naming; empty answer counted | C-19–C-27, C-31 | WS-4 |
 | M-062 | Website Build polish: home-town page on by default with nothing local (D-10, **re-graded P1 → P2**: Paul turns it off per build until fixed); template extraction; `standout` missing from config; prompt contradictions and length; "Built by Findable" credit on by default (Paul decision); mechanical repetition; mobile email wrap; "Launched" event hard-coded to Build; no "Preview concept" label; page-generator leftovers | D-10, D-11, D-13, D-14, D-16, D-17, D-18, D-22, D-23, D-24 | WS-6 |
-| M-063 | Stale docs that will mislead fix sessions: CLAUDE.md §8 `run_number` (unique index exists), §1 "Named = model's verdict" and "RG due 6 Oct — approve before then" (RG refunded, will not fire), §4/§8 `client_error_reports` has no `message` (it does now), §5 "no website cannot be named by Gemini" (counter-example in A-05); README fixture email now suppressed | C-30, E-23, A-05, E-10 | the first fix session to merge (docs only) |
+| M-063 | Stale docs that will mislead fix sessions: CLAUDE.md §8 `run_number` (unique index exists), §1 "Named = model's verdict" and "RG due 6 Oct — approve before then" (RG refunded, will not fire), §4/§8 `client_error_reports` has no `message` (it does now), §5 "no website cannot be named by Gemini" (counter-example in A-05); §0 "two paying customers, RG and Ronnie" (RG refunded; Ronnie closed 4 Oct, see M-004); README fixture email now suppressed | C-30, E-23, A-05, E-10 | the first fix session to merge (docs only) |
 | M-064 | `cert/b-close-payment` contains five live Checkout Session ids; audit branches must never be merged as-is | E-22 | none — do not merge audit branches |
 
 ---
@@ -346,7 +385,7 @@ Grouped by theme. Each is real, none blocks a controlled launch.
 | M-001 | A-01, B-01 (+ D upstream, C note) | Same line, found twice independently | P0 (both agreed) |
 | M-002 | A-02, E §Saved Quick Reply, E role matrix | E traced A's finding to the policy | P0 (both agreed) |
 | M-003 | E-01, README §5 | README documented the hole as a QA convenience | P0 |
-| M-004 | C-01, E (Ronnie reliability note) | Same replay | P0 time-critical, existing-only |
+| M-004 | C-01, E (Ronnie reliability note), Paul's decision 4 Oct | Same replay; resolved by closing him | P0 time-critical, existing-only |
 | M-007 | A-31, E-08 | A saw it in passing; E confirmed and scoped it | P1 (E), not an emergency |
 | M-008 | A-03, B-13 | Same dashboard and handoff fold; B-13 is the "not ready" variant | P1 |
 | M-009 | A-04, A-05, A-06, A-21, A script / objection audits | One builder family (`coldCallPlaybook.ts`, `voiceNoteScript.ts`) | P1 (A-21 rides along) |
@@ -397,7 +436,7 @@ there is only one of it. WS-4 owns it; WS-6 consumes it.
 | 16 | AI question generation inventing services | M-028 | P1, Gate 6 (stand-in: Paul removes them by hand) |
 | 17 | Keyword-like / low-quality baseline questions | M-029 | P1, Gate 6 (core slots required; style can follow with stand-in) |
 | 18 | Silent / capped baseline failures | M-027 (+M-010) | P1, Gate 6 |
-| 19 | Ronnie 13 October | M-004 | P0 time-critical, existing-only |
+| 19 | Ronnie 13 October | M-004 | P0 time-critical, existing-only. **Paul, 4 Oct: Ronnie is closed (client ended early, £99 kept, no refund, no further work); the action is the close before 13 Oct, not a hold or re-run** |
 | 20 | Website intent mapping accepting unsupported services | M-035 | P1, Gate 5 (stand-in for the first 1–3) |
 | 21 | Website Build `section on /` gate failure | M-036 | P1, Gate 5 required |
 | 22 | Website claim truthfulness enforcement | M-037 | P1, Gate 5 / Gate 4 (stand-in: Paul's claim-read) |
@@ -416,6 +455,8 @@ there is only one of it. WS-4 owns it; WS-6 consumes it.
   the one status that removes a lead from revenue.
 - **Ronnie (C-01 P0 vs the existing note in `docs/baseline-workflow.md`, "Paul's decision") → P0 time-critical.**
   The old note said "3 vs 18 questions". It did not say run 1 is the wrong trade. Confirmed today by SQL.
+  **Superseded by Paul's 4 Oct decision:** Ronnie is closed (client ended early), not re-measured; M-004 stays P0
+  time-critical because the close must happen before 13 Oct.
 - **Is the call-first workflow blocked by the lack of bulk audit (E-04)? → No.** One-lead checks work and are
   guarded. Bulk is a P1 product build for normal rollout. The blockers for real calling are M-003, M-005, M-008,
   M-009 and the budget protection in M-010.
@@ -538,7 +579,7 @@ per-rep guard and per-lead limits, and count a 100-lead job as one guard row (E-
   - nothing new reaches day 28 before about 1 Nov;
   - RG is refunded and will not fire;
   - MCL is ended and will not fire;
-  - Ronnie is the exception (M-004).
+  - Ronnie will not fire **once he is closed** (M-004) — that close is the one dated action.
 - **Never promised anywhere, and must stay that way:** guaranteed recommendation, guaranteed citations, rankings,
   guaranteed Google AI inclusion. C and D found none in client copy. M-026 and M-032's causal sentence are the
   two places that drift toward implied promises.
@@ -605,30 +646,61 @@ per-rep guard and per-lead limits, and count a 100-lead job as one guard row (E-
 **Nothing in this section was changed by this session.** These are instructions for the fix sessions and
 decisions for Paul.
 
-### Ronnie's Shoe Repairs & Key Cutting — TIME CRITICAL (13 October 2026)
+### Ronnie's Shoe Repairs & Key Cutting — CLOSE BEFORE 13 OCTOBER 2026 (TIME CRITICAL)
 
-- **Facts (read-only SQL today):**
-  - lead `payment_received`, not archived, not terminated;
-  - `remeasure_due_date = 2026-10-13`; `remeasure_audit_id` null;
-  - baseline `1a0603aa` (legacy 5-run): run 1 = 3 locksmith questions; runs 2–5 = 15 shoe-repair, key-cutting
-    and watch questions, each asked once.
-- **On 13 Oct the cron will:**
-  - replay run 1;
-  - claim his only re-measure, permanently;
-  - compare 3 locksmith questions against 18.
-- **Results are held** (no contract on the row), so nothing reaches Ronnie automatically.
-- **Paul's options:**
+- **Paul's decision (4 October 2026):** Ronnie is **no longer an active client**. He paid the initial £99, never
+  sent the services / information needed to continue, and has gone quiet. The engagement is **closed / completed
+  early**:
+  - **no refund**; the historic £99 payment and its revenue are **kept**;
+  - **no further payments**; **no further work**;
+  - **no 13 October re-measure**, and **no repair or re-run** of the wrong locksmith question set;
+  - **stop** all future baseline, re-measure, monthly-update, reminder and delivery activity;
+  - historic records and any commission already earned are **preserved**;
+  - closed with the **existing legitimate Completed / client-ended-early** mechanism — never by fabricating a
+    successful delivery state.
+- **Record as last read (read-only SQL, 4 Oct; not changed by this session):** lead `payment_received`, not
+  archived, not terminated; `remeasure_due_date = 2026-10-13`; `remeasure_audit_id` null; legacy baseline
+  `1a0603aa` (run 1 = 3 locksmith questions, runs 2–5 = 15 shoe-repair / key-cutting / watch questions).
+- **THE REQUIRED PRE-13-OCTOBER ACTION:** **Close Ronnie using the existing ended-client mechanism and ensure his
+  scheduled 13 October remeasurement and all future billing/work are disabled.**
+  1. **Close:** Paid Clients → Ronnie → end the engagement, reason **"client ended early"** (paid-client-hub
+     `terminate_service`, reason `client_ended_early`, a note such as "Paid £99, never sent the information
+     needed to continue, gone quiet; closed by Paul 4 Oct 2026 — no refund, no further work", confirm). Paul
+     presses it, or a session runs it with his explicit yes. Nothing else is written by hand.
+  2. **Read back (a session, read-only SQL, recorded in `docs/`):**
+     - `service_terminated_at` set; `service_termination_reason = 'client_ended_early'`;
+     - `amount_paid` still 99; `status` not `refunded`; his `payment_ledger` / commission rows unchanged in
+       count and value (diffed against a snapshot taken just before the close);
+     - `fireDueRemeasures`' exact query (`audit-baseline.ts:640-652`) returns no row for him;
+     - `stripe_subscription_id` null and Stripe shows no subscription or subscription schedule for him. If one
+       exists, **Paul cancels it in Stripe** (the close action emails him to do so; the app never moves money);
+     - Paid Clients shows him **COMPLETED · "Completed — nothing further to do"**; he is absent from the admin
+       "needs you" list, the paid-client count, weekly checks and performance sync.
+  3. **Watch on 13–14 Oct:** no `ai_audits` row with `audit_purpose='remeasure'` for his lead; no Apify spend
+     against him.
+- **Do NOT:** move or clear his `remeasure_due_date` (the firer already skips an ended client, and clearing dates
+  is the C-09 hazard); archive him instead of closing; set `refunded`; delete, regenerate or re-extract
+  `1a0603aa`; create any new question set; send him anything.
+- **Deadline:** close by **Friday 9 October 2026**. Last safe day **Monday 12 October** (the firer runs on the
+  cron and treats a date ≤ today in UTC as due, so it can fire in the first minutes of 13 October).
+- **Owner:** Paul (the decision is made; he presses the close or approves a session doing it). **WS-3** owns the
+  read-back and the ended-client tests below. WS-4 no longer has any Ronnie work.
 
-  | Option | What it means | Recommendation |
-  |---|---|---|
-  | **A. Hold** | Before 13 Oct, a fix session moves `remeasure_due_date` off 13 Oct with Paul's explicit approval, as one SQL statement shown to him first. No pointer is claimed, so nothing is lost. | **Do this first, by Friday 9 October.** It is reversible and buys time. |
-  | **B. Replay the right set** | WS-4 adds an explicit replay-set choice for legacy multi-set baselines: Paul picks the shoe-repair set from runs 2–5, the replay asks those × 3, and the verdict compares the same questions only (before = 1 run each, after = 3; say so in the result). Then Paul sets a new date. | Do it after A, before the new date. |
-  | C. Let it fire | Spends the one replay on the wrong trade. | **Not acceptable.** |
-- **Budget on his day.** Whatever the date, make sure the guarantee pool (M-010) is live first, or that no rep
-  prospecting runs that day. Apify is at about 72% with its cycle ending 16 Oct.
-- **Owner:** WS-4 (code and SQL), Paul (decision and approval). **Deadline for Paul's decision: Friday 9 October
-  2026. Last safe day for the hold SQL: Monday 12 October.**
-- **His four-week result** is written by Paul by hand while `REMEASURE_RESULTS_COPY_APPROVED` stays false.
+#### Tests the engineering plan must run: closing Ronnie cannot…
+
+Run on a **fixture** shaped like Ronnie (paid £99, legacy baseline pointer, a due `remeasure_due_date`, a ledger
+row), closed with `client_ended_early` — never on Ronnie's live row. Owned by **WS-3**, run again in the final
+regression.
+
+| Closing must not… | Test | Where it is guarded |
+|---|---|---|
+| refund the £99 | after the close: `amount_paid` unchanged, `status` ≠ `refunded`, no refund call in the code path (static sweep: `terminate_service` reaches no Stripe refund endpoint) | `serviceEnd.ts` rule; `terminate_service` writes four columns only |
+| erase historic revenue | admin revenue and the client's ledger / commission rows identical before and after (diff); the revenue fold still counts the £99 (`isPaidLead`, not `refunded`) | `adminMetrics.ts`; write-once ledger |
+| trigger another payment | no Checkout Session, Payment Link or invoice created; Quick Close refuses (`already_paid`); no payment-link template sendable for an ended client | `quick-close` `already_paid`; WS-2 to confirm the email-the-link path (M-015) also refuses an ended client |
+| create recurring charges | no subscription / schedule created by the close; a `checkout.session.completed` replay after the close creates none (`delayed-subscription.ts` must refuse an ended client — **add the check**, with M-017's claim); an `invoice.paid` after the close does not set `subscription_status='active'` or earn commission (**E-17, fix in WS-3**) | `stripe-webhook`, `delayed-subscription.ts`, `commission.ts` |
+| trigger the 13 October re-measure | with a due date ≤ today, `fireDueRemeasures` returns 0 for the ended fixture; no `remeasure` audit; the results sender skips it | `audit-baseline.ts:646`; `remeasure-results.ts:149` |
+| trigger monthly updates or delivery work | weekly visibility and performance sync skip it; the delivery stage is `ended` (Completed), with no next step; admin "needs you" omits it; **creating or sending a monthly update for an ended client is refused (new guard — today `client_monthly_updates` never reads `service_terminated_at`)**; no setup / agreement / chase reminder fires | `weekly-visibility:76`, `performance-sync:121`, `deliveryStage.ts`, `adminMetrics.ts:920`; monthly-update functions (new) |
+| be accidentally reactivated by a payment / webhook replay | replay `checkout.session.completed` ×3 after the close: `service_terminated_at` and reason unchanged; `status` not moved back to `payment_received`; onboarding not moved back to `paid`; no baseline restarted; no second ledger row, notification, PAID email or WhatsApp (**today the status and onboarding DO regress — E-02 proved it on an ended fixture; M-016's fix must cover the ended case**). A second `terminate_service` answers `already` and changes nothing | `stripe-webhook:1210-1220`, `:907-912` (M-016); `terminate_service` conditional update |
 
 ### MCLocksmiths — COMPLETED / ENDED (3 October)
 
@@ -658,7 +730,8 @@ decisions for Paul.
    the junk rule; MCL `50880751`; Ronnie `1a0603aa`). M-061's server refusal for legacy rows must leave
    `baseline_status` null rows as they are.
 2. **Pinned re-measure dates** (RG 6 Oct, Ronnie 13 Oct, MCL 20 Oct). M-031's fix refuses future nulls; it must
-   not backfill or rewrite.
+   not backfill or rewrite. Ronnie's and MCL's dates stay as history: the ended mark, not the date, is what stops
+   the replay.
 3. **M-016 "never move status backwards"** applies to future webhook writes only. No data migration of existing
    statuses.
 4. **Derived, never stored.** M-018's WAITING FOR FINDABLE and M-019's no-website rule are derived on read. No
@@ -765,7 +838,8 @@ first launch.
 - M-032, with Paul approving the results copy;
 - M-033.
 
-**Blocking for existing clients:** M-004, Ronnie's decision, by 9 Oct.
+**Blocking for existing clients:** M-004 — Ronnie closed with the ended-client mechanism (client ended early) and
+read back, by 9 Oct (last safe day 12 Oct).
 
 ---
 
@@ -854,8 +928,12 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
 ### WS-3 — PAYMENT, PAID-CLIENT STATE & CLIENT DOCUMENTS
 - **Mission:** after payment, the record is right, someone owns the next step, and every client document matches
   the route.
-- **Findings:** M-016, M-017, M-018, M-019, M-020, M-021, M-022, M-023, M-024, M-025. Later: M-046, M-047, M-048,
-  M-049, M-055 (onboarding half), M-056. Also renders WS-4's failed-baseline state.
+- **Findings:** **M-004 first (Ronnie's close read-back, no code)**, M-016, M-017, M-018, M-019, M-020, M-021,
+  M-022, M-023, M-024, M-025, plus the **ended-client test suite** (*Existing client actions → Tests the
+  engineering plan must run*) and its three small guards: an ended client is never subscribed
+  (`delayed-subscription.ts`), `invoice.paid` after the end never reactivates or earns commission (the E-17 half of
+  M-056, pulled forward), and a monthly update cannot be created or sent for an ended client. Later: M-046, M-047,
+  M-048, M-049, M-055 (onboarding half), the rest of M-056. Also renders WS-4's failed-baseline state.
 - **Likely files / areas:**
   - `supabase/functions/stripe-webhook/`;
   - `_shared/delayed-subscription.ts`;
@@ -866,9 +944,14 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
   - `supabase/functions/notify-onboarding-submit/`, `src/lib/adminMetrics.ts`;
   - `welcomePackHtml.ts`, `welcome-pack-render.ts`, `welcomePackData.ts`;
   - `PaidClients.tsx`;
+  - the monthly-update functions (migration `20261006100000_client_monthly_updates.sql` defines them; a new
+    migration adds the ended-client refusal) and `MonthlyUpdatePanel.tsx`;
+  - `src/lib/commission.ts` / `_shared/earnings.ts` (the ended-client half of E-17 only);
   - findable-site: the post-payment onboarding page, and the questionnaire wording with its `manualOnboarding.ts`
     mirror.
 - **Dependencies:**
+  - **Ronnie closed by Paul (or by a session with his yes) before 13 Oct.** That needs no WS-3 code; WS-3 does the
+    read-back the same day and records it.
   - Paul rules on the SEO grade in the pack (default remove).
   - The read-only MCL subscription check.
   - Coordinate the `deliveryStage.ts` "baseline failed" branch with WS-4: WS-4 supplies the data, WS-3 renders it.
@@ -876,6 +959,11 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
 - **Must not run in parallel with:** WS-4 on `deliveryStage.ts` (WS-3 owns the file; WS-4 only writes the data).
   WS-6 must not edit `ClientHub.tsx`; D-06 is done inside `WebsiteBuild.tsx`.
 - **Acceptance tests:**
+  - **Ronnie (live, read-only):** the M-004 read-back passes (ended `client_ended_early`, £99 and ledger
+    unchanged, no subscription, not returned by the re-measure firer, COMPLETED in Paid Clients).
+  - **Ended-client suite on a Ronnie-shaped fixture:** closing cannot refund the £99, erase historic revenue,
+    trigger another payment, create recurring charges, trigger a due re-measure, trigger monthly updates or
+    delivery work, or be reactivated by a payment / webhook replay (the seven rows in *Existing client actions*).
   - Replay ×2 on fixtures in `in_delivery`, `refunded` and ended → nothing regresses.
   - Subscription create carries an Idempotency-Key, with the claim unit-tested.
   - A paid fixture shows WAITING FOR FINDABLE with a due date; Send setup link stamps it.
@@ -893,13 +981,14 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
   4. SPA.
   5. findable-site (serialized with WS-2).
 
-### WS-4 — AI MEASUREMENT (BASELINE, BUDGET, RONNIE)
+### WS-4 — AI MEASUREMENT (BASELINE, BUDGET)
 - **Mission:** the guarantee measurement is never starved, never fails silently, and never measures something the
-  client does not do. Ronnie is handled before 13 Oct.
-- **Findings:** **M-004 (first)**, M-010, M-026, M-027, M-028, M-029, M-030, M-031, M-032, M-033. Later: M-060,
-  M-061. Also the report-CTA half of M-049.
+  client does not do. (Ronnie is no longer WS-4 work: he is closed, not re-measured — M-004, owned by Paul and
+  WS-3. No legacy replay-set choice is built.)
+- **Findings:** M-010, M-026, M-027, M-028, M-029, M-030, M-031, M-032, M-033. Later: M-060, M-061. Also the
+  report-CTA half of M-049.
 - **Likely files / areas:**
-  - `_shared/audit-baseline.ts` (replay-set choice, failed state);
+  - `_shared/audit-baseline.ts` (failed state);
   - `supabase/functions/process-ai-audit-queue/` (budget pools);
   - `create-ai-audit` (generator prompt; the sole owner, which WS-7 calls but does not edit);
   - `_shared/baseline-discovery.ts`, `src/lib/baselineMix.ts`, `baselineRecommendation.ts`;
@@ -911,25 +1000,21 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
   - `aiAuditReportHtml.ts` (sole owner);
   - `run-finalise.ts`.
 - **Dependencies:**
-  - **Paul's Ronnie decision by 9 Oct.**
   - Paul's Apify cap / plan decision.
   - Paul approves the results copy before M-032 sends anything.
 - **Can run in parallel with:** WS-1, WS-2, WS-3, WS-5, WS-6.
 - **Must not run in parallel with:** WS-7's edge work (WS-7 waits for the budget pools); WS-3 on
   `deliveryStage.ts`.
 - **Order inside WS-4:**
-  1. Ronnie hold SQL (Paul approved).
-  2. Budget pools / guarantee exemption.
-  3. `serviceScope.ts` and the M-028 checks.
-  4. M-027.
-  5. M-029.
-  6. M-030.
-  7. M-031.
-  8. Ronnie replay-set choice.
-  9. M-026.
-  10. M-032 / M-033.
+  1. Budget pools / guarantee exemption.
+  2. `serviceScope.ts` and the M-028 checks.
+  3. M-027.
+  4. M-029.
+  5. M-030.
+  6. M-031.
+  7. M-026.
+  8. M-032 / M-033.
 - **Acceptance tests:**
-  - Ronnie: hold read back, or a dry-run of the approved set.
   - A baseline fixture still runs with the daily cap exhausted.
   - A forced give-up → `failed` and Needs attention.
   - C's truth set → no "car keys", two core questions, ≤2 per service.
@@ -940,7 +1025,7 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
   - Hook report wording.
   - `scripts/` "only one of it" test for `serviceScope`.
 - **Deployment order:**
-  1. SQL first (Ronnie hold; any budget columns), read back.
+  1. SQL first (any budget columns), read back.
   2. `process-ai-audit-queue`, `create-ai-audit`, `paid-baseline`, `render-audit-report` and everything
      `--reached-by` the changed shared modules (name them).
   3. SPA.
@@ -1044,7 +1129,7 @@ CLAUDE.md §3 and Paul's 14 session-safety rules):
 
 | Wave | Runs in parallel | Starts when | Ends with |
 |---|---|---|---|
-| **0 — Paul, today/tomorrow (no code)** | Ronnie decision (by Fri 9 Oct); set `WHATSAPP_APP_SECRET`; deactivate the two old Payment Links; Apify cap / plan decision; SEO-grade ruling | now | decisions written into `docs/` by the first session that starts |
+| **0 — Paul, today/tomorrow (no code)** | **Close Ronnie** as client ended early (by Fri 9 Oct; last safe day Mon 12 Oct), then a session reads it back; set `WHATSAPP_APP_SECRET`; deactivate the two old Payment Links; Apify cap / plan decision; SEO-grade ruling | now | decisions written into `docs/` by the first session that starts |
 | **1 — launch fixes** | **WS-1, WS-2, WS-3, WS-4, WS-5** (five sessions, disjoint files) and **WS-6 on its leaf-independent items** (M-036, M-040, M-038, M-039, M-037) | immediately, after Wave 0's secret for WS-1's deploy | Gates 1, 2, 3 and 6 passable |
 | **2 — dependants** | **WS-7** (needs WS-1's crawl-check and WS-4's pools); **WS-6's M-035 / M-030 consumer** (needs WS-4's leaf and root) | WS-1 and WS-4 merged | Gates 4 and 5; normal rollout |
 | **3 — after launch** | P2 themes, by owning workstream | after the final regression | — |
@@ -1070,12 +1155,14 @@ and WS-4 are merged.
 ## Deployment order
 
 1. **Paul's no-code actions:**
-   - Ronnie decision;
    - Meta app secret set, then one genuine inbound checked;
    - old Payment Links deactivated;
    - Apify decision;
    - off-boarding rule written.
-2. **Ronnie hold SQL** (WS-4, Paul-approved, read back). **Not later than Monday 12 October.**
+2. **Close Ronnie** with the existing ended-client mechanism (Paid Clients → end engagement → "client ended early",
+   i.e. `terminate_service` / `client_ended_early`), then the WS-3 read-back. **No code, no deploy, no date
+   change. Not later than Monday 12 October.** If the read-back shows a live Stripe subscription or schedule,
+   Paul cancels it in Stripe the same day.
 3. **Release R1 — security (Gate 1 + Gate 2's security half):** templates policy SQL → read back → deploy
    `whatsapp-status` (+ closure) and `crawl-check` → vault SQL after Paul's yes.
 4. **Release R2 — close + payment (Gate 3):**
@@ -1146,7 +1233,8 @@ A fresh end-to-end certification after R1–R5, run on a **new fixture range**. 
 | **No fake external contact** | 0 Meta message ids system-wide for the window; every outbound to a fixture `simulated`; unsigned inbound refused; no email outside paul@findable.live and the QA sink |
 | **No duplicate spend** | Bulk reuse proves zero spend on repeat; one baseline per fixture; re-measure not fired; `enrichment_usage` per-rep rows add up; Apify delta within the cap |
 | **Correct client-facing wording** | `client-copy-claims` green. On rendered pages, by grep for exact strings: guarantee sentence byte-identical; no "eight weeks", "week six", "£49.99", SEO grade or Bing; Optimise documents never claim ownership or a right to take the site down; no "guaranteed", "#1", "rank" or "citations guaranteed" anywhere |
-| **Existing clients untouched** | Ronnie, RG, MCL and BS4 rows byte-identical before and after (diff of selected columns); no remeasure audit created |
+| **Existing clients untouched** | Ronnie (now ended), RG, MCL and BS4 rows byte-identical before and after (diff of selected columns); no remeasure audit created |
+| **Ended clients stay ended** | The WS-3 ended-client suite re-run on a fresh Ronnie-shaped fixture: no refund, revenue unchanged, no new payment or recurring charge, no re-measure, no monthly update or delivery work, and three `checkout.session.completed` replays leave it ended with its status unchanged |
 
 **Cleanup:** README §4.4. Archive, clear contacts and keep exclusions. Every session signed out (scope=local).
 
