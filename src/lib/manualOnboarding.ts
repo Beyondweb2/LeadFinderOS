@@ -48,9 +48,11 @@ export const ONBOARDING_COPY = {
   managerEmail: { label: 'Who should we ask?', optional: '(optional)', placeholder: 'name@theirwebcompany.co.uk', helper: 'Their email, so we can send them exactly what we need. Your agreement with them stays yours to manage.' },
   selfSite: { question: 'Can you give us access to edit it?' },
   permission: { headline: 'Permission to do the work', sub: "One thing to agree, then we're moving.", discuss: "I'd rather talk it through first" },
-  q2: { headline: 'What you do, and where', sub: "Each service becomes its own page on your site, written the way people search — one per town you want work from. That's the last thing we need." },
+  /* ⛔ NOT "one page per town" (2026-10-04, fix/04 — Session C C-07): that promised the cloned town pages
+     the method rejects. Verbatim from findable-site's OnboardingFlow (same commit pair). */
+  q2: { headline: 'What you do, and where', sub: "Each main service gets its own clear page. The towns you list tell us where to measure you and where real local pages make sense. That's the last thing we need." },
   services: { label: 'Services you offer', chipsHint: 'Tap the ones you do. Add anything missing below.', noChips: 'One service per line, in the words a customer would use.', add: 'Add another service' },
-  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after — asked about your home town and the towns you list here. They also decide where your pages go.' },
+  areas: { label: 'Towns you want work from', optional: 'Optional', placeholder: 'e.g. March', helper: 'We judge the refund on the same questions before and after — asked about your home town and the towns you list here.' },
 } as const;
 
 export const DOMAIN_OPTIONS = [

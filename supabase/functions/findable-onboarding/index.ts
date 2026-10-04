@@ -510,6 +510,11 @@ Deno.serve(async (req) => {
         areas_list: clipList(a.areas_list, 30, 120),
         accreditations: clip(a.accreditations, 2000),
         must_not_say: clip(a.must_not_say, 2000),
+        /* ⛔ THE TWO TRUTH QUESTIONS (2026-10-04, fix/04 — Session C): what they do NOT offer (a hard
+           exclusion for Discovery, the baseline and the backlog — src/lib/serviceScope.ts) and what
+           customers contact them for most. Optional; in BOTH lists below (q2 + shedOrder). */
+        services_not_offered: clip(a.services_not_offered, 2000),
+        top_requests: clip(a.top_requests, 2000),
         photos_status: typeof a.photos_status === "string" && PHOTOS_STATUS.has(a.photos_status) ? a.photos_status : null,
         competitor_name: clip(a.competitor_name, 200),
         website_manager: typeof a.website_manager === "string" && WEBSITE_MANAGER.has(a.website_manager) ? a.website_manager : null,
@@ -555,7 +560,7 @@ Deno.serve(async (req) => {
         "website_platform_other", "website_platform", "willing_to_migrate",
         "gbp_verified", "gbp_consent", "gbp_exists", "gbp_status",
         "must_not_say", "photos_status", "competitor_name", "accreditations",
-        "business_address", "confirmed_phone",
+        "business_address", "confirmed_phone", "services_not_offered", "top_requests",
       ];
       let payload = { ...q2 };
       let res = await service.from("onboarding_responses").update(payload).eq("id", onboardingId);
@@ -783,6 +788,9 @@ Deno.serve(async (req) => {
         // The only question here that can embarrass us publicly. Far cheaper to know before we write
         // the pages than to correct after they are published.
         must_not_say: clip(a.must_not_say, 2000),
+        /* The two truth questions (2026-10-04, fix/04) — in ALL THREE lists (answers / NEWER_COLS / optional). */
+        services_not_offered: clip(a.services_not_offered, 2000),
+        top_requests: clip(a.top_requests, 2000),
         /* The owner's name, asked on the pre-pay screen since 2026-08-17. Feeds directory
            registrations at delivery and the questionnaire_followup greeting ({{1}} = first word,
            derived at send time, never stored separately). */
@@ -844,7 +852,7 @@ Deno.serve(async (req) => {
          sent it, the row saved with HTTP 200, and the value was null, because this function builds
          its insert from an explicit key list and an unlisted key simply disappears. A Squarespace
          customer who had said no to moving reached Stripe as a result. */
-      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at"];
+      const NEWER_COLS = ["services_list", "areas_list", "website_manager", "website_manager_email", "competitor_name", "website_platform", "website_platform_other", "willing_to_migrate", "gbp_exists", "gbp_status", "gbp_verified", "must_not_say", "photos_status", "contact_name", "confirmed_phone", "business_website", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "services_not_offered", "top_requests"];
       for (const col of NEWER_COLS) {
         if ((answers as Record<string, unknown>)[col] == null) delete (answers as Record<string, unknown>)[col];
       }
@@ -860,7 +868,7 @@ Deno.serve(async (req) => {
         // website_platform_other before website_platform, for the same reason website_manager_email
         // comes before website_manager: the shorter name is a substring of the longer one, so
         // testing it first would shed both columns on a single miss.
-        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at"];
+        const optional = ["business_website", "services_list", "areas_list", "website_manager_email", "website_manager", "website_platform_other", "website_platform", "willing_to_migrate", "gbp_verified", "gbp_exists", "gbp_status", "must_not_say", "photos_status", "competitor_name", "areas_wanted", "incomplete", "contact_email", "contact_name", "confirmed_phone", "business_address", "source", "website_addon", "plan_tier", "domain_status", "domain_owned", "domain_access", "domain_third_party", "site_rights", "authority_confirmed", "dns_permission", "materials_confirmed", "domain_escalated_at", "services_not_offered", "top_requests"];
         const reduced = { ...answers } as Record<string, unknown>;
         let res = await attempt({ ...reduced, ...extra });
         let guard = 0;

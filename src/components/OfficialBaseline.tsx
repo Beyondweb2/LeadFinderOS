@@ -9,6 +9,33 @@ import { describeDraft, HOOK_REPLACEMENT_MIN_REASON, SOURCE_LABELS, summarise } 
 import { INTENT_LABELS } from '@/lib/baselineMix';
 import { BASELINE_QUESTIONS } from '@/lib/auditQuestionCounts';
 import type { PaidBaseline } from '@/lib/paidBaseline';
+import { assessBaselineQuality, overrideKey, unresolvedBlocks, QUALITY_OVERRIDE_MIN_REASON, type QualityCode, type QualityOverride, type QualityReport } from '@/lib/baselineQuality';
+import { describeScope, questionScope } from '@/lib/serviceScope';
+
+/* ══ THE FINAL-20 CHECKS ON SCREEN (2026-10-04, fix/04 — src/lib/baselineQuality.ts) ══════════════════
+   The same checks the server runs at approval, computed live on the draft as Paul edits it. A BLOCKING
+   check (branded, not offered, unconfirmed service, no approved town, no core home-town question)
+   needs the question replaced or a written reason, which travels with the approval
+   (quality_overrides) and is kept on baseline_meta. Warnings never block. */
+export function draftQuality(data: PaidBaseline, questions: string[]): QualityReport | null {
+  const args = recArgsOf(data);
+  if (!args.scope) return null;
+  return assessBaselineQuality({
+    questions, scope: args.scope, primaryTown: data.location, areas: args.ctx.areas, businessName: data.business_name,
+    trade: data.business_type, hookQuestions: data.hook?.questions ?? [], servicesClientConfirmed: data.services_client_confirmed !== false,
+  });
+}
+/** The reasons Paul typed, as the approval payload expects them. Keys are overrideKey(code, question). */
+export function qualityOverridesOf(reasons: Record<string, string>): QualityOverride[] {
+  return Object.entries(reasons).map(([key, reason]) => {
+    const i = key.indexOf('::');
+    return { code: key.slice(0, i) as QualityCode, question: key.slice(i + 2) || null, reason };
+  });
+}
+export function unresolvedQuality(data: PaidBaseline, questions: string[], reasons: Record<string, string>): number {
+  const q = draftQuality(data, questions);
+  return q ? unresolvedBlocks(q.blocking, qualityOverridesOf(reasons)).length : 0;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    STEP 4 — THE OFFICIAL BASELINE, REVIEWED (2026-09-30).
@@ -22,17 +49,22 @@ import type { PaidBaseline } from '@/lib/paidBaseline';
 
 const SOURCE_TONE = {
   hook: 'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  core: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   discovery: 'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   manual: 'border-border bg-muted text-muted-foreground',
 } as const;
 
-export function OfficialBaseline({ data, questions, onChange, frozen, busy, hookReasons, onHookReason }: {
+export function OfficialBaseline({ data, questions, onChange, frozen, busy, hookReasons, onHookReason, qualityReasons = {}, onQualityReason }: {
   data: PaidBaseline; questions: string[]; onChange: (next: string[]) => void; frozen: boolean; busy: boolean;
   hookReasons: Record<string, string>; onHookReason: (question: string, reason: string) => void;
+  /** Written reasons for blocking checks, keyed by overrideKey(code, question). */
+  qualityReasons?: Record<string, string>; onQualityReason?: (key: string, reason: string) => void;
 }) {
   const args = useMemo(() => recArgsOf(data), [data]);
   const rows = useMemo(() => describeDraft(questions, args), [questions, args]);
   const summary = useMemo(() => summarise(rows, { ctx: args.ctx, target: BASELINE_QUESTIONS }), [rows, args]);
+  const cleanQs = useMemo(() => questions.map((q) => q.trim()).filter(Boolean), [questions]);
+  const quality = useMemo(() => draftQuality(data, cleanQs), [data, cleanQs]);
   const [editing, setEditing] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [adding, setAdding] = useState('');
@@ -55,7 +87,7 @@ export function OfficialBaseline({ data, questions, onChange, frozen, busy, hook
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">4. Official baseline — review</p>
         <p className="text-lg font-semibold">{clean.length} / {BASELINE_QUESTIONS} questions</p>
-        <p className="text-xs text-muted-foreground">{summary.fromHook} Hook Audit · {summary.fromDiscovery} Discovery{summary.manual ? ` · ${summary.manual} added by hand` : ''}</p>
+        <p className="text-xs text-muted-foreground">{summary.fromHook} Hook Audit{summary.fromCore ? ` · ${summary.fromCore} core` : ''} · {summary.fromDiscovery} Discovery{summary.manual ? ` · ${summary.manual} added by hand` : ''}</p>
       </div>
       {frozen && <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-emerald-600"><Lock className="h-3.5 w-3.5"/>Frozen</span>}
     </div>
@@ -84,11 +116,27 @@ export function OfficialBaseline({ data, questions, onChange, frozen, busy, hook
         </div>
       </div>
       <div className="ml-7 space-y-0.5">
+        {args.scope && (() => { const s = questionScope(r.question, args.scope); return s.verdict === 'not_offered' || s.verdict === 'unsupported'
+          ? <p className="text-xs font-medium text-destructive">{describeScope(s)}</p> : null; })()}
         <p className="text-xs text-muted-foreground">{[r.service ?? 'general', r.town ?? 'no approved town', INTENT_LABELS[r.intent]].join(' · ')}</p>
         <p className="text-xs">{r.reason}</p>
         <EngineLines engines={r.engines} target={tallyTarget(data, r.question)} compact/>
       </div>
     </li>)}</ol>
+    {quality && (quality.blocking.length > 0 || quality.warnings.length > 0) && <div className="mt-3 space-y-2 rounded border p-2 text-xs" role="status">
+      <p className="font-semibold uppercase tracking-wide text-muted-foreground">Checks before freezing</p>
+      {quality.blocking.map((b) => {
+        const key = overrideKey(b.code, b.question);
+        const reason = qualityReasons[key] ?? '';
+        const ok = reason.trim().length >= QUALITY_OVERRIDE_MIN_REASON;
+        return <div key={key} className={`rounded border p-2 ${ok ? 'border-amber-400/50 bg-amber-500/10' : 'border-destructive/40 bg-destructive/10'}`}>
+          <p className="font-medium">{b.question ? `“${b.question}”` : 'The whole set'}</p>
+          <p>{b.message}</p>
+          {!frozen && onQualityReason && <Input className="mt-1 h-8" placeholder="Replace the question, or write why it should stay (kept with the approval)" value={reason} onChange={(e) => onQualityReason(key, e.target.value)}/>}
+        </div>;
+      })}
+      {quality.warnings.length > 0 && <ul className="ml-4 list-disc text-muted-foreground">{quality.warnings.map((w, i) => <li key={`${w.code}-${i}`}>{w.question ? `“${w.question}” — ` : ''}{w.message}</li>)}</ul>}
+    </div>}
     {Object.keys(hookReasons).length > 0 && <div className="mt-2 rounded border border-amber-400/50 bg-amber-500/10 p-2 text-xs">
       <p className="font-medium">Hook Audit question{Object.keys(hookReasons).length === 1 ? '' : 's'} replaced — the reason is kept with the approval:</p>
       <ul className="ml-4 list-disc">{Object.entries(hookReasons).map(([q, why]) => <li key={q}>“{q}” — {why}</li>)}</ul>

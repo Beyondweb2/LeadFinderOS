@@ -49,7 +49,10 @@ console.log('\n── 1. EVERY APPROVED AREA FEEDS DISCOVERY ──');
   ok(ctx.areas.length === 6 && ctx.areas.join('|') === AREAS.join('|'), '1. all six of BS4\'s approved areas are in the Discovery context');
   const c = perTownCounts(6);
   ok(c.area > 0 && c.primary + c.area * 6 <= 80 && c.primary < c.area * 6, `1. the home town gets more weight (${c.primary}) but not the pool (areas ${c.area} × 6)`);
-  ok(/if \(!hasBroad\) interleaved\.push\(`\$\{trade\} in \$\{t\} UK`\);/.test(src), '1. every approved town gets its plain core query ("[approved trade] in [town] UK") when the generator wrote none');
+  /* 2026-10-04 (fix/04, C-02/C-03): the core questions are customer questions now — the two mandatory
+     home-town ones (customerQuestion.coreQuestions) and one per approved area — always, not only when the
+     classifier found no "broad" question there (it called every unmatched service broad). */
+  ok(/core\.push\(\.\.\.coreQuestions\(input\.businessCategory, input\.primaryTown, suffix\)\)/.test(src) && /for \(const a of ctx\.areas\) core\.push\(areaCoreQuestion\(input\.businessCategory, a, suffix\)\)/.test(src), '1. every approved town gets its plain core question from the APPROVED trade (two for the home town)');
   ok(classifyQuestion('electricians in Bath UK', ctx).intent === 'broad' && classifyQuestion('electricians in Bath UK', ctx).town === 'Bath', '1. …and it counts as a broad question for that town');
   const covered = new Set(pool.map((p) => classifyQuestion(p.question, ctx).town));
   ok(TOWNS.every((t) => covered.has(t)), '1. the pool covers every approved town');

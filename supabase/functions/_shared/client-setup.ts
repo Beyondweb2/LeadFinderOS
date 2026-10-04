@@ -59,13 +59,15 @@ export async function loadClientSetups(service: Service, leads: Row[], nowMs = D
   if (!leads.length) return out;
   const ids = leads.map((l) => String(l.id));
   const sellerIds = [...new Set(leads.map((l) => (l.sold_by_user_id ?? l.assigned_to_user_id) as string | null).filter((x): x is string => !!x))];
-  const auditIds = leads.map((l) => l.baseline_audit_id as string | null).filter((x): x is string => !!x);
+  /* The baseline AND the day-28 replay (2026-10-04): their baseline_error / baseline_completed_at say
+     whether a measurement stopped or froze (deliveryStage — Needs attention). */
+  const auditIds = leads.flatMap((l) => [l.baseline_audit_id as string | null, l.remeasure_audit_id as string | null]).filter((x): x is string => !!x);
   const [ob, crawls, prospect, owners, audits] = await Promise.all([
     service.from("onboarding_responses").select(SETUP_ONBOARDING_COLUMNS).in("lead_id", ids),
     service.from("lead_crawl_checks").select("lead_id,created_at").in("lead_id", ids),
     service.from("ai_audits").select("lead_id").in("lead_id", ids).or(PROSPECT_AUDIT_OR),
     service.from("team_members").select("user_id,is_book_owner").in("user_id", sellerIds.length ? sellerIds : [NONE]),
-    service.from("ai_audits").select("id,baseline_completed_at").in("id", auditIds.length ? auditIds : [NONE]),
+    service.from("ai_audits").select("id,baseline_completed_at,baseline_error").in("id", auditIds.length ? auditIds : [NONE]),
   ]);
   for (const r of [ob, crawls, prospect, owners, audits]) if (r.error) throw r.error;
   const obByLead = new Map<string, Row[]>();
@@ -107,7 +109,8 @@ export async function loadClientSetups(service: Service, leads: Row[], nowMs = D
       readiness,
       lead: l as never,
       onboarding: o as { baseline_status?: string | null } | null,
-      baselineAudit: l.baseline_audit_id ? (auditById.get(String(l.baseline_audit_id)) as { baseline_completed_at?: string | null } | undefined) ?? null : null,
+      baselineAudit: l.baseline_audit_id ? (auditById.get(String(l.baseline_audit_id)) as { baseline_completed_at?: string | null; baseline_error?: string | null } | undefined) ?? null : null,
+      remeasureAudit: l.remeasure_audit_id ? (auditById.get(String(l.remeasure_audit_id)) as { baseline_completed_at?: string | null; baseline_error?: string | null } | undefined) ?? null : null,
       discovery: discoverySummary(o?.baseline_discovery, dAudit ? runStatus.get(dAudit) ?? [] : []),
       /* The route they PAID on first (the checkout's stamp), else the onboarding row's — the same order
          the readiness rule uses, so the stage label and the checklist cannot disagree. */

@@ -7,8 +7,61 @@
  * (search) does NOT go through here — it stays on the cheap search_cache path so
  * search stays cheap and uncapped by the per-lead enrichment budget.
  */
+import { poolLedgerFilter, type BudgetPool } from "../../../../src/lib/auditBudget.ts";
+
 // deno-lint-ignore no-explicit-any
 type ServiceClient = any;
+
+/* ⛔ THE BUDGET POOL (2026-10-04, src/lib/auditBudget.ts). An audit's spend is recorded against the
+   pool its purpose belongs to (enrichment_usage.budget_pool), and the cap check sums ONLY that pool —
+   so a day of prospecting can no longer refuse a paying client's baseline or re-measure.
+   MIGRATION-TOLERANT, because the column arrives by SQL that may lag this deploy:
+     · the ledger insert retries without the column (spend is never lost);
+     · a pool-filtered read that fails on the column falls back to the old shared sum, EXCEPT for the
+       guarantee pool, which is then not daily-capped at all (the per-run cap and Apify's own monthly
+       cap still bound it) — the shared sum is exactly what used to starve it. */
+const isMissingPoolColumn = (e: { message?: string } | null | undefined) => !!e && /budget_pool/i.test(e.message ?? "");
+
+async function insertUsage(service: ServiceClient, row: Record<string, unknown>, pool: BudgetPool | undefined): Promise<{ message?: string } | null> {
+  const { error } = await service.from("enrichment_usage").insert(pool ? { ...row, budget_pool: pool } : row);
+  if (error && pool && isMissingPoolColumn(error)) {
+    const retry = await service.from("enrichment_usage").insert(row);
+    return retry.error ?? null;
+  }
+  return error ?? null;
+}
+
+/** Rolling-24h spend for a user, in one pool (or across everything when no pool is given).
+ *  ⛔ PAGED: PostgREST stops at 1,000 rows without saying so (CLAUDE.md §4), and a busy prospecting
+ *  day writes more ledger rows than that — a truncated sum would quietly lift the cap. */
+export async function rollingSpendUsd(service: ServiceClient, userId: string, pool?: BudgetPool): Promise<{ spent: number; pooled: boolean } | null> {
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const PAGE = 1000;
+  const sumPaged = async (filtered: boolean): Promise<{ spent: number; error: { message?: string } | null }> => {
+    let spent = 0;
+    for (let from = 0; ; from += PAGE) {
+      let q = service.from("enrichment_usage").select("id, cost_usd").eq("user_id", userId).gte("created_at", since);
+      if (filtered && pool) {
+        const f = poolLedgerFilter(pool);
+        q = f.eq ? q.eq("budget_pool", f.eq) : q.or(f.or!);
+      }
+      const { data, error } = await q.order("id", { ascending: true }).range(from, from + PAGE - 1);
+      if (error) return { spent, error };
+      const rows = (data ?? []) as Array<{ cost_usd: number | null }>;
+      spent += rows.reduce((s, r) => s + Number(r.cost_usd ?? 0), 0);
+      if (rows.length < PAGE) return { spent, error: null };
+    }
+  };
+  if (pool) {
+    const r = await sumPaged(true);
+    if (!r.error) return { spent: r.spent, pooled: true };
+    if (!isMissingPoolColumn(r.error)) return null;
+    if (pool === "guarantee") return { spent: 0, pooled: false };
+  }
+  const all = await sumPaged(false);
+  if (all.error) return null;
+  return { spent: all.spent, pooled: false };
+}
 
 /** Rolling-24h per-user cap, shared by every paid enrichment source. */
 export const DAILY_CAP_USD = 2.0;
@@ -38,6 +91,9 @@ export interface RunEnrichArgs<T> {
    *  Usage + audit are still recorded (we did spend). Must be null-safe. When omitted,
    *  behaviour is unchanged (always cache). */
   noCacheWrite?: (result: T) => boolean;
+  /** The audit budget pool this spend belongs to (src/lib/auditBudget.ts). Absent = the old shared
+   *  per-user cap, exactly as before — every non-audit enrichment source. */
+  budgetPool?: BudgetPool;
 }
 
 export interface RunEnrichOutcome<T> {
@@ -64,20 +120,12 @@ export async function runEnrichSource<T>(args: RunEnrichArgs<T>): Promise<RunEnr
     }
   } catch (_e) { /* cache is best-effort */ }
 
-  // 2) Daily cap (rolling 24h sum of enrichment_usage). Block BEFORE spending.
+  // 2) Daily cap (rolling 24h sum of enrichment_usage — of THIS POOL when one is given). Block BEFORE spending.
   if (userId) {
     try {
-      const since = new Date(Date.now() - 86_400_000).toISOString();
-      const { data: rows } = await service
-        .from("enrichment_usage")
-        .select("cost_usd")
-        .eq("user_id", userId)
-        .gte("created_at", since);
-      const spent = (rows ?? []).reduce(
-        (s: number, r: { cost_usd: number | null }) => s + Number(r.cost_usd ?? 0),
-        0,
-      );
-      if (spent + estCostUsd > capUsd) {
+      const read = await rollingSpendUsd(service, userId, args.budgetPool);
+      const spent = read?.spent ?? 0;
+      if (read && spent + estCostUsd > capUsd) {
         return { result: null, cached: false, costUsd: 0, capReached: true, spentUsd: spent };
       }
     } catch (_e) { /* if the cap check fails, fail safe by proceeding once */ }
@@ -105,11 +153,7 @@ export async function runEnrichSource<T>(args: RunEnrichArgs<T>): Promise<RunEnr
   }
   if (userId) {
     try {
-      await service.from("enrichment_usage").insert({
-        user_id: userId,
-        enrichment_type: type,
-        cost_usd: costUsd,
-      });
+      await insertUsage(service, { user_id: userId, enrichment_type: type, cost_usd: costUsd }, args.budgetPool);
     } catch (_e) { /* ignore */ }
   }
   try {
@@ -142,16 +186,18 @@ export async function recordCostCorrection(service: any, args: {
   estimatedUsd: number;
   actualUsd: number;
   note?: string;
+  /** The pool the original spend was booked to, so the correction lands in the same pool. */
+  budgetPool?: BudgetPool;
 }): Promise<void> {
   const delta = Number((args.actualUsd - args.estimatedUsd).toFixed(6));
   if (!Number.isFinite(delta) || delta === 0) return;
   try {
     if (args.userId) {
-      const { error } = await service.from("enrichment_usage").insert({
+      const error = await insertUsage(service, {
         user_id: args.userId,
         enrichment_type: `${args.type}_correction`,
         cost_usd: delta,
-      });
+      }, args.budgetPool);
       if (error) console.warn(`[enrich] cost correction not recorded (${args.type}):`, error.message);
     }
     await service.from("api_usage_log").insert({

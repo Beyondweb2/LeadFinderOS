@@ -5,6 +5,7 @@ import { logOpenAiUsage } from "../_shared/openai-usage.ts";
    (CLAUDE.md 4); both files are pure and pull in nothing Deno-hostile. */
 import { isProvableJunkName } from "../../../src/lib/competitorCleaning.ts";
 import { classifyKnownEntity } from "../../../src/lib/knownEntities.ts";
+import { nameIsTextJudgeable, nameMatches } from "../../../src/lib/nameMatch.ts";
 
 // extract-competitors — AI-judged competitor extraction from a run's ALREADY-STORED answer
 // text (no new Apify scrape). For each engine answer on the run, an OpenAI call reads the
@@ -112,9 +113,28 @@ export function stripCaptureNoise(text: string): string {
  *  ⛔ SO WHAT THIS FUNCTION RETURNS IS WHAT THE CLIENT READS. Anything added here must be a fact
  *  about the NAME (it is a directory; it is not a name at all), never a heuristic about towns, word
  *  counts, capitalisation or trade vocabulary - those are what threw real competitors away. */
-function cleanNames(names: unknown, businessName: string): { names: string[]; selfMatched: boolean } {
+/* ⛔ TWO FACTS ABOUT THE NAME, ADDED 2026-10-04 (fix/04, Session C C-16):
+   · SELF, SPELLING-TOLERANT. "MC Locksmiths" was listed as MCLocksmiths centre's own rival seven times:
+     the substring test cannot see a joined/split spelling. nameMatches (nameMatch.ts — the client
+     report's own matcher) can. Same outcome as before when it fires: never listed, selfMatched recorded.
+   · THE SAME FIRM TWICE. "Keytek" / "Keytek Locksmiths", "Lockfit Canterbury" / "Lockfit Canterbury
+     Locksmiths" are one firm. Merged ONLY when what is left after removing the trade word, the town
+     and a legal suffix is identical and at least DUP_KEY_MIN_CHARS long — two different firms are never
+     merged into one, and nothing is dropped that is not a repeat (the first spelling is kept). */
+const DUP_KEY_MIN_CHARS = 4;
+function firmKey(name: string, trade: string, town: string): string {
+  const drop = new Set([
+    ...trade.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).flatMap((w) => [w, w.replace(/s$/, ""), `${w.replace(/s$/, "")}s`]),
+    ...town.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+    "ltd", "limited", "llp", "plc", "co", "the", "and", "uk", "services", "service",
+  ]);
+  return name.toLowerCase().replace(/&/g, " ").split(/[^a-z0-9]+/).filter((w) => w && !drop.has(w)).join(" ").trim();
+}
+
+function cleanNames(names: unknown, businessName: string, ctx: { trade?: string; town?: string } = {}): { names: string[]; selfMatched: boolean } {
   const self = businessName.trim().toLowerCase();
   const seen = new Set<string>();
+  const firms = new Set<string>();
   const out: string[] = [];
   /* ⛔ RETURNED, NOT DISCARDED (2026-09-15). The self entry is still never printed as a rival —
      that rule is unchanged and the displayed list is byte-identical. What changed is that the
@@ -128,6 +148,13 @@ function cleanNames(names: unknown, businessName: string): { names: string[]; se
     const k = name.toLowerCase();
     if (seen.has(k)) continue;
     if (self && (k === self || k.includes(self) || self.includes(k))) { selfMatched = true; continue; } // never list self — but record it
+    if (self && nameIsTextJudgeable(businessName, { trade: ctx.trade ?? null, town: ctx.town ?? null })
+      && nameMatches(name, businessName, { trade: ctx.trade ?? null, town: ctx.town ?? null })) { selfMatched = true; continue; }
+    const fk = firmKey(name, ctx.trade ?? "", ctx.town ?? "");
+    if (fk.replace(/\s+/g, "").length >= DUP_KEY_MIN_CHARS) {
+      if (firms.has(fk)) continue;               // the same firm, spelled again
+      firms.add(fk);
+    }
     /* A known DIRECTORY is a SOURCE, not a rival a customer hires instead - Checkatrade printing as
        a client's competitor is the failure this prevents. Known NATIONALS stay: Able Group really is
        a rival (knownEntities.ts). */
@@ -312,7 +339,7 @@ Deno.serve(async (req) => {
 
     // Business context (for self-exclusion + prompt grounding).
     const { data: audit } = await service
-      .from("ai_audits").select("business_name, location_text").eq("id", run.audit_id).maybeSingle();
+      .from("ai_audits").select("business_name, business_type, location_text").eq("id", run.audit_id).maybeSingle();
     const businessName = str(audit?.business_name) || "the business";
     const location = str(audit?.location_text) || "(not given)";
 
@@ -423,7 +450,7 @@ Return one entry per id via return_competitors.`;
       for (const r of Array.isArray(results) ? results : []) {
         const id = str(r?.id);
         if (!id) continue;
-        const { names, selfMatched } = cleanNames(r?.competitors, businessName);
+        const { names, selfMatched } = cleanNames(r?.competitors, businessName, { trade: str(audit?.business_type), town: str(audit?.location_text) });
         /* ⛔ EITHER SIGNAL IS A NAMING, and the OR is deliberate. The model is asked to mark the
            business rather than list it, but if it lists it anyway — against the instruction —
            that is still the model saying this answer points a customer at them. Only an explicit

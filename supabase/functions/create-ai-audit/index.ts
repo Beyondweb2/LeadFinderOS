@@ -45,6 +45,9 @@ import { canWorkLead, isClientLead, refusalBody, resolveActor, salesAuditRefusal
 import { guardAction, paidMode } from "../_shared/protection.ts";
 import { OUTREACH_AUDIT_EST_USD } from "../_shared/outreach-audit.ts";
 import { HOOK_SCORE_QUESTIONS, initialHookStateV2, topUpHookQuestions, type HookStateV2 } from "../../../src/lib/hookScore.ts";
+import { budgetDecision, budgetPoolForPurpose } from "../../../src/lib/auditBudget.ts";
+import { rollingSpendUsd } from "../_shared/enrichment/runner.ts";
+import { latestApifyUsage } from "../_shared/audit-budget.ts";
 
 // create-ai-audit — fast, NO Apify. Generates the audit's search questions with
 // OpenAI (gpt-4o-mini, tool-calling), creates the audit +
@@ -63,6 +66,8 @@ const corsHeaders = {
 // Google organic in the same run; those are captured/shown but not queue engines.
 // (Perplexity dropped — kept dormant in ai-search.ts in case it's re-added.)
 const AUDIT_ENGINES = ["chatgpt", "gemini"];
+/** The paid-client Discovery pool's generation style (see questionStyle in the handler). */
+type QuestionStyle = { customer: boolean; notOffered: string[]; mustNotSay: string };
 // How many questions to generate. Bounds come from the shared policy module so the SPA, the
 // outreach hook and the paid baseline cannot drift apart. Always clamped server-side (the count
 // is untrusted client input). Callers are expected to state their own count explicitly — the
@@ -503,6 +508,19 @@ Deno.serve(async (req) => {
        keeps its existing clamp, because their callers are automations replaying a stored set and a
        refusal there would turn a working lane into a dead one. Absent → the default, which is not
        an invalid value. A numeric STRING is not a number: the body is untrusted JSON. */
+    /* ⛔ CUSTOMER-QUESTION STYLE + THE CLIENT'S NEGATIVES (2026-10-04, fix/04, Session C C-02 / C-04).
+       Opt-in, INTERNAL DISCOVERY ONLY: the paid-client Discovery pool (_shared/baseline-discovery.ts)
+       asks for questions a customer types into an AI ("Who can help if I'm locked out in Canterbury,
+       UK?") instead of search keywords, and hands over what the client said they do NOT offer and
+       must never be described as offering. Every other caller — the hook, a market scan, a replay —
+       sends none of this and generates byte-for-byte what it did before. */
+    const questionStyle: QuestionStyle | null = isDiscovery && isInternal && body.question_style === "customer"
+      ? {
+        customer: true,
+        notOffered: normalizeAuditList(body.not_offered).slice(0, 30),
+        mustNotSay: typeof body.must_not_say === "string" ? body.must_not_say.trim().slice(0, 600) : "",
+      }
+      : null;
     if (isDiscovery) {
       const statedCount = body.question_count ?? body.questionCount;
       if (statedCount !== undefined && statedCount !== null
@@ -758,6 +776,23 @@ Deno.serve(async (req) => {
         estCostUsd: isSales && !preview ? OUTREACH_AUDIT_EST_USD : 0,
       });
       if (!guard.ok) return json(guard.body, guard.status);
+      /* ⛔ THE PROSPECTING POOL, SAID UP FRONT (2026-10-04, src/lib/auditBudget.ts). A person starting a
+         prospecting audit when the prospecting pool or its Apify reserve is used is told so now, in a
+         sentence, instead of the audit queuing and ending `capped`. Client measurement draws from its
+         own pools and is never refused here. A failed read refuses nothing (the queue still enforces). */
+      if (!preview && budgetPoolForPurpose(auditPurpose) === "prospecting") {
+        const owner = userId;
+        const [spend, apifyNow] = await Promise.all([
+          rollingSpendUsd(service, owner, "prospecting").catch(() => null),
+          latestApifyUsage(service),
+        ]);
+        if (spend) {
+          /* ⚠️ Priced inline: `estimate` is declared further down, and reading a const before its
+             declaration throws (CLAUDE.md §4, TDZ). */
+          const decision = budgetDecision({ pool: "prospecting", poolSpentUsd: spend.spent, estCostUsd: questionCount * SOURCES.ai_search.estCostUsd, apify: apifyNow });
+          if (!decision.allowed) return json({ ok: false, error: "prospecting_budget_used", detail: decision.message, reason: decision.reason }, 429);
+        }
+      }
     } else if ((await paidMode(service)) === "all_stop") {
       return json({ ok: false, error: "all_stop", detail: "The emergency stop is on — no new paid work starts until it is released." }, 423);
     }
@@ -1003,7 +1038,7 @@ Deno.serve(async (req) => {
            short would be a short audit nobody was told about. */
         const generated = await generateDiscoverySet(
           businessName, businessType, locationText, hasWebsite, specialisms, questionCount,
-          businessScope, country, serviceAreaCoverage, marketContext,
+          businessScope, country, serviceAreaCoverage, marketContext, questionStyle,
         );
         qs = fillGenerated("discovery preview", generated, questionCount, [],
           { type: businessType, loc: locationText, hasWebsite, specialisms, scope: businessScope, country, market: marketContext });
@@ -1801,12 +1836,13 @@ async function generateDiscoverySet(
   country: string | null,
   coverage: string,
   market: MarketContext,
+  style: QuestionStyle | null = null,
 ): Promise<string[]> {
   const batches = planGenerationBatches(target, 0);
   if (batches.length <= 1) {
     return await generateQuestions(
       businessName, businessType, locationText, hasWebsite, specialisms, batches[0] ?? 0,
-      scope, country, coverage, 0, null, true, market,
+      scope, country, coverage, 0, null, true, market, style,
     );
   }
   const out: string[] = [];
@@ -1816,7 +1852,7 @@ async function generateDiscoverySet(
       : coverage;
     const part = await generateQuestions(
       businessName, businessType, locationText, hasWebsite, specialisms, batches[i],
-      scope, country, cov, 0, null, true, market,
+      scope, country, cov, 0, null, true, market, style,
     );
     out.push(...part);
   }
@@ -1897,6 +1933,9 @@ async function generateQuestions(
      before. When present it drives the NATIONAL intent mix, the HYBRID split, the deterministic
      templates and the trade guard's third door. */
   market: MarketContext | null = null,
+  /* ⛔ OPT-IN, DEFAULT NULL (2026-10-04): customer-question style and the client's negatives, for the
+     paid-client Discovery pool only. Null → the prompt below is byte-identical to before. */
+  style: QuestionStyle | null = null,
 ): Promise<string[]> {
   // The CALLER has already applied the right POLICY ceiling: MAX_QUESTION_COUNT for the outreach
   // hook, BASELINE_MAX_QUESTION_COUNT for a paid baseline, FULL_MEASURE_QUESTIONS for a measure.
@@ -1951,15 +1990,42 @@ async function generateQuestions(
     ? `Known for: ${specialisms}. Treat these as SEPARATE specialisms — give each its own single-intent question; NEVER combine two in one query.`
     : `No specialisms were given — INFER the single main specialism from the NAME and type. The name often carries the whole point (e.g. "X Kava Bar" → kava; "Y Vinyl Cafe" → records). Build the specialism questions around it, one intent each.`;
 
+  /* ⛔ CUSTOMER STYLE (style.customer — the paid-client Discovery pool only, 2026-10-04). Whole
+     questions a person asks an AI, the place written "Town, UK" the way a person writes it, and the
+     client's own NOT-OFFERED list as a hard exclusion. The deterministic check behind this prompt is
+     src/lib/serviceScope.ts + customerQuestion.ts (baseline-discovery runs every question through
+     them), so a question that ignores these rules is reshaped or dropped, never measured. */
+  const customer = style?.customer === true;
+  const customerPlace = customer && locationText ? (isUK ? `${locationText}, UK` : abroadQ ? `${locationText}, ${abroadQ}` : locationText) : locQ;
+  const placeQ = customer ? customerPlace : locQ;
+  const notOfferedLine = customer && style?.notOffered?.length
+    ? `\n- The business does NOT offer: ${style.notOffered.join("; ")}. NEVER ask about any of these, not even in other words.`
+    : "";
+  const mustNotSayLine = customer && style?.mustNotSay
+    ? `\n- The client asked that we never describe them like this: ${style.mustNotSay}`
+    : "";
+
   // Shared across all scopes.
-  const ALWAYS_RULES = `RULES THAT ALWAYS APPLY:
+  const ALWAYS_RULES = customer
+    ? `RULES THAT ALWAYS APPLY:
+- EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things.
+- Write each one as a full, natural question a real customer would type into ChatGPT or Gemini, in plain English, ending with a question mark. Good: "Who can help if I'm locked out of my house in ${placeQ}?", "Can you recommend a reliable ${type.toLowerCase()} in ${placeQ}?", "Which ${type.toLowerCase()} in ${placeQ} can replace a mortice lock?". NEVER a keyword string such as "mortice lock replacement ${placeQ.toLowerCase()}".
+- Put the kind of business (the trade word) or the specific service in every question, so it cannot be read as a different trade.
+- Ground EVERY question in the business's ACTUAL services listed under "Known for". NEVER invent a service it doesn't offer.${notOfferedLine}${mustNotSayLine}
+- SPREAD the questions across the business's services and the real situations customers are in — no near-duplicates, and never the same service reworded.
+- Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`
+    : `RULES THAT ALWAYS APPLY:
 - EXACTLY ONE intent per question. Never combine two services or needs. No "and" joining two things (NOT "tax returns and payroll", NOT "bar with kava and pool").
 - Natural phrasing a real person would type or ask an AI — short, terse, plain lowercase.
 - Ground EVERY question in the business's ACTUAL services and the "known for" field. NEVER invent a service it doesn't offer.
 - SPREAD the questions across the business's main services / niches — no near-duplicates.
 - Do NOT include the business's own name or any brand name (the customer is trying to DISCOVER it). No quotes.`;
 
-  const LOCAL_RULES = `- Local framing is good: "[service] in ${locQ}".
+  const LOCAL_RULES = customer
+    ? `- Name the place in EVERY question, written exactly "${placeQ}" — the country after the comma stops AI answering about a same-named town abroad.
+- At most a third of the questions may be general recommendation questions ("Can you recommend a good ${type.toLowerCase()} in ${placeQ}?"); the rest are about one specific service, or a real situation the customer is in.
+- NEVER use "near me" in any form.`
+    : `- Local framing is good: "[service] in ${locQ}".
 - ALWAYS write the place EXACTLY as "${locQ}" — never a bare town name (town names are often shared with bigger non-UK places, and a bare name makes AI answer about the wrong country).
 - Broad head-terms are allowed here (a small local pool is winnable): e.g. "best [service] in ${locQ}", "top [service] in ${locQ}".
 - NEVER use "near me" in any form — always name the actual place (${locQ}) instead.`;
@@ -2012,7 +2078,9 @@ ${LOCAL_RULES}
 IF NATIONAL:
 ${NATIONAL_RULES}`;
 
-  const systemPrompt = `You generate the exact search phrases a REAL PERSON would type into an AI assistant (ChatGPT, Gemini) to find a business like this one. Output nothing but the phrases, via the return_questions tool.
+  const systemPrompt = `${customer
+    ? "You write the questions a REAL CUSTOMER would ask an AI assistant (ChatGPT, Gemini) when they need a business like this one. Output nothing but the questions, via the return_questions tool."
+    : "You generate the exact search phrases a REAL PERSON would type into an AI assistant (ChatGPT, Gemini) to find a business like this one. Output nothing but the phrases, via the return_questions tool."}
 
 Business name: ${name}
 Business type: ${type}
@@ -2024,7 +2092,7 @@ ${scopeGuidance}
 ${moneyDirective}
 ${coverage ? `${coverage}
 
-` : ""}Return EXACTLY ${n} questions (lowercase), spread across the business's services/niches under the matching rule set. ${framing}
+` : ""}Return EXACTLY ${n} questions${customer ? ", each a full sentence ending in a question mark" : " (lowercase)"}, spread across the business's services/niches under the matching rule set. ${framing}
 
 Return via the return_questions tool.`;
 
@@ -2037,8 +2105,12 @@ Do not otherwise widen the question to a country or region: no "for [audience] i
     : forceHybrid
     ? `This business is HYBRID. Generate ${n} phrases: ${hybridAllocation(n).local} LOCAL ones written with the place exactly "${locQ}", and ${hybridAllocation(n).national} WIDER ${market!.region} ones with NO town in them at all. Different services on each side — never the same question with and without the town.`
     : `First classify this business as NATIONAL or LOCAL from the location, then generate ${n} short, single-intent search phrases under the matching rules.`;
+  /* Customer style replaces the "short phrases" instruction for the local and unclassified paths. */
+  const userScope = customer && !forceNational && !forceHybrid
+    ? `Generate ${n} natural customer questions about this LOCAL business, each naming the place exactly "${placeQ}" and ending with a question mark. NEVER "near me", never a keyword string.`
+    : userScopeLine;
 
-  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}\n\n${userScopeLine} One intent each, grounded in its real services, no "and", no invented services.`;
+  const userPrompt = `Business name: ${name}\nBusiness type: ${type}\nLocation as given: ${loc}\nHas website: ${hasWebsite ? "yes" : "no"}${specialisms ? `\nKnown for: ${specialisms}` : ""}${customer && style?.notOffered?.length ? `\nDoes NOT offer: ${style.notOffered.join("; ")}` : ""}\n\n${userScope} One intent each, grounded in its real services, no "and", no invented services.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {

@@ -122,7 +122,7 @@ export interface ReplayRunLite { status: string | null }
 
 export type ResultsDecision =
   | { send: true }
-  | { send: false; reason: string; kind: 'copy_not_approved' | 'terms_differ' | 'replay_gave_up' | 'incomparable' | 'unproven' };
+  | { send: false; reason: string; kind: 'copy_not_approved' | 'terms_differ' | 'replay_gave_up' | 'incomparable' | 'unproven' | 'engine_imbalance' };
 
 /** Should the results go to the client automatically? */
 export function remeasureResultsDecision(input: {
@@ -156,6 +156,19 @@ export function remeasureResultsDecision(input: {
   const thin = c.questions.filter((q) => q.before && q.after && (q.before.cells < MIN_CELLS_FOR_QUESTION_CLAIM || q.after.cells < MIN_CELLS_FOR_QUESTION_CLAIM));
   if (thin.length) {
     return { send: false, kind: 'unproven', reason: `${thin.length} question(s) have fewer than ${MIN_CELLS_FOR_QUESTION_CLAIM} answer cells on one side, so the number cannot be proven — e.g. "${thin[0].question}"` };
+  }
+  /* ⛔ AN ENGINE SHORT ON ONE SIDE HOLDS THE VERDICT (2026-10-04, C-12). The pooled number moves with
+     the engine MIX; a Gemini drop-out on the replay can read as "gone up" and cost a client a refund
+     they were owed. measurementCompare counts each engine over the matched questions only.
+     ⛔ ABSENT HOLDS: a comparison that carries no engine count cannot show it is balanced, and this is
+     a sending path (CLAUDE.md §4). */
+  if (!Array.isArray(c.engineShort)) {
+    return { send: false, kind: 'engine_imbalance', reason: 'the comparison carries no per-engine count, so engine balance cannot be checked' };
+  }
+  const short = c.engineShort;
+  if (short.length) {
+    const lines = short.map((e) => { const b = c.engineBalance?.[e]; return b ? `${e} ${b.before.answered} before / ${b.after.answered} after` : e; });
+    return { send: false, kind: 'engine_imbalance', reason: `an engine answered unevenly between the two measurements (${lines.join('; ')}), so the pooled number cannot be compared fairly` };
   }
   return { send: true };
 }
@@ -257,7 +270,10 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     `The full before-and-after, question by question, is here: ${i.documentUrl}`,
   ];
   if (i.wentUp) {
-    out.push(`Your number has gone up. The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`);
+    /* ⛔ NO CAUSAL CLAIM (2026-10-04, Session C C-28). This used to say "The pages and listings we built
+       are what the engines are now reading" — the data shows the number rose, not why. The sentence
+       says what was measured and what we keep doing, nothing more. */
+    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named more often than ${weeksWord(i.weeks)} weeks ago, by more than the ${NOISE_BAND_PP}-point swing we see between repeat checks. We keep the work live and keep measuring.`);
   } else {
     /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
        It used to read as an apology followed by an offer. "That means the guarantee applies" is
@@ -292,7 +308,8 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
   if (i.wentUp) {
     return [
       `${i.businessName} is named more often than it was ${weeksWord(i.weeks)} weeks ago, on the same questions and the same engines.`,
-      `The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`,
+      /* No causal claim (C-28): the measurement shows the rise, not its cause. */
+      `We keep the work live and keep measuring.`,
     ];
   }
   return [

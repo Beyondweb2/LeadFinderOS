@@ -447,6 +447,9 @@ Deno.serve(async (req) => {
            authority domains those runs cited, for the hold wording. */
         const authByQ = new Map<string, { runs: number; domains: string[] }>();
         const locText = qaAudit.location_text ?? "";
+        /* The client report's ruler (namedSignal.ts): the answer text for a judgeable name, so "already
+           named" here cannot contradict the client's score (C-32, 2026-10-04). */
+        const namedCtx = { businessName: qaAudit.business_name ?? null, trade: qaAudit.business_type ?? null, town: locText || null };
         const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
         for (const r of resRows ?? []) {
           const q = String((r as { question: string }).question ?? "").trim();
@@ -460,9 +463,9 @@ Deno.serve(async (req) => {
             const er = result[eng];
             if (!er) continue;
             for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) { doms.push(h); rowDoms.push(h); } }
-            named[eng][1]++; if (cellNamed(er)) named[eng][0]++;
+            named[eng][1]++; if (cellNamed(er, namedCtx)) named[eng][0]++;
           }
-          const namedAnywhere = DISPLAY_ENGINES.some((e) => cellNamed(result[e]));
+          const namedAnywhere = DISPLAY_ENGINES.some((e) => cellNamed(result[e], namedCtx));
           const mixR = sourceMix(rowDoms);
           if (!namedAnywhere && mixR.total >= AUTHORITY_LOCK_MIN_CITES && mixR.business === 0
             && mixR.authority / mixR.total >= AUTHORITY_LOCK_SHARE) {

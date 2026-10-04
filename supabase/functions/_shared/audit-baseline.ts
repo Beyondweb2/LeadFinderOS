@@ -42,7 +42,9 @@ import { BASELINE_QUESTIONS, BASELINE_RUNS, FULL_MEASURE_QUESTIONS } from "../..
 import { START_IN_PROGRESS_SKIP, canClaimStart, startClaimFilter } from "../../../src/lib/paidBaselineState.ts";
 import { findPaidBaseline, findAmbiguousMultiRun, FREE_CHECK_AUDIT_PURPOSE } from "../../../src/lib/auditKind.ts";
 import { type BaselineContract } from "../../../src/lib/baselineContract.ts";
-import { cellNamed } from "../../../src/lib/namedSignal.ts";
+import { cellNamed, type NamedContext } from "../../../src/lib/namedSignal.ts";
+import { budgetPoolForPurpose } from "../../../src/lib/auditBudget.ts";
+import { measurementHealth, type HealthRow, type HealthRun, type MeasurementHealth } from "../../../src/lib/measurementHealth.ts";
 import { fullMeasureAllocation } from "../../../src/lib/fullMeasure.ts";
 import { isRemeasureDue, utcDateISO } from "../../../src/lib/remeasureDue.ts";
 import { remeasureDueFill, workIncompleteFor } from "../../../src/lib/remeasureFill.ts";
@@ -79,13 +81,18 @@ export interface BaselineSnapshot {
     named_rate: number;           // named_cells / answered_cells (0 when nothing answered)
   };
   measured_at: string;
+  /** Guarantee measurements only (2026-10-04): whether every expected cell was answered at the
+   *  freeze, or Paul accepted it as partial (the note says which). */
+  coverage?: { complete: boolean; note: string };
 }
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
 
-/** Aggregate a set of runs into per-question/per-engine answered+named counts. */
-export async function aggregateRuns(service: Client, runIds: string[]): Promise<BaselineSnapshot> {
+/** Aggregate a set of runs into per-question/per-engine answered+named counts.
+ *  `ctx` (2026-10-04): the business, trade and town, so `named` is read from the ANSWER TEXT for a
+ *  judgeable name (namedSignal.ts) — the client report's ruler. Absent = the old model-first reading. */
+export async function aggregateRuns(service: Client, runIds: string[], ctx?: NamedContext): Promise<BaselineSnapshot> {
   const questions: BaselineSnapshot["questions"] = {};
   let answeredCells = 0;
   let namedCells = 0;
@@ -105,7 +112,7 @@ export async function aggregateRuns(service: Client, runIds: string[]): Promise<
         if (!er) continue;           // engine returned nothing this run — not an answered cell
         stat.answered += 1;
         answeredCells += 1;
-        if (cellNamed(er)) { stat.named += 1; namedCells += 1; }
+        if (cellNamed(er, ctx)) { stat.named += 1; namedCells += 1; }
       }
     }
   }
@@ -233,6 +240,9 @@ export async function advanceBaseline(service: Client, auditId: string, source =
       : isMeasurementAudit ? "measurement" : "baseline";
     if (!audit || !(target > 1)) return;          // not a paid baseline audit
     if (audit.baseline) return;                    // already finalised
+    /* The guarantee measurements (baseline, remeasure — src/lib/auditBudget.ts) get the completion rule
+       and the cell retry below. A positive match on the stored purpose: anything else is unchanged. */
+    const isGuarantee = budgetPoolForPurpose(storedPurpose) === "guarantee";
 
     // Runs that actually produced data. `results` is read for run 1's SEO marker (see the repeat).
     const { data: runs } = await service
@@ -265,6 +275,19 @@ export async function advanceBaseline(service: Client, auditId: string, source =
        create-ai-audit answers the loser's 23505 with a quiet 200 skip. Without that index this
        predicate would silently buy a fourth run. */
     if (usable.length < target && all.length >= target) {
+      /* 🔴 C-11, FOUND 2026-10-04: THIS BRANCH WAS THE "BASELINE RUNNING FOR EVER". Once every run had
+         been started it answered "waiting" whether or not anything was still going — so a run that
+         FAILED (Apify's cap, a provider outage) left the chain waiting with zero runs in flight, and the
+         give-up below it could never be reached. For a GUARANTEE measurement with nothing left in
+         flight, the missing cells are now retried once (inside the existing runs) and then HELD with a
+         reason Paid Clients shows. Other multi-run audits keep the old behaviour exactly — changing
+         them would start spending where today nothing does. */
+      const settling = all.some((r) => r.status === "processing");
+      if (isGuarantee && inFlight.length === 0 && !settling) {
+        const held = await holdOrRetryGuarantee(service, auditId, audit, source);
+        await record({ action: held.retrying ? "started_run" : "error", detail: held.detail, runs_usable: usable.length, runs_target: target });
+        return;
+      }
       // Every run has been STARTED; we are only waiting for them to land. Nothing to post.
       await record({ action: "waiting_in_flight", detail: `${inFlight.length} run(s) still going`, runs_usable: usable.length, runs_target: target });
       return;
@@ -306,6 +329,15 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     // stop and say so. A baseline that cannot reach its target is an operator problem, not
     // something to keep buying.
     if (usable.length < target && all.length >= target + MAX_EXTRA_ATTEMPTS) {
+      /* ⛔ A GUARANTEE MEASUREMENT THAT GAVE UP IS RETRIED ONCE, CELL BY CELL, THEN SURFACED (2026-10-04,
+         C-11). Its failed questions are re-asked inside the runs that already exist — never a new run,
+         never a second audit — and if that does not land it is HELD with a reason Paid Clients shows
+         under Needs attention. Other multi-run audits keep the old give-up exactly. */
+      if (isGuarantee) {
+        const held = await holdOrRetryGuarantee(service, auditId, audit, source);
+        await record({ action: held.retrying ? "started_run" : "error", detail: held.detail, runs_usable: usable.length, runs_target: target });
+        return;
+      }
       await record({
         action: "error",
         detail: `gave up after ${all.length} runs: only ${usable.length}/${target} usable (${all.filter((r) => r.status === "failed").length} failed)`,
@@ -316,8 +348,28 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     }
 
     if (usable.length >= target) {
+      /* ⛔ THE COMPLETION RULE (2026-10-04, C-11 / M-027): a GUARANTEE measurement (baseline, remeasure)
+         freezes only when every expected cell is answered — questions × runs × engines — or when Paul
+         has accepted it as partial with a reason. Missing cells are retried once automatically (only
+         the missing ones), then the measurement is HELD with a plain reason. A run "finishing" is no
+         longer enough. Every other multi-run audit freezes exactly as before. */
+      let coverage: BaselineSnapshot["coverage"] | undefined;
+      if (isGuarantee) {
+        const gate = await guaranteeFreezeGate(service, auditId, audit, source);
+        if (!gate.freeze) {
+          await record({ action: gate.retrying ? "started_run" : "error", detail: gate.detail, runs_usable: usable.length, runs_target: target });
+          return;
+        }
+        coverage = { complete: gate.detail === "complete", note: gate.detail };
+      }
       // Enough runs: average the FIRST `target` of them and store the snapshot.
-      const snapshot = await aggregateRuns(service, usable.slice(0, target).map((r) => r.id));
+      /* The answer text is the ruler when the name is judgeable (namedSignal.ts) — the same ruler the
+         client report and the refund comparison use, so the frozen summary cannot contradict them
+         (C-32: the model-only verdict "named" a business that exists nowhere 4 times in 120). */
+      const snapshot = await aggregateRuns(service, usable.slice(0, target).map((r) => r.id), {
+        businessName: audit.business_name ?? null, trade: audit.business_type ?? null, town: audit.location_text ?? null,
+      });
+      if (coverage) snapshot.coverage = coverage;
       /* ⛔ CONDITIONAL, AND THE WINNER IS THE ONLY ONE THAT HANDS OFF. `advanceBaseline` runs from
          two places every 30s tick (finalisation and the sweep), so two ticks can both read
          `baseline IS NULL` and both arrive here. `.is("baseline", null)` makes exactly one write
@@ -441,6 +493,115 @@ export async function advanceBaseline(service: Client, auditId: string, source =
     console.error("[baseline] advance error:", msg);
     await record({ action: "error", detail: `threw: ${msg}` });
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   GUARANTEE COMPLETENESS, RETRY AND HOLD (2026-10-04, fix/04 — Session C C-11, master plan M-027).
+   src/lib/measurementHealth.ts holds the rule; these are its database halves.
+   ⛔ A RETRY RE-ASKS ONLY FAILED QUEUE ROWS, IN THE RUNS THAT ALREADY EXIST. A failed row holds no
+   answer, so nothing successful can be asked twice; no new run, no new audit, no second pointer; the
+   question text is untouched (the frozen set cannot move). The claim is the conditional
+   failed → pending update: a double press, or the cron and an operator together, re-queue each row once.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Automatic cell-retry rounds a guarantee measurement gets before it is held for Paul. */
+export const MAX_AUTO_CELL_RETRIES = 1;
+
+type RunLite = { id: string; run_number: number | null; status: string | null; results?: unknown };
+
+/** The runs a guarantee measurement is made of: the first `target` usable runs when there are enough,
+ *  else the first `target` runs that were not cancelled (some failed — those are what a retry fixes). */
+export function guaranteeRunSet(runs: RunLite[], target: number): RunLite[] {
+  const ordered = [...runs].filter((r) => r.status !== "cancelled").sort((a, b) => Number(a.run_number ?? 0) - Number(b.run_number ?? 0));
+  const usable = ordered.filter((r) => r.status === "complete" || r.status === "capped");
+  return (usable.length >= target ? usable : ordered).slice(0, target);
+}
+
+/** Read a measurement's health over its run set. Never throws. */
+export async function loadMeasurementHealth(service: Client, auditId: string): Promise<{ health: MeasurementHealth; runSet: RunLite[]; retryRounds: number; target: number; frozenAt: string | null } | null> {
+  try {
+    const { data: a } = await service.from("ai_audits").select("id, baseline_target_runs, baseline_completed_at").eq("id", auditId).maybeSingle();
+    if (!a) return null;
+    const target = Math.max(1, Number((a as { baseline_target_runs?: number | null }).baseline_target_runs ?? 1) || 1);
+    const { data: runs } = await service.from("ai_audit_runs").select("id, run_number, status, results").eq("audit_id", auditId).order("run_number", { ascending: true });
+    const runSet = guaranteeRunSet((runs ?? []) as RunLite[], target);
+    const ids = runSet.map((r) => r.id);
+    const { data: rows } = ids.length
+      ? await service.from("ai_audit_queue").select("id, run_id, question, status, result").in("run_id", ids).order("id", { ascending: true }).limit(1000)
+      : { data: [] };
+    const frozenAt = (a as { baseline_completed_at?: string | null }).baseline_completed_at ?? null;
+    const health = measurementHealth({ runs: runSet as HealthRun[], rows: (rows ?? []) as HealthRow[], targetRuns: target, frozen: !!frozenAt });
+    const firstResults = runSet[0]?.results && typeof runSet[0].results === "object" ? runSet[0].results as Record<string, unknown> : {};
+    const retryRounds = Array.isArray(firstResults.cell_retries) ? (firstResults.cell_retries as unknown[]).length : 0;
+    return { health, runSet, retryRounds, target, frozenAt };
+  } catch (e) {
+    console.warn(`[baseline] health read failed for ${auditId}:`, e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** Re-ask the missing (failed) cells of a guarantee measurement, inside its existing runs. */
+export async function retryMissingCells(service: Client, auditId: string, source: string): Promise<{ ok: boolean; requeued: number; reason?: string }> {
+  const loaded = await loadMeasurementHealth(service, auditId);
+  if (!loaded) return { ok: false, requeued: 0, reason: "audit_not_found" };
+  if (loaded.frozenAt) return { ok: false, requeued: 0, reason: "frozen" };
+  const ids = loaded.health.retryableRowIds;
+  if (!ids.length) return { ok: true, requeued: 0, reason: "nothing_to_retry" };
+  const runIds = [...new Set(loaded.health.missing.filter((m) => m.run_id && m.reason !== "engine_no_answer" && m.reason !== "in_flight").map((m) => m.run_id as string))];
+  /* Reopen the runs FIRST, so the finaliser can fold them again once the rows settle (it only flips
+     pending/running runs). Their competitor-cleaning stamp is dropped so the new answers are cleaned. */
+  for (const run of loaded.runSet.filter((r) => runIds.includes(r.id))) {
+    const prev = run.results && typeof run.results === "object" ? { ...(run.results as Record<string, unknown>) } : {};
+    delete prev.competitor_cleaning;
+    await service.from("ai_audit_runs").update({ status: "running", results: prev }).eq("id", run.id).in("status", ["complete", "capped", "failed"]);
+  }
+  /* THE CLAIM: only rows STILL failed are re-queued, each exactly once. attempts back to 0 so the
+     per-run cost cap counts the retry's own spend, not the refused starts before it. */
+  const { data: claimed, error } = await service.from("ai_audit_queue")
+    .update({ status: "pending", attempts: 0, result: null })
+    .in("id", ids).eq("status", "failed").select("id");
+  if (error) return { ok: false, requeued: 0, reason: `requeue failed: ${error.message}` };
+  const n = (claimed ?? []).length;
+  const first = loaded.runSet[0];
+  if (first && n) {
+    const { data: fr } = await service.from("ai_audit_runs").select("results").eq("id", first.id).maybeSingle();
+    const cur = (fr as { results?: Record<string, unknown> } | null)?.results ?? {};
+    const prior = Array.isArray(cur.cell_retries) ? cur.cell_retries as unknown[] : [];
+    await service.from("ai_audit_runs").update({ results: { ...cur, cell_retries: [...prior, { at: new Date().toISOString(), source, rows: n }] } }).eq("id", first.id);
+  }
+  console.log(`[baseline] audit ${auditId}: re-queued ${n} missing question row(s) (${source})`);
+  return { ok: true, requeued: n };
+}
+
+/** Paul accepted this measurement as partial (onboarding baseline_meta.partial_accepted[auditId]). */
+export async function partialAcceptedFor(service: Client, leadId: string | null, auditId: string): Promise<boolean> {
+  if (!leadId) return false;
+  const { data } = await service.from("onboarding_responses").select("baseline_meta").eq("lead_id", leadId).limit(10);
+  return ((data ?? []) as Array<{ baseline_meta?: { partial_accepted?: Record<string, { reason?: unknown }> } | null }>)
+    .some((r) => typeof r.baseline_meta?.partial_accepted?.[auditId]?.reason === "string");
+}
+
+/** Freeze now, retry the missing cells, or hold — for a guarantee measurement whose runs all finished. */
+async function guaranteeFreezeGate(service: Client, auditId: string, audit: { lead_id?: string | null }, source: string): Promise<{ freeze: boolean; retrying: boolean; detail: string }> {
+  const loaded = await loadMeasurementHealth(service, auditId);
+  /* Absent reading → do NOT freeze on a guess; the next tick reads again. */
+  if (!loaded) return { freeze: false, retrying: false, detail: "held: could not read the measurement's answers — will look again next tick" };
+  if (loaded.health.missing.length === 0) return { freeze: true, retrying: false, detail: "complete" };
+  if (await partialAcceptedFor(service, audit.lead_id ?? null, auditId)) return { freeze: true, retrying: false, detail: `accepted as partial: ${loaded.health.label}` };
+  if (loaded.health.retryableRowIds.length && loaded.retryRounds < MAX_AUTO_CELL_RETRIES) {
+    const r = await retryMissingCells(service, auditId, `auto:${source}`);
+    if (r.requeued > 0) return { freeze: false, retrying: true, detail: `retrying ${r.requeued} missing question(s) automatically — ${loaded.health.label}` };
+  }
+  return { freeze: false, retrying: false, detail: `held: ${loaded.health.label}${loaded.health.action ? ` — ${loaded.health.action}` : ""}` };
+}
+
+/** The give-up path for a guarantee measurement: one automatic cell retry, then a held reason. */
+async function holdOrRetryGuarantee(service: Client, auditId: string, audit: { lead_id?: string | null }, source: string): Promise<{ retrying: boolean; detail: string }> {
+  const gate = await guaranteeFreezeGate(service, auditId, audit, source);
+  /* An accepted-partial note cannot freeze a measurement whose RUNS are missing: those answers are
+     retryable, and freezing would settle the refund on runs that never ran. */
+  if (gate.freeze) return { retrying: false, detail: "held: whole runs are missing answers — press Retry missing answers first" };
+  return { retrying: gate.retrying, detail: gate.detail };
 }
 
 /** The columns onBaselineFrozen needs, as advanceBaseline selects them. */
@@ -603,17 +764,21 @@ export async function startFullMeasure(service: Client, audit: FrozenBaseline): 
 
 /** Write one client_error_reports row per (error_id, lead) per hour, so a persistent refusal leaves
  *  a readable trail rather than 120 rows an hour at the 30-second tick. */
-export async function reportOnceAnHour(service: Client, errorId: string, leadId: string, message: string, context: Record<string, unknown>): Promise<void> {
+/** Returns true when a NEW row was written (false when one already exists this window, or on error) —
+ *  so a caller can tie a side effect (an operator email) to the same once-an-hour rule. */
+export async function reportOnceAnHour(service: Client, errorId: string, leadId: string, message: string, context: Record<string, unknown>, windowMs = 60 * 60_000): Promise<boolean> {
   try {
-    const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    const since = new Date(Date.now() - windowMs).toISOString();
     const { data: recent } = await service
       .from("client_error_reports").select("id")
       .eq("error_id", errorId).gte("created_at", since)
       .contains("context", { lead_id: leadId }).limit(1);
-    if (recent && (recent as unknown[]).length) return;
-    await service.from("client_error_reports").insert({ error_id: errorId, message: message.slice(0, 1000), context: { lead_id: leadId, ...context, at: new Date().toISOString() } });
+    if (recent && (recent as unknown[]).length) return false;
+    const { error } = await service.from("client_error_reports").insert({ error_id: errorId, message: message.slice(0, 1000), context: { lead_id: leadId, ...context, at: new Date().toISOString() } });
+    return !error;
   } catch (e) {
     console.error(`[remeasure] could not record ${errorId}:`, e instanceof Error ? e.message : e);
+    return false;
   }
 }
 
@@ -639,7 +804,7 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
   const today = utcDateISO(Date.now());
   const { data, error } = await service
     .from("outreach_leads")
-    .select("id, user_id, business_name, baseline_audit_id, remeasure_audit_id, remeasure_due_date, status, is_archived, amount_paid, delivery_checklist")
+    .select("id, user_id, business_name, baseline_audit_id, remeasure_audit_id, remeasure_due_date, status, is_archived, amount_paid, delivery_checklist, service_terminated_at")
     .not("baseline_audit_id", "is", null)
     .is("remeasure_audit_id", null)
     /* A service Findable ended over a domain / authority dispute is not re-measured (no guarantee applies). */
@@ -657,7 +822,7 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
   const rows = (data ?? []) as Array<{
     id: string; user_id: string; business_name: string | null; baseline_audit_id: string | null; remeasure_audit_id: string | null;
     remeasure_due_date: string | null; status: string | null; is_archived: boolean | null; amount_paid: number | null;
-    delivery_checklist: Record<string, boolean> | null;
+    delivery_checklist: Record<string, boolean> | null; service_terminated_at: string | null;
   }>;
   let fired = 0;
   for (const lead of rows) {
@@ -766,12 +931,17 @@ export async function fireDueRemeasures(service: Client, limit = 3): Promise<num
  * backlog can never monopolise an invocation.
  */
 export async function sweepStalledBaselines(service: Client, limit = 5): Promise<number> {
-  const { data, error } = await service
-    .from("ai_audits").select("id, baseline_target_runs")
-    .not("baseline_target_runs", "is", null)
-    .is("baseline", null)
-    .order("created_at", { ascending: true })
-    .limit(limit);
+  /* ⛔ ROTATED, NOT OLDEST-FIRST (2026-10-04, C-11). Oldest-first let the same stuck audits (Session C
+     found two legacy ones at the head) take every slot of every tick, and a measurement HELD for Paul
+     never leaves this list — so a new client's baseline could wait behind them for ever. Ordered by
+     the last time the chain looked at each one (recordOutcome stamps it), nulls first, so every
+     unfinished measurement gets its turn. Falls back to oldest-first if that column is missing. */
+  const base = () => service.from("ai_audits").select("id, baseline_target_runs")
+    .not("baseline_target_runs", "is", null).is("baseline", null);
+  let { data, error } = await base().order("baseline_last_attempt_at", { ascending: true, nullsFirst: true }).limit(limit);
+  if (error && /baseline_last_attempt_at/i.test(error.message ?? "")) {
+    ({ data, error } = await base().order("created_at", { ascending: true }).limit(limit));
+  }
   if (error) {
     // Columns pending migration → nothing to sweep, and the queue carries on regardless.
     console.warn("[baseline] sweep skipped:", error.message);
