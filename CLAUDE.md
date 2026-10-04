@@ -460,6 +460,12 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   used/cap, never trust a stored `usage_pct`. `capped`/`daily_cap` tokens are OURS; anything else is
   the vendor.
 
+**QA and live testing (2026-10-04, `docs/pre-sales-certification/README.md`)**
+- ⛔ **A QA lead is explicit, never a name:** a `metric_exclusions` lead row, a 07700 900xxx number, email
+  paul@move37.fun. Every WhatsApp sender asks `qaSendHold` (`_shared/qa-guard.ts`): fixture → SIMULATED,
+  real lead held/pressed by a test account → REFUSED. A new sender must ask it (`qa-safety.test.ts` sweeps).
+- **Payment success in a test is `scripts/qa-simulate-payment.ts`**, never a real card, never Stripe test mode.
+
 **Shape rules that have each bitten more than once**
 - 🔴 **An absent value falling through as a real one — 16 recorded instances.** Never branch on the
   known states and let `else` carry the rest. Enumerate the absent case; assert on the grade you WANT

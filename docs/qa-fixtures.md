@@ -44,3 +44,18 @@ pin in `scripts/workspace-declutter.test.ts`.
 
 All 18 fixtures (`ZZ QA` … `ZZ QA6`) checked: archived, no phone or email, excluded. Nothing needed
 cleaning; the QA6 pair was archived by its own session at 10:16 UK.
+
+## Since 04/10/2026 — the QA safety layer (src/lib/qaSafety.ts, docs/pre-sales-certification/README.md)
+
+- A fixture MAY now carry a phone, but only from Ofcom's drama range **07700 900000–900999**, and an email
+  only of **paul@move37.fun**. Every WhatsApp sender SIMULATES a send to a fixture (its lead id / phone in
+  metric_exclusions, or a 07700 900xxx number): nothing reaches Meta, the row is `simulated` /
+  `test_mode=true`, and the lead advances as a live send would. Before 04/10 a drama-range number DID
+  reach Meta (it passed every gate) — the older fixtures relied on "no phone" or the town gate.
+- A REAL lead held by a test account, or a send pressed by one, is REFUSED (`qa_test_account`).
+- Payment success is simulated with `scripts/qa-simulate-payment.ts` (CRON_SECRET-gated, fixture-only,
+  no Stripe customer). The exclusion row must exist BEFORE the payment (the commission stamp is never redone).
+- An archived fixture leaves the Paid Clients list; the admin team view of sales performance excludes
+  fixtures and test accounts.
+- ZZ QA12 (`10800000-0000-4000-8000-0000000008a1`, onboarding `…08b1`) is the coordinator's smoke test
+  of all of the above: paid by simulation twice (idempotent), archived, contacts cleared. Leave it.
