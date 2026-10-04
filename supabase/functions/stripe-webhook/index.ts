@@ -23,6 +23,16 @@ import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapsho
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
+import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
+import { loadQaPaymentFacts, qaSendHold } from "../_shared/qa-guard.ts";
+
+/** Constant-time compare for the QA simulation header (no early exit on the first differing byte). */
+function sameSecret(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
+}
 
 // stripe-webhook — flips generated_sites.is_paid from Stripe subscription events.
 //
@@ -430,9 +440,18 @@ async function sendFindablePaymentConfirmation(
       return;
     }
 
-    const res = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
-    const status = res.ok ? "sent" : "failed";
-    if (res.ok) console.log(`${tag}: sent ${TEMPLATE_PAYMENT_CONFIRM} to ${to} (msg ${res.messageId})`);
+    /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts): a QA fixture's confirmation is SIMULATED (recorded,
+       test_mode true, never sent); a real lead held by a test account is not messaged. A failed read
+       throws into GUARD 1 below — nothing is sent. */
+    const qa = await qaSendHold(service, { leadId: lead.id as string, to });
+    if (qa.kind === "refuse") { console.warn(`${tag}: QA refuse (${qa.reason}) — confirmation not sent`); return; }
+    const simulated = qa.kind === "simulate";
+    const res = simulated
+      ? { ok: true, messageId: null as string | null, error: null as string | null }
+      : await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
+    const status = simulated ? "simulated" : res.ok ? "sent" : "failed";
+    if (simulated) console.log(`${tag}: QA fixture (${qa.reason}) — ${TEMPLATE_PAYMENT_CONFIRM} simulated, not sent`);
+    else if (res.ok) console.log(`${tag}: sent ${TEMPLATE_PAYMENT_CONFIRM} to ${to} (msg ${res.messageId})`);
     else console.error(`${tag}: send FAILED: ${res.error}`);
 
     /* Both logs, and both non-blocking — the message is already gone by this point.
@@ -453,7 +472,7 @@ async function sendFindablePaymentConfirmation(
         template_name: TEMPLATE_PAYMENT_CONFIRM,
         wa_message_id: res.messageId,
         status,
-        test_mode: env.testMode,
+        test_mode: env.testMode || simulated,
         error: res.error,
         template_snapshot: templateSnapshot,
       });
@@ -468,7 +487,7 @@ async function sendFindablePaymentConfirmation(
         phone: to,
         business_name: businessName,
         claim_url: null,
-        test_mode: env.testMode,
+        test_mode: env.testMode || simulated,
         message_id: res.messageId,
         delivery_status: status,
         error: res.error,
@@ -578,8 +597,17 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ received: false, error: "webhook_not_configured" }), { status: 500 });
   }
 
+  /* ⛔ THE QA PAYMENT SIMULATION (2026-10-04, pre-sales certification; docs/pre-sales-certification/
+     README.md). An UNSIGNED checkout.session.completed is accepted ONLY with the CRON_SECRET in
+     x-qa-simulate-payment AND only when every fact in src/lib/qaSafety.ts holds: livemode false, evt_qa_ /
+     pi_qa_ ids, NO customer (so the branch below makes no Stripe call — no subscription, no portal), and
+     a lead that is a QA fixture whose phone and every email are reserved or internal. It then runs the
+     SAME branch a real payment runs — that is the point: the certification exercises the real money
+     logic, idempotency included (send the same body twice), with no money and nobody real contacted.
+     Without the header nothing here changes: the Stripe signature is required exactly as before. */
+  const qaHeader = req.headers.get("x-qa-simulate-payment");
   const signature = req.headers.get("stripe-signature");
-  if (!signature) return new Response("Missing stripe-signature", { status: 400 });
+  if (!signature && !qaHeader) return new Response("Missing stripe-signature", { status: 400 });
 
   const rawBody = await req.text();
   const stripe = new Stripe(stripeSecret, {
@@ -587,26 +615,51 @@ Deno.serve(async (req) => {
     httpClient: Stripe.createFetchHttpClient(),
   });
 
-  // Verify the signature (async + SubtleCrypto: required on Deno/Edge).
-  let event: Stripe.Event;
-  try {
-    event = await stripe.webhooks.constructEventAsync(
-      rawBody,
-      signature,
-      webhookSecret,
-      undefined,
-      Stripe.createSubtleCryptoProvider(),
-    );
-  } catch (e) {
-    console.error("[stripe-webhook] signature verification failed:", (e as Error).message);
-    return new Response("Invalid signature", { status: 400 });
-  }
-
   const service = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } },
   );
+
+  let event: Stripe.Event;
+  if (qaHeader) {
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    if (!cronSecret || !sameSecret(qaHeader, cronSecret)) return new Response("Forbidden", { status: 401 });
+    const qaJson = (body: Record<string, unknown>, status: number) =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    let parsed: unknown = null;
+    try { parsed = JSON.parse(rawBody); } catch { /* refused below */ }
+    const shape = qaPaymentEventShapeRefusal(parsed);
+    if (shape) return qaJson({ received: false, qa_refused: shape }, 400);
+    const sim = parsed as { id: string; data: { object: { metadata: Record<string, string>; customer_details?: { email?: string | null } | null } } };
+    const simLeadId = sim.data.object.metadata.lead_id;
+    try {
+      const facts = await loadQaPaymentFacts(service, {
+        leadId: simLeadId, onboardingId: sim.data.object.metadata.onboarding_id,
+        payerEmail: (sim.data.object.customer_details?.email ?? null) || null,
+      });
+      const refusal = qaPaymentFactsRefusal(simLeadId, facts);
+      if (refusal) return qaJson({ received: false, qa_refused: refusal }, 400);
+    } catch (e) {
+      return qaJson({ received: false, qa_refused: (e as Error).message }, 503);
+    }
+    console.log(`[stripe-webhook] QA SIMULATED PAYMENT ${sim.id} lead=${simLeadId} — no money, no Stripe call`);
+    event = parsed as Stripe.Event;
+  } else {
+    // Verify the signature (async + SubtleCrypto: required on Deno/Edge).
+    try {
+      event = await stripe.webhooks.constructEventAsync(
+        rawBody,
+        signature as string,
+        webhookSecret,
+        undefined,
+        Stripe.createSubtleCryptoProvider(),
+      );
+    } catch (e) {
+      console.error("[stripe-webhook] signature verification failed:", (e as Error).message);
+      return new Response("Invalid signature", { status: 400 });
+    }
+  }
 
   // Idempotent write: set is_paid to a fixed value on the one mapped site. On a
   // paid=true event we read the row first so we can email EXACTLY ONCE on the real

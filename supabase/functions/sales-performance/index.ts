@@ -8,6 +8,8 @@ import { foldSalesWorkspace, parseTargets, AUDIT_READY_DAYS, FEED_DAYS, type Wor
 import { loadEarnings } from "../_shared/earnings.ts";
 import { londonDayOf } from "../../../src/lib/commission.ts";
 import { quickCloseState } from "../../../src/lib/quickClose.ts";
+import { isExcludedUser } from "../../../src/lib/metricExclusions.ts";
+import { loadQaExclusions } from "../_shared/qa-guard.ts";
 
 // sales-performance — the Sales Dashboard's numbers (2026-09-28, docs/sales-readiness.md).
 //
@@ -97,13 +99,25 @@ Deno.serve(async (req) => {
 
     const sinceMs = periodSinceMs(typeof body.period === "string" ? body.period : "all");
 
-    const leads = await allRows<PerfLead & { id: string }>((a, b, c) => {
+    const fetchedLeads = await allRows<PerfLead & { id: string }>((a, b, c) => {
       let q = service.from("outreach_leads")
         .select("id, business_name, campaign_id, status, amount_paid, is_potential_work, lead_source, sold_by_user_id, sold_at, assigned_to_user_id, next_action, next_action_date, next_action_time, next_action_note, call_booked_at", (c ? { count: "exact" } : undefined));
       /* The person's leads, plus any client they SOLD that has since been reassigned (the win stays theirs). */
       if (personId) q = q.or(`assigned_to_user_id.eq.${personId},sold_by_user_id.eq.${personId}`);
       return q.order("id").range(a, b);
     });
+    /* ⛔ THE TEAM VIEW EXCLUDES TEST ACTIVITY (2026-10-04, pre-sales certification; Paul's 2026-09-30
+       rule that test accounts never count). When the admin looks at EVERYONE, a lead that is a QA fixture,
+       or that a test account holds or sold, is left out. A person's OWN view is untouched — the Test
+       salesperson must see their numbers move, that is what the certification checks. If the exclusion
+       list cannot be read the team view is shown unfiltered rather than failing (it is a display). */
+    let leads = fetchedLeads;
+    if (personId === null) {
+      try {
+        const qaEx = await loadQaExclusions(service);
+        leads = fetchedLeads.filter((l) => !qaEx.leads.has(l.id) && !isExcludedUser(qaEx, l.assigned_to_user_id) && !isExcludedUser(qaEx, l.sold_by_user_id));
+      } catch (e) { console.error("[sales-performance] exclusions read failed (team view unfiltered):", (e as Error).message); }
+    }
     const ids = leads.map((l) => l.id);
 
     const [messages, activity, linkEvents, hits, campaigns] = await Promise.all([

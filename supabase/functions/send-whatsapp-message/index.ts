@@ -29,6 +29,8 @@ import { guardAction } from "../_shared/protection.ts";
 import { checkOptedOut, checkWrongNumber } from "../_shared/suppression.ts";
 import { OPT_OUT_REFUSAL_REASON, optOutBlocksTemplate } from "../../../src/lib/marketingConsent.ts";
 import { STRONG_STATUSES, postgrestList } from "../../../src/lib/strongStatuses.ts";
+import { QA_REFUSAL_REASON } from "../../../src/lib/qaSafety.ts";
+import { qaSendHold } from "../_shared/qa-guard.ts";
 
 // send-whatsapp-message — the Inbox reply sender (Phase A).
 //
@@ -78,8 +80,9 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
 /* 2026-09-27b: multi-user — role required, sales on assigned leads only, sent_by_user_id.
    2026-09-27c: NO SELECTED OPENER — either approved opener sends as chosen (opener_not_selected is
    gone; the capability reads any_approved_opener).
-   2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts). */
-const BUILD_ID = "2026-10-01b";
+   2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
+   2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
+const BUILD_ID = "2026-10-04a-qa";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -345,7 +348,14 @@ Deno.serve(async (req) => {
     const lastInboundAt = lastIn && lastIn.length ? new Date((lastIn[0] as { created_at: string }).created_at).getTime() : null;
     const windowOpen = lastInboundAt != null && Date.now() - lastInboundAt < WINDOW_MS;
 
-    const env = resolveWhatsAppEnv();
+    /* ⛔ QA SAFETY (2026-10-04, src/lib/qaSafety.ts). A QA fixture gets the TEST-MODE env for this one
+       request — every branch below (window, payload, simulated record, response) then behaves exactly
+       as it does with WHATSAPP_TEST_MODE on, and nothing reaches Meta. A real lead held by a test
+       account, or a send pressed by one, is refused. A failed read throws (500) — fail closed. */
+    const qa = await qaSendHold(service, { leadId: resolvedLeadId, to, actorUserId: actor.id });
+    if (qa.kind === "refuse") return json({ ok: false, error: "qa_test_account", reason: QA_REFUSAL_REASON }, 200);
+    const liveEnv = resolveWhatsAppEnv();
+    const env = qa.kind === "simulate" ? { ...liveEnv, live: false, testMode: true } : liveEnv;
 
     // --- Decide payload: template (out-of-window) vs text (in-window) ---
     /* ⛔ A PAYLOAD THAT CANNOT BE BUILT IS A REFUSAL, NEVER A 500 — and that distinction is the
@@ -765,7 +775,10 @@ Deno.serve(async (req) => {
        pill in the browser; a salesperson cannot write the lead row, and a send from the Inbox set it for
        nobody — so a lead a rep had actually messaged never showed WhatsApp. A real live send is the fact;
        it fills ONLY an empty tag (.is null), never overwrites a method somebody chose. Both roles. */
-    if (env.live && status === "sent" && resolvedLeadId) {
+    /* ⛔ QA: a SIMULATED fixture send advances the lead exactly as a live send does (2026-10-04) — the
+       certification must exercise these transitions; a plain test-mode simulation still does not. */
+    const advancesLead = (env.live && status === "sent") || (qa.kind === "simulate" && status === "simulated");
+    if (advancesLead && resolvedLeadId) {
       try {
         await service.from("outreach_leads").update({ contact_method: "whatsapp" })
           .eq("id", resolvedLeadId).is("contact_method", null);
@@ -773,7 +786,7 @@ Deno.serve(async (req) => {
         console.error(`[send-whatsapp-message] contact_method tag write failed for lead ${resolvedLeadId}:`, (e as Error).message);
       }
     }
-    if (env.live && status === "sent" && resolvedLeadId) {
+    if (advancesLead && resolvedLeadId) {
       const tvars = usedTemplate ? (WA_TEMPLATES[usedTemplate]?.vars ?? []) : [];
       const isReportSend = tvars.includes("trade") || tvars.includes("trade_plural") || tvars.includes("competitors");
       if (isReportSend) {
