@@ -13,8 +13,9 @@ report format. The coordinator built the safety layer it relies on (§2) and ver
 
 ## 0. Verdict — is it safe to start?
 
-**Yes, once Paul has done the three things in §15.** The QA safety layer is live (main `22bf5362`,
-deployed to 9 functions 04/10/2026 ~02:05 UTC, verified in production — §2.4).
+**Paul's three decisions are made and applied (§15).** The QA safety layer is live (main `22bf5362`,
+9 functions, verified §2.4) and the QA email guard is live (main `b1c18d61`, 10 functions, verified
+§2.5). The automatic queue path is PROVEN in production (main `4294aa3d`, §2.6). **Session A may start.**
 
 ---
 
@@ -82,6 +83,13 @@ sitting on the test accounts (§15). There was no way to exercise the £99 payme
    absent/reserved and whose lead, payer and onboarding emails are all internal. It then runs **the same
    branch a real payment runs**. Helper: `scripts/qa-simulate-payment.ts` (§7).
 3. **Paid Clients** hides a fixture once it is archived (it shows while its test runs).
+5. **QA email guard (04/10, Paul's decision)** — a client-facing email about a QA lead (fixture, reserved
+   number, or held by a test account) may go ONLY to **paul@move37.fun**; anything else is REFUSED with
+   "QA only: … Nothing was sent", never redirected. Applied where an address can be TYPED in the journey:
+   Paid Clients → Send agreement link (`qa_email_sink_only`), the client's agree page (refused on the
+   form, nothing stored), and a backstop in the signed-copy sender. Genuine clients are unchanged. Not
+   reachable for a fixture, so left alone: monthly payment emails (need a Stripe customer), the
+   free-check result (public form, new lead), the four-week results (held, and fixtures are archived).
 4. **Sales performance, admin "everyone" view** leaves out test accounts and fixtures (a person's own
    view, including Test's, is unchanged so A can watch numbers move).
 
@@ -103,13 +111,43 @@ sitting on the test accounts (§15). There was no way to exercise the £99 payme
   window; verification ran at 03:10). The auto-reply lane ran clean on the new build. Session A's
   first queued fixture is the first drip proof — see A-precondition in §12.
 
+### 2.5 QA email guard — production verification (04/10/2026 ~02:55 UTC)
+On fixture ZZ QA13 as admin: agreement link to `qa-outsider@example.com` → `409 qa_email_sink_only`;
+to `paul@findable.live` → refused the same way (a test lead's CLIENT email is only the sink); the agree
+page POSTed with an outside email → `422` with the QA sentence, no acceptance stored, no link sent
+(`last_sent_to` null). The sink being allowed is proved by `scripts/qa-safety.test.ts`.
+
+### 2.6 Automatic queue proof
+**PROVEN 04/10/2026 03:25 UTC** through the real `process-whatsapp-queue` (same headers as the cron).
+Fixture ZZ QA13 (`10800000-0000-4000-8000-0000000008a2`, 07700 900013, held by Test) was queued the way
+Session A will do it: as Test, `campaign_create` "TEST - QA COORDINATOR QUEUE PROOF" → `campaign_add_leads`
+→ `campaign_launch` (→ `sales_queue_opener`, status `queued`, History `bulk_queued`).
+- **The QA drill** (`qa_drill_lead_id`, cron/admin only): runs the real drip tick for ONE named lead at any
+  hour. It skips only the clock (London window, local window, pacing); pause, cap, suppression, town gate
+  and the QA guard still apply, and it REFUSES any lead whose verdict is not SIMULATE. It never moves the
+  real pacing clock and never runs the follow-up lanes.
+- Drill on a REAL queued lead (Roof Rhino) → `qa_drill_not_sendable`, nothing written.
+- Drill on QA13 → `sent:true, simulated:true, qa_simulated:"reserved_test_number", outcome:"sent"`. The lead
+  moved `queued` → `initial_contact`, `whatsapp_sent_at` stamped, delivery `simulated`, attempts 1; one
+  `whatsapp_sends` row (`test_mode` true, `message_id` null); the opener rendered into the thread
+  ("Hi, is this ZZ QA13 coordinator queue proof?…", `simulated`, `test_mode` true, no Meta id) plus the
+  known mirror placeholder (§5). A real send writes no History row here either (only `bulk_queued` earlier).
+- Drill on QA13 again → `qa_drill_not_sendable` (left the queue; never picked twice). A normal tick →
+  `outside_window`.
+- **0 Meta message ids** (QA13 and the whole system, that hour). The two real queued leads (Paul's, no
+  phone, so never chosen) unchanged: same status, attempts and `updated_at`. `next_send_at` unchanged.
+- QA13 then archived (History `archived_set`), phone and email cleared, exclusion kept.
+**For sessions:** inside 07:00–21:30 London the normal cron picks up a queued fixture within a minute.
+Outside it, the drill may be used on YOUR fixture only (POST `process-whatsapp-queue` with the cron headers
+and `{"qa_drill_lead_id":"<your fixture>"}`). One queued fixture at a time across all sessions (§14).
+
 ---
 
 ## 3. The QA protocol — rules every session follows
 
 - **P1. Never contact a real business.** No WhatsApp, email, call, form or message to anyone outside
   Paul. Every lead you act on is a fixture from YOUR batch (§4), except Coverage reading (P5).
-- **P2. Fixtures carry only reserved contact details:** phone `07700 900xxx` from your range (or none);
+- **P2. Fixtures carry only reserved contact details (the email guard enforces the address server-side):** phone `07700 900xxx` from your range (or none);
   email `paul@move37.fun` (or none). Never a real number, never a real address, never `paul@findable.live`
   on a lead (it is not in the internal-email list, so the payment simulation refuses it).
 - **P3. Exclude BEFORE you act.** Insert the `metric_exclusions` lead row before the fixture does anything
@@ -146,7 +184,7 @@ Sorts last, unmistakable, and the letter says whose it is.
 
 | Session | Lead ids (fixed, never a real uuid) | Phones | Holder |
 |---|---|---|---|
-| Coordinator (done) | `10800000-0000-4000-8000-0000000008a1` ZZ QA12, onboarding `…08b1` | 07700 900012 (cleared) | Test — archived, paid (simulated) |
+| Coordinator (done) | `10800000-0000-4000-8000-0000000008a1` ZZ QA12 (paid, simulated; onboarding `…08b1`), `…08a2` ZZ QA13 (queue + email proof; campaign "TEST - QA COORDINATOR QUEUE PROOF") | 07700 900012 / 900013 (cleared) | Test — archived |
 | A Salesperson | `1a000000-0000-4000-8000-0000000000a1` … `…a9` | 07700 900101–900109 | Test |
 | B Close/payment | `1b000000-0000-4000-8000-0000000000b1` … `…b6` | 07700 900201–900206 | Test |
 | C Delivery AI | `1c000000-0000-4000-8000-0000000000c1` … `…c3` | none needed (07700 900301–3 if one is) | Test |
@@ -224,8 +262,12 @@ The Test account already OWNS a campaign `roofers 2` (from Paul's mistaken use o
   CRM** (the add returns "already in the CRM" otherwise — that is a valid observation). They are real
   leads held by Test: the guard refuses every WhatsApp to them. **Never** queue, launch a campaign on,
   enrich, "Find email", audit-spend beyond §9, claim, or change their stage.
-- Record their ids in `salesperson.md`. At the end **do not archive them** (archiving blocks every real
-  rep from ever claiming them). Paul decides their fate (§15 item 3).
+- Record their ids in `salesperson.md`. **At the end (Paul, 04/10): they are QA material only — never
+  moved to Paul as actionable leads.** For each: insert its `metric_exclusions` lead row (reason "QA
+  material from Coverage, pre-sales certification"), archive it through `lead_set_archived`, clear its
+  phone and email, keep its History. Prove with the §4.4 check. ⚠️ Once excluded, the WhatsApp guard
+  treats it as a fixture (simulated, never sent) — if anyone ever revives it as a genuine prospect,
+  delete that exclusion row FIRST.
 - The QA journey from "assign to campaign" onward uses fixtures, not these businesses.
 
 ---
@@ -271,14 +313,19 @@ lead may still earn commission (only the initial is stamped `test_excluded`).
   paul@move37.fun. Nothing in code was changed; the canonical public address stays paul@findable.live.
 - Expect, per simulated payment: the PAID / new-client email (to paul@findable.live, subject names the
   ZZ QA business) and the signed-agreement PDF (to paul@move37.fun + paul@findable.live).
-- ⚠️ **No email guard exists** — the QA layer guards WhatsApp only. Paul's "Send agreement link" on Paid Clients takes an editable address (`body.to`): type **paul@move37.fun**. The Welcome Pack is a page, never emailed. Outreach email is `mailto:` only.
+- **The QA email guard (§2.3 item 5) enforces the sink server-side** for the typed-address actions:
+  any other address on a QA lead is refused, never sent. Type **paul@move37.fun**. The Welcome Pack is a
+  page, never emailed. Outreach email is `mailto:` only.
 - The four-week results email is held by `REMEASURE_RESULTS_COPY_APPROVED = false` — do not change it.
 - Sessions cannot read the mailbox; prove an email by its Resend record (`client_error_reports`
   `payment_email_sent`, `new_client_email_at`, etc.) and ask Paul to glance at move37 if wording matters.
 
 ---
 
-## 9. Spend caps for the whole certification
+## 9. Spend caps for the whole certification — APPROVED by Paul 04/10/2026
+
+Keep the certification deliberately lean: Ronnie's re-measure still needs Apify budget. **Exceeding
+any cap below = STOP and report why to Paul before spending more.**
 
 | Spend | Cap | Note |
 |---|---|---|
@@ -290,7 +337,8 @@ lead may still earn commission (only the initial is stamped `test_excluded`).
 | OpenAI drafts (voice-note script, warm reply, question generation, page generator) | normal use on fixtures | |
 | **Apify total** | **≤ $3** | ⚠️ $27.35 of the $40 monthly cap was used by 30/09 (cycle ends 16/10); at 100 % every audit stops, and Ronnie's re-measure is due 13/10. Check usage first; stop at 80 %. |
 
-Anything beyond: stop and ask Paul.
+Anything beyond: stop and report to Paul. The caps are TOTALS across all five sessions — record every
+paid run (what, which fixture, cost from `enrichment_usage` / `apify_account_usage`) in your report.
 
 ---
 
@@ -386,9 +434,8 @@ For **every stage J1–J28** the owning session answers the twelve questions and
 12. Does failure give a useful recovery path?
 
 Session-specific must-proves (in addition):
-- **A-precondition:** before queueing A1, confirm a queue tick after 07:00 London returned 200 with no
-  error (`net._http_response`); after A1 sends, the response carries `qa_simulated` and the lead is
-  `initial_contact` with a `simulated` row. That is the first production proof of the drip path.
+- **A:** the drip path is already proven (§2.6); A's job at J5–J6 is the salesperson's experience of
+  queueing, the queue panel, remove/requeue — and confirming the same `simulated` result on A1.
 - **B:** payment → seller retained → commission rule → lead leaves active workflow → exactly one Paid
   Client → admin notification → handoff exists → known info prefilled → missing info identified →
   agreement correct → Welcome Pack continues; and the replay proves no second client, commission,
@@ -444,20 +491,20 @@ queued at any moment across all sessions.
 
 ---
 
-## 15. Before starting — Paul's three items
+## 15. Paul's decisions (04/10/2026) and their state
 
-1. **Real businesses sitting on test accounts.** `MB & Son Recovery and Repairs` (on Test, real mobile,
-   never messaged), `Sunnybank Plumbing Services` (on test1, real mobile, received a real WhatsApp on
-   01/10 and is at "price given") and `JB7 Plumbing and Heating Limited` (on Test, archived). Since the
-   guard went live, nothing can be sent to them from those accounts. Decide: move all three to Paul (one
-   `assign_lead`, reversible), or leave them. Until then sessions must not open or change them (P4).
-2. **The ZZ QA12 smoke test produced two emails** on 04/10 ~02:14 UTC: a "PAID" email to
-   paul@findable.live and a signed-agreement email to paul@move37.fun + paul@findable.live, both naming
-   "ZZ QA12 coordinator smoke". They are tests; no action. A `client_paid` notification for it is in the
-   admin bell.
-3. **Approve the spend caps in §9** (or change them), especially the ≤ $3 Apify cap given the monthly
-   usage, and say what should happen to the ≤ 3 real businesses session A adds from Coverage (default
-   proposal: move them to Paul unarchived, never contacted, at the end).
+1. **Genuine businesses off the test accounts — DONE.** `assign_lead` to Paul (one History line each,
+   nothing else rewritten): MB & Son Recovery (active, never messaged), Sunnybank Plumbing (active, its
+   real conversation and "price given" stage kept), JB7 Plumbing (kept archived). test1 now holds no
+   leads; Test holds only excluded fixtures. Test still OWNS the old `roofers 2` campaign shell, but its
+   82 leads are Paul's: as Test it reads "0 leads" and none can be read or queued.
+2. **Spend caps APPROVED** (§9), Apify ≤ $3 total. Over a cap → stop and report.
+3. **Coverage adds are QA material** — excluded, archived, contact cleared at the end (§6).
+4. **QA email guard** — added and verified (§2.3 item 5, §2.5).
+5. **Automatic queue path** — §2.6.
+
+The ZZ QA12 smoke test (04/10 ~02:14 UTC) produced a PAID email, a signed-agreement email and a
+`client_paid` notification — tests, no action.
 
 Optional: setting `WHATSAPP_APP_SECRET` closes the unsigned inbound webhook (good for security) but
 removes §5's inbound simulation — if you set it, do it after session A finishes J8.
