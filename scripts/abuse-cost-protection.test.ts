@@ -192,10 +192,13 @@ console.log("\n── Meta webhook signature ──");
   const uni = new TextEncoder().encode('{"text":"café 👍"}');
   ok(await validMetaSignature(uni, "sha256=" + (await metaSignatureHex(uni, "s")), "s"), "non-ASCII bodies are judged on their bytes");
   const ws = read("supabase/functions/whatsapp-status/index.ts");
-  ok(/new Uint8Array\(await req\.arrayBuffer\(\)\)/.test(ws) && /validMetaSignature\(rawBytes, req\.headers\.get\("x-hub-signature-256"\), appSecret\)/.test(ws), "whatsapp-status checks the RAW bytes");
-  ok(/if \(!ok\) \{\n\s+console\.error\("\[whatsapp-status\] bad or missing signature — rejecting"\);\n\s+return new Response\("invalid signature", \{ status: 401 \}\);/.test(ws), "…and refuses 401 before reading anything");
-  ok(ws.indexOf("validMetaSignature(") < ws.indexOf("JSON.parse(rawBody"), "…before the body is parsed");
-  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp webhook signatures are NOT being checked/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent");
+  /* 2026-10-04 (M-003): the gate moved to src/lib/metaWebhookGate.ts and now FAILS CLOSED; its full
+     behaviour is scripts/whatsapp-webhook-gate.test.ts. Here: the raw bytes are what is judged, and the
+     refusal happens before the body is parsed. */
+  ok(/new Uint8Array\(await req\.arrayBuffer\(\)\)/.test(ws) && /judgeWhatsAppWebhookPost\(\{\s+rawBytes,\s+signatureHeader: req\.headers\.get\("x-hub-signature-256"\)/.test(ws), "whatsapp-status checks the RAW bytes");
+  ok(/if \(!verdict\.accept\) \{[\s\S]{0,300}status: verdict\.status/.test(ws), "…and refuses with the gate's status before reading anything");
+  ok(ws.indexOf("judgeWhatsAppWebhookPost(") < ws.indexOf("JSON.parse(rawBody"), "…before the body is parsed");
+  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp inbound is OFF/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent");
 }
 
 console.log("\n── alerts ──");

@@ -139,6 +139,9 @@ constant-time; missing / malformed / wrong → false; an empty secret verifies n
 refuses 401 before parsing whenever `WHATSAPP_APP_SECRET` is set. Unset (true on 2026-09-29): it still
 accepts (refusing would drop every genuine receipt and reply), the Admin screen shows a red banner, and
 the sweep emails `webhook_unsigned` once.
+**Superseded 2026-10-04 (M-003, `docs/pre-sales-certification/fixes-01-security-inbound.md`):** the
+webhook now FAILS CLOSED — unset secret = every POST refused 401 (`src/lib/metaWebhookGate.ts`). The
+"still accepts" behaviour above was proved exploitable live by the certification.
 
 ## 7. Re-running the tests
 

@@ -242,15 +242,16 @@ The Test account already OWNS a campaign `roofers 2` (from Paul's mistaken use o
   copies each `whatsapp_sends` row into the thread; when the send has no Meta id (simulated or failed)
   that makes a duplicate placeholder row (`[template]` / `[template_name]`). Expect one extra row per
   simulated send. Record it once as a finding if it matters to the rep's view; do not re-report it.
-- **Simulating a customer reply (session A, E):** `whatsapp-status` currently accepts unsigned Meta-shaped
-  POSTs because `WHATSAPP_APP_SECRET` is not set (shown on the Admin Security panel). Post a standard
-  Meta `messages` webhook whose `from` is your fixture's number in E.164 (`447700900101`) and whose
-  `id` starts `wamid.QA`. This exercises the real inbound path (owner resolution, STOP detection,
+- **Simulating a customer reply:** ⛔ **the unsigned route is CLOSED** (fix branch `fix/01-security-inbound`,
+  M-003): `whatsapp-status` refuses every POST that is not Meta-signed, and refuses everything while
+  `WHATSAPP_APP_SECRET` is unset. Use the fixture-only QA path instead:
+  `npx tsx scripts/qa-simulate-inbound.ts --from "07700 900101" --text "..." [--times 2]` (token via
+  `SUPABASE_MGMT_TOKEN_FILE`). It sends the CRON_SECRET in `x-qa-simulate-inbound`; the webhook accepts
+  it only for inbound MESSAGES from reserved 07700 900xxx numbers with `wamid.QA_` ids (a real number is
+  403), then runs the real inbound path (owner resolution, phone-key matching, STOP detection,
   Interested/triage, auto-reply arming). Any reply the system then sends is simulated by the guard.
   ⚠️ An inbound reply can arm the first-reply rule, which is `audit_only` live — it may start a 3-question
-  hook audit on the fixture (small Apify/OpenAI spend, inside §9). If Paul sets the app secret, this
-  route closes; then fall back to inserting the inbound row via SQL and say the inbound processor was not
-  exercised.
+  hook audit on the fixture (small Apify/OpenAI spend, inside §9).
 
 ---
 
@@ -349,7 +350,7 @@ paid run (what, which fixture, cost from `enrichment_usage` / `apify_account_usa
 | WhatsApp send to a fixture (queue, Inbox, media, voice, payment confirmation) | **SAFE ONLY WITH QA FIXTURE** | simulated by the guard |
 | WhatsApp send to any real business | **DO NOT TRIGGER** | refused for test accounts; protocol for admin |
 | WhatsApp `test_send` (Paul's own test number) | **DO NOT TRIGGER** | admin-only, costs a real message |
-| Inbound customer reply | **SIMULATE** | unsigned Meta-shaped POST from a fixture number (§5) |
+| Inbound customer reply | **SIMULATE** | `scripts/qa-simulate-inbound.ts` (CRON_SECRET, reserved numbers only, §5) |
 | Email to a fixture / operator email to Paul | **SAFE ONLY WITH QA FIXTURE** | paul@move37.fun sink (§8) |
 | Email to any real business | **DO NOT TRIGGER** | |
 | Stripe Checkout Session creation (Quick Close link) | **SAFE ONLY WITH QA FIXTURE** | unpaid live session; never pay |
@@ -506,5 +507,5 @@ queued at any moment across all sessions.
 The ZZ QA12 smoke test (04/10 ~02:14 UTC) produced a PAID email, a signed-agreement email and a
 `client_paid` notification — tests, no action.
 
-Optional: setting `WHATSAPP_APP_SECRET` closes the unsigned inbound webhook (good for security) but
-removes §5's inbound simulation — if you set it, do it after session A finishes J8.
+`WHATSAPP_APP_SECRET` is REQUIRED once `fix/01-security-inbound` is deployed: without it the webhook refuses
+every real reply and receipt (fail closed). §5's simulation does not depend on it.
