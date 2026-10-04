@@ -518,3 +518,24 @@ export const QUICK_CLOSE_AFTER_PAYMENT: readonly string[] = [
   'Paul handles the website, domain and access questions.',
   'Paul may ask them for a few more details later — they do not need everything today.',
 ];
+
+/* ══ QUICK CLOSE IS PRE-PAYMENT ONLY — JUDGED ON THE LEAD, NOT THE ROW (wave 1 integration, 2026-10-04) ══
+   🔴 The save / link / share modes refused only an onboarding row whose status was exactly 'paid'. A
+   client moves on — 'in_delivery', 'completed' — and an ended client's row may read any of those, so a
+   paying client in delivery, or an ENDED one, could have answers changed, or an unexpired payment link
+   e-mailed or WhatsApped to them (findable-checkout refuses a NEW session for a paid lead, but a link
+   made before payment can still be paid twice). ⛔ The lead's own facts decide: money on it (and not
+   refunded), a paid-or-beyond status, refunded, or an ended engagement. Any one → refused. Positive
+   matches on the closing facts; the row's status is still read as a second signal. */
+const QC_PAID_OR_BEYOND: ReadonlySet<string> = new Set(['paid', 'payment_received', 'in_delivery', 'completed']);
+export function quickCloseClosedRefusal(
+  lead: { amount_paid?: number | null; status?: string | null; service_terminated_at?: string | null } | null | undefined,
+  row?: { status?: string | null } | null,
+): { error: 'already_paid' | 'client_closed'; detail: string } | null {
+  if (String(lead?.service_terminated_at ?? '').trim()) return { error: 'client_closed', detail: 'This client’s engagement has ended — no payment link can be made or sent.' };
+  if (lead?.status === 'refunded') return { error: 'client_closed', detail: 'This client was refunded — no payment link can be made or sent. Ask Paul.' };
+  if (Number(lead?.amount_paid ?? 0) > 0 || QC_PAID_OR_BEYOND.has(String(lead?.status ?? '')) || QC_PAID_OR_BEYOND.has(String(row?.status ?? ''))) {
+    return { error: 'already_paid', detail: 'This client has already paid — Paul looks after them from here.' };
+  }
+  return null;
+}

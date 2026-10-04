@@ -84,7 +84,7 @@ export function describeSecurityEvent(e: SecurityEventRow): string {
     case 'apify_near_cap':
       return `Apify is at ${String(d.pct ?? '?')}% of its monthly cap ($${String(d.used_usd ?? '?')} of $${String(d.cap_usd ?? '?')}). At 100% every audit question and SEO scan stops, paying clients included.`;
     case 'webhook_unsigned':
-      return 'WhatsApp inbound is OFF: WHATSAPP_APP_SECRET is not set, so the webhook refuses every incoming message and delivery receipt (it fails closed). Add the Meta App Secret and Meta re-delivers them.';
+      return 'WhatsApp webhook signatures are not verified: WHATSAPP_APP_SECRET is not set. Until it is, the current webhook accepts unsigned posts, and the fail-closed webhook (held until the Findable Meta App is ready) would refuse every reply. Add the Meta App Secret.';
     case 'data_export':
       return `${act}: ${Number(d.rows ?? 0)} rows.`;
     case 'paused':

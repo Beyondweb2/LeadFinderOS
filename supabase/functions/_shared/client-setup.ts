@@ -23,8 +23,9 @@ export const SETUP_LEAD_COLUMNS =
   "id,business_name,phone,email,website,amount_paid,payment_date,status,services_included,service_areas,website_control,delivery_checklist," +
   "service_terminated_at,service_termination_reason,sold_by_user_id,sold_at,assigned_to_user_id,baseline_audit_id,remeasure_due_date,remeasure_audit_id," +
   "remeasure_results_sent_at,website_build,sales_handoff,delivery_submitted_at,delivery_submitted_by," +
-  /* pre-sales fix 03: the route they PAID on (readiness is route-aware) and Paul's recorded first contact. */
-  "contract_total_payments,client_contacted_at,client_contacted_via";
+  /* pre-sales fix 03: the route they PAID on (readiness is route-aware) and Paul's recorded first contact;
+     wave 1 integration: the activation stamp that decides whether first contact is owed at all. */
+  "contract_total_payments,client_contacted_at,client_contacted_via,first_contact_owed_since";
 
 /** Onboarding columns the checklist + stage read. */
 export const SETUP_ONBOARDING_COLUMNS =

@@ -20,11 +20,13 @@ import {
   FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_WEEKS_STANDARD,
   SERVICE_ROUTE_NAME, termMonthsFor, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
-import { QUICK_CLOSE_AFTER_PAYMENT } from './quickClose.ts';
+import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
 import type { SiteSource } from './leadWebsiteKind.ts';
 
-/** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro). */
-export const GUARANTEE_HEADLINE = 'We improve AI visibility or you get your money back.';
+/** findable.live's guarantee line, word for word (findable-site Guarantee.astro / Pricing.astro).
+ *  ⛔ ONE COPY (wave 1 integration): it IS Quick Close's promise, so the call screen and the payment
+ *  link can never word the guarantee differently. */
+export const GUARANTEE_HEADLINE = QUICK_CLOSE_PROMISE;
 
 /** The first monthly payment, said aloud: "six weeks after today" from FINDABLE_MONTHLY_DELAY_DAYS. */
 const WEEKS_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];

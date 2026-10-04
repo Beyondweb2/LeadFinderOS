@@ -45,7 +45,7 @@ import { websiteServiceRoute } from '@/lib/websiteRoute';
 import { domainAuthority, domainInputFromRow, DOMAIN_REASON_TEXT } from '@/lib/domainAuthority';
 import { productionGateProblems } from '@/lib/websiteLaunch';
 import { readSiteForm, siteFormProblems, suggestSiteKey, productionOriginsFor, DEFAULT_THANKS_PATH } from '@/lib/siteForm';
-import { readSiteGateReport } from '@/lib/siteGate';
+import { readSiteGateReport, siteIntentMap } from '@/lib/siteGate';
 import { correctionPrompt } from '@/lib/buildExecution';
 import { launchProblems, PRODUCTION_GATE_REPORT_FILE } from '@/lib/buildPack';
 import { EXISTING_SITE_QA_KEYS, type ManifestAsset, type AssetType, ASSET_TYPES } from '@/lib/websiteBuildState';
@@ -262,6 +262,13 @@ export default function WebsiteBuild() {
   const packInput = useMemo(() => (state && evidence) ? {
     state, template, facts: rows, evidence, businessName, existingSiteUrl, mustNotSay: evidence.facts.mustNotSay.value ?? '',
     serviceRoute: routeVerdict.route, routeSource: routeVerdict.source, domain: domainVerdict,
+    /* WAVE 1 INTEGRATION: Workstream 4 service truth from the client own records (siteGate.siteTruthFromBuild). */
+    clientTruth: {
+      onboardingList: (payload?.onboarding as { services_list?: unknown } | null)?.services_list,
+      onboardingText: (payload?.onboarding as { services?: unknown } | null)?.services,
+      notOffered: (payload?.onboarding as { services_not_offered?: unknown } | null)?.services_not_offered,
+      leadServices: (payload?.lead as { services_included?: unknown } | null)?.services_included,
+    },
   } : null, [state, template, rows, evidence, businessName, existingSiteUrl, routeVerdict, domainVerdict]);
   const launch = useMemo(() => packInput ? launchProblems(packInput) : [], [packInput]);
   const pack = useMemo(() => packInput ? buildPack(packInput) : [], [packInput]);
@@ -271,6 +278,8 @@ export default function WebsiteBuild() {
   const mapping = useMemo(() => state ? computeMapping(state, template, rows, businessName) : null, [state, template, rows, businessName]);
   /* ⛔ THE readiness: the same blockers gate the prompt, the Build pack stage and the Ready badge (F14). */
   const buildBlockers = useMemo(() => packInput && mapping ? executionBlockers(packInput, mapping) : undefined, [packInput, mapping]);
+  /* WAVE 1 INTEGRATION: planned service pages the client never confirmed (Workstream 4 truth) — shown here, not only in the prompt. */
+  const unconfirmedServices = useMemo(() => packInput && mapping ? siteIntentMap(packInput, mapping).unconfirmedServices : [], [packInput, mapping]);
   const stages = useMemo(() => state ? websiteBuildStages({
     state, hasExistingSite: !!existingSiteUrl, factsAwaiting: summary.awaiting, architectureErrors: archErrors,
     setupMissing: setupProblems(state).map((p) => p.label),
@@ -440,6 +449,8 @@ export default function WebsiteBuild() {
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
+      {unconfirmedServices.length > 0 && <div role="status" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Not confirmed by the client:</b> {unconfirmedServices.join(', ')}. The page plan has a page for it, but it is not in the client's own services (onboarding answer or a verified fact). It answers no baseline question, and must claim nothing beyond the verified facts. Confirm it with the client before launch, or remove the page.</span></div>}
       {state.route && <QualityPanel state={state} update={update} hasExistingSite={!!existingSiteUrl} />}
       {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
         execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}

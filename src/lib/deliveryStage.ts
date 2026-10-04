@@ -60,6 +60,8 @@ export interface StageInput {
     /** The payment day and the recorded first contact (src/lib/firstContact.ts — Paul owns first contact). */
     payment_date?: string | null;
     client_contacted_at?: string | null;
+    /** The first-contact activation stamp (stripe-webhook, wave 1 integration) — absent = rule never applied. */
+    first_contact_owed_since?: string | null;
     baseline_audit_id?: string | null;
     remeasure_due_date?: string | null;
     remeasure_audit_id?: string | null;

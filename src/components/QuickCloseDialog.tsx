@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
+import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact';
 
 /* ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
    Built for a phone call on a phone: one question at a time, big buttons, every tap SAVED (so a dropped
@@ -34,6 +35,8 @@ import type { NextStep } from '@/lib/deliveryStage';
 
 interface View {
   ok: true; canEdit: boolean;
+  /** Set when the lead is already a client (already_paid) or its engagement ended / was refunded (client_closed). */
+  closed?: 'already_paid' | 'client_closed' | null;
   lead: { id: string; business_name: string | null; phone: string | null; email: string | null; website: string | null; address: string | null; town: string | null; trade: string | null; contact_name: string | null; rating: number | null; review_count: number | null; campaign: string | null; lead_source: string | null; salesperson: string | null };
   onboarding: { id: string; status: string; contact_name: string | null; contact_email: string | null; confirmed_phone: string | null; business_website: string | null } | null;
   answers: QuickCloseAnswers; state: QuickCloseState; gate: QuickCloseGate;
@@ -47,7 +50,7 @@ interface View {
   /** The sales handoff (src/lib/salesHandoff.ts) — editable by the seller even after payment. */
   handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[] };
   /** After payment: the client's setup checklist, so the seller sees what is missing. */
-  setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean } | null;
+  setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean; first_contact?: { state: FirstContactState; due: string | null } } | null;
 }
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
 const STATE_TONE: Record<QuickCloseState, string> = {
@@ -58,7 +61,7 @@ const STATE_TONE: Record<QuickCloseState, string> = {
   paid: 'bg-emerald-600 text-white',
 };
 /** Server refusals that mean "what you are looking at is out of date" — the screen re-reads itself. */
-const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'answers_changed', 'link_expired', 'busy', 'route_locked']);
+const REFRESH_ON: ReadonlySet<string> = new Set(['stale_route', 'answer_not_kept', 'already_paid', 'client_closed','answers_changed', 'link_expired', 'busy', 'route_locked']);
 
 export function useQuickClose(leadId: string | null | undefined, enabled = true) {
   return useQuery({
@@ -196,11 +199,18 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
           {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading what we already know…</p>}
           {q.isError && <p className="text-sm text-destructive">{edgeErrorMessage(q.error)}</p>}
 
-          {v && v.state === 'paid' && (
+          {v && v.state === 'paid' && v.closed === 'client_closed' && (
+            <section className="rounded-2xl border border-border/60 p-5" data-testid="qc-client-closed">
+              <p className="text-lg font-bold">This client's engagement has ended.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Nothing more happens here: no payment link can be made or sent. Ask Paul if anything looks wrong.</p>
+            </section>
+          )}
+
+          {v && v.state === 'paid' && v.closed !== 'client_closed' && (
             <section className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 text-white">
               <CheckCircle2 className="h-8 w-8" />
               <p className="mt-2 text-xl font-bold">Paid — your part is done.</p>
-              <p className="mt-1 text-sm text-emerald-50/90">Paul takes it from here and will be in touch with them within two working days. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.</p>
+              <p className="mt-1 text-sm text-emerald-50/90">Paul takes it from here and will be in touch with them within two working days{v.setup?.first_contact?.due && (v.setup.first_contact.state === 'owed' || v.setup.first_contact.state === 'overdue') ? ` (by ${firstContactDueLabel(v.setup.first_contact.due)})` : ''}. He has the handoff: your answers, the contact details, the latest messages and anything still to collect.</p>
             </section>
           )}
 

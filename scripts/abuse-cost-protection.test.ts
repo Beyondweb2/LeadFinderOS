@@ -200,7 +200,7 @@ console.log("\n── Meta webhook signature ──");
   ok(/new Uint8Array\(await req\.arrayBuffer\(\)\)/.test(ws) && /judgeWhatsAppWebhookPost\(\{\s+rawBytes,\s+signatureHeader: req\.headers\.get\("x-hub-signature-256"\)/.test(ws), "whatsapp-status checks the RAW bytes");
   ok(/if \(!verdict\.accept\) \{[\s\S]{0,300}status: verdict\.status/.test(ws), "…and refuses with the gate's status before reading anything");
   ok(ws.indexOf("judgeWhatsAppWebhookPost(") < ws.indexOf("JSON.parse(rawBody"), "…before the body is parsed");
-  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp inbound is OFF/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent");
+  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp webhook signatures are not verified/.test(read("src/components/SecurityPanel.tsx")) && /held until the Findable Meta App is ready/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent — in words true whichever webhook is live (wave 1: the fail-closed one is held)");
 }
 
 console.log("\n── alerts ──");

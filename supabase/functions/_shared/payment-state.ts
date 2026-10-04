@@ -49,6 +49,27 @@ export async function establishLeadPayment(service: Service, leadId: string, fac
   return first ? { kind: "first" } : { kind: "replay", lead: now as PaymentStateLead & { payment_date?: string | null } };
 }
 
+/** FIRST CONTACT IS OWED (wave 1 integration, Paul 2026-10-04 — src/lib/firstContact.ts). Stamped on the
+ *  payment that made them a client, by THIS code only, so the "introduce yourself" rule applies from the
+ *  moment the code that carries it is live and never to a client paid before. Conditional: only over a
+ *  blank stamp, never once contact is recorded, never for an ended client. NEVER THROWS — the payment is
+ *  already recorded; a failure is returned for the caller to write to client_error_reports. */
+export async function stampFirstContactOwed(service: Service, leadId: string, atIso: string): Promise<"stamped" | "kept" | { error: string }> {
+  try {
+    const { data, error } = await service.from("outreach_leads")
+      .update({ first_contact_owed_since: atIso })
+      .eq("id", leadId)
+      .is("first_contact_owed_since", null)
+      .is("client_contacted_at", null)
+      .is(FIRST_PAYMENT_FILTERS.notEnded, null)
+      .select("id");
+    if (error) return { error: error.message };
+    return Array.isArray(data) && data.length > 0 ? "stamped" : "kept";
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 /** Move the paid-for onboarding row to `paid` — once. A row already in a paid-family status (paid,
  *  in delivery, completed, refunded …) is never moved back. Throws when the row does not exist. */
 export async function markOnboardingPaid(service: Service, onboardingId: string, nowIso: string): Promise<"moved" | "kept"> {

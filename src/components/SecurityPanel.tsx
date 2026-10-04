@@ -103,7 +103,7 @@ export function SecurityPanel() {
       {!d.webhook_signature_enforced && (
         <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/10 border-destructive/30 text-destructive">
           <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-          <div className="text-sm"><span className="font-semibold">WhatsApp inbound is OFF.</span> WHATSAPP_APP_SECRET is not set, so the webhook refuses every incoming reply and delivery receipt rather than accept unsigned posts. Add the Meta App Secret (see the setup note): Meta re-delivers what was refused, and this warning clears.</div>
+          <div className="text-sm"><span className="font-semibold">WhatsApp webhook signatures are not verified.</span> WHATSAPP_APP_SECRET is not set. Until it is, the current webhook accepts unsigned posts (anyone who finds its address could post a fake reply), and the fail-closed webhook (built, held until the Findable Meta App is ready) would refuse every reply. Add the Meta App Secret (see the setup note) and this warning clears.</div>
         </div>
       )}
 

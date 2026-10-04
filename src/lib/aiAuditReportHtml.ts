@@ -162,7 +162,12 @@ export interface AiAuditReportData {
      output byte-for-byte, so the PAID BASELINE — the only place the grade is still wanted — is
      untouched by construction rather than by a filter someone has to remember. Only callers that
      KNOW they are not a paid baseline opt into 'issues'. */
-  seoStyle?: 'graded' | 'issues';
+  seoStyle?: 'graded' | 'issues' | 'pack';
+  /* ⛔ THE WELCOME PACK'S WEBSITE SLOT ('pack', wave 1 integration — Paul 2026-10-04: KEEP the SEO grade in
+     the pack, as a separate before / after website measure). `seo` is the BEFORE (the baseline's scan);
+     `seoAfter` is an AFTER only when a later scan was genuinely measured — absent, the slot says it has
+     not been measured, never a projected or promised grade. Neither is the guarantee's number. */
+  seoAfter?: { seo: AiAuditSeo; measuredAt?: string | null } | null;
   /** Render the founder offer at the bottom. DEFAULTS TO FALSE — a renderer that shows a price
    *  unless told not to is the wrong default, because the callers that forget are the in-app preview
    *  and the download, and a client must never open their own report to a cheaper offer.
@@ -611,6 +616,45 @@ function seoIssuesSection(seo: AiAuditSeo | undefined): string {
         </ul>`
           : `<p class="seo-intro">We didn&rsquo;t flag any page-level issues on the pages we checked. That&rsquo;s a small sample and separate from whether AI names you, which the results above cover.</p>`}
       </div>
+    </section>`;
+}
+
+/** THE WELCOME PACK'S WEBSITE GRADE (wave 1 integration). A factual measure of how the site is BUILT,
+ *  shown before / after — and said, in so many words, NOT to be the money-back measure.
+ *  ⛔ No grade-dependent spin ("a good result"), no target grade, no after grade unless one was measured. */
+function seoPackSection(before: AiAuditSeo, after: { seo: AiAuditSeo; measuredAt?: string | null } | null): string {
+  const findings = (before.leadFindings ?? []).map((f) => `
+          <li class="find">
+            <span class="find-dot" style="background:${SEV_COLOUR[f.severity] ?? "var(--faint)"}"></span>
+            <span class="find-body"><b class="find-title">${esc(f.title)}</b> <span class="find-detail">${esc(f.detail)}</span></span>
+          </li>`).join("");
+  const grades = (s: AiAuditSeo) => `
+        <div class="seo-grades">
+          <div class="seo-overall">${gradeCircle(s.overallGrade, null, 124, "Overall")}</div>
+          <div class="seo-grade-split" aria-hidden="true"></div>
+          <div class="seo-cats">
+            ${gradeCircle(s.categories.onPage.grade, s.categories.onPage.score, 60, "On-Page SEO", true)}
+            ${gradeCircle(s.categories.contentTechnical.grade, s.categories.contentTechnical.score, 60, "Content & Technical", true)}
+          </div>
+        </div>`;
+  const afterDay = after?.measuredAt && Number.isFinite(Date.parse(after.measuredAt))
+    ? new Date(after.measuredAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "";
+  return `
+    <!-- WEBSITE SEO GRADE (Welcome Pack) &mdash; a separate website measure, before / after; never the guarantee's number -->
+    <section class="seo" data-seo="pack">
+      <div class="sec-eyebrow">Your website &middot; a separate measure</div>
+      <div class="sec-title">Your website&rsquo;s SEO grade</div>
+      <p class="seo-intro">This grade scores how well your web pages are built for search engines and AI to read &mdash; the on-page and technical foundations. It is separate from your AI visibility. Your money-back guarantee is judged only on AI visibility, measured before we start and re-measured after four weeks; this grade does not decide it.</p>
+      <p class="seo-intro"><b>Before</b> &mdash; your website as we measured it at the start: overall <b style="color:${gradeColour(before.overallGrade)}">${esc(before.overallGrade)}</b>.</p>
+      <div class="seo-body">
+        ${grades(before)}
+        ${findings ? `<ul class="seo-findings">${findings}
+        </ul>` : ""}
+      </div>
+      ${after
+        ? `<p class="seo-intro"><b>After</b> &mdash; measured${afterDay ? ` on ${esc(afterDay)}` : ""}: overall <b style="color:${gradeColour(after.seo.overallGrade)}">${esc(after.seo.overallGrade)}</b>.</p>
+      <div class="seo-body">${grades(after.seo)}</div>`
+        : `<p class="seo-intro"><b>After</b> &mdash; not measured yet. An after grade appears here only once your website has actually been scanned again; we never estimate one.</p>`}
     </section>`;
 }
 
@@ -1202,7 +1246,7 @@ export function renderReportHtml(d: AiAuditReportData): string {
      2026-09-16: do not strip it). Every other report shows the free crawl-check faults instead; a
      no-website lead gets the "we'll build you one" slot; otherwise nothing. */
   const seoSlot = d.seo
-    ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : seoSection(d.seo))
+    ? (d.seoStyle === 'issues' ? seoIssuesSection(d.seo) : d.seoStyle === 'pack' ? seoPackSection(d.seo, d.seoAfter ?? null) : seoSection(d.seo))
     : (d.crawlFaults && d.crawlFaults.length) ? faultsSection
     : d.hasWebsite === false ? noWebsiteSection()
     : "";

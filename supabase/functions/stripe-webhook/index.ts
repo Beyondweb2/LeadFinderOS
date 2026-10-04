@@ -2,7 +2,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
 import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments, type DelayedSubscriptionLead } from "../_shared/delayed-subscription.ts";
-import { establishLeadPayment, markOnboardingPaid } from "../_shared/payment-state.ts";
+import { establishLeadPayment, markOnboardingPaid, stampFirstContactOwed } from "../_shared/payment-state.ts";
 import { clientClosed, maySetSubscriptionStatus, paymentDayOf, type ClosedReason, type PaymentStateLead } from "../../../src/lib/paymentState.ts";
 import { firstContactDueDay, firstContactDueLabel } from "../../../src/lib/firstContact.ts";
 import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
@@ -1269,6 +1269,13 @@ Deno.serve(async (req) => {
                 throw e;
               }
               firstPayment = established.kind === "first";
+              /* ⛔ FIRST CONTACT IS OWED FROM HERE (wave 1 integration, src/lib/firstContact.ts): the stamp is
+                 the rule's activation point — written only by this code, only on the payment that made them
+                 a client, BEFORE the new-client email reads the stage. Never fails the payment. */
+              if (firstPayment) {
+                const fc = await stampFirstContactOwed(service, findableLeadId, new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString());
+                if (typeof fc === "object") await recordPaymentFailure("first_contact_stamp_failed", { lead_id: findableLeadId, reason: fc.error });
+              }
               const replayLead = established.kind === "replay" ? established.lead : null;
               ownsPayment = firstPayment || (!closedBefore && !!stripePaymentIntentId && !!replayLead
                 && String(replayLead.stripe_payment_intent_id ?? stripePaymentIntentId) === stripePaymentIntentId);

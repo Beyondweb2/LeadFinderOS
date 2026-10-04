@@ -27,6 +27,7 @@ import { isPublishable } from './buildFacts.ts';
 import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, parseIntentPage } from './websiteQuality.ts';
 import { mentions, ownershipFor, type OwnedPage } from './intentOwnership.ts';
 import { classifyQuestion, excludedFromText, type SiteScope } from './siteScope.ts';
+import { serviceConfirmed, siteServiceTruth, type SiteTruth } from './siteServiceTruth.ts';
 import { claimExpect, claimSupport, type ClaimExpect } from './claimRules.ts';
 import { SITE_ENQUIRY_ENDPOINT } from './websiteBuildStandard.ts';
 export { parseIntentPage } from './websiteQuality.ts';
@@ -80,6 +81,11 @@ export interface SiteIntentMap {
   claims: ClaimExpect;
   /** The enquiry form the built site must post to, when Paul has switched it on. */
   form: { siteKey: string; endpoint: string } | null;
+  /** WAVE 1 INTEGRATION: planned service pages that are NOT on the client's confirmed services (Workstream 4's
+   *  service truth). They own no baseline question; Paul confirms them with the client before they are built. */
+  unconfirmedServices: string[];
+  /** The client's explicit "we do NOT offer" list — never written about on the site. */
+  notOffered: string[];
 }
 
 const fact = (i: BuildPackInput, key: string) => { const r = i.facts.find((f) => f.key === key); return r && isPublishable(r) ? r.value.trim() : ''; };
@@ -88,12 +94,33 @@ const list = (v: string) => v.split(/\s*[,;|]\s*/).filter(Boolean);
 const townSlug = (n: string) => n.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 /**
- * THE BOUNDARY Website Build reads what the client genuinely offers and serves through (siteScope.ts).
- * ⚠️ WORKSTREAM 4: `services` is the APPROVED page plan / template config today. When WS-4's verified
- *    service set merges, its services (and its "not offered" list) are fed in HERE and nowhere else —
- *    docs/pre-sales-certification/fixes-06-website-build.md, "Session 4 integration".
+ * WORKSTREAM 4's SERVICE TRUTH FOR THIS BUILD (wave 1 integration). The client's own records when the page
+ * passed them (clientTruth: onboarding row + lead), else what the evidence resolved — only the ONBOARDING
+ * list counts as the client's, a Sales list only as Sales notes, the baseline's own context never — plus a
+ * services fact Paul VERIFIED in the ledger. Must-not-say's "no X" phrases are negatives too.
  */
-export function siteScopeFromBuild(i: BuildPackInput, m: Mapping, services: ReadonlyArray<{ name: string }>, served: readonly string[], primary: string): SiteScope {
+export function siteTruthFromBuild(i: BuildPackInput, served: readonly string[], primary: string): SiteTruth {
+  const ev = i.evidence.facts.services;
+  const verified = i.facts.find((f) => f.key === 'services' && f.status === 'verified')?.value ?? '';
+  const ct = i.clientTruth ?? null;
+  return siteServiceTruth({
+    onboardingList: ct ? ct.onboardingList : (ev.source === 'onboarding' ? ev.values : []),
+    onboardingText: ct ? ct.onboardingText : [],
+    verifiedServices: verified,
+    leadServices: ct ? ct.leadServices : (ev.source === 'client_record' ? ev.values : []),
+    notOffered: ct?.notOffered ?? '',
+    mustNotSay: i.mustNotSay,
+    trade: fact(i, 'trade') || (i.template && isTemplateRoute(i.state) ? i.template.trade : ''),
+    towns: [...served, ...(primary ? [primary] : [])],
+  });
+}
+
+/**
+ * THE BOUNDARY Website Build reads what the client genuinely offers and serves through (siteScope.ts).
+ * `services` arrives ALREADY FILTERED to the client-confirmed ones (siteIntentMap, wave 1 integration);
+ * Workstream 4's not-offered list joins `excluded` here and nowhere else.
+ */
+export function siteScopeFromBuild(i: BuildPackInput, m: Mapping, services: ReadonlyArray<{ name: string }>, served: readonly string[], primary: string, truth?: SiteTruth): SiteScope {
   const catalogue = i.template?.serviceCatalogue ?? [];
   const excludedCatalogue = isTemplateRoute(i.state) ? m.services.filter((x) => !x.include && x.decided).map((x) => x.service.name) : [];
   const rejected = i.facts.filter((f) => (f.key === 'services' || f.key === 'services_on_site') && (f.status === 'rejected' || f.status === 'not_applicable') && f.value).flatMap((f) => list(f.value));
@@ -103,7 +130,7 @@ export function siteScopeFromBuild(i: BuildPackInput, m: Mapping, services: Read
       const c = catalogue.find((t) => t.name === x.name);
       return { name: x.name, aliases: c ? c.synonyms : [] };
     }),
-    excluded: [...excludedFromText(i.mustNotSay), ...excludedCatalogue, ...rejected],
+    excluded: [...new Set([...excludedFromText(i.mustNotSay), ...excludedCatalogue, ...rejected, ...(truth?.excluded ?? [])])],
     towns: served, homeTown: primary,
     trade: [fact(i, 'trade'), i.template && isTemplateRoute(i.state) ? i.template.trade : ''].filter(Boolean),
     businessName: fact(i, 'business_name') || i.businessName,
@@ -152,12 +179,27 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
     ...services.map((x) => ({ page: x.page, label: x.name, kind: 'service' as const, service: x.name, source: 'page plan' })),
     ...locations.map((x) => ({ page: x.page, label: x.name, kind: 'location' as const, town: bareTown(x.name, primary), source: 'page plan' })),
   ];
-  const scope = siteScopeFromBuild(i, m, services, served, primary);
-  const ctx = { services: services.map((x) => x.name), towns: served, homeTown: primary };
+  /* ⛔ WAVE 1 INTEGRATION — CLIENT TRUTH OUTRANKS THE PAGE PLAN. A planned service page owns baseline
+     questions only when the service is one the client confirmed (Workstream 4's truth, siteServiceTruth.ts);
+     a page for anything else is listed for Paul and owns nothing. The not-offered list joins the scope. */
+  const truth = siteTruthFromBuild(i, served, primary);
+  const aliasesOf = (name: string) => catalogue.find((t) => t.name === name)?.synonyms ?? [];
+  const confirmedServices = services.filter((x) => serviceConfirmed(x.name, aliasesOf(x.name), truth));
+  const unconfirmedServices = services.filter((x) => !confirmedServices.includes(x)).map((x) => x.name);
+  const scope = siteScopeFromBuild(i, m, confirmedServices, served, primary, truth);
+  const planScope = unconfirmedServices.length ? siteScopeFromBuild(i, m, services, served, primary, truth) : scope;
+  const ctx = { services: confirmedServices.map((x) => x.name), towns: served, homeTown: primary };
   const unowned: string[] = [], unownedWhy: Array<{ question: string; reason: string }> = [];
   for (const q of i.evidence.frozenQuestions ?? []) {
     const c = classifyQuestion(q, scope);
-    if (c.kind === 'unowned') { unowned.push(q); unownedWhy.push({ question: q, reason: c.reason }); continue; }
+    if (c.kind === 'unowned') {
+      /* Say WHY when the only page that would have taken it is a service the client never confirmed. */
+      const viaPlan = planScope === scope ? null : classifyQuestion(q, planScope);
+      const about = viaPlan && viaPlan.kind !== 'unowned' && unconfirmedServices.includes(viaPlan.service) ? viaPlan.service : '';
+      unowned.push(q);
+      unownedWhy.push({ question: q, reason: about ? 'is about "' + about + '", which has a planned page but is NOT one of the client' + "'" + 's confirmed services — never pointed at a page until the client confirms it' : c.reason });
+      continue;
+    }
     const o = ownershipFor({ service: c.service || undefined, town: c.town || undefined, question: q, generic: c.kind === 'home' || c.kind === 'town' }, owned, ctx);
     if (o.decision === 'improve_existing' && o.owner && o.owner.page) intents.push({ intent: 'Baseline: ' + q, page: o.owner.page, ...(o.owner.kind === 'service' ? { service: o.owner.service } : {}), ...(o.owner.kind === 'location' ? { town: o.owner.town } : {}), source: 'baseline', question: q });
     else { unowned.push(q); unownedWhy.push({ question: q, reason: c.town && !c.service ? '"' + c.town + '" is served but has no page of its own — it belongs in the area wording (or Paul adds a genuinely local page)' : 'no planned page owns it — Paul decides (a new page, or a section of an existing one)' }); }
@@ -176,6 +218,7 @@ export function siteIntentMap(i: BuildPackInput, m: Mapping): SiteIntentMap {
     homeTown: primary,
     claims: claimExpect(i.facts.filter(isPublishable).map((f) => ({ key: f.key, value: f.value }))),
     form: s.form.enabled && s.form.site_key ? { siteKey: s.form.site_key, endpoint: SITE_ENQUIRY_ENDPOINT } : null,
+    unconfirmedServices, notOffered: truth.truth.notOffered,
   };
 }
 /** "Electrician in Bath" / "Bath" → "Bath": a location page's title names the trade too. */
@@ -199,6 +242,8 @@ export function siteIntentMapLines(map: SiteIntentMap, i: BuildPackInput): strin
       '- These baseline questions have NO owning page, and some name things the client does NOT offer or serve. Do NOT create pages for them, and do NOT write copy that answers a "not offered" / "not served" / unverified ask (no 24-hour copy, no out-of-area town, no service they do not do). List each in warnings for Paul:',
       ...map.unowned.map((q) => { const why = map.unownedWhy.find((w) => w.question === q)?.reason; return '    · ' + q + (why ? '  — ' + why : ''); }),
     ] : []),
+    ...(map.unconfirmedServices.length ? ['- ⛔ These PLANNED service pages are NOT on the client' + "'" + 's confirmed services (their onboarding answer or a verified fact): ' + map.unconfirmedServices.join(', ') + '. They own no baseline question and must claim nothing beyond the verified facts. Build them only as the plan says, and list them in warnings: Paul confirms them with the client before launch.'] : []),
+    ...(map.notOffered.length ? ['- ⛔ The client does NOT offer: ' + map.notOffered.join(', ') + '. Never describe them as offering it, on any page, heading, meta description or schema field.'] : []),
     ...(map.homeTown ? ['- The HOME PAGE owns "<trade> in ' + map.homeTown + '". A location page for ' + map.homeTown + ' (if the plan has one) must carry genuinely local content of its own, never the home page again with the town name added.'] : []),
     ...(map.form ? ['- The enquiry form posts to ' + map.form.endpoint + '?site=' + map.form.siteKey + ' (registered in LeadFinderOS — the gate checks a page posts there).'] : []),
     '- The "claims" block lists the trust claims the gate FAILS unless a verified fact backs them. Do not edit it.',

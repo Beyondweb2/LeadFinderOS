@@ -26,7 +26,7 @@ import { handoffReadiness, type HandoffEvidence, type HandoffLead, type HandoffO
 import { deliveryStage, matchesFilter, type StageInput } from '../src/lib/deliveryStage.ts';
 import { answersFromRecords, changedOnboardingPatch, consentsCleared, cleanAnswers, visibleAnswers } from '../src/lib/manualOnboarding.ts';
 import { agreementRouteLock, maySetAgreementRoute, resolveAgreementRoute } from '../src/lib/agreementRoute.ts';
-import { firstContact, firstContactDueDay, FIRST_CONTACT_SINCE } from '../src/lib/firstContact.ts';
+import { firstContact, firstContactDueDay } from '../src/lib/firstContact.ts';
 import { AGREEMENT_KEY_POINTS } from '../src/lib/welcomePackHtml.ts';
 import { recordFirstContact } from '../supabase/functions/_shared/client-setup.ts';
 
@@ -355,7 +355,9 @@ console.log('\n── 4c. WELCOME PACK SAYS THE RIGHT THING PER ROUTE ──');
   const pack = read('src/lib/welcomePackHtml.ts');
   ok(/AGREEMENT_KEY_POINTS\[a\.route \?\? 'unknown'\]/.test(pack), 'the agreement page picks the list by the agreement\'s route');
   ok(/A new website, built and hosted by us\./.test(pack) && /Clearer pages on your own website\./.test(pack), '"What you get" names the new website for Build and their own site for Optimise');
-  ok(/seoStyle: 'issues'/.test(pack), 'no SEO letter grade in a client\'s pack');
+  /* Paul's ruling (wave 1 integration, 2026-10-04): the SEO grade STAYS, as a separate before / after website
+     measure that is never the guarantee's number — scripts/wave1-integration.test.ts renders it. */
+  ok(/seoStyle: 'pack'/.test(pack), 'the pack shows the SEO grade as its own website measure (seoStyle pack)');
   ok(/route: resolveAgreementRoute\(linkRoute/.test(read('supabase/functions/_shared/welcome-pack-render.ts')), 'the pack\'s route is what they paid on, else the link');
 }
 
@@ -387,16 +389,23 @@ console.log('\n── 6. FIRST CONTACT AFTER PAYMENT IS PAUL\'S ──');
   ok(firstContactDueDay('2026-10-09') === '2026-10-13', 'paid Fri 9 Oct → due Tue 13 Oct (two working days, weekend skipped)');
   ok(firstContactDueDay('2026-12-24') === '2026-12-30', 'paid Thu 24 Dec → due Wed 30 Dec (Christmas, Boxing Day substitute and the weekend skipped)');
   ok(firstContactDueDay('not a day') === null, 'an unreadable day gives no date, never a guess');
-  const owed = deliveryStage(stageInput({ lead: { payment_date: '2026-10-05', client_contacted_at: null } }));
+  const owed = deliveryStage(stageInput({ lead: { first_contact_owed_since: '2026-10-05T10:00:00Z', payment_date: '2026-10-05', client_contacted_at: null } }));
   ok(owed.state === 'waiting_findable' && owed.next.key === 'contact_client' && owed.next.action, `a new client → WAITING FOR FINDABLE, Paul's action (got ${owed.state} / ${owed.next.label})`);
   ok(/Introduce yourself and send the setup link — by Wed 7 Oct/.test(owed.next.label), 'with the due date in the step');
   ok(matchesFilter(owed, 'attention'), 'it sits in "Needs attention"');
-  const late = deliveryStage({ ...stageInput({ lead: { payment_date: '2026-10-05', client_contacted_at: null } }), today: '2026-10-09' });
+  const late = deliveryStage({ ...stageInput({ lead: { first_contact_owed_since: '2026-10-05T10:00:00Z', payment_date: '2026-10-05', client_contacted_at: null } }), today: '2026-10-09' });
   ok(late.firstContact.state === 'overdue' && /overdue since/.test(late.next.label), 'past the due day → overdue');
-  const done = deliveryStage(stageInput({ lead: { payment_date: '2026-10-05', client_contacted_at: '2026-10-06T09:00:00Z' } }));
+  const done = deliveryStage(stageInput({ lead: { first_contact_owed_since: '2026-10-05T10:00:00Z', payment_date: '2026-10-05', client_contacted_at: '2026-10-06T09:00:00Z' } }));
   ok(done.next.key !== 'contact_client' && done.firstContact.state === 'done', 'once recorded, the normal setup step takes over');
   const older = deliveryStage(stageInput({ lead: { payment_date: '2026-09-20', client_contacted_at: null } }));
-  ok(older.firstContact.state === 'not_recorded_before' && older.next.key !== 'contact_client', `a client paid before ${FIRST_CONTACT_SINCE} is never chased retroactively`);
+  ok(older.firstContact.state === 'not_recorded_before' && older.next.key !== 'contact_client', 'a client paid before the rule was live (no activation stamp) is never chased retroactively');
+  /* Wave 1 integration (Paul, decision 3): the cut-off is the activation stamp, never a calendar day. */
+  const unstampedLater = deliveryStage({ ...stageInput({ lead: { payment_date: '2026-10-20', client_contacted_at: null } }), today: '2026-11-30' });
+  ok(unstampedLater.firstContact.state === 'not_recorded_before' && unstampedLater.next.key !== 'contact_client', 'a payment after any given day but processed before the deploy (no stamp) is never chased — no date decides it');
+  const stampedEarly = deliveryStage({ ...stageInput({ lead: { first_contact_owed_since: '2026-09-01T10:00:00Z', payment_date: '2026-09-01', client_contacted_at: null } }), today: '2026-09-02' });
+  ok(stampedEarly.firstContact.state === 'owed', 'a stamped client is owed whatever the calendar says');
+  ok(firstContact({ first_contact_owed_since: 'not a time', payment_date: '2026-10-05' }, '2026-10-06').state === 'not_recorded_before', 'an unreadable stamp is not a stamp (positive match)');
+  ok(!/FIRST_CONTACT_SINCE|'2026-10-05'/.test(read('src/lib/firstContact.ts').replace(/\/\*[\s\S]*?\*\//g, '')), 'no hard-coded cut-off day remains in the rule');
   ok(firstContact({ payment_date: null }, '2026-10-06').state === 'not_recorded_before', 'no payment day → not recorded (never "overdue")');
   const db = dbWith({ status: 'payment_received', amount_paid: 99, payment_date: '2026-10-05' });
   const r1 = await recordFirstContact(db, LEAD, 'paul', 'phone', 'Spoke to Sam');

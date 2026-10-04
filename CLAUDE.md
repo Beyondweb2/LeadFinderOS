@@ -714,6 +714,17 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `submissions` endpoint.
 - **The browser never decides money**: `findable-checkout` reads the add-on tick from the ROW; the
   AI line stays inline `price_data` because it is the guarantee's only carrier.
+- **Payment state is monotonic** (pre-sales wave 1, `docs/pre-sales-certification/wave1-integration.md`): only
+  `establishLeadPayment` writes the paid state, as conditions ON the update; a replay never moves a client back,
+  and a closed (ended / refunded) client never gets a subscription, a live status or a first-contact chase back.
+- **Quick Close is pre-payment only, judged on the LEAD** (`quickCloseClosedRefusal`): money on it, a
+  paid-or-beyond status, refunded or ended refuses every save / link / share — never the onboarding row's
+  status alone (it moves on to `in_delivery` / `completed`).
+- **First contact is owed only from the activation stamp** (`outreach_leads.first_contact_owed_since`, written
+  by stripe-webhook on the payment that made them a client; `firstContact.ts`). ⛔ Never a hard-coded day.
+- **The Welcome Pack's SEO grade is a separate website measure** (`seoStyle: 'pack'`, Paul 2026-10-04): the
+  measured grade as Before, an After only when genuinely re-scanned, and the words saying the guarantee is
+  judged on AI visibility alone. Never a projected grade, never the money-back number.
 - ⛔ **A lead's country comes from Google's address, never from a form's remembered choice**
   (`src/lib/leadCountry.ts`, 2026-09-28): the hidden Find Leads country stored 349 UK businesses as USA.
   A stored phone → WhatsApp digits is ONE rule, `src/lib/waNumber.ts` (UK byte-identical, India's
@@ -858,6 +869,14 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
   competitor names never on a client page; neighbourhoods are an operator field, never mined.
+- **A site page answers only what the client confirmed** (wave 1, `src/lib/siteServiceTruth.ts`): Workstream 4's
+  service truth (client onboarding / verified fact → Sales notes → never Discovery) feeds Website Build's scope
+  (`siteGate.siteTruthFromBuild`) and the page generator. A planned page for an unconfirmed service owns no
+  baseline question and is flagged; the client's "not offered" list joins every exclusion; a MEASURED question
+  naming an unconfirmed service or an unserved town gets no Q&A / plan page. WS-6's own rules: launch =
+  `websiteLaunch.ts`, form registry = `website_build.form`, claims = `claimRules.ts` ↔ the gate.
+- ⛔ **A not-offered entry about NEW work binds only new work** (`serviceScope.ts` `NEW_WORK`): "no new boilers"
+  must never exclude boiler repairs or servicing (wave 1 found it shrinking to "boiler").
 
 **Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
 - **Every manual Crawl site / Re-crawl site / Crawl check is EXHAUSTIVE** (`mode: "full"`, operator-only,
@@ -1045,6 +1064,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
+- 🔴 **Pre-sales wave 1 is integrated, NOT deployed** (`integration/pre-sales-wave1`;
+  `docs/pre-sales-certification/wave1-integration.md` has the deploy order). ⛔ **`whatsapp-status` must not be
+  deployed until the Findable Meta App and its App Secret are ready** — the new code fails closed without
+  `WHATSAPP_APP_SECRET`; the post-call reply matcher rides the same deploy, so it waits too.
 - ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).
 - ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
   refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction

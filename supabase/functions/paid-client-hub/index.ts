@@ -89,7 +89,9 @@ const HANDOFF_ACTIVITY_KINDS = ["note", "call_outcome", "contact_logged", "repor
 /* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
    CLIENT stated; nothing is derived and nothing is operator workflow. */
 const HUB_ONBOARDING_COLUMNS =
-  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at";
+  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at," +
+  /* wave 1 integration: Workstream 4 service truth for Website Build (migration 20261007040100 — run it first). */
+  "services_not_offered";
 
 /* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
    than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */

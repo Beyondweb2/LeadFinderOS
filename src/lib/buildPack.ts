@@ -79,6 +79,10 @@ export interface BuildPackInput {
   serviceRoute?: ServiceRoute | null;
   routeSource?: string;
   domain?: DomainReadiness | null;
+  /** WAVE 1 INTEGRATION — Workstream 4's service truth, from the client's own records (the onboarding row
+   *  and the lead): what they said they do, and what they said they do NOT. Absent → siteGate derives the
+   *  truth from the evidence and the fact ledger (siteTruthFromBuild). */
+  clientTruth?: { onboardingList?: unknown; onboardingText?: unknown; notOffered?: unknown; leadServices?: unknown } | null;
 }
 
 /** The launch rule for this input (websiteLaunch.ts) — the production prompt, the production commands

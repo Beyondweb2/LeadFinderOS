@@ -158,7 +158,8 @@ export interface ServiceScope {
   confirmed: CanonService[];
   /** Every token any confirmed service uses — a question word must be one of these to count. */
   confirmedTokens: string[];
-  notOffered: Array<{ label: string; tokens: string[] }>;
+  /** `newWork`: the negative names NEW / INSTALL / FIT work ("new boilers", "bathroom fitting"). */
+  notOffered: Array<{ label: string; tokens: string[]; newWork?: boolean }>;
   tradeTokens: string[];
 }
 
@@ -176,10 +177,13 @@ export function buildServiceScope(i: { services: string[]; notOffered?: string[]
      a question, so each part is its own negative. */
   const notOffered = (i.notOffered ?? [])
     .flatMap((label) => label.split(/\s*\/\s*|\s+or\s+/i).map((part) => part.trim()).filter(Boolean))
-    .map((label) => ({ label, tokens: dropTrade(meaningTokens(synonymised(label), towns)) }))
+    .map((label) => ({ label, tokens: dropTrade(meaningTokens(synonymised(label), towns)), newWork: NEW_WORK.test(label) }))
     .filter((n) => n.tokens.length > 0);
   return { trade: i.trade ?? '', towns, confirmed, confirmedTokens, notOffered, tradeTokens };
 }
+
+/** Words that ask for NEW work — a new unit supplied and fitted, not a repair or a service of an existing one. */
+const NEW_WORK = /\b(?:new|brand[\s-]new|install(?:s|ed|ing|ation|ations|er|ers)?|fit|fits|fitted|fitting|fittings|fitter|fitters|supply|supplied|replace(?:s|d|ment|ments)?|replacing)\b/i;
 
 export type ScopeVerdict = 'core' | 'service' | 'not_offered' | 'unsupported';
 
@@ -203,6 +207,12 @@ export function questionScope(question: string, scope: ServiceScope): QuestionSc
   const tokens = dropTrade(meaningTokens(text, scope.towns));
   // 1. An explicit negative wins over everything: every word of the not-offered entry is in the question.
   for (const n of scope.notOffered) {
+    /* ⛔ A NEGATIVE ABOUT NEW WORK BINDS ONLY NEW WORK (wave 1 integration, 2026-10-04). meaningTokens drops
+       "new", "installation", "fitting" as filler, so "Does NOT fit new boilers" used to shrink to "boiler"
+       and refuse "Who can repair my boiler" and "cheapest boiler service" — the plumber's REAL services,
+       kept out of his own baseline and (through siteServiceTruth) off his site. Such a negative now matches
+       only a question that also asks for new / install / fit / replacement work. */
+    if (n.newWork && !NEW_WORK.test(question)) continue;
     if (n.tokens.every((nt) => tokens.some((t) => alike(t, nt)))) {
       return { verdict: 'not_offered', service: null, notOffered: n.label, unconfirmedTerms: [], urgent };
     }

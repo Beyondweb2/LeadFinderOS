@@ -4,7 +4,7 @@ import { recordDenial } from "../_shared/protection.ts";
 import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
   quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, STRIPE_SESSION_LIFETIME_MS,
-  stripeSessionIdFromUrl, type QcLinkShare, type QcRecord, type QuickCloseRecord,
+  stripeSessionIdFromUrl, quickCloseClosedRefusal, type QcLinkShare, type QcRecord, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
 import {
@@ -80,7 +80,7 @@ const WHATSAPP_REFUSAL_TEXT: Record<string, string> = {
   qa_test_account: "Not sent: this is a test account or a lead held by one.",
 };
 
-const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments";
+const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at";
 const ROW_COLS = "id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon";
 
 async function loadAll(service: Service, leadId: string) {
@@ -211,12 +211,16 @@ Deno.serve(async (req) => {
       if (paidLead) {
         try {
           const s = (await loadClientSetup(service, leadId))?.setup;
-          if (s) setup = { ready: s.readiness.ready, label: s.readiness.label, done: s.readiness.done, total: s.readiness.total, missing: s.readiness.missing, state_label: s.stage.stateLabel, next: s.stage.next, submitted: !!lead.delivery_submitted_at };
+          if (s) setup = { ready: s.readiness.ready, label: s.readiness.label, done: s.readiness.done, total: s.readiness.total, missing: s.readiness.missing, state_label: s.stage.stateLabel, next: s.stage.next, submitted: !!lead.delivery_submitted_at,
+            /* The seller sees the SAME first-contact due day Paul's screen and email use (firstContact.ts). */
+            first_contact: { state: s.stage.firstContact.state, due: s.stage.firstContact.due } };
         } catch (e) { console.error("[quick-close] setup read failed (non-blocking):", e instanceof Error ? e.message : e); }
       }
       /* THE LINK, AS IT REALLY IS (M-014): the URL is returned only while it is safe to hand over. An
          expired link reports when it was made, and nothing that could be copied. */
-      const usable = linkUsable(cur, nowMs);
+      /* ⛔ A paid / refunded / ended client is never handed a link, even one still inside its window. */
+      const closedNow = quickCloseClosedRefusal(lead as never, row as never);
+      const usable = linkUsable(cur, nowMs) && !closedNow;
       const session = cur?.link_session_id ?? stripeSessionIdFromUrl(cur?.link_url);
       const exp = linkExpiresAtMs(cur);
       const until = linkUsableUntilMs(cur);
@@ -229,7 +233,8 @@ Deno.serve(async (req) => {
           complete: handoffComplete(saved), missing: handoffMissing(saved),
         },
         setup,
-        canEdit: access.ok && row?.status !== "paid",
+        canEdit: access.ok && row?.status !== "paid" && !closedNow,
+        closed: closedNow?.error ?? null,
         lead: {
           id: lead.id, business_name: lead.business_name, phone: lead.phone, email: lead.email, website: lead.website, address: lead.address,
           town: lead.derived_town || lead.search_location || null, trade: (lead.category || lead.search_keyword || "").trim() || null,
@@ -238,7 +243,7 @@ Deno.serve(async (req) => {
           salesperson: (seller as { data?: { display_name?: string } | null }).data?.display_name ?? null,
         },
         onboarding: row ? { id: row.id, status: row.status, contact_name: row.contact_name, contact_email: row.contact_email, confirmed_phone: row.confirmed_phone, business_website: row.business_website } : null,
-        answers, state: quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
+        answers, state: closedNow ? "paid" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
         consents: { lines: buildConsentsFor(answers), wording: buildConsentsWording(answers), confirmed: cur?.build_consents_confirmed ?? null },
         review: { approved_at: cur?.review_approved_at ?? null, reasons: quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]) },
         link: cur?.link_url && cur.link_generated_at ? {
@@ -303,7 +308,11 @@ Deno.serve(async (req) => {
     }
 
     if (!access.ok) return json({ ok: false, error: "not_your_lead", detail: "That lead is not assigned to you." }, 403);
-    if (row?.status === "paid") return json({ ok: false, error: "already_paid", detail: "This client has already paid — Paul looks after them from here." }, 409);
+    /* ⛔ PRE-PAYMENT ONLY, JUDGED ON THE LEAD (wave 1 integration): money on it, a paid-or-beyond status,
+       refunded or ENDED refuses every mode below — save, review, link, share — not only a row that still
+       reads 'paid' (quickCloseClosedRefusal). */
+    const closedRefusal = quickCloseClosedRefusal(lead as never, row as never);
+    if (closedRefusal) return json({ ok: false, error: closedRefusal.error, detail: closedRefusal.detail }, 409);
 
     /* ══ SAVE ONE OR MORE ANSWERS ═════════════════════════════════════════════════════════════════════
        🔴 M-001 (2026-10-04): the incoming answer is merged OVER the saved set and only then cleaned

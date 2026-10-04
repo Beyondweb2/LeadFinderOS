@@ -164,7 +164,9 @@ const mig = read('supabase/migrations/20260929170000_service_route.sql');
 ok(/create trigger trg_onboarding_paid_route_lock before update on public\.onboarding_responses/.test(mig), 'a trigger guards the onboarding row');
 ok(/old\.status = 'paid'/.test(mig) && /new\.plan_tier is distinct from old\.plan_tier or new\.website_addon is distinct from old\.website_addon/.test(mig) && /in \('anon', 'authenticated', 'service_role'\)/.test(mig), '…refusing a route change on a PAID row from any API role (app, sales, edge functions)');
 ok(/create trigger trg_outreach_leads_contract_immutable/.test(mig) && /old\.contract_total_payments is not null/.test(mig), 'the stamped contract on the lead is immutable through the API too');
-ok(/if \(row\?\.status === "paid"\) return json\(\{ ok: false, error: "already_paid"/.test(qcFn), 'Quick Close refuses any change once paid (unchanged)');
+/* Wave 1 integration: the refusal is judged on the LEAD (money, a paid-or-beyond status, refunded, ended),
+   with the row's status as a second signal — a row that reads 'paid' is still refused. */
+ok(/const closedRefusal = quickCloseClosedRefusal\(lead as never, row as never\);\s*if \(closedRefusal\) return json\(\{ ok: false, error: closedRefusal\.error/.test(qcFn), 'Quick Close refuses any change once paid (now judged on the lead, the row as a second signal)');
 ok(!/update\([^)]*plan_tier/.test(code('supabase/functions/paid-client-hub/index.ts')), 'Paid Clients never writes the route');
 
 console.log('── 7. DOUBLE CLICK → ONE CHECKOUT (unchanged) ──');

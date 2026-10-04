@@ -818,9 +818,11 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   const name = (input.businessName || 'your business').trim();
   const reviewLink = (input.reviewLink ?? '').trim();
 
-  /* ⛔ NO SEO LETTER GRADE IN A CLIENT'S PACK (pre-sales fix 03, M-024 / B-25: the standing rule "never
-     claim an SEO score"; Paul's ruling pending, default remove). 'issues' prints what to fix, never a grade. */
-  const reportHtml = renderReportHtml({ ...input.report, hidePitch: true, seoStyle: 'issues' });
+  /* ⛔ THE SEO GRADE STAYS IN THE PACK — AS A SEPARATE WEBSITE MEASURE (Paul's ruling, wave 1 integration,
+     2026-10-04; fix 03 had removed it pending that ruling). 'pack' prints the measured grade as BEFORE, an
+     AFTER only when one was genuinely measured, and says the guarantee is judged on AI visibility alone —
+     never a projected or promised grade, never the money-back number. */
+  const reportHtml = renderReportHtml({ ...input.report, hidePitch: true, seoStyle: 'pack' });
   const reportCss = slice(reportHtml, /<style>/i, '</style>', 'stylesheet');
   const reportBody = slice(reportHtml, /<body>/i, '</body>', 'body');
 
