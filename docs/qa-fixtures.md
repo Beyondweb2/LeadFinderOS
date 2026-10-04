@@ -57,5 +57,7 @@ cleaning; the QA6 pair was archived by its own session at 10:16 UK.
   no Stripe customer). The exclusion row must exist BEFORE the payment (the commission stamp is never redone).
 - An archived fixture leaves the Paid Clients list; the admin team view of sales performance excludes
   fixtures and test accounts.
+- A QA lead's client emails (agreement link, signed copy) can only go to paul@move37.fun (`qaEmailHold`).
+- ZZ QA13 (`…08a2`) proved the queue drip path with the `qa_drill_lead_id` drill (archived, contacts cleared).
 - ZZ QA12 (`10800000-0000-4000-8000-0000000008a1`, onboarding `…08b1`) is the coordinator's smoke test
   of all of the above: paid by simulation twice (idempotent), archived, contacts cleared. Leave it.

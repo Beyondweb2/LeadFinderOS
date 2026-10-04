@@ -465,6 +465,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   paul@move37.fun. Every WhatsApp sender asks `qaSendHold` (`_shared/qa-guard.ts`): fixture → SIMULATED,
   real lead held/pressed by a test account → REFUSED. A new sender must ask it (`qa-safety.test.ts` sweeps).
 - **Payment success in a test is `scripts/qa-simulate-payment.ts`**, never a real card, never Stripe test mode.
+- A QA lead's client email (agreement link, signed copy) goes only to paul@move37.fun — `qaEmailHold` refuses anything else.
+- Prove the drip at any hour with `qa_drill_lead_id` on `process-whatsapp-queue` (cron/admin, fixture-only, simulate-only).
 
 **Shape rules that have each bitten more than once**
 - 🔴 **An absent value falling through as a real one — 16 recorded instances.** Never branch on the
