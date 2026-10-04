@@ -200,6 +200,13 @@ Other wording changes:
 
 ## 11. Expected conflicts with other workstreams
 
+**Checked, not guessed (4 Oct, after the push):** `git merge-tree` of this branch against
+`fix/01-security-inbound`, `fix/03-payment-client-state` and `fix/05-call-workspace` as they stood on
+`origin` — **no textual conflicts with any of them.** Shared files: `scripts/service-route-terms.test.ts`
+with fix/03 (different assertions), `src/lib/salesCrm.ts` and `src/lib/salesWorkspace.ts` with fix/05
+(fix/05 reworks the workspace fold; this branch adds one `link_expired` line beside its Quick Close
+actions — re-read that block after both merge). None of the three touches either kind check.
+
 | File | Likely touched by | Note |
 |---|---|---|
 | `supabase/functions/notify-onboarding-submit/index.ts` | WS-3 (M-022 is theirs in the plan) | One filter line. |
