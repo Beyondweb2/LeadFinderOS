@@ -166,6 +166,9 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'template_required': return 'Choose which approved opener to send first';
     case 'not_an_initial_opener': return 'Bulk initial outreach sends an approved opener only';
     case 'stage_not_allowed': return 'Only the admin can set that status';
+    /* lead_set_follow_up's stale-screen check (migration 20261007105000). */
+    case 'stale_next_action': return 'Kept the newer Next Action — it was changed somewhere else since you opened this';
+    case 'bad_expected': return 'Could not check the Next Action — close and open the lead again';
     /* lead_set_lost_reason (why they said no, 2026-10-01). */
     case 'not_not_interested': return 'The lead is not Not interested any more, so no reason was saved';
     case 'reason_not_allowed': return 'Pick one of the reasons';

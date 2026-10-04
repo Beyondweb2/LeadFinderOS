@@ -575,7 +575,7 @@ function LeadDetailBody({
 
           <TabsContent value="scripts" className="mt-0" data-testid="workspace-scripts">
             {/* The call script and the voice-note script, one switch, one lead context. */}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} onLogCall={logThisCall} />}
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} onLogCall={logThisCall} onRunCheck={() => { setTab('work'); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} />}
           </TabsContent>
 
           <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">

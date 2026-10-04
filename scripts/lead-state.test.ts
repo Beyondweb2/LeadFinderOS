@@ -259,7 +259,7 @@ console.log("\n── 10. queues: Next best actions and Focus read the state ─
   ok(ws.followUps.meetings.map((m) => m.id).join(",") === "meet,later", "…but both are on the Meetings list, soonest first");
   ok(!ws.followUps.meetings.some((m) => m.id === "out") && !ws.nextActions.some((a) => a.leadId === "out"), "a not-interested lead's meeting is not surfaced");
   ok(/key: 'meetings'/.test(read("src/components/salesDash/sections.tsx")), "Sales → What to do next has a Meetings list (moved from Focus Mode)");
-  ok(/call_booked_at"/.test(read("supabase/functions/sales-performance/index.ts")) || /call_booked_at",/.test(read("supabase/functions/sales-performance/index.ts")), "sales-performance reads call_booked_at");
+  ok(/call_booked_at(, is_archived)?"/.test(read("supabase/functions/sales-performance/index.ts")) || /call_booked_at",/.test(read("supabase/functions/sales-performance/index.ts")), "sales-performance reads call_booked_at");
   const perf = read("src/lib/salesPerformance.ts");
   ok(perf.includes('import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } fr' + "om './leadState" + ".ts'") &&!/const NOT_INTERESTED_STATUSES/.test(perf) && !/const CONVERSATION_OUTCOMES/.test(perf), "the dashboard's Not interested and conversation outcomes are the engine's sets (one of each)");
 }

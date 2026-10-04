@@ -38,12 +38,12 @@ import {
 /* The 20-second version beside a saved script (2026-09-30): derived from THAT row's engine, competitors
    and website kind, never stored, so it cannot disagree with the script it sits under. */
 // deno-lint-ignore no-explicit-any
-function withShort(row: any, trade: string | null, area: string | null) {
+function withShort(row: any, trade: string | null, area: string | null, caller: string | null) {
   if (!row) return row;
   const short = shortVoiceNote({
     engineLabel: hookEngineLabel(String(row.hook_engine ?? "")),
     competitors: Array.isArray(row.competitors) ? row.competitors : [],
-    trade, area,
+    trade, area, caller,
     site: { mode: row.site_mode, source: row.site_source ?? "own_site", sourceLabel: row.site_source_label ?? null },
   });
   return { ...row, short_script: short };
@@ -138,7 +138,16 @@ async function loadHookEvidence(service: Service, lead: ResearchLead): Promise<H
  * engine) against the one a Regenerate would pick now (loadHookEvidence — DB reads only, no fetch, no
  * model). A mismatch is shown as OUT OF DATE; nothing regenerates here.
  */
-async function handleLatest(service: Service, lead: ResearchLead) {
+/** WHO IS SPEAKING (fix workstream 5, 2026-10-04): the signed-in person's display name (team_members), the name
+ *  the call script uses too. A failed read falls back to the book owner's name (callerName.ts), never blocks. */
+async function callerNameFor(service: Service, userId: string): Promise<string | null> {
+  try {
+    const { data } = await service.from("team_members").select("display_name").eq("user_id", userId).maybeSingle();
+    return typeof data?.display_name === "string" && data.display_name.trim() ? data.display_name.trim() : null;
+  } catch { return null; }
+}
+
+async function handleLatest(service: Service, lead: ResearchLead, caller: string | null) {
   const { data, error } = await service.from(TABLE).select(ROW_COLUMNS).eq("lead_id", lead.id).order("generated_at", { ascending: false }).limit(1);
   if (error) throw error;
   const { count } = await service.from(TABLE).select("id", { count: "exact", head: true }).eq("lead_id", lead.id);
@@ -155,10 +164,10 @@ async function handleLatest(service: Service, lead: ResearchLead) {
   ));
   const trade = hook.ok ? hook.trade : (leadTrade(lead) || null);
   const area = hook.ok ? hook.area : (leadTown(lead) || null);
-  return json({ ok: true, script: withShort(script, trade, area), versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
+  return json({ ok: true, script: withShort(script, trade, area, caller), versions: count ?? 0, current, stale, generatorVersion: VOICE_NOTE_GENERATOR_VERSION });
 }
 
-async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>) {
+async function handleGenerate(service: Service, lead: ResearchLead, operatorId: string, body: Record<string, unknown>, caller: string | null) {
   const started = Date.now();
   // 1) The evidence — and the refusal — before anything is fetched or spent.
   const hook = await loadHookEvidence(service, lead);
@@ -184,7 +193,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
   // 4) The model, then the checks; one rewrite if a fact is wrong.
   const promptBase = {
     business: hook.business, trade: hook.trade, area: hook.area, website: lead.website,
-    evidence: hook.evidence, site, avoid: previous?.script ?? null,
+    evidence: hook.evidence, site, avoid: previous?.script ?? null, caller,
   };
   let best: VoiceNoteCheck | null = null;
   let promptTokens = 0; let completionTokens = 0; let calls = 0; let modelError: string | null = null;
@@ -195,7 +204,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
     calls++; promptTokens += call.promptTokens; completionTokens += call.completionTokens;
     const raw = parseVoiceNoteScript(call.args);
     if (!raw) { modelError = "model_empty_script"; continue; }
-    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade, business: hook.business });
+    const checked = checkVoiceNoteScript(raw, { evidence: hook.evidence, site, town: hook.area, trade: hook.trade, business: hook.business, caller });
     best = best ? betterAttempt(best, checked) : checked;
     if (!best.problems.length) break;
   }
@@ -232,7 +241,7 @@ async function handleGenerate(service: Service, lead: ResearchLead, operatorId: 
   };
   const { data: saved, error: saveErr } = await service.from(TABLE).insert(row).select(ROW_COLUMNS).single();
   if (saveErr) throw saveErr;
-  return json({ ok: true, script: withShort(saved, hook.trade, hook.area), ms: Date.now() - started });
+  return json({ ok: true, script: withShort(saved, hook.trade, hook.area, caller), ms: Date.now() - started });
 }
 
 Deno.serve(async (req) => {
@@ -255,13 +264,14 @@ Deno.serve(async (req) => {
     const who = { user: { id: book } };
     const lead = access.ok ? await loadLead(service, leadId, book) : null;
     if (!lead) return json({ ok: false, error: "lead_not_found", detail: "That lead is not in your account." }, 404);
-    if (action === "latest") return await handleLatest(service, lead);
+    const caller = await callerNameFor(service, whoActor.actor.id);
+    if (action === "latest") return await handleLatest(service, lead, caller);
     if (lead.is_archived === true) return json({ ok: false, error: "lead_archived", detail: "This lead is archived." }, 409);
     if (action === "generate") {
       /* ⛔ USAGE GUARD (2026-09-29): suspension, the pause modes, drafts per hour, spend. */
       const guard = await guardAction(service, whoActor.actor.id, "ai_draft", { fn: "voice-note-script", leadId, role: whoActor.actor.role, estCostUsd: whoActor.actor.role === "admin" ? 0 : VOICE_SCRIPT_EST_USD });
       if (!guard.ok) return json(guard.body, guard.status);
-      return await handleGenerate(service, lead, who.user.id, body);
+      return await handleGenerate(service, lead, who.user.id, body, caller);
     }
     return json({ ok: false, error: "unknown_action" }, 400);
   } catch (e) {

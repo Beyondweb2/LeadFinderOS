@@ -37,8 +37,12 @@ console.log("\n── the Sales dashboard ──");
 {
   ok(/title="Sales dashboard"/.test(sales), 'it is called "Sales dashboard"');
   const at = (s: string) => sales.indexOf(s);
-  const order = ["<MonthlyLadder ", "<EarningsStats ", "<NextActions ", '<KpiCard label="Calls made"', "<CommissionForecastCard ", "<RecentWins ", "<CommissionExplainer ", "<PaymentsTable "];
-  ok(order.every((s) => at(s) > -1) && order.every((s, i) => i === 0 || at(order[i - 1]) < at(s)), `order: the month + money → what to do next → work → next six months + wins → rules → payments`);
+  /* 2026-10-04 (fix workstream 5, Session A A-18): for a SALESPERSON "What to do next" comes first (on a phone it sat
+     ~1,600 px down under commission); the admin's overview keeps month → what to do next. */
+  const order = ["<MonthlyLadder ", "<EarningsStats ", '<KpiCard label="Calls made"', "<CommissionForecastCard ", "<RecentWins ", "<CommissionExplainer ", "<PaymentsTable "];
+  ok(order.every((s) => at(s) > -1) && order.every((s, i) => i === 0 || at(order[i - 1]) < at(s)), `order: the month + money → work → next six months + wins → rules → payments`);
+  ok(/const todoFirst = role === 'sales';/.test(sales) && at("{todoFirst && todo}") > -1 && at("{todoFirst && todo}") < at("<MonthlyLadder ") && at("{!todoFirst && todo}") > at("<EarningsStats ") && at("{!todoFirst && todo}") < at('<KpiCard label="Calls made"'),
+    'what to do next: first for a salesperson, after the month for the admin');
   ok(!/SalesByWeek|week by week/i.test(sales + code("src/components/salesDash/earningsParts.tsx")), '"This month, week by week" is gone (page and parts)');
   const explainer = code("src/components/salesDash/earningsParts.tsx");
   const ex = explainer.slice(explainer.indexOf("export function CommissionExplainer"), explainer.indexOf("export function PaymentsTable"));

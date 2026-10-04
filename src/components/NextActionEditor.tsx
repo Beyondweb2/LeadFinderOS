@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { refusalText } from '@/lib/salesCrm';
 import { nextActionView, nextActionText } from '@/lib/nextActionView';
-import { saveNextAction, type NextActionInput } from '@/lib/nextActionWrite';
+import { saveNextAction, snapshotOf, type NextActionInput } from '@/lib/nextActionWrite';
 import type { LeadStateInput } from '@/lib/leadState';
 import { NextActionForm } from '@/components/NextActionForm';
 
@@ -80,7 +80,7 @@ export function NextActionEditor({ lead, variant = 'cell' }: { lead: EditorLead;
       </Popover>
       {v && (
         <Button variant="ghost" size="icon" className={cn(variant === 'pill' ? 'h-6 w-6' : 'h-7 w-7', 'text-green-500 hover:bg-green-500/10 hover:text-green-400')}
-          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })} title="Complete next action" aria-label="Complete next action" data-testid="complete-next-action">
+          onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true, expected: snapshotOf(lead) })} title="Complete next action" aria-label="Complete next action" data-testid="complete-next-action">
           <CheckCircle2 className="h-4 w-4" />
         </Button>
       )}

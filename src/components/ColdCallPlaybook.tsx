@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { logFeatureUse } from '@/lib/featureUsage';
-import { AlertTriangle, Check, Copy, ExternalLink, Loader2, PhoneCall, ScrollText } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Globe, Loader2, PhoneCall, ScrollText, ShieldCheck, Sparkles } from 'lucide-react';
 import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
+import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,9 @@ import { playbookDate, usableExcerpt, OPENING_COMPETITORS, type ColdCallPlaybook
    ⛔ Operator-only. It shows the lead's private WhatsApp history, so it lives behind the app's
    authenticated routes and reads through the operator's own session. Nothing here is ever written
    into a public report URL.
+   ⚠️ QUICK CLOSE ON THE CALL SCREEN (fix workstream 5, 2026-10-04): the close block and the sticky bar carry the
+   SAME Quick Close button as the workspace header (QuickCloseDialog) — it only opens that dialog; the payment
+   link is made there, by its own rules. The panel itself still sends nothing and starts no audit or crawl.
    ⚠️ THE ONE WRITE (Admin control centre, release 5, 2026-09-30): a feature-usage row via
    src/lib/featureUsage.ts — the call script shown for a lead, a LinkedIn / email script copied — at
    most one per person/feature/lead/day. It spends nothing and changes no lead; it is how the admin
@@ -155,11 +159,11 @@ function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId:
         {tabs.map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={tab === key} className={tabClass(tab === key)} onClick={() => setTab(key)}>{label}</button>
         ))}
-        {tab === 'call' && <span className="ml-auto"><CopyButton text={p.callScript.join('\n\n')} label="Copy" /></span>}
+        {tab === 'call' && <span className="ml-auto"><CopyButton text={callFlowText(p)} label="Copy" /></span>}
         {tab === 'linkedin' && <span className="ml-auto"><CopyButton text={p.messages.linkedin} label="Copy" onCopied={() => logFeatureUse('linkedin_script', leadId)} /></span>}
         {tab === 'email' && <span className="ml-auto flex gap-1"><CopyButton text={p.messages.email.subject} label="Copy subject" /><CopyButton text={p.messages.email.body} label="Copy email" onCopied={() => logFeatureUse('email_script', leadId)} /></span>}
       </div>
-      {tab === 'call' && <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>}
+      {tab === 'call' && <CallFlow p={p} leadId={leadId} />}
       {tab === 'voice' && <VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} />}
       {tab === 'linkedin' && <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed" data-testid="playbook-linkedin">{p.messages.linkedin}</p>}
       {tab === 'email' && (
@@ -168,6 +172,108 @@ function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId:
           <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{p.messages.email.body}</p>
         </div>
       )}
+    </section>
+  );
+}
+
+/* ── THE CALL, IN ORDER (fix workstream 5, 2026-10-04) ───────────────────────────────────────────────
+   1 Open (who is calling, then why — the opening read), 2 Ask (the questions worth asking), 3 If they're
+   interested (the route that fits: price, payments, what they get; the guarantee; "I'll send you the link
+   now" beside Quick Close), 4 After they pay. The gatekeeper and voicemail lines fold underneath. Short
+   blocks, not a monologue: the rep glances, says it in their own words, moves on. */
+const STEP = 'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
+const stepNo = (n: number) => <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{n}</span>;
+
+export function callFlowText(p: ColdCallPlaybook): string {
+  const c = p.close;
+  return [
+    ...p.callScript,
+    'Questions:\n' + p.qualify.map((q) => '- ' + q).join('\n'),
+    'If they\'re interested:\n' + c.routes.map((r) => r.name + ' (' + r.summary + '): ' + r.spoken.join(' ')).join('\n') + '\n' + c.guarantee.headline + ' ' + c.guarantee.spoken + '\n' + c.closeLine,
+    'After they pay:\n' + c.afterPayment.map((l) => '- ' + l).join('\n'),
+  ].join('\n\n');
+}
+
+function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+  const c = p.close;
+  return (
+    <div className="space-y-4" data-testid="playbook-call-flow">
+      <section className="space-y-2" data-testid="call-step-open">
+        <h4 className={STEP}>{stepNo(1)}Open: who you are, why you're ringing</h4>
+        <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>
+        <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="call-fallback">{p.fallback}</p>
+      </section>
+      <section className="space-y-1.5" data-testid="call-step-ask">
+        <h4 className={STEP}>{stepNo(2)}Ask</h4>
+        <ul className="list-disc space-y-1 pl-5 text-sm">{p.qualify.map((q) => <li key={q}>{q}</li>)}</ul>
+      </section>
+      <section className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="call-step-close">
+        <h4 className={STEP}>{stepNo(3)}If they're interested</h4>
+        {c.routeNote && <p className="text-xs text-muted-foreground">{c.routeNote}</p>}
+        <div className={cn('grid gap-2', c.routes.length > 1 && 'sm:grid-cols-2')}>
+          {c.routes.map((r, i) => (
+            <div key={r.route} className={cn('rounded-md border bg-background/60 p-2.5', i === 0 ? 'border-emerald-500/50' : 'border-border/60')} data-testid={'call-route-' + r.route}>
+              <p className="text-sm font-semibold">{r.name}{c.routes.length > 1 && i === 0 && <span className="ml-1.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">keeps their site</span>}</p>
+              <p className="text-xs font-medium">{r.summary}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{r.site}</p>
+              <div className="mt-1.5 space-y-1 text-sm leading-relaxed">{r.spoken.map((s) => <p key={s}>{s}</p>)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="rounded-md bg-background/60 p-2.5 text-sm" data-testid="call-guarantee">
+          <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-600" />{c.guarantee.headline}</p>
+          <p className="mt-1 leading-relaxed">{c.guarantee.spoken}</p>
+          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{c.guarantee.caution}</p>
+        </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">{c.monthly}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/30 pt-2">
+          <p className="min-w-0 flex-1 text-[15px] font-medium">“{c.closeLine}”</p>
+          <QuickCloseButton leadId={leadId} />
+        </div>
+      </section>
+      <section className="space-y-1.5" data-testid="call-step-after">
+        <h4 className={STEP}>{stepNo(4)}After they pay</h4>
+        <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">{c.afterPayment.map((l) => <li key={l}>{l}</li>)}</ul>
+      </section>
+      <details className="rounded-md border border-border/60 px-2.5 py-1.5 text-sm" data-testid="call-not-the-owner">
+        <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">Not the owner, or voicemail</summary>
+        <p className="mt-1.5"><span className="text-muted-foreground">Someone else answers: </span>“{p.gatekeeper}”</p>
+        <p className="mt-1"><span className="text-muted-foreground">Voicemail (under 20 seconds): </span>“{p.voicemail}”</p>
+      </details>
+    </div>
+  );
+}
+
+/** Business, phone, website and the AI check in one strip — the first thing a rep sees on a laptop or a phone.
+ *  "No audit yet" is said plainly, with the way to run one; nothing is invented when there is no result. */
+function CallCard({ p, onRunCheck }: { p: ColdCallPlaybook; onRunCheck?: () => void }) {
+  const c = p.context;
+  const tone = p.audit.state === 'ready' ? (p.evidence.named ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300') : 'text-muted-foreground';
+  return (
+    <section className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3" data-testid="call-card">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        {c.phone
+          ? <a href={'tel:' + c.phone} className="inline-flex items-center gap-1 font-semibold text-emerald-700 hover:underline dark:text-emerald-300" data-testid="call-card-phone"><PhoneCall className="h-4 w-4" />{c.phone}</a>
+          : <span className="text-muted-foreground">No phone on file</span>}
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-xs" data-testid="call-card-website">
+          <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {c.website
+            ? <a href={/^https?:\/\//i.test(c.website) ? c.website : 'https://' + c.website} target="_blank" rel="noreferrer" className="truncate text-primary hover:underline">{c.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}</a>
+            : <span className="text-muted-foreground">No website</span>}
+          {p.site.source !== 'own_site' && p.site.label && <span className="text-muted-foreground">({p.site.label} profile)</span>}
+        </span>
+        {(c.trade || c.town) && <span className="text-xs text-muted-foreground">{[c.trade, c.town].filter(Boolean).join(', ')}</span>}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className={cn('flex min-w-0 items-center gap-1.5 text-sm font-semibold', tone)} data-testid="call-card-audit">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span className="min-w-0">{p.audit.headline}{p.audit.finding && <span className="block text-xs font-normal text-muted-foreground">Website: {p.audit.finding}</span>}</span>
+        </p>
+        {p.audit.state === 'none' && onRunCheck && (
+          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onRunCheck} data-testid="call-card-run-check">Run the AI check (about a minute)</Button>
+        )}
+      </div>
+      {p.audit.state === 'none' && <p className="text-[11px] text-muted-foreground">No problem if you ring first — the script below does not claim a result.</p>}
     </section>
   );
 }
@@ -244,7 +350,7 @@ function ReportLinks({ p }: { p: ColdCallPlaybook }) {
   );
 }
 
-function PlaybookBody({ p, leadId, scriptsFirst, initialScript }: { p: ColdCallPlaybook; leadId: string; scriptsFirst?: boolean; initialScript?: 'call' | 'voice' }) {
+function PlaybookBody({ p, leadId, scriptsFirst, initialScript, onRunCheck }: { p: ColdCallPlaybook; leadId: string; scriptsFirst?: boolean; initialScript?: 'call' | 'voice'; onRunCheck?: () => void }) {
   /* Inside the prospect workspace the script is what is read mid-call, so it comes first and the
      prospect summary (already on the workspace's own tabs) is left out. Same pieces, same data. */
   if (scriptsFirst) {
@@ -255,6 +361,7 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript }: { p: ColdCallP
             {p.warnings.map((w) => <p key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</p>)}
           </div>
         )}
+        <CallCard p={p} onRunCheck={onRunCheck} />
         <Scripts p={p} leadId={leadId} initial={initialScript} />
         <Block title="AI opportunity" tone="primary"><AiOpportunity p={p} /></Block>
         <Block title="What I'd talk about"><TalkAbout p={p} /></Block>
@@ -297,18 +404,20 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript }: { p: ColdCallP
  *  same builder, same call/voice-note switch as the sheet; the script comes first. */
 /** The call's outcome, Next Action and notes are logged on the Work tab (LeadWorkPanel — the ONE outcome rule).
  *  `onLogCall` takes the person there with Log a contact open, so the script and the record are one click apart. */
-function LogCallBar({ onLogCall }: { onLogCall: () => void }) {
-  return <div className="sticky bottom-0 mt-3 border-t border-border bg-background py-2">
-    <Button type="button" className="w-full" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4" />Log this call: outcome and Next Action</Button>
+function LogCallBar({ onLogCall, leadId }: { onLogCall: () => void; leadId: string }) {
+  return <div className="sticky bottom-0 mt-3 flex items-center gap-2 border-t border-border bg-background py-2">
+    <Button type="button" className="min-w-0 flex-1" onClick={onLogCall} data-testid="log-this-call"><PhoneCall className="mr-1.5 h-4 w-4 shrink-0" /><span className="truncate">Log this call<span className="hidden sm:inline">: outcome and Next Action</span></span></Button>
+    <QuickCloseButton leadId={leadId} className="h-10 px-3 text-sm" />
   </div>;
 }
 
-export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall }: { leadId: string; initialScript?: 'call' | 'voice'; onLogCall?: () => void }) {
+/** onRunCheck: the workspace's Work tab, where the one-lead AI check is proposed and run (LeadHookPanel). */
+export function ColdCallPlaybookInline({ leadId, initialScript, onLogCall, onRunCheck }: { leadId: string; initialScript?: 'call' | 'voice'; onLogCall?: () => void; onRunCheck?: () => void }) {
   const q = useColdCallPlaybook(leadId, true);
   if (q.isLoading) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading the script…</p>;
   if (q.isError) return <p className="text-sm text-destructive">Couldn't load the script: {(q.error as { message?: string })?.message ?? 'unknown error'}</p>;
   if (!q.data) return <p className="text-sm text-muted-foreground">Lead not found.</p>;
-  return <><PlaybookBody p={q.data} leadId={leadId} scriptsFirst initialScript={initialScript} />{onLogCall && <LogCallBar onLogCall={onLogCall} />}</>;
+  return <><PlaybookBody p={q.data} leadId={leadId} scriptsFirst initialScript={initialScript} onRunCheck={onRunCheck} />{onLogCall && <LogCallBar onLogCall={onLogCall} leadId={leadId} />}</>;
 }
 
 export function ColdCallPlaybookSheet({ leadId, open, onOpenChange, onLogCall }: { leadId: string | null; open: boolean; onOpenChange: (open: boolean) => void; onLogCall?: () => void }) {

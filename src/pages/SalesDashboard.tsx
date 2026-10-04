@@ -91,6 +91,15 @@ export default function SalesDashboard() {
   const reached = d ? Object.entries(d.calls.byOutcome).filter(([k]) => CONVERSATION_OUTCOMES.has(k)).reduce((s, [, n]) => s + n, 0) : 0;
   const conversion = d ? rate(d.funnel.won, d.funnel.contacted) : null;
   const oneSeller = !isAdmin || person !== 'all';
+  /* ⛔ WHAT TO DO NEXT COMES FIRST FOR A SALESPERSON (fix workstream 5, 2026-10-04; Session A A-18): on a phone it
+     sat ~1,600 px down, under the commission ladder. The admin's overview keeps its order. */
+  const todoFirst = role === 'sales';
+  const todo = w ? (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-5" data-testid="what-to-do-next">
+      <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" hint="Calls and follow-ups due first. Tap a lead to open it." /></div>
+      <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} /></div>
+    </div>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
@@ -125,6 +134,8 @@ export default function SalesDashboard() {
         </div>
       )}
 
+      {todoFirst && todo}
+
       {/* ── 1. The month: the ladder (sales, the progress line, the rates) with the three money figures beside it ── */}
       {earn.isLoading && <div className="h-72 animate-pulse rounded-[1.25rem] bg-muted/50 motion-reduce:animate-none" aria-busy="true" />}
       {e && oneSeller && e.commissionable && (
@@ -141,13 +152,8 @@ export default function SalesDashboard() {
       {/* Their own paid sales that still owe the handoff (2026-10-02). */}
       {role === 'sales' && <MyHandoffs />}
 
-      {/* ── 2. What to do next (the ranked list, and the lists Focus Mode used to hold) ── */}
-      {w && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <div className="min-w-0 lg:col-span-3"><NextActions items={w.nextActions} go={go} title="What to do next" hint="Most urgent first. Tap a lead to open it." /></div>
-          <div className="min-w-0 lg:col-span-2"><FollowUpQueue fu={w.followUps} go={go} group={fuGroup ?? fuDefault} setGroup={setFuGroup} /></div>
-        </div>
-      )}
+      {/* ── 2. What to do next (the ranked list, and the lists Focus Mode used to hold) — here for the admin ── */}
+      {!todoFirst && todo}
 
       {/* ── 3. The work this month: three numbers, each with its base ── */}
       {q.isLoading && <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="h-24 sm:h-32 animate-pulse rounded-[1.25rem] bg-muted/60 motion-reduce:animate-none" />)}</div>}

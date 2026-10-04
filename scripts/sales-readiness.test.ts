@@ -170,7 +170,7 @@ console.log("── one CRM truth: every writer notifies, every reader re-reads 
     ok(/markLeadInterested\(c\.leadId/.test(inbox) && /setLeadPipelineStatus\(c\.leadId/.test(inbox) && (qa.match(/notifyLeadChanged\(leadId\);/g) ?? []).length === 2, "the Inbox status pill and star announce too (through the one quick-action path)");
   }
   const saveFn = crm.slice(crm.indexOf("function useSave("), crm.indexOf("/* ── WORK"));
-  ok(/if \(r\.ok\) \{ toast\(\{ title: okText \}\); notifyLeadChanged\(leadId, undefined, patch\); \}/.test(saveFn), "the CRM panel announces only after the server's yes, carrying the accepted values");
+  ok(/if \(r\.ok\) \{ toast\(\{ title: r\.duplicate === true \? '[^']+' : okText \}\); notifyLeadChanged\(leadId, undefined, patch\); \}/.test(saveFn), "the CRM panel announces only after the server's yes, carrying the accepted values (a server-side duplicate is said as such)");
   ok(/if \(patch\) \{ qc\.setQueryData\(key, before \?\? null\); notifyLeadChanged\(leadId\); \}/.test(saveFn) && /variant: 'destructive'/.test(saveFn), "a refused save puts the old values back everywhere (a plain notice = every reader re-reads) and says why");
   ok(/notifyLeadChanged\(leadId, undefined, patch, true\)/.test(saveFn) && saveFn.indexOf("patch, true") < saveFn.indexOf("await leadRpc"), "the chosen values reach Outreach, the Inbox and other tabs before the server answers");
   ok(/if \(optimistic\) return;/.test(sync) && /if \(detail\?\.optimistic\) return;/.test(useOut), "…and nobody re-reads (or refetches) until it has");

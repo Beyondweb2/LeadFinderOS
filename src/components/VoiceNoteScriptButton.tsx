@@ -166,7 +166,9 @@ export function VoiceNoteScriptBody({ leadId, currentAuditId }: { leadId: string
                   <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200" data-testid="voice-note-old-style">
                     {(row.generator_version ?? 0) < 3
                       ? 'Written with the older script style (longer, and it ends by offering to explain changes). Regenerate for the short version that asks who controls the website.'
-                      : 'Written before the plain-English style update. Regenerate for the newer wording.'}
+                      : (row.generator_version ?? 0) < 5
+                        ? 'Written before the voice note said who is speaking. Regenerate so it opens with your name and Findable.'
+                        : 'Written before the plain-English style update. Regenerate for the newer wording.'}
                   </p>
                 )}
                 {row.problems.length > 0 && (
