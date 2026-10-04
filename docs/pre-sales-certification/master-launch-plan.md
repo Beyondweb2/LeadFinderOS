@@ -18,6 +18,10 @@
     **E-03 confirmed as a real, narrow window.**
 - **Raw totals across the five reports:** 5 P0 · 52 P1 · 86 P2. **After merging duplicates and re-grading:
   4 P0 · 39 P1 · 21 P2** (the P2s are grouped by theme; every source ID is kept in SOURCE AUDITS).
+- **Second consolidation pass (same day, review only):** re-read all five reports, re-checked the code behind
+  M-003, M-005, M-010 and M-017 on `origin/main`, and corrected two contradictions between this plan's sections:
+  **M-003 now sits in Gate 1** (the security section already said "before any real login"), and **M-015 is now a
+  Gate 3 blocker** (the call-first section already listed it in the minimum). Counts unchanged.
 
 ---
 
@@ -678,12 +682,14 @@ own track.
 ### GATE 1 — Safe to give test salesperson logins (a real person, test account, fixtures only)
 **FAIL NOW.** Blocking:
 - **M-002**: policy narrowed, and Paul's two old Payment Links deactivated in Stripe;
+- **M-003**: the webhook (Meta app secret set, a genuine inbound proven, then fail-closed). It is a P0 and an
+  external hole that exists whether or not anyone logs in; Session E's launch line is "no logins until E-01 and
+  A-02 are fixed";
 - **the off-boarding rule** (M-054) written into `docs/` and CLAUDE.md;
 - **M-051 QA impact**: README's fixture email changed, because the sink is suppressed.
 
 ### GATE 2 — Safe for real calling / prospecting (real reps, real leads, no payment links yet)
-**FAIL NOW.** Blocking, on top of Gate 1:
-- M-003, the webhook (secret set and fail-closed);
+**FAIL NOW.** Blocking, on top of Gate 1 (which now includes M-003):
 - M-005, the reply after a call;
 - M-006, crawl-check ids;
 - M-007, vault names deleted;
@@ -701,6 +707,9 @@ own track.
 - M-001 (Build close);
 - M-011 (guarantee, minimum term and agreement tick stated before the link);
 - M-014 (stale and superseded links);
+- M-015 (window-closed send: "Email the link" plus History rows for copy and email). After a phone call the
+  24-hour window is shut on almost every close, so without it the one step that takes the money happens off the
+  system, from the rep's own phone, with no record. The Meta payment-link template stays after launch;
 - M-016 (no status regression);
 - M-017 (subscription idempotency);
 - M-018 (first-contact owner);
@@ -709,7 +718,7 @@ own track.
 
 **For Build payments, also:** M-012 (consent wording), M-019 (false blockers) and M-020 (consents wiped).
 
-**Strongly recommended in the same release, not gate-blocking:** M-013, M-015 and M-022.
+**Strongly recommended in the same release, not gate-blocking:** M-013 and M-022.
 
 ### GATE 4 — Safe to deliver Optimise
 **FAIL NOW.** Blocking, on top of Gate 3 and Gate 6:
@@ -1155,7 +1164,8 @@ These can safely wait until after a controlled launch with one or two reps and P
 3. **M-032 / M-033, the results sender and verdict.** Before the first new client's day 28 (on or after about
    1 Nov). Paul approves the copy first.
 4. **M-022, false "not paid" alerts.** In the first week.
-5. **M-013 / M-015, link placement and email send.** In the first week, if not shipped in R2.
+5. **M-013, link placement.** In the first week, if not shipped in R2. (M-015's email send is Gate 3; only its
+   Meta payment-link template waits until after launch.)
 6. **M-029's question style** (customer questions, not keyword strings). Until then Paul rewrites drafts.
 7. **M-041, the Optimise brief.** Paul works from the client page until it exists.
 8. **M-044 to M-064, the P2 themes,** by owning workstream:
