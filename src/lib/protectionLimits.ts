@@ -49,7 +49,7 @@ export interface ProtectionLimits {
 export const GUARD_ACTIONS = [
   'lead_search', 'place_details', 'enrich', 'site_scrape', 'hook_audit', 'hook_preview', 'ai_draft',
   'prospect_preview', 'niche_check', 'audit_manual', 'admin_ai', 'claim', 'lead_add', 'lead_lookup',
-  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue',
+  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check',
 ] as const;
 export type GuardAction = typeof GUARD_ACTIONS[number];
 
@@ -82,8 +82,21 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
     export_csv: { paid: false, sales_allowed: false },
     whatsapp_send: { paid: false },
     whatsapp_queue: { paid: false },
+    /* "Check before calling" (2026-10-04, fn sales-prospect-check): one guard row per FRESH paid check a
+       salesperson's batch starts (reused results are free and never counted). per_day IS the rep's daily
+       allowance — src/lib/salesCheck.ts reads it from the live row and falls back to this value. */
+    sales_check: { paid: true, per_day: 40 },
   },
 };
+
+/** The live limits row with any action it does not know yet filled from the defaults (an action added
+ *  by a later release, before its SQL has run). The Security panel reads and saves through this, so a
+ *  save never fails validation on an action the row has not caught up with, and no existing value is
+ *  ever replaced. */
+export function withDefaultActions(limits: ProtectionLimits): ProtectionLimits {
+  const actions = { ...DEFAULT_PROTECTION_LIMITS.actions, ...(limits?.actions ?? {}) } as ProtectionLimits['actions'];
+  return { ...limits, actions };
+}
 
 /** The three global states. One control on the Admin screen, never three switches.
  *  running            — everything normal.

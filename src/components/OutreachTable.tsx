@@ -233,6 +233,8 @@ interface OutreachTableProps {
     channel: 'whatsapp' | 'call' | 'open';
     templateContent?: string | null;
     shareLink?: string | null;
+    /** 'open' only: the workspace tab to land on ("Check before calling" opens the call screen). */
+    tab?: WorkspaceTab;
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
   onLaunchConsumed?: () => void;
@@ -246,6 +248,10 @@ interface OutreachTableProps {
   onBulkJob?: (type: 'enrich' | 'audit', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
   /** True while a bulk job is queued/running (or being created) — disables new ones. */
   bulkJobActive?: boolean;
+  /** Sales: "Check before calling" over the selection (fn sales-prospect-check judges every lead). */
+  onSalesCheck?: (leadIds: string[]) => void;
+  /** Why the button is off right now (a batch still starting), or null. */
+  salesCheckBlocked?: string | null;
   /** Bulk-move the selected leads to a campaign (null = "No campaign"). Single
    *  batched write, owner-RLS scoped. Demo leads are filtered by the caller. */
   onAssignCampaign?: (leadIds: string[], campaignId: string | null) => Promise<boolean> | void;
@@ -331,6 +337,8 @@ export function OutreachTable({
   onClearPreset,
   onBulkJob,
   bulkJobActive = false,
+  onSalesCheck,
+  salesCheckBlocked = null,
   onAssignCampaign,
   onRemoveFromMyLeads,
 }: OutreachTableProps) {
@@ -774,7 +782,7 @@ export function OutreachTable({
     setLaunchLink(launchIntent.shareLink ?? null);
     if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
     else if (launchIntent.channel === 'call') handleCallClick(lead);
-    else if (launchIntent.channel === 'open') setDetailLead(lead);
+    else if (launchIntent.channel === 'open') { setDetailTab(launchIntent.tab); setDetailLogContact(false); setDetailLead(lead); }
     onLaunchConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchIntent, leads, listComplete]);
@@ -2028,6 +2036,22 @@ export function OutreachTable({
                   >
                     {socialBulk ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <SearchCheck className="h-3.5 w-3.5 mr-1.5 text-sky-500" />}
                     {socialBulk ? `Finding socials ${socialBulk}` : `Find socials (${Math.min(selectedIds.size, SOCIAL_BULK_MAX)})`}
+                  </Button>
+                )}
+                {/* ── CHECK BEFORE CALLING (sales, fix/07) ── research only: never sends, never writes the lead.
+                    Every selected id goes to the server, which says per lead why one cannot be checked. */}
+                {!readOnly && onSalesCheck && perms.salesChecks && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-background text-xs h-8"
+                    disabled={!!salesCheckBlocked}
+                    title={salesCheckBlocked ?? 'Run the AI check and a website check on the selected leads before you ring them. Recent results are reused. Nothing is sent.'}
+                    onClick={() => onSalesCheck(Array.from(selectedIds))}
+                    data-testid="sales-check-button"
+                  >
+                    <SearchCheck className="h-3.5 w-3.5 mr-1.5 text-sky-500" />
+                    Check before calling ({selectedIds.size})
                   </Button>
                 )}
                 {!readOnly && onBulkJob && perms.bulkAudits && (

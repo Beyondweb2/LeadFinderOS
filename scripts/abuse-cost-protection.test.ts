@@ -28,7 +28,15 @@ const MIG = read("supabase/migrations/20260929100000_abuse_cost_protection.sql")
 console.log("── the thresholds live once ──");
 {
   const m = MIG.match(/insert into public\.protection_settings \(id, mode, limits\) values \(1, 'running', '(\{.*?\})'::jsonb\)/);
-  ok(m && JSON.stringify(JSON.parse(m[1])) === JSON.stringify(DEFAULT_PROTECTION_LIMITS), "the migration's seed JSON == DEFAULT_PROTECTION_LIMITS");
+  /* 2026-10-04 (fix/07): an action added after the seed reaches the live row through its OWN migration
+     (jsonb_set, only when absent). The defaults must equal the seed PLUS exactly those additions. */
+  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261006070000_sales_prospect_checks.sql" };
+  const seeded = m ? JSON.parse(m[1]) : null;
+  if (seeded) for (const [action, file] of Object.entries(LATER_ACTIONS)) {
+    const am = read(file).match(new RegExp(`'\{actions,${action}\}', '(\{[^']*\})'::jsonb`));
+    if (am) seeded.actions[action] = JSON.parse(am[1]);
+  }
+  ok(seeded && JSON.stringify(seeded) === JSON.stringify(DEFAULT_PROTECTION_LIMITS), "the migration's seed JSON (+ actions later migrations add) == DEFAULT_PROTECTION_LIMITS");
   ok(validateLimits(DEFAULT_PROTECTION_LIMITS).ok, "the defaults validate");
   ok(GUARD_ACTIONS.every((a) => a in DEFAULT_PROTECTION_LIMITS.actions), "every guard action has a default entry");
   const L = DEFAULT_PROTECTION_LIMITS;

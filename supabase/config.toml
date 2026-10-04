@@ -209,6 +209,13 @@ verify_jwt = true
 [functions.sales-performance]
 verify_jwt = true
 
+# sales-prospect-check: "Check before calling" — a salesperson's bulk pre-call check (fix/07, 2026-10-04).
+# SPA-only caller with the signed-in user's JWT (a salesperson; the admin for its overview); the handler
+# resolves the role itself on every call and judges every lead server-side. It calls create-ai-audit and
+# crawl-check on their internal doors (CRON_SECRET) with ids it read itself. It sends nothing.
+[functions.sales-prospect-check]
+verify_jwt = true
+
 # admin-overview: the Admin control centre's numbers (docs/admin-control-centre.md). SPA-only caller
 # with the admin's own JWT; the handler refuses anyone who is not the admin (requireAdmin). Reads only,
 # spends nothing, returns totals — never a message body, phone number or Stripe id.
