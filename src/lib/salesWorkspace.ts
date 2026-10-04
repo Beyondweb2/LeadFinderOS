@@ -266,6 +266,8 @@ export function foldSalesWorkspace(input: WorkspaceInput): SalesWorkspace {
     if (qcs && !f.won) {
       if (qcs.state === 'in_progress' || qcs.state === 'ready' || qcs.state === 'consents_needed') actions.push({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: qcs.state === 'ready' ? 'Quick Close ready — send the payment link' : qcs.state === 'consents_needed' ? 'Quick Close — Build consents needed' : 'Finish Quick Close', detail: qcs.state === 'consents_needed' ? 'They need to confirm the three new-website consents before the link' : 'Answers are saved — pick up where you left off', at: null, tone: 'amber', link: 'lead', rank: 2 });
       else if (qcs.state === 'link_generated') actions.push({ kind: 'quick_close_link', leadId: f.lead.id, name, title: 'Payment link sent — not paid yet', detail: qcs.linkAt ? `Link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Check they received it', at: qcs.linkAt, tone: 'green', link: 'whatsapp', rank: 3 });
+      /* M-014 (2026-10-04): an expired link is never "sent, not paid" — the rep needs a fresh one. */
+      else if (qcs.state === 'link_expired') actions.push({ kind: 'quick_close_finish', leadId: f.lead.id, name, title: 'Payment link expired — make a fresh one', detail: qcs.linkAt ? `Old link made ${new Date(qcs.linkAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : 'Open Quick Close to make a fresh link', at: qcs.linkAt, tone: 'amber', link: 'lead', rank: 2 });
       else if (qcs.state === 'needs_review') actions.push({ kind: 'quick_close_review', leadId: f.lead.id, name, title: 'Quick Close waiting for Paul', detail: 'Domain / agency issue under review', at: null, tone: 'amber', link: 'lead', rank: 8 });
     }
 
