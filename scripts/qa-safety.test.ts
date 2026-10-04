@@ -94,6 +94,12 @@ for (const p of senders) {
 }
 const queue = readFileSync(path.join(FN, "process-whatsapp-queue/index.ts"), "utf8");
 ok(!/\n\s*if \(live\) \{/.test(queue), "the queue has no bare `if (live)` send branch left");
+const q = queue.replace(/\r\n/g, "\n");
+ok(/const qaDrill = !!qaDrillLeadId && \(isCron \|\| isAdmin\) && mode === "tick";/.test(q), "the queue drill is cron/admin-only and only on a tick");
+ok(/if \(qaDrill && qaVerdict\.kind !== "simulate"\) return/.test(q), "a drill refuses any lead the QA guard would not SIMULATE (it can never send live)");
+ok(/if \(paused\) return json\(\{ ok: true, skipped: "paused"/.test(q) && !/paused[^\n]*!qaDrill/.test(q), "a drill still respects pause");
+ok(/cap_reached/.test(q) && !/DAILY_CAP\)[^\n]*qaDrill/.test(q), "a drill still respects the daily cap");
+ok(/if \(!qaDrill\) \{\s*await service\.from\("whatsapp_outreach_state"\)\s*\.update\(\{ next_send_at/.test(q), "a drill never moves the real queue's pacing clock");
 const webhook = readFileSync(path.join(FN, "stripe-webhook/index.ts"), "utf8");
 ok(/if \(qaHeader\) \{[\s\S]{0,400}sameSecret\(qaHeader, cronSecret\)/.test(webhook), "the payment simulation requires the CRON_SECRET header first");
 ok(/qaPaymentEventShapeRefusal\(parsed\)[\s\S]{0,1200}qaPaymentFactsRefusal\(/.test(webhook), "and checks shape then facts before running the branch");
