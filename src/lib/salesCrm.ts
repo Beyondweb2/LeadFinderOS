@@ -329,6 +329,8 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   /* The delivery workflow (2026-10-02, _shared/client-setup.ts recordLeadEvent) — meaningful events only. */
   payment_received: 'Payment received',
   handoff_saved: 'Sales handoff',
+  /* fn quick-close share_link (2026-10-04): how the payment link reached them — copied / emailed / WhatsApp. */
+  payment_link_shared: 'Payment link',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',
@@ -411,6 +413,8 @@ export function activityDetail(
     case 'website_control_set': return d.value ? String(d.value).replace(/_/g, ' ') : null;
     case 'crawl_run': return d.url ? String(d.url) : null;
     case 'opted_out': return a.body ?? 'Future automated outreach is suppressed';
+    /* Written by fn quick-close: "copied (to send by hand)", "emailed to x", "sent on WhatsApp (test mode)". */
+    case 'payment_link_shared': return a.body ?? null;
     default: return null;
   }
 }

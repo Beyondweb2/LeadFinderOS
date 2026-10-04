@@ -196,7 +196,15 @@ Deno.serve(async (req) => {
          is pure lag on the warmest lead in the funnel. Free-check rows are therefore picked on the
          NEXT cron tick (within a minute); everything else keeps the delay exactly as it was.
          One .or() rather than two queries, so the batch/ordering semantics are untouched. */
-      .or(`source.eq.free_check,created_at.lte.${cutoff}`)
+      /* ⛔ A QUICK CLOSE ROW IS NEVER A "QUESTIONNAIRE SUBMITTED, NOT PAID" (M-022, 2026-10-04). fn quick-close
+         creates its row at the rep's FIRST tap, often while they are still on the phone, so 20 minutes
+         after that tap is not a bailed checkout — it emailed Paul about prospects still being closed. The
+         rep's own dashboard owns the unpaid link ("Payment link sent — not paid yet"), and Paul's chase
+         task counts it only from the moment a link was made (adminMetrics signup_unpaid).
+         ⚠️ `source` is NULL on older self-service rows, so the exclusion is an is.null-or-neq pair —
+         a bare neq would drop them too (CLAUDE.md §4). Excluded IN the query, not after it, so these
+         rows can never fill a batch and starve the real ones. */
+      .or(`source.eq.free_check,and(created_at.lte.${cutoff},or(source.is.null,source.neq.quick_close))`)
       .order("created_at", { ascending: true })
       .limit(BATCH);
 

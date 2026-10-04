@@ -82,7 +82,8 @@ const cols = onboardingColumnsFor(cleanAnswers({ ...build, build_consents: 'yes'
 ok(cols.dns_permission === true && cols.materials_confirmed === true && cols.authority_confirmed === true, 'confirmed → the same consent columns the self-service pages write');
 ok(onboardingColumnsFor(cleanAnswers({ ...build, manager: 'agency', authority: 'not_sure', build_consents: 'yes' })).authority_confirmed === undefined, 'an explicit "not sure" to authority is never turned into a yes');
 ok(cleanAnswers({ ...base, route: 'optimise', build_consents: 'yes' }).build_consents === undefined && !missingQuestions(cleanAnswers({ ...base, route: 'optimise' })).includes('build_consents'), 'Optimise never asks or keeps the Build consents (existing checks only)');
-ok(/if \(prev\.build_consents === "yes" && answers\.build_consents !== "yes"\) \{\s*patch\.dns_permission = null; patch\.materials_confirmed = null;/.test(code('supabase/functions/quick-close/index.ts')), 'withdrawing the consents clears the columns they set');
+/* 2026-10-04: the save decision moved into planQuickCloseSave (src/lib/quickClose.ts), which fn quick-close runs. */
+ok(/if \(prev\.build_consents === 'yes' && answers\.build_consents !== 'yes'\) \{\s*cols\.dns_permission = null; cols\.materials_confirmed = null;/.test(code('src/lib/quickClose.ts')) && /planQuickCloseSave\(/.test(code('supabase/functions/quick-close/index.ts')), 'withdrawing the consents clears the columns they set');
 
 console.log(f === 0 ? '\nALL PASS' : `\n${f} FAILURE(S)`);
 process.exit(f === 0 ? 0 : 1);

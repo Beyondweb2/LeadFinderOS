@@ -123,7 +123,9 @@ export function stripeDashboardUrl(...ids: (string | null | undefined)[]): strin
   }
   return null;
 }
-export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null }
+/** `source` + `qc_link_at` (2026-10-04, M-022): a Quick Close row exists from the rep's FIRST tap, so it is
+ *  "filled the sign-up" only once a payment link was made (`quick_close->>link_generated_at`). */
+export interface AdminOnboarding { lead_id: string | null; status: string | null; created_at: string; plan_tier: string | null; website_addon: boolean | null; contact_email?: string | null; source?: string | null; qc_link_at?: string | null }
 /** conversation_triage (fn conversation-triage): one row per inbound message. */
 export interface TriageRow {
   id: string; message_id: string; lead_id: string | null; message_at: string;
@@ -958,11 +960,17 @@ function attentionItems(
     const l = leadById.get(leadId); if (!l || l.is_archived || isPaidLead(l) || DEAD_STATUSES.has(String(l.status)) || o.status === 'paid') continue;
     // A sign-up Paul (or the team) filled in to test the flow is not a prospect waiting to pay.
     if (isExcludedLead(input.exclusions, l) || isInternalEmail(input.exclusions, o.contact_email)) continue;
-    const d = Math.floor((nowMs - ms(o.created_at)) / 86_400_000);
+    /* ⛔ A QUICK CLOSE IS NOT A FILLED SIGN-UP UNTIL A PAYMENT LINK EXISTS (M-022, 2026-10-04). Its row is
+       created at the rep's first tap; the clock starts when the link was made, and the words say so. */
+    const quickClose = o.source === 'quick_close';
+    const since = quickClose ? (o.qc_link_at ?? null) : o.created_at;
+    if (!since) continue;
+    const d = Math.floor((nowMs - ms(since)) / 86_400_000);
     if (d < SIGNUP_CHASE_DAYS) continue;
+    const ago = d === 1 ? 'yesterday' : `${d} days ago`;
     out.push({ key: `signup:${leadId}`, group: 'today', kind: 'signup_unpaid', leadId, business: l.business_name ?? 'Lead',
-      why: `Filled the sign-up ${d === 1 ? 'yesterday' : `${d} days ago`} and hasn't paid`, owner: nameOf(factsById.get(leadId)?.holder ?? null),
-      sinceIso: o.created_at, state: stateOf(l), action: 'Chase the sign-up in the Inbox', open: 'inbox' });
+      why: quickClose ? `Quick Close payment link made ${ago} and not paid` : `Filled the sign-up ${ago} and hasn't paid`, owner: nameOf(factsById.get(leadId)?.holder ?? null),
+      sinceIso: since, state: stateOf(l), action: quickClose ? 'Check with the salesperson, then chase in the Inbox' : 'Chase the sign-up in the Inbox', open: 'inbox' });
   }
   // REVIEW — one line: live leads with no trade cannot be sold to.
   const noTrade = facts.filter((f) => isLiveLeadWithoutTrade(f.lead));
