@@ -22,6 +22,21 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-04-qa-safety', date: '2026-10-04', title: 'Test accounts can never message a real business', audience: 'admin',
+    body: 'Before salespeople get logins, test accounts and test leads are now fenced off from real WhatsApps, real payments and the business numbers.',
+    report: {
+      added: [
+        'Test leads (marked as test, or on a 07700 900 number) are never sent to WhatsApp: the message is recorded as simulated and the lead moves on as if it had been sent.',
+        'A safe way to test a £99 payment without money, used only on test leads.',
+      ],
+      changed: [
+        'A real business held by a test account can no longer be messaged from anywhere; the sender is told why.',
+        'Paid Clients drops a test client once its test is finished and archived.',
+        'The whole-team sales performance view leaves out test accounts and test leads.',
+      ],
+      removed: [],
+      effect: 'The pre-sales certification can run the real sales and payment flow end to end without contacting anyone real or touching the real numbers.',
+    } },
   { id: '2026-10-03-campaigns-top-right-and-queue', date: '2026-10-03', title: 'Campaigns from the top right, and your own WhatsApp queue', audience: 'all',
     body: 'Campaigns opens from the top right of Find Leads and Outreach (not the menu). Salespeople now see their own WhatsApp queue on Outreach.',
     report: {
