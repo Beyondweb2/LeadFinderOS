@@ -39,6 +39,11 @@
      Wales bank holidays skipped).
    - PROJECTED is only what future payments WOULD earn — never added to earned.
    - Only a salesperson earns commission. A client sold by the admin earns £0.
+   - 🔴 NOTHING AFTER THE CLIENT'S ENGAGEMENT IS OVER (pre-sales fix 03, 2026-10-04; E-16 / E-17): a
+     recurring payment received at or after the client's service ended (service_terminated_at) earns 0%
+     — a live subscription Paul has not yet cancelled is not a sale — and an ended or refunded client
+     projects nothing more. A TEST lead's recurring payments earn 0% like its initial one (the initial
+     is stamped test_excluded). Historic commission earned before the end is never touched.
    Pure: ledger rows in, lines and totals out. Read by fn sales-earnings and fn sales-performance.
    The money facts come ONLY from payment_ledger (Stripe); never from a CRM status.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -131,6 +136,8 @@ export interface CommissionLine {
   testSale?: boolean;
   /** A monthly payment received after the seller's engagement ended: 0%, still listed. */
   afterEngagementEnded?: boolean;
+  /** A monthly payment received after the CLIENT's service ended: 0%, still listed. */
+  afterClientEnded?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -184,6 +191,9 @@ export interface CommissionInput {
   engagement?: Map<string, EngagementEvent[]>;
   /** Per lead: the payment links generated for it (who, when) — the proof a sale was closed. */
   closings?: Map<string, SaleClosing[]>;
+  /** Per lead: whether the client's engagement is over (outreach_leads.service_terminated_at; status
+   *  refunded). Absent = open. Recurring payments at/after endedAt earn 0%; a closed client projects 0. */
+  clientStateOf?: Map<string, { endedAt: string | null; refunded: boolean }>;
 }
 
 export interface EngagementEvent { kind: 'ended' | 'resumed'; at: string }
@@ -230,6 +240,8 @@ export interface ClientEarnings {
   commissionable: boolean;
   /** The seller's engagement has ended: nothing more is earned or projected on this client. */
   engagementEnded?: boolean;
+  /** The CLIENT's engagement is over (ended or refunded): nothing more is projected. */
+  clientClosed?: boolean;
 }
 
 export function commissionLines(input: CommissionInput): { lines: CommissionLine[]; clients: ClientEarnings[] } {
@@ -246,10 +258,14 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const events = seller ? input.engagement?.get(seller) ?? null : null;
     const business = input.businessName?.get(leadId) ?? 'Client';
     const rateOf = new Map<string, { rate: number; n: number }>(); // payment row id → its rate and number
+    const clientState = input.clientStateOf?.get(leadId) ?? null;
+    const clientEndMs = clientState?.endedAt ? Date.parse(clientState.endedAt) : NaN;
+    /* A test lead: its initial payment is stamped test_excluded, and so are all of its monthlies. */
+    const testLead = payments.some((p) => p.kind === 'initial' && p.commission_rule === TEST_EXCLUDED_RULE);
     let initialSeen = false; let recurringSeen = 0;
     for (const p of payments) {
       let n: number; let rate: number; let label: string;
-      let monthStart: string | null = null; let monthSeq: number | null = null; let testSale = false; let afterEnd = false;
+      let monthStart: string | null = null; let monthSeq: number | null = null; let testSale = false; let afterEnd = false; let afterClientEnd = false;
       if (p.kind === 'initial' && !initialSeen) {
         initialSeen = true; n = 1;
         /* ⛔ THE STORED RATE, never recomputed here: what the sale earned when it landed. */
@@ -270,8 +286,13 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         recurringSeen += 1; n = 1 + recurringSeen;
         /* It still takes its place in the count (month 4 is month 4 whoever it pays). */
         afterEnd = earns && recurringSeen <= COMMISSION_RECURRING_COUNT && !engagedAt(events, p.occurred_at);
-        rate = recurringSeen <= COMMISSION_RECURRING_COUNT && !afterEnd ? COMMISSION_RECURRING_RATE : 0;
-        label = afterEnd ? `Month ${recurringSeen} · after the engagement ended` : `Month ${recurringSeen}`;
+        /* ⛔ Received at or after the CLIENT's service ended: 0%, permanently (an unreadable time fails closed). */
+        afterClientEnd = !!clientState?.endedAt && (!Number.isFinite(clientEndMs) || !(Date.parse(p.occurred_at) < clientEndMs));
+        testSale = testLead;
+        rate = recurringSeen <= COMMISSION_RECURRING_COUNT && !afterEnd && !afterClientEnd && !testSale ? COMMISSION_RECURRING_RATE : 0;
+        label = afterClientEnd ? `Month ${recurringSeen} · after the client's service ended`
+          : testSale ? `Month ${recurringSeen} · test sale (not counted)`
+          : afterEnd ? `Month ${recurringSeen} · after the engagement ended` : `Month ${recurringSeen}`;
       }
       else { n = 1; rate = 0; label = 'Additional one-off payment'; }
       if (!earns) rate = 0;
@@ -281,10 +302,11 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       lines.push({
         id: `pay:${p.id}`, leadId, sellerId: seller, kind: 'payment', paymentNumber: n, label, clientAmount: round2(p.amount_gbp), rate,
         commission: commissionOn(p.amount_gbp, rate), occurredAt: p.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
-        status: !earns || afterEnd ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
+        status: !earns || afterEnd || afterClientEnd || (testSale && p.kind === 'recurring') ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
         ...(monthSeq ? { monthStart, monthSeq } : {}),
         ...(testSale ? { testSale: true } : {}),
         ...(afterEnd ? { afterEngagementEnded: true } : {}),
+        ...(afterClientEnd ? { afterClientEnded: true } : {}),
       });
     }
     // Reversals: a refunded charge or a lost/open chargeback takes back the commission on that money.
@@ -324,11 +346,14 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const contractRecurringLeft = typeof contractTotal === 'number' && contractTotal > 0 ? Math.max(0, contractTotal - 1 - recurringSeen) : Infinity;
     /* Ended NOW: every payment still to come lands while not engaged, so none is projected. */
     const ended = engagementEndedNow(events);
+    /* The CLIENT closed (ended / refunded) or a test lead: no future revenue is expected from it. */
+    const clientClosed = !!clientState && (!!clientState.endedAt || clientState.refunded);
     clients.push({
       leadId, business, sellerId: seller, payments: payments.length, earned: round2(earned), reversed: round2(reversedTotal),
-      commissionablePaymentsLeft: earns && !ended ? Math.max(0, Math.min(COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT), contractRecurringLeft)) : 0,
+      commissionablePaymentsLeft: earns && !ended && !clientClosed && !testLead ? Math.max(0, Math.min(COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT), contractRecurringLeft)) : 0,
       commissionable: earns,
       ...(ended ? { engagementEnded: true } : {}),
+      ...(clientClosed ? { clientClosed: true } : {}),
     });
   }
   lines.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));

@@ -12,6 +12,7 @@ import type { HandoffReadiness, HandoffWho } from '@/lib/handoffReadiness';
 import { ACTIVITY_LABEL } from '@/lib/salesCrm';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import { cn } from '@/lib/utils';
+import { firstContactDueLabel, type FirstContactChannel, type FirstContactView } from '@/lib/firstContact';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    CLIENT SETUP — the production line at the top of a paid client's page (2026-10-02,
@@ -24,6 +25,8 @@ import { cn } from '@/lib/utils';
 export interface SetupView {
   ready: boolean; label: string; missing: string[]; done: number; total: number; waiting_on: HandoffWho | null;
   stage: DeliveryStage | 'ended'; stage_label: string; state: DeliveryState; state_label: string; next: NextStep;
+  /** Paul's first contact after payment (src/lib/firstContact.ts). Absent on an older server. */
+  first_contact?: FirstContactView;
 }
 export interface SetupHandoff {
   readiness: HandoffReadiness;
@@ -63,6 +66,10 @@ export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }:
   };
   const submit = () => run('submit', () => invokeEdge('paid-client-hub', { action: 'submit_delivery', lead_id: leadId }), 'Submitted for delivery');
   const confirmGbp = () => run('gbp', () => invokeEdge('paid-client-hub', { action: 'confirm_gbp', lead_id: leadId }), 'GBP access confirmed');
+  /* Paul records the first contact (pre-sales fix 03): once, with how it was made. */
+  const recordContact = (via: FirstContactChannel) => run(`contact_${via}`, () => invokeEdge('paid-client-hub', { action: 'record_first_contact', lead_id: leadId, via }), 'First contact recorded');
+  const fc = s.first_contact;
+  const contactOwed = !!fc && (fc.state === 'owed' || fc.state === 'overdue');
   const saveHandoff = async (f: SalesHandoffFields) => {
     const ok = await run('handoff', () => invokeEdge('quick-close', { mode: 'save_handoff', lead_id: leadId, handoff: f }), 'Handoff saved');
     if (ok) setEditing(false);
@@ -75,6 +82,7 @@ export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }:
     if (k === 'confirm_gbp') return void confirmGbp();
     if (k === 'complete_handoff') return setEditing(true);
     if (k === 'run_discovery' || k === 'review_questions' || k === 'run_baseline') return onOpenBaseline();
+    if (k === 'contact_client') return document.getElementById('setup-first-contact')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     go(s.next.section);
   };
   const setupLink = h.onboarding_id ? clientSetupUrl(h.onboarding_id, leadId) : null;
@@ -104,6 +112,29 @@ export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }:
             )}
           </div>
         </div>
+
+        {/* FIRST CONTACT IS PAUL'S (pre-sales fix 03): the client was told "within two working days". */}
+        {contactOwed && fc && (
+          <div id="setup-first-contact" data-testid="setup-first-contact"
+            className={cn('space-y-2 rounded-lg border p-3', fc.state === 'overdue' ? 'border-red-500/60' : 'border-sky-600/50')}>
+            <p className="text-sm font-semibold">
+              First contact is yours — introduce yourself and send the setup link
+              <span className={cn('ml-1 font-normal', fc.state === 'overdue' ? 'text-red-600' : 'text-muted-foreground')}>
+                {fc.state === 'overdue' ? `· overdue since ${firstContactDueLabel(fc.due)}` : `· by ${firstContactDueLabel(fc.due)}`}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">They were told we would be in touch within two working days. The salesperson's part is done. Once you have spoken to them or sent the link, record it here.</p>
+            <div className="flex flex-wrap gap-2">
+              {setupLink && <Button size="sm" variant="outline" onClick={() => void copyLink()}><ClipboardCopy className="mr-1 h-4 w-4" />Copy client setup link</Button>}
+              {(['phone', 'email', 'whatsapp'] as const).map((via) => (
+                <Button key={via} size="sm" onClick={() => void recordContact(via)} disabled={!!busy}>
+                  {busy === `contact_${via}` ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1 h-4 w-4" />}
+                  Done by {via === 'whatsapp' ? 'WhatsApp' : via}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* The pipeline — the real stages, the current one marked. Wraps on a phone, never scrolls sideways. */}
         <ol className="flex flex-wrap gap-1.5 text-[11px]" aria-label="Delivery stages">

@@ -1,7 +1,10 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { startPaidBaseline } from "../_shared/audit-baseline.ts";
-import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments } from "../_shared/delayed-subscription.ts";
+import { createDelayedSubscription, resolvePaidRoute, subscriptionEndedByTerm, subscriptionRoute, subscriptionTotalPayments, type DelayedSubscriptionLead } from "../_shared/delayed-subscription.ts";
+import { establishLeadPayment, markOnboardingPaid } from "../_shared/payment-state.ts";
+import { clientClosed, maySetSubscriptionStatus, paymentDayOf, type ClosedReason, type PaymentStateLead } from "../../../src/lib/paymentState.ts";
+import { firstContactDueDay, firstContactDueLabel } from "../../../src/lib/firstContact.ts";
 import { effectiveQuestionnaireServices, questionnaireComplete } from "../../../src/lib/questionnaireComplete.ts";
 import { handoffLine } from "../../../src/lib/handoffReadiness.ts";
 import { loadClientSetup, recordLeadEvent } from "../_shared/client-setup.ts";
@@ -351,9 +354,10 @@ async function notifyOfFindablePayment(opts: {
    baseline, and the only confirmation was an on-screen panel they lose by closing the tab.
 
    ⛔ PAYMENT RECORDING IS SACRED AND THIS IS BEST-EFFORT ON TOP. Every path returns rather than
-   throws, the whole body is wrapped, and it deliberately does NOT use mustWrite — mustWrite exists
-   to fail the webhook so Stripe retries, which is right for money and wrong for a greeting. A
-   failure here must never re-run the money writes. Same contract as notifyOfFindablePayment.
+   throws, the whole body is wrapped, and it deliberately does NOT throw like the payment writes do
+   (_shared/payment-state.ts) — those fail the webhook so Stripe retries, which is right for money
+   and wrong for a greeting. A failure here must never re-run the money writes. Same contract as
+   notifyOfFindablePayment.
 
    ⛔ A TEMPLATE BYPASSES THE 24-HOUR WINDOW, AND THAT IS WHY IT MUST BE ONE. The payer just used a
    web checkout, which is not a WhatsApp inbound, so the customer-service window is almost always
@@ -681,32 +685,9 @@ Deno.serve(async (req) => {
     }
   };
 
-  /* A write in the payment path that CANNOT fail quietly.
-     supabase-js resolves with { error } rather than throwing, so the try/catch that used to wrap
-     these updates could never fire: a rejected write still printed the success line and returned
-     200. This checks the error AND that a row actually matched (.select()), records the failure,
-     then throws - the handler's outer catch turns that into a 500, so Stripe retries. The updates
-     set a terminal state, so a retry is safe. */
-  const mustWrite = async (
-    table: string,
-    patch: Record<string, unknown>,
-    id: string,
-    what: string,
-  ): Promise<void> => {
-    const { data, error } = await service.from(table).update(patch).eq("id", id).select("id");
-    if (error) {
-      console.error(`[stripe-webhook] ${what} FAILED (${table} ${id}):`, error.message);
-      await recordPaymentFailure("stripe_write_failed", { what, table, row_id: id, reason: error.message, patch });
-      throw new Error(`${what} failed: ${error.message}`);
-    }
-    if (!Array.isArray(data) || data.length === 0) {
-      console.error(`[stripe-webhook] ${what} MATCHED NO ROW (${table} ${id}) - money taken, nothing updated`);
-      await recordPaymentFailure("stripe_write_no_row", { what, table, row_id: id, patch });
-      throw new Error(`${what} matched no row (${table} ${id})`);
-    }
-    console.log(`[stripe-webhook] ${what} ok (${table} ${id})`);
-  };
-
+  /* The payment writes that must not fail quietly live in _shared/payment-state.ts (pre-sales fix 03):
+     conditional, checked for an error AND for a matched row, recorded to client_error_reports by the
+     caller here, then thrown — the handler's outer catch turns that into a 500, so Stripe retries. */
   /** A lead id has to look like one before it is used as a filter: metadata is free text set at
    *  checkout, and a malformed value would otherwise become a PostgREST error at event time. */
   const SUB_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -825,16 +806,54 @@ Deno.serve(async (req) => {
 
   /** Record the hosting subscription's state on the lead. Never fatal: a status we failed to write
    *  is a reporting gap, and throwing would make Stripe retry an event that already succeeded. */
+  /* ⛔ A CLOSED CLIENT IS NEVER MADE "PAYING" AGAIN (pre-sales fix 03, E-17): an ended or refunded
+     client never gets `active` / `trialing` written back by a late invoice or subscription event
+     (paymentState.maySetSubscriptionStatus). Stopping statuses are always recorded. Returns "closed"
+     when a live status was withheld, so the caller can tell Paul. */
   const setFindableSubscription = async (
     leadId: string,
     patch: { subscription_status?: string; subscription_renews_at?: string | null; stripe_customer_id?: string },
     why: string,
-  ) => {
+  ): Promise<"written" | "closed" | "failed"> => {
+    if (patch.subscription_status) {
+      const { data: st, error: stErr } = await service.from("outreach_leads")
+        .select("status, service_terminated_at").eq("id", leadId).maybeSingle();
+      if (stErr) { console.error(`[stripe-webhook] ${why}: could not read lead ${leadId}: ${stErr.message}`); return "failed"; }
+      if (!maySetSubscriptionStatus(st as PaymentStateLead | null, patch.subscription_status)) {
+        await recordPaymentFailure("subscription_status_kept_closed", {
+          lead_id: leadId, why, withheld_status: patch.subscription_status, closed: clientClosed(st as PaymentStateLead | null),
+        });
+        return "closed";
+      }
+    }
     const { error } = await service.from("outreach_leads").update(patch).eq("id", leadId);
     if (error) {
       console.error(`[stripe-webhook] ${why}: could not update lead ${leadId}: ${error.message}`);
-    } else {
-      console.log(`[stripe-webhook] ${why}: lead ${leadId} -> ${JSON.stringify(patch)}`);
+      return "failed";
+    }
+    console.log(`[stripe-webhook] ${why}: lead ${leadId} -> ${JSON.stringify(patch)}`);
+    return "written";
+  };
+
+  /** Paul is told — once per Stripe object — that money arrived for a client whose engagement is over.
+   *  The app never moves money: he cancels / refunds in Stripe. Never throws. */
+  const alertPaymentAfterClose = async (leadId: string, objectId: string, amountGbp: number) => {
+    try {
+      const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+      const ownerId = (owner as { user_id?: string } | null)?.user_id;
+      const { data: lead } = await service.from("outreach_leads").select("business_name").eq("id", leadId).maybeSingle();
+      const name = String((lead as { business_name?: string | null } | null)?.business_name ?? "").trim() || "A closed client";
+      if (ownerId) {
+        /* kind client_paid: an allowed kind (notifications_kind_check); the title says what happened. */
+        await service.from("notifications").upsert([{
+          user_id: ownerId, kind: "client_paid", lead_id: leadId, priority: 1,
+          title: `Payment after the engagement ended: ${name}`,
+          body: `£${amountGbp.toFixed(2)} was taken from ${name}, whose engagement has ended. Cancel the subscription in Stripe and decide whether to refund it.`,
+          link: `/paid-clients/${leadId}`, dedupe_key: `after_close:${objectId}`,
+        }], { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+      }
+    } catch (e) {
+      console.error("[stripe-webhook] payment-after-close alert failed (non-fatal):", (e as Error).message);
     }
   };
 
@@ -901,20 +920,39 @@ Deno.serve(async (req) => {
           if (s.status === "complete") {
             const findableLeadId = (s.metadata?.lead_id as string) || "";
             const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : FINDABLE_SETUP_PRICE_GBP;
+            /* ⛔ IS THIS CLIENT ALREADY CLOSED (ended / refunded)? Read FIRST, because a late replay for a
+               closed client must not start anything new: no agreement acceptance or PDF, no baseline, no
+               subscription, no new-client email (src/lib/paymentState.ts). A failed read is not "open":
+               it throws, the handler 500s and Stripe retries. */
+            let closedBefore: ClosedReason | null = null;
+            if (findableLeadId) {
+              const { data: stateRow, error: stateErr } = await service.from("outreach_leads")
+                .select("status, service_terminated_at, amount_paid").eq("id", findableLeadId).maybeSingle();
+              if (stateErr) {
+                await recordPaymentFailure("stripe_write_failed", { what: "read client state", lead_id: findableLeadId, reason: stateErr.message });
+                throw new Error(`could not read the client's state: ${stateErr.message}`);
+              }
+              closedBefore = clientClosed(stateRow as PaymentStateLead | null);
+            }
             // Every write checked. A failure records to client_error_reports and throws, so the
             // handler returns 500 and Stripe retries. The one thing that must never happen is
             // taking the money and leaving no trace that we did.
-            await mustWrite(
-              "onboarding_responses",
-              { status: "paid", updated_at: new Date().toISOString() },
-              onboardingId,
-              "findable onboarding -> paid",
-            );
+            /* ⛔ MONOTONIC (M-016): the row moves to `paid` once; a row already paid / in delivery /
+               completed / refunded is never moved back by a replay (_shared/payment-state.ts). */
+            try {
+              await markOnboardingPaid(service, onboardingId, new Date().toISOString());
+            } catch (e) {
+              await recordPaymentFailure("stripe_write_failed", { what: "findable onboarding -> paid", table: "onboarding_responses", row_id: onboardingId, reason: (e as Error).message });
+              throw e;
+            }
             /* Payment prepares fulfilment but never starts the paid audit. Preserve any later
-               operator state on webhook retries; only initialise an untouched row. */
-            await service.from("onboarding_responses")
-              .update({ baseline_status: "needs_questions", updated_at: new Date().toISOString() })
-              .eq("id", onboardingId).is("baseline_status", null);
+               operator state on webhook retries; only initialise an untouched row — and never for a
+               closed client. */
+            if (!closedBefore) {
+              await service.from("onboarding_responses")
+                .update({ baseline_status: "needs_questions", updated_at: new Date().toISOString() })
+                .eq("id", onboardingId).is("baseline_status", null);
+            }
             /* ⛔ NO QUESTION DRAFT AT PAYMENT ANY MORE (Paul, 2026-10-02): the order is crawl → Discovery →
                proposed questions → approve & freeze → baseline, and the proposed set is built FROM Discovery
                (baselineRecommendation.ts). A draft made here, before Discovery, from the plain generator,
@@ -1063,8 +1101,10 @@ Deno.serve(async (req) => {
                evidence row (method checkout, keyed by this session id, so a Stripe retry is a no-op
                and never a second email), then the signed PDF to the payer and to Paul.
                ⛔ NON-FATAL, like the payer-email capture above: it must never be the reason a recorded
-               payment gets retried. Every failure lands in client_error_reports instead. */
-            if (findableLeadId) {
+               payment gets retried. Every failure lands in client_error_reports instead.
+               ⛔ NEVER FOR A CLOSED CLIENT: a late replay must not create an acceptance or email an
+               agreement PDF to somebody whose engagement has ended or been refunded. */
+            if (findableLeadId && !closedBefore) {
               try {
                 const { data: agreeLead } = await service.from("outreach_leads").select("id, business_name").eq("id", findableLeadId).maybeSingle();
                 if (agreeLead) await recordCheckoutAcceptance(service, s as unknown as Parameters<typeof recordCheckoutAcceptance>[1], agreeLead as { id: string; business_name: string | null });
@@ -1206,18 +1246,39 @@ Deno.serve(async (req) => {
             /* Set when no monthly schedule could be created — the PAID email says so out loud. */
             let billingProblem: string | null = null;
 
+            /* Set below: did THIS delivery establish the payment (the first), or is it a replay? And does
+               the payment on the lead belong to this checkout (its payment intent)? The new-client
+               email, the customer confirmation and the baseline start key on these. */
+            let firstPayment = false;
+            let ownsPayment = false;
             if (findableLeadId) {
-              await mustWrite(
-                "outreach_leads",
-                {
-                  status: "payment_received",
-                  amount_paid: amountGbp,
-                  payment_date: new Date().toISOString(),
-                  paid_for: paidForLabel,
-                },
-                findableLeadId,
-                "findable lead -> payment_received",
-              );
+              /* ══ MONOTONIC PAYMENT STATE (M-016, pre-sales fix 03) ═════════════════════════════════════
+                 The FIRST genuine payment writes status / amount / date / label — with the rule's
+                 conditions ON the update, so only one delivery can win and a paid, refunded or ended
+                 client matches nothing. A replay leaves the state exactly as it is (in_delivery stays
+                 in_delivery, refunded stays refunded, the original payment date stays) and only fills a
+                 Stripe id that is still blank. A missing row throws (money with nowhere to record it). */
+              let established: Awaited<ReturnType<typeof establishLeadPayment>>;
+              try {
+                established = await establishLeadPayment(service, findableLeadId, {
+                  amountGbp, paymentDay: paymentDayOf(event.created), paidFor: paidForLabel,
+                  stripeCustomerId, stripePaymentIntentId,
+                });
+              } catch (e) {
+                await recordPaymentFailure("stripe_write_failed", { what: "findable lead -> payment_received", table: "outreach_leads", row_id: findableLeadId, reason: (e as Error).message });
+                throw e;
+              }
+              firstPayment = established.kind === "first";
+              const replayLead = established.kind === "replay" ? established.lead : null;
+              ownsPayment = firstPayment || (!closedBefore && !!stripePaymentIntentId && !!replayLead
+                && String(replayLead.stripe_payment_intent_id ?? stripePaymentIntentId) === stripePaymentIntentId);
+              if (replayLead) {
+                await recordPaymentFailure("payment_replay_state_kept", {
+                  lead_id: findableLeadId, onboarding_id: onboardingId, checkout_session: s.id,
+                  kept_status: replayLead.status ?? null, kept_payment_date: replayLead.payment_date ?? null,
+                  closed: closedBefore, owns_payment: ownsPayment,
+                });
+              }
               /* ⛔ THE PAYMENT LEDGER (2026-09-28): a RECORD of the money that just landed, after the
                  payment write above so sold_by_user_id is already stamped. Never throws, never blocks
                  the payment; unique by the payment intent, so a retried event writes nothing twice. */
@@ -1227,27 +1288,15 @@ Deno.serve(async (req) => {
                 stripe_object_id: stripePaymentIntentId ?? s.id, stripe_payment_intent_id: stripePaymentIntentId,
                 stripe_customer_id: stripeCustomerId, stripe_event_id: event.id, note: `checkout ${s.id}`,
               });
-              /* ⛔ THE STRIPE IDS GO IN A SEPARATE, NON-FATAL WRITE, AND THAT SPLIT IS DELIBERATE.
-                 mustWrite above is the one that must not fail - it is the money landing. These
-                 columns are newer than some rows and newer than this function's own history, so a
-                 PostgREST 400 on a pre-migration database must not be able to lose a payment.
-                 Without them we cannot cancel a subscription or answer "is this customer still
-                 paying", so they are worth writing - just never at the payment's expense. */
-              if (stripeCustomerId || stripeSubscriptionId || stripePaymentIntentId) {
-                const subPatch: Record<string, unknown> = {};
-                if (stripeCustomerId) subPatch.stripe_customer_id = stripeCustomerId;
-                if (stripePaymentIntentId) subPatch.stripe_payment_intent_id = stripePaymentIntentId;
-                if (stripeSubscriptionId) {
-                  subPatch.stripe_subscription_id = stripeSubscriptionId;
-                  subPatch.subscription_status = "active";
-                }
-                const { error: subErr } = await service
-                  .from("outreach_leads").update(subPatch).eq("id", findableLeadId);
-                if (subErr) {
-                  console.error(`[stripe-webhook] could not store the Stripe ids for lead ${findableLeadId}: ${subErr.message} - the payment IS recorded; hosting will be untrackable until this is fixed`);
-                } else {
-                  console.log(`[stripe-webhook] stored stripe ids for lead ${findableLeadId}: customer=${stripeCustomerId ?? "(none)"} subscription=${stripeSubscriptionId ?? "(none)"}`);
-                }
+              /* ⛔ THE STRIPE IDS: customer and payment intent are filled where blank by
+                 establishLeadPayment (never over a stored id — a later refund resolves by the FIRST
+                 payment's intent). A subscription-mode session (none since 2026-09-13) records its
+                 subscription only on the first payment and only over a blank. Non-fatal, as always. */
+              if (stripeSubscriptionId && firstPayment) {
+                const { error: subErr } = await service.from("outreach_leads")
+                  .update({ stripe_subscription_id: stripeSubscriptionId, subscription_status: "active" })
+                  .eq("id", findableLeadId).is("stripe_subscription_id", null);
+                if (subErr) console.error(`[stripe-webhook] could not store subscription ${stripeSubscriptionId} for lead ${findableLeadId}: ${subErr.message} - the payment IS recorded`);
               }
               /* The standard recurring plan is created at successful signup, with Stripe holding a
                  42-day trial. This makes the promised six-week start independent of when the
@@ -1256,23 +1305,31 @@ Deno.serve(async (req) => {
               /* ⛔ THE CONTRACT, STAMPED ONCE (2026-09-29): the payment count this client agreed to on the
                  Stripe page. Written only when the route is resolved; a DB trigger refuses to change it
                  once set. Non-fatal — the payment above is already recorded. */
-              if (paid.route) {
+              /* ⛔ Only for the payment this checkout made, and never for a closed client. */
+              if (paid.route && ownsPayment) {
                 const { error: cErr } = await service.from("outreach_leads")
                   .update({ contract_total_payments: totalPaymentsFor(paid.route) })
                   .eq("id", findableLeadId).is("contract_total_payments", null);
                 if (cErr) console.error(`[stripe-webhook] could not stamp the contract on lead ${findableLeadId}: ${cErr.message}`);
               }
-              if (stripeCustomerId) {
+              /* ⛔ THE MONTHLY (M-017): at most one per checkout, never for a closed client, never for a
+                 payment that is not this checkout's. createDelayedSubscription claims the lead and sends
+                 Stripe an Idempotency-Key keyed by this session; the sign-up instant is the EVENT's time,
+                 so every delivery sends identical parameters. */
+              if (!ownsPayment) {
+                console.log(`[stripe-webhook] no monthly subscription attempt: lead ${findableLeadId} is ${closedBefore ?? "already paid by another payment"} (replay of ${s.id})`);
+              } else if (stripeCustomerId) {
                 const { data: billingLead } = await service.from("outreach_leads")
-                  .select("id, business_name, stripe_customer_id, stripe_subscription_id")
+                  .select("id, business_name, stripe_customer_id, stripe_subscription_id, status, service_terminated_at")
                   .eq("id", findableLeadId).maybeSingle();
                 const subscription = await createDelayedSubscription(
                   service,
-                  (billingLead as { id: string; business_name: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null }) ?? {
+                  (billingLead as DelayedSubscriptionLead | null) ?? {
                     id: findableLeadId, business_name: null, stripe_customer_id: stripeCustomerId, stripe_subscription_id: null,
                   },
-                  new Date().toISOString(),
+                  new Date((typeof event.created === "number" && event.created > 0 ? event.created : Math.floor(Date.now() / 1000)) * 1000).toISOString(),
                   paid.route,
+                  s.id,
                 );
                 if (subscription.kind === "failed") {
                   billingProblem = paid.route ? subscription.reason : paid.problem;
@@ -1311,7 +1368,11 @@ Deno.serve(async (req) => {
                RELEASES the claim, so the next delivery may try again rather than going silent for ever.
                ⚠️ If the claim write itself errors (the column not migrated yet) the old trace rule decides
                alone — exactly the behaviour before this change. */
-            let claimedEmail = !paidEmailAlreadySent;
+            /* ⛔ AND ONLY FOR THE PAYMENT THIS CHECKOUT MADE (pre-sales fix 03): a replay for a closed client,
+               or for a lead whose payment came from somewhere else (a legacy client paid before these
+               traces existed), never announces a "new client". A crashed first delivery is still
+               completed by its retry — same payment intent, same lead, claim still blank. */
+            let claimedEmail = !paidEmailAlreadySent && (!findableLeadId || ownsPayment);
             if (claimedEmail && findableLeadId) {
               const { data: won, error: claimErr } = await service.from("outreach_leads")
                 .update({ new_client_email_at: new Date().toISOString() })
@@ -1322,7 +1383,9 @@ Deno.serve(async (req) => {
             if (!claimedEmail && !paidEmailAlreadySent) {
               await recordPaymentFailure("payment_email_skipped", {
                 onboarding_id: onboardingId, lead_id: findableLeadId || null,
-                reason: "the new-client email for this lead was already claimed (a Stripe retry, or a second payment)",
+                reason: findableLeadId && !ownsPayment
+                  ? `a replay for a client that is ${closedBefore ?? "already paid by another payment"} — no new-client email`
+                  : "the new-client email for this lead was already claimed (a Stripe retry, or a second payment)",
                 amount_on_lead_gbp: Number(leadForEmail?.amount_paid ?? 0) || null,
                 amount_gbp: amountGbp, at: new Date().toISOString(),
               });
@@ -1412,24 +1475,50 @@ Deno.serve(async (req) => {
             }
 
             /* THE CUSTOMER'S CONFIRMATION — WhatsApp template, best-effort, after the paid write.
-               ⛔ GUARD 4, IDEMPOTENCY: gated on the SAME `alreadyPaid` flag as the operator email
-               above, and for the same reason. Stripe retries webhooks; `alreadyPaid` is read from
-               the lead's amount_paid BEFORE the write, so on a replay it is true and the customer
-               is not messaged twice. The two notifications are kept as separate `if` blocks rather
-               than merged so that a change to one can never silently re-gate the other.
+               ⛔ GUARD 4, IDEMPOTENCY (pre-sales fix 03): gated on `firstPayment` — the delivery that WON
+               the conditional payment write. It used to be `!alreadyPaid`, a read taken before the
+               write, which two concurrent first deliveries could both pass. The operator email has its
+               own claim (new_client_email_at); the two are kept as separate `if` blocks so that a change
+               to one can never silently re-gate the other.
                ⚠️ Requires findableLeadId: the phone lives on the lead and nowhere else (the
                questionnaire never asks for one). A payment with no lead is already reported to the
                operator by the note above, which is the route to fixing it by hand.
                ⚠️ Ordered BEFORE baseline preparation deliberately — the customer's confirmation should
                not queue behind question drafting. Neither can throw. */
-            if (!alreadyPaid && findableLeadId) {
+            if (firstPayment && findableLeadId) {
               await sendFindablePaymentConfirmation(service, {
                 leadId: findableLeadId,
                 onboardingId,
                 fallbackBusinessName: ((leadForEmail?.business_name as string) ?? "").trim(),
               });
-            } else if (alreadyPaid) {
+            } else if (findableLeadId) {
               console.log(`[stripe-webhook] findable confirmation skipped: lead ${findableLeadId} already had a payment (retry?)`);
+            }
+
+            /* ══ FIRST CONTACT IS PAUL'S (M-018, pre-sales fix 03) ═════════════════════════════════════
+               The client has just been told "we'll be in touch within two working days"; the salesperson
+               has been told their part is done. So the book owner gets an actionable notification with
+               the due date, once per lead (dedupe key), on the payment that established the client. The
+               Paid Client page shows the same step (deliveryStage → "Introduce yourself…") until Paul
+               records the contact. Never throws. */
+            if (firstPayment && findableLeadId) {
+              try {
+                const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+                const ownerId = (owner as { user_id?: string } | null)?.user_id;
+                const due = firstContactDueDay(paymentDayOf(event.created));
+                if (ownerId) {
+                  /* kind client_paid: notifications_kind_check (live, read 2026-10-04) has no first-contact kind;
+                     a new kind needs that CHECK widened, deliberately not done in a parallel workstream. */
+                  await service.from("notifications").upsert([{
+                    user_id: ownerId, kind: "client_paid", lead_id: findableLeadId, priority: 1,
+                    title: `Introduce yourself: ${((leadForEmail?.business_name as string) ?? "").trim() || "new client"}`,
+                    body: `New client. Introduce yourself and send them the setup link by ${firstContactDueLabel(due)}.`,
+                    link: `/paid-clients/${findableLeadId}?section=setup`, dedupe_key: `first_contact:${findableLeadId}`,
+                  }], { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
+                }
+              } catch (e) {
+                console.error("[stripe-webhook] first-contact notification failed (non-fatal):", (e as Error).message);
+              }
             }
 
             // START THE PAID BASELINE. This is the moment the customer becomes a client, and the
@@ -1441,7 +1530,10 @@ Deno.serve(async (req) => {
             // outcome is recorded, and process-ai-audit-queue's ensureBaselinesForPaidOnboardings
             // re-attempts every tick for any paid row whose lead still has no baseline. So a failed
             // start here delays the baseline by ~1 minute; it cannot lose it.
-            const baseline = await startPaidBaseline(service, onboardingId, "stripe-webhook");
+            /* ⛔ NEVER FOR A CLOSED CLIENT: a late replay for an ended or refunded client starts nothing. */
+            const baseline: { ok: boolean; skipped?: string; error?: string } = closedBefore
+              ? { ok: true, skipped: `client ${closedBefore}` }
+              : await startPaidBaseline(service, onboardingId, "stripe-webhook");
             if (!baseline.ok) {
               console.error(`[stripe-webhook] baseline start failed for onboarding ${onboardingId}: ${baseline.error ?? baseline.skipped}`);
               await recordPaymentFailure("baseline_start_failed", {
@@ -1497,10 +1589,14 @@ Deno.serve(async (req) => {
           }
         }
         const periodEnd = (inv as { period_end?: number }).period_end;
-        await setFindableSubscription(leadId, {
+        const wrote = await setFindableSubscription(leadId, {
           subscription_status: "active",
           subscription_renews_at: typeof periodEnd === "number" ? new Date(periodEnd * 1000).toISOString() : null,
         }, "invoice.paid");
+        /* An invoice PAID for a closed client: recorded in the ledger above (it is a fact; commission
+           on it is 0 — commission.ts reads the client's end), never reactivated, and Paul is told. */
+        const paidMinorAfter = Number((inv as { amount_paid?: number }).amount_paid ?? 0);
+        if (wrote === "closed" && paidMinorAfter > 0) await alertPaymentAfterClose(leadId, String(inv.id ?? subId), paidMinorAfter / 100);
         break;
       }
       case "invoice.payment_failed": {

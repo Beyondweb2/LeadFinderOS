@@ -19,6 +19,7 @@ import { WAITING_ON_LABEL, type HandoffReadiness } from './handoffReadiness.ts';
 import { hubBaselineStatus } from './paidBaselineState.ts';
 import { weeklyStart } from './weeklyCheck.ts';
 import { serviceEndView } from './serviceEnd.ts';
+import { firstContact, type FirstContactView } from './firstContact.ts';
 
 export type DeliveryStage = 'setup' | 'ready' | 'discovery' | 'questions' | 'baseline' | 'build' | 'launched' | 'remeasure' | 'ended';
 export const DELIVERY_STAGES: readonly DeliveryStage[] = ['setup', 'ready', 'discovery', 'questions', 'baseline', 'build', 'launched', 'remeasure'];
@@ -56,6 +57,9 @@ export interface StageInput {
   lead: {
     status?: string | null;
     delivery_submitted_at?: string | null;
+    /** The payment day and the recorded first contact (src/lib/firstContact.ts — Paul owns first contact). */
+    payment_date?: string | null;
+    client_contacted_at?: string | null;
     baseline_audit_id?: string | null;
     remeasure_due_date?: string | null;
     remeasure_audit_id?: string | null;
@@ -84,6 +88,8 @@ export interface StageResult {
   next: NextStep;
   /** The required setup items still missing (labels) — shown only while in setup. */
   missing: string[];
+  /** Where Paul's first contact with the client stands (derived; firstContact.ts). */
+  firstContact: FirstContactView;
 }
 
 const step = (key: string, label: string, action: boolean, section: HubSection): NextStep => ({ key, label, action, section });
@@ -110,11 +116,12 @@ function setupStep(r: HandoffReadiness): NextStep {
 export function deliveryStage(i: StageInput): StageResult {
   const r = i.readiness;
   const L = i.lead;
+  const contact = firstContact(L, i.today);
   const result = (stage: DeliveryStage, next: NextStep, state?: DeliveryState): StageResult => {
     const st: DeliveryState = state ?? (stage === 'ended' ? 'ended' : 'in_delivery');
     const stateLabel = st === 'ended' ? 'ENDED' : st === 'ready' ? 'READY FOR DELIVERY' : st === 'ready_to_submit' ? 'READY TO SUBMIT' : st === 'in_delivery' ? `IN DELIVERY · ${DELIVERY_STAGE_LABEL[stage].toUpperCase()}`
       : st === 'waiting_sales' ? WAITING_ON_LABEL.sales : st === 'waiting_client' ? WAITING_ON_LABEL.client : WAITING_ON_LABEL.findable;
-    return { stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
+    return { firstContact: contact, stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
   };
 
   if (L.status === 'refunded') return result('ended', step('none', 'Refunded — nothing to do', false, 'setup'));
@@ -154,6 +161,12 @@ export function deliveryStage(i: StageInput): StageResult {
 
   // Setup until every required item is in AND the client is submitted for delivery.
   if (r.ready && L.delivery_submitted_at) return result('ready', step('run_discovery', 'Run Discovery', true, 'baseline'), 'ready');
+  /* ⛔ FIRST CONTACT IS PAUL'S (M-018, firstContact.ts): until he records that he introduced himself and
+     sent the setup link, the one next step is his — never "waiting for client" before we have asked the
+     client for anything. Applies only in setup and only to clients paid since the rule existed. */
+  if (contact.state === 'owed' || contact.state === 'overdue') {
+    return result('setup', step('contact_client', contact.label ?? 'Introduce yourself and send the setup link', true, 'setup'), 'waiting_findable');
+  }
   if (r.ready) return result('setup', step('submit', 'Submit for delivery', true, 'setup'), 'ready_to_submit');
   const waiting: DeliveryState = r.waitingOn === 'sales' ? 'waiting_sales' : r.waitingOn === 'client' ? 'waiting_client' : 'waiting_findable';
   return result('setup', setupStep(r), waiting);

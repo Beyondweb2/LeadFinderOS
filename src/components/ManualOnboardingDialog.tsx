@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
+import { EdgeFunctionError, edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { tradeWord } from '@/lib/trade';
 import { chipsForTrade, serviceExamplesFor } from '@/lib/onboardingChips';
 import { AGENCY_CONTRACT_NOTE, DOMAIN_ACCESS_OPTIONS, DOMAIN_OWNED_OPTIONS, DOMAIN_QUESTIONS, DOMAIN_REASON_TEXT, DOMAIN_THIRD_PARTY_OPTIONS, NEW_DOMAIN_REGISTRATION_NOTE, SITE_RIGHTS_OPTIONS, domainAuthority } from '@/lib/domainAuthority';
@@ -114,7 +114,15 @@ export function ManualOnboardingDialog({ leadId, open, onOpenChange, onSaved }: 
         self_site: a.agency_manages === 'no' ? a.self_site : null,
         website_manager_email: a.agency_manages === 'yes' && a.can_get_access === 'yes' ? a.website_manager_email : '',
       };
-      await call({ action: 'save_onboarding', lead_id: leadId, answers });
+      try {
+        await call({ action: 'save_onboarding', lead_id: leadId, answers });
+      } catch (e) {
+        /* ⛔ A SAVE THAT WOULD TAKE AWAY WHAT THE CLIENT CONFIRMED (pre-sales fix 03, M-020) is refused by the
+           server until Paul says, explicitly, that the client withdrew it. Never silently. */
+        if (!(e instanceof EdgeFunctionError) || e.code !== 'would_clear_consents') throw e;
+        if (!window.confirm(`${e.detail}\n\nOnly press OK if the client has told you this. Otherwise press Cancel and leave the website answers as they were.`)) return;
+        await call({ action: 'save_onboarding', lead_id: leadId, answers, confirm_clear_consents: true });
+      }
       toast({ title: 'Onboarding saved', description: 'Saved to the client’s onboarding record, marked as entered by you.' });
       await onSaved();
       onOpenChange(false);

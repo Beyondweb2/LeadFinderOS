@@ -25,6 +25,7 @@ import { DOMAIN_REASON_TEXT, domainAuthority, domainInputFromRow, type DomainAut
 import { CRAWL_FRESH_MS } from './crawlCheck.ts';
 import type { HandoffApplies } from './salesHandoff.ts';
 import { serviceEndView } from './serviceEnd.ts';
+import { serviceRouteForTotal, serviceRouteFromRow, type ServiceRoute } from './findableOffer.ts';
 
 export interface HandoffLead {
   business_name?: string | null;
@@ -40,6 +41,8 @@ export interface HandoffLead {
   /** The service ended (serviceEnd.ts). A terminated client is never ready — and never "waiting" either. */
   service_terminated_at?: string | null;
   service_termination_reason?: string | null;
+  /** The route the client PAID on (12 = Build, 6 = Optimise), stamped once by the checkout. */
+  contract_total_payments?: number | null;
 }
 
 export interface HandoffOnboarding extends DomainRow {
@@ -58,6 +61,13 @@ export interface HandoffOnboarding extends DomainRow {
   gbp_exists?: string | null;
   /** The baseline's town (questionnaireComplete reads it with services). */
   confirmed_location?: string | null;
+  /** 'no_website' is Quick Close's positive "they have no website" (quickClose.onboardingColumnsFor). */
+  website_platform?: string | null;
+  /** The route on the onboarding row (serviceRouteFromRow), used only when no contract is stamped. */
+  plan_tier?: string | null;
+  website_addon?: boolean | null;
+  /** The Quick Close record (answers.manager = 'no_website' is the rep's positive "no website"). */
+  quick_close?: unknown;
 }
 
 export interface HandoffEvidence {
@@ -202,29 +212,52 @@ export function handoffReadiness(
     detail: areas.length ? preview(areas) : 'Not given by the client or by Sales',
   });
 
+  /* ⛔ THE ROUTE DECIDES WHAT THE WEBSITE ITEMS MEAN (pre-sales fix 03, M-019 / B-05). BUILD does not
+     need an existing website or a login to one: Findable builds, hosts and manages the new site, so
+     neither is ever a blocker (an old site, if there is one, is shown for reference). OPTIMISE works on
+     their own site, so the site and who controls it stay required. The route is the one they PAID on
+     (contract_total_payments), else the onboarding row's; unknown keeps the old, stricter rule. */
+  const route: ServiceRoute | null = serviceRouteForTotal(L.contract_total_payments) ?? serviceRouteFromRow(O as never);
+  const build = route === 'build';
   // Website: a site on file, or a positive "no website / build a new one".
   const site = text(O?.business_website) || text(L.website);
   const control = text(L.website_control);
-  const noSite = !site && (O?.website_route === 'new_site' || control === 'no_website');
-  add({
-    key: 'website', label: 'Website', ok: !!site || noSite, required: true,
-    source: text(O?.business_website) ? 'onboarding' : site ? 'sales' : O?.website_route === 'new_site' ? 'onboarding' : noSite ? 'sales' : null, who: 'client',
-    detail: site ? site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '') : noSite ? 'No website — Findable builds one' : 'Not known whether they have a website',
-  });
+  const qcManager = text(((O?.quick_close as { answers?: { manager?: unknown } } | null)?.answers)?.manager);
+  /* POSITIVE answers only: the onboarding route, the rep's record, Quick Close's "no website" (written as
+     website_platform, and kept in its answers). Unknown is still unknown. */
+  const noSite = !site && (O?.website_route === 'new_site' || control === 'no_website'
+    || text(O?.website_platform) === 'no_website' || qcManager === 'no_website');
+  const siteShown = site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
+  if (build) {
+    add({
+      key: 'website', label: 'Website', ok: true, required: false, notNeeded: true, source: site ? (text(O?.business_website) ? 'onboarding' : 'sales') : null, who: 'client',
+      detail: site ? `Not needed — Findable builds the new website (current site: ${siteShown})` : 'Not needed — Findable builds the new website',
+    });
+    add({
+      key: 'website_access', label: 'Website access / control', ok: true, required: false, notNeeded: true, source: null, who: 'client',
+      detail: 'Not needed — Findable builds and hosts the new website',
+    });
+  } else {
+    add({
+      key: 'website', label: 'Website', ok: !!site || noSite, required: true,
+      source: text(O?.business_website) ? 'onboarding' : site ? 'sales' : O?.website_route === 'new_site' ? 'onboarding' : noSite ? 'sales' : null, who: 'client',
+      detail: site ? siteShown : noSite ? 'No website — Findable builds one' : 'Not known whether they have a website',
+    });
 
-  // Who controls the site (onboarding's route / manager, else the salesperson's record).
-  const route = text(O?.website_route);
-  const manager = text(O?.website_manager);
-  const accessFromOnboarding = WEBSITE_ROUTES.has(route) || WEBSITE_MANAGERS.has(manager);
-  const accessFromSales = control in WEBSITE_CONTROL_KNOWN;
-  add({
-    key: 'website_access', label: 'Website access / control', ok: noSite || accessFromOnboarding || accessFromSales, required: !noSite, notNeeded: noSite,
-    source: accessFromOnboarding ? 'onboarding' : accessFromSales ? 'sales' : noSite ? 'onboarding' : null, who: 'client',
-    detail: noSite ? 'Not needed — new site'
-      : accessFromOnboarding ? [route && route.replace(/_/g, ' '), MANAGER_WORDS[manager] ?? ''].filter(Boolean).join(' · ')
-      : accessFromSales ? `Sales: ${WEBSITE_CONTROL_KNOWN[control]}`
-      : 'Not known who controls the website',
-  });
+    // Who controls the site (onboarding's route / manager, else the salesperson's record).
+    const siteRoute = text(O?.website_route);
+    const manager = text(O?.website_manager);
+    const accessFromOnboarding = WEBSITE_ROUTES.has(siteRoute) || WEBSITE_MANAGERS.has(manager);
+    const accessFromSales = control in WEBSITE_CONTROL_KNOWN;
+    add({
+      key: 'website_access', label: 'Website access / control', ok: noSite || accessFromOnboarding || accessFromSales, required: !noSite, notNeeded: noSite,
+      source: accessFromOnboarding ? 'onboarding' : accessFromSales ? 'sales' : noSite ? 'onboarding' : null, who: 'client',
+      detail: noSite ? 'Not needed — new site'
+        : accessFromOnboarding ? [siteRoute && siteRoute.replace(/_/g, ' '), MANAGER_WORDS[manager] ?? ''].filter(Boolean).join(' · ')
+        : accessFromSales ? `Sales: ${WEBSITE_CONTROL_KNOWN[control]}`
+        : 'Not known who controls the website',
+    });
+  }
 
   /* GBP: Findable's own tick wins; "client says done" is enough to start; anything else is missing.
      ⛔ A CLIENT WITH NO PROFILE IS NEVER BLOCKED BY IT (Paul, 2026-10-02): their own answer

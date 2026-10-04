@@ -240,7 +240,7 @@ console.log("── payment: the server says paid, never the URL ──");
   const ck = read("supabase/functions/findable-checkout/index.ts");
   ok(/form\.set\("success_url", `\$\{back\}\$\{back\.includes\("\?"\) \? "&" : "\?"\}paid=1`\);/.test(ck), "checkout's success_url is unchanged (no token added)");
   const wh = read("supabase/functions/stripe-webhook/index.ts");
-  ok(/mustWrite/.test(wh) && /alreadyPaid/.test(wh), "the webhook's idempotency is untouched (mustWrite, alreadyPaid)");
+  ok(/establishLeadPayment/.test(wh) && /alreadyPaid/.test(wh), "the webhook's idempotency is untouched (the conditional payment write, alreadyPaid)");
   const flow = siteRead("src/components/OnboardingFlow.tsx");
   if (flow) {
     const paid = flow.slice(flow.indexOf("{/* ---------- PAID ----------"), flow.indexOf("{/* ---------- Q2 DONE ---------- */}"));

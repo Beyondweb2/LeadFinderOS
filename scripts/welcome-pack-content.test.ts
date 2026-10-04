@@ -175,17 +175,31 @@ console.log('\n── YOUR AGREEMENT: THE KEY POINTS (Paul, 2026-10-02) ──')
   const url = 'https://findable.live/agree/' + 'ab'.repeat(32);
   const none = buildWelcomePackHtml({ ...base });
   ok(!none.includes('Your agreement: the key points'), 'no agreement link on record → no agreement page');
-  const open = buildWelcomePackHtml({ ...base, agreement: { url, termsKnown: true } });
+  const open = buildWelcomePackHtml({ ...base, agreement: { url, termsKnown: true, route: 'build' } });
   const ot = text(open);
   ok(ot.includes('Your agreement: the key points') && ot.includes('Your agreement The key points, and where to review and sign it.'), 'the page is in the pack and on the contents list');
+  /* ⛔ PER ROUTE since pre-sales fix 03 (M-024): Build keeps the ownership lines of ITS agreement; Optimise
+     says the opposite (agreement 9.4) and never claims the client's website. */
   for (const line of [
-    'Your service has a minimum term: 12 payments (Build) or 6 (Optimise). The remaining payments are owed even if you stop early.',
+    'Your service has a minimum term: 12 payments, counting your first. The remaining payments are owed even if you stop early.',
     'Monthly payments start six weeks after your first payment.',
+    'We build, host and manage your new website during the term.',
     'We own the website and our work until your final payment. Then it’s yours.',
-    'If a payment is 14 days late, we can take the site down until it’s paid.',
+    'If a payment is 14 days late, we can take down the website we built until it’s paid. We will tell you first.',
     'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.',
     'Your domain, logo and photos are always yours.',
-  ]) ok(ot.includes(line), `key point: "${line.slice(0, 48)}…"`);
+  ]) ok(ot.includes(line), `Build key point: "${line.slice(0, 48)}…"`);
+  const opt = text(buildWelcomePackHtml({ ...base, agreement: { url, termsKnown: true, route: 'optimise' } }));
+  for (const line of [
+    'Your service has a minimum term: 6 payments, counting your first. The remaining payments are owed even if you stop early.',
+    'Your website is always yours. We will never take it offline.',
+    'The pages and content we add become yours on your final payment.',
+    'If a payment is 14 days late, we can remove the pages and content we added until it’s paid. We will tell you first.',
+    'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.',
+  ]) ok(opt.includes(line), `Optimise key point: "${line.slice(0, 48)}…"`);
+  ok(!/We own the website|take down the website we built|take the site down/.test(opt), 'Optimise: no ownership claim over their website and no right to take it down');
+  const noRoute = text(buildWelcomePackHtml({ ...base, agreement: { url, termsKnown: true } }));
+  ok(!/We own the website|take down|offline/.test(noRoute) && noRoute.includes('claim your £99 back'), 'route unknown: no ownership or take-down terms at all, the guarantee still stated');
   ok(open.includes(`class="wp-agreebtn" href="${url}"`) && /Review and agree to your agreement/.test(open), 'the button links to the client’s own page');
   ok(/<svg[^>]+aria-label="QR code for your agreement page"/.test(open), 'and a QR code sits beside it');
   ok(!/brand-new domain|eight if/i.test(ot.replace(/Eight weeks after/g, '')), 'no new-domain eight-week wording anywhere in the pack');

@@ -94,10 +94,10 @@ export async function loadEarnings(service: Service, personId: string | null, to
   const sales = new Set([...roles.filter((r) => r.role === "sales").map((r) => r.user_id), ...disabledNow]);
   for (const a of admins) sales.delete(a);
   const leadIds = [...new Set(ledger.map((r) => r.lead_id).filter((x): x is string => !!x))];
-  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null };
+  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null; service_terminated_at: string | null; status: string | null };
   const leads = new Map<string, LeadBits>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at, service_terminated_at, status").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(error.message);
     for (const l of (data ?? []) as (LeadBits & { id: string })[]) leads.set(l.id, l);
   }
@@ -118,6 +118,8 @@ export async function loadEarnings(service: Service, personId: string | null, to
     sellerOfLead, businessName: new Map([...leads].map(([id, l]) => [id, l.business_name ?? "Client"])),
     contractTotalOf: new Map([...leads].map(([id, l]) => [id, l.contract_total_payments ?? null])),
     engagement: timelines, closings,
+    /* pre-sales fix 03: the CLIENT's end — no commission on money taken after it, nothing projected. */
+    clientStateOf: new Map([...leads].map(([id, l]) => [id, { endedAt: l.service_terminated_at ?? null, refunded: l.status === "refunded" }])),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));

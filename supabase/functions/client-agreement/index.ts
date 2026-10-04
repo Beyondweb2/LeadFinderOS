@@ -19,7 +19,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { acceptanceRowFrom, agreePageMissing, renderAgreementText, sha256Hex, type AgreementFill, type AgreementRoute, type AgreementAcceptanceRow } from "../../../src/lib/clientAgreement.ts";
 import { agreementPageHtml, agreementUnavailableHtml, type AgreementFormValues } from "../../../src/lib/agreementPageHtml.ts";
-import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
+import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
+import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow, reportAgreementError, storeAndSendAcceptance } from "../_shared/client-agreement.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 
@@ -29,7 +30,7 @@ type Service = any;
 const TOKEN_RE = /^[0-9a-f]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_FIELD = 300;
-const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contract_total_payments";
+const LEAD_COLUMNS = "id,business_name,email,phone,website,address,contract_total_payments,service_terminated_at,status";
 
 function html(body: string, status = 200): Response {
   return new Response(body, {
@@ -52,8 +53,9 @@ async function resolve(service: Service, token: string) {
   const { data: lead, error: leadErr } = await service.from("outreach_leads").select(LEAD_COLUMNS).eq("id", link.lead_id).maybeSingle();
   if (leadErr) throw leadErr;
   if (!lead) return null;
-  const linkRoute = link.service_route === "build" || link.service_route === "optimise" ? link.service_route as AgreementRoute : null;
-  const route: AgreementRoute | null = linkRoute ?? serviceRouteForTotal(lead.contract_total_payments);
+  /* ⛔ WHAT THE CLIENT PAID ON OUTRANKS THE LINK (pre-sales fix 03, src/lib/agreementRoute.ts): a stamped
+     contract decides; the link's route only fills in for a client paid before routes existed. */
+  const route: AgreementRoute | null = resolveAgreementRoute(link.service_route, lead.contract_total_payments);
   return { lead, route, businessName: clip(lead.business_name) || "your business" };
 }
 
@@ -102,6 +104,9 @@ Deno.serve(async (req) => {
       return html(agreementPageHtml({ mode: "accepted", businessName: ctx.businessName, acceptedAtIso: existing.accepted_at, acceptedBy: existing.typed_name ?? "", pdfHref }));
     }
     if (!ctx.route) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
+    /* ⛔ NO NEW SIGNATURE FOR A CLOSED CLIENT (pre-sales fix 03): an ended or refunded engagement asks for
+       no agreement. A copy they already signed stays readable above (history is kept). */
+    if (clientClosed(ctx.lead)) return html(agreementPageHtml({ mode: "not_ready", businessName: ctx.businessName }));
 
     if (req.method === "GET") {
       /* Pre-filled only with what we already hold about the business; the name and role are always typed. */
