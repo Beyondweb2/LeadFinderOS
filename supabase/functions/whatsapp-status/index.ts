@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 import { handleInboundMessages } from "../_shared/whatsapp-inbound.ts";
-import { validMetaSignature } from "../../../src/lib/metaSignature.ts";
+import { judgeWhatsAppWebhookPost, QA_INBOUND_HEADER } from "../../../src/lib/metaWebhookGate.ts";
 
 // whatsapp-status — Meta WhatsApp delivery STATUS webhook.
 //
@@ -17,14 +17,17 @@ import { validMetaSignature } from "../../../src/lib/metaSignature.ts";
 //        so both arrive here under the same `messages` field: value.statuses[] for
 //        delivery receipts, value.messages[] for inbound. Statuses are handled below;
 //        inbound is delegated to handleInboundMessages (_shared/whatsapp-inbound.ts).
-//        Verified with the app-secret X-Hub-Signature-256 when set (one gate covers both).
+//        EVERY POST must pass src/lib/metaWebhookGate.ts first (one gate covers both): a valid
+//        X-Hub-Signature-256 under WHATSAPP_APP_SECRET, or the CRON_SECRET-gated QA simulation for
+//        reserved test numbers only. ⛔ FAIL CLOSED: no secret configured = every POST refused 401.
 // verify_jwt = false (this is a public webhook; auth is the verify token + signature).
 
 const VERIFY_TOKEN_SECRET = "WHATSAPP_WEBHOOK_VERIFY_TOKEN";
 const APP_SECRET_SECRET = "WHATSAPP_APP_SECRET";
 
 /* The signature check itself is src/lib/metaSignature.ts (one place, unit-tested): HMAC-SHA256 over the
-   RAW BYTES received, "sha256=<hex>", constant-time compare. */
+   RAW BYTES received, "sha256=<hex>", constant-time compare. Who may post at all is
+   src/lib/metaWebhookGate.ts (also unit-tested: scripts/whatsapp-webhook-gate.test.ts). */
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -47,23 +50,28 @@ Deno.serve(async (req) => {
     const rawBytes = new Uint8Array(await req.arrayBuffer());
     const rawBody = new TextDecoder().decode(rawBytes);
 
-    /* ⛔ SIGNATURE (2026-09-29, docs/abuse-cost-protection.md). With WHATSAPP_APP_SECRET set, EVERY POST
-       must carry a valid X-Hub-Signature-256 over the exact bytes received, or it is refused 401 before
-       anything is read or written — a forged "inbound reply" can no longer arm the paid first-reply
-       audit or plant a conversation.
-       ⚠️ Without the secret the webhook still accepts (refusing would drop every genuine delivery
-       receipt and reply until Paul adds it), and that is NOT hidden: the Admin screen's Security
-       section shows "signatures NOT checked" and the alert sweep emails it once (security-admin). */
-    const appSecret = Deno.env.get(APP_SECRET_SECRET) ?? "";
-    if (appSecret) {
-      const ok = await validMetaSignature(rawBytes, req.headers.get("x-hub-signature-256"), appSecret);
-      if (!ok) {
-        console.error("[whatsapp-status] bad or missing signature — rejecting");
-        return new Response("invalid signature", { status: 401 });
-      }
-    } else {
-      console.warn("[whatsapp-status] WHATSAPP_APP_SECRET not set — signature NOT checked (shown on the Admin screen)");
+    /* ⛔ THE GATE (2026-10-04, M-003 / E-01 — was fail-OPEN when WHATSAPP_APP_SECRET was unset, proved
+       exploitable live). Nothing is parsed, read or written until src/lib/metaWebhookGate.ts accepts:
+         · Meta: the app secret is configured AND X-Hub-Signature-256 is valid over the exact bytes;
+         · QA: the CRON_SECRET in x-qa-simulate-inbound AND inbound messages only, every sender a
+           reserved 07700 900xxx number, every id wamid.QA_… (fixtures only; never a real person).
+       ⛔ NO SECRET = REFUSED (401), not "accepted with a warning". A refused Meta delivery is retried
+       by Meta, and Meta signs every delivery, so once the secret is set the retries land. The Admin
+       Security panel says so while the secret is missing. */
+    const verdict = await judgeWhatsAppWebhookPost({
+      rawBytes,
+      signatureHeader: req.headers.get("x-hub-signature-256"),
+      appSecret: Deno.env.get(APP_SECRET_SECRET) ?? "",
+      qaHeader: req.headers.get(QA_INBOUND_HEADER),
+      cronSecret: Deno.env.get("CRON_SECRET") ?? "",
+    });
+    if (!verdict.accept) {
+      console.error(`[whatsapp-status] refused POST: ${verdict.reason} (${verdict.status})`);
+      return new Response(JSON.stringify({ ok: false, error: verdict.reason }), {
+        status: verdict.status, headers: { "Content-Type": "application/json" },
+      });
     }
+    if (verdict.via === "qa_simulation") console.log("[whatsapp-status] QA SIMULATED INBOUND — reserved test numbers only");
 
     const body = JSON.parse(rawBody || "{}");
     const service = createClient(

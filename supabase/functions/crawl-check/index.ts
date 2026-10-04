@@ -36,7 +36,9 @@ import {
 import { createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
-import { canWorkLead, isClientLead, pickRole, type AppRole } from "../../../src/lib/roleRules.ts";
+import { canWorkLead, isClientLead, type AppRole } from "../../../src/lib/roleRules.ts";
+import { refusalBody, resolveActor } from "../_shared/access.ts";
+import { salesCrawlIdsRefusal } from "../../../src/lib/crawlAccess.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -195,15 +197,16 @@ Deno.serve(async (req) => {
     let role: AppRole | null = null;
     const internal = req.headers.get("x-internal-job") === "1"
       && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
+    /* ⛔ THE SHARED ACTOR CHECK (2026-10-04, E-09 / E-15 / M-054). This used getClaims, which verifies
+       the token LOCALLY — a signed-out session kept working here until its token expired (≤1 h), and an
+       auth outage answered 401 (read by the browser as "signed out"). resolveActor asks the auth
+       service (a revoked session is refused), reads the role from user_roles on EVERY call (removing
+       the role — Team → Disable — refuses the very next request), and answers 503 on an outage. */
     if (!internal) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Auth required" }, 401);
-      const { data: claims, error: claimsErr } = await service.auth.getClaims(authHeader.replace("Bearer ", ""));
-      userId = (claims?.claims?.sub as string | undefined) ?? null;
-      if (claimsErr || !userId) return json({ ok: false, error: "Invalid token" }, 401);
-      const { data: roleRows } = await service.from("user_roles").select("role").eq("user_id", userId);
-      role = pickRole(roleRows);
-      if (!role) return json({ ok: false, error: "Not authorised" }, 403);
+      const who = await resolveActor(req, service);
+      if (!who.ok) return json(refusalBody(who), who.status);
+      userId = who.actor.id;
+      role = who.actor.role;
     }
 
     const body = await req.json().catch(() => ({}));
@@ -229,6 +232,21 @@ Deno.serve(async (req) => {
         .select("id, user_id, assigned_to_user_id, amount_paid, status").eq("id", targetLead).maybeSingle();
       if (!wl || isClientLead(wl) || !canWorkLead({ id: userId!, role }, wl)) return json({ ok: false, error: "not_your_lead" }, 403);
       if (body?.url || body?.audit_id) return json({ ok: false, error: "lead_website_only", detail: "Sales crawls the lead's own website." }, 403);
+      /* ⛔ THE IDS MUST BELONG TO THAT SAME LEAD (2026-10-04, M-006 / E-06). The lead check above proved
+         the rep works lead X, and then the status read preferred `job_id` — any job, so another lead's
+         crawl result could be read — and a `run_id` merged the rep's crawl into ANY audit run's
+         results, a paying client's baseline report included. Now: a run id is refused outright for a
+         salesperson (only the audit pipeline, an internal caller, files a crawl into a run), and a job
+         id is accepted only when that job's lead IS the lead just checked. Pure rule:
+         src/lib/crawlAccess.ts (scripts/crawl-check-access.test.ts). */
+      let jobLeadId: string | null = null;
+      if (jobIdIn) {
+        const { data: jr, error: jrErr } = await service.from("crawl_jobs").select("lead_id").eq("id", jobIdIn).maybeSingle();
+        if (jrErr) return json({ ok: false, error: "lookup_failed" }, 503);
+        jobLeadId = (jr?.lead_id as string | null | undefined) ?? null;
+      }
+      const idsRefusal = salesCrawlIdsRefusal({ leadId: wl.id as string, jobId: jobIdIn || null, jobLeadId, runId: body?.run_id ?? null });
+      if (idsRefusal) return json({ ok: false, error: idsRefusal }, 403);
       salesLead = { id: wl.id as string, user_id: wl.user_id as string };
     }
 

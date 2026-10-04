@@ -3,6 +3,7 @@ import { armFirstReplyAuditIntent } from "./first-reply-audit.ts";
 import { countsAsFirstReply } from "../../../src/lib/firstReplyAutomation.ts";
 import { INBOUND_NO_DOWNGRADE, postgrestList } from "../../../src/lib/strongStatuses.ts";
 import { createMockupRow, fillMockupFromSite } from "./mockup-trigger.ts";
+import { chooseInboundLead, type InboundLeadCandidate } from "../../../src/lib/inboundMatch.ts";
 
 // Inbound WhatsApp message handling — barber replies arriving on the SAME Meta
 // webhook that delivers statuses (Cloud API has ONE callback URL; inbound lives in
@@ -117,20 +118,26 @@ function tsToIso(ts: unknown): string {
 
 /**
  * Resolve the conversation owner (user_id) + lead_id for an inbound sender.
- *  1. Primary: the most recent OUTBOUND whatsapp_messages row to this phone — this
- *     is authoritative and IS the agreed tiebreak ("whoever most recently sent an
- *     outbound to that number"). Always hits for a genuine reply (a barber can only
- *     reply within 24h of a template we sent, and every send logs an outbound row).
- *  2. Fallback: match outreach_leads by phone (cheap last-9-digits ilike prefilter,
- *     then confirm with the same normaliser). Single owner → use it; ambiguous with
- *     no outbound history to break the tie → Unassigned.
- *  3. Default: Unassigned (null / null) → admin-only bucket the Inbox supports.
+ *  1. Primary: the most recent OUTBOUND whatsapp_messages row to this phone that names a lead — this
+ *     is authoritative and IS the agreed tiebreak ("whoever most recently sent an outbound to that
+ *     number"). Always hits for a reply to a message we sent.
+ *  2. Fallback (2026-10-04, M-005 / E-07): the number was never messaged by the system — the
+ *     call-first case. Candidates come from public.inbound_lead_candidates (phone_key on BOTH sides,
+ *     so "07700 900123", "+44 7700 900123" and "07700900123" all meet), and src/lib/inboundMatch.ts
+ *     decides: one lead → that lead; several → AMBIGUOUS, never a guess.
+ *     The old fallback's `ilike '%<last 9 digits>%'` never matched a spaced stored phone (almost all
+ *     of them), and it judged ambiguity by `user_id` — always the one book owner — so it never fired.
+ *  3. Default: Unassigned (lead null) → the admin-only bucket the Inbox supports.
+ * ⛔ A failed candidate read is "none" (the message still lands, Unassigned): an inbound row is never
+ *    dropped because matching failed, and nothing is attached on a guess.
  */
+type OwnerResolution = { userId: string | null; leadId: string | null; ambiguous: number };
+
 async function resolveOwner(
   // deno-lint-ignore no-explicit-any
   service: any,
   waPhone: string,
-): Promise<{ userId: string | null; leadId: string | null }> {
+): Promise<OwnerResolution> {
   // 1. Most recent outbound to this number.
   const { data: prior } = await service
     .from("whatsapp_messages")
@@ -140,32 +147,53 @@ async function resolveOwner(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (prior?.user_id) {
-    return { userId: prior.user_id as string, leadId: (prior.lead_id as string | null) ?? null };
+  if (prior?.user_id && prior?.lead_id) {
+    return { userId: prior.user_id as string, leadId: prior.lead_id as string, ambiguous: 0 };
   }
+  /* An outbound with no lead (a send to a bare number) still names the conversation's owner; the
+     lead is then looked for by phone exactly as for a never-messaged number. */
+  const priorUser = (prior?.user_id as string | null | undefined) ?? null;
 
-  // 2. Fallback — match a lead by phone. Prefilter on the last 9 digits, then
-  //    confirm with the normaliser (leads store raw: 07…, +44…, spaced).
-  const last9 = waPhone.slice(-9);
-  if (last9.length >= 6) {
-    const { data: leads } = await service
-      .from("outreach_leads")
-      .select("id, user_id, phone, country")
-      .ilike("phone", `%${last9}%`);
-    const matches = ((leads ?? []) as Array<{ id: string; user_id: string; phone: string; country: string | null }>)
-      .filter((l) => toWhatsAppNumber(l.phone ?? "", l.country) === waPhone);
-    const owners = new Set(matches.map((m) => m.user_id));
-    if (owners.size === 1) {
-      const m = matches[0];
-      return { userId: m.user_id, leadId: m.id };
-    }
-    if (owners.size > 1) {
-      console.warn(`[whatsapp-inbound] ${matches.length} leads / ${owners.size} owners for ${waPhone}, no outbound history — Unassigned`);
-    }
+  // 2. Fallback — the canonical phone key, in SQL (index-backed).
+  const { data: candidates, error } = await service.rpc("inbound_lead_candidates", { _phone: waPhone });
+  if (error) {
+    console.error(`[whatsapp-inbound] candidate lookup failed for ${waPhone}: ${String((error as { message?: string }).message ?? error)} — Unassigned`);
+    return { userId: priorUser, leadId: null, ambiguous: 0 };
+  }
+  const choice = chooseInboundLead((candidates ?? []) as InboundLeadCandidate[]);
+  if (choice.kind === "matched") return { userId: choice.userId ?? priorUser, leadId: choice.leadId, ambiguous: 0 };
+  if (choice.kind === "ambiguous") {
+    console.warn(`[whatsapp-inbound] ${choice.candidates} leads share ${waPhone} and none was ever messaged — Unassigned, Paul told`);
+    return { userId: priorUser, leadId: null, ambiguous: choice.candidates };
   }
 
   // 3. Unknown sender.
-  return { userId: null, leadId: null };
+  return { userId: priorUser, leadId: null, ambiguous: 0 };
+}
+
+/** AMBIGUOUS (several leads share the number): the message lands Unassigned (admin-only) and the book
+ *  owner gets ONE notification per message, so a real reply is never silently lost and never shown to
+ *  the wrong rep. Best-effort: a failed notification never fails the inbound. */
+// deno-lint-ignore no-explicit-any
+async function notifyAmbiguousInbound(service: any, waPhone: string, candidates: number, messageId: string, convUserId: string | null) {
+  try {
+    const { data: owner } = await service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle();
+    const to = (owner?.user_id as string | undefined) ?? null;
+    if (!to) return;
+    const { error } = await service.rpc("notify_person", {
+      _user: to,
+      _kind: "whatsapp_reply",
+      _title: "WhatsApp reply needs matching",
+      _body: `+${waPhone} wrote in and that number is on ${candidates} leads. It is in Unassigned — open it and attach it to the right lead.`,
+      _link: "/inbox?c=" + encodeURIComponent((convUserId ?? "unassigned") + "::" + waPhone),
+      _lead: null,
+      _dedupe: `reply-ambiguous:${messageId}`,
+      _priority: 2,
+    });
+    if (error) console.error(`[whatsapp-inbound] ambiguous notification failed: ${String((error as { message?: string }).message ?? error)}`);
+  } catch (e) {
+    console.error("[whatsapp-inbound] ambiguous notification error:", e instanceof Error ? e.message : String(e));
+  }
 }
 /** The first persisted inbound after outreach began. Meta redelivery is already removed by wamid's
  * unique index; timestamp plus id gives two genuine rapid replies a deterministic winner. */
@@ -240,7 +268,7 @@ export async function handleInboundMessages(
         console.warn(`[whatsapp-inbound] message ${wamid || "(no id)"} has no usable phone — skipping`);
         continue;
       }
-      const { userId, leadId } = await resolveOwner(service, waPhone);
+      const { userId, leadId, ambiguous } = await resolveOwner(service, waPhone);
       const body = bodyFor(msg);
       const media = await saveInboundMedia(service, msg, userId, wamid);
       const { data: insertedRow, error: insErr } = await service.from("whatsapp_messages").insert({
@@ -259,6 +287,7 @@ export async function handleInboundMessages(
         continue;
       }
       inserted++;
+      if (!leadId && ambiguous > 0 && insertedRow?.id) await notifyAmbiguousInbound(service, waPhone, ambiguous, insertedRow.id as string, userId);
       if (!leadId || !insertedRow?.id) continue;
 
       await service.from("outreach_leads").update({ status: "replied" })
