@@ -9,6 +9,7 @@ import { OPPORTUNITY_GROUP_LABELS, type EngineTally, type OpportunityClass } fro
 import { measurementsLine, namedLine, REC_LABELS, type RecInput, type RecVerdict, type RecommendArgs } from '@/lib/baselineRecommendation';
 import { BASELINE_QUESTIONS, BASELINE_RUNS } from '@/lib/auditQuestionCounts';
 import { DISCOVERY_JOB_LABELS, DISCOVERY_ENGINES, ENGINE_LABELS, discoveryPlan, discoveryView, type DiscoveryProgress } from '@/lib/discoveryProgress';
+import { buildServiceScope } from '@/lib/serviceScope';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    DISCOVERY → THE RECOMMENDED OFFICIAL BASELINE (Paid Clients; rebuilt 2026-09-30, Paul).
@@ -114,7 +115,13 @@ export function mixContextOf(data: PaidBaseline) {
 /** The recommendation inputs from what the server sent — the same shape paid-baseline builds. */
 export function recArgsOf(data: PaidBaseline): Omit<RecommendArgs, 'target'> {
   const pool: RecInput[] = (data.discovery?.pool ?? []).map((p) => ({ question: p.question, engines: p.opportunity?.engines ?? null, verdict: p.opportunity?.verdict ?? null }));
-  return { hook: data.hook?.questions ?? [], pool, hookMeasures: data.hook?.measures ?? [], ctx: mixContextOf(data), trade: data.business_type ?? '' };
+  /* The same service scope and core questions the server uses (serviceScope.ts, 2026-10-04), so the
+     screen's row reasons and the server's checks cannot disagree. */
+  const scope = buildServiceScope({
+    services: data.services_list ?? [], notOffered: data.services_not_offered ?? [], trade: data.business_type ?? '',
+    towns: [data.location, ...(data.areas_list ?? [])].filter(Boolean),
+  });
+  return { hook: data.hook?.questions ?? [], pool, hookMeasures: data.hook?.measures ?? [], ctx: mixContextOf(data), trade: data.business_type ?? '', scope, core: data.core_questions ?? [] };
 }
 /** How many runs a question's tallies are out of: the Discovery job's target, or 1 for the Hook Audit. */
 export function tallyTarget(data: PaidBaseline, question: string): number {
@@ -184,6 +191,11 @@ export function DiscoverySection({ data, questions, busy, frozen, onGenerate, on
     {d?.mismatch && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">An earlier Discovery (audit {d.mismatch.audit_id.slice(0, 8)}) measured a different question set. Its results stay on that audit and are not mixed in.</p>}
     {d?.audit?.progress && <DiscoveryProgressPanel progress={d.audit.progress}/>}
     {d?.towns_failed?.length ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">No questions came back for: {d.towns_failed.join(', ')} — regenerate to retry.</p> : null}
+    {/* 2026-10-04 (fix/04): questions the generator wrote about a service the client does not offer or
+        never confirmed are kept OUT of the pool — listed here so nothing disappears silently. */}
+    {d?.rejected?.length ? <CollapsibleBlock defaultOpen={false} titleClassName="text-xs text-muted-foreground" title={`${d.rejected.length} generated question${d.rejected.length === 1 ? '' : 's'} kept out — not a confirmed service`}>
+      <ul className="ml-4 list-disc text-xs text-muted-foreground">{d.rejected.map((r) => <li key={r.question}>{r.question} — {r.reason}</li>)}</ul>
+    </CollapsibleBlock> : null}
     {!!d?.pool.length && rec && <div className="mt-3 space-y-2">
       {view.provisional && measured && <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">{view.status === 'running' ? 'Provisional — Discovery still running. The verdicts below will change as answers arrive.' : 'Provisional — Discovery did not finish. The verdicts use the answers it collected.'}</p>}
       <p className="text-sm font-medium">Which questions should go into the official baseline?</p>

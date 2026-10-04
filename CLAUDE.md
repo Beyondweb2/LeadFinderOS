@@ -304,8 +304,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   sent BY HAND, as /terms says. ⛔ Only the measurement paragraph is generated, from stored `weekly_check_runs`
   counts, comparing only like-for-like checks; work done is the operator's words (stored facts are Add
   suggestions). ⛔ `client_monthly_updates` is admin-only through its three functions; a sent row is never edited.
-- **Named = the model's verdict** (`self_named` from `extract-competitors`), string-match fallback,
-  one ruler on both sides of a comparison (`src/lib/namedSignal.ts`). A name that is only trade +
+- **Named = the answer text first** for a judgeable name, then the model's verdict (`self_named`), then the
+  string flag — one ruler on both sides of a comparison (`src/lib/namedSignal.ts`); since 2026-10-04 the frozen
+  snapshot, `mention_rate`, the page generator and the action plan pass the context too. A name that is only trade +
   town is **not judgeable** (`nameIsJudgeable`, `_shared/derivable.ts`) — the report replaces its hero
   with Paul's wording, never a caveat under a false headline.
 
@@ -581,6 +582,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The four-minute gap between repeat runs was never a sampling safeguard**; `NOISE_BAND_PP = 5` was
   measured minutes apart. Do not restore sequencing as protection; do not stagger to zero until
   `run_number` has a unique index (§docs/measurement.md §25).
+- **Business truth outranks generated ideas** (`docs/pre-sales-certification/fixes-04-ai-measurement.md`): the
+  highest-ranked service list wins whole, Discovery is never a source of services, and every Discovery /
+  baseline question passes `serviceScope.ts`; the final-20 checks live in `baselineQuality.ts` (one copy).
+- **A guarantee measurement freezes only at questions × runs × engines answered** (`measurementHealth.ts`), or
+  a Paul-accepted partial; missing cells are retried in place (`retryMissingCells`), never fabricated.
+- **Audit spend is pooled by purpose** (`auditBudget.ts`: guarantee / client / prospecting, plus an Apify reserve).
+  ⛔ Never one shared cap again — that is how a day of prospecting could cap a client's baseline.
 
 ---
 

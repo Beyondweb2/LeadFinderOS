@@ -46,6 +46,12 @@ export const NOISE_BAND_PP = 5;
  *  × one run = 2, which is why a one-run re-measure proves nothing per question. */
 export const MIN_CELLS_FOR_QUESTION_CLAIM = 4;
 
+/** An engine is "short" on one side when it answered fewer than this share of the cells it answered
+ *  on the other side (over the matched questions). A drop-out on part of a replay changes the engine
+ *  MIX — ChatGPT names businesses about three times as often as Gemini — and that alone can move the
+ *  pooled number past the noise band (Session C C-12). */
+export const ENGINE_BALANCE_MIN_RATIO = 0.9;
+
 export type Movement = 'improved' | 'dropped' | 'within_noise' | 'unchanged' | 'only_before' | 'only_after';
 
 export interface SideCounts {
@@ -119,6 +125,10 @@ export interface MeasurementComparison {
   onlyAfter: string[];
   /** One honest sentence for the top of the view (and for a client document). */
   headline: string;
+  /** Per engine, answered / named cells on each side, over the MATCHED questions only. */
+  engineBalance: Record<string, { before: { answered: number; named: number }; after: { answered: number; named: number } }>;
+  /** Engines answered so unevenly between the sides that the pooled verdict cannot be trusted. */
+  engineShort: string[];
 }
 
 /** Case-insensitive question identity — the same rule askedKeys and dedupeQuestions use, so a
@@ -193,28 +203,33 @@ function sideCounts(
   ownWebsite: string,
   namedMode: NamedMode,
   context: { trade?: string | null; town?: string | null } = {},
-): { byQuestion: Map<string, SideCounts>; overall: OverallSide; label: Map<string, string> } {
+): { byQuestion: Map<string, SideCounts>; byEngine: Map<string, Record<string, { answered: number; named: number }>>; overall: OverallSide; label: Map<string, string> } {
   const view = buildBaselineView(rows, { businessName, namedMode, trade: context.trade ?? null, town: context.town ?? null });
   const cited = citedByQuestion(rows, businessName, ownWebsite);
   const byQuestion = new Map<string, SideCounts>();
+  const byEngine = new Map<string, Record<string, { answered: number; named: number }>>();
   const label = new Map<string, string>();
   let citedTotal = 0;
   for (const q of view.questions) {
     const key = qKey(q.question);
     let named = 0, answered = 0, cells = 0;
+    const perEngine: Record<string, { answered: number; named: number }> = {};
     for (const engine of Object.keys(q.engines)) {
       const c = q.engines[engine];
       named += c.named;
       answered += c.answered;
       cells += c.runs;
+      perEngine[engine] = { answered: c.answered, named: c.named };
     }
     const c = cited.get(key) ?? 0;
     citedTotal += c;
     byQuestion.set(key, { named, answered, cells, cited: c, ratePct: ratePct(named, answered) });
+    byEngine.set(key, perEngine);
     label.set(key, q.question);
   }
   return {
     byQuestion,
+    byEngine,
     label,
     overall: {
       named: view.namedCells,
@@ -380,9 +395,46 @@ export function compareMeasurements(
      for reading a comparison is the order the questions were asked. */
   questions.sort((x, y) => x.askIndex - y.askIndex || x.question.localeCompare(y.question));
 
-  const ratePpDelta = b.overall.ratePct === null || a.overall.ratePct === null
+  /* ⛔ THE TOTALS COUNT ONLY THE QUESTIONS ASKED ON BOTH SIDES (2026-10-04, Session C C-12). They used
+     to pool every question on each side, so a question asked only once — or a side carrying an extra
+     run — moved the headline rate without being a before-and-after at all. With nothing matched the
+     sides are left as they are (the verdict is `incomparable` either way). */
+  const matchedKeys = [...keys].filter((k) => b.byQuestion.has(k) && a.byQuestion.has(k));
+  const matchedSide = (side: typeof b): OverallSide => {
+    let named = 0, answered = 0, cited = 0;
+    for (const k of matchedKeys) {
+      const s = side.byQuestion.get(k)!;
+      named += s.named; answered += s.answered; cited += s.cited;
+    }
+    return { ...side.overall, named, answered, cited, ratePct: ratePct(named, answered), questions: matchedKeys.length };
+  };
+  const before = matched ? matchedSide(b) : b.overall;
+  const after = matched ? matchedSide(a) : a.overall;
+  /* AND EACH ENGINE MUST BE THERE ON BOTH SIDES. A Gemini drop-out on part of the replay leaves the
+     after side leaning on ChatGPT, which names businesses about three times as often — the pooled
+     rate can cross the band from the mix alone. Counted here; the results sender holds on it. */
+  const engineBalance: MeasurementComparison['engineBalance'] = {};
+  for (const k of matchedKeys) {
+    for (const side of ['before', 'after'] as const) {
+      const per = (side === 'before' ? b : a).byEngine.get(k) ?? {};
+      for (const [engine, c] of Object.entries(per)) {
+        const slot = (engineBalance[engine] ??= { before: { answered: 0, named: 0 }, after: { answered: 0, named: 0 } });
+        slot[side].answered += c.answered;
+        slot[side].named += c.named;
+      }
+    }
+  }
+  const engineShort = Object.entries(engineBalance)
+    .filter(([, e]) => {
+      const hi = Math.max(e.before.answered, e.after.answered);
+      const lo = Math.min(e.before.answered, e.after.answered);
+      return hi > 0 && lo / hi < ENGINE_BALANCE_MIN_RATIO;
+    })
+    .map(([engine]) => engine);
+
+  const ratePpDelta = before.ratePct === null || after.ratePct === null
     ? null
-    : a.overall.ratePct - b.overall.ratePct;
+    : after.ratePct - before.ratePct;
   const withinNoise = ratePpDelta === null || Math.abs(ratePpDelta) <= NOISE_BAND_PP;
   /* Uneven sampling: the same question asked a different number of times each side. Real and
      common (ABLM: 8 cells before, 2 after) — it does not invalidate the comparison, but it must be
@@ -403,23 +455,23 @@ export function compareMeasurements(
   } else if (ratePpDelta === null) {
     headline = 'One of the two measurements has no answered questions, so there is nothing to compare yet.';
   } else if (withinNoise) {
-    headline = `Named in ${a.overall.named} of ${a.overall.answered} answers, against `
-      + `${b.overall.named} of ${b.overall.answered} before (${pp(ratePpDelta)}). `
+    headline = `Named in ${after.named} of ${after.answered} answers, against `
+      + `${before.named} of ${before.answered} before (${pp(ratePpDelta)}). `
       + `That is inside the ±${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, `
       + 'so it is not proven movement.';
   } else {
     const dir = ratePpDelta > 0 ? 'up' : 'down';
-    headline = `Named in ${a.overall.named} of ${a.overall.answered} answers, against `
-      + `${b.overall.named} of ${b.overall.answered} before — ${dir} ${pp(ratePpDelta)}, `
+    headline = `Named in ${after.named} of ${after.answered} answers, against `
+      + `${before.named} of ${before.answered} before — ${dir} ${pp(ratePpDelta)}, `
       + `which is beyond the ±${NOISE_BAND_PP}-point swing between repeat measurements.`;
   }
 
   return {
     questions,
-    before: b.overall,
-    after: a.overall,
+    before,
+    after,
     ratePpDelta,
-    namedCellsDelta: a.overall.named - b.overall.named,
+    namedCellsDelta: after.named - before.named,
     movement,
     withinNoise,
     noiseBandPp: NOISE_BAND_PP,
@@ -428,5 +480,7 @@ export function compareMeasurements(
     onlyBefore,
     onlyAfter,
     headline,
+    engineBalance,
+    engineShort,
   };
 }

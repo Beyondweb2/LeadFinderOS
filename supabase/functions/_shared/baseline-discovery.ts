@@ -19,6 +19,9 @@ import { isAggregatorUrl } from "./aggregators.ts";
 import type { QueueRow } from "../../../src/lib/auditReport.ts";
 import { discoveryProgress, poolMatchesJob, poolVersion, type DiscoveryProgress, type ProgressRow, type ProgressRun, type QuestionProgress } from "../../../src/lib/discoveryProgress.ts";
 import { engineTallies } from "../../../src/lib/discoveryOpportunity.ts";
+import { buildServiceScope, describeScope, inScope, questionScope, type ScopeVerdict } from "../../../src/lib/serviceScope.ts";
+import { areaCoreQuestion, coreQuestions, toCustomerQuestion } from "../../../src/lib/customerQuestion.ts";
+import { placeSuffixForCountry } from "../../../src/lib/seedGuard.ts";
 /** = src/lib/queueAuditStatus.ts RUN_USABLE (that module is not edge-safe). balanced-baseline.test.ts
  *  fails if the two ever differ. */
 export const DISCOVERY_RUN_USABLE = new Set(["complete", "capped"]);
@@ -34,13 +37,19 @@ export const DISCOVERY_MAX_QUESTIONS = 80;
    corrections); the ledger rate AI_SEARCH_USD_PER_QUESTION is unchanged. */
 export const DISCOVERY_USD_PER_QUESTION_RUN = 0.014;
 
-export interface PoolItem { question: string; town: string | null; service: string | null; intent: string }
+/** `scope` (2026-10-04): the question's verdict against the client's confirmed services
+ *  (src/lib/serviceScope.ts) — 'core' or 'service' only; anything else never enters a pool. Absent on
+ *  pools generated before then. */
+export interface PoolItem { question: string; town: string | null; service: string | null; intent: string; scope?: ScopeVerdict }
 /** Stored on onboarding_responses.baseline_discovery. `pool_version` identifies the pool (a stable
  *  hash of its questions); `audit_id` + `audit_pool_version` are the ONE Discovery job measuring it;
  *  `run_claimed_at` is the start claim (paid-baseline, discovery_run); `history` keeps earlier
  *  pools' jobs when the pool is regenerated, so no measurement is ever detached silently. */
 export interface DiscoveryStore {
   generated_at: string; pool: PoolItem[]; towns_failed?: string[];
+  /** Generated questions kept OUT of the pool, with why (a service not offered / not confirmed). Shown
+   *  to the operator so nothing disappears silently; never measured, never seeded to the backlog. */
+  rejected?: Array<{ question: string; reason: string }>;
   pool_version?: string;
   audit_id?: string | null; audit_pool_version?: string | null; run_started_at?: string | null;
   run_claimed_at?: string | null;
@@ -55,6 +64,15 @@ export const storePoolVersion = (store: Pick<DiscoveryStore, "pool" | "pool_vers
 export interface DiscoveryInput {
   businessName: string; businessCategory: string; website: string; country: string;
   primaryTown: string; areas: string[]; services: string[];
+  /** The client's explicit "we do not offer" list (onboarding services_not_offered). */
+  notOffered?: string[];
+  /** onboarding must_not_say — given to the question writer as a constraint. */
+  mustNotSay?: string;
+}
+
+/** The service scope a Discovery pool is judged against (src/lib/serviceScope.ts). */
+export function discoveryScope(i: Pick<DiscoveryInput, 'primaryTown' | 'areas' | 'services' | 'notOffered' | 'businessCategory'>) {
+  return buildServiceScope({ services: i.services, notOffered: i.notOffered ?? [], trade: i.businessCategory, towns: [i.primaryTown, ...i.areas].filter(Boolean) });
 }
 
 export function mixContext(i: Pick<DiscoveryInput, 'primaryTown' | 'areas' | 'services'>): MixContext {
@@ -80,10 +98,17 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
     /* ⛔ NO lead_id: with one, create-ai-audit replaces the town with the client's confirmed home
        town (pickAuditTown). Each call must be about ITS town. The areas are Paul-approved, so the
        per-lead distance block does not apply. */
-    const body = buildAuditPreviewRequest({
-      business_name: input.businessName, business_category: input.businessCategory, primary_location: town,
-      country: input.country, website: input.website, services, service_areas: [], specialisms: [],
-    }, { questionCount: n, purpose: "discovery", userId: call.userId });
+    /* question_style 'customer' + the client's negatives (create-ai-audit, internal Discovery only):
+       questions a person asks an AI, never a service the client said they do not offer. */
+    const body = {
+      ...buildAuditPreviewRequest({
+        business_name: input.businessName, business_category: input.businessCategory, primary_location: town,
+        country: input.country, website: input.website, services, service_areas: [], specialisms: [],
+      }, { questionCount: n, purpose: "discovery", userId: call.userId }),
+      question_style: "customer",
+      not_offered: input.notOffered ?? [],
+      must_not_say: input.mustNotSay ?? "",
+    };
     try {
       const res = await fetch(`${call.url}/functions/v1/create-ai-audit`, {
         method: "POST",
@@ -99,22 +124,44 @@ export async function generateDiscoveryPool(input: DiscoveryInput, call: { url: 
   const interleaved: string[] = [];
   for (let i = 0; i < Math.max(...perTown.map((l) => l.length), 0); i++) for (const l of perTown) if (l[i]) interleaved.push(l[i]);
   const allTowns = [input.primaryTown, ...ctx.areas];
-  /* THE CORE QUERY PER TOWN. The generator writes mostly service questions; for the other areas it
-     often writes no plain "[trade] in [town]" at all, which is the broadest genuine thing a customer
-     asks. Added only where that town has no broad question, from the APPROVED category — nothing
-     invented (BS4, 2026-09-23: 2 broad questions in a pool of 41). */
-  const trade = input.businessCategory.trim().toLowerCase();
-  if (trade) {
-    for (const t of allTowns) {
-      const hasBroad = interleaved.some((q) => { const m = classifyQuestion(q, ctx); return m.town === t && m.intent === "broad"; });
-      if (!hasBroad) interleaved.push(`${trade} in ${t} UK`);
-    }
+  const scope = discoveryScope(input);
+  const suffix = placeSuffixForCountry(input.country);
+  const cqCtx = { trade: input.businessCategory, towns: allTowns, countrySuffix: suffix };
+  /* ⛔ THE CORE QUESTIONS FIRST (C-03, 2026-10-04). Session C's pool for a Canterbury locksmith had no
+     plain "locksmith in Canterbury" question at all, and the old fill skipped a town whenever the
+     classifier called ANY question there "broad" — which it did for every unmatched service. Now:
+     the two mandatory home-town core questions always lead the pool, plus one plain recommendation
+     question per approved area. From the APPROVED category and towns — nothing invented. */
+  const core: string[] = [];
+  if (input.businessCategory.trim() && input.primaryTown.trim()) {
+    core.push(...coreQuestions(input.businessCategory, input.primaryTown, suffix));
+    for (const a of ctx.areas) core.push(areaCoreQuestion(input.businessCategory, a, suffix));
   }
-  const pool = dedupeByMeaning(interleaved, allTowns).slice(0, DISCOVERY_MAX_QUESTIONS).map((q) => {
+  /* ⛔ EVERY QUESTION IS RESHAPED AND JUDGED (C-02, C-04). Customer form (customerQuestion.ts — the
+     prompt asks for it, this guarantees it, including every template top-up), then the service
+     scope: a question about something the client does NOT offer, or never confirmed, is kept OUT of
+     the pool and listed in `rejected` with the reason. It can never be recommended, measured or
+     seeded into the backlog. */
+  const rejected: Array<{ question: string; reason: string }> = [];
+  const shaped: Array<{ question: string; scope: ScopeVerdict }> = [];
+  for (const raw of [...core, ...interleaved]) {
+    const q = toCustomerQuestion(raw, cqCtx);
+    if (!q) continue;
+    const s = questionScope(q, scope);
+    if (!inScope(s)) { rejected.push({ question: q, reason: describeScope(s) }); continue; }
+    shaped.push({ question: q, scope: s.verdict });
+  }
+  const scopeOf = new Map(shaped.map((x) => [x.question, x.scope]));
+  const pool = dedupeByMeaning(shaped.map((x) => x.question), allTowns).slice(0, DISCOVERY_MAX_QUESTIONS).map((q) => {
     const m = classifyQuestion(q, ctx);
-    return { question: q, town: m.town, service: m.service, intent: m.intent };
+    return { question: q, town: m.town, service: m.service, intent: m.intent, scope: scopeOf.get(q) };
   });
-  return { generated_at: new Date().toISOString(), pool, pool_version: poolVersion(pool.map((p) => p.question)), ...(failed.length ? { towns_failed: failed } : {}), audit_id: null };
+  return {
+    generated_at: new Date().toISOString(), pool, pool_version: poolVersion(pool.map((p) => p.question)),
+    ...(failed.length ? { towns_failed: failed } : {}),
+    ...(rejected.length ? { rejected: rejected.slice(0, 40) } : {}),
+    audit_id: null,
+  };
 }
 
 /** Measure the pool as a Discovery audit (runs = DISCOVERY_RUNS). Returns the audit id. */
@@ -147,6 +194,8 @@ export interface DiscoveryState {
   /** A start is claimed and its audit not written yet (a press in the last few seconds). */
   starting: boolean;
   estimate_usd: number;
+  /** Generated questions kept out of the pool, with why (DiscoveryStore.rejected). */
+  rejected: Array<{ question: string; reason: string }>;
 }
 
 /** What the screen shows: the stored pool, and — if a Discovery audit exists for it — its progress
@@ -223,6 +272,7 @@ export async function discoveryState(service: Client, store: DiscoveryStore | nu
     generated_at: store?.generated_at ?? null, pool_version: version, pool, towns_failed: store?.towns_failed ?? [], audit, mismatch,
     starting: !audit && Number.isFinite(claimedMs) && Date.now() - claimedMs < DISCOVERY_CLAIM_STALE_MS,
     estimate_usd: Math.round(pool.length * DISCOVERY_RUNS * DISCOVERY_USD_PER_QUESTION_RUN * 100) / 100,
+    rejected: Array.isArray(store?.rejected) ? store!.rejected! : [],
   };
 }
 

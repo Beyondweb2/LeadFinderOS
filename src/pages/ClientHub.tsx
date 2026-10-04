@@ -25,7 +25,8 @@ import { LeadCrawlPanel } from '@/components/LeadCrawlPanel';
 import { ClientHandoffCard, type ClientHandoff } from '@/components/ClientHandoffCard';
 import { ClientSetupCard, type SetupHandoff } from '@/components/ClientSetupCard';
 import { DISCOVERY_PLAN_RUNS, DiscoverySection, HookAuditStep, nearDuplicateCount, RecommendationStep, useDiscoveryPoll } from '@/components/BaselineDiscovery';
-import { OfficialBaseline } from '@/components/OfficialBaseline';
+import { OfficialBaseline, qualityOverridesOf, unresolvedQuality } from '@/components/OfficialBaseline';
+import { MeasurementHealthPanel } from '@/components/MeasurementHealthPanel';
 import { OpportunityBacklog, useOpportunities } from '@/components/OpportunityBacklog';
 import { MonthlyUpdatePanel } from '@/components/MonthlyUpdatePanel';
 import { EndEngagementButton, EngagementEndedCard } from '@/components/EngagementEnd';
@@ -110,7 +111,9 @@ const BUSY_TEXT: Record<Exclude<Busy, null>, string> = {
   approving: 'Approving questions…',
   starting: 'Starting baseline…',
 };
-const contextOf = (b: Baseline) => ({ location: b.location, services: b.services, services_list: b.services_list, areas_list: b.areas_list, business_type: b.business_type, website: b.website });
+/* services_not_offered / top_requests (2026-10-04, fix/04): the client's negatives and what they are
+   called for most — saved with section A, read by Discovery and the final-20 checks. */
+const contextOf = (b: Baseline) => ({ location: b.location, services: b.services, services_list: b.services_list, areas_list: b.areas_list, business_type: b.business_type, website: b.website, services_not_offered: (b.services_not_offered ?? []).join(', '), top_requests: b.top_requests ?? '' });
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    PREPARE BASELINE. One state transition at a time:
@@ -139,11 +142,13 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   const [acceptDuplicates, setAcceptDuplicates] = useState(false);
   /** Hook Audit questions Paul replaced, with the reason (sent with the approval, kept on the row). */
   const [hookReasons, setHookReasons] = useState<Record<string, string>>({});
+  /** Written reasons for the blocking final-20 checks (OfficialBaseline, baselineQuality.ts). */
+  const [qualityReasons, setQualityReasons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setBusy('load'); setError(null); setHookReasons({});
+    setBusy('load'); setError(null); setHookReasons({}); setQualityReasons({});
     invokePaidBaseline('get', leadId)
       .then((next) => { if (cancelled) return; setData(next); setLoaded(next); setQuestions(next.questions); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load baseline setup'); })
@@ -154,8 +159,8 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
   /* The approval carries Paul's explicit "approve anyway" when near-duplicates remain, and the reason
      for every Hook Audit question he replaced (the server refuses either otherwise). */
   const invoke = useCallback((action: string, extra: Record<string, unknown> = {}) => invokePaidBaseline(action, leadId, action === 'approve'
-    ? { ...extra, ...(acceptDuplicates ? { accept_duplicates: true } : {}), hook_replacements: Object.entries(hookReasons).map(([question, reason]) => ({ question, reason })) }
-    : extra), [leadId, acceptDuplicates, hookReasons]);
+    ? { ...extra, ...(acceptDuplicates ? { accept_duplicates: true } : {}), hook_replacements: Object.entries(hookReasons).map(([question, reason]) => ({ question, reason })), quality_overrides: qualityOverridesOf(qualityReasons) }
+    : extra), [leadId, acceptDuplicates, hookReasons, qualityReasons]);
   const accept = (next: Baseline) => { setData(next); setLoaded(next); setQuestions(next.questions); };
   const fail = (title: string, message: string) => { setError(message); toast({ title, description: message, variant: 'destructive' }); };
 
@@ -227,6 +232,7 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
     void act('save', 'reopen_approved', { reason });
   };
   const duplicates = data ? nearDuplicateCount(data, cleanAuditQuestions(questions)) : 0;
+  const qualityUnresolved = data ? unresolvedQuality(data, cleanAuditQuestions(questions), qualityReasons) : 0;
   /* Discovery runs on the server; while it runs, re-read its stored progress (discovery block and the
      recommendation built from it — the draft on screen is untouched). */
   useDiscoveryPoll(leadId, open, data, !!busy, (discovery, recommendation) => {
@@ -267,7 +273,12 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
             {(data.detected?.services.length ?? 0) > 0 && <p className="mt-1">Services: {data.detected!.services.join(', ')}</p>}
             {(data.detected?.areas.length ?? 0) > 0 && <p className="mt-1">Towns: {data.detected!.areas.join(', ')}</p>}
           </div>}
-          <div className="sm:col-span-2"><Label>Services list (comma separated)</Label><Input value={data.services_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, services_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
+          <div className="sm:col-span-2"><Label>Services list (comma separated)</Label><Input value={data.services_list.join(', ')} disabled={started || !!busy} onChange={(e) => setData({ ...data, services_list: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/>
+            {data.services_client_confirmed === false && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">These come from what Sales recorded, not from the client — confirm them before freezing.</p>}
+            {(data.unconfirmed?.services.length ?? 0) > 0 && <p className="mt-1 text-xs text-muted-foreground">Also mentioned elsewhere, NOT included: {data.unconfirmed!.services.join(', ')}. Add one only if the client confirms it.</p>}</div>
+          {/* 2026-10-04 (fix/04): the client's own negatives — a hard exclusion for Discovery, the 20 and the backlog. */}
+          <div className="sm:col-span-2"><Label>Services they do NOT offer (comma separated)</Label><Input value={(data.services_not_offered ?? []).join(', ')} disabled={started || !!busy} placeholder="e.g. car keys, glass replacement" onChange={(e) => setData({ ...data, services_not_offered: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}/></div>
+          <div className="sm:col-span-2"><Label>What customers contact them for most</Label><Input value={data.top_requests ?? ''} disabled={started || !!busy} onChange={(e) => setData({ ...data, top_requests: e.target.value })}/></div>
         </div>
         {!started && <Button className="mt-3" size="sm" variant="outline" disabled={!!busy || !contextDirty} onClick={() => data && void act('save_context', 'save_context', contextOf(data))}><Save className="mr-1 h-4 w-4"/>Save client context</Button>}
       </CollapsibleBlock>
@@ -275,7 +286,8 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
       <DiscoverySection data={data} questions={questions} busy={!!busy} frozen={frozen} onGenerate={() => void generateDiscovery()} onRun={runDiscovery} onAdd={addFromDiscovery}/>
       {!frozen && <RecommendationStep data={data} busy={!!busy} frozen={frozen} draftIsRecommendation={draftIsRecommendation} onUse={generate}/>}
       <OfficialBaseline data={data} questions={questions} onChange={setQuestions} frozen={frozen} busy={!!busy} hookReasons={hookReasons}
-        onHookReason={(q, reason) => setHookReasons((cur) => ({ ...cur, [q]: reason }))}/>
+        onHookReason={(q, reason) => setHookReasons((cur) => ({ ...cur, [q]: reason }))}
+        qualityReasons={qualityReasons} onQualityReason={(key, reason) => setQualityReasons((cur) => ({ ...cur, [key]: reason }))}/>
       {!frozen && count > 0 && <div className="flex justify-end"><Button size="sm" variant="outline" disabled={!!busy || count === 0} onClick={() => void act('save', 'save', { questions: cleanAuditQuestions(questions) })}><Save className="mr-1 h-4 w-4"/>Save draft</Button></div>}
       <section className="rounded-md border border-primary/30 bg-primary/5 p-3"><h3 className="font-medium">5. Freeze + run</h3>
         {!frozen && <>
@@ -288,7 +300,8 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
           </div>}
           {duplicates > 0 && <label className="mt-2 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300"><input type="checkbox" className="mt-1" checked={acceptDuplicates} onChange={(e) => setAcceptDuplicates(e.target.checked)}/>
             <span>{duplicates} near-duplicate pair{duplicates === 1 ? '' : 's'} flagged above. Approve anyway — I have checked they are genuinely different questions.</span></label>}
-          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS || (duplicates > 0 && !acceptDuplicates) || !!hook?.unexplained.length} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve, freeze &amp; start baseline</Button>
+          {qualityUnresolved > 0 && <p className="mt-2 text-sm text-destructive" role="alert">{qualityUnresolved} check{qualityUnresolved === 1 ? '' : 's'} above must be fixed or explained before freezing.</p>}
+          <Button className="mt-3" disabled={!!busy || count !== BASELINE_QUESTIONS || (duplicates > 0 && !acceptDuplicates) || !!hook?.unexplained.length || qualityUnresolved > 0} onClick={() => void approveAndRun()}>{busy === 'approving' || busy === 'starting' ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Play className="mr-1 h-4 w-4"/>}Approve, freeze &amp; start baseline</Button>
         </>}
         {data.status === 'approved' && <>
           <p className="mt-2 text-sm">Frozen. Complete the client context if anything is missing, then start.</p>
@@ -298,6 +311,7 @@ function BaselineSetupDialog({ leadId, open, onOpenChange, onChanged }: { leadId
           </div>
         </>}
         {started && <p className="mt-2 text-sm">{paidBaselineStatusLabel(data.status)}. The frozen {BASELINE_QUESTIONS} can no longer change — the re-measure repeats them exactly. The hub tracks the runs.</p>}
+        {started && <MeasurementHealthPanel data={data} leadId={leadId} onChanged={accept}/>}
         {(data.meta?.corrections?.length ?? 0) > 0 && <p className="mt-2 text-xs text-muted-foreground">Correction history: {data.meta!.corrections!.map((c) => `${new Date(c.at).toLocaleDateString('en-GB')} — ${c.reason}`).join(' · ')}</p>}
       </section>
     </div>}

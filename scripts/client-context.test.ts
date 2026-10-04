@@ -39,7 +39,10 @@ const checks: Array<[string, boolean]> = [
   ['onboarding location wins', context.primary_location === 'Canterbury'],
   /* 2026-09-23: the crawl no longer MERGES into what the baseline measures — it is returned as
      detected suggestions (src/lib/clientContext.ts). These three assertions changed on purpose. */
-  ['approved services are preserved and deduplicated; the crawl is not merged', context.services.join('|') === 'Locksmithing|Emergency entry|Key cutting'],
+  /* 2026-10-04 (fix/04, Session C C-08): the client's own list WINS WHOLE — the lead's "Key cutting" is no
+     longer concatenated in; it comes back as an unconfirmed entry for Paul to ask about. Changed on purpose. */
+  ['approved services are the client list alone; the lead list and the crawl are not merged', context.services.join('|') === 'Locksmithing|Emergency entry'],
+  ['what only the lead recorded is returned as unconfirmed, never measured', context.unconfirmed_services.join('|') === 'Key cutting' && context.services_client_confirmed === true],
   ['approved service areas are preserved and deduplicated; the crawl is not merged', context.service_areas.join('|') === 'Canterbury|Whitstable'],
   ['crawl-only services and towns come back as detected suggestions', context.detected_services.join('|') === 'UPVC door repair' && context.detected_areas.join('|') === 'Herne Bay|Faversham'],
   ['category uses lead data', context.business_category === 'Locksmiths'],

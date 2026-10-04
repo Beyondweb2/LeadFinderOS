@@ -18,6 +18,7 @@ import { articleTrade } from './templateVars.ts';
    render-audit-report and apply-seo-paste, and Deno cannot resolve the Vite alias. Both are
    dependency-free constant files, so nothing heavy joins those bundles. */
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, REMEASURE_CLAIM_SENTENCE, offerSummaryFor } from './findableOffer.ts';
+import { BASELINE_QUESTIONS } from './auditQuestionCounts.ts';
 import type { CrawlFault } from './crawlCheck.ts';
 import type { EvidenceKind, SiteEvidenceFinding } from './siteEvidence.ts';
 import { cleanAnswerText, isJunkAnswer, isMapCardAnswer } from './answerText.ts';
@@ -2287,7 +2288,7 @@ ${seoSlot}
 
     <!-- WHAT WE DO (solution) &mdash; the confident turn from problem to fix -->
     <!-- PITCH: hidden in the welcome pack (d.hidePitch) -->
-${d.hidePitch || d.measuring || quick || quickIncomplete ? "" : `
+${d.hidePitch || d.paidSummary || d.measuring || quick || quickIncomplete ? "" : `
     <section class="dowe">
       <div class="sec-eyebrow">The fix</div>
       <!-- The title names the ARGUMENT this section makes, not an inventory. It read "Here's what we
@@ -2387,8 +2388,11 @@ ${d.hidePitch || d.measuring || quick || quickIncomplete ? "" : `
          number here goes stale the moment the cut changes and nobody is standing next to it to
          notice. The length IS claimed on findable.live ("under a minute"), which is true at 49s and
          sits directly above the player, where a re-cut cannot be made without seeing it. -->
-${d.hidePitch || quickIncomplete ? "" : `
-    <!-- 🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
+${d.hidePitch || d.paidSummary || quickIncomplete ? "" : `
+    <!-- ⛔ NOT ON A PAID CLIENT'S OWN BASELINE / RE-MEASURE (2026-10-04, Session C C-34): "Want to be one
+         of the names? Request a call" was printed to clients who had already paid. paidSummary is set
+         only for those documents (reportKind.ts), so every prospect report is unchanged.
+         🔴 STRIPPED BACK TO A HEADING, ONE LINE AND TWO BUTTONS (2026-09-02, Paul's call). What
          was here: "Ready to get started?", three paragraphs, Email us / WhatsApp us / Who we are,
          and directly below it the whole founder-offer block - "first 10 at £49.99", "normally £99",
          a What's included list, the guarantee box and week-eight references. All of it described a
@@ -2414,8 +2418,12 @@ ${d.hidePitch || quickIncomplete ? "" : `
       <a class="cta-site" href="${esc(REPORT_SITE_URL)}" target="_blank" rel="noopener noreferrer">See how it works at findable.live &rarr;</a>
       <!-- ⛔ THE REFUND SENTENCE IS REMEASURE_CLAIM_SENTENCE, VERBATIM/BYTE-LOCKED (Paul, 2026-09-16).
            The layout changed; the sentence does not. Not the shortened mockup version, not paraphrased
-           — it is the promise the checkout and the refunds page carry, and it must read identically. -->
-      <p class="cta-promise">${esc(REMEASURE_CLAIM_SENTENCE)}</p>
+           — it is the promise the checkout and the refunds page carry, and it must read identically.
+           ⛔ AND IT IS NOT JUDGED ON THIS PAGE'S NUMBER (2026-10-04, Session C C-06 / M-026). On a quick
+           check the sentence sat directly under a 3-question score, so "that number" read as THIS
+           figure. The line in front says which number the guarantee is judged on; the locked sentence
+           follows it unchanged. -->
+      <p class="cta-promise">Your guarantee is judged on a full ${BASELINE_QUESTIONS}-question measurement we run after you join, not on this quick check. ${esc(REMEASURE_CLAIM_SENTENCE)}</p>
     </section>`}
 
     <footer class="site-foot">
@@ -2428,7 +2436,11 @@ ${d.hidePitch || quickIncomplete ? "" : `
         <div><span class="foot-k">Report date</span><span class="foot-v">${esc(d.generatedAtLabel)}</span></div>
         <div><span class="foot-k">Measured on</span><span class="foot-v">${d.hook || quickIncomplete ? 'ChatGPT &amp; Google AI' : 'ChatGPT &amp; Gemini'}</span></div>
       </div>
-      <div class="foot-note">A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after.</div>
+      <!-- ⛔ "the same questions" is true of a paid baseline (the re-measure replays it word for word),
+           NOT of a prospect's quick check — the guarantee is judged on the full measurement (C-06). -->
+      <div class="foot-note">${d.paidSummary
+        ? 'A snapshot of where you stand today. After we make changes we ask the same questions again to show your before and after.'
+        : 'A snapshot of where you stand today. If you join, we first measure a full ' + BASELINE_QUESTIONS + ' questions, then ask those again after the work to show your before and after.'}</div>
     </footer>
   </div>
 ${questionDetail}

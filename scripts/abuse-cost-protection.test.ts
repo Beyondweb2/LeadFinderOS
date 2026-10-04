@@ -131,7 +131,9 @@ console.log("\n── the guard's placement ──");
 console.log("\n── the pause modes reach the background work ──");
 {
   const aq = read("supabase/functions/process-ai-audit-queue/index.ts");
-  ok(/if \(candidateIds\.length < START_BATCH && tickMode === "running"\)/.test(aq), "audit queue: under the prospecting pause only measurement (baseline-priority) rows start");
+  /* 2026-10-04 (fix/04): the candidate selection is one ranked scan now (guarantee → other measurement →
+     prospecting); prospecting (rank 2) is offered only while the mode is `running`. */
+  ok(/\.filter\(\(c\) => c\.rank < 2 \|\| tickMode === "running"\)/.test(aq), "audit queue: under the prospecting pause only measurement (baseline-priority) rows start");
   ok(/if \(tickMode === "all_stop"\) candidateIds\.length = 0;/.test(aq), "audit queue: the emergency stop starts no new run");
   ok(aq.indexOf("PHASE A: POLL") < aq.indexOf('if (tickMode === "all_stop") candidateIds.length = 0;'), "…while runs already started are still polled (nothing stranded)");
   ok(/if \(tickMode === "all_stop"\) \{\n\s+console\.log\("\[process-ai-audit-queue\] emergency stop is on - no SEO scan this tick"\);/.test(aq), "audit queue: no SEO scan under the emergency stop");

@@ -67,8 +67,12 @@ export interface StageInput {
     website_build?: { production_url?: string | null; production_status?: string | null; qa?: { production_checked?: boolean | null } | null } | null;
   };
   onboarding: { baseline_status?: string | null } | null;
-  /** The baseline audit row, when the lead points at one (completion lives there). */
-  baselineAudit: { baseline_completed_at?: string | null } | null;
+  /** The baseline audit row, when the lead points at one (completion lives there). `baseline_error`
+   *  (2026-10-04, fix/04) is the engine's own record of a measurement that stopped — held as partial /
+   *  capped / failed, or a refused repeat — written by advanceBaseline and cleared when it moves on. */
+  baselineAudit: { baseline_completed_at?: string | null; baseline_error?: string | null } | null;
+  /** The day-28 replay audit row, when there is one: it has FROZEN only when baseline_completed_at is set. */
+  remeasureAudit?: { baseline_completed_at?: string | null; baseline_error?: string | null } | null;
   discovery: DiscoverySummary;
   route: 'build' | 'optimise' | null;
   implementedOpportunities?: number;
@@ -133,6 +137,17 @@ export function deliveryStage(i: StageInput): StageResult {
   const due = (L.remeasure_due_date ?? '').slice(0, 10);
   if (baselineDone && (L.remeasure_audit_id || (due && daysBetween(i.today, due) <= REMEASURE_STAGE_DAYS))) {
     if (L.remeasure_results_sent_at) return result('remeasure', step('done', 'Results sent', false, 'results'));
+    /* ⛔ "DONE" ONLY WHEN THE REPLAY HAS FROZEN (2026-10-04, C-20 / C-11): it used to say "Remeasure done
+       — send results" the moment the replay started. A replay that stopped needs Paul; one still
+       measuring needs nobody. A caller that does not pass the replay row keeps the old wording. */
+    if (L.remeasure_audit_id && i.remeasureAudit !== undefined) {
+      const rmErr = (i.remeasureAudit?.baseline_error ?? '').trim();
+      if (!i.remeasureAudit?.baseline_completed_at) {
+        return rmErr
+          ? result('remeasure', step('fix_remeasure', 'Re-measure stopped — open it to retry or accept', true, 'remeasure'))
+          : result('remeasure', step('wait_remeasure_run', 'Re-measure running', false, 'remeasure'));
+      }
+    }
     if (L.remeasure_audit_id) return result('remeasure', step('send_results', 'Remeasure done — send results', true, 'results'));
     return result('remeasure', step('remeasure', daysBetween(i.today, due) <= 0 ? 'Remeasure due — it runs automatically' : `Remeasure on ${due}`, false, 'remeasure'));
   }
@@ -142,6 +157,12 @@ export function deliveryStage(i: StageInput): StageResult {
     const ws = L.website_build ?? null;
     if (i.route === 'build') return result('build', ws?.production_url ? step('verify_launch', 'Verify the live site', true, 'build') : step('build', 'Build website', true, 'build'));
     return result('build', step('optimise', 'Optimise their site and mark it live', true, 'build'));
+  }
+  /* ⛔ A BASELINE THAT STOPPED IS NOT "RUNNING" (2026-10-04, C-11 / M-027). The engine records why on the
+     audit (baseline_error); while it is set, the step is Paul's (it lands in Needs attention) and says
+     so. When the chain moves on the record clears and the step goes back to waiting. */
+  if ((baseline === 'starting' || baseline === 'running') && (i.baselineAudit?.baseline_error ?? '').trim()) {
+    return result('baseline', step('fix_baseline', 'Baseline stopped — open it to retry or accept', true, 'baseline'));
   }
   if (baseline === 'starting' || baseline === 'running') return result('baseline', step('wait_baseline', 'Baseline running', false, 'baseline'));
   if (baseline === 'approved') return result('baseline', step('run_baseline', 'Run baseline', true, 'baseline'));

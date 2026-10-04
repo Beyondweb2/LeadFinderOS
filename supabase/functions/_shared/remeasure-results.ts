@@ -102,9 +102,22 @@ export async function loadRemeasureBundle(service: Client, remeasureAuditId: str
 
   const runsOf = async (auditId: string) => ((await service.from("ai_audit_runs").select("id, status, created_at").eq("audit_id", auditId).order("run_number", { ascending: true })).data ?? []) as Array<{ id: string; status: string | null; created_at: string }>;
   const rowsOf = async (auditId: string) => ((await service.from("ai_audit_queue").select("run_id, question, engines, status, result").eq("audit_id", auditId).order("id", { ascending: true })).data ?? []) as QueueRowLite[];
-  const [baselineRuns, replayRuns, baselineRows, replayRows] = await Promise.all([
+  /* ⛔ ONLY THE FROZEN RUNS (2026-10-04, C-12). Each side is read from the runs its frozen snapshot
+     lists (ai_audits.baseline.runs) — never "every run of the audit": a retry or an extra run would
+     otherwise change a before side that was settled on day 0. A side with no snapshot yet is read
+     whole, exactly as before (the sender refuses an unfrozen replay below anyway). */
+  const snapRunsOf = async (auditId: string): Promise<string[] | null> => {
+    const { data } = await service.from("ai_audits").select("baseline").eq("id", auditId).maybeSingle();
+    const runs = ((data as { baseline?: { runs?: unknown } | null } | null)?.baseline?.runs);
+    return Array.isArray(runs) && runs.every((r) => typeof r === "string") && runs.length ? runs as string[] : null;
+  };
+  const [baselineRuns, replayRuns, baselineRowsAll, replayRowsAll, baselineFrozenRuns, replayFrozenRuns] = await Promise.all([
     runsOf(lead.baseline_audit_id), runsOf(audit.id), rowsOf(lead.baseline_audit_id), rowsOf(audit.id),
+    snapRunsOf(lead.baseline_audit_id), snapRunsOf(audit.id),
   ]);
+  const onlyRuns = (rows: QueueRowLite[], ids: string[] | null) => (ids ? rows.filter((r) => ids.includes(String(r.run_id ?? ""))) : rows);
+  const baselineRows = onlyRuns(baselineRowsAll, baselineFrozenRuns);
+  const replayRows = onlyRuns(replayRowsAll, replayFrozenRuns);
   const businessName = (audit.business_name ?? lead.business_name ?? "").trim();
   /* Trade + town make the ANSWER TEXT the ruler on both sides (namedSignal.ts) — the same context
      the internal baseline view and the client report use, so the refund is judged on one measure. */
@@ -139,22 +152,32 @@ export type RemeasureSendOutcome =
   | { kind: "held"; reason: string }
   | { kind: "skipped"; reason: string };
 
-export async function maybeSendRemeasureResults(service: Client, auditId: string): Promise<RemeasureSendOutcome> {
+/* opts.quietHold (2026-10-04): the SWEEP calls this every few minutes for every unsent replay, so a
+   hold must not email Paul each time. Holds are always recorded (once an hour per lead); the operator
+   email goes only when that record is NEW and quietHold is off — i.e. the first time, from the
+   finaliser or Paul's own "Send results" press. */
+export async function maybeSendRemeasureResults(service: Client, auditId: string, opts: { quietHold?: boolean } = {}): Promise<RemeasureSendOutcome> {
   const { bundle, reason } = await loadRemeasureBundle(service, auditId);
   if (!bundle) return { kind: "skipped", reason: reason ?? "not a pointed-at replay" };
   const { audit, lead, replayRuns, comparison, town } = bundle;
   if (lead.remeasure_results_sent_at) return { kind: "skipped", reason: `already sent ${lead.remeasure_results_sent_at}` };
-  /* ⛔ FINDABLE ENDED THIS SERVICE over a client-side domain / authority / IP dispute (Paul, 2026-09-28):
-     the money-back guarantee does not cover that interruption, so no "the guarantee applies" email goes. */
-  if (lead.service_terminated_at) return { kind: "skipped", reason: `service terminated ${lead.service_terminated_at} (domain / authority dispute)` };
+  /* ⛔ FINDABLE ENDED THIS SERVICE (a dispute, or the client ended early): no "the guarantee applies"
+     email goes, and nothing is re-measured for them either (fireDueRemeasures). */
+  if (lead.service_terminated_at) return { kind: "skipped", reason: `service terminated ${lead.service_terminated_at}` };
   /* All runs settled? A run still pending/running means the next tick will look again. */
-  const unsettled = replayRuns.filter((r) => r.status === "pending" || r.status === "running").length;
+  const unsettled = replayRuns.filter((r) => r.status === "pending" || r.status === "running" || r.status === "processing").length;
   if (unsettled > 0) return { kind: "skipped", reason: `${unsettled} replay run(s) still in flight` };
+  /* ⛔ THE REPLAY MUST HAVE FROZEN (2026-10-04, C-11): its runs finishing is not success. A replay
+     held as partial / capped / failed by the completion rule (advanceBaseline) has no snapshot, and
+     a document that starts a refund clock must not rest on it. */
+  if (!audit.baseline_completed_at) return { kind: "skipped", reason: "the replay has not frozen — it is still measuring, or held for a retry or Paul's decision" };
 
   const decision = remeasureResultsDecision({ replayRuns, replayTarget: audit.baseline_target_runs, comparison, terms: bundle.terms });
   const businessName = (audit.business_name ?? lead.business_name ?? "your business").trim();
   if (!decision.send) {
-    await reportOnceAnHour(service, "remeasure_results_held", lead.id, decision.reason, { remeasure_audit_id: audit.id, kind: decision.kind, matched: comparison.matchedCount, before: comparison.before, after: comparison.after, movement: comparison.movement });
+    const fresh = await reportOnceAnHour(service, "remeasure_results_held", lead.id, decision.reason, { remeasure_audit_id: audit.id, kind: decision.kind, matched: comparison.matchedCount, before: comparison.before, after: comparison.after, movement: comparison.movement },
+      opts.quietHold ? 24 * 60 * 60_000 : 60 * 60_000);
+    if (!fresh || opts.quietHold) return { kind: "held", reason: decision.reason };
     /* A terms refusal gets its OWN subject. It is not a transient hold that clears itself next
        tick: it means this client is not on the offer the document describes, and only Paul can
        answer it. Filed under the same subject as a thin question, it would be skimmed past. */
@@ -274,4 +297,36 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
 
   await service.from("client_error_reports").insert({ error_id: "remeasure_results_sent", context: { lead_id: lead.id, remeasure_audit_id: audit.id, to, provider_message_id: providerMessageId, at: nowIso, went_up: copy.wentUp, subscription } });
   return { kind: "sent", to, providerMessageId };
+}
+
+/* ══ THE HELD-RESULTS SWEEP (2026-10-04, Session C C-10) ════════════════════════════════════════════
+   🔴 maybeSendRemeasureResults had ONE caller — the moment a replay run finished. Every hold was
+   therefore final: a result held while the copy was unapproved (or for any other reason) was never
+   looked at again, even after the reason went away, and without the stamp the client's /results link
+   answers "unavailable".
+   ⛔ This sweep re-offers every unsent, frozen, pointed-at replay to the SAME claim-first sender, so the
+   once-only stamp, the copy gate, the terms gate and the ended-client refusal all still apply. Quiet:
+   a hold that is already recorded is not emailed again. Bounded per call. */
+export const RESULTS_SWEEP_EVERY_MS = 15 * 60_000;
+/** Due on the first tick of each RESULTS_SWEEP_EVERY_MS window (each tick is a fresh isolate). */
+export const resultsSweepDue = (nowMs: number, tickMs = 30_000) => (nowMs % RESULTS_SWEEP_EVERY_MS) < tickMs;
+
+export async function sweepUnsentRemeasureResults(service: Client, limit = 5): Promise<Array<{ auditId: string; outcome: RemeasureSendOutcome }>> {
+  const { data, error } = await service.from("outreach_leads")
+    .select("id, remeasure_audit_id")
+    .not("remeasure_audit_id", "is", null)
+    .filter("remeasure_results_sent_at", "is", null)
+    .filter("service_terminated_at", "is", null)
+    .order("remeasure_due_date", { ascending: true })
+    .limit(limit);
+  if (error) { console.warn("[remeasure-results] sweep read skipped:", error.message); return []; }
+  const out: Array<{ auditId: string; outcome: RemeasureSendOutcome }> = [];
+  for (const l of (data ?? []) as Array<{ id: string; remeasure_audit_id: string }>) {
+    try {
+      out.push({ auditId: l.remeasure_audit_id, outcome: await maybeSendRemeasureResults(service, l.remeasure_audit_id, { quietHold: true }) });
+    } catch (e) {
+      console.error(`[remeasure-results] sweep error for lead ${l.id}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return out;
 }
