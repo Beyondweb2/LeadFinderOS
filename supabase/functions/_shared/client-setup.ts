@@ -9,7 +9,8 @@
 import { handoffReadiness, type HandoffLead, type HandoffOnboarding, type HandoffReadiness } from "../../../src/lib/handoffReadiness.ts";
 import { deliveryStage, discoverySummary, type StageResult } from "../../../src/lib/deliveryStage.ts";
 import { handoffComplete, handoffMissing, salesHandoffApplies, type HandoffApplies, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
-import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { serviceRouteForTotal, serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
+import { isFirstContactChannel, type FirstContactChannel } from "../../../src/lib/firstContact.ts";
 import { londonDay } from "../../../src/lib/reportingPeriod.ts";
 import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
 
@@ -21,12 +22,14 @@ type Row = Record<string, unknown>;
 export const SETUP_LEAD_COLUMNS =
   "id,business_name,phone,email,website,amount_paid,payment_date,status,services_included,service_areas,website_control,delivery_checklist," +
   "service_terminated_at,service_termination_reason,sold_by_user_id,sold_at,assigned_to_user_id,baseline_audit_id,remeasure_due_date,remeasure_audit_id," +
-  "remeasure_results_sent_at,website_build,sales_handoff,delivery_submitted_at,delivery_submitted_by";
+  "remeasure_results_sent_at,website_build,sales_handoff,delivery_submitted_at,delivery_submitted_by," +
+  /* pre-sales fix 03: the route they PAID on (readiness is route-aware) and Paul's recorded first contact. */
+  "contract_total_payments,client_contacted_at,client_contacted_via";
 
 /** Onboarding columns the checklist + stage read. */
 export const SETUP_ONBOARDING_COLUMNS =
   "id,lead_id,status,updated_at,source,services,services_list,areas_list,areas_wanted,business_website,confirmed_phone,contact_email," +
-  "contact_name,confirmed_location,website_route,website_manager,domain_status,gbp_status,gbp_exists,plan_tier,website_addon," +
+  "contact_name,confirmed_location,website_route,website_manager,website_platform,domain_status,gbp_status,gbp_exists,plan_tier,website_addon," +
   "baseline_status,baseline_discovery,quick_close," +
   "domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed";
 
@@ -106,7 +109,9 @@ export async function loadClientSetups(service: Service, leads: Row[], nowMs = D
       onboarding: o as { baseline_status?: string | null } | null,
       baselineAudit: l.baseline_audit_id ? (auditById.get(String(l.baseline_audit_id)) as { baseline_completed_at?: string | null } | undefined) ?? null : null,
       discovery: discoverySummary(o?.baseline_discovery, dAudit ? runStatus.get(dAudit) ?? [] : []),
-      route: serviceRouteFromRow(o as never),
+      /* The route they PAID on first (the checkout's stamp), else the onboarding row's — the same order
+         the readiness rule uses, so the stage label and the checklist cannot disagree. */
+      route: serviceRouteForTotal(l.contract_total_payments) ?? serviceRouteFromRow(o as never),
       today,
     });
     out.set(id, { readiness, stage, onboarding: o, handoffApplies: applies, sellerId, crawlAgeDays });
@@ -128,7 +133,7 @@ export async function loadClientSetup(service: Service, leadId: string): Promise
    system / client / sales / admin; actor_user_id is the person when there is one. A one-per-lead event
    (payment_received, launched) is guarded by a partial unique index: a retry's 23505 is "already there". */
 export type LeadEventKind =
-  | "payment_received" | "handoff_saved" | "onboarding_submitted" | "delivery_submitted"
+  | "payment_received" | "handoff_saved" | "onboarding_submitted" | "delivery_submitted" | "contact_logged"
   | "discovery_run" | "baseline_approved" | "baseline_run" | "build_started" | "launched";
 export async function recordLeadEvent(
   service: Service, leadId: string, kind: LeadEventKind,
@@ -193,4 +198,35 @@ export async function submitForDelivery(
   }
   const after = await loadClientSetup(service, leadId);
   return { ok: true, already: false, setup: after?.setup ?? setup };
+}
+
+/* ══ FIRST CONTACT (pre-sales fix 03, M-018; src/lib/firstContact.ts) ═════════════════════════════════
+   Paul records that he introduced himself and sent the setup link. Written ONCE (a conditional write
+   only one caller can win), never for a client that is ended or refunded, and recorded in History as a
+   contact_logged event (an existing lead_activity kind, so no constraint change). */
+export type FirstContactOutcome =
+  | { ok: true; already: boolean; at: string }
+  | { ok: false; error: "bad_channel" | "not_found" | "closed" | "not_saved"; detail: string };
+export async function recordFirstContact(
+  service: Service, leadId: string, actorId: string, via: unknown, note: string | null, nowIso = new Date().toISOString(),
+): Promise<FirstContactOutcome> {
+  if (!isFirstContactChannel(via)) return { ok: false, error: "bad_channel", detail: "Say how you contacted them: phone, email, WhatsApp or other." };
+  const channel: FirstContactChannel = via;
+  const { data: lead, error } = await service.from("outreach_leads")
+    .select("id,client_contacted_at,service_terminated_at,status").eq("id", leadId).maybeSingle();
+  if (error || !lead) return { ok: false, error: "not_found", detail: "This client could not be found." };
+  const L = lead as { client_contacted_at?: string | null; service_terminated_at?: string | null; status?: string | null };
+  if (L.client_contacted_at) return { ok: true, already: true, at: L.client_contacted_at };
+  if (L.service_terminated_at || L.status === "refunded") return { ok: false, error: "closed", detail: "This client’s engagement has ended — there is no first contact to record." };
+  const { data: won, error: upErr } = await service.from("outreach_leads")
+    .update({ client_contacted_at: nowIso, client_contacted_by: actorId, client_contacted_via: channel })
+    .eq("id", leadId).is("client_contacted_at", null).select("id");
+  if (upErr) return { ok: false, error: "not_saved", detail: "Not saved — try again." };
+  if (!Array.isArray(won) || !won.length) return { ok: true, already: true, at: nowIso };
+  await recordLeadEvent(service, leadId, "contact_logged", {
+    actor: actorId, source: "admin",
+    body: `First contact made (${channel === "whatsapp" ? "WhatsApp" : channel}) — introduced and sent the setup link${note ? ` · ${note.slice(0, 300)}` : ""}`,
+    data: { first_contact: true, via: channel },
+  });
+  return { ok: true, already: false, at: nowIso };
 }

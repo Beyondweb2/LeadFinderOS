@@ -42,7 +42,7 @@ ok(/check \(link is null or link like '\/%'\)/.test(mig), "links are in-app path
 console.log("\n── money ──");
 const w = read("supabase/functions/_shared/payment-ledger.ts");
 ok(/if \(row\.source !== "backfill"\) await notifyMoney/.test(w), "a backfill never announces old payments");
-ok(/commissionLines\(\{ ledger, payouts: \[\], isCommissionable/.test(w), "the commission amount comes from the commission rule, not SQL");
+ok(/commissionLines\(\{\s*ledger, payouts: \[\], isCommissionable/.test(w), "the commission amount comes from the commission rule, not SQL");
 ok(/dedupe_key: `commission:\$\{me\.id\}`/.test(w) && /ignoreDuplicates: true/.test(w), "money notifications are idempotent too");
 
 console.log("\n── the bell ──");

@@ -185,10 +185,21 @@ export function answersFromRecords(row: Row, lead: Row): OnboardingAnswers {
   const manager = str(r.website_manager);
   const route = str(r.website_route);
   const addon = typeof r.website_addon === 'boolean' ? r.website_addon : null;
-  const agency: AgencyManages | null = manager === 'web_company' ? 'yes' : manager === 'direct_access' ? 'no' : null;
+  /* ⛔ QUICK CLOSE'S TWO ANSWERS ARE READ BACK TOO (pre-sales fix 03, B-06). Quick Close writes
+     website_manager 'owner_only' (they run it themselves but cannot hand over access) and, for "no
+     website", website_platform 'no_website' with no manager. Neither used to map to a branch, so the
+     form opened with the site questions blank — and its save then nulled the Build consents taken on
+     the call. Both are the customer flow's "No, I look after it myself"; no website is "I haven't got
+     a website". */
+  const noWebsite = !manager && str(r.website_platform) === 'no_website';
+  const agency: AgencyManages | null = manager === 'web_company' ? 'yes'
+    : manager === 'direct_access' || manager === 'owner_only' || noWebsite ? 'no' : null;
   const keeps = route === 'optimise_existing' ? true : route ? false : addon === false ? true : addon === true ? false : null;
   const access: CanGetAccess | null = agency === 'yes' && keeps !== null ? (keeps ? 'yes' : 'no') : null;
   const self: SelfSiteChoice | null = agency !== 'no' ? null
+    : noWebsite && !route ? 'none'
+    /* owner_only cannot give access, so it is never read as "Yes, I can give you access" by default. */
+    : manager === 'owner_only' && !route && addon !== true ? null
     : route === 'optimise_existing' || (!route && addon === false) ? 'access'
     : route === 'rebuild_existing' ? 'rebuild'
     : route === 'new_site' ? 'none'
@@ -288,6 +299,79 @@ export function buildOnboardingPatch(a: OnboardingAnswers, operatorId: string, n
     operator_edited_by: operatorId,
     updated_at: nowIso,
   };
+}
+
+/* ══ PARTIAL UPDATES: AN EDIT CHANGES ONLY WHAT THE OPERATOR CHANGED (pre-sales fix 03, M-020 / B-06) ══
+   🔴 Paul's routine "Fix in onboarding" (add a service, a town) rewrote EVERY column from the form, so any
+   stored value the form could not show came back null — the Build consents taken on the call, a
+   website_manager of owner_only, a domain answer. Proved live: authority_confirmed, dns_permission and
+   materials_confirmed went true → null and the client flipped to DOMAIN / AGENCY ISSUE.
+   ⛔ So a save of an EXISTING row writes only the column groups whose answers differ from what the row
+   already says (answersFromRecords(row, null) — the row alone, so a value the form pre-filled from the
+   lead still counts as new and is written, as before). Provenance is always stamped; 'incomplete' is
+   recomputed from the merged row. A new row gets the full patch. */
+const DOMAIN_ANSWER_KEYS: (keyof OnboardingAnswers)[] = ['domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed'];
+const BRANCH_ANSWER_KEYS: (keyof OnboardingAnswers)[] = ['agency_manages', 'can_get_access', 'self_site', 'website_manager_email'];
+export const ONBOARDING_COLUMN_GROUPS: ReadonlyArray<{ answers: readonly (keyof OnboardingAnswers)[]; columns: readonly string[] }> = [
+  { answers: ['contact_name'], columns: ['contact_name'] },
+  { answers: ['contact_email'], columns: ['contact_email'] },
+  { answers: ['confirmed_phone'], columns: ['confirmed_phone'] },
+  { answers: ['business_website'], columns: ['business_website'] },
+  { answers: ['business_name'], columns: ['business_name'] },
+  { answers: ['confirmed_location'], columns: ['confirmed_location'] },
+  { answers: ['domain_status'], columns: ['domain_status'] },
+  { answers: BRANCH_ANSWER_KEYS, columns: ['website_manager', 'website_manager_email', 'website_route'] },
+  { answers: ['gbp_consent'], columns: ['gbp_consent'] },
+  { answers: ['services'], columns: ['services', 'services_list'] },
+  { answers: ['areas'], columns: ['areas_list'] },
+  /* The domain answers live on the new-site branch, so a change to the branch or the domain question
+     re-decides them; nothing else touches them. */
+  { answers: [...BRANCH_ANSWER_KEYS, 'domain_status', ...DOMAIN_ANSWER_KEYS], columns: ['domain_owned', 'domain_access', 'domain_third_party', 'site_rights', 'authority_confirmed', 'dns_permission', 'materials_confirmed'] },
+];
+
+/** The patch for an operator save: the full patch for a new row; for an existing row, only the column
+ *  groups whose answers changed (see above), plus provenance and the recomputed 'incomplete'. */
+export function changedOnboardingPatch(a: OnboardingAnswers, existingRow: Row, operatorId: string, nowIso: string): Record<string, unknown> {
+  const full = buildOnboardingPatch(a, operatorId, nowIso);
+  if (!existingRow) return full;
+  /* Both sides compared as the form SENDS them: an answer hidden by the branch is cleared on the way out
+     (ManualOnboardingDialog), so the stored side is cleared the same way before comparing. */
+  const before = visibleAnswers(answersFromRecords(existingRow, null));
+  a = visibleAnswers(a);
+  const same = (k: keyof OnboardingAnswers) => JSON.stringify(a[k]) === JSON.stringify(before[k]);
+  const out: Record<string, unknown> = {};
+  for (const g of ONBOARDING_COLUMN_GROUPS) {
+    if (g.answers.every(same)) continue;
+    for (const c of g.columns) if (c in full) out[c] = full[c];
+  }
+  const merged = { ...(existingRow as Record<string, unknown>), ...out };
+  out.incomplete = missingQuestionnaireFields(merged as never).length > 0;
+  out.operator_edited_at = nowIso;
+  out.operator_edited_by = operatorId;
+  out.updated_at = nowIso;
+  return out;
+}
+
+/** The answers as the form sends them: the branch that is not showing is cleared (the dialog's rule). */
+export function visibleAnswers(a: OnboardingAnswers): OnboardingAnswers {
+  return {
+    ...a,
+    can_get_access: a.agency_manages === 'yes' ? a.can_get_access : null,
+    self_site: a.agency_manages === 'no' ? a.self_site : null,
+    website_manager_email: a.agency_manages === 'yes' && a.can_get_access === 'yes' ? a.website_manager_email : '',
+  };
+}
+
+/** The handoff confirmations a patch would take away (stored true → written as anything else). The
+ *  server refuses such a save unless the operator explicitly confirms it. */
+export const CONSENT_COLUMNS: Readonly<Record<string, string>> = {
+  authority_confirmed: 'authority to have the website replaced or moved',
+  dns_permission: 'permission to connect the domain',
+  materials_confirmed: 'rights to the material they supply',
+};
+export function consentsCleared(existingRow: Row, patch: Record<string, unknown>): string[] {
+  const r = existingRow ?? {};
+  return Object.keys(CONSENT_COLUMNS).filter((c) => r[c] === true && c in patch && patch[c] !== true).map((c) => CONSENT_COLUMNS[c]);
 }
 
 function domainPatch(a: OnboardingAnswers, siteAccess: string | null): Record<string, unknown> {

@@ -33,7 +33,7 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' :
 console.log('-- the branch reads the EMAIL record, not the money --');
 /* 2026-10-02: the gate is the claim, which STARTS from the trace answer — so the email record still
    decides first, and the claim only narrows it to one delivery. */
-ok(/let claimedEmail = !paidEmailAlreadySent;/.test(src) && /if \(claimedEmail\) \{/.test(src),
+ok(/let claimedEmail = !paidEmailAlreadySent(?: &&[^;]*)?;/.test(src) && /if \(claimedEmail\) \{/.test(src),
    'the send is gated on paidEmailAlreadySent');
 /* 🔴 THE REGRESSION IN ONE LINE. If this ever reads `if (!alreadyPaid)` again, a crash between the
    money write and the Resend call silently loses the notification for ever. */

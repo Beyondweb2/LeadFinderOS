@@ -99,14 +99,19 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
     if (!leadId) return;
     const [{ data: rows }, { data: lead }, { data: owner }] = await Promise.all([
       service.from("payment_ledger").select("id, lead_id, kind, status, amount_gbp, occurred_at, stripe_object_id, stripe_payment_intent_id, stripe_charge_id, stripe_invoice_id, sold_by_user_id, commission_rule, commission_month_start, commission_month_seq, commission_rate").eq("lead_id", leadId),
-      service.from("outreach_leads").select("business_name, sold_by_user_id").eq("id", leadId).maybeSingle(),
+      service.from("outreach_leads").select("business_name, sold_by_user_id, service_terminated_at, status").eq("id", leadId).maybeSingle(),
       service.from("team_members").select("user_id").eq("is_book_owner", true).maybeSingle(),
     ]);
     const ledger = ((rows ?? []) as LedgerRow[]).map((r) => ({ ...r, amount_gbp: Number(r.amount_gbp) }));
     const seller = ledger.find((r) => r.sold_by_user_id)?.sold_by_user_id ?? (lead as { sold_by_user_id?: string | null } | null)?.sold_by_user_id ?? null;
     let sellerIsSales = false;
     if (seller) { const { data: r } = await service.from("user_roles").select("role").eq("user_id", seller).eq("role", "sales").maybeSingle(); sellerIsSales = !!r; }
-    const { lines } = commissionLines({ ledger, payouts: [], isCommissionable: (u) => !!u && u === seller && sellerIsSales });
+    /* The client's end decides too (pre-sales fix 03): a payment after it never announces commission. */
+    const L = lead as { service_terminated_at?: string | null; status?: string | null } | null;
+    const { lines } = commissionLines({
+      ledger, payouts: [], isCommissionable: (u) => !!u && u === seller && sellerIsSales,
+      clientStateOf: new Map([[leadId, { endedAt: L?.service_terminated_at ?? null, refunded: L?.status === "refunded" }]]),
+    });
     const me = ledger.find((r) => r.kind === kind && r.stripe_object_id === objectId);
     if (!me) return;
     const line = lines.find((l) => l.id === (kind === "refund" || kind === "chargeback" ? `rev:${me.id}` : `pay:${me.id}`));

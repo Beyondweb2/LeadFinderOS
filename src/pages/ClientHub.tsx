@@ -327,6 +327,8 @@ const STEPS = ['Hook Audit', 'Discovery', 'Recommendation', 'Review', 'Freeze + 
    ⛔ Read and set through paid-client-hub only — the agreement tables are server-only. */
 type AgreementView = {
   url: string | null; route: 'build' | 'optimise' | null; route_source: 'set' | 'checkout' | null;
+  /* pre-sales fix 03 (src/lib/agreementRoute.ts): fixed once they paid on a route or accepted it. */
+  route_locked?: boolean; route_lock_reason?: string | null;
   last_sent_at: string | null; last_sent_to: string | null;
   acceptances: Array<{ method: string; accepted_at: string; typed_name: string | null; typed_role: string | null; email: string | null; agreement_version: string }>;
 };
@@ -381,7 +383,7 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
       {!ended && <><div className="flex flex-wrap items-center gap-2 pt-1">
         <span className="text-sm text-muted-foreground">Service:</span>
         {(['build', 'optimise'] as const).map((r) => (
-          <Button key={r} size="sm" variant={view.route === r ? 'default' : 'outline'} disabled={!!busy || (!!signed && view.route !== r)}
+          <Button key={r} size="sm" variant={view.route === r ? 'default' : 'outline'} disabled={!!busy || ((!!signed || !!view.route_locked) && view.route !== r)}
             onClick={() => void run({ action: 'agreement_set_route', route: r }, r === 'build' ? 'Route set to Build' : 'Route set to Optimise')}>
             {r === 'build' ? 'Build' : 'Optimise'}
           </Button>
@@ -389,6 +391,7 @@ function AgreementStage({ lead, ended = false }: { lead: AnyRecord; ended?: bool
         {!view.route && <span className="text-xs text-amber-600">Set the route first: the agreement page will not open until it is set.</span>}
         {!view.route && <p className="w-full text-xs text-muted-foreground">Choosing Build or Optimise puts this client on the current agreement (£99 to start, then £99 a month, 12 or 6 payments). Only choose it for a client on those terms; until then their pack and agreement page show no prices.</p>}
         {view.route_source === 'checkout' && <span className="text-xs text-muted-foreground">(from their checkout)</span>}
+        {view.route_locked && view.route_lock_reason && <p className="w-full text-xs text-muted-foreground">{view.route_lock_reason}</p>}
       </div>
       {view.url && <div className="flex flex-wrap gap-2 pt-1">
         <Button size="sm" variant="outline" onClick={() => { void copy(view.url!); toast({ title: 'Agreement link copied' }); }}><Clipboard className="mr-1 h-4 w-4"/>Copy agreement link</Button>

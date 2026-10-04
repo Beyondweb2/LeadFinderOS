@@ -175,11 +175,11 @@ ok(resolvePaidRoute({ service_route: 'optimise', total_payments: '12' }, 'optimi
 ok(resolvePaidRoute({}, 'build').route === null && /created before routes existed/.test(resolvePaidRoute({}, 'build').problem ?? ''), 'a session with no route (pre-change) → no schedule, with the reason');
 const wh = code('supabase/functions/stripe-webhook/index.ts');
 ok(/const paid = resolvePaidRoute\(s\.metadata \?\? null, rowReadOk \? rowRoute : undefined\)/.test(wh), 'the webhook resolves the route from the session + row');
-ok(/createDelayedSubscription\([\s\S]{0,400}paid\.route,\s*\)/.test(wh), 'and creates the subscription for THAT route');
+ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
 ok(/\.update\(\{ contract_total_payments: totalPaymentsFor\(paid\.route\) \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
 ok(/NO MONTHLY SCHEDULE WAS CREATED/.test(wh), 'a payment with no schedule says so in Paul\'s PAID email');
 ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: totalPaymentsFor'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');
-ok(/mustWrite\(\s*"outreach_leads",\s*\{\s*status: "payment_received"/.test(wh), 'the payment itself is still the must-write');
+ok(/establishLeadPayment\(service, findableLeadId/.test(wh) && /throw e;/.test(wh), 'the payment itself is still a must-write (conditional since pre-sales fix 03; a missing row still throws)');
 ok(/charge\.refunded|refund/.test(wh) && /charge\.dispute/.test(wh), 'refund and dispute handling is still in the webhook');
 
 console.log('── 8b, 9b, 10. COMMISSION: SAME RULE, NEVER PROJECTED PAST THE CONTRACT ──');
