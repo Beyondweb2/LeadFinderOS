@@ -93,6 +93,6 @@ grant all on public.sales_check_items to service_role;
 
 -- ── The rep's daily allowance of fresh checks (src/lib/protectionLimits.ts DEFAULT_PROTECTION_LIMITS) ─
 update public.protection_settings
-   set limits = jsonb_set(limits, '{actions,sales_check}', '{"paid": true, "per_day": 40}'::jsonb, true),
+   set limits = jsonb_set(limits, '{actions,sales_check}', '{"paid": true, "per_day": 20}'::jsonb, true),
        updated_at = now()
  where id = 1 and not (limits -> 'actions' ? 'sales_check');

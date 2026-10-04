@@ -8,7 +8,7 @@
    counted, not assumed. Plus the pure rules (src/lib/salesCheck.ts), the import-closure sweep (no sender
    reachable), and the wiring of the function, the migration and the screens.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { FakeDb } from './fake-supabase.ts';
 import {
@@ -24,8 +24,11 @@ import { CLIENT_STATUSES } from '../src/lib/roleRules.ts';
 import { DEFAULT_PROTECTION_LIMITS, GUARD_ACTIONS, validateLimits, withDefaultActions } from '../src/lib/protectionLimits.ts';
 import { budgetDecision, budgetPoolForPurpose, POOL_DAILY_CAP_USD, APIFY_RESERVE_PCT } from '../src/lib/auditBudget.ts';
 import { rollingSpendUsd } from '../supabase/functions/_shared/enrichment/runner.ts';
-import { buildColdCallPlaybook, callCardAudit, type PlaybookInput } from '../src/lib/coldCallPlaybook.ts';
-import { leadPermissions } from '../src/lib/access.ts';
+import { buildColdCallPlaybook, callCardAudit, STRONG_VISIBILITY_HEADLINE, type PlaybookInput } from '../src/lib/coldCallPlaybook.ts';
+import { buildReportData } from '../src/lib/auditReport.ts';
+import { initialHookStateV2, scoreHookRun } from '../src/lib/hookScore.ts';
+import { sixResultHookForbidsAbsenceCopy } from '../supabase/functions/_shared/audit-reply.ts';
+import { leadPermissions, maySetStatus } from '../src/lib/access.ts';
 
 let f = 0;
 const ok = (c: unknown, m: string) => { if (c) console.log(`  ✓ ${m}`); else { f++; console.log(`  ✗ FAIL ${m}`); } };
@@ -130,6 +133,8 @@ console.log('── the rules ──');
   ok(!normalizeLeadIds([]).ok && !normalizeLeadIds(null).ok, 'no leads → refused');
   ok(SALES_CHECK_BATCH_MAX === 20, 'the launch batch maximum is 20 (brief)');
   ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > 0, 'the per-rep allowance lives once (protectionLimits sales_check.per_day)');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 20, 'the launch allowance is 20 fresh checks per rep per day (Paul, 2026-10-04)');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === SALES_CHECK_BATCH_MAX, '…exactly one full batch a day; the per-batch maximum is unchanged');
   ok(perRepDailyAllowance(null) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY && perRepDailyAllowance({ actions: { sales_check: { per_day: 'x' } } }) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY, 'absent / malformed allowance → the default, never unlimited');
   ok(perRepDailyAllowance({ actions: { sales_check: { per_day: 0 } } }) === 0, 'Paul can set the allowance to 0 (switch off fresh checks)');
   ok([...CLIENT_STATUSES].every((s) => leadEligibility(REP_A, { id: 'x', assigned_to_user_id: REP_A, status: s, business_name: 'n', search_keyword: 't', derived_town: 'x' }).ok === false), 'every client status is refused (held equal to roleRules CLIENT_STATUSES)');
@@ -571,6 +576,59 @@ console.log('── admin overview ──');
   ok(Math.abs(rep.est_usd - 0.0331) < 1e-9 && Math.abs(rep.actual_usd - 0.0312) < 1e-9, 'estimated and ACTUAL spend (the run\'s billed Apify cost)');
   ok(o.problems.some((p) => p.reason === 'not_yours'), 'refusals are visible to the admin');
   ok(!JSON.stringify(o).match(/sk_|secret|apify_token|service_key/i), 'no secret in the overview');
+}
+
+/* ═══ 12. An audit result never sets "Not interested" (Paul, 2026-10-04) ══════════════════════ */
+console.log('── 6/6: a fact on screen, never a status change ──');
+{
+  const Q6 = ['Who are the best plumbers in Halifax, UK?', 'Can you recommend a reliable plumber in Halifax, UK?', 'Which plumbers in Halifax, UK have the best reviews?'];
+  const BIZ = 'ZZ QA Elland Drains';
+  const cell6 = (named: boolean) => ({ named, self_named: named, position: named ? 1 : null, citations: [], competitors: ['ZZ Rival Pennine Plumbing'], answer_text: named ? `${BIZ} is well reviewed, as is ZZ Rival Pennine Plumbing.` : 'Try ZZ Rival Pennine Plumbing or ZZ Rival Calder Gas Services.' });
+  const state6 = initialHookStateV2(Q6);
+  const rows6 = (grid: Array<[boolean, boolean]>) => Q6.map((q, i) => ({ id: `q${i}`, question: q, status: 'done', engines: ['chatgpt', 'gemini'], result: { chatgpt: cell6(grid[i][0]), gemini: cell6(grid[i][1]) } }));
+  const run6 = { id: 'r6', audit_id: 'a6', run_number: 1, status: 'complete', mention_rate: 1, results: { hook: state6, competitor_cleaning: { complete: true, at: 'x', attempts: 1, errors: [] } } };
+  const report6 = (grid: Array<[boolean, boolean]>) => buildReportData(rows6(grid) as never, run6 as never, { businessName: BIZ, businessType: 'plumbers', locationText: 'Halifax', specialisms: '', isAggregatorUrl: () => false, ownWebsite: 'https://zz-qa-6.example' });
+  const card = (grid: Array<[boolean, boolean]>) => callCardAudit({
+    lead: { id: 'l6', business_name: BIZ, phone: '07700 900636', website: 'https://zz-qa-6.example' },
+    reportAudit: { id: 'a6', short_code: null, created_at: iso(T0 - DAY), business_name: BIZ, business_type: 'plumbers', location_text: 'Halifax' },
+    report: report6(grid) as never, auditRunning: false, runCrawls: [], leadCrawl: null, nowMs: T0,
+  });
+  const all = [[true, true], [true, true], [true, true]] as Array<[boolean, boolean]>;
+  const five = [[true, true], [true, false], [true, true]] as Array<[boolean, boolean]>;
+  const ctx6 = { named: { businessName: BIZ, trade: 'plumbers', town: 'Halifax' }, town: 'Halifax', trade: 'plumbers' };
+  ok(STRONG_VISIBILITY_HEADLINE === 'Strong AI visibility — named in all 6 answers', 'the finding reads "Strong AI visibility — named in all 6 answers"');
+  ok(card(all).state === 'ready' && card(all).headline === STRONG_VISIBILITY_HEADLINE, '6/6 → the call card (and the bulk panel, same helper) shows the strong-visibility finding');
+  ok(card(five).headline !== STRONG_VISIBILITY_HEADLINE && /did not name them/.test(card(five).headline), '5/6 → the missed search is still shown, never "strong"');
+  const score = scoreHookRun(state6, rows6(all) as never, ctx6);
+  ok(score.complete && score.allNamed && score.expected === 6, 'the stored 6/6 result itself is unchanged: scored complete, all named, six answers');
+  ok(sixResultHookForbidsAbsenceCopy(state6, rows6(all) as never, ctx6), 'no contact on 6/6: every audit-based WhatsApp template is still refused (no "not named" claim), for every sender');
+
+  // The bulk check: a 6/6 lead keeps its status, star and Next Action.
+  const w = world();
+  const l = addLead(w, { status: 'contacted', is_potential_work: true, next_action: 'call', next_action_date: '2026-10-06' });
+  const before = JSON.stringify(l);
+  await run(w, A, [l.id]);
+  const it = itemFor(w, l.id);
+  w.db.table('ai_audit_runs').find((r) => r.id === it.run_id)!.status = 'complete';
+  await advance(w.deps, A);
+  ok(itemFor(w, l.id).status === 'done', 'bulk: the 6/6 lead\'s check finishes as ready');
+  ok(JSON.stringify(w.db.table('outreach_leads').find((x) => x.id === l.id)) === before, 'bulk 6/6: the lead row is byte-identical — status, star and Next Action unchanged, no follow-up created');
+  ok(!w.db.writes.some((x) => x.table === 'outreach_leads' || x.table === 'lead_follow_ups'), '…and nothing wrote to the lead or a follow-up');
+
+  // The single check and the bulk check share the audit queue: no status rule is left in it, or anywhere server-side.
+  const queue = read('supabase/functions/process-ai-audit-queue/index.ts');
+  ok(!existsSync(path.join(ROOT, 'supabase/functions/_shared/hook-not-interested.ts')), 'the auto "Not interested" writer (_shared/hook-not-interested.ts) is deleted');
+  ok(!/autoMarkHookLeadNotInterested|autoMarkSixOfSixNotInterested|hook-not-interested/.test(queue), 'single + bulk: the audit queue no longer calls any audit → status rule (3/3 or 6/6)');
+  const fnFiles: string[] = [];
+  const walkFns = (dir: string) => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walkFns(p); else if (/\.ts$/.test(e.name)) fnFiles.push(p); } };
+  walkFns(path.join(ROOT, 'supabase/functions'));
+  const writers = fnFiles.filter((p) => /status["']?\s*:\s*["']not_interested["']/.test(readFileSync(p, 'utf8')));
+  ok(fnFiles.length > 100 && writers.length === 0, `no edge function writes a "not_interested" status at all (${writers.map((p) => path.relative(ROOT, p)).join(', ') || 'none'})`);
+  const hv = read('src/components/HookVisibilityView.tsx').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(/score\.allNamed \?/.test(hv) && !/\.update\(|\.rpc\(|invoke\(/.test(hv), 'single check: the card shows "Named in all six results" and writes nothing');
+
+  // A person can still record it.
+  ok(maySetStatus(leadPermissions('sales'), 'not_interested') && maySetStatus(leadPermissions('admin'), 'not_interested'), 'a salesperson (and the admin) can still set Not interested by hand');
 }
 
 console.log(f ? `\n${f} FAILED` : '\nALL PASS');

@@ -776,6 +776,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   door, the rep's own hook body). The database is the dedupe (request id, one active batch per rep, one lead
   per batch). It writes no lead row and refuses a NEW check while `audit_complete_template` is set or a pitch
   waits on the lead. `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md`.
+- ⛔ **No audit result ever changes a lead's status** (Paul, 2026-10-04). "Not interested" is a sales outcome a
+  person records. The 3/3 and 6/6 auto-rules and `_shared/hook-not-interested.ts` are deleted; a 6/6 result
+  is shown as "Strong AI visibility — named in all 6 answers" (`callCardAudit`). Do not re-add one.
 - **The Dashboard "Full Reset" is gone**; `reset_my_account()` still exists in the DB until Phase 3.
 
 **WhatsApp**

@@ -2,7 +2,7 @@
    score; this drives it with the cases Paul listed (A–K) plus the surfaces that read it: the report
    summary, the deep-crawl gate, the send guard, the 6/6 Not Interested write and the Inbox card's
    audit choice. */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   HOOK_ALL_NAMED_REASON, HOOK_ENGINES, HOOK_SCORE_RESULTS, hookMissSentence, hookScoreHeadline,
@@ -12,7 +12,6 @@ import { buildHookReportSummary, hookReportCopy, initialHookState, isHookState, 
 import { cellNamed } from '../src/lib/namedSignal.ts';
 import { pickHookAudit, scoreHookAuditForCard } from '../src/lib/hookVisibility.ts';
 import { sixResultHookForbidsAbsenceCopy, hookForbidsAbsenceCopy } from '../supabase/functions/_shared/audit-reply.ts';
-import { autoMarkSixOfSixNotInterested } from '../supabase/functions/_shared/hook-not-interested.ts';
 import { OUTREACH_HOOK_QUESTIONS } from '../src/lib/auditQuestionCounts.ts';
 
 let failures = 0;
@@ -239,65 +238,6 @@ ok(hookForbidsAbsenceCopy(state) === false, 'send guard: the v1 check never misr
   ok(card.score.hook?.competitors.includes('Sparks Ltd') && !card.score.hook.competitors.some((n) => n === BIZ), 'card: the business is never listed as its own rival');
 }
 
-/* ── 6/6 Not Interested: the write ───────────────────────────────────────────────────────────── */
-type Call = { table: string; op: string; args: unknown[] };
-function fakeService(data: { audit: Record<string, unknown> | null; runResults: unknown; rows: HookScoreRow[]; leadMatches: boolean }) {
-  const calls: Call[] = [];
-  const from = (table: string) => {
-    let op = 'select';
-    let payload: unknown = null;
-    const q: Record<string, unknown> = {};
-    const chain = {
-      select: (...a: unknown[]) => { calls.push({ table, op: op === 'update' ? 'update.select' : 'select', args: a }); return chain; },
-      update: (p: unknown) => { op = 'update'; payload = p; calls.push({ table, op: 'update', args: [p] }); return chain; },
-      delete: () => { calls.push({ table, op: 'delete', args: [] }); return chain; },
-      eq: (..._a: unknown[]) => chain, not: (..._a: unknown[]) => chain, or: (..._a: unknown[]) => chain, order: (..._a: unknown[]) => chain,
-      maybeSingle: async () => ({ data: table === 'ai_audits' ? data.audit : table === 'ai_audit_runs' ? { results: data.runResults } : null, error: null }),
-      then: (res: (v: unknown) => unknown) => {
-        if (table === 'ai_audit_queue') return Promise.resolve({ data: data.rows, error: null }).then(res);
-        if (table === 'outreach_leads' && op === 'update') return Promise.resolve({ data: data.leadMatches ? [{ id: 'lead-1' }] : [], error: null }).then(res);
-        return Promise.resolve({ data: null, error: null, payload, q }).then(res);
-      },
-    };
-    return chain;
-  };
-  return { svc: { from }, calls };
-}
-await (async () => {
-  const audit = { lead_id: 'lead-1', business_name: BIZ, business_type: TRADE, location_text: TOWN };
-  {
-    const { svc, calls } = fakeService({ audit, runResults: { hook: state }, rows: rows([[true, true], [true, true], [true, true]]), leadMatches: true });
-    const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-    ok(out.applied === true, 'F: 6/6 → Not Interested applied');
-    const leadWrite = calls.find((c) => c.table === 'outreach_leads' && c.op === 'update');
-    ok(JSON.stringify(leadWrite?.args[0]) === JSON.stringify({ status: 'not_interested', is_potential_work: false }), 'F: the exact patch the manual Not interested button writes');
-    ok(!calls.some((c) => c.op === 'delete'), 'F: nothing is deleted (lead, audit and history preserved)');
-    const stamp = calls.find((c) => c.table === 'ai_audit_runs' && c.op === 'update');
-    const hook = (stamp?.args[0] as { results?: { hook?: { auto_not_interested?: { reason?: string } } } })?.results?.hook;
-    ok(hook?.auto_not_interested?.reason === HOOK_ALL_NAMED_REASON && (hook as { planned?: unknown }).planned !== undefined, 'F: the internal reason is recorded on results.hook, and the plan is kept');
-  }
-  for (const grid of [[[true, true], [true, false], [true, true]], [[false, false], [false, false], [false, false]]] as Array<Array<[boolean, boolean]>>) {
-    const { svc, calls } = fakeService({ audit, runResults: { hook: state }, rows: rows(grid), leadMatches: true });
-    const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-    ok(!out.applied && out.reason === 'not_six_of_six' && !calls.some((c) => c.table === 'outreach_leads'), `any miss keeps the lead as an opportunity (${grid.flat().filter(Boolean).length}/6)`);
-  }
-  {
-    const { svc, calls } = fakeService({ audit, runResults: { hook: state }, rows: rows([[true, true], [true, true], [null, true]]), leadMatches: true });
-    const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-    ok(!out.applied && !calls.some((c) => c.table === 'outreach_leads'), 'incomplete (one failure) never moves the lead');
-  }
-  {
-    const { svc } = fakeService({ audit, runResults: { hook: { ...initialHookState(Q), executed: 3, stop_reason: 'max_questions_reached' } }, rows: rows([[true, true], [true, true], [true, true]]), leadMatches: true });
-    const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-    ok(!out.applied && out.reason === 'not_a_six_result_hook', 'a v1 run is left to the v1 rule');
-  }
-  {
-    const { svc } = fakeService({ audit, runResults: { hook: state }, rows: rows([[true, true], [true, true], [true, true]]), leadMatches: false });
-    const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-    ok(!out.applied && out.reason === 'lead_already_progressed_or_missing', 'an already-progressed / starred lead is left alone (conditional write)');
-  }
-})();
-
 /* ── Wiring (source) ─────────────────────────────────────────────────────────────────────────── */
 const root = resolve(import.meta.dirname, '..');
 const createAudit = readFileSync(resolve(root, 'supabase/functions/create-ai-audit/index.ts'), 'utf8');
@@ -305,9 +245,9 @@ const queue = readFileSync(resolve(root, 'supabase/functions/process-ai-audit-qu
 ok(createAudit.includes('hookState = initialHookStateV2(questions, AUDIT_ENGINES);'), 'create-ai-audit writes a version-2 hook marker');
 ok(/const queueRows = questions\.map\(\(q\) => \(\{[\s\S]{0,200}engines: AUDIT_ENGINES,/.test(createAudit), 'every hook question is queued at once, each row asking both engines (same questions, like-for-like)');
 const released = queue.indexOf('if (!error) readyRuns.add(p.runId);');
-const sixCall = queue.indexOf('autoMarkSixOfSixNotInterested(service, p.auditId, p.runId)');
-ok(released > 0 && sixCall > released && sixCall - released < 2000, 'the 6/6 rule runs after the run is released (competitor extraction done), beside readyRuns');
-ok(sixCall < queue.indexOf('completionSendJobs.splice'), 'the 6/6 rule runs before the completion auto-send is considered');
+/* 6/6 → "Not interested" is RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status. The result itself is still scored and stored. */
+ok(released > 0 && !/autoMarkSixOfSixNotInterested|hook-not-interested/.test(queue), '6/6 moves no lead: the queue no longer calls the status rule after release');
+ok(!existsSync(resolve(root, 'supabase/functions/_shared/hook-not-interested.ts')), '…and the writer is deleted');
 
 if (failures) throw new Error(`${failures} six-result hook checks failed`);
 console.log('hook-score: all checks passed');

@@ -45,7 +45,7 @@ import { excludeSelfRivals } from './rivalHook.ts';
 import { nameMatches } from './nameMatch.ts';
 import { displayBusinessName } from './displayName.ts';
 import { articleTrade, pluraliseTrade } from './templateVars.ts';
-import { HOOK_ENGINE_LABELS } from './hookScore.ts';
+import { HOOK_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
@@ -591,6 +591,17 @@ const spokenTown = (town: string | null): string | null => {
 /** THE AI CHECK IN ONE LINE — the call card's headline and website finding, from the stored evidence
  *  only. ONE copy: the call screen (buildColdCallPlaybook) and the "Check before calling" results panel
  *  (fix/07) both read it, so a bulk result can never say something the call screen does not. */
+/** The finding for a complete six-result check that named the business in every answer (Paul,
+ *  2026-10-04): a FACT shown to the rep — never a status change. The lead keeps its status. */
+export const STRONG_VISIBILITY_HEADLINE = `Strong AI visibility — named in all ${HOOK_SCORE_RESULTS} answers`;
+
+/** True when the stored hook result has every one of its HOOK_SCORE_RESULTS answers present and
+ *  naming the business. An unanswered cell, a missing engine or fewer answers is never "all". */
+export function namedInEveryHookAnswer(report: PlaybookReport | null | undefined): boolean {
+  const cells = (report?.hook?.tested ?? []).flatMap((t) => t.perEngine ?? []);
+  return cells.length === HOOK_SCORE_RESULTS && cells.every((c) => c.named === true);
+}
+
 export function callCardAudit(input: Pick<PlaybookInput, 'lead' | 'reportAudit' | 'report' | 'auditRunning' | 'runCrawls' | 'leadCrawl' | 'nowMs'>): ColdCallPlaybook['audit'] {
   const business = clean(input.reportAudit?.business_name) || clean(input.lead.business_name) || 'this business';
   const evidence = selectEvidence(input.report, business);
@@ -605,6 +616,7 @@ export function callCardAudit(input: Pick<PlaybookInput, 'lead' | 'reportAudit' 
       state: 'ready',
       headline: evidence.kind === 'gap'
         ? engine + ' did not name them' + (top.length ? ' — it named ' + joinNames(top) : '')
+        : namedInEveryHookAnswer(input.report) ? STRONG_VISIBILITY_HEADLINE
         : engine + ' named them',
       finding: lead0 ? lead0.title : siteKind.source === 'none' ? 'No website on file' : siteKind.source === 'own_site' ? null : 'Only a ' + siteKind.label + ' profile, no site of their own',
     };

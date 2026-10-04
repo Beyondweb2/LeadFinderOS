@@ -26,8 +26,8 @@
      · Gemini produced no evaluable answer (the row failed after its retries) → stop, truthfully,
        as a provider failure. It is never reported as a gap — an unanswered question is not a "yes".
    After the last planned question, stop regardless (max_questions_reached) — this is also the only
-   way a hook run ends with Gemini having genuinely named the business in all three, which is what
-   the Gemini-3/3 lead-qualification rule (_shared/hook-not-interested.ts) keys on.
+   way a hook run ends with Gemini having genuinely named the business in all three. (That used to
+   move the lead to "Not interested"; since 2026-10-04 no audit result changes a lead's status.)
 
    ⛔ ONE ai_audit_run, ALWAYS. The next question is another ai_audit_queue row on the SAME run;
    nothing here ever mints run 2. Provider retries stay retries of the queue row.
@@ -102,8 +102,9 @@ export function isHookState(v: unknown): v is HookState {
  *
  * For a HOOK audit that is one outcome and one only:
  *   · visibility_gap_found   → yes. This is the lead we are about to message.
- *   · max_questions_reached  → no. Gemini named them in every question; _shared/hook-not-interested
- *                              auto-marks the lead not interested. Nobody will send this message.
+ *   · max_questions_reached  → no. Gemini named them in every question, so there is no missed search
+ *                              to argue from. The lead keeps its status (no audit sets "Not interested"
+ *                              since 2026-10-04); the rep decides.
  *   · provider_failure       → no. There is no hook, so there is nothing to attach findings to.
  *   · still running (null)   → no, yet. The run finalises again when the next question settles, and
  *                              the caller's dedupe re-crawls deeply then because the shallow row it
@@ -185,7 +186,9 @@ export type HookEvaluation =
    terms, Gemini's cell only, so a future change to the hook's own state machine can never silently
    change what counts as "genuinely named all three" for this specific classification. */
 
-/** True only when exactly three rows are given, every one settled 'done' with a genuine,
+/** A READ of a version-1 result only. Since 2026-10-04 (fix/07) it has no production caller and
+ *  moves no lead — "Not interested" is a sales outcome a person records.
+ *  True only when exactly three rows are given, every one settled 'done' with a genuine,
  *  non-error Gemini answer, and Gemini named the business in every one. A missing engine block,
  *  an unsettled/failed row, or an unanswered/errored Gemini cell on ANY of the three makes this
  *  false — absence or failure is never counted as a hit. */

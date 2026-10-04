@@ -8,6 +8,14 @@
 - **Findings:** M-034 (Session E E-04) and the per-rep attribution half of M-057 (E-20). Design source: the master plan's
   *Product decision — a salesperson bulk-check flow* (`cert/master-launch-plan`).
 
+> **Update, same day — Paul's two final decisions (second commit on this branch):**
+> 1. **The rep's daily allowance is 20 fresh checks** (was 40): one full batch a day, more headroom under the ~$100 Apify
+>    cap, raised later from real usage. Still admin-configurable exactly as before. The 20-per-batch maximum is unchanged.
+> 2. **No audit result changes a lead's status — ever.** The 6/6 rule (and the older Gemini 3/3 one) that moved a lead to
+>    "Not interested" is removed for the single check and the bulk check alike. A 6/6 result is now shown as
+>    **"Strong AI visibility — named in all 6 answers"**. The lead keeps its status. The rep may skip, call or set the
+>    outcome by hand. The stored result is untouched. See §6, §8, §9, §11, §12.
+
 ---
 
 ## 1. What a salesperson does
@@ -139,7 +147,8 @@ The order, before **any** spend, for a lead that needs a new check (serialised i
 cannot overshoot):
 1. **The rep's allowance** — fresh checks they started in the last 24 hours against
    `protection_settings.limits.actions.sales_check.per_day`.
-   - **Default 40** (`DEFAULT_PROTECTION_LIMITS`; the migration adds it to the live row only if absent).
+   - **Default 20** (Paul, 2026-10-04: one full batch a day). It lives in `DEFAULT_PROTECTION_LIMITS`; the
+     migration adds it to the live row only if absent.
    - A missing or malformed value is the default, never unlimited. Paul can set 0.
    - Refusal: "Today's checking allowance is used — try again tomorrow or ask Paul."
 2. **The prospecting pool** (WS-4).
@@ -164,13 +173,14 @@ Apify past the prospecting reserve.
 
 | | Per day | Per month (22 working days) |
 |---|---|---|
-| One rep, full allowance (40) | $1.32 | $29 |
-| Two reps | $2.65 | $58 |
-| Five reps | $6.62 | **$146** |
+| One rep, full allowance (20) | $0.66 | $15 |
+| Two reps | $1.32 | $29 |
+| Five reps | $3.31 | $73 |
 
 ⚠️ **The binding limit is Apify's monthly cap, not the daily pool.** With a ~$100 cap, prospecting stops at 85% (~$85
-for **all** prospecting: single checks, free checks and bulk). Two reps at full allowance fit. Five do not unless the cap
-rises, or the per-rep allowance drops to about 15. Reuse lowers the real figure (a lead is paid for once per 14 days).
+for **all** prospecting: single checks, free checks and bulk). At 20 a day, even five reps using every check fit under
+that ($73), leaving about $12 for the single checks and free checks. Raise the allowance only with the cap, after real
+usage is seen. Reuse lowers the real figure (a lead is paid for once per 14 days).
 
 **Cost visibility:**
 - The rep never sees a cost — only "Checks left today: N of M".
@@ -239,16 +249,27 @@ Leads not yet started wait until the rep next has Outreach open — starting 20 
 - The engine writes only its two tables, `lead_activity` ("AI check run" / "website checked", under the rep) and, via
   the crawl, `lead_crawl_checks`. Tested: no `outreach_leads` write at all — no status, no Interested, no Replied, no Next
   Action. No follow-up is created because a check finished.
-- ⚠️ **The one existing side effect, kept and surfaced (decision for Paul, §12):** the audit queue's 6/6 rule
-  (`autoMarkSixOfSixNotInterested`, Paul 2026-09-25) moves a lead that **both engines named in all six answers** to Not
-  interested. It applies to every hook check, the rep's single button included. A bulk check uses the same hook, so it
-  applies here too. It sends nothing. The rep's panel shows "ChatGPT and Google AI named them".
+- ⛔ **No audit result changes a lead's status (Paul, 2026-10-04).** The audit queue used to move a lead to "Not
+  interested" when both engines named it in all six answers (`autoMarkSixOfSixNotInterested`, 2026-09-25), and on an
+  older Gemini 3/3 rule (`autoMarkHookLeadNotInterested`). Both calls and their module
+  (`_shared/hook-not-interested.ts`) are deleted. This covers the single check and the bulk check, which share the queue.
+  - **A 6/6 result is shown, not acted on:** the call card (and so the bulk panel) reads **"Strong AI visibility — named
+    in all 6 answers"** (`STRONG_VISIBILITY_HEADLINE` / `namedInEveryHookAnswer` in `coldCallPlaybook.ts`). The
+    single check's Inbox card already says "Named in all six results. No missed-search hook."
+  - **The lead keeps its status, star and Next Action.** No follow-up is created. The rep may skip, call, or set "Not
+    interested" by hand (the workspace's outcome, which asks why).
+  - **The stored result is unchanged:** the run, its rows, `results.hook`, the score and the report are exactly as
+    before.
+  - **Still no contact:** a 6/6 lead that stays active can never be sent "AI didn't name you" copy, because
+    `sixResultHookForbidsAbsenceCopy` refuses every audit-based template for every sender (drip, Inbox, first-reply).
+  - **History:** old runs that the retired rule moved still carry `results.hook.auto_not_interested`. Their card now says
+    "This check moved the lead to Not interested under a rule since retired (…)". Those leads were not moved back.
 
 ---
 
 ## 9. Tests
 
-**New — `scripts/sales-prospect-check.test.ts`, 171 assertions, all passing.** The real engine against an in-memory
+**New — `scripts/sales-prospect-check.test.ts`, 186 assertions, all passing** (171 + 15 for Paul's two decisions). The real engine against an in-memory
 database (`scripts/fake-supabase.ts`), with recording fake providers, so spend and sends are **counted**:
 
 | Area | Covered |
@@ -263,6 +284,8 @@ database (`scripts/fake-supabase.ts`), with recording fake providers, so spend a
 | No contact | `auto_message_on`, `pitch_waiting`; only the allowed tables written; no lead row written; import-closure sweep; the two function targets; no run / job id on the crawl |
 | Wiring | Migration dedupe, revokes, the two SELECT policies, the jsonb action equal to the defaults and added only if absent; `config.toml`; sales-only permission; `bulkAudits` still admin-only; the panel calls nothing; same request id on retry; no cost shown; the call card's line equals `callCardAudit` |
 | Admin overview | Per rep: leads / fresh / reused / skipped; estimated and actual spend; refusals visible; no secret |
+| Allowance (update) | The default is 20, the same value in the defaults and the migration, and equal to the batch maximum |
+| No auto "Not interested" (update) | 6/6 → the "Strong AI visibility — named in all 6 answers" finding; 5/6 still shows the miss; the stored 6/6 result still scores complete / all named; bulk 6/6 leaves the lead row byte-identical (status, star, Next Action), with no follow-up write; the queue calls no status rule and the writer is deleted; **no edge function anywhere writes a "not_interested" status**; the single check's card writes nothing; a salesperson and the admin can still set Not interested by hand; every audit-based template is still refused on 6/6 (no contact) |
 
 **Mutation-checked** (each break made the suite fail):
 - ownership by book owner;
@@ -278,6 +301,9 @@ One survivor, by design: removing the per-item claim alone is still covered by t
 
 **Updated:**
 - `scripts/abuse-cost-protection.test.ts`: the seed check is now "seed + actions later migrations add".
+- `scripts/hook-audit-adaptive.test.ts`, `hook-score.test.ts`, `hook-send-integrity.test.ts`: the tests of the deleted
+  writer are removed (it no longer exists). In their place they assert that the writer is gone, that the queue calls no
+  status rule and that it writes no `not_interested`. The pure, read-only `geminiNamedAllThree` tests stay.
 - `scripts/fake-supabase.ts`, additive: date-aware comparisons, `gte/gt/lte/lt`, `delete`, partial unique indexes,
   `insert().select().maybeSingle()`. Its other users still pass.
 
@@ -309,7 +335,7 @@ accounts "Test" = rep A and "test1" = rep B):
 
 | Check | Result |
 |---|---|
-| The action added | `{"paid": true, "per_day": 40}`; every other limit unchanged |
+| The action added | `{"paid": true, "per_day": 20}` (re-run after the update); every other limit unchanged |
 | Second active batch / same request id / same lead twice / bad status / bad request id | refused (all five) |
 | A waiting batch beside an active one | allowed |
 | Grants | authenticated SELECT only; anon none; two SELECT policies |
@@ -348,7 +374,7 @@ deleted before commit and `launch.json` restored.
 | Checked | Result (both widths unless noted) |
 |---|---|
 | Selection | Only the rep's 8 leads listed (rep B's absent); "Check before calling (7)" beside Copy Numbers / Queue WhatsApp |
-| Batch action | The dialog: research only, nothing sent; 14-day reuse; "40 of 40 left today"; skip reasons; "Check again" option |
+| Batch action | The dialog: research only, nothing sent; 14-day reuse; "N of [allowance] left today" (the harness ran at the old default of 40; it now reads "of 20"); skip reasons; "Check again" option |
 | Progress | Bar; "AI checks running — 1 ready so far"; per-lead "Checking…" with "Asking ChatGPT and Google AI — usually a few minutes" |
 | Reused result | "Ready" + "Reused — checked 3 days ago, no new check needed" + "Website check reused" |
 | Failed lead | Red "Failed" with the server's sentence ("…about 41 km from Halifax…"); **no Call screen button** |
@@ -366,6 +392,14 @@ deleted before commit and `launch.json` restored.
 - "No website on file" is no longer said twice.
 
 **Minor, not changed:** on a phone, a ready row's "Skip" wraps to its own line under the three buttons.
+
+**After the update:** the harness was not rebuilt. The two visible changes are covered by tests:
+- the allowance number comes from the server;
+- the 6/6 line ("Strong AI visibility — named in all 6 answers") is asserted on a real report built from six named
+  answers, through the same helper the panel and the call card use.
+
+In the earlier render, the 6/6 fixture lead ("ZZ QA Elland Drains") read "ChatGPT and Google AI named them"; it now
+reads the strong-visibility line.
 
 ---
 
@@ -385,7 +419,7 @@ deleted before commit and `launch.json` restored.
      - `to_regclass` for both tables;
      - `pg_policies` → exactly two (SELECT);
      - `has_table_privilege('authenticated', 'public.sales_check_items', 'INSERT')` = false;
-     - `protection_settings.limits->'actions'->'sales_check'` = `{"paid":true,"per_day":40}`.
+     - `protection_settings.limits->'actions'->'sales_check'` = `{"paid":true,"per_day":20}`.
 2. **Edge functions**, after the SQL:
    - **`sales-prospect-check`** (new);
    - **`security-admin`** — `validateLimits` now requires the `sales_check` action; deploy after the SQL so a save from
@@ -402,7 +436,13 @@ deleted before commit and `launch.json` restored.
    template-request voice-note-script warm-lead-reply weekly-visibility`.
    Most are in Wave 1's own list anyway.
 
-   `coldCallPlaybook.ts` (the `callCardAudit` extraction) reaches no edge function.
+   `coldCallPlaybook.ts` (the `callCardAudit` extraction and the strong-visibility line) reaches no edge function.
+
+   **Update — the "Not interested" removal needs `process-ai-audit-queue` redeployed** (it is already in Wave 1's list).
+   Until it is, the live queue keeps moving 6/6 leads.
+   - Verify by marker: the deployed `process-ai-audit-queue` body no longer contains `autoMarkSixOfSixNotInterested`.
+   - Comment-only changes, no redeploy needed for them: `crawl-check`, `_shared/audit-reply.ts`, `src/lib/hookAudit.ts`,
+     `src/lib/hookScore.ts`.
 3. **SPA** (`main` → Cloudflare), after the function: the button calls it.
 4. **Verify:**
    - OPTIONS `…/functions/v1/sales-prospect-check` → `x-sales-check-build: sales-prospect-check-1`;
@@ -422,13 +462,19 @@ deleted before commit and `launch.json` restored.
 ## 12. For Paul
 
 **Decisions:**
-1. **Per-rep allowance.** 40 fresh checks a day (about $1.32) is the launch value. Change it on API Usage & Security →
-   thresholds → "pre-call checks". With more than two reps, the Apify monthly cap is the real limit (§6) — lower it to
-   about 15, or raise the cap.
+1. ✅ **Per-rep allowance: 20 a day** (Paul, 2026-10-04) — applied. Change it on API Usage & Security → thresholds →
+   "pre-call checks".
 2. **Apify monthly cap.** Raise or confirm about $100 before rollout (already on Wave 1's list; not changed here).
-3. **The 6/6 rule on bulk checks** (§8). Today a lead both engines named in all six answers is moved to Not interested
-   by the existing hook rule — the single check does the same. Keep it (recommended: there is nothing to sell, and it
-   sends nothing), or ask for bulk checks to be exempt (a queue change).
+3. ✅ **No audit sets "Not interested"** (Paul, 2026-10-04) — applied to the single and the bulk check (§8).
+
+**Knock-on effects of decision 3 (for awareness, nothing to decide):**
+- A 6/6 lead now stays in the working lists (Outreach, campaigns, the rep's tasks) until someone sets an outcome.
+- Audit-based messages to it are still refused (§8). A non-audit opener queued for it could still send, as for any active
+  lead.
+- Leads the old rule already moved were **not** moved back. Their "Not interested" shows "Reason not recorded" in "Why
+  they said no".
+- `geminiNamedAllThree` (`hookAudit.ts`) is now a read-only helper with no production caller. It is kept because it
+  describes the stored version-1 result.
 
 **Manual actions:** the deploy steps in §11, and a yes for the one ~3p live check on a QA lead.
 

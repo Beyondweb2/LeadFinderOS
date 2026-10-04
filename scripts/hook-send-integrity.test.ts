@@ -11,7 +11,6 @@ import { buildReportData } from '../src/lib/auditReport.ts';
 import { renderReportHtml } from '../src/lib/aiAuditReportHtml.ts';
 import { TEMPLATE_ENGINE_CLAIM_WAIVED, TEMPLATE_SINGLE_ENGINE_CLAIM, templateEngineConflict } from '../src/lib/rivalHook.ts';
 import { HOOK_INCOMPLETE_REASON, resolveAuditReplyVars } from '../supabase/functions/_shared/audit-reply.ts';
-import { autoMarkSixOfSixNotInterested } from '../supabase/functions/_shared/hook-not-interested.ts';
 import { WA_TEMPLATES, renderTemplateBody, templateBodyParams } from '../supabase/functions/_shared/whatsapp-send.ts';
 
 let failures = 0;
@@ -170,19 +169,7 @@ await (async () => {
   const s = scoreHookRun(short, allNamed, { named: { businessName: BIZ, trade: 'electricians', town: 'Addlestone' } });
   ok(s.questionShortfall && !s.complete && s.percent === null && !s.allNamed && s.hook === null, 'D: two questions all named → incomplete, no percentage, no 4/4 dressed as a result, no hook');
   ok(buildHookReportSummary({ state: short, rows: allNamed, engineOrder: ['chatgpt', 'gemini'], engineLabel: (e) => HOOK_ENGINE_LABELS[e], namedInstead: (c) => c }) === null, 'D: no hook report summary');
-  const calls: string[] = [];
-  const svc = {
-    from(table: string) {
-      const chain: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'order', 'not', 'or']) chain[m] = () => chain;
-      chain.update = () => { calls.push(`update:${table}`); return chain; };
-      chain.maybeSingle = async () => ({ data: table === 'ai_audits' ? { lead_id: 'lead-1', business_name: BIZ, business_type: 'electricians', location_text: 'Addlestone' } : { results: { hook: short } }, error: null });
-      chain.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: table === 'ai_audit_queue' ? allNamed : [{ id: 'lead-1' }], error: null }).then(res);
-      return chain;
-    },
-  };
-  const out = await autoMarkSixOfSixNotInterested(svc, 'audit-1', 'run-1');
-  ok(!out.applied && out.reason === 'not_six_of_six' && calls.length === 0, 'D: never auto-marked Not Interested, nothing written');
+  /* (The 6/6 "Not interested" writer this used to call is RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status.) */
 })();
 
 /* E. Every user-facing hook surface says Google AI. */
