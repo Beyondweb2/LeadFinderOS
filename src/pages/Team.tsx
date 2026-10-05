@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
+import { OnboardingBadge, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
+import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
  * action below goes to admin-users, which refuses anyone without the admin role. No password is ever
@@ -74,6 +76,25 @@ export default function Team() {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [moveTo, setMoveTo] = useState<Record<string, string>>({});
+  const [openOnboarding, setOpenOnboarding] = useState<string | null>(null);
+  /* Salesperson onboarding (2026-10-05): admin-users is the only way to the records (no RLS policy). */
+  const onboarding = useQuery({
+    queryKey: ['team', 'onboarding'],
+    queryFn: async () => {
+      const r = await call('team_onboarding_list');
+      if (!r.ok) throw new Error(String(r.error ?? 'could not load onboarding'));
+      return new Map(((r.rows ?? []) as OnboardingRecord[]).map((x) => [x.user_id, x]));
+    },
+  });
+  const saveOnboarding = async (userId: string, patch: Partial<OnboardingRecord>): Promise<boolean> => {
+    const r = await call('team_onboarding_save', { user_id: userId, patch });
+    if (!r.ok) {
+      toast({ title: 'Not saved', description: ONBOARDING_SAVE_ERRORS[String(r.error)] ?? String(r.error ?? 'Try again'), variant: 'destructive' });
+      return false;
+    }
+    await qc.invalidateQueries({ queryKey: ['team', 'onboarding'] });
+    return true;
+  };
   const refresh = () => qc.invalidateQueries({ queryKey: ['team'] });
   const fail = (r: Record<string, unknown>) => toast({ title: 'Not done', description: ERR[String(r.error)] ?? String(r.error ?? 'Try again'), variant: 'destructive' });
 
@@ -96,6 +117,8 @@ export default function Team() {
       <div>
         <h1 className="text-xl font-semibold">Team</h1>
         <p className="text-sm text-muted-foreground">Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings.</p>
+        <p className="text-xs text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing before they are ready to sell. Only you can see these records.</p>
+        {onboarding.error && <p className="text-xs text-destructive">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</p>}
       </div>
 
       <Card className="p-4 space-y-3">
@@ -124,6 +147,11 @@ export default function Team() {
                 </div>
                 <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</Badge>
                 {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
+                {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
+                  <button type="button" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
+                    <OnboardingBadge summary={onboardingSummary(onboarding.data.get(m.user_id) ?? null, m)} />
+                  </button>
+                )}
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex flex-wrap items-center gap-2">
                     {m.status === 'active' && !m.has_signed_in && (
@@ -154,6 +182,11 @@ export default function Team() {
                     ) : (
                       <Button size="sm" variant="outline" onClick={async () => { const r = await call('team_reactivate', { user_id: m.user_id }); if (!r.ok) fail(r); else { toast({ title: `${m.display_name} re-enabled` }); void refresh(); } }}>Re-enable</Button>
                     )}
+                  </div>
+                )}
+                {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
+                  <div className="w-full pl-11">
+                    <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.get(m.user_id) ?? null} member={m} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
                   </div>
                 )}
                 {m.assigned_leads > 0 && (

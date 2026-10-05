@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
+import { validateOnboardingPatch, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -572,6 +573,37 @@ serve(async (req) => {
       }));
       for (let i = 0; i < rows.length; i += 500) await serviceClient.from('lead_activity').insert(rows.slice(i, i + 500));
       return jsonResponse({ ok: true, moved: rows.length }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* ═════════════════════ SALESPERSON ONBOARDING (2026-10-05, docs/salesperson-onboarding.md) ═════════════════════
+       ⛔ ADMIN ONLY BY CONSTRUCTION: public.salesperson_onboarding has RLS on and NO policy, so these two
+       actions (behind the admin check above) are the only way in. Every save is validated by the ONE rule
+       file (src/lib/salespersonOnboarding.ts): unknown fields refused, versions must be known documents,
+       text that looks like a bank, passport or birth-date detail refused. READY TO SELL is never stored —
+       the Team page derives it from this record and the live login. Commission does not read any of it. */
+    if (action === 'team_onboarding_list') {
+      const { data, error } = await serviceClient.from('salesperson_onboarding').select('*');
+      if (error) return jsonResponse({ ok: false, error: 'read_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
+      return jsonResponse({ ok: true, rows: data ?? [] }, 200, corsHeaders, rlHeaders);
+    }
+
+    if (action === 'team_onboarding_save') {
+      const uid = body.user_id;
+      if (!uuidOk(uid)) return jsonResponse({ ok: false, error: 'bad_user' }, 400, corsHeaders, rlHeaders);
+      const { data: m } = await serviceClient.from('team_members').select('user_id, is_book_owner').eq('user_id', uid).maybeSingle();
+      if (!m) return jsonResponse({ ok: false, error: 'not_a_member' }, 404, corsHeaders, rlHeaders);
+      const { data: isAdminRow } = await serviceClient.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').maybeSingle();
+      if (m.is_book_owner || isAdminRow) return jsonResponse({ ok: false, error: 'not_a_salesperson' }, 400, corsHeaders, rlHeaders);
+      const { data: current, error: cErr } = await serviceClient.from('salesperson_onboarding').select('*').eq('user_id', uid).maybeSingle();
+      if (cErr) return jsonResponse({ ok: false, error: 'read_failed', detail: cErr.message }, 500, corsHeaders, rlHeaders);
+      const v = validateOnboardingPatch(body.patch, (current as OnboardingRecord | null) ?? null);
+      if (!v.ok) return jsonResponse({ ok: false, error: v.error, field: v.field ?? null }, 400, corsHeaders, rlHeaders);
+      const { data: saved, error: sErr } = await serviceClient.from('salesperson_onboarding')
+        .upsert({ ...v.clean, user_id: uid, updated_by: adminUserId }, { onConflict: 'user_id' })
+        .select('*').single();
+      if (sErr) return jsonResponse({ ok: false, error: 'write_failed', detail: sErr.message }, 500, corsHeaders, rlHeaders);
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, target: uid, fields: Object.keys(v.clean), timestamp: new Date().toISOString() }));
+      return jsonResponse({ ok: true, row: saved }, 200, corsHeaders, rlHeaders);
     }
 
     return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);

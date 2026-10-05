@@ -200,6 +200,8 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Page generator / Page plan / Mockups / Playbook', admin: 'yes', sales: 'no' },
   { feature: 'Remove, reset, import, enrichment, campaigns, AI Audit page, Templates, queue controls', admin: 'yes', sales: 'no' },
   { feature: 'Team, roles, invites, disable', admin: 'yes', sales: 'no' },
+  { feature: 'Salesperson onboarding records (agreement, right to work, VAT, leaving)', admin: 'yes', sales: 'no — not even their own' },
+  { feature: 'Business type and TPS/CTPS status on a prospect', admin: 'all leads', sales: 'own leads (record business type with evidence)' },
   { feature: 'API usage, system configuration, secrets', admin: 'yes', sales: 'no' },
   { feature: 'CSV export of leads (Outreach, Find Leads)', admin: 'yes, logged', sales: 'no' },
   { feature: 'Copy Numbers', admin: 'yes, logged', sales: 'own leads, limited per copy / hour / day, logged' },

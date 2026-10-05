@@ -682,7 +682,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **A directory listing is CONFIRMED only by an identifier** (a link from their own site, the place id, their phone/domain, name + postcode) — never by a name; an inconsistency needs a confirmed listing; nothing is "worth adding" without positive evidence; absence never downgrades (`directoryPresence.ts`, `docs/directory-presence.md`). Discovery only — nothing creates a listing.
 
 **Derived, never stored** — `serveGate`, `townVerdict`, `nameIsJudgeable`, `needsQ2`, the free-check
-progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`. A stored verdict freezes
+progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`, READY TO SELL
+(`onboardingSummary`). A stored verdict freezes
 old rows at a stale rule.
 
 **The market model is the MARKET, never the delivery** (`src/lib/marketModel.ts`, 2026-09-20).
@@ -1249,6 +1250,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
+| Salesperson onboarding (Ready to Sell, right to work, privacy-notice blanks), TPS/CTPS state (no provider yet), business type, leavers | `docs/salesperson-onboarding.md` — onboarding rows are admin-only by having NO policy; only fn `admin-users` reads them |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 | The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
 
