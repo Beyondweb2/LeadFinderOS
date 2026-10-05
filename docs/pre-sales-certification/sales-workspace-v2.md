@@ -334,3 +334,21 @@ queueing, no Next Action is created. A salesperson asking `contact_check` is ans
 Tests: `scripts/opener-contact-guard.test.ts` (each outcome; the star; the tap; one list; every door calls the one
 function; fail-closed; the wording; the untouched fields; continuations and free-form exempt) + `pre-sales-final`
 (the later-migration list). Gate: 312 / 312.
+
+**Deployed 5 Oct 2026** (fix `fe68f1a0`, merge `9f8451c6` to `main`):
+- **SQL first:** migration applied alone and read back. Both functions exist; `sales_queue_opener` calls
+  `opener_contact_block(v_id)` and no longer reads `lead_reached_contact` inline; execute is granted to
+  `service_role` only (not `authenticated` or `anon`). Rolled-back live probe on a Test-rep QA lead: no answer,
+  voicemail and the star on its own → null; each of the six conversation outcomes → `contacted_by_phone` (the
+  batch form agrees); an email conversation → `contacted_logged`; the lead's status, campaign and Next Action
+  were unchanged; nothing was left behind. 14 live leads are currently guarded; Infinity Fit Club is not one of them.
+- **Edge:** `process-whatsapp-queue` (body markers `opener_contact_blocks`, `THE REAL-CONTACT GUARD AT SEND TIME`,
+  `contact_guard_unreadable`) and `send-whatsapp-message` (OPTIONS `x-swm-build: 2026-10-05a-contact-guard`).
+  `whatsapp-status` was **not** deployed; no WhatsApp credentials were touched.
+- **Live refusal, QA data only:** a Test-salesperson session asked `contact_check` about three leads: its
+  own QA lead with a logged call got `contacted_by_phone`; its own lead with no conversation got nothing; a
+  guarded lead owned by someone else was not answered (own-leads scoping). The session was revoked afterwards.
+  Nothing was queued or sent.
+- **SPA:** `app.leadfinderos.com` and `leadfinderos-next.pages.dev` serve the new build. The Outreach chunk
+  carries " not queued — " and the per-lead control carries "Could not check the contact history, so nothing
+  was queued" plus `lead_ids:[`. Nobody has seen the dialog on screen.
