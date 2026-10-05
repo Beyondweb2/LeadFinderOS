@@ -66,9 +66,11 @@ Map: `13-REPOSITORIES-AND-FILE-MAP.md`.
 
 ## Critical safety rules (the short list)
 
-1. **Work from fresh `origin/main` in your own worktree** (`C:\Users\paulj\LeadFinderOS-wt\<task>`). The primary checkout
-   `C:\Users\paulj\LeadFinderOS` is STALE — never work in it, never switch its branch, never delete it. Unlink the
-   `node_modules` junction before removing any worktree.
+1. **Work from fresh `origin/main` in your own worktree.** PRIMARY checkout = `C:\Users\paulj\LeadFinderOS-current`
+   (keep it clean on `main`, never switch its branch). PARALLEL work = `C:\Users\paulj\LeadFinderOS-wt\<task>`, one branch
+   each, added from the primary after `git fetch origin`. ARCHIVE = `C:\Users\paulj\LeadFinderOS` — STALE; no new work
+   there unless Paul asks, never delete it. Parallel branches are pushed, not merged or deployed, until an integration
+   session. Unlink the `node_modules` junction before removing any worktree. Details: `09-…` "Local machine layout".
 2. **Production = app.leadfinderos.com.** Verify every deploy there by a marker only your change produces.
 3. **Deploy order:** SQL (read back) → edge functions (by hand, every function in the changed module's closure) → push
    `main` (frontend). Production only from `main`. **Skip `whatsapp-status`** until the WhatsApp cutover.

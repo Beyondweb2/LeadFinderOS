@@ -26,18 +26,22 @@ this file says so.*
 ## Prompts for other Claude sessions
 
 - **If Paul asks for a change, ALWAYS give him a fresh, ready-to-paste prompt** that a Claude Code session can run as-is.
-- **Say exactly where to run it** — e.g. "Paste into a NEW Claude Code session opened on `C:\Users\paulj\LeadFinderOS`."
+- **Say exactly where to run it** — e.g. "Paste into a NEW Claude Code session opened on `C:\Users\paulj\LeadFinderOS-current`." For parallel
+  sessions, name each one's branch and its worktree `C:\Users\paulj\LeadFinderOS-wt\<task>`, and say it must not merge or
+  deploy.
 - **Don't give a prompt when none is needed** (e.g. he asked a question, or the work is already done in this session).
 - Paul likes prompts that cover **a whole coherent pass**, not endless micro-prompts.
 - **Parallelise only when it is genuinely safe** — separate branches, no shared files, no dependency between them. Once
-  dependencies matter, run **one session at a time**.
+  dependencies matter, run **one session at a time**. Parallel branches are pushed and left unmerged; an integration
+  session merges and deploys them.
 
 ## How to do the work
 
-- **Start from the latest production `main`** after any release. Never work from a stale branch or the stale primary
-  checkout (`C:\Users\paulj\LeadFinderOS` is hundreds of commits behind — see `09-PRODUCTION-AND-DEPLOYMENT.md`).
-- One task = one named branch in its own git worktree under `C:\Users\paulj\LeadFinderOS-wt\<task>`. Never touch another
-  session's branch or worktree.
+- **Start from the latest production `main`** after any release. `git fetch origin` first. Never work from a stale branch or the archived
+  old checkout (`C:\Users\paulj\LeadFinderOS` is hundreds of commits behind — see `09-PRODUCTION-AND-DEPLOYMENT.md`). The
+  primary checkout is `C:\Users\paulj\LeadFinderOS-current`.
+- One task = one named branch in its own git worktree under `C:\Users\paulj\LeadFinderOS-wt\<task>`, added from
+  `LeadFinderOS-current`. Never touch another session's branch or worktree.
 - **Preserve existing good functionality** — read the code before changing it; don't rewrite blindly. Most rules in this
   codebase exist because something went wrong once (`docs/traps.md`).
 - **Complex backend is fine; the operator UI must stay simple.** Hide internal complexity from humans. The pattern Paul

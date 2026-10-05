@@ -62,8 +62,10 @@ Paul may have done some of the manual ones since.*
   ("BASELINE_QUESTIONS (10)"), several "8 weeks" comments (`remeasureResults.ts`, `remeasureFill.ts`,
   `remeasureResultsHtml.ts`, `_shared/remeasure-results.ts`), the `LeadDetailDialog.tsx` tab comment (WORK / SCRIPTS /
   PROSPECT), the `sources.ts` "MUST EQUAL" comment, `measurementCompare.ts` "SPA-only" header.
-- **The stale primary checkout** `C:\Users\paulj\LeadFinderOS` could be reset to `origin/main` — but keep its untracked
-  `SQL_FOR_PAUL_*.sql` files (only copies) and never delete the folder (worktrees hang off it).
+- **The archived old checkout** `C:\Users\paulj\LeadFinderOS` (replaced as primary by `LeadFinderOS-current` on
+  2026-10-05) is left as it is — keep its untracked `SQL_FOR_PAUL_*.sql` files (only copies) and never delete the folder
+  (older worktrees hang off it, and its `node_modules` is the one every worktree junctions to). Only if Paul wants it:
+  give `LeadFinderOS-current` its own `npm ci` so the archive stops being load-bearing.
 - **Unmerged certification report branches** `cert/a-salesperson` … `cert/e-security-reliability`, `cert/master-launch-plan`
   hold the full 2026-10-04 audit reports (main has only stubs). Merge them as docs if Paul wants them on `main`.
 - **Local-only branch** `feat/forecast-nextaction-crawl` (one commit, 2026-10-02, never pushed) — probably superseded by

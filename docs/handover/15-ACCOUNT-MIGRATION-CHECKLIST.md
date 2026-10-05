@@ -42,7 +42,8 @@ chat history and the old account's sign-in. Everything a new Claude needs to und
 ## AFTER THE NEW ACCOUNT IS CREATED
 
 - ☐ Install / sign in to the **Claude desktop app** with the new account (Code tab).
-- ☐ **Open the folder `C:\Users\paulj\LeadFinderOS`** in a new Code session (or clone `Beyondweb2/LeadFinderOS` fresh).
+- ☐ **Open the folder `C:\Users\paulj\LeadFinderOS-current`** in a new Code session (or clone `Beyondweb2/LeadFinderOS`
+  fresh). Not `C:\Users\paulj\LeadFinderOS` — that is the archived old checkout.
 - ☐ **Paste the bootstrap prompt** (`14-NEW-CLAUDE-BOOTSTRAP-PROMPT.md`).
 - ☐ **Let the new Claude read the handover** and give you its summary. Correct anything it got wrong.
 - ☐ **Re-connect the tools the new Claude will need** (it will ask as it goes — approve them yourself):
