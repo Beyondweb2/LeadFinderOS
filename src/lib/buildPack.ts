@@ -204,7 +204,7 @@ export function forbiddenFactLines(facts: FactRow[]): string[] {
   return out.length ? out : ['(Every fact on record is verified.)'];
 }
 
-function claimMappingLines(template: WebsiteTemplate, facts: FactRow[]): string[] {
+export function claimMappingLines(template: WebsiteTemplate, facts: FactRow[]): string[] {
   const out = [
     'The template is ' + template.sourceClient + "'s finished site. EVERY one of these claims in it belongs to",
     'that business. For each, the verdict for THIS client:',
@@ -536,7 +536,7 @@ function sourceOfTruth(i: BuildPackInput): string[] {
   return out;
 }
 
-function contentRules(i: BuildPackInput): string[] {
+export function contentRules(i: BuildPackInput): string[] {
   const s = i.state;
   const preserve = isFaithfulRoute(s) && mayPreserveCopy(s.copy_ownership);
   return [
@@ -742,7 +742,7 @@ export function masterPrompt(i: BuildPackInput, opts: { lean?: boolean; executio
 
 /* ── TEMPLATE REBUILD: the generated client config is the build's ONLY data (Phase 3) ────────── */
 
-function templateConfigSection(i: BuildPackInput, m: Mapping): string[] {
+export function templateConfigSection(i: BuildPackInput, m: Mapping): string[] {
   const t = i.template!;
   const r = m.readiness;
   const services = m.services.filter((x) => x.include).map((x) => x.service.name);

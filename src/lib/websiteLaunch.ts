@@ -13,7 +13,8 @@
        gate, the quality standard and the build standard all pass — a failed preview never unlocks)
      · that result for THIS client's project and domain: the recorded preview URL is the reported one,
        on the recorded Cloudflare project, and the build reported a commit
-     · every required preview QA tick (requiredPreviewQa), "No unverified claim published" among them
+     · every required preview QA tick (requiredPreviewQa), "No unverified claim published" among them —
+       the technical ones answered by the automatic gate once the preview is ready (outstandingPreviewQa)
      · a live enquiry form switched on when the build has a site-enquiry form
 
      productionReadiness()       the problems, in Paul's words. Empty = production may be offered.
@@ -30,7 +31,7 @@
 import type { ServiceRoute } from './findableOffer.ts';
 import { OPTIMISE_BUILD_REFUSAL } from './websiteRoute.ts';
 import {
-  parseWebsiteBuild, previewReadyProblems, readProductionGate, requiredPreviewQa, stateHasExistingSite,
+  outstandingPreviewQa, parseWebsiteBuild, previewReadyProblems, readProductionGate, stateHasExistingSite,
   type ProductionGateRecord, type WebsiteBuildState,
 } from './websiteBuildState.ts';
 import { siteFormProblems } from './siteForm.ts';
@@ -74,7 +75,9 @@ export function productionReadiness(i: LaunchInput): string[] {
   if (!s.canonical_domain) out.push('Domain (canonical) not recorded');
   if (!s.local_repo_path) out.push('Local folder not recorded');
   if (b.result_imported_at && !b.commit_hash) out.push('The build reported no commit — production must publish a known commit');
-  const missing = requiredPreviewQa(i.hasExistingSite).filter((q) => s.qa[q.key] !== true);
+  /* Website Build Simple (2026-10-05): the technical ticks are answered by the automatic gate once the
+     preview is ready by LeadFinderOS's own rule (gateAnsweredQa); Paul's own review ticks are still owed. */
+  const missing = outstandingPreviewQa(s, i.hasExistingSite);
   if (missing.length) out.push(missing.length + ' preview QA tick(s) not done: ' + missing.slice(0, 4).map((q) => q.label).join('; ') + (missing.length > 4 ? ' …' : ''));
   if ((b.standard.form === 'site_enquiry') && !s.form.enabled) out.push('The site has an enquiry form but it is not switched on in LeadFinderOS — the live form would not deliver');
   return out;

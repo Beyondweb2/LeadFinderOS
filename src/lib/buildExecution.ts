@@ -28,7 +28,7 @@
 
 import type { BuildExecution, BuildQaKey, BuildResultStatus, ManifestAsset, WebsiteBuildState } from './websiteBuildState.ts';
 import { BUILD_QA_KEYS, BUILD_ROUTE_LABELS, EMPTY_BUILD_EXECUTION, PAGE_FAMILY_LABELS, mayPreserveCopy, previewReadyProblems, standardEvidence } from './websiteBuildState.ts';
-import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, readUpgradeReview, strengthProblems, type UpgradeReview } from './websiteQuality.ts';
+import { CONTENT_INTENTS, CONTENT_INTENT_LABELS, EMPTY_UPGRADE, MAX_STRENGTHS, QUALITY_STANDARD_LINES, STRENGTH_CATEGORY_LABELS, STRENGTH_DISPOSITION_LABELS, UPGRADE_QA_LINES, UPGRADE_VERDICTS, intentProblems, mergeStrengths, readStrength, readUpgradeReview, strengthProblems, type ExistingStrength, type UpgradeReview } from './websiteQuality.ts';
 import type { BuildPackInput } from './buildPack.ts';
 import { BUILD_STANDARD_LINES, EMPTY_STANDARD, SITE_ENQUIRY_ENDPOINT, STANDARD_RESULT_RULES, STANDARD_RESULT_SCHEMA_LINE, readStandardReport, standardProblems, type StandardReport } from './websiteBuildStandard.ts';
 import { cloudflareBranches, cloudflareModeProblem, modeLabel, previewDeploySteps, stablePreviewUrl } from './cloudflareDeploy.ts';
@@ -131,6 +131,7 @@ export const BUILD_RESULT_SCHEMA_LINES: string[] = [
   '  "qa": { "buildPassed": true, "seedContaminationPassed": true, "linksPassed": true, "responsivePassed": true, "schemaPassed": true },',
   '  "quality": {',
   '    "oldVsNew": { "verdict": "upgrade", "widths": [1440, 390], "stillStronger": [], "notes": "" },',
+  '    "strengths": [{ "category": "photography", "label": "20 genuine job photos", "evidence": "home + gallery", "disposition": "preserve", "where": "/our-work/", "reason": "" }],',
   '    "siteGate": { "siteGateVersion": 1, "…": "the WHOLE of qa/site-gate.json, unedited" },',
   '    "siteGatePreview": { "siteGateVersion": 1, "…": "the WHOLE of qa/site-gate-preview.json, unedited" },',
   STANDARD_RESULT_SCHEMA_LINE,
@@ -151,6 +152,8 @@ export const BUILD_RESULT_RULES: string[] = [
   '- quality.oldVsNew (existing-site rebuilds): verdict "upgrade" ONLY if you compared old and new side by side at the widths listed',
   '  and the new site is clearly an upgrade; otherwise "not_upgrade" with every place the old site still wins in stillStronger.',
   '  status may be "preview_ready" only with verdict "upgrade" and an empty stillStronger (no old site: leave verdict "").',
+  '- quality.strengths (existing-site rebuilds): the old site’s strengths as you inventoried them, each with your no-downgrade decision —',
+  '  preserve / modernise / improve with WHERE it lives on the new site, or remove with a reason. Any decision Paul already made in LeadFinderOS wins.',
   ...STANDARD_RESULT_RULES,
   '  status may be "preview_ready" only when quality.standard meets X5c (LeadFinderOS re-checks it and says why not).',
   '- quality.siteGate / quality.siteGatePreview: the gate\'s own JSON files, pasted whole. status may be "preview_ready" only when both',
@@ -213,6 +216,33 @@ export function sameDomainRebuild(existingSiteUrl: string, canonicalDomain: stri
 }
 
 const expectedRemote = (s: WebsiteBuildState) => 'https://github.com/' + (s.github_owner || MARK.owner) + '/' + (s.repo_name || MARK.repo) + '.git';
+
+
+/** X5d — the enquiry form on the Findable site-enquiry backend. Shared by the Build Execution prompt and the
+ *  Master Build Prompt (simpleBuild.ts), so both print the same rule. */
+export function enquiryFormLines(s: WebsiteBuildState): string[] {
+  return [
+    '- If the site has an enquiry / quote form (required where the old site had a working one), it posts to ' + SITE_ENQUIRY_ENDPOINT + '?site=' + (s.form.enabled && s.form.site_key ? s.form.site_key : '<site key>') + ' — JSON from the page script, or a plain form post without JavaScript (answered with a 303 back to the site). Fields: name, phone, email, service, location, message; a hidden honeypot input named company_website; fill_ms = milliseconds from page load to submit (a duration, never a timestamp).',
+    '- The recipient is NEVER in the page: LeadFinderOS holds it on this client\'s Website Build record (Paul switches the form on there — no code change and no deploy). Only https://' + (s.canonical_domain || MARK.domain) + ' delivers to the client; this project\'s *.pages.dev preview is TEST mode automatically (the Resend test inbox, never the client). Show the real success / failure state; no fake thank-you.',
+    ...(s.form.enabled && s.form.site_key
+      ? ['- The form is REGISTERED (site key "' + s.form.site_key + '"). Submit ONE clearly-labelled test enquiry from the preview and report formTest "passed" only if it succeeded.']
+      : ['- The form is NOT switched on in LeadFinderOS yet, so it cannot be proven: build it to the spec above with site key "<site key>" left for Paul, say so in warnings ("switch the enquiry form on in Website Build"), report formTest "not_run", and do NOT call it preview_ready.']),
+    '- No form (phone / WhatsApp / email only) is allowed only when the old site had no working form. Never a mailto or text/plain post dressed as a form.',
+  ];
+}
+
+/** X6 — SEO / AI visibility. Shared by the Build Execution prompt and the Master Build Prompt. */
+export function seoVisibilityLines(canonicalDomain: string): string[] {
+  const s = { canonical_domain: canonicalDomain };
+  return [
+    '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
+    '- Titles and meta descriptions: unique per page, specific (service · place · business), about 60 / 155 characters, never stuffed. Exactly ONE H1 per page naming what the page is for; headings in order (H2 then H3, no skipped level).',
+    '- Internal links (by need, never a link farm): home → every service page (or the services hub) and the areas hub; services hub → each service; each service page → the areas it genuinely serves (and those location pages) + contact; each location page → the services offered there + contact; breadcrumbs on every page below home; no orphan, nothing deeper than three clicks; link to final URLs (trailing slash), never to a redirect.',
+    '- Structured data (JSON-LD, only verified facts, matching what the page shows): ONE business entity with a stable @id of https://' + s.canonical_domain + '/#business, typed with the schema.org trade SUBTYPE where one exists (Electrician, Locksmith, Plumber, HVACBusiness, RoofingContractor, AccountingService …; plain LocalBusiness only when none fits), with name, url, telephone, email, address (only if customers visit / it is public) and areaServed; sameAs only for verified profiles. Every other page refers to it by @id — never a second business. A BreadcrumbList on every page below home. Service nodes only for BUILT service pages, with provider → the business @id and areaServed where genuine.',
+    '- Entity and contact details identical everywhere — page copy, header, footer, tel: / mailto: links and schema.',
+    '- Do NOT add: llms.txt, hidden AI text, prompt pages, fake citations, review / rating schema (show genuine reviews as visible content only — never AggregateRating / Review markup), mass FAQs or FAQ schema on every page, schema stuffing.',
+  ];
+}
 
 /* ── the Build Execution prompt ───────────────────────────────────────────────────────────────── */
 
@@ -299,19 +329,9 @@ export function executionPrompt(i: BuildPackInput): { text: string; blockedBy: s
     '',
     ...standardEvidenceLines(s),
     ...H('X5d. ENQUIRY FORM — the Findable site-enquiry backend'),
-    '- If the site has an enquiry / quote form (required where the old site had a working one), it posts to ' + SITE_ENQUIRY_ENDPOINT + '?site=' + (s.form.enabled && s.form.site_key ? s.form.site_key : '<site key>') + ' — JSON from the page script, or a plain form post without JavaScript (answered with a 303 back to the site). Fields: name, phone, email, service, location, message; a hidden honeypot input named company_website; fill_ms = milliseconds from page load to submit (a duration, never a timestamp).',
-    '- The recipient is NEVER in the page: LeadFinderOS holds it on this client\'s Website Build record (Paul switches the form on there — no code change and no deploy). Only https://' + (s.canonical_domain || MARK.domain) + ' delivers to the client; this project\'s *.pages.dev preview is TEST mode automatically (the Resend test inbox, never the client). Show the real success / failure state; no fake thank-you.',
-    ...(s.form.enabled && s.form.site_key
-      ? ['- The form is REGISTERED (site key "' + s.form.site_key + '"). Submit ONE clearly-labelled test enquiry from the preview and report formTest "passed" only if it succeeded.']
-      : ['- The form is NOT switched on in LeadFinderOS yet, so it cannot be proven: build it to the spec above with site key "<site key>" left for Paul, say so in warnings ("switch the enquiry form on in Website Build"), report formTest "not_run", and do NOT call it preview_ready.']),
-    '- No form (phone / WhatsApp / email only) is allowed only when the old site had no working form. Never a mailto or text/plain post dressed as a form.',
+    ...enquiryFormLines(s),
     ...H('X6. SEO / AI VISIBILITY'),
-    '- Crawlable public HTML, HTTPS-ready, self-referencing canonicals on https://' + s.canonical_domain + ', XML sitemap of every built page, robots.txt allowing OAI-SearchBot / ChatGPT-User / Claude-User / PerplexityBot and pointing at the sitemap, no noindex in the PRODUCTION configuration.',
-    '- Titles and meta descriptions: unique per page, specific (service · place · business), about 60 / 155 characters, never stuffed. Exactly ONE H1 per page naming what the page is for; headings in order (H2 then H3, no skipped level).',
-    '- Internal links (by need, never a link farm): home → every service page (or the services hub) and the areas hub; services hub → each service; each service page → the areas it genuinely serves (and those location pages) + contact; each location page → the services offered there + contact; breadcrumbs on every page below home; no orphan, nothing deeper than three clicks; link to final URLs (trailing slash), never to a redirect.',
-    '- Structured data (JSON-LD, only verified facts, matching what the page shows): ONE business entity with a stable @id of https://' + s.canonical_domain + '/#business, typed with the schema.org trade SUBTYPE where one exists (Electrician, Locksmith, Plumber, HVACBusiness, RoofingContractor, AccountingService …; plain LocalBusiness only when none fits), with name, url, telephone, email, address (only if customers visit / it is public) and areaServed; sameAs only for verified profiles. Every other page refers to it by @id — never a second business. A BreadcrumbList on every page below home. Service nodes only for BUILT service pages, with provider → the business @id and areaServed where genuine.',
-    '- Entity and contact details identical everywhere — page copy, header, footer, tel: / mailto: links and schema.',
-    '- Do NOT add: llms.txt, hidden AI text, prompt pages, fake citations, review / rating schema (show genuine reviews as visible content only — never AggregateRating / Review markup), mass FAQs or FAQ schema on every page, schema stuffing.',
+    ...seoVisibilityLines(s.canonical_domain),
     ...H('X6b. SITE INTENT MAP — which page owns which intent'),
     ...siteIntentMapLines(siteIntentMap(i, m), i),
     ...H('X7. GITHUB'),
@@ -364,6 +384,9 @@ export interface BuildResult {
   /** The site quality gate on the build output (quality.siteGate) and on the preview (quality.siteGatePreview). */
   siteGate: SiteGateReport;
   siteGatePreview: SiteGateReport;
+  /** Website Build Simple (2026-10-05): the old site's strengths as the BUILD inventoried and decided them
+   *  (quality.strengths). null = not reported (every older result) — the stored inventory is untouched. */
+  strengths: ExistingStrength[] | null;
 }
 export interface BuildResultSummary { dropped: string[]; ignoredKeys: string[]; notes: string[] }
 export type BuildResultParse = { ok: true; result: BuildResult; summary: BuildResultSummary } | { ok: false; error: string };
@@ -415,6 +438,8 @@ export function parseBuildResult(input: string): BuildResultParse {
     standard: isObj(o.quality) && isObj(o.quality.standard) ? readStandardReport(o.quality.standard) : EMPTY_STANDARD,
     siteGate: isObj(o.quality) ? readSiteGateReport(o.quality.siteGate) : EMPTY_SITE_GATE,
     siteGatePreview: isObj(o.quality) ? readSiteGateReport(o.quality.siteGatePreview) : EMPTY_SITE_GATE,
+    strengths: isObj(o.quality) && Array.isArray(o.quality.strengths)
+      ? o.quality.strengths.map(readStrength).filter((x): x is ExistingStrength => !!x).slice(0, MAX_STRENGTHS) : null,
   };
   const rawVerdict = isObj(o.quality) && isObj(o.quality.oldVsNew) ? clean(o.quality.oldVsNew.verdict, 30) : '';
   if (rawVerdict && !(UPGRADE_VERDICTS as readonly string[]).includes(rawVerdict)) dropped.push('quality.oldVsNew.verdict "' + rawVerdict + '" is not upgrade / not_upgrade');
@@ -513,6 +538,14 @@ export function applyBuildResult(s: WebsiteBuildState, r: BuildResult, opts: { n
     redirects: r.redirects, seed_hits: r.seedHits, upgrade: r.upgrade ?? EMPTY_UPGRADE, standard: r.standard ?? EMPTY_STANDARD, previous,
   };
   next.build_execution = be;
+  /* The build's strength inventory (Website Build Simple): it fills the record ONLY where nothing has
+     been decided — an inventory Paul (or an imported recon) already marked reviewed keeps every decision
+     (mergeStrengths keeps the operator's disposition / place / reason). A failed build changes nothing. */
+  if (!failed && r.strengths) {
+    next.quality = { ...s.quality,
+      strengths: mergeStrengths(s.quality.strengths, r.strengths),
+      strengths_reviewed: true };
+  }
   return { state: next, conflicts };
 }
 

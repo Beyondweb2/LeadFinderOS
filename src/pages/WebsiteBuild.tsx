@@ -50,6 +50,8 @@ import { correctionPrompt } from '@/lib/buildExecution';
 import { launchProblems, PRODUCTION_GATE_REPORT_FILE } from '@/lib/buildPack';
 import { EXISTING_SITE_QA_KEYS, type ManifestAsset, type AssetType, ASSET_TYPES } from '@/lib/websiteBuildState';
 import { LOCATION_NOTE_MIN_WORDS } from '@/lib/templateMapping';
+import SimpleWebsiteBuild from '@/components/SimpleWebsiteBuild';
+import { gateAnsweredQa, GATE_ANSWERED_QA } from '@/lib/websiteBuildState';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    WEBSITE BUILD COMMAND CENTRE (V2) — /paid-clients/:leadId/website-build
@@ -321,11 +323,31 @@ export default function WebsiteBuild() {
   const crawl = summariseLeadCrawl(payload.crawl, payload.crawl_job);
   const faithful = state.route === 'faithful_rebuild';
 
-  return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-0">
+  /* WEBSITE BUILD SIMPLE (2026-10-05): the simple screen is the default; this command centre is the
+     ADVANCED view (?view=advanced) — every panel, prompt and internal decision unchanged behind it. */
+  const reload = async () => {
+    if (queue.current!.pending()) await flush();
+    if (queue.current!.pending()) { toast({ title: 'Not reloaded', description: 'Your last edit is not saved yet. Retry the save, then reload.', variant: 'destructive' }); return; }
+    setReloadKey((k) => k + 1);
+  };
+  const setView = (v: 'simple' | 'advanced') => { const next = new URLSearchParams(params); if (v === 'advanced') next.set('view', 'advanced'); else { next.delete('view'); next.delete('step'); } setParams(next, { replace: true }); window.scrollTo({ top: 0 }); };
+  const saveNode = <span className={`inline-flex flex-wrap items-center gap-2 ${save === 'error' ? 'text-destructive' : ''}`}>
+    {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className="h-3.5 w-3.5 text-emerald-600" />}{saveLabel}
+    {save === 'error' && <><span>— {saveError}</span><Button size="sm" variant="outline" onClick={() => void flush()}>Retry save</Button></>}</span>;
+  if (params.get('view') !== 'advanced' && packInput) return <div className="mx-auto max-w-4xl space-y-4 px-4 py-6 sm:px-0">
     <Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
+    <SimpleWebsiteBuild leadId={leadId} state={state} update={update} pack={packInput} onboarding={(payload.onboarding ?? null) as Record<string, unknown> | null}
+      oldUrls={crawlOldUrls(payload.crawl)} domain={domainVerdict} ended={ended} launch={launch} productionPrompt={prompts.find((x) => x.id === 'production_deploy')}
+      crawl={crawl} saveLabel={saveNode} onReload={reload} onAdvanced={() => setView('advanced')}
+      copy={(title, text) => copyText(title, text, [])} toast={toast} />
+  </div>;
+
+  return <div className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-0">
+    <div className="flex flex-wrap items-center justify-between gap-2"><Link to={`/paid-clients/${leadId}`} className="text-xs text-muted-foreground">← Client hub</Link>
+      <Button size="sm" variant="outline" onClick={() => setView('simple')}>← Back to the simple view</Button></div>
     <Card><CardContent className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><h1 className="text-xl font-semibold sm:text-2xl">Website Build — {businessName || 'client'}</h1>
+        <div className="min-w-0"><h1 className="text-xl font-semibold sm:text-2xl">Website Build — {businessName || 'client'} <span className="text-sm font-normal text-muted-foreground">(Advanced)</span></h1>
           <p className="text-sm text-muted-foreground">{state.route ? BUILD_ROUTE_LABELS[state.route] : 'Build route not chosen yet'}{template ? ` · ${template.name} v${template.version}` : ''}{faithful && state.rebuild_style ? ` · ${REBUILD_STYLE_LABELS[state.rebuild_style]}` : ''}</p></div>
         <div className={`flex items-center gap-2 text-xs ${save === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">
           {save === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{save === 'saved' && <Check className="h-3.5 w-3.5 text-emerald-600" />}{saveLabel}
@@ -573,14 +595,17 @@ function Checklist({ state, group, set, title, hasExistingSite, lockedKeys = {} 
   /* The same list the production gate requires (requiredPreviewQa): the old-site comparisons are not
      asked of a client with no old site. A locked tick says why (the server refuses it too). */
   const notNeeded = (k: string) => !hasExistingSite && (EXISTING_SITE_QA_KEYS as readonly string[]).includes(k);
+  /* Website Build Simple: the technical ticks the automatic gate has answered (gateAnsweredQa) — the same
+     rule the launch check reads, so this list and "Cleared for production?" cannot disagree. */
+  const auto = new Set<string>(group === 'preview' ? gateAnsweredQa(state, hasExistingSite) : []);
   const items = QA_ITEMS.filter((q) => q.group === group);
   const counted = items.filter((q) => !notNeeded(q.key));
-  const done = counted.filter((q) => state.qa[q.key]).length;
+  const done = counted.filter((q) => state.qa[q.key] || auto.has(q.key)).length;
   return <Section title={title} right={<span className="text-xs text-muted-foreground">{done} of {counted.length}</span>}>
-    <div className="grid gap-1.5 sm:grid-cols-2">{items.map((q) => { const lock = lockedKeys[q.key]; const na = notNeeded(q.key);
-      return <label key={q.key} className={`flex items-start gap-2 text-sm ${na || (lock && state.qa[q.key] !== true) ? 'opacity-60' : 'cursor-pointer'}`}>
-        <input type="checkbox" aria-label={q.label} className="mt-1" disabled={na || (!!lock && state.qa[q.key] !== true)} checked={state.qa[q.key] === true} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} />
-        <span>{q.label}{na && <span className="text-xs text-muted-foreground"> — no old site, not needed</span>}{lock && state.qa[q.key] !== true && <span className="text-xs text-amber-700 dark:text-amber-300"> — {lock}</span>}</span></label>; })}</div>
+    <div className="grid gap-1.5 sm:grid-cols-2">{items.map((q) => { const lock = lockedKeys[q.key]; const na = notNeeded(q.key); const byGate = auto.has(q.key) && state.qa[q.key] !== true;
+      return <label key={q.key} className={`flex items-start gap-2 text-sm ${na || byGate || (lock && state.qa[q.key] !== true) ? 'opacity-60' : 'cursor-pointer'}`}>
+        <input type="checkbox" aria-label={q.label} className="mt-1" disabled={na || byGate || (!!lock && state.qa[q.key] !== true)} checked={state.qa[q.key] === true || byGate} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} />
+        <span>{q.label}{na && <span className="text-xs text-muted-foreground"> — no old site, not needed</span>}{byGate && <span className="text-xs text-emerald-700 dark:text-emerald-300"> — answered by the automatic technical check ({GATE_ANSWERED_QA[q.key]})</span>}{lock && state.qa[q.key] !== true && <span className="text-xs text-amber-700 dark:text-amber-300"> — {lock}</span>}</span></label>; })}</div>
     <p className="text-xs text-muted-foreground">Tick only what the QA prompts reported as PASS, or what you checked yourself.</p>
   </Section>;
 }
