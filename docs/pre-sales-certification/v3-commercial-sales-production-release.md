@@ -1,9 +1,9 @@
 # v3 commercial alignment + salesperson onboarding — production release (F + G + H), 2026-10-05
 
-**STATUS: PAUSED at Phase 11 step 8 (the Stripe legacy cutover EXECUTE), waiting for Paul's explicit go-ahead.**
-Backend is LIVE and verified (3 migrations, 35 functions, the v3 payment gate). The cutover execute was refused by this
-session's permission check; nothing was done to get around it. Frontend (`main`) and findable-site are NOT released yet —
-the brief releases them only after the cutover reports READY. Selling stays paused until then.
+**STATUS: DEPLOYED (2026-10-05).** Backend, Stripe cutover (READY), LeadFinderOS frontend and findable.live are live
+and verified. The cutover execute was first refused by the session permission check; Paul then said "yes, run the
+cutover" and it ran (§8). During the release Paul changed the salesperson-paperwork rule (§14) — applied, tested and
+deployed before the final release. Production commits: LeadFinderOS `main` — see §15; findable-site `master` `5af9064`.
 
 ## 1. Source commits
 
@@ -136,9 +136,15 @@ Report (dry run, 13:40, tool deployed alone first — read-only; and again after
   on this account). Classification was made confident by adding each link's line items and its evidence (name vs price
   only) to the report — display only, the plan hash covers ids (`c8a8db6b`).
 
-EXECUTE: **not run** — refused by the session permission check. Production meanwhile: the two links and the session can
-still take a card, but any such payment is HELD by the new webhook (no client lifecycle, no subscription, no commission,
-Paul emailed); the session lapses by itself at 2026-10-06 09:38 UTC.
+EXECUTE: first refused by the session permission check (nothing worked around it); run after Paul's explicit
+"yes, run the cutover" at **2026-10-05 ~14:01 UTC** with plan hash `63fb023a…` and the confirm phrase:
+- expired `cs_live_a1Hmk…` (Portsmouth Plumbing Quick Close link) — done;
+- deactivated `plink_1UGfgAFi…` ("Findable one off" £99) and `plink_1UGffKFi…` ("Findable — New site plan" £99) — done.
+Report after (and re-run independently at 14:02:30): **Open legacy Checkout Sessions 0 · Active legacy Payment Links 0 ·
+Stored legacy Quick Close links 3 (still payable 0) · Other bypass paths 0 · READY: no payable legacy Findable path
+remains.** Plan hash now `3fcf505e…`. Nothing else in Stripe was touched (0 non-Findable objects existed).
+⚠️ Paul: The Portsmouth Plumbing and Heating Co's old link no longer works — send them their sign-up link (Quick Close →
+the link is now the agreement page) so they sign v3 before paying.
 
 ## 9. Agreement parity
 
@@ -169,21 +175,78 @@ The CURRENT public `/agreement` (old site, proxying `client-agreement`) already 
   `sales-shared-workflow.sql` (calls a removed `lead_set_follow_up` signature) fail identically on live without this release.
 - `multi-user-rls.sql` 1, `claim-rule.sql` 3, `call-workspace-guards.sql` 1 failing items — identical without this release.
 
-## 12. Still to do (in order) once Paul says yes
+## 12. Releases
 
-Execute the cutover (plan hash above; a changed plan is refused and re-reported) → report until READY → merge to `main`
-(`--no-ff`), push, verify app.leadfinderos.com + leadfinderos-next.pages.dev → parity again → findable-site merge to
-`master`, deploy with `--branch=master`, verify findable.live → live verification and visual QA → resume selling → this
-record completed.
+- **LeadFinderOS frontend:** `main` `81628fdb` (release merge, `--no-ff`, origin proven unmoved at `ac9b8a07` before the
+  push), then `af51f62e` (§14), then the final record/visual-fix merge (§15). Cloudflare Pages auto-deploys `main`;
+  **app.leadfinderos.com and leadfinderos-next.pages.dev serve the same entry chunk** and every release-only marker
+  (review reasons, `conflicting_creators`, the new not-ready wording) was found by crawling the live chunks.
+- **findable-site:** parity re-run on the exact commits (LFOS `81628fdb` tree = integration; site `5af9064`):
+  **IDENTICAL — 139**. `master` fast-forwarded `f23d42e → 5af9064` (the G `--no-ff` merge), built, deployed with
+  `wrangler pages deploy --branch=master --commit-hash=5af9064` on the findable-site account (`4148056c…`); Cloudflare lists
+  `c8e47e41` as **Production / master / 5af9064** (rollback = `ce99e331` / `f23d42e`).
+- Live findable.live checks (fetched, not the local build): /agreement/ is the static v3 page (9A, £29.99, read-only note),
+  Option B wording on home + /pricing, £29.99 after, Build 12 / Optimise 6, any increase, no six-weeks / nothing-charged-after
+  / £9.99, /terms points to the agreement, /privacy clean (its only "[…]" is Cloudflare's own `[email protected]` rewrite),
+  sitemap lists /agreement/.
 
-## 13. Open items (not finished, by design)
+## 13. Live verification (no real payment, no message to anyone)
 
-1. Final salesperson contractor agreement — v2 is a draft; nobody can be Ready to Sell until Paul adds and approves a final.
-2. Final salesperson privacy notice — draft with 10 outstanding items.
-3. TPS/CTPS — postponed (dormant table and lib only).
-4. Findable Meta / WhatsApp cutover — pending; `whatsapp-status` held on v114.
-5. CSV import — pre-existing bug, open.
-6. Prospect full-site crawl, larger audit modal, salesperson WhatsApp queue UI, compact Outreach audit rows — not in this
+- **Client sign-up:** a QA fixture's live `/agree/<token>` page: v3 text, the chosen route (Findable Optimise, 6
+  payments), £29.99 Continuing Service, **3 tick boxes (authority, agree, marketing opt-out), none pre-ticked**, "I agree and
+  sign", **no payment link or pay button before signing**. Unsigned `pay` → `agreement_required` / `not_signed`, no session;
+  Quick Close `signup_link` → the agreement URL, no session. v1 bypass: unit-proven (not demonstrated live).
+- **Payment:** cutover READY; the webhook HOLD is live (marker `holdPayment`); a held client cannot be charged again
+  (`payment_held`); old Stripe URLs are never reused (`linkUsable`).
+- **Timing / guarantee / Continuing Service:** the live Paid Client card (rendered from the real `timelineView`) shows Access
+  Date → Results Date → Refund Window end (+14) → Approval / Payment Start (+15), "NOT yet set in Stripe" until confirmed,
+  monthly count, and Continuing Service £29.99 "manual for now". Any +1 counts (`guaranteeNumberWentUp`, unit-proven); the
+  20 × 3 × 2 method is unchanged. Nothing charges £29.99 automatically (`CONTINUING_SERVICE_AUTOMATION` all false).
+- **Salesperson onboarding:** live read-back — no rep is Ready (Test, test1 miss practical items), Paul is never gated, no
+  paperwork key anywhere, TPS absent.
+- **Attribution / commission:** live rolled-back suites 70/70 (H), 24/24 (sign-up attribution), 13/13 (paperwork rule);
+  hold → commission unit-proven (§4). Historic sellers: hash `f3db0eaf…` unchanged throughout.
+- **D + E:** their TS suites pass in the 328; `outreach-ownership.sql` and the other SQL suites give identical results with
+  and without this release.
+- **WhatsApp:** `whatsapp-status` still **v114** (2026-09-30); no WhatsApp policy changed (a not-ready rep is refused sends
+  exactly like a suspended one, as before).
+
+## 14. Change from Paul mid-release — salesperson paperwork HANDLED EXTERNALLY, NOT ENFORCED IN LEADFINDEROS
+
+- Migration `20261010140000_ready_to_sell_without_paperwork.sql` (applied ~14:3x UTC, read back): Ready to Sell no longer
+  checks the contractor agreement or the privacy notice. Also fixed a real gap found by the new live test: a NULL
+  `contractor_type` silently passed the contractor-status item.
+- **Still blocks Ready to Sell:** 18+ confirmed, right to work, bank details, VAT status, individual / limited company, start
+  date, own login, current team guide acknowledged. Schedule 2 optional; TPS/CTPS postponed.
+- Not ready ⇒ server refuses Find Leads (`search-leads` → `guard_action` `not_onboarded`), claims, checks, calls / contact
+  logging, outreach and WhatsApp, Quick Close sign-up links (so no commission-bearing sale). Paul is never gated.
+- No salesperson-facing paperwork UI: the banner says "Calls, messages, claiming leads, checks, Find Leads and sign-up
+  links are paused until your onboarding is complete. Waiting on: …" with only real missing items; its one button is the
+  team-guide acknowledgement. Find Leads shows the banner and its single search handler does not start a search.
+  Team-page agreement / notice fields are optional reference lines.
+- Deployed: `admin-users` (marker-verified). Tests: `salesperson-paperwork-external` (new), `salesperson-onboarding`
+  rewritten, live `ready-to-sell-paperwork.sql` 13/13; H 70/70 and attribution 24/24 re-run on the new rule.
+- The CLIENT v3 agreement-before-payment flow is unchanged (no client agreement / checkout file or object touched).
+
+## 15. Visual QA
+
+- Public pages (/agreement/, /, /pricing/, /refunds/, /terms/, /privacy/) on live findable.live at 390 px and 1440 px:
+  no horizontal overflow, no stale v1 wording, no debug text.
+- Operator components rendered from the real source in a throwaway harness (fixtures, no network; deleted afterwards):
+  not-ready banner, Team onboarding panel, Team documents card, attribution-review card, Paid Client timeline. Found and
+  fixed: the banner's team-guide button ran 30 px off a 390 px screen (now wraps); the paperwork labels read
+  "…reference only)(optional)" (shortened). After: no overflow at 390 or 1440. Not rendered: the Quick Close dialog and the
+  full signed-in pages (no admin session in this session). Measured by script; nobody has looked at them yet.
+
+## 16. Open items
+
+1. Salesperson contractor agreement / privacy notice — **handled externally by Paul; not a product blocker** (§14).
+2. TPS/CTPS — postponed (dormant table and lib only).
+3. Findable Meta / WhatsApp cutover — pending; `whatsapp-status` held on v114.
+4. CSV import — pre-existing bug, open.
+5. Prospect full-site crawl, larger audit modal, salesperson WhatsApp queue UI, compact Outreach audit rows — not in this
    release.
-7. Admin team table: a sale under attribution review shows its REVENUE on the book owner's row (display only; no seller, no
-   commission). To fix separately.
+6. Admin team table: a sale under attribution review shows its REVENUE on the book owner's row (display only; no seller, no
+   commission).
+7. Attribution review "Confirm seller" offers only the claimed seller (§3).
+8. Stale SQL test files `quick-close.sql`, `sales-shared-workflow.sql` (pre-existing, §11).
