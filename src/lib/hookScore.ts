@@ -150,6 +150,20 @@ function stringList(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && !!s.trim()).map((s) => s.trim()) : [];
 }
 
+/** A cell's stored citations, cleaned: http(s) URLs only, deduped, at most 12. */
+function citationList(v: unknown): Array<{ title: string; url: string }> {
+  if (!Array.isArray(v)) return [];
+  const out: Array<{ title: string; url: string }> = [];
+  for (const c of v) {
+    const url = typeof (c as { url?: unknown })?.url === 'string' ? (c as { url: string }).url.trim() : typeof c === 'string' ? c.trim() : '';
+    if (!/^https?:\/\//i.test(url) || out.some((o) => o.url === url)) continue;
+    const title = typeof (c as { title?: unknown })?.title === 'string' ? (c as { title: string }).title.trim() : '';
+    out.push({ title, url });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 /* ── The score ─────────────────────────────────────────────────────────────────────────────── */
 
 export type HookResultStatus = 'named' | 'not_named' | 'failed' | 'pending';
@@ -164,6 +178,10 @@ export interface HookResult {
    *  answer is valid. */
   competitors: string[];
   answerExcerpt: string;
+  /** The sources this engine cited for this answer, as stored (title + URL). Display only — being
+   *  cited is not being named, and nothing scores on it. Added 2026-10-05 (the detailed audit view);
+   *  empty when the answer is not valid or carried none. */
+  citations?: Array<{ title: string; url: string }>;
 }
 
 export interface HookEngineTally {
@@ -300,6 +318,7 @@ export function scoreHookRun(state: unknown, rows: readonly HookScoreRow[], ctx:
         questionIndex, question, engine, label, status,
         competitors: ctx.cleanCompetitors ? ctx.cleanCompetitors(raw) : raw,
         answerExcerpt: valid ? String((cell as { answer_text: string }).answer_text).trim().slice(0, 600) : '',
+        citations: valid ? citationList((cell as { citations?: unknown }).citations) : [],
       });
     }
   });

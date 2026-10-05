@@ -22,6 +22,24 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-05-prospect-full-audit', date: '2026-10-05', title: 'A full audit window for every prospect', audience: 'all',
+    body: 'The AI check details and the website evidence now open in one large window you can read during a call — on a phone it fills the screen. The website crawl checks much more and groups repeated problems.',
+    report: {
+      added: [
+        '"Full audit & website evidence" on the lead’s Call tab, "View full audit" on the AI check card, and "Full audit" on the Crawl check popup — all open the same window.',
+        'For this call: are they showing up in AI, what is wrong with the website, and the strongest point to raise, each with the evidence behind it.',
+        'ChatGPT and Google AI side by side: named or not for each question, who was named instead, the sources each answer cited, and the full answer.',
+        'Website evidence grouped by topic and marked High / Medium / Low / Verified: crawler access (including ChatGPT’s search crawler), robots.txt and sitemap, noindex and canonical problems, broken pages, business name / town / phone / services, thin and copy-paste pages, customer questions answered, reviews and credentials, titles, phone layout and structured data.',
+        'A repeated problem is one line with how many pages it affects, five examples and "Show all".',
+      ],
+      changed: [
+        'A prospect crawl reads up to 500 pages. On a bigger site it says it was capped and how many pages were not read. Paying clients’ crawls still read every page.',
+        'Pressing Crawl site within 7 days of the last full crawl opens the saved result instead of crawling the site again. It says it is saved.',
+        'A crawl that fails says why: the site did not answer, a certificate error, the address does not exist, a redirect loop, or it blocked us.',
+      ],
+      removed: ['The small details overlay that scrolled inside the AI check card.'],
+      effect: 'Before or during a call you can open one window and see whether AI names them, what is wrong with their site and what to say. Crawling never uses your AI checks.',
+    } },
   { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
     body: 'Outreach now opens on My leads — only the leads you own. Unassigned leads, a salesperson’s leads or the whole team show only when you choose them, and queueing WhatsApp across several people’s leads asks you first. Leads you add from Find Leads are now yours from the start.',
     report: {
