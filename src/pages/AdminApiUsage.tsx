@@ -12,6 +12,7 @@ import {
   ArrowLeft, Loader2, DollarSign, AlertTriangle, Activity, Database, RefreshCw,
 } from 'lucide-react';
 import { SecurityPanel } from '@/components/SecurityPanel';
+import { SalesChecksAdminCard } from '@/components/SalesChecksAdminCard';
 
 interface ApiUsageData {
   spendToday: number;
@@ -101,6 +102,9 @@ export default function AdminApiUsage() {
 
       {/* Security & usage (2026-09-29): who spent what, warnings, restrictions, the paid-action control. */}
       <SecurityPanel />
+
+      {/* Salespeople's bulk pre-call checks (fix/07): batches, fresh vs reused, estimated and actual spend, problems. */}
+      <SalesChecksAdminCard />
 
       <h2 className="text-xl font-semibold text-foreground pt-2">Google API detail</h2>
 

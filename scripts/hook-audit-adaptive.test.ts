@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   HOOK_MAX_QUESTIONS,
@@ -12,7 +12,6 @@ import {
   type HookState,
 } from '../src/lib/hookAudit.ts';
 import { BASELINE_QUESTIONS, BASELINE_RUNS, OUTREACH_HOOK_QUESTIONS } from '../src/lib/auditQuestionCounts.ts';
-import { autoMarkHookLeadNotInterested } from '../supabase/functions/_shared/hook-not-interested.ts';
 import { esc, renderHookSection } from '../src/lib/aiAuditReportHtml.ts';
 
 let failures = 0;
@@ -465,7 +464,7 @@ ok(noCompetitorsHtml.includes('class="cc-callout"'), 'N7: the truthful red not-n
 // Everything else in the hook section still renders (no broader redesign).
 ok(geminiHtml.includes('hook-eyebrow') && geminiHtml.includes('hook-vk') && geminiHtml.includes('hook-caveat'), 'the eyebrow, "the verdict" label and caveat all still render beside the simplified box');
 
-/* ── K. GEMINI-ONLY 3/3 AUTO "NOT INTERESTED" (Paul, 2026-09-21) ─────────────────────────────────
+/* ── K. GEMINI-ONLY 3/3 — A FACT ABOUT THE RESULT (2026-09-21; since 2026-10-04 it moves no lead) ──
    geminiNamedAllThree is deliberately independent of the hook's own stop/gap logic above — it
    reads the three settled rows on its own terms, Gemini's cell only. ChatGPT's presence, absence
    or failure must never move this answer. */
@@ -499,95 +498,12 @@ ok(geminiNamedAllThree([
 // 7: a non-hook audit never reaches geminiNamedAllThree in production — the queue only calls it
 // inside `if (isHookState(results.hook) ...)`, asserted below as a source-shape guard.
 
-/* ── L. THE LEAD WRITE ITSELF: resolution, the exact status, and the terminal-state guard ──────
-   A tiny fake Supabase client that behaves like Postgres would under the code's own `.not(...)`
-   predicate, so the test tracks PROTECTED_LEAD_STATUSES from the source rather than duplicating
-   the list. */
-type FakeLead = { id: string; status: string; is_potential_work: boolean | null };
-function fakeService(opts: { auditLeadId?: string | null; auditError?: string; lead?: FakeLead | null }) {
-  function chain(table: string) {
-    const calls: Array<[string, unknown[]]> = [];
-    const resolve = () => {
-      if (table === 'ai_audits') {
-        if (opts.auditError) return { data: null, error: { message: opts.auditError } };
-        return { data: opts.auditLeadId === undefined ? null : { lead_id: opts.auditLeadId }, error: null };
-      }
-      // outreach_leads: simulate the conditional UPDATE ... WHERE id = ? AND status NOT IN (...) AND (is_potential_work IS NULL OR = false)
-      const lead = opts.lead;
-      if (!lead) return { data: [], error: null };
-      const eqId = calls.find((c) => c[0] === 'eq' && c[1][0] === 'id')?.[1][1];
-      if (eqId !== lead.id) return { data: [], error: null };
-      const notIn = calls.find((c) => c[0] === 'not');
-      const protectedList = notIn ? String(notIn[1][2]).replace(/^\(|\)$/g, '').split(',') : [];
-      if (protectedList.includes(lead.status)) return { data: [], error: null };
-      if (lead.is_potential_work === true) return { data: [], error: null };
-      return { data: [{ id: lead.id }], error: null };
-    };
-    const api: Record<string, unknown> = {
-      select: (...a: unknown[]) => { calls.push(['select', a]); return api; },
-      update: (...a: unknown[]) => { calls.push(['update', a]); return api; },
-      eq: (...a: unknown[]) => { calls.push(['eq', a]); return api; },
-      not: (...a: unknown[]) => { calls.push(['not', a]); return api; },
-      or: (...a: unknown[]) => { calls.push(['or', a]); return api; },
-      maybeSingle: async () => resolve(),
-      then: (onFulfilled: (v: unknown) => unknown) => Promise.resolve(resolve()).then(onFulfilled),
-    };
-    return api;
-  }
-  return { from: chain };
-}
-
-const threeGeminiHits = [done({ gemini: cell(true) }), done({ gemini: cell(true) }), done({ gemini: cell(true) })];
-
-// Top-level await: this file is an ES module (package.json "type": "module"), and these checks
-// exercise real async IO through the fake client, so they must resolve before the failure count
-// below is read — a fire-and-forget async block here would let the final throw run first.
-await (async () => {
-  // 4 (write side): a genuinely qualifying lead, still active, gets moved.
-  {
-    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
-    ok(outcome.applied === true && outcome.leadId === 'lead-1', '4 (write): a 3/3 Gemini hook on an active lead is applied');
-  }
-  // Not 3/3 → never calls through to a lead write, never guesses.
-  {
-    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', [done({ gemini: cell(true) }), done({ gemini: cell(false) })]);
-    ok(outcome.applied === false && outcome.reason === 'gemini_not_3_of_3', 'not 3/3 → never applied');
-  }
-  // 8: missing/ambiguous lead association — never update another lead, never guess.
-  {
-    const svc = fakeService({ auditLeadId: null, lead: { id: 'lead-1', status: 'queued', is_potential_work: null } });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
-    ok(outcome.applied === false && outcome.reason === 'audit_has_no_lead', '8a: an audit with no lead_id is left alone');
-  }
-  {
-    const svc = fakeService({});
-    const outcome = await autoMarkHookLeadNotInterested(svc, null, threeGeminiHits);
-    ok(outcome.applied === false && outcome.reason === 'no_audit_id', '8b: no audit id at all — never looked up, never guessed');
-  }
-  {
-    const svc = fakeService({ auditError: 'timeout' });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
-    ok(outcome.applied === false && outcome.reason.startsWith('audit_lookup_failed'), '8c: an unreadable audit->lead lookup is reported, not guessed past');
-  }
-  // 9: a lead already in a manual/paid/terminal state, or starred Interested, is left untouched.
-  for (const status of ['payment_received', 'in_delivery', 'completed', 'refunded', 'closed', 'opted_out', 'price_given', 'already_visible', 'not_interested']) {
-    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status, is_potential_work: null } });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
-    ok(outcome.applied === false, `9: a lead already "${status}" is never overwritten by the auto-classification`);
-  }
-  {
-    const svc = fakeService({ auditLeadId: 'lead-1', lead: { id: 'lead-1', status: 'queued', is_potential_work: true } });
-    const outcome = await autoMarkHookLeadNotInterested(svc, 'audit-1', threeGeminiHits);
-    ok(outcome.applied === false, '9b: a lead starred Interested (is_potential_work) is never auto-marked not interested');
-  }
-})();
-
-/* ── M. Source-shape guards for the write path and the isolation from every other audit type ──── */
-const notInterested = readFileSync(resolve(root, 'supabase/functions/_shared/hook-not-interested.ts'), 'utf8');
-ok(/status: "not_interested", is_potential_work: false/.test(notInterested), 'M: the write is the EXACT statusUpdatePatch(\'not_interested\') shape — no parallel status invented');
-ok(queue.includes('isHookState((results as Row).hook) && (results as Row).hook.executed === 3 && rows.length === 3'), 'M: the queue only ever calls the auto-classifier for a genuine hook run with all three questions settled — every other audit type (Quick Check, Full Measurement, paid baseline, remeasure, manual/bulk) never populates results.hook and is structurally excluded');
-ok(queue.includes('autoMarkHookLeadNotInterested(service, runRow?.audit_id, rows)'), 'M: the write happens after the SAME atomic finalise claim as the crawl side-effect — fires once per run, not once per tick');
+/* ── L/M. RETIRED 2026-10-04 (Paul, fix/07): an audit result never changes a lead's status ──
+   The 3/3 Google AI rule above used to move the lead to "Not interested" (_shared/hook-not-interested.ts).
+   That writer is deleted; geminiNamedAllThree stays as a pure READ of the result and has no production
+   caller. "Not interested" is a sales outcome a person records. */
+ok(!existsSync(resolve(root, 'supabase/functions/_shared/hook-not-interested.ts')), 'L: the auto "Not interested" writer is deleted');
+ok(!/autoMarkHookLeadNotInterested|autoMarkSixOfSixNotInterested|hook-not-interested|geminiNamedAllThree\(/.test(queue), 'M: the audit queue neither imports nor calls any audit → status rule');
+ok(!/status:\s*"not_interested"/.test(queue), 'M: the audit queue writes no "not_interested" status anywhere');
 
 if (failures) throw new Error(`${failures} adaptive hook checks failed`);

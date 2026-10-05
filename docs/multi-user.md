@@ -34,6 +34,7 @@ below are what the server enforces.
 | Conversations, replies, templates, voice notes | all | own leads (send-whatsapp-message / -voice check the assignment) |
 | Bulk outreach | Outreach table | `sales_queue_opener`: the admin's selected opener only, never-contacted own leads |
 | Hook audit | yes | own leads only (`create-ai-audit` → `salesAuditRefusal`) |
+| Check before calling (bulk AI check + website check) | no (admin bulk audits instead) | own active leads only, `SALES_CHECK_BATCH_MAX` per press, a daily allowance, recent results reused (`sales-prospect-check`, fix/07) |
 | Full measurement / Discovery / Baseline / Remeasure | yes | no |
 | Coverage, niche verdict | yes | yes (book-wide counts, no lead names) |
 | Find Leads search | yes | yes (`search-leads` requires admin or sales) |

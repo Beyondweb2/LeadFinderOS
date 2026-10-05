@@ -10,6 +10,15 @@ type Row = Record<string, unknown>;
 
 const parseVal = (v: string): unknown => (v === 'null' ? null : v === 'true' ? true : v === 'false' ? false : v);
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v));
+/** Order two values as SQL would for the comparisons used here: numbers as numbers, ISO timestamps as
+ *  instants (added for scripts/sales-prospect-check.test.ts; numbers behave exactly as before). */
+const cmp = (a: unknown, b: unknown): number => {
+  const na = num(a), nb = num(b);
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  const da = Date.parse(String(a)), db = Date.parse(String(b));
+  if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  return NaN;
+};
 
 /** One PostgREST filter atom ("col.op.value") against a row. */
 function atom(row: Row, expr: string): boolean {
@@ -23,10 +32,10 @@ function atom(row: Row, expr: string): boolean {
   else if (v === null || v === undefined) r = false; // SQL: a comparison with NULL is never true
   else if (op === 'eq') r = String(v) === raw;
   else if (op === 'neq') r = String(v) !== raw;
-  else if (op === 'lte') r = num(v) <= num(raw);
-  else if (op === 'lt') r = num(v) < num(raw);
-  else if (op === 'gte') r = num(v) >= num(raw);
-  else r = num(v) > num(raw);
+  else if (op === 'lte') r = cmp(v, raw) <= 0;
+  else if (op === 'lt') r = cmp(v, raw) < 0;
+  else if (op === 'gte') r = cmp(v, raw) >= 0;
+  else r = cmp(v, raw) > 0;
   // NOT x where x is NULL-comparison-unknown stays unknown (false), as in SQL — except for `is`.
   if (neg) return op === 'is' ? !r : (v === null || v === undefined ? false : !r);
   return r;
@@ -45,6 +54,10 @@ function splitTop(s: string): string[] {
 export class FakeDb {
   tables: Record<string, Row[]> = {};
   unique: Record<string, string[][]> = {};
+  /** Partial unique indexes: the key applies only to rows matching `where` (e.g. one ACTIVE batch per rep). */
+  partialUnique: Record<string, Array<{ cols: string[]; where: (r: Row) => boolean }>> = {};
+  /** Optional hook run before every query resolves — a test can make a table fail (throw / error). */
+  failOn: ((table: string, op: string) => { message: string; code?: string } | null) | null = null;
   writes: Array<{ table: string; kind: string; patch: Row }> = [];
   table(name: string) { return (this.tables[name] ??= []); }
   from(name: string) { return new Query(this, name); }
@@ -52,7 +65,7 @@ export class FakeDb {
 
 class Query implements PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> {
   private filters: Array<(r: Row) => boolean> = [];
-  private op: 'select' | 'update' | 'insert' | 'upsert' = 'select';
+  private op: 'select' | 'update' | 'insert' | 'upsert' | 'delete' = 'select';
   private patch: Row | Row[] | null = null;
   private returning = false;
   private single: 'maybe' | 'one' | null = null;
@@ -63,6 +76,11 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   update(p: Row) { this.op = 'update'; this.patch = p; return this; }
   insert(p: Row | Row[]) { this.op = 'insert'; this.patch = p; return this; }
   upsert(p: Row | Row[], o: { onConflict?: string; ignoreDuplicates?: boolean } = {}) { this.op = 'upsert'; this.patch = p; this.upsertOpts = o; return this; }
+  delete() { this.op = 'delete'; return this; }
+  gte(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && cmp(r[c], v) >= 0); return this; }
+  gt(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && cmp(r[c], v) > 0); return this; }
+  lte(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && cmp(r[c], v) <= 0); return this; }
+  lt(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && cmp(r[c], v) < 0); return this; }
   eq(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && String(r[c]) === String(v)); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => r[c] !== null && r[c] !== undefined && String(r[c]) !== String(v)); return this; }
   is(c: string, v: unknown) { this.filters.push((r) => (v === null ? r[c] === null || r[c] === undefined : r[c] === v)); return this; }
@@ -82,10 +100,22 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
     for (const key of this.db.unique[this.name] ?? []) {
       if (this.db.table(this.name).some((r) => key.every((k) => r[k] !== null && r[k] !== undefined && r[k] === row[k]))) return true;
     }
+    for (const p of this.db.partialUnique[this.name] ?? []) {
+      if (!p.where(row)) continue;
+      if (this.db.table(this.name).some((r) => p.where(r) && p.cols.every((k) => r[k] !== null && r[k] !== undefined && r[k] === row[k]))) return true;
+    }
     return false;
   }
   private run(): { data: unknown; error: { message: string; code?: string } | null } {
     const t = this.db.table(this.name);
+    const forced = this.db.failOn?.(this.name, this.op) ?? null;
+    if (forced) return { data: null, error: forced };
+    if (this.op === 'delete') {
+      const gone = this.matches();
+      this.db.tables[this.name] = t.filter((r) => !gone.includes(r));
+      this.db.writes.push({ table: this.name, kind: 'delete', patch: { _matched: gone.length } });
+      return { data: null, error: null };
+    }
     if (this.op === 'select') {
       let rows = this.matches().map((r) => ({ ...r }));
       if (this.limitN !== null) rows = rows.slice(0, this.limitN);
@@ -109,6 +139,7 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
       t.push(row); out.push(row);
       this.db.writes.push({ table: this.name, kind: this.op, patch: row });
     }
+    if (this.returning && this.single) return { data: out[0] ?? null, error: null };
     return { data: this.returning ? out : null, error: null };
   }
 }

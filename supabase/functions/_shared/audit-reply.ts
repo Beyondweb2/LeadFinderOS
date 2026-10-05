@@ -41,7 +41,7 @@ export function hookForbidsAbsenceCopy(state: unknown): boolean {
 
 /** VERSION 2 (2026-09-25): the six-result hook forbids absence copy when it is COMPLETE and named the
  *  business in all six results. Scored by scoreHookRun with the report's ruler, the same call the
- *  6/6 Not Interested rule and the Inbox card make. Any miss (5/6 down) or an incomplete audit
+ *  Inbox card makes (the 6/6 Not Interested rule that also did was removed 2026-10-04). Any miss (5/6 down) or an incomplete audit
  *  returns false and leaves every other check below to decide, as before. */
 export function sixResultHookForbidsAbsenceCopy(state: unknown, rows: readonly HookScoreRow[], ctx: HookScoreContext): boolean {
   if (!isHookStateV2(state)) return false;

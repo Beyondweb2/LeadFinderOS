@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge } from '@/lib/edgeInvoke';
 import { edgeErrorMessage } from '@/lib/edgeInvokeCore';
-import { GUARD_ACTIONS, type ProtectionLimits, type ProtectionMode, validateLimits } from '@/lib/protectionLimits';
+import { GUARD_ACTIONS, type ProtectionLimits, type ProtectionMode, validateLimits, withDefaultActions } from '@/lib/protectionLimits';
 import { actionWords, describeSecurityEvent, type SecurityEventRow } from '@/lib/securityAlerts';
 
 /* SECURITY & USAGE — admin only (2026-09-29, docs/abuse-cost-protection.md). The whole page answers:
@@ -86,7 +86,9 @@ export function SecurityPanel() {
     );
   }
   const d = q.data;
-  const L = d.limits;
+  /* An action added by a newer release (sales_check) is shown from the defaults until its SQL adds it to
+     the live row, so the table never reads an undefined action and a save carries it. */
+  const L = withDefaultActions(d.limits);
   const warnings = d.events.filter((e) => e.severity !== 'info' || ['not_allowed', 'suspended', 'webhook_unsigned'].includes(e.kind));
   const exports = d.events.filter((e) => e.kind === 'data_export');
   const suspended = d.members.filter((m) => m.suspended_at);

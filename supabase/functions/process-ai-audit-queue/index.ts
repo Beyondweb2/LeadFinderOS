@@ -15,14 +15,12 @@ import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
 import { maybeSendRemeasureResults, resultsSweepDue, sweepUnsentRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
-import { autoMarkHookLeadNotInterested, autoMarkSixOfSixNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
-import { isHookStateV2 } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
 import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
@@ -1194,22 +1192,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     finalised++;
     processingRuns.push({ runId, auditId: runRow?.audit_id as string, finalStatus: runStatus, allFailed });
 
-    /* ── AUTO "NOT INTERESTED" ON A 3/3 GEMINI HOOK (2026-09-21, _shared/hook-not-interested.ts) ──
-       Fires ONCE per run's completion (same atomic transition winner as the crawl below), only for
-       a hook run whose three questions all settled with Gemini genuinely naming the business — see
-       geminiNamedAllThree (src/lib/hookAudit.ts) for the exact, ChatGPT-independent rule. Every
-       other audit type never reaches here with a `results.hook`, so this is inert for them. */
-    if (isHookState((results as Row).hook) && (results as Row).hook.executed === 3 && rows.length === 3) {
-      const outcome = await autoMarkHookLeadNotInterested(service, runRow?.audit_id, rows);
-      if (outcome.applied) {
-        console.log(`[process-ai-audit-queue] hook run ${runId}: Gemini named the business in all 3 questions — lead ${outcome.leadId} auto-marked not interested`);
-      } else if (outcome.reason !== "gemini_not_3_of_3") {
-        console.log(`[process-ai-audit-queue] hook run ${runId}: not auto-marking not interested — ${outcome.reason}`);
-      }
-    }
-    /* The VERSION-2 hook's 6/6 rule is NOT here. It runs after the run is released (below, beside
-       readyRuns), because "named" must be read after extract-competitors has written its verdicts.
-       That way the rule, the report and the Inbox card read one set of cells. */
+    /* ⛔ AN AUDIT RESULT NEVER CHANGES A LEAD'S STATUS (Paul, 2026-10-04, fix/07). The two rules that
+       used to sit here and beside readyRuns below — Google AI named them in 3/3 (version 1) and named
+       in 6/6 (version 2) → "Not interested" — are removed, for the single check and the bulk check
+       alike. "Not interested" is a sales outcome a person records, never an inference from an audit.
+       A strong result is shown as a finding ("Strong AI visibility — named in all 6 answers",
+       coldCallPlaybook.ts callCardAudit) and the lead keeps its status. The stored result is unchanged. */
 
     /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
        Every audit that finalises crawls its lead's site — complete, capped OR failed, because the
@@ -1229,9 +1217,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
        precisely one outcome:
 
          · visibility_gap_found   → DEEP. This is the lead we are about to message.
-         · max_questions_reached  → shallow. Gemini named them every time; hook-not-interested.ts
-                                    auto-marks the lead not interested a few lines above this, so
-                                    building an argument for them is work for a message never sent.
+         · max_questions_reached  → shallow. AI named them every time, so there is no missed search
+                                    to build a sales argument for. (The lead keeps its status — no
+                                    audit sets "Not interested" since 2026-10-04 — and the cheap
+                                    crawl's fault signals are still taken.)
          · provider_failure       → shallow. No hook, nothing to attach findings to.
          · still running / absent → handled by the line below, not by this list.
 
@@ -1460,23 +1449,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (readiness.ready) {
       const { error } = await service.from("ai_audit_runs").update({ status: p.finalStatus }).eq("id", p.runId).eq("status", "processing");
       if (!error) readyRuns.add(p.runId);
-      /* ── VERSION 2 HOOK: 6/6 ON CHATGPT + GOOGLE AI (2026-09-25, _shared/hook-not-interested.ts) ──
-         Here, after release, because only now has extract-competitors written the model's named
-         verdicts. The rule reads the queue rows with the report's own ruler, so it agrees with the
-         Inbox card and the report. Only a COMPLETE six-result hook where all six results named the
-         business moves the lead. Any miss (5/6 down to 0/6) keeps it as an opportunity, and an
-         incomplete audit decides nothing. It deletes nothing, sends nothing, and is idempotent (a
-         conditional write that skips an already-moved lead). The reason is recorded on
-         results.hook. Runs before the completion auto-send below. That send would refuse anyway
-         (audit-reply's hookForbidsAbsenceCopy), but the lead should already be out of outreach. */
-      if (!error && isHookStateV2(current.hook)) {
-        const outcome = await autoMarkSixOfSixNotInterested(service, p.auditId, p.runId);
-        if (outcome.applied) {
-          console.log(`[process-ai-audit-queue] hook run ${p.runId}: named in all six results — lead ${outcome.leadId} auto-marked not interested`);
-        } else if (outcome.reason !== "not_six_of_six") {
-          console.log(`[process-ai-audit-queue] hook run ${p.runId}: not auto-marking not interested — ${outcome.reason}`);
-        }
-      }
     } else {
       await service.from("ai_audit_runs").update({ status: "pending" }).eq("id", p.runId).eq("status", "processing");
       console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${readiness.crawlReady}, cleaning=${readiness.cleaning}`);

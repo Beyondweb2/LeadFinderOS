@@ -20,6 +20,7 @@
  * agreeing. A future sales_manager is one more AppRole and one more branch. */
 
 import type { AppRole } from './roleRules';
+import { SALES_CHECK_BATCH_MAX } from './salesCheck';
 export type { AppRole } from './roleRules';
 
 /** Route PATTERNS a salesperson may open (react-router syntax, matched by the rule below). */
@@ -96,6 +97,9 @@ export interface LeadPermissions {
   enrichLeads: boolean;
   /** Bulk AI audits (the paid multi-lead audit job). A salesperson runs the one-lead Hook Audit. */
   bulkAudits: boolean;
+  /** "Check before calling" — the salesperson's bulk pre-call check on their own leads (fix/07,
+   *  fn sales-prospect-check, which judges every lead itself). The admin keeps the admin bulk runner. */
+  salesChecks: boolean;
   /** Create, rename, delete campaigns (restrictive RLS: admin only). */
   campaigns: boolean;
   /** Put leads into an EXISTING campaign — one lead (the workspace card) or the Outreach selection.
@@ -143,6 +147,7 @@ export function leadPermissions(role: AppRole | null): LeadPermissions {
     importLeads: admin,
     enrichLeads: admin,
     bulkAudits: admin,
+    salesChecks: role === 'sales',
     campaigns: admin,
     moveToCampaign: admin || role === 'sales',
     removeFromMyLeads: role === 'sales',
@@ -171,6 +176,7 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Approved templates / replies / voice notes / attachments', admin: 'yes', sales: 'own leads only' },
   { feature: 'Bulk initial outreach (the opener chosen for the batch)', admin: 'yes', sales: 'own never-contacted leads' },
   { feature: 'Hook audit ("AI visibility check")', admin: 'yes', sales: 'own leads only' },
+  { feature: 'Check before calling (bulk AI check + website check, recent results reused)', admin: 'admin bulk audits instead', sales: `own active leads only, at most ${SALES_CHECK_BATCH_MAX} per press, a daily allowance` },
   { feature: 'Full website crawl (lead workspace)', admin: 'any lead or any URL', sales: "own leads only, the lead's own website" },
   { feature: 'Services, service areas, address, website on a prospect', admin: 'all leads', sales: 'own leads' },
   { feature: 'Share the prospect report (copy, mark sent, see opened)', admin: 'all leads', sales: 'own leads' },

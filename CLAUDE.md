@@ -769,6 +769,16 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   sender diagnostic. `whatsapp_messages.user_id` NULL = system-sent or unmatched inbound.
 - **Edge auth:** handler-side, always. Internal callers use CRON_SECRET + `x-internal-job`. Every
   function is listed in `config.toml`.
+- ⛔ **A salesperson's bulk check is fn `sales-prospect-check` ONLY — never `bulk-jobs`** (it keys on
+  `user_id` = the whole book; E-04). Per lead, judged when it is processed: assigned to them, not a client /
+  archived / suppressed; reuse (in flight, or a result under `SALES_CHECK_AUDIT_REUSE_DAYS`) before any spend;
+  then the rep's `sales_check` allowance → the prospecting pool → `guard_action` → `create-ai-audit` (internal
+  door, the rep's own hook body). The database is the dedupe (request id, one active batch per rep, one lead
+  per batch). It writes no lead row and refuses a NEW check while `audit_complete_template` is set or a pitch
+  waits on the lead. `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md`.
+- ⛔ **No audit result ever changes a lead's status** (Paul, 2026-10-04). "Not interested" is a sales outcome a
+  person records. The 3/3 and 6/6 auto-rules and `_shared/hook-not-interested.ts` are deleted; a 6/6 result
+  is shown as "Strong AI visibility — named in all 6 answers" (`callCardAudit`). Do not re-add one.
 - **The Dashboard "Full Reset" is gone**; `reset_my_account()` still exists in the DB until Phase 3.
 
 **WhatsApp**
@@ -1011,6 +1021,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | WhatsApp registries | `_shared/whatsapp-send.ts`, `process-whatsapp-queue` mirror, `src/types/outreach.ts`, `src/lib/whatsappTemplates.ts`, `templateBodies.ts`, `templateVars.ts`, `templateRouting.ts`, `coldOutreach.ts`, `rivalHook.ts`, `displayName.ts`, `firstReplyMode.ts` |
 | Senders | fn `send-whatsapp-message` (Inbox, `dry_run`, `test_send`), `process-whatsapp-queue` (drip, first-reply lane, `contact_check`, `suppress_lead`), `_shared/whatsapp-inbound.ts` (via `whatsapp-status`) |
 | Voice notes (Inbox, 24h only) | fn `send-whatsapp-voice`, `_shared/voice-note-send.ts`, `src/lib/oggOpus.ts` (WebM→Ogg remux), `voiceNote.ts`, `VoiceNoteRecorder`/`VoiceNotePlayer` — `docs/whatsapp-voice-notes.md` |
+| Sales pre-call checks ("Check before calling") | `src/lib/salesCheck.ts`, `_shared/sales-check.ts`, fn `sales-prospect-check`, tables `sales_check_batches` / `_items`, `SalesCheckPanel.tsx`, `SalesChecksAdminCard.tsx`, `callCardAudit` (`coldCallPlaybook.ts`) |
 | Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
@@ -1137,6 +1148,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
 | Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
 | Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
+| A salesperson's bulk pre-call check, its allowance, reuse windows, the job model | `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md` (+ `fixes-07-rollback-qa.sql`, always rolled back) |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |

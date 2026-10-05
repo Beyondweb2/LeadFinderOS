@@ -281,9 +281,9 @@ Deno.serve(async (req) => {
        It governs the EVIDENCE half only — the cheap crawl (fault signals + site info) runs for every
        caller either way, because that is what Paul reads before a conversation and it costs nothing.
        The caller that says `deep: false` is process-ai-audit-queue, for a HOOK audit that did not
-       find a visibility gap: a lead named in every question is auto-marked not interested in the
-       same block, so paying the extra fetches to build a sales argument for somebody we will not
-       contact is waste.
+       find a visibility gap: a lead named in every question has no missed search to argue from, so
+       paying the extra fetches for sales evidence is waste. (Since 2026-10-04 that lead keeps its
+       status — no audit sets "Not interested"; the rep decides.)
        🔴 DEFAULTING TO TRUE IS THE FAIL-SAFE DIRECTION AND IT IS THE POINT. An absent flag means
        "an ordinary audit" — a paid baseline, a remeasure, a free check, the operator's own button —
        and every one of those keeps the behaviour it has always had. If this defaulted to false, a
