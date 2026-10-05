@@ -85,11 +85,13 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   reads `outreach_leads` (it holds Stripe/amount/refund/delivery columns) — only the `sales_leads`
   view and the role-checked SQL functions.
   ⛔ **Outreach owner scope (2026-10-05, `docs/pre-sales-certification/outreach-ownership-safety.md`)**: the admin's
-  Outreach opens on MY LEADS (own + unassigned), NOT remembered; a rep / All team only when chosen. The scope is
+  Outreach opens on MY LEADS = leads the admin OWNS (never unassigned), NOT remembered; Unassigned / a rep / All team
+  (= every OWNED lead, unassigned excluded) only when chosen. A lead a signed-in team member adds is owned by them at
+  creation (trigger `trg_outreach_leads_added_by_owner`); only system inserts stay unassigned. Unassigned → "Claim for me". The scope is
   applied by the PAGE before the table (`src/lib/outreachOwnerScope.ts`) — never as a row filter inside it — so
   counts, Select all and bulk actions cannot reach a hidden lead. A contact action spanning owners needs
   "Queue across team" (`contactScopeCheck`). A campaign launch messages only the campaign OWNER's leads
-  (`other_owner`). Campaign membership never overrides ownership.
+  (`other_owner`, `unassigned` skipped). Campaign membership never overrides ownership.
   ⛔ **ONE workflow (Paul, 2026-09-27): Sales uses the SAME Outreach and Inbox** — never build a
   SalesOutreach/SalesInbox or a second CRM (My Leads is deleted). Reads go through `leadSourceFor`;
   a salesperson's writes go through `planSalesPatch` → the lead functions (a direct update from a sales

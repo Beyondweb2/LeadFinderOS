@@ -169,7 +169,7 @@ const Outreach = () => {
 
   /* ⛔ WHOSE LEADS THIS PAGE HOLDS (2026-10-05, src/lib/outreachOwnerScope.ts). Applied HERE, before the table
      sees a single row: the count, Select all, every bulk action, CSV and Previous / Next only ever see the scoped
-     list. Admin: My leads by default (theirs + unassigned), a salesperson or All team only when chosen — and NOT
+     list. Admin: My leads by default (owned by them — never the unassigned ones), Unassigned / a salesperson / All team (owned) only when chosen — and NOT
      remembered, so every visit opens on My leads. Sales: their own leads (the server already sends only those). */
   const { role } = useSubscription();
   const [ownerScopeChoice, setOwnerScopeChoice] = useState<OwnerScope>(DEFAULT_OWNER_SCOPE);

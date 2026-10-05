@@ -23,16 +23,18 @@ export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
   { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
-    body: 'Outreach now opens on My leads (yours and the unassigned ones). A salesperson’s leads, or the whole team, show only when you choose them — and queueing WhatsApp across several people’s leads asks you first.',
+    body: 'Outreach now opens on My leads — only the leads you own. Unassigned leads, a salesperson’s leads or the whole team show only when you choose them, and queueing WhatsApp across several people’s leads asks you first. Leads you add from Find Leads are now yours from the start.',
     report: {
       added: [
-        'A "Whose leads" choice on Outreach: My leads, Unassigned, each salesperson by name, or All team. Anything wider than My leads shows an amber tag beside the count.',
+        'A "Whose leads" choice on Outreach: My leads (you own them), Unassigned (nobody owns them), each salesperson by name, or All team (owned) — every lead someone owns, not the unassigned ones. A line under the count says what the view holds; anything other than My leads shows an amber tag.',
+        'Claim for me, in the Unassigned view: tick the leads you want and they become yours (up to 200 a press). Nobody is messaged.',
         'When the ticked leads belong to more than one person, Queue WhatsApp says how many and whose, and needs a second press on "Queue across team". Cancel is the default.',
       ],
       changed: [
         'Outreach always opens on My leads. Picking a salesperson or All team lasts for that visit only.',
         'The count, Select all and every bulk action only ever cover the leads in the current view. Ticks are cleared when you switch whose leads you are looking at.',
-        'Launching a campaign only messages the leads owned by that campaign’s owner. Anyone else’s lead in it is listed as "owned by someone else" and is not messaged.',
+        'Leads you add from Find Leads or Coverage are owned by you from the moment they are added (they used to land as unassigned). A salesperson’s adds are theirs.',
+        'Launching a campaign only messages the leads owned by that campaign’s owner. Anyone else’s lead in it is listed as "owned by someone else", and an unassigned one as "owned by nobody yet — claim them first"; neither is messaged.',
         'Opening a salesperson’s lead from a link (the WhatsApp page, a notification) switches the view to that person’s leads so it can open.',
       ],
       removed: ['"Any owner" as the starting view.'],

@@ -81,6 +81,7 @@ import {
   ScrollText,
   UserMinus,
   Archive,
+  UserCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -137,12 +138,13 @@ import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { logDataAccess } from '@/lib/dataAccessLog';
 import { maySetStatus } from '@/lib/access';
-import { salesQueueOpener } from '@/lib/leadRpc';
+import { leadRpc, salesQueueOpener } from '@/lib/leadRpc';
+import { notifyLeadChanged } from '@/lib/leadSync';
 import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerFilterSelect } from '@/components/OwnerFilterSelect';
-import { contactScopeCheck, crossOwnerHeadline, DEFAULT_OWNER_SCOPE, ownerGroupsLine, ownerScopeLabel, OWNER_SCOPE_MINE, type OwnerScope } from '@/lib/outreachOwnerScope';
+import { CLAIM_BATCH_MAX, contactScopeCheck, crossOwnerHeadline, DEFAULT_OWNER_SCOPE, ownerGroupsLine, ownerScopeExplainer, ownerScopeLabel, OWNER_SCOPE_MINE, OWNER_SCOPE_UNASSIGNED, type OwnerScope } from '@/lib/outreachOwnerScope';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { londonToday } from '@/lib/conversationState';
 import { BulkAssignSelect } from '@/components/BulkAssignSelect';
@@ -493,6 +495,29 @@ export function OutreachTable({
     [leads, selectedIds, role, user?.id],
   );
   const memberName = (id: string) => team.byId.get(id)?.display_name ?? null;
+  /* "Claim for me" (Unassigned view): only leads still unowned in THIS list, at most CLAIM_BATCH_MAX, after a
+     confirmation naming the count. assign_lead is admin-only in the database; it re-checks nothing about contact
+     history on purpose — an unowned lead Paul claims is his, whatever happened to it before. */
+  const [claimBusy, setClaimBusy] = useState(false);
+  const handleClaimSelected = async () => {
+    if (needsFullList() || claimBusy || !user?.id) return;
+    const ids = leads.filter((l) => selectedIds.has(l.id) && !l.assigned_to_user_id && !isDemoLead(l.id)).map((l) => l.id).slice(0, CLAIM_BATCH_MAX);
+    if (!ids.length) { toast({ title: 'Nothing to claim', description: 'Tick unassigned leads first.' }); return; }
+    const over = selectedIds.size > CLAIM_BATCH_MAX ? ` (the first ${CLAIM_BATCH_MAX} of the ${selectedIds.size} ticked — press again for more)` : '';
+    if (!window.confirm(`Claim ${ids.length} unassigned lead${ids.length === 1 ? '' : 's'} as yours${over}? They move to My leads. Nobody is messaged.`)) return;
+    setClaimBusy(true);
+    let claimed = 0; const refused: string[] = [];
+    for (const id of ids) {
+      const r = await leadRpc('assign_lead', { _lead_id: id, _to_user_id: user.id });
+      if (r.ok) { claimed++; notifyLeadChanged(id); } else refused.push(refusalText(r.error));
+    }
+    setClaimBusy(false);
+    setSelectedIds(new Set());
+    toast({ title: claimed ? `Claimed ${claimed} — they are in My leads now` : 'Nothing claimed',
+      description: refused.length ? `${refused.length} not claimed: ${[...new Set(refused)].join('; ')}` : undefined,
+      variant: refused.length && !claimed ? 'destructive' : undefined });
+    onRefreshLeads?.();
+  };
   /* Bumped whenever filter STATE is written from outside the inputs (the restore-on-mount effect,
      and Clear all). The search/location inputs are UNCONTROLLED (defaultValue + debounce, for typing
      performance), so a restored or cleared value would otherwise apply to the table while the box
@@ -2029,6 +2054,10 @@ export function OutreachTable({
               )}
             </CardTitle>
           </div>
+          {/* What this view holds, in one sentence (admin) — the ownership model said on the screen, not inferred. */}
+          {onOwnerScopeChange && (
+            <p data-testid="owner-scope-explainer" className="-mt-1 text-xs text-muted-foreground">{ownerScopeExplainer(ownerScope, memberName)}</p>
+          )}
           
           {/* Actions rows — all buttons equal-weight outline; two tidy rows.
               ⛔ Inside a fieldset that is DISABLED until the whole list has loaded: every button,
@@ -2234,6 +2263,16 @@ export function OutreachTable({
 
                       {/* ASSIGN TO A TEAMMATE — admin only (Paul, 2026-09-29): hand cold or unworked leads to a
                           salesperson; they are notified (src/components/BulkAssignSelect.tsx). */}
+                      {/* CLAIM — the Unassigned view only (Paul, 2026-10-05): take the ticked unowned leads as your own, through
+                          the same assign_lead the lead popup uses (History records it; assigning to yourself notifies nobody).
+                          At most CLAIM_BATCH_MAX per press — a deliberate act, never the whole pool. */}
+                      {perms.assignOwner && ownerScope === OWNER_SCOPE_UNASSIGNED && (
+                        <Button variant="outline" size="sm" className="bg-background text-xs h-8" data-testid="claim-unassigned" disabled={claimBusy}
+                          onClick={() => void handleClaimSelected()}>
+                          {claimBusy ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 mr-1.5 text-primary" />}
+                          Claim for me ({Math.min(selectedIds.size, CLAIM_BATCH_MAX)})
+                        </Button>
+                      )}
                       {perms.assignOwner && (
                         <BulkAssignSelect ids={Array.from(selectedIds).filter((id) => !isDemoLead(id))} onDone={() => { setSelectedIds(new Set()); onRefreshLeads?.(); }} />
                       )}

@@ -1,176 +1,223 @@
 # Outreach lead ownership safety (2026-10-05)
 
-Branch `fix/outreach-lead-ownership` (worktree `C:/Users/paulj/LeadFinderOS-wt/outreach-lead-ownership`), off
-`origin/main` `52b15962`. **Pushed, NOT merged, NOT deployed** (parallel-session rule). The rule lives in
-`src/lib/outreachOwnerScope.ts`.
+- **Branch and worktree:** `fix/outreach-lead-ownership`, worktree `C:/Users/paulj/LeadFinderOS-wt/outreach-lead-ownership`,
+  off `origin/main` `52b15962`. Two commits: the ownership safety work, then Paul's correction ("My leads means
+  MY leads").
+- **Status:** pushed, NOT merged, NOT deployed (parallel-session rule).
+- **Where the rule lives:** `src/lib/outreachOwnerScope.ts` (screen) and migration `20261009160000` (owner at creation).
 
-## 1. Old behaviour, and why Paul saw other people's leads
+## The rule (final, Paul 2026-10-05)
 
-- Who works a lead is `outreach_leads.assigned_to_user_id` (docs/multi-user.md §1). Every row's `user_id` is the
-  book owner (Paul), so the admin's Outreach reads the whole book from `outreach_leads`. That is correct for an
-  admin. The problem was the screen.
-- Outreach had an owner filter, `OwnerFilterSelect`, whose **default was "Any owner"** (`useState('all')`). It
-  was **remembered** with the rest of the table state, and it only filtered the rows *shown*.
-- So Paul's normal working list held every salesperson's leads. Select all ticked all of them, and Queue WhatsApp
-  wrote `status = 'queued'` onto all of them. The queue then messaged another rep's prospects as if Paul had
-  meant to.
-- Ticks also **outlived the filter**. After ticking in one view and switching to another, `selectedIds` still
-  held the hidden leads, and most bulk handlers read `selectedIds` directly.
-- **Live data (read 2026-10-05):**
-
-  | Owner | Active leads |
-  |---|---|
-  | Paul (book owner, admin) | 2,683 |
-  | Unassigned | 2,646 |
-  | test1 (sales) | 3 |
-  | Test (sales) | 0 (32 archived) |
-
-  The admin's recent Find Leads adds land **unassigned**: 148 in the last 10 days.
-
-## 2. New admin behaviour
-
-- **The scope is applied by the page, before the table sees a lead.** `src/pages/Outreach.tsx` →
-  `scopeLeads(allLeads, ownerScope, role, user.id)` → `OutreachTable leads={scopedLeads}`. Everything in the table
-  is computed from that list: the `Outreach (N)` count, Select all, every bulk action, CSV, Previous / Next and
-  the overdue count. None of them can reach a lead outside the scope, because it is not there.
-- **Choices:** My leads (default) · Unassigned · each salesperson by name · All team.
-  - Anything wider than My leads gives the control an amber border and puts an amber tag beside the count
-    ("test1", "All team").
-- **My leads = assigned to Paul OR unassigned.** An unassigned lead belongs to nobody else. It is the book's
-  unworked pool, and the admin's own adds land there. The first real message assigns it to the sender or the
-  book owner (`trg_whatsapp_messages_assign`). Hiding it would have hidden Paul's own new leads.
-- **Not remembered.** Every visit opens on My leads. The owner value is gone from the saved table state, and
-  `normaliseOwnerScope` turns anything unknown into My leads: the old saved `'all'`, a member who left, or an
-  absent value.
-- **Ticks cannot outlive the scope.** `selectedIds` = the ticks INTERSECTED with the scoped lead ids. Changing the
-  scope also clears the ticks.
-- **A lead opened by link outside the scope** (Inbox, a notification, `?lead=`) switches the view to that lead's
-  owner (`scopeShowingLead`). Opening it is a deliberate act; this way it does not silently fail to open.
-- Clear all (the "Filtered" pill) also puts the scope back to My leads.
-- The admin's **queue panel** still lists the whole WhatsApp queue. That is the one queue, and it sends for the
-  whole team.
-
-## 3. Salesperson isolation (server-enforced, unchanged and re-verified)
-
-A salesperson reads only the `sales_leads` view. The view holds rows assigned to them that are not a client. A
-direct read or update of `outreach_leads` returns 0 rows (RESTRICTIVE policies). Every write goes through a
-function that runs `_require_work` → `can_work_lead`. The client adds a second cut: their scope is always their
-own id. They never see the owner control. Their queue batch is refused outright (never warned) if it holds
-anything that is not theirs, and the server refuses it again (`sales_queue_opener` → `not_yours`).
-
-| Path | Server enforcement |
+| Who adds the lead | Owner (`assigned_to_user_id`) |
 |---|---|
-| Outreach list | `sales_leads` view (assigned to them, not a client) |
-| Bulk / per-lead WhatsApp | `sales_queue_opener` → `can_work_lead` per lead → `not_yours` |
-| Unqueue | `lead_unqueue` → `not_yours` |
-| Check before calling | fn `sales-prospect-check`: `leadEligibility` per lead, before any spend |
-| Crawl | fn `crawl-check`: `canWorkLead`; `job_id` / `run_id` tied to the lead (`salesCrawlIdsRefusal`) |
-| Status / Next Action / star / archive / details | `lead_set_*` / `lead_mark_interested` → `_require_work` |
-| Campaigns | `campaign_usable` (own campaigns only), `lead_set_campaign` (own lead → own campaign), counts and candidates scoped to their leads |
-| Export | Sales has no CSV. Copy Numbers goes through `log_data_access`, which checks their own leads |
-| Messages, voice, media, scripts, previews, Quick Close, social profiles | `leadAccess` in each function |
+| Paul / an admin (Find Leads, Coverage add, Add a lead) | Paul (the adding admin) — set by the DATABASE at creation |
+| A salesperson (Find Leads, Add a lead) | That salesperson — `sales_add_lead`; they cannot nominate anyone else |
+| System-created (free check, onboarding, paid-client setup, crons — no signed-in user) | Unassigned |
+| Legacy (everything already unassigned on 2026-10-05) | Unassigned — untouched |
+
+| Admin Outreach view | Holds exactly |
+|---|---|
+| **My leads** (default, every visit) | Leads Paul owns. **Never** the unassigned ones. |
+| **Unassigned** | Leads nobody owns. Paul opens it on purpose; **Claim for me** makes the ticked ones his. |
+| **[salesperson]** | Leads that person owns. |
+| **All team (owned)** | Every lead someone owns: Paul plus every salesperson. **Unassigned is NOT included** — the label says "(owned)" and the line under the count says so. |
+
+A salesperson sees only their own leads (server-enforced). They have no owner control and never see Unassigned
+in Outreach.
+
+## 1. Old behaviour, and why
+
+- **Wrong default.** Outreach's owner filter defaulted to **"Any owner"** and was remembered. It only filtered the
+  rows shown, so Paul's working list held every salesperson's leads. Select all → Queue WhatsApp could message them.
+  Ticks also outlived the filter.
+- **Paul's adds had no owner.** Find Leads "Add" and the Coverage add-all (`useOutreach.addLead`) insert straight
+  from the browser and never set `assigned_to_user_id`. So every lead Paul added landed **unassigned**: 148 in the
+  ten days to 2026-10-05. Only `sales_add_lead` ("Add a lead") stamped an owner.
+- **"Unassigned" was treated as Paul's.** The first version of this branch made "My leads" = Paul + unassigned to
+  compensate. Paul rejected that: unassigned is its own state, never a synonym for his.
+
+**Live counts (2026-10-05):**
+
+| Owner | Active leads |
+|---|---|
+| Paul (book owner, admin) | 2,683 |
+| Unassigned | 2,646 (2,694 including archived) |
+| test1 (sales) | 3 |
+| Test (sales) | 0 (32 archived) |
+
+All 5,550 leads have `list_type = 'no_website'`.
+
+## 2. Find Leads ownership — server-side, at creation
+
+- **The trigger.** Migration `20261009160000_lead_owner_on_add.sql` adds trigger `trg_outreach_leads_added_by_owner`
+  (`lead_owner_on_add`), BEFORE INSERT:
+  - A signed-in admin or sales caller inserting a lead with no owner → owner = the caller
+    (`assigned_to_user_id`, `assigned_at`, and `added_by_user_id` if blank).
+  - A salesperson inserting a lead owned by someone else → refused (`owner_not_yours`). They cannot insert
+    directly anyway (RESTRICTIVE policy); this is the backstop.
+  - No signed-in user (service role) → untouched. Those are the genuinely unowned new leads.
+  - An admin choosing an owner explicitly is kept.
+- **Prospective only:** no existing row is updated.
+- **No side effects:** the assignment notification and reassignment triggers fire on UPDATE only, so adding a lead
+  notifies nobody.
+- **Browser belt-and-braces:** `useOutreach.addLead` also sends `assigned_to_user_id` / `added_by_user_id` =
+  the adding user, so the owner shows at once and is right even if the app ships before the SQL. The trigger is
+  the rule.
+- **Salespeople:** they add through `sales_add_lead`, which sets owner = the caller and reads no owner from the
+  request (tested: a nominated owner is ignored).
+- **Campaign at add time:** the owner is set in the same insert, so a lead added into a campaign from Find Leads is
+  owned by the adder from the first moment. A salesperson can only add into their own campaign (`campaign_usable`).
+- **Not an import marker:** `outreach_leads_list_type_check` allows only `no_website` / `broken_website` /
+  `manual`. The Outreach CSV import writes `list_type: 'imported'`, which the database refuses. That is a
+  **pre-existing fault**: the import cannot create rows today. It is flagged as a separate task and not fixed here.
+  So `list_type` cannot mark imports, and the trigger does not try.
+
+## 3. The Outreach scopes
+
+- **Applied before the table sees a lead.** `src/pages/Outreach.tsx` → `scopeLeads(...)` →
+  `OutreachTable leads={scopedLeads}`. The count, Select all, every bulk action, CSV and Previous / Next only see
+  the scope.
+- **Not remembered.** Every visit opens on My leads. Unknown or stale values (the old saved `'all'`, a member who
+  left) become My leads.
+- **Ticks stay inside the scope.** `selectedIds` = ticks ∩ scoped leads, and switching scope clears the ticks.
+- **What the screen says:**
+  - One line under the count, every view:
+    - My leads: "Leads you own."
+    - Unassigned: "Leads nobody owns yet (older, imported or system-added). Claim the ones you want to work."
+    - A salesperson: "Leads owned by test1."
+    - All team: "Every lead someone owns — you and every salesperson. Unassigned leads are not included."
+  - Anything other than My leads shows an amber tag beside the count.
+- **Leads opened by link.** A lead outside the scope (Inbox, a notification, `?lead=`) switches the view to its
+  owner, or to Unassigned.
+- **Claim for me** (Unassigned view only):
+  - Ticked, still-unowned leads become Paul's through `assign_lead`, the same function the lead popup uses.
+  - History records it, and assigning to yourself notifies nobody.
+  - At most `CLAIM_BATCH_MAX` (200) per press, after a confirmation naming the count. Nobody is messaged.
+  - Nothing is ever bulk-claimed automatically.
+  - `claim_lead` is the salesperson's pool rule (it refuses contacted leads) and is deliberately not used.
 
 ## 4. Bulk-send safety
 
-- **Queue WhatsApp:** `handleQueueForWhatsApp` calls `contactScopeCheck(selected leads)` **before any queue
-  write**. That covers the opener path, the follow-up lane and the sales path.
-  - Paul's own leads and the unassigned ones count as one group ("You").
-  - When the selection spans more than one owner group, the dialog shows *"You're about to queue WhatsApp for 37
-    leads across 3 owners."* plus the counts per owner ("You (incl. unassigned) 20 · test1 12 · Test 8"). Its
-    button reads *Queue N across team…*.
-  - That button opens a second confirmation with Cancel (focused by default) and **Queue across team**. Only that
-    second button passes `crossOwnerConfirmed`; the handler refuses without it.
-- **Campaign launch (server, migration `20261009150000_campaign_launch_owner_scope.sql`):**
-  - Old behaviour: `campaign_launch` queued every not_contacted member when the ADMIN launched it. Membership
-    decided who got messaged.
-  - Live example: "roofers 2", created by Test, holds 82 active leads now assigned to Paul.
-  - Now a launch queues only the **campaign owner's** leads. That means assigned to `created_by`, or unassigned
-    when the owner is an admin. Anyone else's member is counted as `skipped.other_owner` and shown as "owned by
-    someone else".
-- The shared opener contact guard (`opener_contact_block`) is untouched. A launch still goes through
+- **Queue WhatsApp:** `handleQueueForWhatsApp` calls `contactScopeCheck` BEFORE any queue write.
+  - Owner groups: You, each salesperson, and Unassigned as its own group.
+  - More than one group → the dialog says *"You're about to queue WhatsApp for 32 leads across 3 owners."* and
+    lists the counts per owner (*"You 12 · test1 12 · Test 8"*). The button reads *Queue N across team…*.
+  - A second confirmation follows, with Cancel focused and **Queue across team**. That second button is the only
+    caller passing `crossOwnerConfirmed`.
+  - A salesperson's batch holding anything not theirs is refused outright; the server refuses it again
+    (`not_yours`).
+- **Campaign launch** (migration `20261009150000`): queues **only** leads owned by the campaign's owner
+  (`created_by`). Everything else is counted, never silently dropped:
+  - `skipped.other_owner` — owned by someone else.
+  - `skipped.unassigned` — owned by nobody, shown as "owned by nobody yet — claim them first".
+
+  Campaign membership never substitutes for ownership.
+  - ⚠️ **Live 2026-10-05:** 52 never-contacted UNASSIGNED leads sit in Paul's live campaigns (Locksmiths 24,
+    Morgage 21, Plumber 2 5, Accountants 1, plumber 1). They are almost certainly Find Leads adds from before the
+    trigger. After this ships, a launch skips them until Paul claims them: Outreach → Unassigned + that campaign
+    → Select all → Claim for me.
+  - "roofers 2" (created by Test) holds 82 active leads now owned by Paul. An admin launch of it skips them as
+    `other_owner`.
+- **The opener contact guard** (`opener_contact_block`) is untouched. Launches still go through
   `sales_queue_opener`.
 
-## 5. Leaks found beyond the screen, fixed in this branch
+## 5. Salesperson isolation and the leaks fixed in this branch
 
-1. **`campaign_launch`** — see §4. It could message another rep's (or Paul's) leads through campaign membership.
-2. **`enrich-lead` (data read).**
-   - The cache key came from the caller's `place_id`. `mayWriteLeadId` allows a made-up `lead_id` on purpose (for
-     Find Leads).
-   - So a salesperson could send another rep's or Paul's place id and get back the cached email / Facebook /
-     Instagram for that business. With one of their own lead ids, the value was also copied onto their lead.
-   - Now `mayLookUpBusiness` (the same check place-details uses) runs before the cache read.
-3. **`process-whatsapp-queue` `contact_check` (read).**
-   - The phone half answered "already messaged / suppressed" for ANY number a salesperson sent.
-   - Now a salesperson's phones are cut to their own leads' numbers (last nine digits) before any history or
-     suppression read. The lead half was already scoped.
+- **Server-enforced, re-verified:**
 
-Noted, not changed:
-- `quick-close` answers 404 for an unknown id but 403 for someone else's lead. That reveals only whether an id
-  exists.
-- `agency-check` and `companies-house-check` let any team member refresh a shared per-domain / per-place cache of
-  public data. That is not lead data.
+  | Path | Enforcement |
+  |---|---|
+  | List | `sales_leads` view |
+  | Queue, unqueue | `sales_queue_opener` / `lead_unqueue` → `not_yours` |
+  | Check before calling | `sales-prospect-check` `leadEligibility` |
+  | Crawl | `crawl-check` `canWorkLead` + `salesCrawlIdsRefusal` |
+  | Status, Next Action, star, archive | `lead_set_*` → `_require_work` |
+  | Campaigns | `campaign_usable`, own lead → own campaign |
+  | Export | no CSV for Sales; Copy Numbers via `log_data_access` |
+  | Messages, voice, media, scripts, Quick Close, socials | `leadAccess` |
+
+- **Leaks fixed here:**
+  1. **Campaign launch** messaged other owners' leads by membership (§4).
+  2. **`enrich-lead`** returned another rep's or Paul's cached email / Facebook / Instagram by `place_id`. It now
+     calls `mayLookUpBusiness` before the cache read.
+  3. **`process-whatsapp-queue` `contact_check`** answered "messaged / suppressed" for any phone a salesperson
+     sent. A salesperson's phones are now cut to their own leads' numbers (last nine digits) before any read.
+- **Noted, not changed:**
+  - `quick-close` answers 404 vs 403, which reveals only whether a lead id exists.
+  - `agency-check` and `companies-house-check` refresh shared caches of public data.
+  - The CSV import fault (§2).
 
 ## 6. Tests
 
-- **`scripts/outreach-owner-scope.test.ts`** (in `npm test`).
-  - The rule: sales sees own only, can't widen, and a foreign batch is refused. The admin's default is My leads
-    (own + unassigned), and they can choose a rep or All team. An old `'all'` or unknown value becomes My leads.
-    Select all and counts in the default view hold no rep's lead. Multi-owner needs confirmation; single-owner
-    doesn't. The headline and owner line are pinned.
-  - The wiring: the page passes the scoped leads; the scope is not persisted; there is no owner filter or "Any
-    owner" in the table; selection is intersected and cleared on scope change. The owner check comes before
-    every queue write. Only "Queue across team" confirms, and Cancel is focused.
-  - The server source: the launch owner filter and `other_owner`; enrich-lead checks before the cache read;
-    contact_check cuts first.
-- **`supabase/tests/outreach-ownership.sql`** (live, always rolled back; 25 checks). Two fake salespeople (A, B).
-  - **Salesperson A:**
-    - sees only their own lead in `sales_leads`;
-    - reads 0 rows of B's / Paul's leads and crawl checks;
-    - queueing B / unassigned / Paul gives 0 queued, 3 `not_yours`;
-    - stage, Next Action (B's and Paul's), star and archive are refused with `not_your_lead`; a direct UPDATE
-      writes 0 rows; unqueue is refused;
-    - cannot pull B's or Paul's leads into their own campaign, cannot put their own lead into B's campaign, and
-      gets `not_found` for B's campaign leads and launch; campaign candidates are their own leads only;
-    - a lead they add is owned by them, in their own campaign.
-  - **Admin:** launching an admin campaign that holds A's and B's leads skips both as `other_owner`, queues
-    neither, and considers only the unassigned lead.
-  - **Result 2026-10-05:** 25/25 with the new `campaign_launch` loaded inside the rolled-back transaction.
-    Against today's LIVE function: 22/25. Checks 22–24 fail: it queued all 3, including both salespeople's leads.
-    That is the bug, reproduced. Afterwards: 0 fixture campaigns, users or leads left, and the live function
-    unchanged.
+- **`scripts/outreach-owner-scope.test.ts`** (in `npm test`):
+  - **The rule:**
+    - My leads = owned only, with no unassigned and no rep's lead.
+    - Unassigned = the pool only.
+    - A named rep. All team = owned only, and it says so on screen.
+    - Paul + unassigned together are two owners.
+    - Sales sees own only and can't widen; a foreign batch, including an unassigned lead, is refused.
+    - Stale or `'all'` values become My leads. A lead opened by link moves the view to its owner or to Unassigned.
+  - **The wiring:**
+    - The page passes the scoped leads, and the scope is not persisted.
+    - Selection is intersected and cleared on scope switch.
+    - The owner check comes before every queue write. Only "Queue across team" confirms, and Cancel is focused.
+    - Claim is Unassigned-only, via `assign_lead`, still-unowned leads only, capped.
+  - **The server source:**
+    - The ownership trigger: caller owns, no user stays unassigned, a salesperson can't nominate, no existing row
+      updated.
+    - `addLead` sends the owner.
+    - Launch: owner only, with `other_owner` / `unassigned` reported.
+    - enrich-lead and contact_check checks come first.
+- **`supabase/tests/outreach-ownership.sql`** (live, always rolled back, **32 checks**):
+  - **Salesperson A** — own-only view, no direct reads of B's or Paul's leads or crawl checks, cross-owner queue
+    refused (3 `not_yours`), stage / Next Action / star / archive / unqueue refused, direct UPDATE = 0 rows.
+  - **Campaigns** — A cannot pull others' leads into their campaign or use B's campaign, and candidates are A's own
+    leads only.
+  - **Adding a lead** — A's add is owned by A; `sales_add_lead` ignores a nominated owner; a direct insert owned by
+    B is refused.
+  - **Paul's Find Leads insert with NO owner field** → owned by Paul (server-side). An explicit admin-chosen owner
+    is kept.
+  - **Admin launch** — A's and B's leads skipped as `other_owner`; the unassigned member skipped as `unassigned`
+    and not queued; only Paul's own lead considered and queued.
+  - **Claim** — claiming an unassigned lead makes it Paul's.
+  - **System insert** — an insert with no signed-in user stays unassigned.
+  - **Result 2026-10-05:** 32/32 with both new migrations loaded inside the rolled-back transaction. Read back
+    afterwards: 0 fixtures left, the trigger NOT live, and unassigned still 2,694 (nothing changed).
 - **Updated pins:**
-  - `outreach-filters.test.ts`: the owner control is the page scope and is not remembered.
-  - `initial-opener-select.test.ts`: the queue button also stays disabled on a refused batch.
-  - `pre-sales-final.test.ts`: the new migration is listed as a later release.
-- **Gate:** `npm run check` — typecheck 9 = baseline, edge syntax / undefined / import graph clean, build ok,
-  **316/316 suites**.
+  - `outreach-filters.test.ts` — the owner control is the page scope and not remembered.
+  - `initial-opener-select.test.ts` — the queue button also stays disabled on a refused batch.
+  - `pre-sales-final.test.ts` — both new migrations are listed as later releases.
+- **Gate:** `npm run check` — typecheck 9 = baseline, edge checks clean, build ok, **316/316 suites**.
 
 ## 7. Visual QA
 
 - **How it was done:**
-  - A throwaway harness rendered the REAL Outreach page, behind `RequireAccess`, over fake ZZ leads with no
-    network.
-  - The 40 leads were split: Paul 12, unassigned 8, test1 12, Test 8.
+  - A throwaway harness rendered the REAL Outreach page, behind `RequireAccess`, over 40 fake ZZ leads with no
+    network: Paul 12, unassigned 8, test1 12, Test 8.
   - It was driven by headless Edge at 1440×1000 and 390×844. The harness was deleted before commit.
-  - Nobody has looked at it on the live app. It is not deployed.
-- **Admin, desktop:**
-  - The default is My leads, `Outreach (20)` = Paul + unassigned.
-  - test1 shows `(12)` with a "test1" tag.
-  - All team shows `(40)` with an "All team" tag.
-  - Select all ticks 40 (only in All team). The queue dialog shows the amber warning "40 leads across 3 owners"
-    and the button "Queue 40 across team…". The confirmation names the owners, and Cancel has focus.
-- **Admin, phone:**
-  - The same states. Ticking the 10 visible cards gives "10 leads across 3 owners" (5 / 3 / 2) and the same
-    confirmation.
-  - Phones have no Select-all control. That was already the case.
-- **Sales, both sizes:** no owner control, `Outreach (12)` = exactly test1's 12 leads.
-- **Horizontal overflow:** 0 px in every state, including with the confirmation open.
+  - Nobody has seen it on the live app; it is not deployed.
 
-## 8. Deploy (when an integration session or Paul does it — not this branch)
+| View | Desktop | Phone |
+|---|---|---|
+| My leads | `Outreach (12)` "Leads you own." | same, 10 of 12 per page |
+| Unassigned | `(8)`, tag "Unassigned", the claim line; 8 ticked → **Claim for me (8)** | 4 ticked → **Claim for me (4)** |
+| Switch Unassigned → test1 | the bulk toolbar is gone (nothing selected) | same |
+| test1 | `(12)` "Leads owned by test1." | same |
+| All team (owned) | `(32)`, "Unassigned leads are not included." | same |
+| Select all in All team → Queue | 32 ticked; "32 leads across 3 owners — You 12 · test1 12 · Test 8"; "Queue 32 across team…"; confirmation with Cancel focused | 10 ticked across 3 owners, same confirmation |
+| Salesperson | `Outreach (12)` = exactly test1's leads; no owner control | same |
 
-1. **SQL first:** apply `20261009150000_campaign_launch_owner_scope.sql`. Read back with
-   `prosrc ~ 'other_owner'`. Then re-run `supabase/tests/outreach-ownership.sql`: expect 25/25.
-2. **Edge functions:**
-   - Deploy `enrich-lead` and `process-whatsapp-queue`. Both are self-contained edits; no shared module changed.
-   - ⛔ Do not bundle `whatsapp-status`.
-3. **The SPA** ships with `main`. The What's New entry is `2026-10-05-outreach-my-leads`.
+Horizontal overflow: 0 px in every state.
+
+## 8. Deploy (an integration session or Paul — not this branch)
+
+1. **SQL first, one at a time, each read back:**
+   1. `20261009150000_campaign_launch_owner_scope.sql` — read back `prosrc ~ 'other_owner'`.
+   2. `20261009160000_lead_owner_on_add.sql` — read back the trigger name, and check the unassigned count is
+      unchanged.
+
+   Then re-run `supabase/tests/outreach-ownership.sql`: expect 32/32.
+2. **Edge functions:** deploy `enrich-lead` and `process-whatsapp-queue`. Both are self-contained; no shared module
+   changed. ⛔ Never bundle `whatsapp-status`.
+3. **The SPA** ships with `main`. What's New entry: `2026-10-05-outreach-my-leads`.
+4. **After it ships, tell Paul** about the 52 unassigned leads in his campaigns (§4): claim them before relaunching.

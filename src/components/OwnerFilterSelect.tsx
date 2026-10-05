@@ -4,8 +4,8 @@ import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { cn } from '@/lib/utils';
 import { OWNER_SCOPE_MINE, OWNER_SCOPE_TEAM, OWNER_SCOPE_UNASSIGNED } from '@/lib/outreachOwnerScope';
 
-/* The admin's Outreach OWNER SCOPE (2026-10-05, src/lib/outreachOwnerScope.ts): My leads (default) / Unassigned /
-   each salesperson / All team. It decides which leads the page holds at all — not a filter over the whole book —
+/* The admin's Outreach OWNER SCOPE (2026-10-05, src/lib/outreachOwnerScope.ts): My leads (default, owned by you) /
+   Unassigned (owned by nobody) / each salesperson / All team (every OWNED lead; unassigned is not in it). It decides which leads the page holds at all — not a filter over the whole book —
    so Select all and every bulk action stay inside it. A salesperson never sees this control.
    Its own file so the team members' ids never read like a lead column inside OutreachTable
    (scripts/outreach-list-columns.test.ts). */
@@ -28,9 +28,9 @@ export function OwnerFilterSelect({ value, onChange, selfId }: { value: string; 
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
         data-testid="owner-scope"
-        className={cn('w-[128px] sm:w-[150px] bg-background h-8 text-xs', wide && 'border-amber-500/70 text-amber-700 dark:text-amber-400')}
+        className={cn('w-[150px] sm:w-[160px] bg-background h-8 text-xs', wide && 'border-amber-500/70 text-amber-700 dark:text-amber-400')}
         aria-label="Whose leads"
-        title={value === OWNER_SCOPE_MINE ? 'Your leads and the unassigned ones. Choose a salesperson or All team to look wider.' : 'You are looking beyond your own leads — Select all and bulk actions apply to this view.'}
+        title={value === OWNER_SCOPE_MINE ? 'Leads you own. Choose Unassigned, a salesperson or All team to look wider.' : 'You are looking beyond your own leads — Select all and bulk actions apply to this view only.'}
       ><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value={OWNER_SCOPE_MINE}>My leads</SelectItem>
@@ -38,7 +38,7 @@ export function OwnerFilterSelect({ value, onChange, selfId }: { value: string; 
         {members.length > 0 && <SelectSeparator />}
         {members.map((m) => <SelectItem key={m.user_id} value={m.user_id}>{m.display_name}</SelectItem>)}
         <SelectSeparator />
-        <SelectItem value={OWNER_SCOPE_TEAM}>All team</SelectItem>
+        <SelectItem value={OWNER_SCOPE_TEAM}>All team (owned)</SelectItem>
       </SelectContent>
     </Select>
   );

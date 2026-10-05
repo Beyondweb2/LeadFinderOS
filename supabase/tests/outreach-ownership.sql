@@ -21,7 +21,7 @@ create temp table t_fx as select array(
   order by l.created_at limit 3) as mob,
   (select l.id from public.outreach_leads l where l.assigned_to_user_id = public.book_owner_id() and l.is_archived is not true
      and not public.lead_is_client(l.amount_paid, l.status) order by l.created_at desc limit 1) as pauls,
-  null::uuid as camp_a, null::uuid as camp_b, null::uuid as camp_admin, null::uuid as added;
+  null::uuid as camp_a, null::uuid as camp_b, null::uuid as camp_admin, null::uuid as added, null::uuid as paul_add;
 grant select, update on t_fx to authenticated;
 insert into t_results (name, ok, detail) select 'fixtures: 3 unassigned mobiles + a Paul lead', array_length(mob, 1) = 3 and pauls is not null, array_length(mob, 1)::text from t_fx;
 
@@ -94,6 +94,19 @@ do $$ declare r jsonb; n int; e text; begin
     exists (select 1 from public.sales_leads s where s.id = (select added from t_fx) and s.assigned_to_user_id = auth.uid() and s.campaign_id = (select camp_a from t_fx)), r::text);
   r := public.lead_set_campaign((select mob[1] from t_fx), (select camp_a from t_fx));
   insert into t_results (name, ok, detail) values ('A: own lead into own campaign', (r ->> 'ok')::boolean, r::text);
+  -- A SALESPERSON CANNOT NOMINATE ANOTHER OWNER
+  r := public.sales_add_lead(jsonb_build_object('business_name', 'ZZ QA Ownership Nominate Ltd', 'search_keyword', 'Plumber',
+         'assigned_to_user_id', 'bbbbbbbb-0000-4000-8000-00000000000b', 'user_id', 'bbbbbbbb-0000-4000-8000-00000000000b'));
+  insert into t_results (name, ok, detail) values ('A: sales_add_lead ignores a nominated owner — the lead is A''s',
+    (r ->> 'ok')::boolean and exists (select 1 from public.sales_leads s where s.id = (r ->> 'lead_id')::uuid and s.assigned_to_user_id = auth.uid()), r::text);
+  begin
+    insert into public.outreach_leads (user_id, business_name, status, assigned_to_user_id)
+    values (public.book_owner_id(), 'ZZ QA Ownership Direct B Ltd', 'not_contacted', 'bbbbbbbb-0000-4000-8000-00000000000b');
+    e := 'inserted';
+  exception when others then e := sqlstate || ' ' || sqlerrm;
+  end;
+  insert into t_results (name, ok, detail) values ('A: a direct insert owned by B is refused', e <> 'inserted'
+    and not exists (select 1 from public.outreach_leads where business_name = 'ZZ QA Ownership Direct B Ltd'), e);
 end $$;
 reset role;
 
@@ -101,26 +114,54 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', public.book_owner_id(), 'role', 'authenticated')::text, true);
 select set_config('request.jwt.claim.sub', public.book_owner_id()::text, true);
-do $$ declare r jsonb; begin
+do $$ declare r jsonb; v uuid; begin
+  -- PAUL'S FIND LEADS ADD: the browser's insert (useOutreach addLead) WITHOUT any owner field → owned by Paul.
+  insert into public.outreach_leads (user_id, business_name, phone, status, next_action, country, list_type, search_keyword)
+  values (public.book_owner_id(), 'ZZ QA Ownership Paul Add Ltd', '07700 900987', 'not_contacted', 'none', 'UK', 'no_website', 'Plumber')
+  returning id into v;
+  update t_fx set paul_add = v;
+  insert into t_results (name, ok, detail) values ('Paul: a Find Leads add with no owner field is owned by Paul (server-side)',
+    (select assigned_to_user_id = public.book_owner_id() and added_by_user_id = public.book_owner_id() and assigned_at is not null from public.outreach_leads where id = v), null);
+  -- The admin may still choose an owner explicitly.
+  insert into public.outreach_leads (user_id, business_name, status, next_action, list_type, assigned_to_user_id)
+  values (public.book_owner_id(), 'ZZ QA Ownership For A Ltd', 'not_contacted', 'none', 'manual', 'bbbbbbbb-0000-4000-8000-00000000000a') returning id into v;
+  insert into t_results (name, ok, detail) values ('Paul: an explicit owner chosen by the admin is kept',
+    (select assigned_to_user_id = 'bbbbbbbb-0000-4000-8000-00000000000a'::uuid from public.outreach_leads where id = v), null);
   r := public.campaign_create('ZZ QA ownership admin');
   update t_fx set camp_admin = (r ->> 'id')::uuid;
   -- A's lead [1] and B's lead [2] put into the ADMIN's campaign (the admin may), plus the unassigned [3].
   perform public.lead_set_campaign((select mob[1] from t_fx), (select camp_admin from t_fx));
   perform public.lead_set_campaign((select mob[2] from t_fx), (select camp_admin from t_fx));
   perform public.lead_set_campaign((select mob[3] from t_fx), (select camp_admin from t_fx));
+  perform public.lead_set_campaign((select paul_add from t_fx), (select camp_admin from t_fx));
   r := public.campaign_launch((select camp_admin from t_fx));
   insert into t_results (name, ok, detail) values ('admin launch: membership never overrides ownership (A + B leads skipped as other_owner)',
     (r -> 'skipped' ->> 'other_owner')::int = 2, r::text);
   insert into t_results (name, ok, detail) values ('admin launch: A''s and B''s leads were NOT queued',
     (select count(*) from public.outreach_leads where id in ((select mob[1] from t_fx), (select mob[2] from t_fx)) and status = 'queued') = 0, null);
-  insert into t_results (name, ok, detail) values ('admin launch: the unassigned (admin''s own pool) lead WAS considered',
-    (r ->> 'considered')::int = 1, r::text);
+  insert into t_results (name, ok, detail) values ('admin launch: the UNASSIGNED member is not Paul''s — skipped as unassigned, not queued',
+    (r -> 'skipped' ->> 'unassigned')::int = 1 and (select status from public.outreach_leads where id = (select mob[3] from t_fx)) = 'not_contacted', r::text);
+  insert into t_results (name, ok, detail) values ('admin launch: only Paul''s OWN lead was considered and queued',
+    (r ->> 'considered')::int = 1 and (select status from public.outreach_leads where id = (select paul_add from t_fx)) = 'queued', r::text);
+  -- CLAIM: the admin takes the unassigned lead through assign_lead (the Unassigned view's "Claim for me").
+  r := public.assign_lead((select mob[3] from t_fx), public.book_owner_id());
+  insert into t_results (name, ok, detail) values ('Paul: claiming an unassigned lead makes it his (assign_lead)',
+    (r ->> 'ok')::boolean and (select assigned_to_user_id from public.outreach_leads where id = (select mob[3] from t_fx)) = public.book_owner_id(), r::text);
   -- Launching a salesperson's campaign as the admin reaches only THAT salesperson's leads.
   r := public.campaign_launch((select camp_b from t_fx));
   insert into t_results (name, ok, detail) values ('admin launch of B''s campaign: B''s lead (moved out) not touched, nothing foreign queued',
     coalesce((r ->> 'queued')::int, 0) = 0, r::text);
 end $$;
 reset role;
+-- ── No signed-in user (the service role: free check, onboarding, crons) → stays unassigned ─────────
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+do $$ declare v uuid; begin
+  insert into public.outreach_leads (user_id, business_name, status, next_action)
+  values (public.book_owner_id(), 'ZZ QA Ownership System Ltd', 'not_contacted', 'none') returning id into v;
+  insert into t_results (name, ok, detail) values ('system: an insert with no signed-in user stays unassigned',
+    (select assigned_to_user_id is null from public.outreach_leads where id = v), null);
+end $$;
 do $$ begin
   raise exception 'RESULTS %', (select json_agg(json_build_object('n', n, 'ok', ok, 'name', name, 'detail', detail) order by n) from t_results);
 end $$;

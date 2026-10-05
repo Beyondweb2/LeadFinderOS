@@ -10,10 +10,13 @@
 -- part of someone else's campaign. Campaign membership must never override ownership.
 --
 -- The rule now, for BOTH roles: a launch queues only leads the CAMPAIGN'S OWNER owns —
---   assigned_to_user_id = the campaign's created_by, or
---   unassigned when the campaign's owner is an admin (the unassigned pool is the admin's "My leads",
---   src/lib/outreachOwnerScope.ts; a salesperson cannot hold an unassigned lead in a campaign).
--- Every other not_contacted member is reported, never silently dropped: skipped.other_owner = n.
+--   assigned_to_user_id = the campaign's created_by. Nothing else.
+-- ⛔ An UNASSIGNED member is nobody's (Paul, 2026-10-05: "unassigned" is never a synonym for Paul's leads) —
+--   it is not messaged either; the owner claims it first (Outreach → Unassigned → Claim for me).
+-- Every member not queued for this reason is reported, never silently dropped:
+--   skipped.other_owner = owned by someone else, skipped.unassigned = owned by nobody.
+-- Live 2026-10-05: 52 never-contacted UNASSIGNED members sit in Paul's live campaigns (Locksmiths 24, Morgage 21,
+-- Plumber 2 5, Accountants 1, plumber 1) — Find Leads adds made before trg_outreach_leads_added_by_owner.
 -- For a salesperson nothing changes in practice (campaign_usable already limits them to their own campaigns,
 -- and their own leads were the only ones considered).
 --
@@ -29,7 +32,7 @@ create or replace function public.campaign_launch(_campaign_id uuid)
 as $function$
 declare v_role text := public.my_role(); v_template text; v_all uuid[]; v_chunk uuid[]; v_r jsonb;
   v_queued integer := 0; v_skip jsonb := '{}'::jsonb; v_k text; v_n integer; i integer := 1; v_total integer;
-  v_owner uuid; v_owner_admin boolean; v_other integer := 0;
+  v_owner uuid; v_other integer := 0; v_unowned integer := 0;
   c_max constant integer := 2000;
 begin
   if v_role is null then raise exception 'no_role' using errcode = '42501'; end if;
@@ -43,19 +46,22 @@ begin
   end if;
   /* The campaign's owner. A campaign with no recorded creator belongs to the book owner. */
   select coalesce(c.created_by, public.book_owner_id()) into v_owner from public.campaigns c where c.id = _campaign_id;
-  v_owner_admin := exists (select 1 from public.user_roles r where r.user_id = v_owner and r.role = 'admin');
   select coalesce(array_agg(id order by created_at), '{}') into v_all from (
     select o.id, o.created_at from public.outreach_leads o
      where o.campaign_id = _campaign_id and o.status = 'not_contacted' and not coalesce(o.is_archived, false)
        and (v_role = 'admin' or o.assigned_to_user_id = auth.uid())
-       and (o.assigned_to_user_id = v_owner or (o.assigned_to_user_id is null and v_owner_admin))
+       and o.assigned_to_user_id = v_owner
      order by o.created_at limit c_max) s;
-  /* Members someone else owns: counted, never queued. (A salesperson only ever sees their own, so for them this is 0.) */
+  /* Members not queued for ownership: counted, never queued. (A salesperson only ever sees their own, so for
+     them both are 0.) */
   if v_role = 'admin' then
-    select count(*) into v_other from public.outreach_leads o
-     where o.campaign_id = _campaign_id and o.status = 'not_contacted' and not coalesce(o.is_archived, false)
-       and not (o.assigned_to_user_id is not distinct from v_owner or (o.assigned_to_user_id is null and v_owner_admin));
-    if v_other > 0 then v_skip := jsonb_build_object('other_owner', v_other); end if;
+    select count(*) filter (where o.assigned_to_user_id is not null and o.assigned_to_user_id <> v_owner),
+           count(*) filter (where o.assigned_to_user_id is null)
+      into v_other, v_unowned
+      from public.outreach_leads o
+     where o.campaign_id = _campaign_id and o.status = 'not_contacted' and not coalesce(o.is_archived, false);
+    if v_other > 0 then v_skip := v_skip || jsonb_build_object('other_owner', v_other); end if;
+    if v_unowned > 0 then v_skip := v_skip || jsonb_build_object('unassigned', v_unowned); end if;
   end if;
   v_total := coalesce(array_length(v_all, 1), 0);
   while i <= v_total loop

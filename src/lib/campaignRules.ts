@@ -171,6 +171,7 @@ export const LAUNCH_SKIP_TEXT: Record<string, string> = {
   /* 2026-10-05 (migration 20261009150000): a launch messages only the CAMPAIGN OWNER's leads — membership never
      overrides ownership. */
   other_owner: 'owned by someone else (a campaign only messages its owner’s leads)',
+  unassigned: 'owned by nobody yet — claim them first (Outreach → Unassigned → Claim for me)',
 };
 
 export function launchSkipLine(skipped: Record<string, number> | null | undefined): string {
