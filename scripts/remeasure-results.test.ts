@@ -250,5 +250,37 @@ console.log('── The document renders both counts and the sentence, and no co
   ok(!/competitor|rival/i.test(html), 'no competitor language on the client document');
 }
 
+console.log("── Paul's wording decisions (2026-10-05): no \"every week\", the actual service, the sign-off, no monthly after the guarantee ──");
+{
+  const base = { businessName: 'Calder Plumbing and Heating', town: 'Halifax', beforeNamed: 12, beforeAnswered: 120, afterNamed: 27, afterAnswered: 120, questions: 20, documentUrl: 'https://findable.live/r/ABC123', withinNoise: false, monthlyStartsOn: '16 November 2026' };
+  const upBuild = resultsEmailParagraphs({ ...base, wentUp: true, totalPayments: 12 });
+  const upOpt = resultsEmailParagraphs({ ...base, wentUp: true, totalPayments: 6 });
+  const upUnknown = resultsEmailParagraphs({ ...base, wentUp: true, totalPayments: null });
+  const flat = resultsEmailParagraphs({ ...base, afterNamed: 15, wentUp: false, withinNoise: true, totalPayments: 6 });
+  const fell = resultsEmailParagraphs({ ...base, afterNamed: 8, wentUp: false, withinNoise: false, totalPayments: 12 });
+  const all = [upBuild, upOpt, upUnknown, flat, fell];
+  for (const p of all) {
+    ok(p[p.length - 1] === 'Paul, Findable', `signs off exactly "Paul, Findable" (got "${p[p.length - 1]}")`);
+    ok(!p.join(' ').includes('Paul, findable'), 'never the lower-case "Paul, findable"');
+    ok(!/every week|weekly/i.test(p.join(' ')), 'never says the work happens "every week"');
+    ok(!/because of (our|the) work|we (made|caused)|thanks to (our|the) (work|pages)|is what the engines are now reading/i.test(p.join(' ')), 'no causal claim that Findable made the number move');
+    ok(!/\baudit\b/i.test(p.join(' ')), 'the monthly is a "check", never an "audit"');
+  }
+  const billB = upBuild.find((x) => /first monthly payment/.test(x)) ?? '';
+  ok(/a new page each month/.test(billB) && /a monthly check of your AI visibility/.test(billB) && /adjustments as we learn/.test(billB), 'gone up (Build): names the actual monthly service — a new page each month, a monthly check, adjustments');
+  ok(/hosting the website we built for you/.test(billB) && /12-month minimum term/.test(billB) && /payment 2 of 12/.test(billB), 'gone up (Build): hosting, 12-month minimum, payment 2 of 12');
+  const billO = upOpt.find((x) => /first monthly payment/.test(x)) ?? '';
+  ok(/a new page each month/.test(billO) && !/hosting/i.test(billO) && /6-month minimum term/.test(billO) && /payment 2 of 6/.test(billO), 'gone up (Optimise): the service, no hosting claim (they keep their own site), 6-month minimum, payment 2 of 6');
+  const billU = upUnknown.find((x) => /first monthly payment/.test(x)) ?? '';
+  ok(!!billU && !/hosting/i.test(billU) && !/payment 2 of/.test(billU), 'gone up (route unknown): no hosting claim and no invented total');
+  for (const [label, p] of [['near-flat', flat], ['fell', fell]] as const) {
+    const j = p.join(' ');
+    ok(p.includes(resultsClaimParagraph()), `${label}: the guarantee paragraph is there`);
+    ok(!/first monthly payment|16 November 2026|£99 is on/i.test(j), `${label}: NO upcoming monthly payment paragraph after the guarantee says it stops the payments`);
+    ok(p.indexOf(resultsClaimParagraph()) === p.length - 2, `${label}: the guarantee paragraph is the last thing before the sign-off`);
+  }
+  ok(REMEASURE_RESULTS_COPY_APPROVED === false, 'and the copy is STILL held — nothing sends until Paul approves it');
+}
+
 console.log(f ? `\n${f} FAILURES` : '\nALL PASS');
 if (f) process.exit(1);

@@ -175,15 +175,32 @@ export function buildServiceScope(i: { services: string[]; notOffered?: string[]
   const confirmedTokens = [...new Set(confirmed.flatMap((s) => dropTrade(s.tokens)))];
   /* "Car keys / auto locksmith" is two things the client does not do; either one is enough to refuse
      a question, so each part is its own negative. */
+  /* ⛔ THE CLIENT'S OWN "NO" IS NOT A WORD OF THE SERVICE (pre-sales final, 2026-10-05). A negative is
+     matched by requiring EVERY one of its words in the customer's question, and customers never type
+     "no" / "we don't" / "fit". "No new boilers" kept "no", "We do not fit new boilers" kept "not" and
+     "fit", so neither could ever match — a client who said they do not install boilers had installation
+     questions pass as their "Boiler repair" service, into the baseline and onto a planned page. The
+     negation and the client's own verbs are stripped from the LABEL only (never from questions: "no hot
+     water" is a customer's words); a new-work verb is carried by `newWork`, which already binds the
+     negative to new / install / fit questions. */
+  const forTokens = (label: string, newWork: boolean) => {
+    const plain = label.replace(NOT_OFFERED_PREAMBLE, ' ');
+    return newWork ? plain.replace(NEW_WORK_ALL, ' ') : plain;
+  };
   const notOffered = (i.notOffered ?? [])
     .flatMap((label) => label.split(/\s*\/\s*|\s+or\s+/i).map((part) => part.trim()).filter(Boolean))
-    .map((label) => ({ label, tokens: dropTrade(meaningTokens(synonymised(label), towns)), newWork: NEW_WORK.test(label) }))
+    .map((label) => { const newWork = NEW_WORK.test(label); return { label, tokens: dropTrade(meaningTokens(synonymised(forTokens(label, newWork)), towns)), newWork }; })
     .filter((n) => n.tokens.length > 0);
   return { trade: i.trade ?? '', towns, confirmed, confirmedTokens, notOffered, tradeTokens };
 }
 
 /** Words that ask for NEW work — a new unit supplied and fitted, not a repair or a service of an existing one. */
-const NEW_WORK = /\b(?:new|brand[\s-]new|install(?:s|ed|ing|ation|ations|er|ers)?|fit|fits|fitted|fitting|fittings|fitter|fitters|supply|supplied|replace(?:s|d|ment|ments)?|replacing)\b/i;
+const NEW_WORK_SOURCE = String.raw`\b(?:new|brand[\s-]new|install(?:s|ed|ing|ation|ations|er|ers)?|fit|fits|fitted|fitting|fittings|fitter|fitters|supply|supplied|replace(?:s|d|ment|ments)?|replacing)\b`;
+const NEW_WORK = new RegExp(NEW_WORK_SOURCE, 'i');
+const NEW_WORK_ALL = new RegExp(NEW_WORK_SOURCE, 'gi');
+/** How a client words a negative around the service itself: "No …", "We don't do …", "Not offered: …".
+ *  Stripped from a not-offered LABEL before its words are read (buildServiceScope). */
+const NOT_OFFERED_PREAMBLE = /\b(?:no|not|none|never|nor|without|don['’]?t|doesn['’]?t|do|does|we|i|us|any|offer(?:s|ed|ing)?|provide(?:s|d)?|undertake|carry out)\b|:/gi;
 
 export type ScopeVerdict = 'core' | 'service' | 'not_offered' | 'unsupported';
 

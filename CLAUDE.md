@@ -276,6 +276,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The four-week results sender** (`_shared/remeasure-results.ts`) is claim-first on
   `remeasure_results_sent_at` and **holds behind `REMEASURE_RESULTS_COPY_APPROVED = false`** until Paul
   approves the copy. **RG is due 2026-10-06** — approve before then or his results hold.
+  ⛔ **Paul's wording (2026-10-05):** signed `RESULTS_SIGN_OFF` ("Paul, Findable"); the monthly is described as
+  the real service (`monthlyCoversPhrase` — never "every week", no "maintenance"); the not-gone-up version names
+  NO upcoming monthly payment after saying a claim stops it. Exact copy: `final-certification.md` §8.
+  ⛔ **findable-checkout refuses with `quickCloseClosedRefusal`** — one closed-client rule with Quick Close
+  (money, paid-or-beyond, refunded, ended).
   ⛔ **Billing and the claim window are TWO clocks**: billing = `firstRecurringPaymentIso(sign-up)`
   (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
   (`resultsBillingStartIso`) or none — never "that same day". The end of the route's payments (12 / 6) is
@@ -887,6 +892,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `websiteLaunch.ts`, form registry = `website_build.form`, claims = `claimRules.ts` ↔ the gate.
 - ⛔ **A not-offered entry about NEW work binds only new work** (`serviceScope.ts` `NEW_WORK`): "no new boilers"
   must never exclude boiler repairs or servicing (wave 1 found it shrinking to "boiler").
+- ⛔ **The client's own "no" is not a word of the service** (`buildServiceScope` `NOT_OFFERED_PREAMBLE`, pre-sales
+  final): a negative matches only when EVERY one of its words is in the question, so "no" / "we don't" / "fit"
+  left in the LABEL meant "No new boilers" never matched anything. Strip them from labels only — never from
+  questions ("no hot water" is the customer's words).
 
 **Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
 - **Every manual Crawl site / Re-crawl site / Crawl check is EXHAUSTIVE** (`mode: "full"`, operator-only,
@@ -1075,8 +1084,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
-- 🔴 **Pre-sales wave 1 is integrated, NOT deployed** (`integration/pre-sales-wave1`;
-  `docs/pre-sales-certification/wave1-integration.md` has the deploy order). ⛔ **`whatsapp-status` must not be
+- 🔴 **The pre-sales final candidate is certified, NOT merged or deployed** (`integration/pre-sales-final` =
+  wave 1 + WS-7 + the final fixes). `docs/pre-sales-certification/final-certification.md` is the authority for
+  the migration order (10), the edge deploy list (38 + `whatsapp-status` held) and the manual pre-deploy actions;
+  it supersedes the wave-1 lists. ⛔ **`whatsapp-status` must not be
   deployed until the Findable Meta App and its App Secret are ready** — the new code fails closed without
   `WHATSAPP_APP_SECRET`; the post-call reply matcher rides the same deploy, so it waits too.
 - ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).

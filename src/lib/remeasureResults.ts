@@ -292,15 +292,33 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
      (resultsBillingStartIso) and the sentence counts the payments the way the offer does:
      the sign-up £99 is payment 1, this is payment 2, and nothing follows the last. */
   /* 🔴 PER ROUTE (2026-09-29): the count is the client's own contract (Build 12, Optimise 6). */
-  if (i.monthlyStartsOn) {
+  /* ⛔ ONLY WHEN THE NUMBER WENT UP (Paul, 2026-10-05). The not-gone-up email has just said a valid
+     claim stops the monthly; a "your first monthly payment is on…" paragraph straight after it reads
+     as taking that back. That version names no upcoming payment. */
+  if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);
     out.push(route
-      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you, for the rest of your ${termMonthsFor(route)}-month minimum term. It is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
-      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you. It is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
+      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(route)}, for the rest of your ${termMonthsFor(route)}-month minimum term. That first monthly payment is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
+      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(null)}. That first monthly payment is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
     );
   }
-  out.push(`Paul, findable`);
+  out.push(RESULTS_SIGN_OFF);
   return out;
+}
+
+/** Paul's sign-off, exactly (2026-10-05). */
+export const RESULTS_SIGN_OFF = 'Paul, Findable';
+
+/* ⛔ WHAT THE MONTHLY PAYS FOR — THE ACTUAL SERVICE, NEVER "EVERY WEEK" (Paul, 2026-10-02 / 2026-10-05).
+   A new page each month, a monthly check of AI visibility ("check", never "audit": /terms says the
+   monthly update is not a full re-audit), adjustments as we learn. Hosting only on Build, where we
+   host the site we built; an Optimise client keeps their own site, so it is not claimed there, and an
+   unknown route claims nothing route-specific. ⛔ No "maintenance" in a billing text (Paul's standing
+   rule, remeasure-results.test.ts: maintenance is the first thing anyone cuts). */
+export function monthlyCoversPhrase(route: 'build' | 'optimise' | null): string {
+  return route === 'build'
+    ? 'a new page each month, a monthly check of your AI visibility, adjustments as we learn, and hosting the website we built for you'
+    : 'a new page each month, a monthly check of your AI visibility, and adjustments as we learn';
 }
 
 /** The document's "what this means" paragraphs, same rule, same sentence. */
