@@ -242,7 +242,7 @@ export default function Team() {
       {onboarding.data && (
         <Card className="p-4 space-y-2">
           <h2 className="font-semibold">Salesperson documents</h2>
-          <p className="text-xs text-muted-foreground">Only the approved (current) contractor agreement and privacy notice count towards Ready to Sell. Drafts can be recorded for history but never count.</p>
+          <p className="text-xs text-muted-foreground">For your records only. Contractor agreements and privacy notices are handled outside LeadFinderOS and never affect Ready to Sell. Only the current team guide does (salespeople acknowledge it themselves).</p>
           <SalespersonDocumentsCard docs={onboarding.data.documents} call={call} onChanged={(message, error) => {
             if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
             else toast({ title: message ?? 'Saved' });

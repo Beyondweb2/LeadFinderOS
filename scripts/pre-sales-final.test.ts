@@ -273,7 +273,9 @@ console.log('── 7. migrations (static) and the Meta hold ──');
     /* 2026-10-05: v3 agreement + Option B (F), and salesperson onboarding + seller attribution (H). */
     '20261010090000_client_agreement_v3_commercial.sql', '20261010120000_salesperson_onboarding_compliance.sql',
     /* the F + H integration: the paid sign-up decides the seller */
-    '20261010130000_v3_signup_seller_attribution.sql'];
+    '20261010130000_v3_signup_seller_attribution.sql',
+    /* salesperson paperwork handled outside LeadFinderOS (Paul, 2026-10-05) */
+    '20261010140000_ready_to_sell_without_paperwork.sql'];
   const candidate = newer.filter((n) => !ON_MAIN.includes(n) && !LATER.includes(n));
   ok(candidate.length === FINAL.length && candidate.every((n) => FINAL.includes(n)), `exactly the ten candidate migrations are new in this release (${candidate.length}: ${candidate.map((n) => n.slice(0, 14)).join(' ')})`);
   const sc = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');

@@ -16,24 +16,32 @@ No WhatsApp function, template, queue rule, opt-out or suppression rule was chan
 WhatsApp is the gate itself: a salesperson who is NOT Ready to Sell is refused a send or a queue exactly the
 way a suspended salesperson already is (same guard, same response). Ready reps and Paul: identical behaviour.
 
-## 1. Documents — only the CURRENT APPROVED version counts
+## 0. SALESPERSON PAPERWORK — HANDLED EXTERNALLY BY PAUL, NOT ENFORCED IN LEADFINDEROS (Paul, 2026-10-05)
+
+Paul sends the contractor agreement and the salesperson privacy notice to salespeople himself, outside the app.
+So (migration `20261010140000_ready_to_sell_without_paperwork.sql`, live 2026-10-05):
+- neither is part of Ready to Sell (`salesperson_onboarding_missing()` no longer checks them);
+- nothing a salesperson sees asks them to open, tick, sign or upload one — the only thing they can do themselves
+  is acknowledge the current team guide;
+- what Paul chooses to record about them on the Team page (version, date, where the copy is kept) is a
+  REFERENCE line, optional, never "missing";
+- they are no longer a launch blocker: a rep becomes Ready to Sell on the practical items in §3 alone.
+⛔ This is ONLY salesperson paperwork. The CLIENT Service Agreement v3 (read, affirm authority, sign — before
+any Stripe payment, enforced in `findable-checkout`) is unchanged.
+
+## 1. Document records — reference only (and the team guide)
 
 Table `salesperson_document_versions` (id, kind = contractor_agreement / privacy_notice / team_guide, label,
 **status = draft / approved / superseded**, document_ref, outstanding[], approved/superseded times). One
 approved version per kind (unique index); the database refuses approving a version with anything
-outstanding. `approve_salesperson_document()` approves a draft and supersedes the previous approved version
-in one transaction, and reports how many salespeople had the old one (they stop being Ready to Sell). A version whose id says "draft" (draft v2, the draft notice) can never be approved, even with its notes cleared — the final document is added as its own version.
+outstanding. `approve_salesperson_document()` approves a draft and supersedes the previous approved version.
+**Only the TEAM GUIDE's approved version still matters to Ready to Sell** (a new guide must be acknowledged);
+contractor agreement and privacy notice versions are kept for Paul's records only.
 
-Seeded:
-- `contractor-agreement-draft-v2` — **draft**. Outstanding: clause 4.3(c) to be amended. Can be RECORDED as
-  what someone signed (history), **never satisfies "current approved contractor agreement signed"**.
-- `salesperson-privacy-notice-draft-2026-10-05` — **draft / provided for review**, 10 outstanding items (§2).
-- `team-guide-2026-10-02` — approved (the current guide).
+Seeded (kept as records): `contractor-agreement-draft-v2` (draft), `salesperson-privacy-notice-draft-2026-10-05`
+(draft, 10 outstanding items, §2), `team-guide-2026-10-02` (approved, the current guide).
 
-No final version number is invented. When Paul has the final documents he adds them on the Team page →
-Salesperson documents (Add a document version → Approve as current).
-
-## 2. Privacy notice — outstanding before it can be approved
+## 2. Privacy notice — Paul's open drafting items (not a product blocker)
 
 ICO registration number (s1); right-to-work provider or delete the bracket (s5); overseas-transfer safeguard
 per provider (s5); confirm 6 years for payment/commission/tax and for the agreement (s6); retention for
@@ -45,25 +53,27 @@ from the clause being amended.
 
 **The rule** (one place: `public.salesperson_onboarding_missing(uid)` / `salesperson_ready_to_sell(uid)`;
 `src/lib/salespersonOnboarding.ts` mirrors it for the screen with the same keys, and the Team page shows the
-SERVER's answer). Ready = an active, unsuspended sales login, not past an end date, and all ten:
+SERVER's answer). Ready = an active, unsuspended sales login, not past an end date, and all eight:
 
-1. current APPROVED contractor agreement signed (+ date + where the signed copy is kept)
-2. current APPROVED salesperson privacy notice given (+ date)
-3. 18+ confirmed
-4. right-to-work check recorded (result pass, method, date, who, evidence location; provider for a certified
+1. 18+ confirmed
+2. right-to-work check recorded (result pass, method, date, who, evidence location; provider for a certified
    check; a follow-up date that has fallen due blocks)
-5. bank details received
-6. VAT status (no, or yes + UK VAT number)
-7. individual, or limited company with the contracting entity recorded (name, number, date the contract with
-   the company was confirmed)
-8. start date
-9. own LeadFinderOS login (live account, never stored)
-10. current approved team guide acknowledged (the salesperson can do this one themselves)
+3. bank details received
+4. VAT status (no, or yes + UK VAT number)
+5. individual, or limited company with the contracting entity recorded (name, number, date the contract with
+   the company was confirmed) — a contractor status never recorded counts as missing (a NULL slipped through
+   H's first version; fixed in `20261010140000`)
+6. start date
+7. own LeadFinderOS login (live account, never stored)
+8. current approved team guide acknowledged (the salesperson can do this one themselves)
 
-Schedule 2 is optional and never blocks. **TPS/CTPS is not part of it.**
+NOT required: the contractor agreement and the privacy notice (§0, handled outside the app). Schedule 2 is
+optional and never blocks. **TPS/CTPS is not part of it.**
 
 **What a not-ready salesperson CAN do:** sign in; see the "You are not Ready to Sell yet" banner (Sales
-dashboard, lead workspace) with what is outstanding; acknowledge the current team guide; read their leads;
+dashboard, lead workspace, Find Leads) — "Calls, messages, claiming leads, checks, Find Leads and sign-up links
+are paused until your onboarding is complete. Waiting on: …" with only the real missing items; acknowledge the
+current team guide; read their leads;
 write notes; record an opt-out; give leads back / archive; finish the handoff for a sale already made.
 
 **What they CANNOT do (refused on the server):**
@@ -71,7 +81,7 @@ write notes; record an opt-out; give leads back / archive; finish the handoff fo
 | Action | Where it is refused |
 |---|---|
 | Claim a lead / add a lead / be assigned one | `guard_action` ('claim'), the assignment trigger on `outreach_leads` (signed-in sessions), admin-users "move all" |
-| Prospect checks, hook audits, searches, enrichment, any guarded action | `guard_action` → `not_onboarded` (refused like `suspended`, one alert per person per day) |
+| Find Leads (search-leads → `lead_search`), prospect checks, hook audits, enrichment, any guarded action | `guard_action` → `not_onboarded` (refused like `suspended`, one alert per person per day); the Find Leads page also shows the banner and does not start a search |
 | Log a call or any other contact, set stages / follow-ups / interest | the `lead_activity` trigger (only their own session; allowlist: note, opted_out, lead_unassigned, archived_set, handoff_saved, details_set, delivery_submitted, client_info_answered) |
 | Queue outreach, send WhatsApp | `guard_action` ('whatsapp_queue', 'whatsapp_send') — no WhatsApp code changed |
 | Quick Close save / payment link / share | fn `quick-close` (`_shared/sales-ready.ts`, fails closed) |
@@ -80,9 +90,8 @@ write notes; record an opt-out; give leads back / archive; finish the handoff fo
 The admin is never gated anywhere. The screens also hide selling actions (`leadPermissions(role, ready)`),
 but the server is what enforces.
 
-⚠️ After deploy, every current sales login (today only the two TEST accounts) is not ready until its
-onboarding is recorded with approved documents — and no approved agreement or notice exists yet. That is the
-intended effect.
+⚠️ Every current sales login (today only the two TEST accounts) is not ready until Paul records its practical
+onboarding (§3) on the Team page. No document approval is needed first.
 
 ## 3a. Seller attribution — SALE CREATOR ≠ CURRENT LEAD OWNER (final, 2026-10-05)
 
@@ -201,5 +210,5 @@ login. Commission does not read any of it.
    `client-agreement` and `paid-client-hub` (both import the changed `src/lib/paymentState.ts`; behaviour unchanged).
 3. Release the SPA (Team panel, Documents, attribution reviews, the banner, permissions).
 4. Session F wires `sale_attribution_held` / `sale_attribution_holds` into commission (§3a).
-5. Before any real salesperson starts: add and approve the final contractor agreement and the completed
-   privacy notice, then record each person's onboarding.
+5. Before any real salesperson starts: record each person's practical onboarding (§3). The contractor agreement
+   and privacy notice are Paul's to send outside the app (§0) — not a step here.

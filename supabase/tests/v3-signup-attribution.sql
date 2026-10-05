@@ -87,11 +87,10 @@ insert into t_results (name, ok, detail) select 'CREATION: each sign-up is snaps
   and (select creator_role = 'admin' and creator_ready from public.sale_creations where onboarding_id = (select id from t_su where k = 'S7'))
   and (select not creator_ready from public.sale_creations where onboarding_id = (select id from t_su where k = 'S6')), null;
 
--- TUESDAY: L1 and L2 move to Tom; a newer agreement is approved (Sarah, C and Tom are no longer Ready to Sell); C is disabled.
+-- TUESDAY: L1 and L2 move to Tom; Sarah stops being Ready to Sell (her bank-details record is withdrawn — paperwork no
+-- longer decides readiness since 20261010140000); C is disabled.
 update public.outreach_leads set assigned_to_user_id = 'eeeeeeee-0000-4000-8000-0000000005d1', assigned_at = now() where id in ((select leads[1] from t_fx), (select leads[2] from t_fx));
-set local role service_role;
-select public.approve_salesperson_document('qa-v3-agreement-2', (select admin_id from t_fx));
-reset role;
+update public.salesperson_onboarding set bank_details_received_on = null where user_id = 'eeeeeeee-0000-4000-8000-0000000005a1';
 update public.team_members set status = 'disabled', disabled_at = now() where user_id = 'eeeeeeee-0000-4000-8000-0000000005c1';
 delete from public.user_roles where user_id = 'eeeeeeee-0000-4000-8000-0000000005c1' and role = 'sales';
 insert into t_results (name, ok, detail) select 'setup: Sarah is no longer Ready to Sell, C is disabled, L1 and L2 belong to Tom',

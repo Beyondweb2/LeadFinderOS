@@ -65,21 +65,23 @@ insert into public.salesperson_onboarding (user_id, agreement_version, agreement
 values ('ffffffff-0000-4000-8000-0000000005a1', 'contractor-agreement-draft-v2', '2026-10-06', 'Secure folder / A', 'salesperson-privacy-notice-draft-2026-10-05', '2026-10-06',
   '2026-10-06', 'manual_video_call', '2026-10-06', 'Paul James Sales', 'pass', 'Secure folder / RTW / A', '2026-10-06', false,
   'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx));
-insert into t_results (name, ok, detail) select 'DOCS: draft agreement v2 + draft notice do NOT satisfy Ready to Sell',
-  m @> array['agreement', 'privacy_notice'] and cardinality(m) = 2, m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+/* Since migration 20261010140000 (Paul, 2026-10-05) salesperson PAPERWORK is handled outside LeadFinderOS: a draft,
+   approved or superseded agreement / notice — or none — never decides Ready to Sell. */
+insert into t_results (name, ok, detail) select 'DOCS: draft agreement v2 + draft notice recorded → still READY TO SELL (paperwork handled outside the app)',
+  cardinality(m) = 0, m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
 update public.salesperson_onboarding set agreement_version = 'qa-agreement-final-1' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-insert into t_results (name, ok, detail) select 'DOCS: the approved agreement counts; the draft notice still does not',
-  m = array['privacy_notice'], m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+insert into t_results (name, ok, detail) select 'DOCS: an approved agreement changes nothing either',
+  cardinality(m) = 0, m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
 update public.salesperson_onboarding set privacy_notice_version = 'qa-notice-final-1' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-insert into t_results (name, ok, detail) select 'DOCS: approved agreement + approved notice = READY TO SELL (no TPS/CTPS needed)',
+insert into t_results (name, ok, detail) select 'DOCS: READY TO SELL on the practical items alone (no TPS/CTPS needed)',
   public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1'), public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1')::text;
-insert into t_results (name, ok, detail) select 'approving a newer agreement supersedes the old one and reports who is affected',
-  (r ->> 'superseded') = 'qa-agreement-final-1' and (r ->> 'affected')::int = 1, r::text
+insert into t_results (name, ok, detail) select 'approving a newer agreement version is still recorded (reference only)',
+  (r ->> 'superseded') = 'qa-agreement-final-1', r::text
   from (select public.approve_salesperson_document('qa-agreement-final-2', (select admin_id from t_fx)) r) x;
-insert into t_results (name, ok, detail) select 'DOCS: a SUPERSEDED agreement does not satisfy Ready to Sell',
-  m = array['agreement'], m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+insert into t_results (name, ok, detail) select 'DOCS: having only the SUPERSEDED agreement does not stop them selling',
+  cardinality(m) = 0, m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
 update public.salesperson_onboarding set agreement_version = 'qa-agreement-final-2' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-insert into t_results (name, ok) values ('…and signing the new approved one restores it', public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1'));
+insert into t_results (name, ok) values ('…and recording the new one keeps them ready', public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1'));
 do $$ begin
   begin
     update public.salesperson_onboarding set privacy_notice_version = 'qa-agreement-final-2' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
@@ -225,11 +227,11 @@ do $$ begin
   exception when others then insert into t_results (name, ok, detail) values ('the creation snapshot cannot be edited', sqlerrm like '%append-only%', sqlerrm); end;
 end $$;
 
--- TUESDAY: owners change, Sarah becomes not ready (a newer agreement), C is disabled.
+-- TUESDAY: owners change, Sarah becomes not ready (her bank-details record is withdrawn — paperwork no longer
+-- decides readiness since 20261010140000), C is disabled.
 update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005d1', assigned_at = now()
  where id in ((select leads[5] from t_fx), (select leads[7] from t_fx), (select leads[10] from t_fx), (select leads[4] from t_fx));
-insert into public.salesperson_document_versions (id, kind, label, status, outstanding) values ('qa-agreement-final-3', 'contractor_agreement', 'QA agreement final 3', 'draft', '{}');
-select public.approve_salesperson_document('qa-agreement-final-3', (select admin_id from t_fx));
+update public.salesperson_onboarding set bank_details_received_on = null where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
 update public.team_members set status = 'disabled', disabled_at = now() where user_id = 'ffffffff-0000-4000-8000-0000000005c1';
 delete from public.user_roles where user_id = 'ffffffff-0000-4000-8000-0000000005c1' and role = 'sales';
 insert into t_results (name, ok, detail) select 'setup: Sarah and C are now NOT ready; the leads now belong to Tom',

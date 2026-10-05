@@ -49,34 +49,33 @@ console.log("── a complete record on a live sales login is READY TO SELL ─
 {
   const s = sum(full());
   ok(s.readyToSell && s.done === s.total && s.missing.length === 0, `ready, ${s.done}/${s.total}`);
-  ok(s.total === 10 && BLOCKING_KEYS.length === 10, "ten blocking items (Schedule 2 is optional and never blocks)");
+  ok(s.total === 8 && BLOCKING_KEYS.length === 8, "eight blocking items (paperwork and Schedule 2 never block)");
   ok(!BLOCKING_KEYS.some((k) => /tps|ctps/i.test(k)) && !s.items.some((i) => /tps|ctps/i.test(i.label)), "TPS/CTPS is NOT an item (postponed by Paul)");
   const empty = sum(null);
-  ok(!empty.readyToSell && empty.done === 1 && empty.missing.length === 9, `no record: only the login counts (${empty.done}/${empty.total})`);
+  ok(!empty.readyToSell && empty.done === 1 && empty.missing.length === 7, `no record: only the login counts (${empty.done}/${empty.total})`);
 }
 
-console.log("\n── DOCUMENTS: only the CURRENT APPROVED version counts ──");
+console.log("\n── SALESPERSON PAPERWORK: handled OUTSIDE LeadFinderOS (Paul, 2026-10-05) — never blocks ──");
 {
+  ok(!(BLOCKING_KEYS as readonly string[]).includes("agreement"), "the contractor agreement is NOT a Ready to Sell blocker");
+  ok(!(BLOCKING_KEYS as readonly string[]).includes("privacy_notice"), "the salesperson privacy notice is NOT a Ready to Sell blocker");
+  const none = full({ agreement_version: null, agreement_signed_on: null, agreement_ref: null, privacy_notice_version: null, privacy_notice_given_on: null });
+  ok(sum(none).readyToSell && sum(none, ACTIVE, [...SEED_DOCUMENT_VERSIONS]).readyToSell, "nothing recorded about the agreement or notice, and only DRAFT documents exist → still Ready to Sell");
+  ok(sum(full({ agreement_version: "contractor-agreement-draft-v2", privacy_notice_version: "salesperson-privacy-notice-draft-2026-10-05" })).readyToSell, "a draft recorded for reference does not stop them either");
+  const ag = item(none, "agreement"), pn = item(none, "privacy_notice");
+  ok(!ag.blocking && !pn.blocking && ag.done && pn.done && /outside LeadFinderOS/.test(ag.detail), "both are reference lines: never blocking, never shown as missing");
+  ok(!sum(none, ACTIVE, [...SEED_DOCUMENT_VERSIONS]).notes.some((n) => /contractor agreement|privacy notice/i.test(n)), "no note tells Paul he must approve paperwork before anyone can sell");
+  ok(item(full(), "agreement").detail.includes("Secure folder / A"), "what Paul records is still shown for reference");
+  // The remaining practical requirements still gate.
+  for (const [k, over] of [["age_18", { age_18_confirmed_on: null }], ["right_to_work", { rtw_result: null }], ["bank_details", { bank_details_received_on: null }], ["vat", { vat_registered: null }],
+    ["contractor_status", { contractor_type: null }], ["start_date", { start_date: null }], ["team_guide", { team_guide_acknowledged_on: null }]] as const) {
+    const s = sum(full(over as Partial<OnboardingRecord>));
+    ok(!s.readyToSell && s.missing.some((i) => i.key === k), `still required: ${k} missing → NOT Ready to Sell`);
+  }
+  ok(!sum(full(), { ...ACTIVE, status: "disabled" }).readyToSell, "still required: their own live login");
   const seedAgreement = SEED_DOCUMENT_VERSIONS.find((d) => d.kind === "contractor_agreement")!;
-  const seedNotice = SEED_DOCUMENT_VERSIONS.find((d) => d.kind === "privacy_notice")!;
-  ok(seedAgreement.id === "contractor-agreement-draft-v2" && seedAgreement.status === "draft", "the uploaded agreement is seeded as DRAFT v2");
-  ok(seedNotice.status === "draft" && seedNotice.outstanding.length === 10, "the uploaded privacy notice is seeded as a DRAFT with 10 outstanding items");
-  ok(!SEED_DOCUMENT_VERSIONS.some((d) => d.kind !== "team_guide" && d.status === "approved"), "no agreement or notice is approved until Paul approves the final version (no invented version)");
-  const draftAg = item(full({ agreement_version: "contractor-agreement-draft-v2" }), "agreement");
-  ok(!draftAg.done && /DRAFT/.test(draftAg.detail) && /does not count/.test(draftAg.detail), "draft contractor agreement does NOT satisfy the item");
-  ok(!sum(full({ agreement_version: "contractor-agreement-draft-v2" })).readyToSell, "…and does NOT make them Ready to Sell");
-  ok(item(full(), "agreement").done, "the approved current agreement does");
-  ok(!item(full({ agreement_version: "qa-agreement-old" }), "agreement").done && /SUPERSEDED/.test(item(full({ agreement_version: "qa-agreement-old" }), "agreement").detail), "a superseded agreement does not");
-  ok(!item(full({ agreement_ref: null }), "agreement").done, "the approved agreement also needs where the signed copy is kept");
-  ok(!item(full({ agreement_signed_on: null }), "agreement").done, "…and a signing date");
-  const draftPn = item(full({ privacy_notice_version: "salesperson-privacy-notice-draft-2026-10-05" }), "privacy_notice");
-  ok(!draftPn.done && /DRAFT/.test(draftPn.detail), "draft privacy notice does NOT satisfy the item");
-  ok(!sum(full({ privacy_notice_version: "salesperson-privacy-notice-draft-2026-10-05" })).readyToSell, "…and does NOT make them Ready to Sell");
-  ok(item(full(), "privacy_notice").done, "the approved current notice does");
-  ok(!item(full({ privacy_notice_version: "qa-notice-old" }), "privacy_notice").done, "a superseded notice does not");
-  const onlySeeds = sum(full({ agreement_version: "contractor-agreement-draft-v2", privacy_notice_version: "salesperson-privacy-notice-draft-2026-10-05" }), ACTIVE, [...SEED_DOCUMENT_VERSIONS]);
-  ok(!onlySeeds.readyToSell && onlySeeds.notes.some((n) => /no approved contractor agreement yet/.test(n)), "with today's documents nobody can be Ready to Sell, and the panel says why");
-  ok(validateOnboardingPatch({ agreement_version: "contractor-agreement-draft-v2", agreement_signed_on: "2026-10-06" }, null, DOCS).ok, "the draft v2 that was actually signed can be RECORDED for history");
+  ok(seedAgreement.id === "contractor-agreement-draft-v2" && seedAgreement.status === "draft", "the reference record of the draft v2 agreement is kept as it was");
+  ok(validateOnboardingPatch({ agreement_version: "contractor-agreement-draft-v2", agreement_signed_on: "2026-10-06" }, null, DOCS).ok, "Paul can still record what was signed, for reference");
   ok(validateOnboardingPatch({ agreement_version: "made-up" }, null, DOCS).ok === false, "an unknown version is refused");
   ok(validateOnboardingPatch({ privacy_notice_version: "qa-agreement-final" }, null, DOCS).ok === false, "a version of the wrong kind is refused");
   ok(validateNewDocument({ id: "contractor-agreement-v3", kind: "contractor_agreement", label: "Agreement v3", outstanding: ["", " "] }).ok, "Paul can add a new version (blank outstanding lines dropped)");
@@ -93,12 +92,17 @@ console.log("\n── the server's answer is the one shown ──");
 
 console.log("\n── the keys match the database rule ──");
 {
-  const fn = MIG.slice(MIG.indexOf("create or replace function public.salesperson_onboarding_missing"), MIG.indexOf("create or replace function public.salesperson_ready_to_sell"));
+  /* The LIVE definition is the latest migration that replaces the function (20261010140000, paperwork removed). */
+  const LATEST = read("supabase/migrations/20261010140000_ready_to_sell_without_paperwork.sql");
+  const fn = LATEST.slice(LATEST.indexOf("create or replace function public.salesperson_onboarding_missing"), LATEST.indexOf("revoke all on function public.salesperson_onboarding_missing"));
   const emitted = new Set([...fn.matchAll(/'([a-z_0-9]+)'::text/g)].map((m) => m[1]).concat([...fn.matchAll(/array\['([a-z_]+)'\]/g)].map((m) => m[1])));
   for (const k of [...BLOCKING_KEYS, ...INACTIVE_KEYS]) ok(emitted.has(k), `the database rule can return "${k}"`);
   for (const k of emitted) ok((BLOCKING_KEYS as readonly string[]).includes(k) || (INACTIVE_KEYS as readonly string[]).includes(k), `"${k}" from the database is a key the screen knows`);
+  ok(!emitted.has("agreement") && !emitted.has("privacy_notice") && !/contractor_agreement|privacy_notice/.test(fn.replace(/--[^\n]*/g, "")), "the database rule never checks the contractor agreement or privacy notice");
   ok(!/tps|ctps|phone_tps/i.test(fn), "the database rule never reads TPS/CTPS");
-  ok(/d\.status = 'approved'/.test(fn) && (fn.match(/d\.status = 'approved'/g) ?? []).length === 3, "the database rule counts APPROVED versions only (agreement, notice, guide)");
+  ok((fn.match(/d\.status = 'approved'/g) ?? []).length === 1 && /d\.kind = 'team_guide'/.test(fn), "the only document the rule reads is the current APPROVED team guide");
+  const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.slice(0, 14) > "20261010140000").filter((n) => /salesperson_onboarding_missing/.test(read(`supabase/migrations/${n}`)));
+  ok(migs.length === 0, `no later migration redefines the rule (${migs.join(", ") || "none"})`);
   ok(!/schedule2/.test(fn), "Schedule 2 never blocks in the database either");
 }
 
