@@ -36,6 +36,15 @@ Server functions (SECURITY DEFINER, the owner is always the signed-in account): 
   campaign answers `not_found`, never its name. A rep's lead goes only into the rep's own campaign.
 - Campaigns are **not a menu item** (Paul's choice): reached via the Campaigns button top right of Find Leads / Outreach.
 - The "(owner)" in brackets is display only (`campaignDisplayName`).
+- **Lead ownership (live 2026-10-05, `docs/pre-sales-certification/outreach-ownership-safety.md`):** the admin's Outreach
+  opens on **My leads** (owned by Paul only), with **Unassigned**, each salesperson and **All team (owned)** — owned leads
+  only, never the unassigned — as deliberate, unremembered choices (`src/lib/outreachOwnerScope.ts`). Unassigned is never
+  "Paul's"; **Claim for me** (Unassigned view, `assign_lead`) makes a lead his and messages nobody. A salesperson sees
+  only their own. Queueing WhatsApp across more than one owner needs a second press ("Queue across team", Cancel focused).
+  A lead added by a signed-in person is owned by that person (trigger `trg_outreach_leads_added_by_owner`); a service-role
+  insert stays unassigned; the ~2,700 historical unassigned leads were NOT reassigned.
+- **A campaign launch messages only leads the campaign's OWNER owns** (`campaign_launch`, migration
+  `20261009150000`): another owner's member is skipped as `other_owner`, an unassigned one as `unassigned` (claim it first).
 
 ## Contact method
 

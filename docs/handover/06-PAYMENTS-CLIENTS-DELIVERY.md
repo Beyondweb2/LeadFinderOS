@@ -87,6 +87,12 @@ from revenue (and keeps the amount).
 - **Build vs Optimise blockers** (`handoffReadiness.ts`, route = what they PAID on): **Build** never needs an existing
   website or a website login (an old site is shown for reference only). **Optimise** still needs the real site and access.
   Unknown route: the older rule. Not-needed items never block (no GBP = `gbp_exists='no'` only).
+- **Missing information (live 2026-10-05, `docs/pre-sales-certification/client-missing-info-actions.md`):** one box on
+  a Paid Client with three actions — **Find what we already have** (each source separate; website-crawl finds are
+  unconfirmed guesses; nothing applies until Paul presses Use; domain / Google access / setup-form answers are never
+  guessed), **Ask salesperson** (only when another active seller sold it; one open `client_info_requests` row per client;
+  only that seller answers, through the handoff; Paul is told), **Contact client** (opens the Inbox conversation with an
+  INTERNAL need note, else email / phone). Nothing sends by itself.
 - Consents are preserved: a save that would turn a stored consent from true to false is refused (`409
   would_clear_consents`).
 - The agreement route locks at the first binding fact (a stamped contract or any acceptance) — `409 route_locked`.
