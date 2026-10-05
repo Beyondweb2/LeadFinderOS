@@ -815,6 +815,22 @@ Deno.serve(async (req) => {
         const d = String(x ?? "").replace(/\D/g, "");
         if (d && !asked.includes(d)) asked.push(d);
       }
+      /* ⛔ A SALESPERSON IS ANSWERED ONLY FOR THEIR OWN LEADS' NUMBERS (2026-10-05, outreach ownership audit). The
+         phone half answered for ANY number sent, so a rep could ask "has Paul / another rep messaged this
+         number, is it suppressed?" about a lead they cannot see. Numbers are matched on their last nine digits
+         (07… and 447… are one number); anything else is dropped from the question, never answered "no". */
+      if (salesActor && asked.length) {
+        const tail = (v: string) => v.replace(/\D/g, "").slice(-9);
+        const own = new Set<string>();
+        for (let from = 0; ; from += 1000) {
+          const { data: rows, error: ownErr } = await service.from("outreach_leads").select("id, phone")
+            .eq("assigned_to_user_id", salesActor.id).not("phone", "is", null).order("id").range(from, from + 999);
+          if (ownErr) return json({ ok: false, error: "contact_check_failed", detail: "could not read the leads" }, 200);
+          for (const r of (rows ?? []) as Array<{ phone: string | null }>) { const t = tail(r.phone ?? ""); if (t.length === 9) own.add(t); }
+          if (!rows || rows.length < 1000) break;
+        }
+        for (let i = asked.length - 1; i >= 0; i--) if (!own.has(tail(asked[i]))) asked.splice(i, 1);
+      }
       if (asked.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [], conversation });
 
       /* 🔴 THIS USED TO REFUSE ANY BATCH OVER 500 PHONES, AND THAT BROKE ALL OUTREACH (2026-09-03).

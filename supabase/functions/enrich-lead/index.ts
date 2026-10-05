@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
+import { mayLookUpBusiness, mayWriteLeadId, refusalBody, resolveActor } from "../_shared/access.ts";
 import { apifyEnrich, type EnrichmentType } from "../_shared/apify-stub.ts";
 
 // enrich-lead — Phase 2 enrichment backbone (Apify STUBBED in this build).
@@ -129,6 +129,13 @@ Deno.serve(async (req) => {
     if (!who.ok) return json(refusalBody(who), who.status);
     const may = await mayWriteLeadId(service, who.actor, leadId);
     if (may !== "ok") return json({ success: false, error: may }, may === "not_your_lead" ? 403 : 503);
+    /* ⛔ THE PLACE ID IS A KEY TOO (2026-10-05, outreach ownership audit). The cache key below is built from the
+       caller's place_id, and a cache hit returned (and copied onto the caller's lead) the email / Facebook /
+       Instagram found for that business — so a salesperson sending another rep's or Paul's place id with a
+       made-up lead_id (which mayWriteLeadId allows, on purpose, for Find Leads) read that lead's contact
+       details. The same check place-details uses: a business already in the book must be the caller's own. */
+    const mayPlace = await mayLookUpBusiness(service, who.actor, { placeId });
+    if (mayPlace !== "ok") return json({ success: false, error: mayPlace }, mayPlace === "not_your_lead" ? 403 : 503);
 
     const nowIso = new Date().toISOString();
     const cacheKey = `${placeId || `lead:${leadId}`}:${enrichmentType}`;
