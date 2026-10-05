@@ -28,18 +28,21 @@ interface FieldSpec {
   showIf?: (d: OnboardingRecord) => boolean;
 }
 
+/* Only the TEAM GUIDE version still decides Ready to Sell. Salesperson paperwork (contractor agreement, privacy
+   notice) is handled OUTSIDE LeadFinderOS (Paul, 2026-10-05): its versions are listed for reference, never "does not count". */
 const versions = (docs: readonly DocumentVersion[], kind: DocumentKind) => docs.filter((d) => d.kind === kind)
-  .map((v) => ({ value: v.id, label: `${v.label} — ${DOCUMENT_STATUSES[v.status]}${v.status === 'approved' ? '' : ' (does not count)'}` }));
+  .map((v) => ({ value: v.id, label: `${v.label} — ${DOCUMENT_STATUSES[v.status]}${kind === 'team_guide' && v.status !== 'approved' ? ' (does not count)' : ''}` }));
+const REFERENCE_HINT = 'Optional, for your own reference. This paperwork is handled outside LeadFinderOS and never affects Ready to Sell.';
 
 const editorsFor = (docs: readonly DocumentVersion[]): Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> => ({
   agreement: [
-    { field: 'agreement_version', label: 'Version signed', kind: 'select', options: versions(docs, 'contractor_agreement'), hint: 'Only the approved (current) version counts. A draft can be recorded for history.' },
-    { field: 'agreement_signed_on', label: 'Date signed', kind: 'date' },
-    { field: 'agreement_ref', label: 'Where the signed copy is kept', kind: 'text', placeholder: 'e.g. Secure folder › Agreements › Jane Smith' },
+    { field: 'agreement_version', label: 'Version signed (optional)', kind: 'select', options: versions(docs, 'contractor_agreement'), hint: REFERENCE_HINT },
+    { field: 'agreement_signed_on', label: 'Date signed (optional)', kind: 'date' },
+    { field: 'agreement_ref', label: 'Where the signed copy is kept (optional)', kind: 'text', placeholder: 'e.g. Secure folder › Agreements › Jane Smith' },
   ],
   privacy_notice: [
-    { field: 'privacy_notice_version', label: 'Version given', kind: 'select', options: versions(docs, 'privacy_notice'), hint: 'Record the version they actually received. A draft (provided for review) is recorded but does not count.' },
-    { field: 'privacy_notice_given_on', label: 'Date given', kind: 'date' },
+    { field: 'privacy_notice_version', label: 'Version given (optional)', kind: 'select', options: versions(docs, 'privacy_notice'), hint: REFERENCE_HINT },
+    { field: 'privacy_notice_given_on', label: 'Date given (optional)', kind: 'date' },
   ],
   age_18: [{ field: 'age_18_confirmed_on', label: 'Date confirmed', kind: 'date', hint: 'Record only that it was confirmed — never the date of birth.' }],
   right_to_work: [
@@ -112,8 +115,7 @@ function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[];
     setBusy(true);
     try { if (await onSave(patch as Partial<OnboardingRecord>)) onCancel(); } finally { setBusy(false); }
   };
-  const notice = documentVersion(docs, draft.privacy_notice_version, 'privacy_notice');
-  const agreement = documentVersion(docs, draft.agreement_version, 'contractor_agreement');
+  const guide = documentVersion(docs, draft.team_guide_version, 'team_guide');
   const method = draft.rtw_method ? RTW_METHODS[draft.rtw_method] : null;
   return (
     <div className="mt-2 space-y-2 rounded-md border bg-muted/30 p-3">
@@ -124,7 +126,7 @@ function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[];
           {s.hint && <span className="block text-[11px] text-muted-foreground">{s.hint}</span>}
         </label>
       ))}
-      {([['privacy_notice_version', notice], ['agreement_version', agreement]] as const).map(([f, d]) => specs.some((s) => s.field === f) && d && d.status !== 'approved' && (
+      {([['team_guide_version', guide]] as const).map(([f, d]) => specs.some((s) => s.field === f) && d && d.status !== 'approved' && (
         <div key={f} className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
           <p className="font-medium">This version is {d.status === 'draft' ? 'a draft' : 'superseded'} and does not count{d.outstanding.length ? '. Outstanding:' : '.'}</p>
           {d.outstanding.length > 0 && <ul className="ml-4 list-disc">{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>}
@@ -274,13 +276,14 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
   const blank = { kind: 'contractor_agreement', id: '', label: '', document_ref: '', outstanding: '' };
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
-  const run = async (action: string, body: Record<string, unknown>, ok: string) => {
+  const run = async (action: string, body: Record<string, unknown>, ok: string, kind?: DocumentKind) => {
     setBusy(true);
     try {
       const r = await call(action, body);
       if (!r.ok) { onChanged(undefined, String(r.error ?? 'failed')); return false; }
       const affected = typeof r.affected === 'number' ? r.affected : 0;
-      onChanged(affected > 0 ? `${ok} ${affected} salesperson(s) had the old version and are not Ready to Sell until they have the new one.` : ok);
+      /* Only a new TEAM GUIDE changes Ready to Sell; agreement / notice versions are reference only. */
+      onChanged(affected > 0 && kind === 'team_guide' ? `${ok} ${affected} salesperson(s) acknowledged the old guide and are not Ready to Sell until they acknowledge the new one.` : ok);
       return true;
     } finally { setBusy(false); }
   };
@@ -306,8 +309,10 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
                   }}>Mark outstanding items resolved</Button>
                 ) : (
                   <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => {
-                    if (!window.confirm(`Approve "${d.label}" as the current version? The previous approved version (if any) becomes superseded, and anyone who only has that one stops being Ready to Sell.`)) return;
-                    void run('team_document_approve', { id: d.id }, 'Approved.');
+                    if (!window.confirm(d.kind === 'team_guide'
+                      ? `Approve "${d.label}" as the current team guide? The previous guide becomes superseded, and anyone who only acknowledged that one stops being Ready to Sell until they acknowledge this one.`
+                      : `Mark "${d.label}" as the current version for your records? This paperwork is handled outside LeadFinderOS and does not affect Ready to Sell.`)) return;
+                    void run('team_document_approve', { id: d.id }, 'Approved.', d.kind);
                   }}>Approve as current</Button>
                 )}
               </div>

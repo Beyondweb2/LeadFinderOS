@@ -342,18 +342,24 @@ export interface MemberState {
   has_signed_in?: boolean;
 }
 
-/** The ten items that block READY TO SELL — the SAME keys public.salesperson_onboarding_missing() returns. */
+/** The eight items that block READY TO SELL — the SAME keys public.salesperson_onboarding_missing() returns
+ *  (migration 20261010140000).
+ *  ⛔ SALESPERSON PAPERWORK IS HANDLED OUTSIDE LEADFINDEROS (Paul, 2026-10-05): the contractor agreement and the
+ *  salesperson privacy notice are sent and signed outside the app. They NEVER block Ready to Sell and nothing in
+ *  the app asks a salesperson to open, tick or sign them. What Paul records about them stays as a reference line. */
 export const BLOCKING_KEYS = [
-  'agreement', 'privacy_notice', 'age_18', 'right_to_work', 'bank_details', 'vat',
+  'age_18', 'right_to_work', 'bank_details', 'vat',
   'contractor_status', 'start_date', 'login', 'team_guide',
 ] as const;
+/** Shown to Paul for reference only — never blocking (paperwork handled outside the app; Schedule 2 optional). */
+export const REFERENCE_KEYS = ['agreement', 'privacy_notice', 'schedule2'] as const;
 /** The other keys the server can return: the person is not an active salesperson right now. */
 export const INACTIVE_KEYS = ['not_sales', 'suspended', 'ended'] as const;
-export type ChecklistKey = typeof BLOCKING_KEYS[number] | 'schedule2';
+export type ChecklistKey = typeof BLOCKING_KEYS[number] | typeof REFERENCE_KEYS[number];
 
 export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
-  agreement: 'Current approved contractor agreement signed',
-  privacy_notice: 'Current approved privacy notice given',
+  agreement: 'Contractor agreement (handled outside LeadFinderOS — reference only)',
+  privacy_notice: 'Salesperson privacy notice (handled outside LeadFinderOS — reference only)',
   age_18: 'Confirmed 18 or over',
   right_to_work: 'Right to work check recorded',
   bank_details: 'Bank details received',
@@ -435,14 +441,14 @@ export function onboardingSummary(
   const items: ChecklistItem[] = [];
   const add = (key: ChecklistKey, done: boolean, detail: string, blocking = true) => items.push({ key, label: CHECKLIST_LABELS[key], done, blocking, detail });
 
-  /* 1. Contractor agreement — the CURRENT APPROVED version, a date, and where the signed copy is kept. */
-  const ag = documentItem(docs, 'contractor_agreement', r.agreement_version, r.agreement_signed_on, 'signed');
-  const agDone = ag.done && !!r.agreement_ref?.trim();
-  add('agreement', agDone, ag.done && !agDone ? `${ag.detail} — record where the signed copy is kept.` : agDone ? `${ag.detail} (copy: ${r.agreement_ref})` : ag.detail);
-
-  /* 2. Privacy notice — the CURRENT APPROVED version given. */
-  const pn = documentItem(docs, 'privacy_notice', r.privacy_notice_version, r.privacy_notice_given_on, 'given');
-  add('privacy_notice', pn.done, pn.detail);
+  /* 1–2. Contractor agreement and privacy notice — HANDLED OUTSIDE LEADFINDEROS (Paul, 2026-10-05). Reference
+     only: whatever Paul chose to note here is shown, nothing is missing if he noted nothing, and it never blocks. */
+  const refLine = (kind: DocumentKind, version: string | null, when: string | null, ref: string | null, verb: string) =>
+    version || when || ref?.trim()
+      ? [version ? documentVersion(docs, version, kind)?.label ?? version : null, when ? `${verb} ${fmt(when)}` : null, ref?.trim() ? `copy: ${ref.trim()}` : null].filter(Boolean).join(', ')
+      : 'Handled outside LeadFinderOS. Nothing needs recording here.';
+  add('agreement', true, refLine('contractor_agreement', r.agreement_version, r.agreement_signed_on, r.agreement_ref, 'signed'), false);
+  add('privacy_notice', true, refLine('privacy_notice', r.privacy_notice_version, r.privacy_notice_given_on, null, 'given'), false);
 
   /* 3. Age. */
   add('age_18', !!r.age_18_confirmed_on, r.age_18_confirmed_on ? `Confirmed ${fmt(r.age_18_confirmed_on)}` : 'Not confirmed.');
@@ -501,10 +507,6 @@ export function onboardingSummary(
       : r.schedule2_status === 'none' ? 'None listed'
       : s2Due ? (s2Due < today ? `Not received; the 7 days ended ${fmt(s2Due)}, so no existing contacts are listed.` : `Optional; due by ${fmt(s2Due)}.`)
       : 'Optional; due within 7 days of the start date.', false);
-
-  for (const kind of ['contractor_agreement', 'privacy_notice'] as const) {
-    if (!currentDocument(docs, kind)) notes.push(`There is no approved ${DOCUMENT_KINDS[kind].toLowerCase()} yet, so nobody can be Ready to Sell. Add the final version under Documents and approve it.`);
-  }
 
   const blockingItems = items.filter((i) => i.blocking);
   const missing = blockingItems.filter((i) => !i.done);

@@ -35,6 +35,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSubscription } from '@/hooks/useSubscription';
 import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
 import { refusalText } from '@/lib/salesCrm';
+import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
+import { useMyReadiness } from '@/hooks/useMyReadiness';
 import type { OwnershipInfo } from '@/components/FindLeadsOwnership';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
@@ -46,6 +48,7 @@ const Index = () => {
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
+  const readiness = useMyReadiness();
 
   /* ══ WHO ALREADY HAS EACH RESULT (multi-user, 2026-09-27) ═══════════════════════════════════════
      ⛔ The server's answer across EVERY user's leads (lead_identity_lookup: place id, then phone, then
@@ -201,6 +204,13 @@ const Index = () => {
 
 
   const handleSearch = useCallback((filters: any) => {
+    /* READY TO SELL (Paul, 2026-10-05): a salesperson whose onboarding is incomplete cannot use Find Leads — the
+       Search button AND Coverage's "Find leads" both pass through here. The server refuses anyway
+       (search-leads → guard_action 'not_onboarded'); this says so plainly. The admin is never gated. */
+    if (readiness.gated && !readiness.ready) {
+      toast({ title: 'Find Leads is paused', description: 'You can search once your onboarding is complete.', variant: 'destructive' });
+      return;
+    }
     /* No longer recorded here — the context records it inside search(), which is the one point every
        search passes through, and persists it with the results. */
 
@@ -210,7 +220,7 @@ const Index = () => {
     // single-centre search. The backend tiledRegionSearch stays in place but
     // dormant: the frontend never sends region:true.
     search(filters, false, false);
-  }, [search, setSearchParams]);
+  }, [search, setSearchParams, readiness.gated, readiness.ready, toast]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
@@ -492,6 +502,9 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      {/* READY TO SELL: why Find Leads is paused for a salesperson whose onboarding is incomplete (handleSearch). */}
+      <NotReadyToSellBanner />
 
       {/* Search Section */}
       <section>
