@@ -87,7 +87,7 @@ console.log('── the row markup: compact, scores only ──');
   ok(!/Pennine|Rival|named them|did not name|website|Website|crawl|finding|missed/i.test(t), 'no rival name, no headline, no website finding, no missed query in the row');
   ok(t.length <= 60, `the whole ready row summary is one short line (${t.length} chars: "${t}")`);
   const cachedT = text(renderToStaticMarkup(createElement(AiCheckSummary, { state: { ...ready, cached: true }, score: s, onCallScreen: () => {} })));
-  ok(/reused/.test(cachedT) && /ChatGPT 1\/3/.test(cachedT), 'a cached result shows its scores and "reused"');
+  ok(!/reused/i.test(cachedT) && /ChatGPT 1\/3/.test(cachedT) && cachedT === t, 'a cached result looks exactly like a fresh ready result — no visible "reused" (final release)');
   const st = (kind: RowCheckState['kind']) => text(renderToStaticMarkup(createElement(AiCheckSummary, { state: { kind, cached: false, message: 'x' }, onRetry: () => {}, onCallScreen: () => {} })));
   ok(st('waiting') === 'Waiting', 'waiting → "Waiting"');
   ok(st('checking') === 'Checking…', 'checking → "Checking…"');

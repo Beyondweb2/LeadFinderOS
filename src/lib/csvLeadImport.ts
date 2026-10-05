@@ -10,7 +10,9 @@
 // ⛔ ONLY THE TWELVE FIELDS ARE EVER SENT (buildImportRows). An owner, status, seller, payment, agreement or client
 // column in a CSV is never mapped, and the server ignores anything else that arrives anyway.
 //
-// No imports on purpose: scripts/csv-lead-import.test.ts loads it directly.
+// Leaf imports only (relative, explicit .ts): scripts/csv-lead-import.test.ts loads it directly. The one import is the
+// refusal wording for a salesperson whose onboarding is incomplete (readinessWords.ts, final sales release).
+import { onboardingWordsForPausedRefusal } from './readinessWords.ts';
 
 /** The fields a CSV row may set — the same allowlist import_leads reads. Order = the mapping screen's order. */
 export const IMPORT_FIELDS = [
@@ -246,7 +248,7 @@ export function callErrorText(res: ImportCallResult | null): string {
   switch (res?.error) {
     case 'usage_paused': return res.reason === 'paused' || res.reason === 'all_stop'
       ? 'Imports are paused by the usage controls. Release them on the API Usage page.'
-      : 'Usage temporarily paused — contact Paul';
+      : onboardingWordsForPausedRefusal('CSV import') ?? 'Usage temporarily paused — contact Paul';
     case 'too_many_rows': return `Too many rows in one go (the most is ${res.max ?? IMPORT_BATCH_MAX}).`;
     case 'no_rows': return 'There were no rows to import.';
     case 'bad_rows': return 'The rows could not be read.';

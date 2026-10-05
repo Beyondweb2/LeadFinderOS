@@ -279,7 +279,9 @@ console.log('── 7. migrations (static) and the Meta hold ──');
     /* the server-side CSV import (fix/csv-lead-import) */
     '20261010170000_csv_lead_import.sql',
     /* attribution review: Paul chooses the seller from the evidence or overrides with a reason (2026-10-05) */
-    '20261011100000_attribution_review_admin.sql'];
+    '20261011100000_attribution_review_admin.sql',
+    /* the final sales release: a future start date is not Ready to Sell (2026-10-05) */
+    '20261011120000_ready_to_sell_start_date.sql'];
   const candidate = newer.filter((n) => !ON_MAIN.includes(n) && !LATER.includes(n));
   ok(candidate.length === FINAL.length && candidate.every((n) => FINAL.includes(n)), `exactly the ten candidate migrations are new in this release (${candidate.length}: ${candidate.map((n) => n.slice(0, 14)).join(' ')})`);
   const sc = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');

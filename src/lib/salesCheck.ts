@@ -84,7 +84,7 @@ export type SkipReason =
   | 'not_yours' | 'client' | 'archived' | 'suppressed' | 'not_interested' | 'already_won'
   | 'missing_name' | 'missing_trade' | 'missing_town' | 'town_unverified'
   | 'pitch_waiting' | 'auto_message_on'
-  | 'allowance_used' | 'budget_used' | 'budget_unknown' | 'paused' | 'not_allowed'
+  | 'allowance_used' | 'budget_used' | 'budget_unknown' | 'paused' | 'not_allowed' | 'not_ready'
   | 'cancelled' | 'no_longer_yours';
 export type FailReason = 'audit_failed' | 'audit_not_run' | 'audit_timeout' | 'start_failed' | 'not_in_town';
 export type ItemReason = SkipReason | FailReason;
@@ -108,6 +108,8 @@ export const REASON_TEXT: Record<ItemReason, string> = {
   budget_unknown: 'Couldn\'t confirm today\'s allowance, so nothing was started. Try again in a minute.',
   paused: 'Checks are paused by Paul right now — nothing was started.',
   not_allowed: 'Your account can\'t start checks right now — ask Paul.',
+  /* Final sales release (E2E-02): the guard refused an incomplete onboarding — said as itself, never "allowance used". */
+  not_ready: 'Complete your onboarding before starting checks — nothing was started.',
   cancelled: 'Stopped before it started.',
   no_longer_yours: 'No longer one of your active leads.',
   audit_failed: 'The AI check failed — nothing usable came back. Check it again later.',
@@ -360,6 +362,7 @@ export function startRefusalReason(res: { status?: number; error?: unknown }): {
   if (e === 'business_not_in_town') return { status: 'failed', reason: 'not_in_town' };
   if (e === 'prospecting_budget_used') return { status: 'skipped', reason: 'budget_used' };
   if (e === 'usage_paused' || e === 'all_stop') return { status: 'skipped', reason: 'paused' };
+  if (e === 'not_ready_to_sell') return { status: 'skipped', reason: 'not_ready' };
   return { status: 'failed', reason: 'start_failed' };
 }
 
@@ -367,6 +370,7 @@ export function startRefusalReason(res: { status?: number; error?: unknown }): {
 export function guardRefusalReason(reason: string | null | undefined): SkipReason {
   if (reason === 'paused' || reason === 'all_stop') return 'paused';
   if (reason === 'suspended' || reason === 'no_role' || reason === 'not_allowed') return 'not_allowed';
+  if (reason === 'not_onboarded') return 'not_ready';
   if (reason === 'guard_unavailable') return 'budget_unknown';
   return 'allowance_used';
 }

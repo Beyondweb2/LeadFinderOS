@@ -13,7 +13,7 @@ import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvok
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
   APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
-  closeFlow, missingQuestions, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
+  closeFlow, linkTimeLeftWords, missingQuestions, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
   type QcApproach, type QcKey, type QcLinkShare, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
@@ -92,10 +92,7 @@ const hhmm = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleStr
 /** How much longer the rep may send this link (the app stops offering it before Stripe closes it). */
 function timeLeft(iso: string | null | undefined): string {
   if (!iso) return '';
-  const ms = Date.parse(iso) - Date.now();
-  if (!Number.isFinite(ms) || ms <= 0) return 'expired';
-  const h = Math.floor(ms / 3_600_000);
-  return h >= 1 ? `send it within about ${h} hour${h === 1 ? '' : 's'}` : 'send it within the hour';
+  return linkTimeLeftWords(Date.parse(iso) - Date.now());
 }
 const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', email: 'Emailed', whatsapp: 'Sent on WhatsApp' };
 

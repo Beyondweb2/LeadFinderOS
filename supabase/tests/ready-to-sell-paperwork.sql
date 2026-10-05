@@ -14,7 +14,7 @@ insert into public.team_members (user_id, display_name) values ('dddddddd-0000-4
 insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result, rtw_evidence_ref,
   bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
 select u, '2026-10-06', 'manual_video_call', '2026-10-06', 'Paul James Sales', 'pass', 'Secure folder / RTW / QA',
-  case when u = 'dddddddd-0000-4000-8000-0000000000a2'::uuid then null else '2026-10-06'::date end, false, 'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06'
+  case when u = 'dddddddd-0000-4000-8000-0000000000a2'::uuid then null else '2026-10-06'::date end, false, 'individual', '2026-10-01', 'team-guide-2026-10-02', '2026-10-06'
   from unnest(array['dddddddd-0000-4000-8000-0000000000a1', 'dddddddd-0000-4000-8000-0000000000a2']::uuid[]) u;
 
 insert into t_results (name, ok, detail) select 'the live rule no longer reads the contractor agreement or privacy notice',

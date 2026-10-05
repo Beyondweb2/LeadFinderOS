@@ -64,7 +64,7 @@ insert into public.salesperson_onboarding (user_id, agreement_version, agreement
   contractor_type, start_date, team_guide_version, team_guide_acknowledged_on, updated_by)
 values ('ffffffff-0000-4000-8000-0000000005a1', 'contractor-agreement-draft-v2', '2026-10-06', 'Secure folder / A', 'salesperson-privacy-notice-draft-2026-10-05', '2026-10-06',
   '2026-10-06', 'manual_video_call', '2026-10-06', 'Paul James Sales', 'pass', 'Secure folder / RTW / A', '2026-10-06', false,
-  'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx));
+  'individual', '2026-10-01', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx));
 /* Since migration 20261010140000 (Paul, 2026-10-05) salesperson PAPERWORK is handled outside LeadFinderOS: a draft,
    approved or superseded agreement / notice — or none — never decides Ready to Sell. */
 insert into t_results (name, ok, detail) select 'DOCS: draft agreement v2 + draft notice recorded → still READY TO SELL (paperwork handled outside the app)',

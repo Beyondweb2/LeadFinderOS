@@ -21,7 +21,7 @@ insert into public.team_members (user_id, display_name) values
 -- A and B are ready to sell; C has no onboarding record (not ready).
 insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result, rtw_evidence_ref,
   bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
-select u, '2026-10-06', 'manual_video_call', '2026-10-06', 'QA', 'pass', 'QA', '2026-10-06', false, 'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06'
+select u, '2026-10-06', 'manual_video_call', '2026-10-06', 'QA', 'pass', 'QA', '2026-10-06', false, 'individual', '2026-10-01', 'team-guide-2026-10-02', '2026-10-06'
   from unnest(array['eeeeeeee-0000-4000-8000-0000000000a1', 'eeeeeeee-0000-4000-8000-0000000000b1']::uuid[]) u;
 insert into t_results (name, ok, detail) select 'fixtures: A and B ready to sell, C not',
   public.salesperson_ready_to_sell('eeeeeeee-0000-4000-8000-0000000000a1') and public.salesperson_ready_to_sell('eeeeeeee-0000-4000-8000-0000000000b1')

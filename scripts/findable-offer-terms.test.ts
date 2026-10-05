@@ -112,8 +112,8 @@ ok(!/Cancel any time before then/.test(results), 'four-week results email: "Canc
 ok(/termMonthsFor\(route\)\}-month minimum term/.test(results), '…and it names the client\'s own term');
 const welcome = read('src/lib/welcomePackHtml.ts');
 ok(/totalPaymentsFor\(route\)\} payments in total, counting your first/.test(welcome), 'welcome pack: the client\'s own count, counting the first');
-ok(!/stop it any time/.test(welcome) && /Six weeks after your first payment/.test(welcome),
-  'welcome pack: no "stop it any time", and the start date is the real one (six weeks after paying)');
+ok(!/stop it any time/.test(welcome) && !/Six weeks after your first payment/i.test(welcome) && /MONTHLY_START_V3_WORDS/.test(welcome),
+  'welcome pack: no "stop it any time", and the start date is the v3 one (the day after the refund window)');
 const pb = buildColdCallPlaybook({
   lead: { id: 'l', business_name: 'Acme Plumbing', phone: '07700900123', website: null },
   reportAudit: null, report: null, runCrawls: [], leadCrawl: null, messages: [], nowMs: Date.now(),

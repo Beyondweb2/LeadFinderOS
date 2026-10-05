@@ -22,6 +22,51 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-05-sales-small-fixes', date: '2026-10-05', title: 'Four small fixes: unsaved notes, start dates, clearer refusals, link expiry', audience: 'all',
+    body: 'Escape no longer throws away a note you have not saved. A salesperson is Ready to Sell from their start date, not before. If your onboarding is not finished, the app now says so instead of "usage paused". The sign-up link says "about 30 days", not "715 hours".',
+    report: {
+      added: [
+        'Leaving a lead with something typed but not saved (Escape, clicking outside, the X, Previous / Next) asks "Discard unsaved changes?". Keep editing is the default.',
+      ],
+      changed: [
+        'With nothing typed, Escape and close work exactly as before. No extra question.',
+        'A salesperson whose start date is still to come is not Ready to Sell yet. Their checklist says "Starts on …".',
+        'When onboarding is not finished, Find Leads, adding or claiming a lead, campaigns, checks and CSV import say "Complete your onboarding before using …" and list what is still needed. A real pause or suspension still says so.',
+        'Quick Close shows how long the sign-up link lasts in days ("about 30 days"). The link itself lasts as long as before.',
+      ],
+      removed: ['"Usage temporarily paused" shown to a salesperson whose only problem was unfinished onboarding.'],
+      effect: 'You will not lose a note by pressing Escape, and when something is refused you are told the real reason.',
+    } },
+  { id: '2026-10-05-attribution-review', date: '2026-10-05', title: 'Attribution review: choose the seller from the evidence', audience: 'admin',
+    body: 'A sale waiting for attribution is nobody’s revenue until you decide. It no longer lands on your row or on whoever holds the lead now. The review card shows the evidence, and you choose the seller, override with a reason, or mark it Not credited.',
+    report: {
+      added: [
+        'Team page: the review card shows the payment, who made the paid sign-up, the claimed seller, the owner at payment and every sign-up link made for the client.',
+        '"Who sold it?": a seller from that evidence, someone else with a written reason, or Not credited. Each decision is final and recorded.',
+        'Under the team table: "£X awaiting attribution" and "£X not credited to a salesperson" when there is any.',
+      ],
+      changed: [
+        'A sale under review counts in the business totals but in nobody’s sales, commission or "Sold by" until it is decided.',
+        'Paid Clients and the client card never name the current owner as the seller.',
+      ],
+      removed: ['Crediting an undecided sale to the book owner (you) or to the lead’s current holder.'],
+      effect: 'Business revenue stays complete, and nobody is credited for a sale until you have decided who made it.',
+    } },
+  { id: '2026-10-05-outreach-compact-checks', date: '2026-10-05', title: 'Outreach: the AI check sits on each row', audience: 'all',
+    body: 'The big "Check before calling" results panel is gone. Each checked lead now shows ChatGPT and Gemini scores and a Call screen button on its own row. The detail is on the call screen.',
+    report: {
+      added: [
+        'On every checked row: "ChatGPT 1/3 · Gemini 0/3" and a Call screen button that opens the lead on its Call tab, where "Full audit & website evidence" has the detail.',
+        'One line above the list: how your check is going, checks left today, Stop, and "Open next ready", which opens the next ready lead in the list as you have it filtered.',
+        'Retry on a failed check.',
+      ],
+      changed: [
+        'Selecting leads and pressing "Check before calling" works as before: the same daily allowance, the same reuse of recent results.',
+        'A recently reused result looks the same as a fresh one.',
+      ],
+      removed: ['The large results panel at the top of Outreach that listed the batch again.'],
+      effect: 'The list stays a list. You see who is worth calling at a glance and open the call screen for the detail.',
+    } },
   { id: '2026-10-05-prospect-full-audit', date: '2026-10-05', title: 'A full audit window for every prospect', audience: 'all',
     body: 'The AI check details and the website evidence now open in one large window you can read during a call — on a phone it fills the screen. The website crawl checks much more and groups repeated problems.',
     report: {

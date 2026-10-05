@@ -404,6 +404,16 @@ export const STRIPE_SESSION_LIFETIME_MS = 24 * 3_600_000;
  *  link the client cannot open tonight. */
 export const LINK_MIN_LEFT_MS = 4 * 3_600_000;
 
+/** How long the rep has left to send a link, in human words (final release, 2026-10-05): "about 30 days", never
+ *  "about 715 hours". Two days or more → days (rounded); an hour or more → hours; else "within the hour". Pure. */
+export function linkTimeLeftWords(msLeft: number): string {
+  if (!Number.isFinite(msLeft) || msLeft <= 0) return 'expired';
+  const DAY = 86_400_000;
+  if (msLeft >= 2 * DAY) return `send it within about ${Math.round(msLeft / DAY)} days`;
+  const h = Math.floor(msLeft / 3_600_000);
+  return h >= 1 ? `send it within about ${h} hour${h === 1 ? '' : 's'}` : 'send it within the hour';
+}
+
 /** The Checkout Session id inside a Stripe-hosted URL (…/c/pay/cs_live_…#…), for rows stored before the
  *  id was kept. Positive match only. */
 export function stripeSessionIdFromUrl(url: string | null | undefined): string | null {

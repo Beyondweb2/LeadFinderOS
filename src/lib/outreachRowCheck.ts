@@ -52,7 +52,7 @@ export interface RowBatchItem { lead_id: string; status: string; audit_source?: 
 export type RowCheckKind = 'not_checked' | 'waiting' | 'checking' | 'ready' | 'failed' | 'skipped';
 export interface RowCheckState {
   kind: RowCheckKind;
-  /** A result reused from an earlier check (no new spend) — said as "reused" beside the scores. */
+  /** A result reused from an earlier check (no new spend). INTERNAL ONLY: the row draws it exactly like a fresh result. */
   cached: boolean;
   /** The server's plain-words reason for a failed / skipped item (REASON_TEXT), else null. */
   message: string | null;

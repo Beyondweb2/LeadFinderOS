@@ -38,7 +38,7 @@ export function AiCheckSummary({ state, score, scoreLoading = false, onCallScree
             </span>
           ))
         : <span className="text-muted-foreground">{scoreLoading || score === undefined ? 'Checked…' : 'Checked'}</span>)}
-      {state.kind === 'ready' && state.cached && <span className="text-muted-foreground" title="A recent result was reused — no new check was needed">reused</span>}
+      {/* A reused (cached) result looks exactly like any ready result — `cached` stays internal (final release, 2026-10-05). */}
       {state.kind === 'checking' && <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-300"><Loader2 className="h-3 w-3 animate-spin" />{ROW_CHECK_WORD.checking}</span>}
       {state.kind === 'waiting' && <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-3 w-3" />{ROW_CHECK_WORD.waiting}</span>}
       {state.kind === 'failed' && (

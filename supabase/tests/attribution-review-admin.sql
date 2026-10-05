@@ -49,7 +49,7 @@ insert into public.salesperson_onboarding (user_id, agreement_version, agreement
   contractor_type, start_date, team_guide_version, team_guide_acknowledged_on, updated_by)
 select u, 'qa-ara-agreement-1', '2026-10-06', 'Secure folder / QA', 'qa-ara-notice-1', '2026-10-06',
   '2026-10-06', 'manual_video_call', '2026-10-06', 'Paul James Sales', 'pass', 'Secure folder / RTW / QA', '2026-10-06', false,
-  'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx)
+  'individual', '2026-10-01', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx)
   from unnest(array['eeeeeeee-0000-4000-8000-0000000006a1', 'eeeeeeee-0000-4000-8000-0000000006d1']::uuid[]) u;
 reset role;
 insert into t_results (name, ok, detail) select 'setup: Sarah and Tom are Ready to Sell; B is not',

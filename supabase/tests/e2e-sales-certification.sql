@@ -99,10 +99,20 @@ begin
     array_to_string(public.salesperson_onboarding_missing(o), ','));
   update public.salesperson_onboarding set vat_registered = false, vat_number = null, contractor_type = 'individual', company_name = null, company_number = null,
     company_contract_confirmed_on = null where user_id = o;
-  -- INFORMATION (not a pass/fail rule today): a start date in the FUTURE.
-  update public.salesperson_onboarding set start_date = current_date + 30 where user_id = o;
-  insert into t_results (name, ok, detail) values ('A (info): a start date 30 days in the future — Ready to Sell today?', true,
-    case when public.salesperson_ready_to_sell(o) then 'READY (only a missing start date blocks)' else 'not ready' end);
+  -- A START DATE STILL TO COME is not Ready to Sell (E2E-03, fixed in the final sales release, migration 20261011120000).
+  -- "Today" = the London calendar day (the function's own v_today).
+  update public.salesperson_onboarding set start_date = (now() at time zone 'Europe/London')::date where user_id = o;
+  insert into t_results (name, ok, detail) values ('A: start date = today (UK) → Ready', public.salesperson_ready_to_sell(o), array_to_string(public.salesperson_onboarding_missing(o), ','));
+  update public.salesperson_onboarding set start_date = (now() at time zone 'Europe/London')::date - 1 where user_id = o;
+  insert into t_results (name, ok, detail) values ('A: start date in the past → Ready', public.salesperson_ready_to_sell(o), array_to_string(public.salesperson_onboarding_missing(o), ','));
+  update public.salesperson_onboarding set start_date = (now() at time zone 'Europe/London')::date + 1 where user_id = o;
+  m := public.salesperson_onboarding_missing(o);
+  insert into t_results (name, ok, detail) values ('A: start date tomorrow → NOT ready, missing = not_started only', not public.salesperson_ready_to_sell(o) and m = array['not_started'], m::text);
+  update public.salesperson_onboarding set start_date = (now() at time zone 'Europe/London')::date + 31 where user_id = o;
+  m := public.salesperson_onboarding_missing(o);
+  insert into t_results (name, ok, detail) values ('A: start date next month → NOT ready (not_started)', not public.salesperson_ready_to_sell(o) and 'not_started' = any(m), m::text);
+  insert into t_results (name, ok, detail) values ('A: a future-start rep is refused by guard_action as not_onboarded',
+    (public.guard_action(o, 'lead_search', null, 0, 1, 'e2e') ->> 'reason') = 'not_onboarded', 'guard reason checked');
   update public.salesperson_onboarding set start_date = current_date where user_id = o;
   -- Never-onboarded rep: every practical item listed, the paperwork never.
   m := public.salesperson_onboarding_missing('e2e00000-0000-4000-8000-0000000000a3');

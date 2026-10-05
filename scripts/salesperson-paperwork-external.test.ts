@@ -19,7 +19,8 @@ const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\
 console.log('── not a blocker ──');
 ok(JSON.stringify([...BLOCKING_KEYS].sort()) === JSON.stringify(['age_18', 'bank_details', 'contractor_status', 'login', 'right_to_work', 'start_date', 'team_guide', 'vat']),
   `Ready to Sell = exactly the practical items (${BLOCKING_KEYS.join(', ')})`);
-const mig = read('supabase/migrations/20261010140000_ready_to_sell_without_paperwork.sql');
+/* The latest definition (20261011120000 copies 20261010140000's body plus the start-date rule). */
+const mig = read('supabase/migrations/20261011120000_ready_to_sell_start_date.sql');
 const fn = code(mig.slice(mig.indexOf('create or replace function public.salesperson_onboarding_missing'), mig.indexOf('revoke all on function')).replace(/--[^\n]*/g, ''));
 ok(!/'agreement'|'privacy_notice'|contractor_agreement|privacy_notice/.test(fn), 'the database rule checks neither the contractor agreement nor the privacy notice');
 ok(!/tps|ctps/i.test(fn), 'TPS/CTPS is still not part of it (postponed)');

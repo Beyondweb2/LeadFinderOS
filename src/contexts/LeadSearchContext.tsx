@@ -8,6 +8,7 @@ import { fetchAllRowsParallel } from '@/lib/fetchAllRows';
 import { legacySearchResultKeys, packSearchResults, searchResultsKey, unpackSearchResults } from '@/lib/searchResultsCache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { foundRecord, isWithoutWebsite } from '@/lib/websiteStatusClass';
+import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from '@/lib/readinessWords';
 
 type SearchLeadLike = Parameters<typeof foundRecord>[0][number];
 import type { Country, Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
@@ -518,7 +519,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           // Non-retryable error — prefer the function's own friendly message
           // (body.notice / body.error) over the generic "non-2xx status code".
           // body.detail first: the usage guard answers { error: 'usage_paused', detail: <sentence> } (2026-09-29).
-          const errMsg = body?.notice || body?.detail || body?.error
+          /* An incomplete onboarding is said as itself, with what is still needed (final sales release, E2E-02):
+             the new server says 'not_ready_to_sell'; an older deploy's 'usage_paused' is read with the person's own status. */
+          const snap = myReadinessSnapshot();
+          const notReady = body?.error === 'not_ready_to_sell'
+            ? notReadyMessage('Find Leads', snap?.missing ?? [], snap?.startsOn ?? null)
+            : body?.error === 'usage_paused' ? onboardingWordsForPausedRefusal('Find Leads') : null;
+          const errMsg = notReady || body?.notice || body?.detail || body?.error
             || (error.message && !/non-2xx/i.test(error.message) ? error.message : null)
             || 'Search failed. Tap retry to try again.';
           const errorId = await reportClientError({

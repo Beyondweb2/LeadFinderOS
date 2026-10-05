@@ -10,6 +10,7 @@
  * 'other' and shows its raw value, rather than being quietly filed as "new" or "contacted". */
 import { CONTACT_METHODS, LOGGED_CONTACT_METHODS, contactMethodLabel } from './contactMethods.ts';
 import { lostReasonLabel } from './lostReason.ts';
+import { myReadinessSnapshot, notReadyMessage, onboardingWordsForPausedRefusal } from './readinessWords.ts';
 
 export type SalesStage =
   | 'new' | 'queued' | 'contacted' | 'replied' | 'interested' | 'awaiting_decision'
@@ -183,9 +184,10 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'no_leads': return 'Select at least one lead';
     case 'too_many': return 'Too many at once — select 500 or fewer';
     // The usage guard (2026-09-29). The same words everywhere, never a cost or a limit's number.
-    case 'usage_paused': return 'Usage temporarily paused — contact Paul';
+    // …except a not-ready salesperson's refusal, which is said as itself (readinessWords.ts, E2E-02).
+    case 'usage_paused': return onboardingWordsForPausedRefusal() ?? 'Usage temporarily paused — contact Paul';
     // The Ready to Sell gate (2026-10-05, docs/salesperson-onboarding.md): raised by the database.
-    case 'not_ready_to_sell': return 'You are not Ready to Sell yet — finish your onboarding with Paul first';
+    case 'not_ready_to_sell': { const s = myReadinessSnapshot(); return notReadyMessage(null, s?.missing ?? [], s?.startsOn ?? null); }
     case 'no_phone': return 'This lead has no phone number';
     case 'wrong_number': return 'This number is marked Wrong number — the admin can clear it on the lead';
     case 'opted_out': return 'This number asked to stop — marketing templates are not sent to it';
