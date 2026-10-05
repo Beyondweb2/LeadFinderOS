@@ -13,6 +13,7 @@ import { ACTIVITY_LABEL } from '@/lib/salesCrm';
 import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import { cn } from '@/lib/utils';
 import { firstContactDueLabel, type FirstContactChannel, type FirstContactView } from '@/lib/firstContact';
+import { ClientMissingInfoPanel, type MissingInfoView } from '@/components/ClientMissingInfoPanel';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    CLIENT SETUP — the production line at the top of a paid client's page (2026-10-02,
@@ -31,7 +32,9 @@ export interface SetupView {
 export interface SetupHandoff {
   readiness: HandoffReadiness;
   setup: SetupView;
-  sales_handoff: { applies: HandoffApplies; saved: SalesHandoffRecord | null; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_by: string | null; completed_at: string | null };
+  sales_handoff: { applies: HandoffApplies; saved: SalesHandoffRecord | null; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_by: string | null; completed_at: string | null; saved_at?: string | null };
+  /** Missing information + Ask salesperson / Contact client (src/lib/clientMissingInfo.ts). Absent on an older server. */
+  missing_info?: MissingInfoView;
   submitted_at: string | null;
   submitted_by: string | null;
   onboarding_id: string | null;
@@ -46,8 +49,8 @@ const WHO: Record<HandoffWho, string> = { sales: 'Sales', client: 'Client', find
 const day = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : '';
 
-export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }: {
-  leadId: string; h: SetupHandoff; route: 'build' | 'optimise' | null; onChanged: () => void; onOpenBaseline: () => void;
+export function ClientSetupCard({ leadId, businessName = null, h, route, onChanged, onOpenBaseline }: {
+  leadId: string; businessName?: string | null; h: SetupHandoff; route: 'build' | 'optimise' | null; onChanged: () => void; onOpenBaseline: () => void;
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -136,6 +139,9 @@ export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }:
           </div>
         )}
 
+        {/* MISSING INFORMATION (2026-10-05): what is missing, Ask salesperson, Contact client — one place. */}
+        {h.missing_info && <ClientMissingInfoPanel leadId={leadId} businessName={businessName} mi={h.missing_info} setupLink={setupLink} onChanged={onChanged} />}
+
         {/* The pipeline — the real stages, the current one marked. Wraps on a phone, never scrolls sideways. */}
         <ol className="flex flex-wrap gap-1.5 text-[11px]" aria-label="Delivery stages">
           {DELIVERY_STAGES.map((st, i) => (
@@ -187,6 +193,15 @@ export function ClientSetupCard({ leadId, h, route, onChanged, onOpenBaseline }:
                 : sh.completed_at ? `Complete${sh.saved_by ? ` · ${sh.saved_by}` : ''}` : 'Not complete — the salesperson owes it'}
             </span>
           </div>
+          {/* Someone else sold it: who, their handoff, and Paul's request to them (2026-10-05). */}
+          {sh.applies === 'required' && (
+            <p className="mt-1 text-xs text-muted-foreground" data-testid="handoff-seller">
+              Salesperson: <span className="font-medium text-foreground">{h.missing_info?.ask.seller_name ?? sh.saved_by ?? 'Not recorded'}</span>
+              {sh.saved_at ? ` · last update ${day(sh.saved_at)}` : ' · nothing saved yet'}
+              {h.missing_info?.request.state === 'pending' ? ` · info requested ${day(h.missing_info.request.requestedAt)}` : ''}
+              {h.missing_info?.request.state === 'answered' ? ` · answered ${day(h.missing_info.request.answeredAt)}` : ''}
+            </p>
+          )}
           {!editing && (handoffLines.length
             ? <ul className="mt-2 space-y-0.5 text-sm">{handoffLines.map((l) => <li key={l} className="break-words">{l}</li>)}</ul>
             : <p className="mt-1 text-xs text-muted-foreground">Nothing given yet.</p>)}

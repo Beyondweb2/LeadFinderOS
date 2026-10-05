@@ -59,6 +59,8 @@ export function useNotifications(onArrive?: (n: AppNotification) => void) {
         if (p.new && TEAM_BOARD_KINDS.has(p.new.kind)) void qc.invalidateQueries({ queryKey: ['team-board'] });
         /* A new reply raises the bell's grouped card at once (it reads the Inbox's unread state). */
         if (p.new?.kind === 'whatsapp_reply') void qc.invalidateQueries({ queryKey: ['whatsapp-unread'] });
+        /* CLIENT INFO NEEDED (2026-10-05): the seller's "Finish the handoff" list shows Paul's request at once. */
+        if (p.new?.kind === 'client_info_request') void qc.invalidateQueries({ queryKey: ['my-handoffs'] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };

@@ -151,6 +151,10 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `new_client_email_at`); the sales handoff is `outreach_leads.sales_handoff`, written only by quick-close
   `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
   live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
+  ⛔ **Missing information** (2026-10-05, `docs/pre-sales-certification/client-missing-info-actions.md`): ONE box, rules in
+  `src/lib/clientMissingInfo.ts` — Ask salesperson only for another ACTIVE seller's sale (`sold_by_user_id`), ONE open
+  `client_info_requests` row per client (unique index), answered only by that seller's save; Find what we already have shows
+  each source separately and applies a candidate BY ID; Contact client opens the Inbox with an INTERNAL need note. Nothing sends.
 - **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
   `origin/main` (`git fetch origin` first) on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, added from `LeadFinderOS-current` as above; junction `node_modules`
