@@ -40,8 +40,8 @@ source wins). The client's own onboarding answer beats the lead record on name /
 address clash is never settled automatically** (blocker with both values). Services, areas, credentials, guarantees,
 years, people and prices are never auto-accepted. Services for pages come from Workstream 4's truth
 (`siteTruthFromBuild`); a service on both the offered and not-offered lists blocks. A website URL only a Discovery scan
-offered is never the "current site" (`trustedOldSite` — the Advanced page's own derivation still treats any non-rejected
-Current website fact as the source; see open items).
+offered is never the "current site" (`currentWebsite` / `trustedOldSite` — since 2026-10-05 the Advanced page reads the
+same rule; `advanced-website-truth-fix.md`).
 
 Prepare also fills (never overwriting): repo name, GitHub owner `Beyondweb2`, folder `C:\Users\paulj\<Repo>`,
 Cloudflare project / Git-connected / account `beyondwebcraft` (BS4's setup), the web address from the current site's
@@ -136,7 +136,8 @@ Nobody has seen it with a real sign-in.
 
 - The only template is the MCL locksmith template: a non-locksmith New-site client with no old site is blocked with
   "has no pages for this client's services" → Bespoke in Advanced until a trade template exists.
-- The Advanced page still treats a Discovery-only "Current website" fact as the source site (pre-existing).
+- ~~The Advanced page still treats a Discovery-only "Current website" fact as the source site~~ — fixed 2026-10-05
+  (`advanced-website-truth-fix.md`).
 
 ## Deployment (5 October 2026)
 

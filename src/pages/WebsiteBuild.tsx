@@ -51,6 +51,7 @@ import { launchProblems, PRODUCTION_GATE_REPORT_FILE } from '@/lib/buildPack';
 import { EXISTING_SITE_QA_KEYS, type ManifestAsset, type AssetType, ASSET_TYPES } from '@/lib/websiteBuildState';
 import { LOCATION_NOTE_MIN_WORDS } from '@/lib/templateMapping';
 import SimpleWebsiteBuild from '@/components/SimpleWebsiteBuild';
+import { currentWebsite, researchSiteNote } from '@/lib/simpleBuild';
 import { gateAnsweredQa, GATE_ANSWERED_QA } from '@/lib/websiteBuildState';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -244,9 +245,13 @@ export default function WebsiteBuild() {
   const rows = useMemo(() => state ? mergeFacts(candidates, state.facts, template) : [], [candidates, state, template]);
   const summary = useMemo(() => factsSummary(rows), [rows]);
   const websiteRow = rows.find((r) => r.key === 'website');
-  const factSiteUrl = websiteRow && websiteRow.status !== 'rejected' && websiteRow.status !== 'not_applicable' ? websiteRow.value : '';
-  /* The source website: what Paul typed in Project Details, else the Current website fact. */
-  const existingSiteUrl = state?.source_site_url || factSiteUrl;
+  /* ⛔ The source website: ONE rule with the simple flow (simpleBuild.currentWebsite) — what Paul typed in
+     Project Details, else a Current website fact the client, Paul or the client's own records stand behind.
+     A URL only a Discovery scan / baseline context offered is RESEARCH (shown as such), never the source. */
+  const factSite = currentWebsite('', websiteRow);
+  const factSiteUrl = factSite.url;
+  const researchNote = researchSiteNote(factSite);
+  const existingSiteUrl = currentWebsite(state?.source_site_url, websiteRow).url;
   const tradeRow = rows.find((r) => r.key === 'trade');
   const issues = useMemo(() => state ? checkArchitecture(state.pages, state.redirects) : [], [state]);
   const archErrors = issues.filter((i) => i.level === 'error').length;
@@ -376,7 +381,7 @@ export default function WebsiteBuild() {
     </CardContent></Card>
 
     <ProjectDetails key={step === 'build_pack' ? 'open' : 'closed'} defaultOpen={step === 'build_pack'} state={state} set={set} businessName={businessName} productionLocked={launch.length > 0}
-      template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} tradeRow={tradeRow} crawlLabel={crawl.label} crawledAt={crawl.crawledAt} />
+      template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} researchNote={researchNote} tradeRow={tradeRow} crawlLabel={crawl.label} crawledAt={crawl.crawledAt} />
 
     {cur && <p className="text-xs text-muted-foreground">{STAGE_LABELS[cur.stage]}: {cur.detail}</p>}
 
@@ -391,7 +396,7 @@ export default function WebsiteBuild() {
             {state.copy_ownership && <p className={`mt-2 rounded p-2 text-xs ${mayPreserveCopy(state.copy_ownership) ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'}`}>
               {mayPreserveCopy(state.copy_ownership) ? 'The existing wording may be kept where it is accurate.' : 'Facts and the visual requirements are kept; the marketing wording is rewritten freshly, never copied. Only genuine client-owned assets are reused.'}</p>}
           </div>
-          {!existingSiteUrl && <p className="flex items-start gap-2 text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5" />No current website is recorded for this client. A faithful rebuild needs one — add it in Project details or under Client Build Facts.</p>}
+          {!existingSiteUrl && <p className="flex items-start gap-2 break-words text-xs text-amber-700"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="min-w-0">No confirmed current website for this client. A faithful rebuild needs one — add it in Project details or approve it under Client Build Facts.{researchNote ? ` ${researchNote}` : ''}</span></p>}
         </div>}
         {state.route === 'bespoke' && <div className="space-y-2">
           <Label className="text-xs">Design references (existing Findable sites / templates to take the look from)</Label>
@@ -435,7 +440,7 @@ export default function WebsiteBuild() {
     {/* ══ CAPTURE ══════════════════════════════════════════════════════════════════════════ */}
     {step === 'capture' && <>
       {!state.route ? <Section title="Source website"><p className="text-muted-foreground">Choose the build route first.</p></Section> : <>
-        <ReconPanel state={state} update={update} rows={rows} candidates={candidates} template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl}
+        <ReconPanel state={state} update={update} rows={rows} candidates={candidates} template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} researchNote={researchNote}
           set={set} prompt={promptById('recon')} onCopy={copyPrompt} factsAwaiting={summary.awaiting} toast={toast} />
         {state.recon.imported_at && <NeedsReviewPanel state={state} update={update} rows={rows} onDecide={decideRow} onReset={resetFact} onPut={putFact} onEdit={editRow} />}
         {state.manifest.pages.length > 0 && <PageFamiliesPanel manifest={state.manifest} />}
@@ -791,9 +796,9 @@ function TemplatePicker({ state, set, template }: { state: WebsiteBuildState; se
   </div>;
 }
 
-function ProjectDetails({ defaultOpen, state, set, businessName, template, existingSiteUrl, factSiteUrl, tradeRow, crawlLabel, crawledAt, productionLocked }: {
+function ProjectDetails({ defaultOpen, state, set, businessName, template, existingSiteUrl, factSiteUrl, researchNote, tradeRow, crawlLabel, crawledAt, productionLocked }: {
   defaultOpen: boolean; state: WebsiteBuildState; set: SetFn; businessName: string; template: ReturnType<typeof templateById>; productionLocked: boolean;
-  existingSiteUrl: string; factSiteUrl: string; tradeRow: FactRow | undefined; crawlLabel: string; crawledAt: string | null;
+  existingSiteUrl: string; factSiteUrl: string; researchNote: string; tradeRow: FactRow | undefined; crawlLabel: string; crawledAt: string | null;
 }) {
   const repoSuggestion = suggestRepoName(businessName);
   const problems = setupProblems(state);
@@ -812,7 +817,8 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
         <div><Label className="text-xs">Crawl status</Label><p className="h-8 truncate py-1.5 text-xs">{crawlLabel}{crawledAt ? ` · ${new Date(crawledAt).toLocaleDateString('en-GB')}` : ''}</p></div>
         <div><Label className="text-xs">Last captured</Label><Input type="date" aria-label="Last captured" className="h-8 text-xs" value={state.last_captured_at} onChange={(e) => set('last_captured_at', e.target.value)} /></div>
       </G>
-      {!state.source_site_url && factSiteUrl && <p className="-mt-3 text-[11px] text-muted-foreground">Blank uses the Current website fact: {factSiteUrl}</p>}
+      {!state.source_site_url && factSiteUrl && <p className="-mt-3 break-words text-[11px] text-muted-foreground">Blank uses the Current website fact: {factSiteUrl}</p>}
+      {!state.source_site_url && !factSiteUrl && researchNote && <p className="-mt-3 break-words text-[11px] text-amber-700 dark:text-amber-300">{researchNote}</p>}
       <G title="Target">
         <Field label="Target domain (canonical)" value={state.canonical_domain} placeholder="example.co.uk" onChange={(v) => set('canonical_domain', v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))}
           action={domainFromSite && state.canonical_domain !== domainFromSite ? <Sugg label={`Use ${domainFromSite}`} onClick={() => set('canonical_domain', domainFromSite)} /> : undefined} />
@@ -877,9 +883,9 @@ const RECON_TONE: Record<ReconStatus, string> = {
 const when = (iso: string) => { const d = new Date(iso); return iso && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : ''; };
 const factOpen = (rows: FactRow[]) => (key: string) => { const r = rows.find((x) => x.key === key); return !r || r.status === 'detected' || r.status === 'missing'; };
 
-function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl, factSiteUrl, set, prompt, onCopy, factsAwaiting, toast }: {
+function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl, factSiteUrl, researchNote, set, prompt, onCopy, factsAwaiting, toast }: {
   state: WebsiteBuildState; update: UpdateFn; rows: FactRow[]; candidates: ReturnType<typeof candidateFacts>; template: ReturnType<typeof templateById>;
-  existingSiteUrl: string; factSiteUrl: string; set: SetFn; prompt: StagePrompt; onCopy: (p: StagePrompt) => void | Promise<void>;
+  existingSiteUrl: string; factSiteUrl: string; researchNote: string; set: SetFn; prompt: StagePrompt; onCopy: (p: StagePrompt) => void | Promise<void>;
   factsAwaiting: number; toast: ReturnType<typeof useToast>['toast'];
 }) {
   const [importOpen, setImportOpen] = useState(false);
@@ -907,7 +913,8 @@ function ReconPanel({ state, update, rows, candidates, template, existingSiteUrl
       <Button size="sm" disabled={!state.route} onClick={() => void onCopy(prompt)}><Clipboard className="mr-1 h-4 w-4" />Copy Recon Prompt</Button>
       <Button size="sm" variant={importOpen ? 'secondary' : 'outline'} onClick={() => { setImportOpen((o) => !o); setParsed(null); }}>Import Recon Result</Button>
     </div>
-    {!state.source_site_url && factSiteUrl && <p className="text-[11px] text-muted-foreground">Using the Current website fact: {factSiteUrl}</p>}
+    {!state.source_site_url && factSiteUrl && <p className="break-words text-[11px] text-muted-foreground">Using the Current website fact: {factSiteUrl}</p>}
+    {!state.source_site_url && !factSiteUrl && researchNote && <p className="break-words text-[11px] text-amber-700 dark:text-amber-300">{researchNote}</p>}
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
       <div><dt className="text-muted-foreground">Last recon</dt><dd>{when(state.recon.imported_at) || '—'}</dd></div>
       <div><dt className="text-muted-foreground">Pages discovered</dt><dd>{state.recon.imported_at ? state.manifest.pages.length + (state.recon.pages_total && state.recon.pages_total > state.manifest.pages.length ? ` (of ${state.recon.pages_total})` : '') : '—'}</dd></div>
@@ -1367,7 +1374,7 @@ function PreviewResultPanel({ state, input, existingSiteUrl, prompts, onCopy }: 
         help: rv.kind === 'template' ? 'Checks the deployed preview for the right client, services, locations, proof, images, no template leftovers and quality — no redesign for taste.' : 'Checks the deployed preview against the design references and the approved content.', text: rv.text };
   return <Section title="Build preview" right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${EXEC_TONE[status]}`}>{BUILD_EXEC_STATUS_LABELS[status]}</span>}>
     <div className="grid gap-2 sm:grid-cols-2">
-      <div className="rounded border p-2 text-xs"><p className="font-medium">Source site</p>{existingSiteUrl ? <ExtLink url={existingSiteUrl}>Open {existingSiteUrl}</ExtLink> : <p className="text-muted-foreground">No existing site</p>}</div>
+      <div className="rounded border p-2 text-xs"><p className="font-medium">Source site</p>{existingSiteUrl ? <ExtLink url={existingSiteUrl}>Open {existingSiteUrl}</ExtLink> : <p className="text-muted-foreground">No confirmed current website</p>}</div>
       <div className="rounded border p-2 text-xs"><p className="font-medium">New preview</p><ExtLink url={b.preview_url}>{b.preview_url ? 'Open ' + b.preview_url : '—'}</ExtLink>{b.noindex_confirmed === true && <span className="ml-1 text-muted-foreground">· noindex</span>}</div>
     </div>
     <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
