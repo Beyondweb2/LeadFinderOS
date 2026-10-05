@@ -40,6 +40,34 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['"Any owner" as the starting view.'],
       effect: 'You can no longer message another salesperson’s prospects by accident. Looking at the team’s leads is still one click, but it is always your choice.',
     } },
+  { id: '2026-10-05-client-missing-info', date: '2026-10-05', title: 'Paid Clients: ask for missing information in one click', audience: 'admin',
+    body: 'A paid client with missing setup details now shows one Missing information box with two actions: ask the salesperson who sold it, or contact the client.',
+    report: {
+      added: [
+        'Missing information box on a paid client: what is missing and who can answer it.',
+        'Find what we already have — shows what other forms they filled in, the website crawl, the salesperson’s handoff and the sales-call answers already hold, each source on its own. Press Use on the one you trust; website finds are marked as guesses to confirm.',
+        'Ask salesperson — only when someone else sold it. They get a CLIENT INFO NEEDED notice that opens that client’s handoff. Pressing it again never sends a second request; “Remind again” appears after a day.',
+        'Contact client — opens their WhatsApp conversation in the Inbox (or a new one under the usual template rules), else an email draft or their number.',
+        'In the Inbox, an internal “Need from this client” note with Copy request / Put in reply box. It is never sent by itself.',
+      ],
+      changed: [
+        'The Sales handoff box shows the salesperson, their last update and your request’s status.',
+        'History records when you asked, when they answered, and when you opened the client’s contact (never as a message sent).',
+      ],
+      removed: [],
+      effect: 'You can finish a client’s setup from their page instead of working out who to ask; the checklist updates by itself when the details arrive.',
+    } },
+  { id: '2026-10-05-client-info-needed', date: '2026-10-05', title: 'CLIENT INFO NEEDED: Paul may ask about your sale', audience: 'sales',
+    body: 'If one of your paid clients is missing details, Paul can ask you for them. You see it on your Sales page and in your notifications.',
+    report: {
+      added: [
+        'A CLIENT INFO NEEDED notice that opens that client’s handoff directly.',
+        'On that screen: the missing details Paul asked for, and a short form for services, areas, the current website and who controls it.',
+      ],
+      changed: ['“Finish the handoff” lists a sale Paul has asked about first, with what he asked for.'],
+      removed: [],
+      effect: 'Add anything you collected during the sale and save — Paul is told and his setup checklist updates at once.',
+    } },
   { id: '2026-10-04-qa-safety', date: '2026-10-04', title: 'Test accounts can never message a real business', audience: 'admin',
     body: 'Before salespeople get logins, test accounts and test leads are now fenced off from real WhatsApps, real payments and the business numbers.',
     report: {

@@ -27,6 +27,11 @@ import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgr
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
+import { clientContactRoutes, clientInfoRequestView, clientItems, missingInformation, sellerAskState, sellerItems, cleanInfoKeys, gatherKnown, patchForCandidate, type MissingInfoItem } from "../../../src/lib/clientMissingInfo.ts";
+import { whatsAppCapabilityOf } from "../../../src/lib/whatsAppCapability.ts";
+import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
+import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
+import { newestRequestFor, requestClientInfo } from "../_shared/client-info-request.ts";
 
 /* THE OFFICIAL BASELINE'S VISIBILITY, for the client summary (2026-09-30): answers naming the business
    over the FROZEN runs (usable runs, run_number order, the first baseline_target_runs — the same runs
@@ -74,7 +79,9 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,client_contacted_at,client_contacted_via";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,client_contacted_at,client_contacted_via," +
+  /* Client missing-info actions (2026-10-05): WhatsApp reachability for Contact client (whatsAppCapability.ts). Read back live. */
+  "line_type,whatsapp_delivery_status,whatsapp_ever_delivered,country";
 
 /* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
    Paul can start. The list reads the same readiness, so these columns ride on the list too. */
@@ -228,7 +235,60 @@ function setupView(s: ClientSetup) {
 }
 
 /* The delivery workflow's History on the client page: the handoff kinds above plus the delivery events. */
-const DELIVERY_ACTIVITY_KINDS = ["payment_received", "handoff_saved", "onboarding_submitted", "delivery_submitted", "discovery_run", "baseline_approved", "baseline_run", "build_started", "launched", "crawl_run", "audit_run"];
+const DELIVERY_ACTIVITY_KINDS = ["payment_received", "handoff_saved", "onboarding_submitted", "delivery_submitted", "discovery_run", "baseline_approved", "baseline_run", "build_started", "launched", "crawl_run", "audit_run",
+  /* Client missing-info actions (2026-10-05). */
+  "client_info_requested", "client_info_answered", "client_contact_opened"];
+
+/* ══ MISSING INFORMATION: who can answer it, the request to the seller, and how to reach the client ══
+   (2026-10-05, src/lib/clientMissingInfo.ts — every decision is there). Read only. */
+// deno-lint-ignore no-explicit-any
+async function missingInfoFor(service: any, L: Record<string, unknown>, setup: ClientSetup, names: Map<string, string>, nowMs = Date.now()) {
+  const items: MissingInfoItem[] = missingInformation(setup.readiness);
+  const soldBy = typeof L.sold_by_user_id === "string" && L.sold_by_user_id ? L.sold_by_user_id : null;
+  let sellerActive: boolean | null = null;
+  if (soldBy) {
+    const [tm, role] = await Promise.all([
+      service.from("team_members").select("status").eq("user_id", soldBy).maybeSingle(),
+      service.from("user_roles").select("role").eq("user_id", soldBy).eq("role", "sales").maybeSingle(),
+    ]);
+    /* ⛔ Unknown is not active: an unreadable status never lets a request go to someone who left. */
+    sellerActive = tm.error || role.error ? null : (tm.data?.status === "active" && role.data?.role === "sales");
+  }
+  const closed = !!clientClosed(L as never);
+  const ask = sellerAskState({ applies: setup.handoffApplies, soldByUserId: soldBy, sellerActive, closed, items });
+  /* A failed read never fails the client page: the screen offers no Ask while it cannot see whether one
+     is already outstanding (request_read_failed). */
+  let newest: Awaited<ReturnType<typeof newestRequestFor>> = null, requestReadFailed = false;
+  try { newest = await newestRequestFor(service, String(L.id)); }
+  catch (e) { requestReadFailed = true; console.error("[paid-client-hub] client_info_requests read failed:", (e as { message?: string })?.message ?? e); }
+  /* The client's own details first (the ranked rule: onboarding > lead), then the lead's. */
+  const ob = (setup.onboarding ?? {}) as Record<string, unknown>;
+  const phone = text(ob.confirmed_phone) || text(L.phone);
+  const email = text(ob.contact_email) || text(L.email);
+  const digits = toWhatsAppDigits(phone, (L.country as string | null) ?? null);
+  /* A conversation = any message to or from them, by lead or by their number (the Inbox's own match). */
+  const msgOr = digits ? `lead_id.eq.${L.id},phone.eq.${digits}` : `lead_id.eq.${L.id}`;
+  const [anyMsg, lastIn] = await Promise.all([
+    service.from("whatsapp_messages").select("id").or(msgOr).limit(1),
+    service.from("whatsapp_messages").select("created_at").or(msgOr).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1),
+  ]);
+  const conversation = !anyMsg.error && Array.isArray(anyMsg.data) && anyMsg.data.length > 0;
+  const lastInboundAt = (!lastIn.error && Array.isArray(lastIn.data) && lastIn.data[0]?.created_at) || null;
+  const capability = whatsAppCapabilityOf(L as never);
+  return {
+    items,
+    seller_items: sellerItems(items).map((x) => x.key),
+    client_items: clientItems(items).map((x) => x.key),
+    ask: { state: ask, seller_name: soldBy ? names.get(soldBy) ?? "A teammate" : null },
+    request: clientInfoRequestView(newest, nowMs),
+    request_read_failed: requestReadFailed,
+    contact: {
+      routes: clientContactRoutes({ phone, email, capability, conversation }),
+      conversation, window_open: serviceWindowState(lastInboundAt, nowMs).open, capability,
+      contact_name: text(ob.contact_name) || text(L.contact_name) || null,
+    },
+  };
+}
 
 // deno-lint-ignore no-explicit-any
 async function teamNames(service: any): Promise<Map<string, string>> {
@@ -388,10 +448,14 @@ Deno.serve(async (req) => {
         applies: setup.handoffApplies,
         saved, fields: handoffWithPrefill(saved, pre.fields), prefilled: saved?.saved_at ? [] : pre.prefilled,
         saved_by: nameOf(saved?.saved_by), completed_at: saved?.completed_at ?? null,
+        /* The last time anyone saved it (the seller's last update), for the Sales handoff panel. */
+        saved_at: saved?.saved_at ?? null,
       };
+      const missingInfo = await missingInfoFor(service, { ...L, ...loaded!.lead }, setup, names);
       const handoff = {
         readiness,
         setup: setupView(setup),
+        missing_info: missingInfo,
         sales_handoff: salesHandoff,
         submitted_at: loaded!.lead.delivery_submitted_at ?? null,
         submitted_by: nameOf(loaded!.lead.delivery_submitted_by),
@@ -412,6 +476,96 @@ Deno.serve(async (req) => {
         activity: ((act.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? "System" })),
       };
       return json({ ok: true, client: { lead, onboarding: onboarding ?? null, onboarding_unpaid: onboardingUnpaid, audit, runs, pages, crawl, crawl_job: crawlJob, handoff, contract, baseline_visibility: visibility } });
+    }
+
+    /* ══ ASK THE SALESPERSON FOR THE MISSING INFORMATION (2026-10-05, src/lib/clientMissingInfo.ts) ══════
+       Re-derived on the SERVER from the checklist — never a list the screen sent. Only for another, active
+       salesperson's sale (sellerAskState === 'ask'); one open request per client (the unique index), so a
+       second press answers "already requested"; remind: true re-notifies only after the gap. */
+    if (action === "request_client_info") {
+      const leadId = text(body.lead_id);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select(HUB_LEAD_COLUMNS).eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const loaded = await loadClientSetup(service, leadId);
+      if (!loaded) return json({ ok: false, error: "client_not_found", detail: "This client could not be found." }, 404);
+      const names = await teamNames(service);
+      const mi = await missingInfoFor(service, { ...(own as Record<string, unknown>), ...loaded.lead }, loaded.setup, names);
+      if (mi.ask.state !== "ask") return json({ ok: false, error: "cannot_ask", state: mi.ask.state, detail: "There is no salesperson to ask for this client's missing information." }, 409);
+      const keys = cleanInfoKeys(mi.seller_items);
+      const out = await requestClientInfo(service, {
+        leadId, businessName: (loaded.lead.business_name as string | null) ?? null, sellerId: String(loaded.lead.sold_by_user_id),
+        actorId: user.id, actorName: names.get(user.id) ?? null, keys, remind: body.remind === true,
+      });
+      if (!out.ok) return json(out, 500);
+      return json({ ok: true, outcome: out.outcome, seller_name: mi.ask.seller_name, request: clientInfoRequestView(out.request) });
+    }
+
+    /* ══ FIND WHAT WE ALREADY HAVE (Paul, 2026-10-05; src/lib/clientMissingInfo.ts gatherKnown) ══════════
+       gather_known READS: for each missing item, what other forms, the website crawl, the salesperson's
+       handoff and their Quick Close answers already hold — each source separately, labelled, never merged.
+       apply_known WRITES ONE candidate Paul chose, by its id: the server gathers again and applies that
+       candidate through the same allowlist the seller's save uses (cleanSellerClientInfo — four lead
+       fields, only adds, a website only where none is on file). The browser never sends a value. */
+    if (action === "gather_known" || action === "apply_known") {
+      const leadId = text(body.lead_id);
+      const { data: own, error: ownErr } = await service.from("outreach_leads").select("id,website,website_control,sales_handoff,service_terminated_at,status").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (ownErr) throw ownErr;
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const loaded = await loadClientSetup(service, leadId);
+      if (!loaded) return json({ ok: false, error: "client_not_found", detail: "This client could not be found." }, 404);
+      const [rows, crawl] = await Promise.all([
+        service.from("onboarding_responses").select("id,source,status,created_at,updated_at,services,services_list,areas_list,areas_wanted,business_website,confirmed_phone,contact_email").eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(10),
+        service.from("lead_crawl_checks").select("url,created_at,site:result->siteInfo").eq("lead_id", leadId).maybeSingle(),
+      ]);
+      if (rows.error) throw rows.error;
+      const counted = loaded.setup.onboarding;
+      const known = gatherKnown({
+        missing: missingInformation(loaded.setup.readiness).map((x) => x.key),
+        lead: own as { website?: string | null; website_control?: string | null },
+        onboardingRows: (rows.data ?? []) as Array<Record<string, unknown>>,
+        countedOnboardingId: (counted?.id as string | undefined) ?? null,
+        crawl: crawl.error || !crawl.data ? null : { url: crawl.data.url, created_at: crawl.data.created_at, siteInfo: crawl.data.site ?? null },
+        handoffSiteSituation: ((own as { sales_handoff?: { site_situation?: string } | null }).sales_handoff?.site_situation) ?? null,
+        quickCloseManager: ((counted?.quick_close as { answers?: { manager?: string } } | null)?.answers?.manager) ?? null,
+      });
+      if (action === "gather_known") return json({ ok: true, known, crawl_on_file: !!crawl.data });
+
+      if (clientClosed(own as never)) return json({ ok: false, error: "client_closed", detail: "This client's engagement has ended." }, 409);
+      const cand = known.flatMap((k) => k.candidates).find((c) => c.id === text(body.candidate_id));
+      if (!cand) return json({ ok: false, error: "candidate_gone", detail: "That information is no longer on file or is no longer missing — look again." }, 409);
+      const patch = patchForCandidate(cand, own as { website?: string | null });
+      if (!patch) return json({ ok: false, error: "not_applicable", detail: "That cannot be applied here — copy it and confirm it with the client." }, 409);
+      const { error: upErr } = await service.from("outreach_leads").update(patch).eq("id", leadId);
+      if (upErr) return json({ ok: false, error: "not_saved", detail: "Not saved — try again." }, 500);
+      const { error: actErr } = await service.from("lead_activity").insert({
+        lead_id: leadId, actor_user_id: user.id, kind: "details_set",
+        data: { ...patch, source: "admin", from: cand.source, from_label: cand.label, confirmed_by_operator: true },
+      });
+      if (actErr) console.error("[paid-client-hub] details_set not recorded:", actErr.message);
+      return json({ ok: true, applied: Object.keys(patch) });
+    }
+
+    /* ══ PAUL OPENED THE CLIENT'S CONTACT FROM PAID CLIENT (History only) ═════════════════════════════
+       ⛔ Opening the Inbox, an email draft or the phone number is NOT a message: the History line says
+       "opened", never "sent". One line per person per channel per OPEN_DEDUPE_MINUTES. Nothing is sent. */
+    if (action === "client_contact_opened") {
+      const leadId = text(body.lead_id);
+      const via = text(body.via);
+      if (!["whatsapp", "email", "phone"].includes(via)) return json({ ok: false, error: "bad_channel" }, 400);
+      const { data: own } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!own) return json({ ok: false, error: "client_not_found" }, 404);
+      const OPEN_DEDUPE_MINUTES = 10;
+      const since = new Date(Date.now() - OPEN_DEDUPE_MINUTES * 60_000).toISOString();
+      const { data: recent } = await service.from("lead_activity").select("id,data").eq("lead_id", leadId).eq("kind", "client_contact_opened")
+        .eq("actor_user_id", user.id).gte("created_at", since).limit(5);
+      if (((recent ?? []) as Array<{ data?: { via?: string } }>).some((r) => r.data?.via === via)) return json({ ok: true, recorded: false });
+      const keys = cleanInfoKeys(body.items);
+      const words = via === "whatsapp" ? "Opened the client's WhatsApp conversation from Paid Client" : via === "email" ? "Opened an email draft to the client from Paid Client" : "Opened the client's phone number from Paid Client";
+      const r = await recordLeadEvent(service, leadId, "client_contact_opened", {
+        actor: user.id, source: "admin", body: `${words} — nothing sent by the app`, data: { via, items: keys },
+      });
+      return json({ ok: true, recorded: r === "recorded" });
     }
 
     /* ══ END THE SERVICE: a client-side domain / authority / IP dispute (Paul, 2026-09-28) ══════════

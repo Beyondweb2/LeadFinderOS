@@ -345,6 +345,10 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   baseline_run: 'Baseline run',
   build_started: 'Build started',
   launched: 'Launched',
+  /* Client missing-info actions (2026-10-05, _shared/client-info-request.ts). "Opened" is never "sent". */
+  client_info_requested: 'Missing info requested from salesperson',
+  client_info_answered: 'Salesperson answered the info request',
+  client_contact_opened: 'Client contact opened',
 };
 
 /** Where Find email found an address (lead_find_email / lead_set_email). */

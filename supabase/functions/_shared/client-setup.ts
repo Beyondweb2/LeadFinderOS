@@ -138,7 +138,10 @@ export async function loadClientSetup(service: Service, leadId: string): Promise
    (payment_received, launched) is guarded by a partial unique index: a retry's 23505 is "already there". */
 export type LeadEventKind =
   | "payment_received" | "handoff_saved" | "onboarding_submitted" | "delivery_submitted" | "contact_logged"
-  | "discovery_run" | "baseline_approved" | "baseline_run" | "build_started" | "launched";
+  | "discovery_run" | "baseline_approved" | "baseline_run" | "build_started" | "launched"
+  /* Client missing-info actions (2026-10-05, _shared/client-info-request.ts): Paul asked the seller, the
+     seller answered, Paul opened the client's contact (never "a message was sent"). */
+  | "client_info_requested" | "client_info_answered" | "client_contact_opened";
 export async function recordLeadEvent(
   service: Service, leadId: string, kind: LeadEventKind,
   opts: { actor?: string | null; source: "system" | "client" | "sales" | "admin"; body?: string | null; data?: Row },

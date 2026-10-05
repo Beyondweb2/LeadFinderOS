@@ -37,6 +37,8 @@ const KIND: Record<string, { icon: typeof Bell; tone: Tone }> = {
   quick_close_paid: { icon: Trophy, tone: 'green' },
   team_update: { icon: Megaphone, tone: 'blue' },
   team_task: { icon: ListChecks, tone: 'amber' },
+  /* CLIENT INFO NEEDED (2026-10-05): Paul asked the seller for a paid client's missing details (and the reply). */
+  client_info_request: { icon: ListChecks, tone: 'amber' },
 };
 const ALERTS_KEY = 'lf-desktop-alerts';
 const readAlerts = () => { try { return localStorage.getItem(ALERTS_KEY) === 'on'; } catch { return false; } };
