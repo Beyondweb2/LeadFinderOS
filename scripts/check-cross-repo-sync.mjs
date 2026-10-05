@@ -33,10 +33,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { findableSiteDir } from './findable-site-dir.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const LFOS = path.join(HERE, '..', 'src', 'lib');
-const SITE = process.env.FINDABLE_SITE_DIR ? path.join(process.env.FINDABLE_SITE_DIR, 'src', 'lib') : path.join(HERE, '..', '..', 'findable-site', 'src', 'lib');
+const SITE = path.join(findableSiteDir(path.join(HERE, '..')), 'src', 'lib');
 
 /* Each pair: what it is, and where each repo keeps it. `kind` decides how the value is parsed —
    a string built from concatenated literals, or a bare number. */

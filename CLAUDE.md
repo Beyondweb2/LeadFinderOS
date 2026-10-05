@@ -24,7 +24,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   primary after `git fetch origin`:
   `git -C C:/Users/paulj/LeadFinderOS-current worktree add -b <branch> C:/Users/paulj/LeadFinderOS-wt/<task> origin/main`.
   ARCHIVE = **`C:/Users/paulj/LeadFinderOS`** — stale; no new work there unless Paul asks you to inspect it. Never
-  delete it: it still holds the real `node_modules` every worktree junctions to, the only copies of its
+  delete it: the ~95 OLDER worktrees still junction to its `node_modules`, and it holds the only copies of its
   `SQL_FOR_PAUL_*.sql`, and the `.git` the older `LeadFinderOS-wt` folders hang off. Full note:
   `docs/handover/09-PRODUCTION-AND-DEPLOYMENT.md` "Local machine layout".
 - **Product:** Findable — AI visibility for local UK businesses (§1). **No active paying client on 2026-10-05:**
@@ -49,12 +49,15 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   (313/313 on 2026-10-05) — there are NO known failures any more; a red suite is a real finding, unless the
   runner's ⚠️ ENVIRONMENT banner says the findable-site copy is behind (refresh it, below). (The old "known-stale" four were stale tests fixed that day; `site-origin`
   runs under Node with a `Deno.env` stand-in.) Typecheck reads 9 = the deliberate baseline LIST.
-  ⚠️ **The cross-repo suites read findable-site SOURCE** via `FINDABLE_SITE_DIR` or `../findable-site`.
-  In `LeadFinderOS-wt/` that sibling is a junction to **`C:/Users/paulj/findable-site-wt/main-mirror`**, a
-  clean detached worktree of findable-site `origin/master` (it used to point at the stale, dirty primary
-  checkout, which made four suites fail against code that was not live). `npm test` prints which tree
-  it read and warns when it is behind or dirty. **Refresh it after a findable-site merge:**
-  `git -C C:/Users/paulj/findable-site-wt/main-mirror fetch -q origin && git -C … checkout -q --detach origin/master`.
+  📦 **Dependencies (2026-10-05):** `LeadFinderOS-current` has its OWN `node_modules` (`npm ci` from the lockfile;
+  `.npmrc` keeps `legacy-peer-deps`). A NEW worktree junctions to it — never to the archive's.
+  ⚠️ **The cross-repo suites read findable-site SOURCE through ONE resolver, `scripts/findable-site-dir.mjs`:**
+  `FINDABLE_SITE_DIR` → `../findable-site-current` → `../findable-site`. The clean clone is
+  **`C:/Users/paulj/findable-site-current`** (findable-site `origin/master`; `LeadFinderOS-wt/findable-site-current`
+  is a junction to it). The older `../findable-site` siblings are stale (the primary `C:/Users/paulj/findable-site`
+  is dirty; `LeadFinderOS-wt/findable-site` → `findable-site-wt/main-mirror` was 3 commits behind on 2026-10-05) —
+  a red cross-repo suite is first a question about WHICH tree it read; `npm test` prints it and warns when it is
+  behind or dirty. **Refresh after a findable-site merge:** `git -C C:/Users/paulj/findable-site-current pull --ff-only`.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
@@ -151,7 +154,7 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 - **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
   `origin/main` (`git fetch origin` first) on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, added from `LeadFinderOS-current` as above; junction `node_modules`
-  in — `../findable-site` is already a junction in `LeadFinderOS-wt/`); never switch branches in the primary
+  in from `LeadFinderOS-current` — `../findable-site-current` is already a junction in `LeadFinderOS-wt/`); never switch branches in the primary
   checkout, and never touch another session's branch or worktree. **When Paul runs sessions in parallel, a
   parallel branch is pushed but NOT merged or deployed** until an integration session (or Paul) does it
   (Paul's session rules, 2026-09-25 — ported from the unmerged `claude-md-session-safety` branch 2026-10-02).
@@ -1179,7 +1182,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   KEEP the untracked `SQL_FOR_PAUL_*.sql` (each is the only copy; `client_error_message` and
   `unschedule_instantly_poll` look still pending). Never `git worktree remove` anything through it without
   unlinking `node_modules` junctions first. Do not delete the folder: ~95 older worktrees hang off its `.git`
-  (2026-10-05) and its `node_modules` is the real one every worktree junctions to.
+  (2026-10-05) and those older worktrees junction to its `node_modules` (new ones use `LeadFinderOS-current`'s).
 - **Do not merge:** `edge-check-gate` (`d3fd6713`), `findable-product-rename` (`a8365707`),
   `short-signup-url` (`c8896003`).
 - `HANDOFF.md`, `ONBOARDING.md` (untracked) describe the deleted barber product — the best map of it,

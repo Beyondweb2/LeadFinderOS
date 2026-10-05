@@ -10,6 +10,7 @@
    ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
+import { findableSiteDir } from './findable-site-dir.mjs';
 import {
   ONBOARDING_COPY, DOMAIN_OPTIONS, AGENCY_OPTIONS, ACCESS_OPTIONS, SELF_SITE_OPTIONS,
   siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
@@ -55,7 +56,7 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
 {
   /* FINDABLE_SITE_DIR points at a specific findable-site checkout (a worktree on its latest
      master); by default the sibling checkout. */
-  const site = path.resolve(process.env.FINDABLE_SITE_DIR || path.resolve(ROOT, '..', 'findable-site'), 'src');
+  const site = path.resolve(findableSiteDir(ROOT), 'src');
   const flowPath = path.join(site, 'components', 'OnboardingFlow.tsx');
   const accessPath = path.join(site, 'lib', 'siteAccess.ts');
   if (!fs.existsSync(flowPath)) {

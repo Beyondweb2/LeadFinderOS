@@ -70,7 +70,8 @@ Map: `13-REPOSITORIES-AND-FILE-MAP.md`.
    (keep it clean on `main`, never switch its branch). PARALLEL work = `C:\Users\paulj\LeadFinderOS-wt\<task>`, one branch
    each, added from the primary after `git fetch origin`. ARCHIVE = `C:\Users\paulj\LeadFinderOS` — STALE; no new work
    there unless Paul asks, never delete it. Parallel branches are pushed, not merged or deployed, until an integration
-   session. Unlink the `node_modules` junction before removing any worktree. Details: `09-…` "Local machine layout".
+   session. Junction `node_modules` in from `LeadFinderOS-current` (it has its own since 2026-10-05); unlink it before
+   removing any worktree. Cross-repo tests read `C:\Users\paulj\findable-site-current`. Details: `09-…` "Local machine layout".
 2. **Production = app.leadfinderos.com.** Verify every deploy there by a marker only your change produces.
 3. **Deploy order:** SQL (read back) → edge functions (by hand, every function in the changed module's closure) → push
    `main` (frontend). Production only from `main`. **Skip `whatsapp-status`** until the WhatsApp cutover.
