@@ -15,14 +15,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import {
   IMPORT_FIELDS, IMPORT_FIELD_LABEL, IMPORT_FILE_MAX_BYTES, IMPORT_FILE_MAX_ROWS, IMPORT_BATCH_MAX,
-  parseCsv, autoMapColumns, columnLabel, buildImportRows, runImport, outcomeText, problemRows,
-  type ParsedCsv, type ColumnMapping, type ImportReport, type ImportRpc, type ImportField,
+  parseCsv, autoMapColumns, columnLabel, buildImportRows, runImport, outcomeText, problemRows, possibleMatchRows,
+  type ParsedCsv, type ColumnMapping, type ImportReport, type ImportRpc, type ImportField, type RowResult,
 } from '@/lib/csvLeadImport';
 
 /* ══ CSV IMPORT (2026-10-05, fix/csv-lead-import; docs/pre-sales-certification/csv-import-fix.md) ═══════════════
    Pick a file → match its columns → CHECK (a preview: the server runs every rule and writes nothing) → import.
    ⛔ The server (import_leads) decides validity, duplicates and the owner — always the person importing. This
-   screen never decides a row's fate and never sends an owner, status or any field outside the eleven.
+   screen never decides a row's fate and never sends an owner, status or any field outside the twelve.
+   DUPLICATE (same Place ID / phone / Maps listing) never becomes a second lead. POSSIBLE MATCH (same name only →
+   imported and flagged; same website, or same name + same postcode / address → held until the person ticks
+   "import these too") is shown on its own list and never disappears from the import by itself.
    ⛔ Nobody is contacted: an import creates or fills in lead records only — no WhatsApp, no queue, no campaign,
    no status change. The screen says so before the button is pressed. */
 
@@ -58,11 +61,12 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [preview, setPreview] = useState<ImportReport | null>(null);
   const [result, setResult] = useState<ImportReport | null>(null);
+  const [importPossible, setImportPossible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
     setStep('pick'); setFile(null); setParsed(null); setMapping(emptyMapping()); setMapNotes([]);
-    setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null);
+    setError(null); setBusy(false); setProgress(null); setPreview(null); setResult(null); setImportPossible(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -104,7 +108,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
     if (!parsed || !rows.length) return;
     setBusy(true); setError(null); setProgress({ done: 0, total: rows.length });
     try {
-      const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }));
+      const rep = await runImport(importRpc, rows, commit, file?.name ?? null, (done, total) => setProgress({ done, total }), commit && importPossible);
       if (commit) {
         setResult(rep); setStep('done');
         if (rep.createdIds.length || rep.updatedIds.length) {
@@ -133,7 +137,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
   });
 
   const owner = isAdmin ? 'you (Paul)' : 'you';
-  const willAdd = preview ? preview.counts.new : 0;
+  const held = preview ? preview.counts.held : 0;
+  const willAdd = preview ? preview.counts.new + (importPossible ? held : 0) : 0;
   const willFill = preview ? preview.counts.update : 0;
 
   return (
@@ -164,7 +169,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
               </div>
               <div className="text-xs text-muted-foreground space-y-1">
                 <p><strong>Needed:</strong> a business name, and a phone number or an email.</p>
-                <p><strong>Also read if present:</strong> contact person, website, address, postcode, town, trade / category, notes, Google Maps link. You can match the columns on the next step.</p>
+                <p><strong>Also read if present:</strong> contact person, website, address, postcode, town, trade / category, notes, Google Maps link, Google Place ID. You can match the columns on the next step.</p>
                 <p>Up to {IMPORT_FILE_MAX_ROWS.toLocaleString()} rows. From Excel or Google Sheets, save as "CSV UTF-8".</p>
               </div>
             </>
@@ -206,8 +211,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
             <>
               <CountGrid items={[
                 ['Rows detected', preview.counts.rows], ['Valid', preview.counts.valid], ['Invalid', preview.counts.invalid],
-                ['Repeated in file', preview.counts.duplicate_in_file], ['Already exist', preview.counts.existing],
-                ['New', preview.counts.new], ['Fill in blanks', preview.counts.update], ['Skipped', preview.counts.skipped],
+                ['Duplicates', preview.counts.duplicate_in_file + preview.counts.existing], ['Possible matches', preview.counts.possible_match],
+                ['New', preview.counts.new], ['Fill in blanks', preview.counts.update], ['Held', held],
               ]} />
               {preview.stopped && (
                 <Alert variant="destructive"><AlertCircle className="h-4 w-4" />
@@ -219,10 +224,24 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 {willFill > 0 && <><strong>{willFill}</strong> of your existing leads will have blank details filled in (nothing is overwritten). </>}
                 Nobody is messaged, nothing is queued and no status changes.
               </p>
+              <p className="text-xs text-muted-foreground" data-testid="csv-dup-explainer">
+                <strong>Duplicate</strong> = the same Google Place ID, phone number or Google Maps listing as a lead already in the system (or an earlier row): no second lead is made.
+                {' '}<strong>Possible match</strong> = weaker evidence, such as the same business name — many businesses share a name across towns, so these are added and flagged.
+              </p>
+              {held > 0 && (
+                <label className="flex items-start gap-2 rounded-md border border-amber-500/50 p-2 text-sm" data-testid="csv-held">
+                  <input type="checkbox" className="mt-1" checked={importPossible} onChange={(e) => setImportPossible(e.target.checked)} />
+                  <span>
+                    Also import the <strong>{held}</strong> held possible match{held === 1 ? '' : 'es'} (same website, or same name and the same postcode or address).
+                    Tick only if you have checked they are different businesses — for example another branch.
+                  </span>
+                </label>
+              )}
               {rows.length > IMPORT_BATCH_MAX && (
                 <p className="text-xs text-muted-foreground">Checked in parts of {IMPORT_BATCH_MAX}. A business repeated across two parts shows here twice and is added once.</p>
               )}
-              <ProblemList report={preview} isAdmin={isAdmin} />
+              <RowList title="Possible matches" rows={possibleMatchRows(preview.rows)} isAdmin={isAdmin} testId="csv-possible" tone="amber" />
+              <RowList title="Duplicates and rows not added" rows={problemRows(preview.rows)} isAdmin={isAdmin} testId="csv-problems" />
             </>
           )}
 
@@ -232,8 +251,8 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <AlertDescription>
                   {result.counts.created} lead{result.counts.created === 1 ? '' : 's'} added{result.counts.updated ? `, ${result.counts.updated} filled in` : ''}.
-                  {' '}{result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed > 0
-                    ? `${result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed} row(s) not added — listed below.`
+                  {' '}{result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held > 0
+                    ? `${result.counts.invalid + result.counts.duplicate_in_file + result.counts.skipped + result.counts.failed + result.counts.held} row(s) not added — listed below.`
                     : 'Every row was added.'}
                 </AlertDescription>
               </Alert>
@@ -246,10 +265,11 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
                 </Alert>
               )}
               <CountGrid items={[
-                ['Added', result.counts.created], ['Filled in', result.counts.updated], ['Skipped', result.counts.skipped + result.counts.duplicate_in_file],
-                ['Invalid', result.counts.invalid], ['Failed', result.counts.failed],
+                ['Added', result.counts.created], ['Filled in', result.counts.updated], ['Duplicates', result.counts.skipped + result.counts.duplicate_in_file],
+                ['Held', result.counts.held], ['Invalid', result.counts.invalid], ['Failed', result.counts.failed],
               ]} />
-              <ProblemList report={result} isAdmin={isAdmin} />
+              <RowList title="Possible matches" rows={possibleMatchRows(result.rows)} isAdmin={isAdmin} testId="csv-possible" tone="amber" />
+              <RowList title="Duplicates and rows not added" rows={problemRows(result.rows)} isAdmin={isAdmin} testId="csv-problems" />
             </>
           )}
 
@@ -289,7 +309,7 @@ export function CSVImportDialog({ open, onOpenChange, onImported, isAdmin }: CSV
 
 function CountGrid({ items }: { items: Array<[string, number]> }) {
   return (
-    <div className={`grid grid-cols-2 gap-2 ${items.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`} data-testid="csv-counts">
+    <div className={`grid grid-cols-2 gap-2 ${items.length === 5 ? 'sm:grid-cols-5' : items.length === 6 ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`} data-testid="csv-counts">
       {items.map(([label, n]) => (
         <div key={label} className="rounded-md border px-2 py-1.5">
           <div className="text-lg font-semibold leading-tight">{n.toLocaleString()}</div>
@@ -300,19 +320,18 @@ function CountGrid({ items }: { items: Array<[string, number]> }) {
   );
 }
 
-function ProblemList({ report, isAdmin }: { report: ImportReport; isAdmin: boolean }) {
-  const problems = problemRows(report.rows);
-  if (!problems.length) return null;
+function RowList({ title, rows, isAdmin, testId, tone }: { title: string; rows: RowResult[]; isAdmin: boolean; testId: string; tone?: 'amber' }) {
+  if (!rows.length) return null;
   return (
     <div>
-      <p className="text-xs font-medium mb-1">Rows not added ({problems.length})</p>
-      <ul className="max-h-56 overflow-y-auto rounded-md border divide-y text-xs" data-testid="csv-problems">
-        {problems.map((r) => (
+      <p className="text-xs font-medium mb-1">{title} ({rows.length})</p>
+      <ul className={`max-h-56 overflow-y-auto rounded-md border divide-y text-xs ${tone === 'amber' ? 'border-amber-500/50' : ''}`} data-testid={testId}>
+        {rows.map((r) => (
           <li key={`${r.row}-${r.i}`} className="px-2 py-1.5 flex gap-2 min-w-0">
             <span className="shrink-0 w-14 text-muted-foreground">Row {r.row}</span>
             <span className="min-w-0 flex-1">
               {r.business_name ? <span className="font-medium break-words">{r.business_name}: </span> : null}
-              <span className={r.outcome === 'invalid' || r.outcome === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>{outcomeText(r, isAdmin)}</span>
+              <span className={r.outcome === 'invalid' || r.outcome === 'failed' ? 'text-destructive' : tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>{outcomeText(r, isAdmin)}</span>
             </span>
           </li>
         ))}

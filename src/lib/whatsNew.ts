@@ -31,7 +31,8 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
         'A salesperson who is Ready to Sell can import too. Their new leads are theirs.',
       ],
       changed: [
-        'The database decides everything: duplicates (the same rule as Add a lead: place, phone, Maps link, then website or name as a possible duplicate), the owner (always the person importing) and what is valid.',
+        'The database decides everything: duplicates, the owner (always the person importing) and what is valid. A duplicate is the same Google Place ID, phone number or Google Maps listing as a lead already in the system — no second lead is made.',
+        'The same business name alone is only a "possible match": the row is still added and flagged, because many businesses share a name across towns. The same website, or the same name and the same postcode or address, is held until you tick "import these too".',
         'A lead that is already yours only has its blank contact, email, website, address or trade filled in. Nothing is overwritten.',
         'Someone else’s lead, or an unassigned one, is skipped and listed. It is never taken over. Claim unassigned ones from Unassigned.',
         'Imported leads show "Source: CSV import" in their history.',

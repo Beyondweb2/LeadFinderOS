@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import {
   IMPORT_FIELDS, IMPORT_BATCH_MAX, IMPORT_FILE_MAX_ROWS, parseCsv, autoMapColumns, buildImportRows, columnLabel,
-  runImport, reasonText, outcomeText, callErrorText, problemRows, type ImportRow, type ImportRpc, type RowResult,
+  runImport, reasonText, outcomeText, callErrorText, problemRows, possibleMatchRows, matchText, type ImportRow, type ImportRpc, type RowResult,
 } from "../src/lib/csvLeadImport.ts";
 import { leadPermissions } from "../src/lib/access.ts";
 import { activityDetail } from "../src/lib/salesCrm.ts";
@@ -68,8 +68,8 @@ console.log("── reading the file ──");
 
 console.log("\n── matching the columns ──");
 {
-  const m = autoMapColumns(["Company Name", "Contact Person", "Mobile", "Email Address", "Website URL", "Street Address", "Post Code", "City", "Category", "Comments", "Google Maps Link"]).mapping;
-  ok(IMPORT_FIELDS.every((fld, i) => m[fld] === i), "common header names map to all eleven fields");
+  const m = autoMapColumns(["Company Name", "Contact Person", "Mobile", "Email Address", "Website URL", "Street Address", "Post Code", "City", "Category", "Comments", "Google Maps Link", "Place ID"]).mapping;
+  ok(IMPORT_FIELDS.every((fld, i) => m[fld] === i), "common header names map to all twelve fields (Place ID included)");
   const n = autoMapColumns(["Name", "Phone"]).mapping;
   ok(n.business_name === 0, "a bare Name column is the business");
   const both = autoMapColumns(["Contact Name", "Business", "Phone"]).mapping;
@@ -95,15 +95,18 @@ console.log("\n── matching the columns ──");
 console.log("\n── sending: calls of IMPORT_BATCH_MAX, one transaction each, stop and say where ──");
 {
   const mk = (n: number): ImportRow[] => Array.from({ length: n }, (_, i) => ({ row: i + 2, business_name: `B${i}`, phone: `07700 9${String(i).padStart(5, "0")}` }));
-  const calls: Array<{ n: number; commit: boolean; keys: string }> = [];
+  const calls: Array<{ n: number; commit: boolean; possible: boolean; keys: string }> = [];
   const rpc: ImportRpc = async (args) => {
-    calls.push({ n: args._rows.length, commit: args._commit, keys: Object.keys(args).sort().join(",") });
+    calls.push({ n: args._rows.length, commit: args._commit, possible: args._import_possible, keys: Object.keys(args).sort().join(",") });
     const rows: RowResult[] = args._rows.map((r, i) => ({ i: i + 1, row: r.row, business_name: r.business_name, outcome: args._commit ? "created" : "new", lead_id: args._commit ? `id-${r.row}` : undefined }));
     return { data: { ok: true, committed: args._commit, counts: { rows: rows.length, valid: rows.length, invalid: 0, duplicate_in_file: 0, existing: 0, new: rows.length, update: 0, skipped: 0, created: args._commit ? rows.length : 0, updated: 0, failed: 0 }, rows }, error: null };
   };
   const rep = await runImport(rpc, mk(1201), true, "big.csv");
   ok(calls.length === 3 && calls.map((c) => c.n).join(",") === `${IMPORT_BATCH_MAX},${IMPORT_BATCH_MAX},201`, `1,201 rows → 3 calls of at most ${IMPORT_BATCH_MAX}`);
-  ok(calls.every((c) => c.commit && c.keys === "_commit,_file_name,_rows"), "every call carries only rows, commit and the file name — never an owner");
+  ok(calls.every((c) => c.commit && c.keys === "_commit,_file_name,_import_possible,_rows" && c.possible === false), "every call carries only rows, commit, the file name and the held-matches choice (off unless ticked) — never an owner");
+  calls.length = 0;
+  await runImport(rpc, mk(3), true, "x.csv", undefined, true);
+  ok(calls.length === 1 && calls[0].possible === true, "ticking \"import these too\" sends _import_possible = true");
   ok(rep.counts.created === 1201 && rep.createdIds.length === 1201 && !rep.stopped, "counts summed across calls; every created id collected");
   ok(IMPORT_FILE_MAX_ROWS >= 1000 && IMPORT_FILE_MAX_ROWS / IMPORT_BATCH_MAX <= 4, "a whole file is at most a few calls");
 }
@@ -137,6 +140,17 @@ console.log("\n── words ──");
   ok(reasonText("duplicate_in_file", { first_row: 2 }, false) === "Repeats row 2 of this file", "in-file duplicate names the first row");
   ok(reasonText("too_long:business_name", {}, false) === "Business name is too long", "too-long field named");
   ok(outcomeText({ i: 1, row: 3, outcome: "update", fields: ["contact_name", "email"] }, false) === "Yours already — will fill in the blank contact, email", "a fill-in says which blanks");
+  const nm: RowResult = { i: 1, row: 12, business_name: "Premier Plumbing", outcome: "new", reasons: ["possible_match_name"], match: { others: 2, owners: ["test1", "Unassigned"], towns: ["Leeds", "York"] } };
+  ok(/^Will be added — possible match: Same business name as another lead\. Matches 2 leads owned by test1, Unassigned \(Leeds, York\)$/.test(outcomeText(nm, true)), "admin: a same-name row will be ADDED, with the other towns and owners: " + outcomeText(nm, true));
+  const nmSales: RowResult = { i: 1, row: 12, business_name: "Premier Plumbing", outcome: "new", reasons: ["possible_match_name"], match: { yours: 0, others: 1 } };
+  ok(outcomeText(nmSales, false) === "Will be added — possible match: Same business name as another lead. Matches a lead elsewhere in the system", "salesperson: told only that a lead elsewhere has the name — no owner, no town");
+  ok(!/test1/.test(matchText({ others: 1, owners: ["test1"] }, false)), "…and never prints an owner name for a salesperson, even if one arrived");
+  ok(/^Held — possible match: Same website as another lead/.test(outcomeText({ i: 1, row: 13, outcome: "held", reasons: ["possible_match_website"], match: { yours: 1 } }, false)) &&
+     /Not added unless you tick/.test(outcomeText({ i: 1, row: 13, outcome: "held", reasons: ["possible_match_website"] }, false)), "a held row says why and how to import it");
+  const mixed: RowResult[] = [nm, { i: 2, row: 13, outcome: "held", reasons: ["possible_match_name_location"] }, { i: 3, row: 14, outcome: "skipped", reasons: ["owned_by_other"] },
+    { i: 4, row: 15, outcome: "duplicate_in_file", reasons: ["duplicate_in_file"] }, { i: 5, row: 16, outcome: "new" }];
+  ok(possibleMatchRows(mixed).map((r) => r.row).join(",") === "12,13" && problemRows(mixed).map((r) => r.row).join(",") === "14,15",
+    "POSSIBLE MATCHES and DUPLICATES are two separate lists; a plain new row is in neither");
   const pr = problemRows([{ i: 1, row: 2, outcome: "created" }, { i: 2, row: 3, outcome: "invalid", reasons: ["invalid_email"] }, { i: 3, row: 4, outcome: "updated" }, { i: 4, row: 5, outcome: "failed", reasons: ["write_failed"] }]);
   ok(pr.map((r) => r.row).join(",") === "3,5", "the problem list holds every row not added — invalid and failed included");
 }
@@ -175,7 +189,7 @@ const MIG = read("supabase/migrations/20261010170000_csv_lead_import.sql");
   ok(/'not_contacted', 'none', 'UK', 'manual'\)/.test(ins), "insert: not_contacted, no next action, UK, list_type 'manual'");
   ok(!/imported/.test(ins) && !/alter table[^;]*list_type/i.test(MIG), "no 'imported' list type and the CHECK is not widened");
   ok(!/(whatsapp|queued_at|campaign_id|sold_|amount_paid|is_potential_work|paid_|subscription|contract)/.test(ins), "insert sets no WhatsApp / queue / campaign / seller / payment / star / sign-up / subscription / contract field");
-  ok(/'lead_added', jsonb_build_object\('source', 'csv_import'/.test(body), "the origin is recorded on the lead's history: lead_added source csv_import");
+  ok(/'lead_added', jsonb_strip_nulls\(jsonb_build_object\('source', 'csv_import'/.test(body), "the origin is recorded on the lead's history: lead_added source csv_import");
   ok(/from public\._lead_identity_rows\(v_items\)/.test(body), "duplicates: the canonical _lead_identity_rows (place id → phone → Maps link)");
   ok(/pg_advisory_xact_lock\(hashtextextended\('outreach_leads\.phone_key:'/.test(body), "…under the same phone-key lock sales_add_lead takes");
   ok(/when 'owned' then 'owned_by_other'/.test(body) && /else 'exists_unassigned'/.test(body), "another owner's lead or an unassigned one → skipped, never claimed");
@@ -184,7 +198,20 @@ const MIG = read("supabase/migrations/20261010170000_csv_lead_import.sql");
   ok(/'owner_name', case when v_role = 'admin'/.test(body), "an owner's name is returned to the admin only");
   ok(/'lead_id', case when v_outcome in \('created', 'updated'\)/.test(body), "a lead id is returned only for the caller's own created / filled lead");
   ok(/exception when others then\n\s+v_outcome := 'failed'/.test(body), "a row that fails to write is reported as failed; the rest of the call stands");
-  ok(/revoke all on function public\.import_leads\(jsonb, boolean, text\) from public, anon;/.test(MIG) && /grant execute on function public\.import_leads\(jsonb, boolean, text\) to authenticated;/.test(MIG), "anon cannot call it; signed-in users can (the role check is inside)");
+  ok(/revoke all on function public\.import_leads\(jsonb, boolean, text, boolean\) from public, anon;/.test(MIG) && /grant execute on function public\.import_leads\(jsonb, boolean, text, boolean\) to authenticated;/.test(MIG), "anon cannot call it; signed-in users can (the role check is inside)");
+  // ── DUPLICATE vs POSSIBLE MATCH (Paul, 2026-10-05: a name alone never blocks) ──
+  ok(!/possible_duplicate/.test(body), "no 'possible duplicate' skip remains");
+  ok(/foreach v_key in array array_remove\(array\['g:' \|\| c_pid, 'p:' \|\| c_pk, 'm:' \|\| coalesce\(c_cid, lower\(c_maps\)\)\], null\)/.test(body),
+    "a HARD repeat inside the file is only the same Place ID, phone or Maps listing (never name, website or email)");
+  ok(/v_items := v_items \|\| jsonb_build_object\('k', i::text, 'place_id', c_pid, 'phone', c_phone, 'maps_url', c_maps\)/.test(body), "the Place ID goes to the canonical lookup");
+  ok(/substring\(l\.google_maps_url from '\[\?&\]cid=\(\[0-9\]\+\)'\)/.test(body), "the Maps listing is also matched by its cid (stored links carry a per-search g_mp)");
+  const nameOnly = body.slice(body.indexOf("-- The same name ONLY: a warning."), body.indexOf("if v_reason is not null then", body.indexOf("-- The same name ONLY: a warning.")));
+  ok(/v_reason := 'possible_match_name';/.test(nameOnly) && !/v_held := true/.test(nameOnly), "same name ONLY → a warning, never held, never skipped");
+  ok(/v_reason := 'possible_match_website'; v_held := true;/.test(body) && /v_reason := 'possible_match_name_location'; v_held := true;/.test(body),
+    "same website (sales_add_lead's confirm rule) or same name + same postcode / address → held");
+  ok(/if v_held and not v_confirm then v_outcome := 'held'; end if;/.test(body) && /v_confirm boolean := coalesce\(_import_possible, false\);/.test(body), "a held row is imported only when the person ticked \"import these too\"");
+  ok(/'owners', case when v_role = 'admin' then/.test(body) && /\(v_role = 'admin' or \(e ->> 'owner'\)::uuid = v_uid\)/.test(body),
+    "a possible match's owners go to the admin only; its towns only to the admin or for the caller's OWN leads");
   ok(!/\b(whatsapp_sends|whatsapp_messages|sales_queue_opener|campaign_launch|lead_set_stage|lead_mark_interested|net\.http)/.test(body), "the function sends, queues, launches and changes stage NOTHING");
 }
 
@@ -196,6 +223,9 @@ console.log("\n── the browser no longer writes leads itself ──");
   const body = hook.slice(at, hook.indexOf("const updateClientDetails", at));
   ok(at > 0 && !/\.from\('outreach_leads'\)/.test(body) && /if \(isSales\(\) \|\| !importedIds\.length\)/.test(body) && /backfill-lead-towns/.test(body),
     "afterCsvImport writes no lead; only the admin's created leads get the town check");
+  const salesBranch = body.slice(body.indexOf("if (isSales() || !importedIds.length)"), body.indexOf("/* ── VERIFY AS IT LANDS"));
+  ok(/await fetchLeads\(\);\n\s+return \{ verified: 0, unverifiable: 0 \};/.test(salesBranch) && !/backfill-lead-towns/.test(salesBranch),
+    "a SALESPERSON's import never triggers the paid town check (Paul, 2026-10-05: same as their manual Add a lead)");
   const dlg = read("src/components/CSVImportDialog.tsx");
   ok(/\('import_leads', args\)/.test(dlg) && !/\.from\(/.test(dlg), "the dialog imports through import_leads only");
   ok(!/assigned_to|user_id|owner_id|status:/.test(dlg), "the dialog never sends an owner or a status");
@@ -212,6 +242,13 @@ for (const name of [
   "NO CONTACT: nothing queued or sent for any ZZ import row", "120 rows with ONE bad row: 119 created, 1 invalid named, nothing else lost",
   "B importing A''s phone: skipped owned_by_other, no name, no id, nothing created", "not-onboarded salesperson: refused",
   "Paul import: owned by Paul even when the CSV names a salesperson", "anon cannot execute import_leads",
+  "A preview: SAME NAME ONLY (other town) → will be added, flagged possible_match_name",
+  "A preview (salesperson): the same-name match names NO owner and NO town of someone else''s lead",
+  "A preview: same website → HELD possible_match_website", "A preview: same name + same postcode → HELD possible_match_name_location",
+  "A preview: DUPLICATE by Place ID", "A preview: DUPLICATE by Maps listing (same cid, different g_mp)", "A preview: DUPLICATE by phone",
+  "A preview: same name twice in the file, two towns → both added", "A confirms the held possible matches → both created",
+  "same name in another town LANDED as A''s own lead", "B, same name as A''s lead: ADDED for B, flagged — no owner, no town, no id of A''s lead",
+  "Paul, same name as A''s lead (other phone): ADDED as a possible match; the admin sees the town and the owner",
 ]) {
   ok(sqlSuite.includes(name), `live SQL suite covers: ${name.replace(/''/g, "'")}`);
 }

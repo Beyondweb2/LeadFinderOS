@@ -3,24 +3,24 @@
 //
 // ⛔ THE SERVER DECIDES. public.import_leads (migration 20261010170000) validates every row, finds duplicates with
 // the canonical _lead_identity_rows, stamps the owner (always the caller) and writes. This file only READS the file
-// (BOM, quoted commas, line breaks inside quotes, ; or tab separators), MAPS columns to the eleven fields the
+// (BOM, quoted commas, line breaks inside quotes, ; or tab separators), MAPS columns to the twelve fields the
 // server accepts, sends them in calls of IMPORT_BATCH_MAX, and turns the server's answers into words. It holds no
 // validation or duplicate rule of its own — a second copy of either is the "one rule in N places" trap.
 //
-// ⛔ ONLY THE ELEVEN FIELDS ARE EVER SENT (buildImportRows). An owner, status, seller, payment, agreement or client
+// ⛔ ONLY THE TWELVE FIELDS ARE EVER SENT (buildImportRows). An owner, status, seller, payment, agreement or client
 // column in a CSV is never mapped, and the server ignores anything else that arrives anyway.
 //
 // No imports on purpose: scripts/csv-lead-import.test.ts loads it directly.
 
 /** The fields a CSV row may set — the same allowlist import_leads reads. Order = the mapping screen's order. */
 export const IMPORT_FIELDS = [
-  'business_name', 'contact_name', 'phone', 'email', 'website', 'address', 'postcode', 'town', 'trade', 'notes', 'google_maps_url',
+  'business_name', 'contact_name', 'phone', 'email', 'website', 'address', 'postcode', 'town', 'trade', 'notes', 'google_maps_url', 'place_id',
 ] as const;
 export type ImportField = typeof IMPORT_FIELDS[number];
 
 export const IMPORT_FIELD_LABEL: Record<ImportField, string> = {
   business_name: 'Business name', contact_name: 'Contact person', phone: 'Phone', email: 'Email', website: 'Website',
-  address: 'Address', postcode: 'Postcode', town: 'Town', trade: 'Trade / category', notes: 'Notes', google_maps_url: 'Google Maps link',
+  address: 'Address', postcode: 'Postcode', town: 'Town', trade: 'Trade / category', notes: 'Notes', google_maps_url: 'Google Maps link', place_id: 'Google Place ID',
 };
 
 /** import_leads' own ceiling per call (it refuses more: too_many_rows). */
@@ -43,6 +43,7 @@ const ALIASES: Record<ImportField, string[]> = {
   trade: ['trade', 'category', 'type', 'industry', 'sector', 'businesstype', 'service', 'niche'],
   notes: ['notes', 'note', 'comments', 'comment', 'remarks'],
   google_maps_url: ['googlemapsurl', 'googlemaps', 'googlemapslink', 'mapsurl', 'mapslink', 'maplink', 'gmaps'],
+  place_id: ['placeid', 'googleplaceid', 'gplaceid'],
 };
 
 export const normaliseHeader = (h: string) => h.replace(/^﻿/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -167,16 +168,22 @@ export function buildImportRows(parsed: ParsedCsv, mapping: ColumnMapping): Impo
 
 // ── The server's answer ─────────────────────────────────────────────────────────────────────────────────────
 
-export type RowOutcome = 'new' | 'update' | 'created' | 'updated' | 'skipped' | 'invalid' | 'duplicate_in_file' | 'failed';
+/** held = a POSSIBLE MATCH strong enough to wait for the person's say-so (same website, or same name + same
+ *  postcode / address); it is imported only when the import is sent with "import these too". */
+export type RowOutcome = 'new' | 'update' | 'created' | 'updated' | 'skipped' | 'invalid' | 'duplicate_in_file' | 'held' | 'failed';
+/** What import_leads says about a possible match — already cut to what the caller may know: a salesperson gets
+ *  only a count of their OWN same-name leads (with towns) and, of anyone else's, only that one exists. */
+export interface MatchInfo { in_file?: boolean; yours?: number; others?: number; towns?: string[]; owners?: string[] }
 export interface RowResult {
   i: number; row: number; business_name?: string; outcome: RowOutcome; reasons?: string[];
-  first_row?: number; owner_name?: string; fields?: string[]; lead_id?: string;
+  first_row?: number; owner_name?: string; fields?: string[]; lead_id?: string; match?: MatchInfo;
 }
 export interface ImportCounts {
   rows: number; valid: number; invalid: number; duplicate_in_file: number; existing: number;
+  possible_match: number; held: number;
   new: number; update: number; skipped: number; created: number; updated: number; failed: number;
 }
-export const ZERO_COUNTS: ImportCounts = { rows: 0, valid: 0, invalid: 0, duplicate_in_file: 0, existing: 0, new: 0, update: 0, skipped: 0, created: 0, updated: 0, failed: 0 };
+export const ZERO_COUNTS: ImportCounts = { rows: 0, valid: 0, invalid: 0, duplicate_in_file: 0, existing: 0, possible_match: 0, held: 0, new: 0, update: 0, skipped: 0, created: 0, updated: 0, failed: 0 };
 
 export interface ImportCallResult {
   ok: boolean; error?: string; reason?: string | null; max?: number;
@@ -193,7 +200,7 @@ export interface ImportReport {
   updatedIds: string[];
 }
 
-export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null }) =>
+export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_name: string | null; _import_possible: boolean }) =>
   Promise<{ data: unknown; error: { message?: string } | null }>;
 
 /** Send the rows in calls of IMPORT_BATCH_MAX, one after another. Each call is one transaction on the server, so a
@@ -202,6 +209,8 @@ export type ImportRpc = (args: { _rows: ImportRow[]; _commit: boolean; _file_nam
 export async function runImport(
   rpc: ImportRpc, rows: ImportRow[], commit: boolean, fileName: string | null,
   onProgress?: (done: number, total: number) => void,
+  /** Also import the HELD possible matches (the person ticked "import these too"). */
+  importPossible = false,
 ): Promise<ImportReport> {
   const report: ImportReport = { committed: commit, counts: { ...ZERO_COUNTS }, rows: [], stopped: null, createdIds: [], updatedIds: [] };
   for (let at = 0; at < rows.length; at += IMPORT_BATCH_MAX) {
@@ -209,7 +218,7 @@ export async function runImport(
     let res: ImportCallResult | null = null;
     let message: string | null = null;
     try {
-      const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName });
+      const { data, error } = await rpc({ _rows: chunk, _commit: commit, _file_name: fileName, _import_possible: importPossible });
       if (error) message = error.message ?? 'The import could not be reached.';
       else res = (data ?? null) as ImportCallResult | null;
     } catch (e) {
@@ -258,16 +267,16 @@ export function reasonText(reason: string, r: Pick<RowResult, 'first_row' | 'own
     case 'invalid_email': return 'Email address is not valid';
     case 'invalid_website': return 'Website is not valid';
     case 'invalid_maps_link': return 'Google Maps link is not valid';
+    case 'invalid_place_id': return 'Google Place ID is not valid';
     case 'no_phone_or_email': return 'Needs a phone number or an email';
     case 'bad_row': return 'Row could not be read';
     case 'duplicate_in_file': return r.first_row ? `Repeats row ${r.first_row} of this file` : 'Repeats an earlier row of this file';
     case 'already_yours': return 'Already in your leads';
-    case 'already_yours_website': return 'Looks like one of your leads (same website)';
-    case 'already_yours_name': return 'Looks like one of your leads (same business name)';
     case 'owned_by_other': return isAdmin && r.owner_name ? `Already owned by ${r.owner_name} — not changed` : 'Already belongs to another team member — not changed';
     case 'exists_unassigned': return isAdmin ? 'Already in Unassigned — claim it there instead' : 'Already in the system, not yours — not changed';
-    case 'possible_duplicate_website': return 'Possible duplicate: another lead has the same website';
-    case 'possible_duplicate_name': return 'Possible duplicate: another lead has the same business name';
+    case 'possible_match_name': return 'Same business name as another lead';
+    case 'possible_match_website': return 'Same website as another lead';
+    case 'possible_match_name_location': return 'Same business name and the same postcode or address as another lead';
     case 'duplicate_race': return 'Someone added this business a moment ago';
     case 'refused': return 'Not allowed';
     case 'write_failed': return 'Could not be saved';
@@ -279,15 +288,38 @@ const FIELD_WORD: Record<string, string> = { contact_name: 'contact', email: 'em
 export const fieldsText = (fields?: string[]) => (fields ?? []).map((f) => FIELD_WORD[f] ?? f.replace(/_/g, ' ')).join(', ');
 
 /** The row's line on the screen. */
+/** Who / where the possible match is, as far as this person may know. */
+export function matchText(m: MatchInfo | undefined, isAdmin: boolean): string {
+  if (!m) return '';
+  const bits: string[] = [];
+  if (m.in_file) bits.push('an earlier row of this file');
+  if (m.yours) bits.push(m.yours === 1 ? 'one of your leads' : `${m.yours} of your leads`);
+  if (m.others) {
+    const count = m.others === 1 ? 'a lead' : String(m.others) + ' leads';
+    const owners = m.owners?.length ? ' owned by ' + m.owners.join(', ') : '';
+    bits.push(isAdmin ? count + owners : 'a lead elsewhere in the system');
+  }
+  const where = m.towns?.length ? ` (${m.towns.join(', ')})` : '';
+  return bits.length ? `Matches ${bits.join(' and ')}${where}` : '';
+}
+
+const POSSIBLE_REASONS = ['possible_match_name', 'possible_match_website', 'possible_match_name_location'];
+const possibleReason = (r: RowResult) => (r.reasons ?? []).find((x) => POSSIBLE_REASONS.includes(x));
+
 export function outcomeText(r: RowResult, isAdmin: boolean): string {
+  const pm = possibleReason(r);
+  const why = pm ? `${reasonText(pm, r, isAdmin)}. ${matchText(r.match, isAdmin)}`.replace(/\. $/, '') : '';
   switch (r.outcome) {
-    case 'new': return 'Will be added';
-    case 'created': return 'Added';
+    case 'new': return pm ? `Will be added — possible match: ${why}` : 'Will be added';
+    case 'created': return pm ? `Added — possible match: ${why}` : 'Added';
+    case 'held': return `Held — possible match: ${why}. Not added unless you tick "import these too".`;
     case 'update': return `Yours already — will fill in the blank ${fieldsText(r.fields)}`;
     case 'updated': return `Yours already — filled in the blank ${fieldsText(r.fields)}`;
     default: return (r.reasons ?? []).map((x) => reasonText(x, r, isAdmin)).join('; ') || r.outcome;
   }
 }
 
-/** Rows that need the person's attention (everything but a clean add / fill). */
-export const problemRows = (rows: RowResult[]) => rows.filter((r) => !['new', 'created', 'update', 'updated'].includes(r.outcome));
+/** DUPLICATES and other rows that will not become a new lead (invalid, repeated, already in the system, failed). */
+export const problemRows = (rows: RowResult[]) => rows.filter((r) => ['skipped', 'invalid', 'duplicate_in_file', 'failed'].includes(r.outcome));
+/** POSSIBLE MATCHES: weak evidence only — imported (same name) or held for the person's say-so. Never a duplicate. */
+export const possibleMatchRows = (rows: RowResult[]) => rows.filter((r) => r.outcome === 'held' || !!possibleReason(r));
