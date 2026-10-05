@@ -22,6 +22,22 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
+    body: 'Outreach now opens on My leads (yours and the unassigned ones). A salesperson’s leads, or the whole team, show only when you choose them — and queueing WhatsApp across several people’s leads asks you first.',
+    report: {
+      added: [
+        'A "Whose leads" choice on Outreach: My leads, Unassigned, each salesperson by name, or All team. Anything wider than My leads shows an amber tag beside the count.',
+        'When the ticked leads belong to more than one person, Queue WhatsApp says how many and whose, and needs a second press on "Queue across team". Cancel is the default.',
+      ],
+      changed: [
+        'Outreach always opens on My leads. Picking a salesperson or All team lasts for that visit only.',
+        'The count, Select all and every bulk action only ever cover the leads in the current view. Ticks are cleared when you switch whose leads you are looking at.',
+        'Launching a campaign only messages the leads owned by that campaign’s owner. Anyone else’s lead in it is listed as "owned by someone else" and is not messaged.',
+        'Opening a salesperson’s lead from a link (the WhatsApp page, a notification) switches the view to that person’s leads so it can open.',
+      ],
+      removed: ['"Any owner" as the starting view.'],
+      effect: 'You can no longer message another salesperson’s prospects by accident. Looking at the team’s leads is still one click, but it is always your choice.',
+    } },
   { id: '2026-10-04-qa-safety', date: '2026-10-04', title: 'Test accounts can never message a real business', audience: 'admin',
     body: 'Before salespeople get logins, test accounts and test leads are now fenced off from real WhatsApps, real payments and the business numbers.',
     report: {

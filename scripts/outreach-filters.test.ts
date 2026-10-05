@@ -29,9 +29,11 @@ console.log('\n── Next Action and owner filters ──');
   ok(/passesNextActionFilter\(lead, naWhen, naKind, today\)/.test(table), 'Next Action day + type filter, the shared rule');
   ok(/NEXT_ACTION_WHEN_OPTIONS\.map/.test(table) && /NEXT_ACTION_KIND_OPTIONS\.map/.test(table), 'both selects are drawn');
   ok(!/perms\.assignOwner && \(\s*<Select value=\{naWhen\}/.test(table), 'the Next Action filters are for both roles');
-  ok(/\{perms\.assignOwner && <OwnerFilterSelect value=\{ownerFilter\}/.test(table) && /if \(perms\.assignOwner && ownerFilter !== 'all'\)/.test(table), 'the owner filter is admin only (a salesperson\'s list is already their own leads)');
-  ok(/naWhen,\s*naKind,\s*ownerFilter,/.test(table), 'the choices are remembered with the rest of the table state');
-  ok(/naWhen !== 'all' \|\| naKind !== 'all' \|\| ownerFilter !== 'all'/.test(table) && /setNaWhen\('all'\); setNaKind\('all'\); setOwnerFilter\('all'\);/.test(table), 'the Filtered pill shows them and clears them');
+  /* 2026-10-05 (outreach ownership, scripts/outreach-owner-scope.test.ts): the owner control is the PAGE's owner
+     scope — admin only, applied before the table, NOT remembered (every visit opens on My leads). */
+  ok(/\{perms\.assignOwner && onOwnerScopeChange && <OwnerFilterSelect value=\{ownerScope\}/.test(table), 'the owner scope control is admin only (a salesperson\'s list is already their own leads)');
+  ok(/naWhen,\s*naKind,\s*trackedOnly,/.test(table) && !/ownerFilter/.test(table), 'the Next Action choices are remembered with the table state; the owner scope is not');
+  ok(/naWhen !== 'all' \|\| naKind !== 'all' \|\| \(!!onOwnerScopeChange && ownerScope !== OWNER_SCOPE_MINE\)/.test(table) && /setNaWhen\('all'\); setNaKind\('all'\); onOwnerScopeChange\?\.\(OWNER_SCOPE_MINE\);/.test(table), 'the Filtered pill shows them and clears them (owner back to My leads)');
   ok(/filteredAndSortedLeads = useMemo/.test(table) && /visibleWhileLoading\(loadState/.test(table), 'filters run over every loaded lead, not the visible page');
 }
 

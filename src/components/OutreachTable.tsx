@@ -142,6 +142,7 @@ import { announceQueueChanged } from '@/components/MyWhatsAppQueuePanel';
 import { QUEUE_SKIP_LABEL, REMOVE_FROM_MY_LEADS_EXPLAINER, REMOVE_FROM_MY_LEADS_LABEL, refusalText } from '@/lib/salesCrm';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { OwnerFilterSelect } from '@/components/OwnerFilterSelect';
+import { contactScopeCheck, crossOwnerHeadline, DEFAULT_OWNER_SCOPE, ownerGroupsLine, ownerScopeLabel, OWNER_SCOPE_MINE, type OwnerScope } from '@/lib/outreachOwnerScope';
 import { NEXT_ACTION_KIND_OPTIONS, NEXT_ACTION_WHEN_OPTIONS, nextActionSortKey, passesNextActionFilter, type NextActionKind, type NextActionWhen } from '@/lib/nextActionView';
 import { londonToday } from '@/lib/conversationState';
 import { BulkAssignSelect } from '@/components/BulkAssignSelect';
@@ -257,6 +258,10 @@ interface OutreachTableProps {
   onAssignCampaign?: (leadIds: string[], campaignId: string | null) => Promise<boolean> | void;
   /** Sales only: "Remove from my leads" over the selection (sales_remove_leads decides per lead). */
   onRemoveFromMyLeads?: (leadIds: string[]) => Promise<boolean> | void;
+  /** Whose leads `leads` already is (src/lib/outreachOwnerScope.ts — the page scoped them before passing them in). */
+  ownerScope?: OwnerScope;
+  /** Admin only: change the scope. Absent = no owner control (a salesperson). */
+  onOwnerScopeChange?: (scope: OwnerScope) => void;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -341,6 +346,8 @@ export function OutreachTable({
   salesCheckBlocked = null,
   onAssignCampaign,
   onRemoveFromMyLeads,
+  ownerScope = DEFAULT_OWNER_SCOPE,
+  onOwnerScopeChange,
 }: OutreachTableProps) {
   const { toast } = useToast();
   /* ⛔ THE ONE GATE (src/lib/outreachLoad.ts). Select all, every bulk action, CSV, the Paid filter and
@@ -365,7 +372,7 @@ export function OutreachTable({
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
-  const { isAdmin } = useSubscription();
+  const { isAdmin, role } = useSubscription();
   // Newest crawl check per lead → the per-row Crawl-site button (same rows the Inbox reads).
   const { crawlByLeadId } = useLeadCrawls();
   const [playbookLeadId, setPlaybookLeadId] = useState<string | null>(null);
@@ -415,7 +422,9 @@ export function OutreachTable({
      the owner filter. */
   const [naWhen, setNaWhen] = useState<NextActionWhen>('all');
   const [naKind, setNaKind] = useState<NextActionKind>('all');
-  const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  /* ⛔ NO OWNER FILTER IN HERE ANY MORE (2026-10-05). Whose leads are shown is the PAGE's owner scope
+     (src/lib/outreachOwnerScope.ts): `leads` arrives already cut to it, so nothing below can reach a lead outside
+     it, and the old remembered every-owner value can never come back from a saved table state. */
   const [productBusy, setProductBusy] = useState(false);
   /* Off by default: it is a warning about a minority, not a lens Paul works through. */
   const [sharedPhoneOnly, setSharedPhoneOnly] = useState(false);
@@ -467,7 +476,23 @@ export function OutreachTable({
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [rawSelectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /* ⛔ A TICK CAN NEVER OUTLIVE THE OWNER SCOPE (2026-10-05). `selectedIds` — what every bulk action reads — is the
+     ticks INTERSECTED with the leads this table holds, so a lead that left the scope (the admin changed owner,
+     the lead was reassigned while ticked) is no longer selected, whatever was ticked before. Changing the scope
+     also clears the ticks outright. */
+  const scopeLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
+  const selectedIds = useMemo(() => {
+    for (const id of rawSelectedIds) if (!scopeLeadIds.has(id)) return new Set([...rawSelectedIds].filter((x) => scopeLeadIds.has(x)));
+    return rawSelectedIds;
+  }, [rawSelectedIds, scopeLeadIds]);
+  useEffect(() => { setSelectedIds(new Set()); }, [ownerScope]);
+  /** Whose leads the ticked rows are — drives the queue dialog's cross-owner warning. */
+  const selectionOwners = useMemo(
+    () => contactScopeCheck(leads.filter((l) => selectedIds.has(l.id)), role, user?.id),
+    [leads, selectedIds, role, user?.id],
+  );
+  const memberName = (id: string) => team.byId.get(id)?.display_name ?? null;
   /* Bumped whenever filter STATE is written from outside the inputs (the restore-on-mount effect,
      and Clear all). The search/location inputs are UNCONTROLLED (defaultValue + debounce, for typing
      performance), so a restored or cleared value would otherwise apply to the table while the box
@@ -489,6 +514,8 @@ export function OutreachTable({
      batch of accountants without touching the dropdown stamped a barber template on all of them.
      Same class of bug as the Inbox picker; '' means not set and the Queue button stays disabled. */
   const [queueTemplate, setQueueTemplate] = useState<string>('');
+  /* The admin's "Queue across team" confirmation — opened only when the ticked leads span more than one owner. */
+  const [crossOwnerConfirmOpen, setCrossOwnerConfirmOpen] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for the WhatsApp template page
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -634,7 +661,6 @@ export function OutreachTable({
        would render blank while still filtering — the control disagreeing with the table. */
     if (typeof parsed.naWhen === 'string' && NEXT_ACTION_WHEN_OPTIONS.some((o) => o.value === parsed.naWhen)) setNaWhen(parsed.naWhen as NextActionWhen);
     if (typeof parsed.naKind === 'string' && NEXT_ACTION_KIND_OPTIONS.some((o) => o.value === parsed.naKind)) setNaKind(parsed.naKind as NextActionKind);
-    if (typeof parsed.ownerFilter === 'string') setOwnerFilter(parsed.ownerFilter);
     if (parsed.statusFilter) {
       setStatusFilter(parsed.statusFilter === 'all' ? 'all' : canonicalFilterValue(parsed.statusFilter as StatusFilterValue));
     }
@@ -680,7 +706,6 @@ export function OutreachTable({
       statusFilter,
       naWhen,
       naKind,
-      ownerFilter,
       trackedOnly,
       hideNoWhatsApp,
       hideNotInterested,
@@ -696,7 +721,7 @@ export function OutreachTable({
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, locationFilter, statusFilter, naWhen, naKind, trackedOnly, hideNoWhatsApp, hideNotInterested, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -1368,9 +1393,16 @@ export function OutreachTable({
     announceQueueChanged();
   };
 
-  const handleQueueForWhatsApp = async (template: string) => {
+  const handleQueueForWhatsApp = async (template: string, opts: { crossOwnerConfirmed?: boolean } = {}) => {
     if (needsFullList()) return;
     if (selectedIds.size === 0 || !onUpdateLead) return;
+    /* ⛔ WHOSE LEADS THIS WOULD MESSAGE (2026-10-05, src/lib/outreachOwnerScope.ts). A salesperson's batch holding
+       anything not theirs is refused outright (the server refuses it again: sales_queue_opener → not_yours). The
+       admin's batch spanning more than one owner goes only after "Queue across team" — checked HERE as well as
+       in the dialog, so no other caller of this handler can skip it. */
+    const ownerCheck = contactScopeCheck(leads.filter((l) => selectedIds.has(l.id)), role, user?.id);
+    if (ownerCheck.refuse) { toast({ title: 'Nothing queued', description: 'Only your own leads can be queued.', variant: 'destructive' }); return; }
+    if (ownerCheck.needsConfirm && !opts.crossOwnerConfirmed) { setCrossOwnerConfirmOpen(true); return; }
     /* Refuse an unset template here as well as disabling the button. Stamping '' on a batch of leads
        would queue them with no template, and the drainer would then flag every one of them. */
     if (!template) { toast({ title: 'No template chosen', description: 'Pick a template before queueing.', variant: 'destructive' }); return; }
@@ -1770,11 +1802,7 @@ export function OutreachTable({
       const today = londonToday();
       result = result.filter((lead) => passesNextActionFilter(lead, naWhen, naKind, today));
     }
-    /* Owner (admin only — a salesperson's list is their own leads already). */
-    if (perms.assignOwner && ownerFilter !== 'all') {
-      result = ownerFilter === 'unassigned' ? result.filter((lead) => !lead.assigned_to_user_id)
-        : result.filter((lead) => lead.assigned_to_user_id === (ownerFilter === 'mine' ? user?.id : ownerFilter));
-    }
+    /* Owner: already applied — `leads` is the page's owner scope (src/lib/outreachOwnerScope.ts). */
 
     /* ⛔ "Already Visible" is HIDDEN FROM THE DEFAULT LIST — a lead AI already names (>=3 of 6),
        parked so it is not chased. It stays fully reachable: the status filter offers it permanently
@@ -1848,7 +1876,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, ownerFilter, perms.assignOwner, user?.id, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, rowSalesState]);
+  }, [leadsWithOptimistic, listComplete, isArchiveView, archiveView, preset, searchQuery, locationFilter, statusFilter, naWhen, naKind, sharedPhoneOnly, sharedPhoneIds, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, hideNotInterested, sigWebsite, sigNoWebsite, sigFacebook, sigInstagram, sortField, sortDirection, rowSalesState]);
 
   // Bulk "Find emails" — free website crawl (extract-email) over the filtered leads
   // with a website and no email yet, persisting to outreach_leads.email via updateLead.
@@ -1982,6 +2010,12 @@ export function OutreachTable({
               <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
                 ({archiveView === 'all' ? leadCountLabel(loadState, leads.length) : archiveView === 'active' ? leadCountLabel(loadState, rowsForArchiveView(leads, 'active').length) : rowsForArchiveView(leads, 'archived').length.toLocaleString()})
               </span>
+              {/* Whose leads these are, said beside the count whenever it is wider than the admin's own. */}
+              {onOwnerScopeChange && ownerScope !== OWNER_SCOPE_MINE && (
+                <span data-testid="owner-scope-badge" className="ml-1.5 sm:ml-2 rounded-full border border-amber-500/60 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                  {ownerScopeLabel(ownerScope, memberName)}
+                </span>
+              )}
               {selectedIds.size > 0 && (
                 <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-primary">
                   {selectedIds.size} sel
@@ -2462,14 +2496,14 @@ export function OutreachTable({
                 visibly, with a one-click reset of ALL of them (the dropdown's own Clear only covers
                 its nine toggles). Clearing also bumps filterInputStamp so the uncontrolled inputs
                 visibly empty rather than keeping stale text over an unfiltered table. */}
-            {(searchQuery !== '' || locationFilter !== '' || statusFilter !== 'all' || naWhen !== 'all' || naKind !== 'all' || ownerFilter !== 'all'
+            {(searchQuery !== '' || locationFilter !== '' || statusFilter !== 'all' || naWhen !== 'all' || naKind !== 'all' || (!!onOwnerScopeChange && ownerScope !== OWNER_SCOPE_MINE)
               || trackedOnly || hasEmail || hasInstagram || hasFacebook || hasWhatsApp
               || hideNoWhatsApp || hideNotInterested || sigWebsite || sigNoWebsite || sigFacebook || sigInstagram) && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery(''); setLocationFilter('');
-                  setStatusFilter('all'); setNaWhen('all'); setNaKind('all'); setOwnerFilter('all');
+                  setStatusFilter('all'); setNaWhen('all'); setNaKind('all'); onOwnerScopeChange?.(OWNER_SCOPE_MINE);
                   setTrackedOnly(false);
                   setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
                   setHideNoWhatsApp(false); setHideNotInterested(false);
@@ -2546,7 +2580,7 @@ export function OutreachTable({
               <SelectTrigger className={cn('w-[128px] sm:w-[150px] bg-background h-8 text-xs', naKind !== 'all' && 'border-primary/50 text-primary')} aria-label="Next action type"><SelectValue /></SelectTrigger>
               <SelectContent>{NEXT_ACTION_KIND_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
             </Select>
-            {perms.assignOwner && <OwnerFilterSelect value={ownerFilter} onChange={(v) => { setOwnerFilter(v); setCurrentPage(1); }} selfId={user?.id} />}
+            {perms.assignOwner && onOwnerScopeChange && <OwnerFilterSelect value={ownerScope} onChange={(v) => { onOwnerScopeChange(v); setCurrentPage(1); }} selfId={user?.id} />}
             {/* ⭐ Interested toggle — starred leads only (isStarred), combinable with any status */}
             <Button
               variant={trackedOnly ? 'default' : 'outline'}
@@ -3375,15 +3409,48 @@ export function OutreachTable({
             <TemplatePreviewButton selected={queueTemplate} />
             <RequestTemplateButton source="queue" />
           </div>
+          {/* ⛔ CROSS-OWNER: said BEFORE the press, and the press then asks again (src/lib/outreachOwnerScope.ts). */}
+          {selectionOwners.needsConfirm && (
+            <div role="alert" data-testid="queue-cross-owner" className="rounded-md border border-amber-500/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              <p className="font-semibold">{crossOwnerHeadline('queue WhatsApp', selectedIds.size, selectionOwners.owners)}</p>
+              <p className="mt-0.5 break-words">{ownerGroupsLine(selectionOwners.groups, memberName)}</p>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
-            <Button size="sm" disabled={!listComplete || !queueTemplate || openerBlocked(queueTemplate)} onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+            <Button size="sm" disabled={!listComplete || !queueTemplate || openerBlocked(queueTemplate) || selectionOwners.refuse}
+              variant={selectionOwners.needsConfirm ? 'outline' : 'default'}
+              className={selectionOwners.needsConfirm ? 'border-amber-500/70 text-amber-800 dark:text-amber-300' : undefined}
+              onClick={() => handleQueueForWhatsApp(queueTemplate)}>
               <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-              Queue {selectedIds.size}
+              {selectionOwners.needsConfirm ? `Queue ${selectedIds.size} across team…` : `Queue ${selectedIds.size}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* The second, deliberate step for a batch that spans owners. Cancel is the default focus. */}
+      <AlertDialog open={crossOwnerConfirmOpen} onOpenChange={setCrossOwnerConfirmOpen}>
+        <AlertDialogContent data-testid="queue-cross-owner-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{crossOwnerHeadline('queue WhatsApp', selectedIds.size, selectionOwners.owners)}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p className="break-words">{ownerGroupsLine(selectionOwners.groups, memberName)}</p>
+                <p>These include leads other people own. Each one gets the opener exactly as if you had queued it from that person's own list.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              onClick={() => { setCrossOwnerConfirmOpen(false); void handleQueueForWhatsApp(queueTemplate, { crossOwnerConfirmed: true }); }}>
+              Queue across team
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* WhatsApp Template Dialog */}
       <SingleWhatsAppDialog

@@ -32,6 +32,9 @@ import { SalesCheckDialog, SalesCheckPanel } from '@/components/SalesCheckPanel'
 import { useSalesChecks } from '@/hooks/useSalesChecks';
 import type { WorkspaceTabInput } from '@/components/LeadDetailDialog';
 import { UserPlus } from 'lucide-react';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useOwnerScopeMemberIds } from '@/components/OwnerFilterSelect';
+import { DEFAULT_OWNER_SCOPE, normaliseOwnerScope, scopeLeads, scopeShowingLead, type OwnerScope } from '@/lib/outreachOwnerScope';
 
 const Outreach = () => {
   const {
@@ -163,6 +166,25 @@ const Outreach = () => {
     if (!campaignFilter) return combined;
     return combined.filter((l) => l.campaign_id === campaignFilter);
   }, [leads, archivedLeads, campaignFilter]);
+
+  /* ⛔ WHOSE LEADS THIS PAGE HOLDS (2026-10-05, src/lib/outreachOwnerScope.ts). Applied HERE, before the table
+     sees a single row: the count, Select all, every bulk action, CSV and Previous / Next only ever see the scoped
+     list. Admin: My leads by default (theirs + unassigned), a salesperson or All team only when chosen — and NOT
+     remembered, so every visit opens on My leads. Sales: their own leads (the server already sends only those). */
+  const { role } = useSubscription();
+  const [ownerScopeChoice, setOwnerScopeChoice] = useState<OwnerScope>(DEFAULT_OWNER_SCOPE);
+  const leadOwnerIds = useMemo(() => allLeads.map((l) => l.assigned_to_user_id), [allLeads]);
+  const memberIds = useOwnerScopeMemberIds(leadOwnerIds);
+  const ownerScope = normaliseOwnerScope(ownerScopeChoice, role, memberIds);
+  const scopedLeads = useMemo(() => scopeLeads(allLeads, ownerScope, role, user?.id), [allLeads, ownerScope, role, user?.id]);
+  /* A lead opened by link (Inbox, a notification, ?lead=) that sits outside the current scope: the admin's view
+     moves to that lead's owner — a deliberate act — rather than silently failing to open it. */
+  useEffect(() => {
+    if (role !== 'admin' || !launchIntent) return;
+    if (scopedLeads.some((l) => l.id === launchIntent.leadId)) return;
+    const lead = allLeads.find((l) => l.id === launchIntent.leadId);
+    if (lead) setOwnerScopeChoice(scopeShowingLead(lead, user?.id));
+  }, [role, launchIntent, scopedLeads, allLeads, user?.id]);
   /* Sales cannot see the queue panel; when the admin has paused the queue, their queued leads say so. */
 
   const isReadOnly = false;
@@ -386,7 +408,9 @@ const Outreach = () => {
 
       {<OutreachTable
         leadLoad={leadLoad}
-        leads={allLeads}
+        leads={scopedLeads}
+        ownerScope={ownerScope}
+        onOwnerScopeChange={role === 'admin' ? setOwnerScopeChoice : undefined}
         onLeadClick={() => {}}
         onStatusChange={(leadId, status) => {
           if (isDemoLead(leadId)) return;

@@ -269,7 +269,7 @@ console.log('── 7. migrations (static) and the Meta hold ──');
   ok(new Set(stamps).size === stamps.length, 'no two recent migration files share a timestamp');
   /* Shipped AFTER the certified release (deployed 2026-10-05): later releases add their own migrations; the pin is
      that the certified ten are exactly these, not that nothing may follow them. */
-  const LATER = ['20261008100000_sales_workspace_v2.sql', '20261008110000_opener_contact_guard.sql'];
+  const LATER = ['20261008100000_sales_workspace_v2.sql', '20261008110000_opener_contact_guard.sql', '20261009150000_campaign_launch_owner_scope.sql'];
   const candidate = newer.filter((n) => !ON_MAIN.includes(n) && !LATER.includes(n));
   ok(candidate.length === FINAL.length && candidate.every((n) => FINAL.includes(n)), `exactly the ten candidate migrations are new in this release (${candidate.length}: ${candidate.map((n) => n.slice(0, 14)).join(' ')})`);
   const sc = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');
