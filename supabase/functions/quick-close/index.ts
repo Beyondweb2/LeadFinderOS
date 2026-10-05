@@ -17,14 +17,19 @@ import { loadClientSetup, recordLeadEvent, submitForDelivery } from "../_shared/
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { checkSuppressed } from "../_shared/suppression.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
+import { answerClientInfoRequest, openRequestFor, CLIENT_INFO_REQUEST_COLUMNS } from "../_shared/client-info-request.ts";
+import { cleanSellerClientInfo, MISSING_INFO_LABEL } from "../../../src/lib/clientMissingInfo.ts";
 
 // quick-close — QUICK CLOSE (Sales Experience, 2026-09-29; docs/sales-experience.md §9;
 // fixes 2026-10-04: docs/pre-sales-certification/fixes-02-quick-close.md).
 //
-// Modes: load · save · approve_review (admin) · generate_link · share_link · save_handoff · submit_delivery · my_handoffs.
-// ⛔ THE SALES HANDOFF (2026-10-02, src/lib/salesHandoff.ts) is the one thing a salesperson may still
-//   write AFTER payment, and only on their OWN sale (sold_by_user_id) — it lands on
-//   outreach_leads.sales_handoff through cleanHandoff, never anything else on the lead.
+// Modes: load · save · approve_review (admin) · generate_link · share_link · save_handoff · save_client_info · submit_delivery · my_handoffs.
+// ⛔ THE SALES HANDOFF (2026-10-02, src/lib/salesHandoff.ts) is what a salesperson may still write AFTER
+//   payment, and only on their OWN sale (sold_by_user_id) — it lands on outreach_leads.sales_handoff
+//   through cleanHandoff. Since 2026-10-05 (client missing-info actions) the seller may also ADD the client
+//   details Sales already records on the lead — services_included / service_areas / website (only where
+//   none is on file) / website_control — through cleanSellerClientInfo (an allowlist that never clears),
+//   never anything else on the lead. Either save answers Paul's open request (client_info_requests).
 // ⛔ WHO: a salesperson only on a lead they may work (leadAccess: assigned to them, not a client); the
 //   admin on the book's leads. After payment the seller may still LOAD the state (read-only).
 // ⛔ ONE ONBOARDING ROW per lead (public.quick_close_row, advisory-locked). The answers are also written
@@ -80,7 +85,7 @@ const WHATSAPP_REFUSAL_TEXT: Record<string, string> = {
   qa_test_account: "Not sent: this is a test account or a lead held by one.",
 };
 
-const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at";
+const LEAD_COLS = "id, user_id, business_name, phone, email, website, address, search_location, derived_town, category, search_keyword, contact_name, campaign_id, lead_source, assigned_to_user_id, sold_by_user_id, amount_paid, status, rating, review_count, google_maps_url, place_id, website_control, sales_handoff, delivery_submitted_at, contract_total_payments, service_terminated_at, services_included, service_areas";
 const ROW_COLS = "id, status, source, created_at, contact_name, contact_email, confirmed_phone, business_website, quick_close, plan_tier, website_addon";
 
 async function loadAll(service: Service, leadId: string) {
@@ -155,11 +160,23 @@ Deno.serve(async (req) => {
         .or("is_archived.is.null,is_archived.eq.false")
         .order("payment_date", { ascending: false }).limit(50);
       if (error) return json({ ok: false, error: "not_loaded" }, 500);
+      /* Paul's open requests to THIS salesperson (client missing-info actions, 2026-10-05). Only their own
+         (seller_user_id = the caller); a failed read shows the list without them rather than nothing. */
+      const asked = new Map<string, Obj>();
+      {
+        const r = await service.from("client_info_requests").select(CLIENT_INFO_REQUEST_COLUMNS).eq("seller_user_id", actor.id).is("closed_at", null);
+        if (r.error) console.error("[quick-close] my requests read failed (non-blocking):", r.error.message);
+        for (const q of (r.data ?? []) as Obj[]) asked.set(String(q.lead_id), q);
+      }
       const sales = ((data ?? []) as Obj[]).filter((l) => isPaidLead(l)).map((l) => ({
         id: l.id, business_name: l.business_name, paid_on: (l.payment_date ?? "").slice(0, 10),
         handoff_complete: handoffComplete(l.sales_handoff as SalesHandoffRecord | null),
         missing: handoffMissing(l.sales_handoff as SalesHandoffRecord | null).length,
         submitted: !!l.delivery_submitted_at,
+        info_request: asked.has(String(l.id)) ? {
+          requested_at: asked.get(String(l.id))!.requested_at,
+          items: ((asked.get(String(l.id))!.items ?? []) as string[]).map((k) => MISSING_INFO_LABEL[k] ?? k),
+        } : null,
       }));
       return json({ ok: true, sales });
     }
@@ -189,12 +206,16 @@ Deno.serve(async (req) => {
     };
 
     const view = async () => {
-      const [lastIn, camp, seller, events] = await Promise.all([
+      const [lastIn, camp, seller, events, infoRequest] = await Promise.all([
         lastInboundAt(),
         /* ⛔ Campaigns are private to their owner (2026-10-03): a salesperson is told the name only of a campaign they own. */
         lead.campaign_id ? (actor.role === "sales" ? service.from("campaigns").select("name").eq("id", lead.campaign_id).eq("created_by", actor.id).maybeSingle() : service.from("campaigns").select("name").eq("id", lead.campaign_id).maybeSingle()) : Promise.resolve({ data: null }),
         (lead.assigned_to_user_id ?? lead.sold_by_user_id) ? service.from("team_members").select("display_name").eq("user_id", lead.assigned_to_user_id ?? lead.sold_by_user_id).maybeSingle() : Promise.resolve({ data: null }),
         service.from("quick_close_events").select("kind, created_at, actor_user_id, data").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(12),
+        /* Paul's open request for missing information — shown to the SELLER it is addressed to (and the admin). */
+        paidLead && (actor.role === "admin" || lead.sold_by_user_id === actor.id)
+          ? openRequestFor(service, leadId).catch((e: unknown) => { console.error("[quick-close] request read failed (non-blocking):", e instanceof Error ? e.message : e); return null; })
+          : Promise.resolve(null),
       ]);
       const cur = (row?.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
       const answers = cleanAnswers(cur?.answers);
@@ -233,6 +254,17 @@ Deno.serve(async (req) => {
           complete: handoffComplete(saved), missing: handoffMissing(saved),
         },
         setup,
+        /* CLIENT INFO NEEDED (2026-10-05): what Paul asked for, and the client details the seller may add. */
+        info_request: infoRequest && (actor.role === "admin" || (infoRequest as Obj).seller_user_id === actor.id) ? {
+          requested_at: (infoRequest as Obj).requested_at, reminded_at: (infoRequest as Obj).reminded_at ?? null,
+          items: (((infoRequest as Obj).items ?? []) as string[]).map((k) => ({ key: k, label: MISSING_INFO_LABEL[k] ?? k })),
+        } : null,
+        client_info: paidLead ? {
+          /* already_paid is every paid client — only an ENDED / refunded one stops the seller adding details. */
+          canEdit: mayHandoff && closedNow?.error !== "client_closed",
+          services: (lead.services_included ?? []) as string[], service_areas: (lead.service_areas ?? []) as string[],
+          website: lead.website ?? null, website_control: lead.website_control ?? null,
+        } : null,
         canEdit: access.ok && row?.status !== "paid" && !closedNow,
         closed: closedNow?.error ?? null,
         lead: {
@@ -295,7 +327,43 @@ Deno.serve(async (req) => {
         });
       }
       lead.sales_handoff = next;
+      /* The SELLER answered (any save counts as their response); the admin's own edit never closes it. */
+      if (actor.role === "sales" && lead.sold_by_user_id === actor.id && paidLead) {
+        const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+        await answerClientInfoRequest(service, { leadId, actorId: actor.id, actorName: (me?.display_name as string | undefined) ?? null, businessName: lead.business_name ?? null, what: "Sales handoff updated" });
+      }
       return json(await view());
+    }
+
+    /* ══ SAVE THE CLIENT DETAILS THE SELLER COLLECTED (after payment; client missing-info actions) ═══════
+       Only the seller of THIS client (or the admin). An allowlist that only ADDS (cleanSellerClientInfo):
+       services / areas / a website where none is on file / who controls the site. Recorded as details_set
+       (the same History kind as lead_set_profile); the seller's save answers Paul's open request. */
+    if (mode === "save_client_info") {
+      if (!paidLead) return json({ ok: false, error: "not_paid", detail: "Before payment, record services and areas on the lead's Details." }, 409);
+      if (!mayHandoff) {
+        await recordDenial(service, actor.id, "quick-close:save_client_info", leadId);
+        return json({ ok: false, error: "not_your_sale", detail: "Only the salesperson who made this sale can add its details." }, 403);
+      }
+      if (quickCloseClosedRefusal(lead as never, row as never)?.error === "client_closed") return json({ ok: false, error: "client_closed", detail: "This client's engagement has ended." }, 409);
+      const { patch, changed, refused } = cleanSellerClientInfo(body.client_info, { website: lead.website ?? null });
+      if (!changed.length) return json({ ok: false, error: "nothing_to_save", detail: refused[0] ?? "Add at least one detail first." }, 400);
+      const { error } = await service.from("outreach_leads").update(patch).eq("id", leadId);
+      if (error) return json({ ok: false, error: "not_saved", detail: "Not saved — try again." }, 500);
+      Object.assign(lead, patch);
+      const shown: Obj = {};
+      if (patch.services_included) shown.services = patch.services_included;
+      if (patch.service_areas) shown.service_areas = patch.service_areas;
+      if (patch.website) shown.website = patch.website;
+      if (patch.website_control) shown.website_control = patch.website_control;
+      const { error: actErr } = await service.from("lead_activity").insert({ lead_id: leadId, actor_user_id: actor.id, kind: "details_set", data: { ...shown, source: actor.role === "admin" ? "admin" : "sales", after_payment: true } });
+      if (actErr) console.error("[quick-close] details_set not recorded:", actErr.message);
+      if (actor.role === "sales" && lead.sold_by_user_id === actor.id) {
+        const { data: me } = await service.from("team_members").select("display_name").eq("user_id", actor.id).maybeSingle();
+        const what = ["Client details added:", [patch.services_included && "services", patch.service_areas && "service areas", patch.website && "website", patch.website_control && "who controls the website"].filter(Boolean).join(", ")].join(" ");
+        await answerClientInfoRequest(service, { leadId, actorId: actor.id, actorName: (me?.display_name as string | undefined) ?? null, businessName: lead.business_name ?? null, what });
+      }
+      return json({ ...(await view()), refused });
     }
 
     /* ══ SUBMIT FOR DELIVERY (the seller, once everything required is in) ═════════════════════════════ */

@@ -22,6 +22,52 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
+    body: 'Outreach now opens on My leads — only the leads you own. Unassigned leads, a salesperson’s leads or the whole team show only when you choose them, and queueing WhatsApp across several people’s leads asks you first. Leads you add from Find Leads are now yours from the start.',
+    report: {
+      added: [
+        'A "Whose leads" choice on Outreach: My leads (you own them), Unassigned (nobody owns them), each salesperson by name, or All team (owned) — every lead someone owns, not the unassigned ones. A line under the count says what the view holds; anything other than My leads shows an amber tag.',
+        'Claim for me, in the Unassigned view: tick the leads you want and they become yours (up to 200 a press). Nobody is messaged.',
+        'When the ticked leads belong to more than one person, Queue WhatsApp says how many and whose, and needs a second press on "Queue across team". Cancel is the default.',
+      ],
+      changed: [
+        'Outreach always opens on My leads. Picking a salesperson or All team lasts for that visit only.',
+        'The count, Select all and every bulk action only ever cover the leads in the current view. Ticks are cleared when you switch whose leads you are looking at.',
+        'Leads you add from Find Leads or Coverage are owned by you from the moment they are added (they used to land as unassigned). A salesperson’s adds are theirs.',
+        'Launching a campaign only messages the leads owned by that campaign’s owner. Anyone else’s lead in it is listed as "owned by someone else", and an unassigned one as "owned by nobody yet — claim them first"; neither is messaged.',
+        'Opening a salesperson’s lead from a link (the WhatsApp page, a notification) switches the view to that person’s leads so it can open.',
+      ],
+      removed: ['"Any owner" as the starting view.'],
+      effect: 'You can no longer message another salesperson’s prospects by accident. Looking at the team’s leads is still one click, but it is always your choice.',
+    } },
+  { id: '2026-10-05-client-missing-info', date: '2026-10-05', title: 'Paid Clients: ask for missing information in one click', audience: 'admin',
+    body: 'A paid client with missing setup details now shows one Missing information box with two actions: ask the salesperson who sold it, or contact the client.',
+    report: {
+      added: [
+        'Missing information box on a paid client: what is missing and who can answer it.',
+        'Find what we already have — shows what other forms they filled in, the website crawl, the salesperson’s handoff and the sales-call answers already hold, each source on its own. Press Use on the one you trust; website finds are marked as guesses to confirm.',
+        'Ask salesperson — only when someone else sold it. They get a CLIENT INFO NEEDED notice that opens that client’s handoff. Pressing it again never sends a second request; “Remind again” appears after a day.',
+        'Contact client — opens their WhatsApp conversation in the Inbox (or a new one under the usual template rules), else an email draft or their number.',
+        'In the Inbox, an internal “Need from this client” note with Copy request / Put in reply box. It is never sent by itself.',
+      ],
+      changed: [
+        'The Sales handoff box shows the salesperson, their last update and your request’s status.',
+        'History records when you asked, when they answered, and when you opened the client’s contact (never as a message sent).',
+      ],
+      removed: [],
+      effect: 'You can finish a client’s setup from their page instead of working out who to ask; the checklist updates by itself when the details arrive.',
+    } },
+  { id: '2026-10-05-client-info-needed', date: '2026-10-05', title: 'CLIENT INFO NEEDED: Paul may ask about your sale', audience: 'sales',
+    body: 'If one of your paid clients is missing details, Paul can ask you for them. You see it on your Sales page and in your notifications.',
+    report: {
+      added: [
+        'A CLIENT INFO NEEDED notice that opens that client’s handoff directly.',
+        'On that screen: the missing details Paul asked for, and a short form for services, areas, the current website and who controls it.',
+      ],
+      changed: ['“Finish the handoff” lists a sale Paul has asked about first, with what he asked for.'],
+      removed: [],
+      effect: 'Add anything you collected during the sale and save — Paul is told and his setup checklist updates at once.',
+    } },
   { id: '2026-10-04-qa-safety', date: '2026-10-04', title: 'Test accounts can never message a real business', audience: 'admin',
     body: 'Before salespeople get logins, test accounts and test leads are now fenced off from real WhatsApps, real payments and the business numbers.',
     report: {

@@ -909,6 +909,13 @@ export function useOutreach({ history = true, progressive = false }: { history?:
       .from('outreach_leads')
       .insert({
         user_id: user.id,
+        /* ⛔ THE PERSON WHO ADDS IT OWNS IT (Paul, 2026-10-05). Without these, every lead Paul added from Find Leads
+           or Coverage landed UNASSIGNED. The database stamps the same owner itself (trigger
+           trg_outreach_leads_added_by_owner, migration 20261009160000) — this is only so the right owner shows
+           at once; the server, not this line, is the rule. A salesperson never reaches this insert (sales_add_lead). */
+        assigned_to_user_id: user.id,
+        assigned_at: new Date().toISOString(),
+        added_by_user_id: user.id,
         business_name: lead.name,
         // Save the phone we already have from the search result. This avoids
         // a Place Details call entirely when the search already returned one.

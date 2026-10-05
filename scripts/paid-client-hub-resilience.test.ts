@@ -76,7 +76,14 @@ const live: Record<string, string[]> = {
     /* 2026-09-29, the service route (subscription_renews_at existed; contract_total_payments is migration 20260929170000, read back that day). */
     'subscription_renews_at','contract_total_payments'],
   lead_activity: ['id','lead_id','actor_user_id','kind','body','data','created_at'],
-  team_members: ['user_id','display_name'],
+  /* status: client missing-info actions (2026-10-05, read back from information_schema that day) — is the seller still active. */
+  team_members: ['user_id','display_name','status'],
+  /* Client missing-info actions (2026-10-05, read back that day): the seller holds the sales role; any WhatsApp message to/from the client. */
+  user_roles: ['user_id','role'],
+  whatsapp_messages: ['id','created_at'],
+  /* Find what we already have (2026-10-05, read back that day): onboarding_responses source / created_at /
+     updated_at and outreach_leads.sales_handoff (the list is flattened, so they sit under one label). */
+  find_what_we_have: ['source','created_at','updated_at','sales_handoff'],
   onboarding_responses: ['id','business_name','business_website','confirmed_location','business_address','services','services_list','areas_list','areas_wanted','contact_name','contact_email','confirmed_phone','baseline_status','baseline_questions','baseline_approved_at','website_route','domain_status','access_status','client_source','audit_id','standout','accreditations','must_not_say','website_platform','website_platform_other','willing_to_migrate','competitor_name','gbp_consent','gbp_exists','gbp_status','gbp_verified','gbp_manager_email','incomplete',
     'domain_owned','domain_access','domain_third_party','site_rights','authority_confirmed','dns_permission','materials_confirmed','domain_escalated_at'],
   ai_audits: ['id','baseline_completed_at','short_code','created_at','audit_purpose','business_name','business_type','location_text','specialism','website','has_website','baseline_target_runs','is_measurement'],

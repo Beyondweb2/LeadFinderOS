@@ -22,6 +22,7 @@ import { SalesHandoffForm } from '@/components/SalesHandoffForm';
 import type { HandoffFieldKey, SalesHandoffFields } from '@/lib/salesHandoff';
 import type { NextStep } from '@/lib/deliveryStage';
 import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact';
+import { SellerClientInfoForm, type SellerClientInfo } from '@/components/SellerClientInfoForm';
 
 /* ══ QUICK CLOSE (Sales Experience, 2026-09-29) — src/lib/quickClose.ts has the rules ═══════════════════
    Built for a phone call on a phone: one question at a time, big buttons, every tap SAVED (so a dropped
@@ -57,6 +58,9 @@ interface View {
   handoff?: { canEdit: boolean; fields: SalesHandoffFields; prefilled: HandoffFieldKey[]; saved_at: string | null; completed_at: string | null; complete: boolean; missing: HandoffFieldKey[] };
   /** After payment: the client's setup checklist, so the seller sees what is missing. */
   setup?: { ready: boolean; label: string; done: number; total: number; missing: string[]; state_label: string; next: NextStep; submitted: boolean; first_contact?: { state: FirstContactState; due: string | null } } | null;
+  /** CLIENT INFO NEEDED (2026-10-05): Paul's open request to this seller, and the client details they may add. */
+  info_request?: { requested_at: string; reminded_at: string | null; items: { key: string; label: string }[] } | null;
+  client_info?: SellerClientInfo | null;
 }
 export const quickCloseKey = (leadId: string | null | undefined) => ['quick-close', leadId ?? null] as const;
 const STATE_TONE: Record<QuickCloseState, string> = {
@@ -198,6 +202,11 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   };
 
   const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
+  const saveClientInfo = async (ci: Record<string, string>) => {
+    const r = await run('client-info', { mode: 'save_client_info', client_info: ci }) as { refused?: string[] } | null;
+    if (r) toast({ title: 'Client details saved for Paul', description: r.refused?.length ? r.refused.join(' ') : undefined });
+    return !!r;
+  };
   const submitDelivery = async () => { const r = await run('submit', { mode: 'submit_delivery' }); if (r) toast({ title: 'Submitted for delivery', description: 'Paul has been told.' }); };
   const answeredCount = shownQs.filter((x) => answers[x.key] && answers[x.key] !== 'not_applicable').length;
   const known: [string, string | null | undefined][] = v ? [
@@ -250,6 +259,24 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                 <Button className="mt-2 h-11 w-full" onClick={() => void submitDelivery()} disabled={busy === 'submit'}>{busy === 'submit' && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Submit for delivery</Button>
               )}
             </section>
+          )}
+
+          {/* ── CLIENT INFO NEEDED: Paul asked this seller for missing details (client missing-info actions) ── */}
+          {v && v.state === 'paid' && v.closed !== 'client_closed' && (v.info_request || v.client_info?.canEdit) && v.client_info && (
+            <details className={cn('rounded-xl border p-3', v.info_request ? 'border-amber-500/60 bg-amber-500/[0.06]' : 'border-border/60')} open={!!v.info_request} data-testid="qc-client-info">
+              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold">
+                {v.info_request ? 'CLIENT INFO NEEDED' : 'Client details for Paul'}
+                <span className="text-xs font-normal text-muted-foreground">{v.info_request ? `asked ${new Date(v.info_request.reminded_at ?? v.info_request.requested_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}` : 'optional'}</span>
+              </summary>
+              {v.info_request && (
+                <div className="mt-2 text-sm" data-testid="qc-info-request">
+                  <p>{v.lead.business_name ?? 'This client'} is missing:</p>
+                  <ul className="mt-1 list-disc pl-5">{v.info_request.items.map((i) => <li key={i.key}>{i.label}</li>)}</ul>
+                  <p className="mt-1 text-xs text-muted-foreground">Please add anything you collected during the sale — here, and in the handoff below. Saving tells Paul.</p>
+                </div>
+              )}
+              <div className="mt-3"><SellerClientInfoForm info={v.client_info} onSave={saveClientInfo} busy={busy === 'client-info'} /></div>
+            </details>
           )}
 
           {/* ── THE CURRENT QUESTION (while answering) ── */}

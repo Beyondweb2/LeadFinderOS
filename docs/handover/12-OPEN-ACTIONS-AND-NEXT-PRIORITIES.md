@@ -28,8 +28,18 @@ Paul may have done some of the manual ones since.*
    `paul@move37.fun`; WhatsApp runs on Move37's Meta app. If the move37.fun mailbox or accounts could disappear, move these
    first.
 
+8. **Claim the never-contacted UNASSIGNED leads sitting in your campaigns before relaunching them** (52 on 2026-10-05:
+   Locksmiths 24, Morgage 21, Plumber 2 5, Accountants 1, plumber 1). Since 2026-10-05 a launch skips them ("owned by
+   nobody yet") — Outreach → Unassigned → tick → Claim for me (messages nobody).
+
 ## PRODUCT NEXT (likely priorities)
 
+0. **CSV IMPORT — BROKEN / NEEDS FIX** (found 2026-10-05 by the ownership work, pre-existing, separate bug): Outreach CSV
+   import (`bulkImportLeads`, `src/hooks/useOutreach.ts`) inserts `list_type: 'imported'`, but the live
+   `outreach_leads_list_type_check` allows only `no_website` / `broken_website` / `manual`, so every imported row is
+   refused and the import appears to add nothing. Decide the right `list_type` (or widen the CHECK) in its own branch.
+0. **Client agreement before payment — waits on Paul's rewritten client + salesperson agreements.** Not built; the
+   payment state machine and the current agreement flow are unchanged until the final documents arrive.
 1. **Trade templates for Website Build.** Only one template exists (MCL locksmith, `mcl-local-trades`, pinned to a live
    client repo). A non-locksmith New-site client with no old site is blocked → Bespoke in Advanced. Build a Findable-owned
    template repo (`Beyondweb2/findable-local-trades-template` is planned but does not exist) and trade profiles for the

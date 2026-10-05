@@ -52,6 +52,8 @@ import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { WarmReplyAssistant } from '@/components/WarmReplyAssistant';
+import { ClientInfoNeededHelper } from '@/components/ClientInfoNeededHelper';
+import { NEED_PARAM, parseNeedParam } from '@/lib/clientMissingInfo';
 import { warmStage } from '@/lib/warmStage';
 import { LeadOwnerControl } from '@/components/LeadOwnerControl';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
@@ -1590,6 +1592,20 @@ const Inbox = () => {
      the dashboard's next actions and the lead's WhatsApp button all use it; it opens that lead's real
      thread (by number, whoever sent the messages) or starts one. */
   const leadParam = searchParams.get('lead');
+  /* Paid Client → Contact client carries what Paul needs from them (keys only, an allowlist). Shown as an
+     INTERNAL note on THAT lead's thread only; never sent (ClientInfoNeededHelper). */
+  /* ?lead= is one-shot (setActiveKey drops it once the thread opens), so the note remembers WHICH lead it
+     belongs to; it shows only on that lead's thread. */
+  const needRaw = searchParams.get(NEED_PARAM);
+  const [needFor, setNeedFor] = useState<{ leadId: string; keys: string[] } | null>(null);
+  useEffect(() => {
+    const keys = parseNeedParam(needRaw);
+    if (leadParam && keys.length) setNeedFor({ leadId: leadParam, keys });
+  }, [leadParam, needRaw]);
+  const dismissNeed = () => {
+    setNeedFor(null);
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete(NEED_PARAM); return next; }, { replace: true });
+  };
   const leadParamDone = useRef<string | null>(null);
   const leadParamLoading = useRef<string | null>(null);
   useEffect(() => {
@@ -2340,6 +2356,12 @@ const Inbox = () => {
               {/* AI visibility: the lead's hook audit (3 questions × ChatGPT + Google AI) and its report
                   state. Compact by default; "Run new 3 × 2 audit" never queues a pitch. */}
               {active.leadId && <HookVisibilityCard leadId={active.leadId} onRunNew={startHookRerun} runNewBusy={hookRerunBusy} />}
+
+              {/* NEED FROM THIS CLIENT (from Paid Client → Contact client): internal, never sent. */}
+              {active.leadId && needFor && active.leadId === needFor.leadId && (
+                <ClientInfoNeededHelper keys={needFor.keys} contactName={activeLead?.contact_name ?? null} windowOpen={win.open}
+                  onDraft={(text) => insertWarmDraft(active.key, text)} onDismiss={dismissNeed} />
+              )}
 
               {/* Messages */}
               <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">

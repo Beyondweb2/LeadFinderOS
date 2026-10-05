@@ -84,6 +84,14 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   keeps `user_id` = the book owner; who WORKS a lead is `assigned_to_user_id`. A salesperson never
   reads `outreach_leads` (it holds Stripe/amount/refund/delivery columns) — only the `sales_leads`
   view and the role-checked SQL functions.
+  ⛔ **Outreach owner scope (2026-10-05, `docs/pre-sales-certification/outreach-ownership-safety.md`)**: the admin's
+  Outreach opens on MY LEADS = leads the admin OWNS (never unassigned), NOT remembered; Unassigned / a rep / All team
+  (= every OWNED lead, unassigned excluded) only when chosen. A lead a signed-in team member adds is owned by them at
+  creation (trigger `trg_outreach_leads_added_by_owner`); only system inserts stay unassigned. Unassigned → "Claim for me". The scope is
+  applied by the PAGE before the table (`src/lib/outreachOwnerScope.ts`) — never as a row filter inside it — so
+  counts, Select all and bulk actions cannot reach a hidden lead. A contact action spanning owners needs
+  "Queue across team" (`contactScopeCheck`). A campaign launch messages only the campaign OWNER's leads
+  (`other_owner`, `unassigned` skipped). Campaign membership never overrides ownership.
   ⛔ **ONE workflow (Paul, 2026-09-27): Sales uses the SAME Outreach and Inbox** — never build a
   SalesOutreach/SalesInbox or a second CRM (My Leads is deleted). Reads go through `leadSourceFor`;
   a salesperson's writes go through `planSalesPatch` → the lead functions (a direct update from a sales
@@ -151,6 +159,10 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `new_client_email_at`); the sales handoff is `outreach_leads.sales_handoff`, written only by quick-close
   `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
   live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
+  ⛔ **Missing information** (2026-10-05, `docs/pre-sales-certification/client-missing-info-actions.md`): ONE box, rules in
+  `src/lib/clientMissingInfo.ts` — Ask salesperson only for another ACTIVE seller's sale (`sold_by_user_id`), ONE open
+  `client_info_requests` row per client (unique index), answered only by that seller's save; Find what we already have shows
+  each source separately and applies a candidate BY ID; Contact client opens the Inbox with an INTERNAL need note. Nothing sends.
 - **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
   `origin/main` (`git fetch origin` first) on its own named branch in its own `git worktree`
   (`C:/Users/paulj/LeadFinderOS-wt/<task>`, added from `LeadFinderOS-current` as above; junction `node_modules`
