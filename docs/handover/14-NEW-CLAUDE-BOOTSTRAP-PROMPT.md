@@ -1,7 +1,8 @@
 # 14 — Bootstrap prompt for the new Claude account
 
 **Where to run it:** in the **Claude desktop app → Code tab**, signed in to the NEW Claude account, with a **new session
-opened on the folder `C:\Users\paulj\LeadFinderOS`** (or a fresh clone of `https://github.com/Beyondweb2/LeadFinderOS`).
+opened on the folder `C:\Users\paulj\LeadFinderOS-current`** (or a fresh clone of `https://github.com/Beyondweb2/LeadFinderOS`).
+Not `C:\Users\paulj\LeadFinderOS` — that is the archived old checkout.
 Paste everything inside the box below as the first message.
 
 Keep a copy of this prompt somewhere outside Claude (a note, an email to yourself).
@@ -18,7 +19,8 @@ Do this now, in this order:
 1. Fetch the latest code and inspect git state:
    - git fetch origin
    - print origin/main's commit and the current branch / working tree status
-   - note: the folder C:\Users\paulj\LeadFinderOS is an OLD, STALE checkout with leftover uncommitted edits — do NOT trust its files, do NOT switch its branch, do NOT reset or delete anything. Read everything from origin/main (for example: git show origin/main:CLAUDE.md, git show origin/main:docs/handover/00-START-HERE.md), or create a fresh worktree of origin/main under C:\Users\paulj\LeadFinderOS-wt\ for reading.
+   - workspace: the PRIMARY checkout is C:\Users\paulj\LeadFinderOS-current. Parallel work goes in its own worktree, one branch each, under C:\Users\paulj\LeadFinderOS-wt\<task>, always cut from the latest origin/main. Parallel branches are pushed, never merged or deployed, until an integration session does that.
+   - note: the folder C:\Users\paulj\LeadFinderOS is the ARCHIVED, STALE old checkout with leftover uncommitted edits — do NOT work in it, do NOT trust its files, do NOT switch its branch, do NOT reset or delete anything. Read everything from origin/main (for example: git show origin/main:CLAUDE.md, git show origin/main:docs/handover/00-START-HERE.md).
 
 2. Read, from origin/main, in this order:
    - docs/handover/00-START-HERE.md
