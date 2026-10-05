@@ -15,10 +15,13 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 ---
 
-## 0. State of play (2026-09-16)
+## 0. State of play (2026-09-16; customers + handover updated 2026-10-05)
 
-- **Product:** Findable — AI visibility for local UK businesses (§1). **Two paying customers, RG
-  Locksmiths and Ronnie's Shoe Repairs; SC Plumbing & Gas refunded.** Re-count before quoting.
+- 🆕 **NEW CLAUDE ACCOUNT? Start at `docs/handover/00-START-HERE.md`** (account handover, 2026-10-05) — the
+  orientation, reading order, open actions and Paul's preferences. This file stays the rulebook.
+- **Product:** Findable — AI visibility for local UK businesses (§1). **No active paying client on 2026-10-05:**
+  Ronnie and MCLocksmiths are ENDED (`client_ended_early`), RG Locksmiths and SC Plumbing are REFUNDED
+  (`docs/handover/10-HISTORICAL-CLIENTS-AND-EXCEPTIONS.md`). Re-count before quoting.
 - **Operator app = `https://app.leadfinderos.com`** (canonical since 2026-10-01; custom domain on
   the `leadfinderos-next` Pages project). Written ONCE: `OPERATOR_APP_URL`,
   `src/config/operatorApp.ts` (SPA, edge, scripts all import it; `operator-app-url.test.ts` fails on
@@ -237,10 +240,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **Guarantee is outcome-conditional:** measure before, re-measure at four weeks on the same
   questions and engines, **judged on all 20 frozen questions — the home town AND the approved service
   areas** (Paul, 2026-09-23; was home-town-only from 2026-09-12; older frozen sets stay as they
-  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`); Google AI Overview is recorded,
-  never scored. "The number" = named answers ÷ answered answers pooled over every frozen question,
+  were). **Scored engines: ChatGPT + Gemini only** (`SCORED_ENGINES`); Google AI Overview is no longer
+  collected at all (removed from the scraper input, `_shared/enrichment/ai-search.ts`) — never claim it is measured. "The number" = named answers ÷ answered answers pooled over every frozen question,
   replay vs baseline (`compareMeasurements` → `numberWentUp`). Same rule on Build and Optimise; only
-  the clock differs (eight weeks for a new-domain Build, `remeasureWeeksFor`). If the number has not
+  the clock is four weeks for every new client (`remeasureWeeksFor` always returns 4 since 2026-10-02). If the number has not
   gone up, they email within 14 days of their results and get the £99 back, **plus the first monthly
   payment if it has already been taken** (`GUARANTEE_PAYMENT_TWO_SENTENCE`); a valid claim ends the
   monthly. Verified against the code 2026-10-01. `findable.live/refunds` is the
@@ -275,7 +278,7 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   `remeasure_audit_id` are claimed by DB TRIGGERS, immutable once set; one replay per lead, ever.
 - **The four-week results sender** (`_shared/remeasure-results.ts`) is claim-first on
   `remeasure_results_sent_at` and **holds behind `REMEASURE_RESULTS_COPY_APPROVED = false`** until Paul
-  approves the copy. **RG is due 2026-10-06** — approve before then or his results hold.
+  approves the copy. (RG's stored 2026-10-06 date cannot fire: his row is `refunded`, which `fireDueRemeasures` skips.)
   ⛔ **Paul's wording (2026-10-05):** signed `RESULTS_SIGN_OFF` ("Paul, Findable"); the monthly is described as
   the real service (`monthlyCoversPhrase` — never "every week", no "maintenance"); the not-gone-up version names
   NO upcoming monthly payment after saying a claim stops it. Exact copy: `final-certification.md` §8.
@@ -285,8 +288,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
   (`resultsBillingStartIso`) or none — never "that same day". The end of the route's payments (12 / 6) is
   `subscriptionEndedByTerm` → `termCompleteEmail`; ownership words only for `findableSiteKind ===
-  'findable_built'`. ⛔ **Re-measure clock: 4 weeks, or 8 for a site we BUILD on a brand-new domain**
-  (`remeasureWeeksFor`) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
+  'findable_built'`. ⛔ **Re-measure clock: 4 weeks for every new client** (`remeasureWeeksFor`
+  always returns 4 since 2026-10-02; the old 8-week new-domain case is gone — some code comments still say 8) — never "excluded". ⛔ **A valid claim refunds payment 2 too if already taken**
   (`GUARANTEE_PAYMENT_TWO_SENTENCE`, locked to findable-site). Record + MCLocksmiths' missing
   subscription: `docs/business-and-offer.md`, "Customer lifecycle cleanup".
 - ⛔ **Campaigns are OWNED, PRIVATE and GLOBALLY UNIQUE** (2026-10-03, `docs/campaigns.md`, migration `20261006120000`). Owner =
@@ -323,8 +326,15 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   all code. **He never runs terminal commands.**
 - **Plain English, no jargon. Lead with the answer. Questions at the very end.**
 - **Plan first, then stop** for a new piece of work. Once approved, build the whole thing.
-- **Hard stop and ask** before anything irreversible he has not already authorised: merges, pushes,
-  SQL, deletions, payments, deploys, access changes. If the brief authorises it, proceed.
+- ✅ **Deploy live by default (Paul, 2026-10-05):** implementation work ends with tests → commit → push
+  `main` → deploy (SQL first, edge by hand) → verify on `https://app.leadfinderos.com` — unless he says not
+  to, the session is planning-only, or deploying is unsafe.
+- **Hard stop and ask** before anything irreversible or outward-facing he has not already authorised:
+  destructive SQL, deletions, money / Stripe, Meta / WhatsApp credentials, access changes, real messages to
+  real people, historical client rows. If the brief authorises it, proceed.
+- **When Paul asks for a change, give him a fresh ready-to-paste prompt and say exactly where to run it**
+  (no prompt when none is needed). Whole coherent passes, not micro-prompts; parallel sessions only when
+  branches are genuinely independent (`docs/handover/11-PAUL-WORKING-PREFERENCES.md`).
 - **Any plan approved earlier must have its numbers re-derived from the live database by the
   session that builds it.** An approval names intent; the builder re-establishes every fact.
 - ✅ **You can run SQL yourself, and he asked you to.** Route: `POST
@@ -1102,22 +1112,24 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
-- 🔴 **The pre-sales final candidate is certified, NOT merged or deployed** (`integration/pre-sales-final` =
-  wave 1 + WS-7 + the final fixes). `docs/pre-sales-certification/final-certification.md` is the authority for
-  the migration order (10), the edge deploy list (38 + `whatsapp-status` held) and the manual pre-deploy actions;
-  it supersedes the wave-1 lists. ⛔ **`whatsapp-status` must not be
-  deployed until the Findable Meta App and its App Secret are ready** — the new code fails closed without
-  `WHATSAPP_APP_SECRET`; the post-call reply matcher rides the same deploy, so it waits too.
+- ✅ **The pre-sales final release is DEPLOYED** (2026-10-05, `main` `c5c4a1b5`; 10 migrations, 38 functions —
+  `docs/pre-sales-certification/production-deployment.md`), followed the same day by Sales workspace v2, the
+  opener contact guard and the simple Website Build. The live open-actions list is
+  `docs/handover/12-OPEN-ACTIONS-AND-NEXT-PRIORITIES.md` (Apify cap still US$40, results copy, Stripe, Meta).
+- 🔴 ⛔ **`whatsapp-status` must not be deployed until the Findable Meta App and its exact App Secret are ready**
+  (live = v114, 2026-09-30; `WHATSAPP_APP_SECRET` unset) — the new code fails closed without it; the post-call
+  reply matcher rides the same deploy, so it waits too. Skip it in any closure redeploy. Cutover order:
+  `docs/handover/07-SECURITY-AND-PERMISSIONS.md`.
 - ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).
 - ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
   refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction
   succeeded on 8/8 cells and question generation no longer falls back to templates
   (`docs/measurement.md` §32). The hardening it prompted stays — audits finalise regardless
   (`_shared/run-finalise.ts`) and the receipt keeps 400 chars of the error.
-- 🔴 **Apify has no headroom for a big discovery run**: $17.02 of $19.00 (89.6%) on 2026-09-21,
-  resets 16 Oct. An 80 × 3 is ~$1.74 at the measured ~$0.00725 per question-run — it fits on paper
-  and leaves ~20p for everything else, and **at 100% every audit question and SEO scan stops,
-  paying clients included** (§4). ⛔ Do not run MCLocksmiths at 80 × 3 until the cap is raised.
+- 🔴 **The Apify monthly cap is US$40 (read live 2026-10-05: US$29.04 used, cycle ends 16 Oct)** — Paul's
+  decision is ~US$150 and raising it is HIS manual action. Prospecting stops at 85%, client work at 95%, and
+  **at 100% every audit question and SEO scan stops, paying clients included** (§4,
+  `docs/handover/08-COSTS-BUDGETS-LIMITS.md`). Check the live cap before any big Discovery run.
 - `classifySource` grades every `.org` as authority (report accuracy).
 - A 3-run measurement repeats only 20 questions when the set is longer (`BASELINE_MAX_QUESTION_COUNT`
   clamp on repeats) — a spend decision, not a code one.
@@ -1169,6 +1181,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 | Touching… | Read first |
 |---|---|
+| Anything, as a NEW Claude account / fresh start — orientation, reading order, open actions, Paul's preferences | `docs/handover/00-START-HERE.md` (then the folder in its order) |
 | The monthly client update (paid client page step 8), `client_monthly_updates` and its three functions | `docs/monthly-client-update.md` |
 | What the 2026-10-02 closeout audit found complete / fixed / still open | `docs/closeout-2026-10-02.md` |
 | Inbox / Outreach load speed, the stored result-part columns, parallel paging, the shared queue status | `docs/inbox-outreach-speed.md` |
