@@ -85,11 +85,24 @@ export interface PaymentFacts {
   paidFor: string;
   stripeCustomerId: string | null;
   stripePaymentIntentId: string | null;
+  /** The Stripe Checkout Session the client paid through (2026-10-05, docs/salesperson-onboarding.md §3a).
+   *  Written IN THE SAME UPDATE as the payment, so the database stamps the seller from the person who
+   *  CREATED that sign-up link (sale_creations) — never from who owns the lead at payment. */
+  checkoutSessionId?: string | null;
+  /** The client SIGN-UP the payment came through (the onboarding_responses id in the session's metadata;
+   *  v3, F + H integration 2026-10-05). Written in the SAME update as the payment: the database stamps the
+   *  seller as the authorised CREATOR of this sign-up (sale_creations, migration 20261010130000) — never the
+   *  lead's owner at payment, never whoever opened the Stripe session after the client signed. */
+  paidSignupId?: string | null;
 }
 
 /** The patch the FIRST payment writes (and only the first). */
 export function firstPaymentPatch(p: PaymentFacts): Record<string, unknown> {
-  return { status: 'payment_received', amount_paid: p.amountGbp, payment_date: p.paymentDay, paid_for: p.paidFor };
+  return {
+    status: 'payment_received', amount_paid: p.amountGbp, payment_date: p.paymentDay, paid_for: p.paidFor,
+    ...(p.checkoutSessionId ? { paid_checkout_session_id: p.checkoutSessionId } : {}),
+    ...(p.paidSignupId ? { paid_signup_id: p.paidSignupId } : {}),
+  };
 }
 
 /** The Stripe ids a delivery may write: only into a column that is still blank. The payment intent is

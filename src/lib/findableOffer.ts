@@ -43,15 +43,28 @@ export const FINDABLE_SETUP_PRICE_GBP = 99;
  *  It starts FINDABLE_MONTHLY_DELAY_DAYS after the £99 signup payment (Stripe holds it as a trial —
  *  _shared/delayed-subscription.ts). The £99 at sign-up IS payment 1 of totalPaymentsFor(route); Stripe
  *  then bills recurringPaymentsFor(route) more and stops (see the TWO ROUTES note below).
- *  ⛔ THERE IS NO PAYMENT AFTER THE 12TH — no £29.99 continuation, no open-ended £99.
+ *  🔴 v3 (2026-10-05): AFTER THE MINIMUM TERM THE CONTINUING SERVICE FOLLOWS (clause 9A,
+ *  FINDABLE_CONTINUING_GBP a month until cancelled) — manual in Stripe for now. Sales before v3 stop at
+ *  their last payment (cancel_at), as they were sold.
  *
  *  ⚠️ DECLARED HERE, NEAR THE TOP, AND THAT IS STRUCTURAL. The offer strings below interpolate
  *  this one, and a const referenced before its declaration throws ReferenceError at module load —
  *  which in this file would take down the checkout, not a screen. It used to live at the bottom. */
 export const FINDABLE_MONTHLY_GBP = 99;
 
-/** The first recurring payment is exactly six weeks after the successful £99 signup payment. */
+/** ⚠️ LEGACY TIMING ONLY (sales made before the v3 Client Service Agreement): the first recurring
+ *  payment six weeks after the £99. Under v3 (Paul, 2026-10-05, "Option B") the first monthly payment is
+ *  the day after the 14-day Refund Window that follows the Results Date — src/lib/clientTimeline.ts. */
 export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
+
+/** 🔴 THE CONTINUING SERVICE (v3 clause 9A): after the minimum term, FINDABLE_CONTINUING_GBP a month on the same date
+ *  until the client cancels on 30 days' notice — Build (hosting + monitoring + reasonable updates) and
+ *  Optimise (monitoring + reasonable updates) alike. ⛔ NOT charged automatically yet (Paul, 2026-10-05:
+ *  manual control first — clientTimeline.ts CONTINUING_SERVICE_AUTOMATION). No salesperson commission. */
+export const FINDABLE_CONTINUING_GBP = 29.99;
+
+/** When the first £99 monthly payment is taken under the v3 agreement, in words (clauses 5.6, 3.1). */
+export const MONTHLY_START_V3_WORDS = 'the day after your 14-day refund window closes (normally about six weeks after you give us access)';
 
 /* 🔴 TWO ROUTES, ONE PRICE, TWO LENGTHS (Paul, 2026-09-29). The price never changes — £99 at sign-up,
    then £99 a month from six weeks after sign-up — but the NUMBER of payments depends on the website
@@ -60,8 +73,9 @@ export const FINDABLE_MONTHLY_DELAY_DAYS = 42;
      · FINDABLE OPTIMISE — the client keeps their own website and gives us access: 6 payments in total.
    ⛔ THE SIGN-UP £99 IS PAYMENT 1 ON BOTH ROUTES. Build = sign-up + 11 monthly; Optimise = sign-up + 5
    monthly. Never "£99 plus 12 more" / "£99 plus 6 more" — the recurring counts are DERIVED below.
-   ⛔ NOTHING AFTER THE LAST PAYMENT on either route: Stripe's cancel_at stops it (_shared/delayed-
-   subscription.ts). No continuation price, no open-ended £99.
+   ⛔ STRIPE STOPS AT THE LAST MINIMUM-TERM PAYMENT on either route (cancel_at, _shared/delayed-
+   subscription.ts). 🔴 Under v3 the Continuing Service (FINDABLE_CONTINUING_GBP, clause 9A) follows —
+   set up by hand until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is on; never an open-ended £99.
    ⛔ THE ROUTE IS STORED ON THE ONBOARDING ROW as `plan_tier` ('new_site' = Build, 'keep' = Optimise),
    written by the self-service questionnaire and by Quick Close, read by findable-checkout. A row with no
    route is UNDECIDED and is never sold a schedule — never a silent 12 or 6 (serviceRouteFromRow).
@@ -184,12 +198,15 @@ export function remeasureWeeksFor(_row?: { plan_tier?: unknown; website_route?: 
  *  names both lengths. Built from the constants so a price move cannot leave a stale figure in a call
  *  script. ⛔ Where the route is known, use offerSummaryFor(route) — never both options to a client who
  *  has already chosen one. */
+/* 🔴 v3 TERMS (Paul, 2026-10-05): the monthly starts the day after the refund window, not at a fixed six
+   weeks; after the minimum term the service continues at FINDABLE_CONTINUING_GBP a month until cancelled (clause 9A).
+   Salespeople quote ONLY these (contractor checklist Part 2, "Prices and terms"). */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} if we optimise the one you have. After that, £${FINDABLE_CONTINUING_GBP} a month until you cancel.`;
 
 /** The offer in one line for ONE route. */
 export function offerSummaryFor(route: ServiceRoute): string {
-  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from six weeks after sign-up — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term.`;
+  return `${SERVICE_ROUTE_NAME[route]}: £${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, a ${termMonthsFor(route)}-month minimum term, then £${FINDABLE_CONTINUING_GBP} a month until you cancel.`;
 }
 
 /** 🔴 WhatsApp templates whose META-REGISTERED body quotes an offer we no longer sell ("After that
@@ -439,7 +456,12 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
    minimum term now, so offering a free exit here would contradict what was sold. `cancelUrl` stays in
    the signature for the caller and is deliberately not printed.
    🔴 ROUTE-AWARE (2026-09-29): `route` is the subscription's own (its metadata); null names no count. */
-export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null }): { subject: string; paragraphs: string[] } {
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean }): { subject: string; paragraphs: string[] } {
+  /* 🔴 v3 (clause 9A): the minimum term is followed by the Continuing Service (FINDABLE_CONTINUING_GBP), so "then it stops"
+     is only true for a legacy subscription. The caller says which (the subscription's own marker). */
+  const after = i.continuingService
+    ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before it starts.`
+    : 'then it stops.';
   return {
     subject: `Your Findable monthly starts on ${i.startsOn}`,
     paragraphs: [
@@ -447,8 +469,8 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
       `Your monthly payment of £${FINDABLE_MONTHLY_GBP} starts on ${i.startsOn}.`,
       `It covers the work we keep doing every week to add another way for people to find you: pages improved on what the newer data shows, new pages where there is something worth going after, and an eye on who else is being named.`,
       i.route
-        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`
-        : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, then it stops.`,
+        ? `It runs for your ${termMonthsFor(i.route)}-month minimum term: ${totalPaymentsFor(i.route)} payments in total, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${i.continuingService ? '. ' : ', '}${after}`
+        : `It runs until your agreed payments are complete, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up${i.continuingService ? '. ' : ', '}${after}`,
       `Any questions, just reply to this email.`,
       `Paul, findable`,
     ],
@@ -476,14 +498,16 @@ export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: st
    its own copy of this sentence and must be changed to match (separate repo, deployed by hand). */
 /* 🔴 PER ROUTE (2026-09-29): the checkout reads the route off the row and shows THAT route's count —
    the Stripe page a customer pays on names exactly the schedule the webhook then creates. */
+/* 🔴 v3 (2026-10-05): the agreement's own timing and the Continuing Service — "Nothing is charged after
+   the Nth" stopped being true when clause 9A was signed. Every v3 sale is checked out under these words. */
 export function cardSavedNoticeFor(route: ServiceRoute): string {
   const n = totalPaymentsFor(route);
-  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card and £${FINDABLE_MONTHLY_GBP} a month starts six weeks from today, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. Nothing is charged after the ${n}th.`;
+  return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, as your signed agreement says.`;
 }
 /** The Stripe line-item name for a route — what the payer sees on the Stripe page and the receipt. */
 export function checkoutLineNameFor(route: ServiceRoute): string {
   const what = route === 'build' ? 'AI visibility + a new website we build and manage' : 'AI visibility on your existing website';
-  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from week six, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum)`;
+  return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum), then £${FINDABLE_CONTINUING_GBP}/month until cancelled`;
 }
 
 export const FINDABLE_CONTACT_EMAIL = "paul@findable.live";

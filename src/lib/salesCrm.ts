@@ -184,6 +184,8 @@ export function refusalText(code: string | null | undefined, ownerName?: string 
     case 'too_many': return 'Too many at once — select 500 or fewer';
     // The usage guard (2026-09-29). The same words everywhere, never a cost or a limit's number.
     case 'usage_paused': return 'Usage temporarily paused — contact Paul';
+    // The Ready to Sell gate (2026-10-05, docs/salesperson-onboarding.md): raised by the database.
+    case 'not_ready_to_sell': return 'You are not Ready to Sell yet — finish your onboarding with Paul first';
     case 'no_phone': return 'This lead has no phone number';
     case 'wrong_number': return 'This number is marked Wrong number — the admin can clear it on the lead';
     case 'opted_out': return 'This number asked to stop — marketing templates are not sent to it';
@@ -337,7 +339,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   payment_received: 'Payment received',
   handoff_saved: 'Sales handoff',
   /* fn quick-close share_link (2026-10-04): how the payment link reached them — copied / emailed / WhatsApp. */
-  payment_link_shared: 'Payment link',
+  payment_link_shared: 'Sign-up link',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',

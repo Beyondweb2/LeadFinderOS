@@ -110,7 +110,8 @@ for (const [label, start] of [
   ok(/paymentDay: paymentDayOf\(event\.created\)/.test(co), 'the payment day is the event\'s, so a replay names the same day');
   ok(/if \(firstPayment && findableLeadId\) \{\s*await sendFindablePaymentConfirmation/.test(co), 'the customer confirmation goes only from the delivery that established the payment');
   ok(/claimedEmail = !paidEmailAlreadySent && \(!findableLeadId \|\| ownsPayment\)/.test(co), 'the new-client email only for the payment this checkout made (never a replay for a closed client)');
-  ok(/if \(findableLeadId && !closedBefore\) \{[\s\S]{0,300}recordCheckoutAcceptance/.test(co), 'no agreement acceptance or PDF for a closed client on a replay');
+  /* 2026-10-05: the legacy checkout tick is recorded only for a pre-v3 session (`&& !v3Checkout`) — the closed-client guard is unchanged. */
+  ok(/if \(findableLeadId && !closedBefore && !v3Checkout\) \{[\s\S]{0,300}recordCheckoutAcceptance/.test(co), 'no agreement acceptance or PDF for a closed client on a replay');
   ok(/closedBefore\s*\n?\s*\? \{ ok: true, skipped: `client \$\{closedBefore\}` \}\s*\n?\s*: await startPaidBaseline/.test(co), 'no baseline start for a closed client on a replay');
 }
 
@@ -194,7 +195,8 @@ console.log('\n── 2. CONCURRENCY: one checkout → at most one monthly subsc
   ok(subscriptionRefusal({ status: 'payment_received' }) === null && subscriptionRefusal({ service_terminated_at: 'x' }) !== null, 'the refusal rule: open → may subscribe; ended → never');
 
   const wh = read('supabase/functions/stripe-webhook/index.ts');
-  ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*\n\s*s\.id,\s*\n\s*\)/.test(wh), 'the webhook passes the checkout session id as the claim key');
+  /* 2026-10-05: a timing argument (v3 hold vs legacy) follows the claim key. */
+  ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*\n\s*s\.id,\s*\n\s*v3Checkout/.test(wh), 'the webhook passes the checkout session id as the claim key');
   ok(/new Date\(\(typeof event\.created === "number"[\s\S]{0,120}\.toISOString\(\),\s*\n\s*paid\.route/.test(wh), 'and the EVENT\'s time as the sign-up instant (identical parameters on every delivery)');
   ok(/if \(!ownsPayment\) \{[\s\S]{0,300}\} else if \(stripeCustomerId\)/.test(wh), 'no subscription attempt at all for a replay that does not own the payment');
   const mig = read('supabase/migrations/20261007030000_payment_client_state.sql');
@@ -235,7 +237,7 @@ console.log('\n── 3. ENDED CLIENT: nothing new starts, history is kept ─�
   const ldg = read('supabase/functions/_shared/payment-ledger.ts');
   const earn = read('supabase/functions/_shared/earnings.ts');
   ok(/clientStateOf: new Map\(\[\[leadId, \{ endedAt: L\?\.service_terminated_at/.test(ldg), 'the "commission earned" alert reads the client\'s end too');
-  ok(/clientStateOf: new Map\(\[\.\.\.leads\]\.map/.test(earn) && /service_terminated_at, status"\)/.test(earn), 'the earnings loader passes every client\'s end and refund');
+  ok(/clientStateOf: new Map\(\[\.\.\.leads\]\.map/.test(earn) && /service_terminated_at, status, remeasure_results_sent_at"\)/.test(earn), 'the earnings loader passes every client\'s end and refund');
 
   // No re-measure, no results, no weekly checks: the existing gates (asserted, not assumed).
   const ab = read('supabase/functions/_shared/audit-baseline.ts');
@@ -254,7 +256,7 @@ console.log('\n── 3. ENDED CLIENT: nothing new starts, history is kept ─�
   // No new agreement, no new link, no new signature.
   const hub = read('supabase/functions/paid-client-hub/index.ts');
   ok(/if \(closed && \(action === "agreement_set_route" \|\| action === "agreement_send_link"\)\)/.test(hub), 'the hub refuses to set a route or send an agreement link for a closed client');
-  ok(/if \(clientClosed\(ctx\.lead\)\) return html\(agreementPageHtml\(\{ mode: "not_ready"/.test(read('supabase/functions/client-agreement/index.ts')), 'the public agreement page takes no new signature from a closed client (a signed copy stays readable)');
+  ok(/const closed = clientClosed\(ctx\.lead\);\s*\n\s*const signup = closed \? null : await openSignup/.test(read('supabase/functions/client-agreement/index.ts')) && /if \(!ctx\.route \|\| closed\) return html\(agreementPageHtml\(\{ mode: "not_ready"/.test(read('supabase/functions/client-agreement/index.ts')), 'the public agreement page takes no new signature from a closed client (a signed copy stays readable)');
 
   // The delivery stage: ended is Completed, with no next step — not even a first-contact chase.
   const s = deliveryStage(stageInput({ lead: { ...ended, payment_date: '2026-10-06', client_contacted_at: null } }));

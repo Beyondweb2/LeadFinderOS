@@ -117,7 +117,7 @@ const row: QcRow = { status: 'answers_saved', quick_close: null, cols: {} };
   const close = buildCallClose('none');
   ok(close.routes.length === 1 && close.routes[0].route === 'build', 'a lead with no website: the call screen offers Build only');
   ok(close.guarantee.headline === QUICK_CLOSE_PROMISE && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the call screen and Quick Close say the SAME guarantee line (one copy)');
-  ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /six weeks after today/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from six weeks');
+  ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /the day after your 14-day refund window closes/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from the day after the refund window (v3, 2026-10-05)');
   let route: unknown = null;
   for (const [k, v] of [['decision_maker', 'yes'], ['approach', 'new_template'], ['domain', 'no_domain']] as const) {
     ok(qcSave(row, { [k]: v }, route).ok, `Quick Close saves ${k}=${v} (one answer per call, as the dialog sends it)`);
@@ -131,7 +131,7 @@ const row: QcRow = { status: 'answers_saved', quick_close: null, cols: {} };
   const step = linkStep(row.status, clone(row.quick_close), NOW);
   ok(step.kind === 'claim', 'a link may be generated');
   writeQc(row, row.quick_close!.rev ?? null, { ...clone(row.quick_close!), link_claimed_at: iso(NOW), link_claimed_by: 'rep-1' });
-  const a = adoptLink(row.status, clone(row.quick_close), answersKey(row.quick_close!.answers), { url: 'https://checkout.stripe.com/c/pay/cs_test_W1', session: 'cs_test_W1', expiresIso: iso(NOW + 24 * 3_600_000) }, 'rep-1', iso(NOW), NOW);
+  const a = adoptLink(row.status, clone(row.quick_close), answersKey(row.quick_close!.answers), { url: 'https://findable.live/agree/' + 'c'.repeat(64), session: null, kind: 'signup', expiresIso: iso(NOW + 30 * 24 * 3_600_000) }, 'rep-1', iso(NOW), NOW);
   ok(a.kind === 'store' && !!writeQc(row, row.quick_close!.rev ?? null, (a as { next: QcRecord }).next), 'the link is stored');
   ok(quickCloseState(row.status, row.quick_close, NOW) === 'link_generated', 'Quick Close: link generated');
 }

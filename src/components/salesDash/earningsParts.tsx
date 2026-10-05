@@ -10,8 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage } from '@/lib/edgeInvoke';
 import { cn } from '@/lib/utils';
 import { Empty, Panel, TONE, gbp, type Tone } from '@/components/salesDash/ui';
+import { FINDABLE_CONTINUING_GBP } from '@/lib/findableOffer';
 import {
-  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
+  COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, londonDayOf,
   type CommissionLine,
 } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
@@ -31,6 +32,9 @@ const STATUS: Record<CommissionLine['status'], { label: string; tone: Tone }> = 
   paid: { label: 'Paid out', tone: 'grey' },
   reversed: { label: 'Reversed', tone: 'red' },
   not_commissionable: { label: 'No commission', tone: 'grey' },
+  /* v3 terms (2026-10-05): the initial commission waits for the client's Approval Date. */
+  pending: { label: 'Pending · until approval', tone: 'amber' },
+  cancelled: { label: 'Cancelled · refunded', tone: 'red' },
 };
 
 /** "Today" / "Yesterday" / "3 Oct" — London days. */
@@ -77,12 +81,13 @@ export function RecentWins({ lines, clients, todayIso = new Date().toISOString()
 export function CommissionExplainer() {
   const rules: { icon: typeof Info; text: ReactNode }[] = [
     { icon: Layers3, text: <>Each sale keeps the rate it earned — reaching sale 13 never changes sales 1–12. The count starts again on the 1st of each month (UK time).</> },
-    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the next {COMMISSION_RECURRING_COUNT} successful monthly payments a client makes after their first payment. A failed, refunded or charged-back payment earns nothing.</> },
+    { icon: Repeat, text: <>Monthly payments: {pct(COMMISSION_RECURRING_RATE)} of each of the first {COMMISSION_RECURRING_COUNT_V3} successful £99 monthly payments, on Build and Optimise alike. Nothing on payment {COMMISSION_RECURRING_COUNT_V3 + 1} onwards or on the £{FINDABLE_CONTINUING_GBP} Continuing Service. A failed, refunded or charged-back payment earns nothing. (Sales made before the current client agreement keep the next {COMMISSION_RECURRING_COUNT}.)</> },
+    { icon: ShieldCheck, text: <>First-payment commission is Pending until the client's Approval Date — the day after their 14-day refund window closes — and your rate for it is provisional until then. A refund inside the window cancels it; a refund after it does not.</> },
     { icon: CalendarCheck2, text: <>Paid on the first working day of the next month. A refund or chargeback takes back the commission on that money, and a refunded sale stops counting towards your rate.</> },
     { icon: ShieldCheck, text: <>Only money the client actually paid counts. Monthly commission is earned while you work with Findable; if that ends, everything you earned before stays yours.</> },
   ];
   return (
-    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the next ${COMMISSION_RECURRING_COUNT} monthly payments — open for the rules.`}>
+    <Panel collapseKey="sales.commission-rules" defaultOpen={false} title="How your commission works" icon={Info} tone="blue" hint="The rules behind every number on this page." summary={`${MONTHLY_TIERS.map((z) => pct(z.rate)).join(' · ')} of the first payment, plus ${pct(COMMISSION_RECURRING_RATE)} of the first ${COMMISSION_RECURRING_COUNT_V3} £99 monthly payments — open for the rules.`}>
       <ul className="space-y-2.5" data-testid="commission-explainer">
         {rules.map((r, i) => (
           <li key={i} className="flex items-start gap-3 text-[13px] leading-relaxed">

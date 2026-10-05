@@ -23,10 +23,12 @@ async function main() {
   const V1_TEMPLATE_SHA = '10b3fd557cc247d445f537255e1472bd851df1f894e229da31e5d18eb87a80ff';
   const tsha = await sha256Hex(versionTemplateText('v1'));
   ok(tsha === V1_TEMPLATE_SHA, `v1 template fingerprint is unchanged (got ${tsha.slice(0, 12)}…)`);
-  ok(CLIENT_AGREEMENT_VERSION === 'v1', 'the current version is v1');
+  /* 2026-10-05: v3 is current (scripts/client-agreement-v3.test.ts pins it); v1 stays readable, unchanged. */
+  ok(CLIENT_AGREEMENT_VERSION === 'v3', 'the current version is v3');
+  ok(renderAgreementText(full, 'v1').includes('four weeks after the baseline'), 'v1 still renders its own words exactly');
   const t = renderAgreementText(full);
   ok(t.includes('[X] Findable Optimise') && t.includes('[ ] Findable Build'), 'the recorded route is the ticked one');
-  ok(!/eight weeks|eight if/i.test(t) && t.includes('four weeks after the baseline'), 'the agreement says four weeks, never eight');
+  ok(!/eight weeks|eight if/i.test(t) && t.includes('about four weeks after the Access Date'), 'the agreement says four weeks (from the Access Date under v3), never eight');
   ok(renderAgreementText(full) === t, 'rendering is deterministic (same fill, same bytes)');
   ok(renderAgreementText({ businessName: 'X', route: 'build' }).includes(`Business address: ${NOT_PROVIDED}`), 'an absent field reads Not provided');
 
@@ -57,7 +59,7 @@ async function main() {
   for (const f of ['legalName', 'contactName', 'role', 'address', 'email', 'phone']) ok(new RegExp(`name="${f}"[^>]*required`).test(sign), `the form requires ${f}`);
   ok(!/name="companyNumber"[^>]*required/.test(sign) && !/name="websiteDomain"[^>]*required/.test(sign), 'company number and website domain are optional');
   ok(/<div class="svc on"><div class="box">&#10003;<\/div><div><b>Findable Build/.test(sign), 'the recorded route is shown ticked');
-  ok(sign.includes('four weeks after the baseline') && !/eight weeks|eight if/i.test(sign), 'the page shows the agreement’s four weeks, never eight');
+  ok(sign.includes('about four weeks after the Access Date') && !/eight weeks|eight if/i.test(sign), 'the page shows the agreement’s four weeks, never eight');
   ok(/noindex/.test(sign), 'the page is never indexed');
   const done = agreementPageHtml({ mode: 'accepted', businessName: 'Test Co', acceptedAtIso: '2026-10-02T13:42:07Z', acceptedBy: 'Sam', pdfHref: '?pdf=1' });
   ok(done.includes('Accepted on 2 October 2026, 14:42 (UK time) by Sam') && !done.includes('I agree and sign</button>'), 'already accepted → "Accepted on … by …" instead of the button');

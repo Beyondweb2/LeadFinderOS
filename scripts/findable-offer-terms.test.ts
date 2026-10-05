@@ -37,7 +37,9 @@ ok(FINDABLE_BUILD_TOTAL_PAYMENTS === 12 && termMonthsFor('build') === 12, 'Build
 ok(FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6 && termMonthsFor('optimise') === 6, 'Optimise: 6 payments in total, a 6-month minimum');
 ok(recurringPaymentsFor('build') === 11 && recurringPaymentsFor('optimise') === 5, 'recurring after the sign-up: 11 / 5 (derived: total - 1)');
 ok(contractTotalGbpFor('build') === 1188 && contractTotalGbpFor('optimise') === 594, 'nominal contract value: £1,188 / £594');
-ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from six weeks after sign-up — 12 payments in total if we build you a new website, 6 if we optimise the one you have.',
+/* 2026-10-05 (v3 Client Service Agreement): the monthly starts the day after the refund window (5.6), and the
+   Continuing Service follows the minimum term (9A). */
+ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from the day after your 14-day refund window closes (normally about six weeks after you give us access) — 12 payments in total if we build you a new website, 6 if we optimise the one you have. After that, £29.99 a month until you cancel.',
   'the one-line (pre-choice) offer: ' + FINDABLE_OFFER_SUMMARY);
 ok(!/FINDABLE_NEW_SITE_|CARD_SAVED_NOTICE_NEW_SITE|export const FINDABLE_TOTAL_PAYMENTS|export const CARD_SAVED_NOTICE\b/.test(read('src/lib/findableOffer.ts')), 'the retired constants (two-tier and single-plan) are gone');
 
@@ -45,9 +47,9 @@ console.log('── 2. CHECKOUT ──');
 for (const r of SERVICE_ROUTES) {
   const n = totalPaymentsFor(r), notice = cardSavedNoticeFor(r);
   ok(notice.includes('£99 a month') && notice.includes(`${termMonthsFor(r)}-month minimum term`), `card notice (${r}) names £99/month and the ${termMonthsFor(r)}-month minimum`);
-  ok(!/cancel/i.test(notice), `card notice (${r}) offers no "cancel before it starts"`);
-  ok(notice.includes(`${n} payments in total, including today's`) && notice.includes(`after the ${n}th`), `card notice (${r}) counts today's £99 inside the ${n}`);
-  ok(checkoutLineNameFor(r).includes(`/month from week six, ${n} payments in total (${termMonthsFor(r)}-month minimum)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
+  ok(!/cancel (before|any ?time)|stop any ?time/i.test(notice), `card notice (${r}) offers no "cancel before it starts"`);
+  ok(notice.includes(`${n} payments in total, including today's`) && /continues at £29\.99 a month until you cancel with 30 days' notice/.test(notice) && !/six weeks from today/.test(notice), `card notice (${r}) counts today's £99 inside the ${n}, then names the Continuing Service (v3)`);
+  ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (${termMonthsFor(r)}-month minimum)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
 }
 const checkout = code('supabase/functions/findable-checkout/index.ts');
 ok(/custom_text\[submit\]\[message\]", cardSavedNoticeFor\(route\)\)/.test(checkout), 'checkout shows the route\'s notice beside the card field');
@@ -131,7 +133,8 @@ const ACTIVE = [
   'src/lib/welcomePackHtml.ts', 'supabase/functions/findable-checkout/index.ts', 'supabase/functions/findable-onboarding/index.ts',
   'supabase/functions/_shared/delayed-subscription.ts', 'supabase/functions/_shared/remeasure-results.ts', 'supabase/functions/stripe-webhook/index.ts',
 ];
-for (const p of ACTIVE) ok(!/29\.99/.test(code(p)), p + ': no £29.99 in code');
+/* 2026-10-05: £29.99 exists in code exactly ONCE — the Continuing Service constant (clause 9A). Everything else names it. */
+for (const p of ACTIVE) ok(!/29\.99/.test(code(p).replace('export const FINDABLE_CONTINUING_GBP = 29.99;', '')), p + ': no £29.99 in code (beyond the one constant)');
 for (const p of [...ACTIVE, 'CLAUDE.md', 'docs/business-and-offer.md']) ok(!/not a binding term/i.test(read(p)), p + ': no "not a binding term"');
 const rules = read('CLAUDE.md');
 ok(!/29\.99/.test(rules.slice(rules.indexOf('## 1.'), rules.indexOf('## 2.'))), 'CLAUDE.md §1 (the offer rules) carries no £29.99');

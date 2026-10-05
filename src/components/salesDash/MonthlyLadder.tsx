@@ -2,7 +2,7 @@ import { CalendarDays, Check, Lock, Sparkles, Undo2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { SURFACE, gbp } from '@/components/salesDash/ui';
-import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
+import { COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, MONTHLY_TIERS, monthName, monthlyTracker, monthlyTrackerNextLine, type CommissionLine, type LadderSale } from '@/lib/commission';
 import type { EarningsResponse } from '@/hooks/useEarnings';
 
 /* ══ THE MONTH'S LADDER — the Sales dashboard's hero (2026-10-01; redesigned 2026-10-02) ═══════════
@@ -116,7 +116,7 @@ export function MonthlyLadder({ lines, clients, todayIso = new Date().toISOStrin
       )}
       {/* The whole scheme in one line, from the same constants that pay it. */}
       <p className="relative mt-4 border-t border-white/[0.08] pt-3 lg:mt-auto text-xs leading-relaxed text-slate-300" data-testid="ladder-scheme">
-        {zoneWords(zones)} of the first payment, <span className="font-bold text-white">plus {pct(COMMISSION_RECURRING_RATE)} of the next {COMMISSION_RECURRING_COUNT} successful monthly payments</span> from each client. Each sale keeps its rate; the count restarts on the 1st (UK time).
+        {zoneWords(zones)} of the first payment, <span className="font-bold text-white">plus {pct(COMMISSION_RECURRING_RATE)} of the first {COMMISSION_RECURRING_COUNT_V3} successful £99 monthly payments</span> from each client. A sale's rate is provisional until the client's Approval Date, then locked; the count restarts on the 1st (UK time).
       </p>
     </section>
   );

@@ -2,7 +2,7 @@ import { CalendarRange, Info, PiggyBank, TrendingUp, UserX, Wallet } from 'lucid
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { KpiCard, Panel, gbp } from '@/components/salesDash/ui';
-import { COMMISSION_RECURRING_COUNT, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
+import { COMMISSION_RECURRING_COUNT_V3, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN, FORECAST_MONTHS, type CommissionForecast, type EarningsTotals, type ForecastMonth } from '@/lib/commission';
 
 /* ══ YOUR MONEY — THREE FIGURES AND THE NEXT SIX MONTHS (Paul, 2026-10-02; redesigned the same day) ══
    EarningsStats: the three money figures, each once, beside the month's ladder — earned this month,
@@ -111,7 +111,7 @@ export function CommissionForecastCard({ forecast, engagement }: {
         <p className="mt-3 flex items-start gap-1.5 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           <span>
-            Expected is {pct(COMMISSION_RECURRING_RATE)} of each live client's next monthly payments (up to {COMMISSION_RECURRING_COUNT} per client), on the date Stripe will bill them — not earned until they pay. A failed or refunded payment drops out. New sales are never guessed.
+            Expected is {pct(COMMISSION_RECURRING_RATE)} of each live client's next monthly payments (up to {COMMISSION_RECURRING_COUNT_V3} per client on the current terms), plus first-payment commission still pending its Approval Date, on the date Stripe will bill them — not earned until they pay. A failed or refunded payment drops out. New sales are never guessed.
           </span>
         </p>
       </div>

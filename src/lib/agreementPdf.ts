@@ -13,7 +13,7 @@
    it (winAnsi) — the STORED record keeps exactly what was typed; only this copy approximates.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  agreementVersion, clientDetailRows, CLIENT_AGREEMENT_TITLE, methodWords, NOT_PROVIDED, ukDate, ukDateTime, utcStamp,
+  agreementSectionTitles, agreementVersion, clientDetailRows, CLIENT_AGREEMENT_TITLE, methodWords, NOT_PROVIDED, ukDate, ukDateTime, utcStamp,
   type AgreementFill, type AgreementRoute,
 } from './clientAgreement.ts';
 
@@ -144,12 +144,13 @@ export async function buildAgreementPdf(lib: PdfLib, fill: AgreementFill, acc: A
   y -= 30;
   para(v.intro, { size: 10, gap: 10 });
 
-  heading('FINDABLE DETAILS', 9.5);
+  const titles = agreementSectionTitles(v);
+  heading(titles.findable, 9.5);
   table(v.findableDetails.map(([k, val]) => [k, val]), [190, W - 190], { boldFirst: true });
-  heading('CLIENT DETAILS', 9.5);
+  heading(titles.client, 9.5);
   table(clientDetailRows(fill, v).map(([k, val]) => [k, val]), [190, W - 190], { boldFirst: true });
 
-  heading('YOUR SERVICE', 9.5);
+  heading(titles.service, 9.5);
   for (const r of ['build', 'optimise'] as AgreementRoute[]) {
     const s = v.services[r]; const on = fill.route === r;
     const lines = wrap(s.description, font, 9, W - 150);
@@ -167,7 +168,14 @@ export async function buildAgreementPdf(lib: PdfLib, fill: AgreementFill, acc: A
     y -= h;
   }
   y -= 6;
-  para(v.serviceNote, { size: 9, color: muted, gap: 8 });
+  if (v.serviceNote !== undefined) para(v.serviceNote, { size: 9, color: muted, gap: 8 });
+  if (v.keyPoints) {
+    heading(v.keyPoints.title, 9.5);
+    for (const p of v.keyPoints.points) {
+      const at = para(p, { size: 9.5, indent: 14, gap: 3 });
+      at.page.drawText('•', { x: M + 4, y: at.baseline, size: 9.5, font, color: ink });
+    }
+  }
 
   // ── the clauses ─────────────────────────────────────────────────────────────────────────────
   for (const b of v.body) {
@@ -180,6 +188,10 @@ export async function buildAgreementPdf(lib: PdfLib, fill: AgreementFill, acc: A
     } else if (b.kind === 'bullet') {
       const at = para(b.text, { size: 9.5, indent: 40, gap: 2 });
       at.page.drawText('•', { x: M + 30, y: at.baseline, size: 9.5, font, color: ink });
+    } else if (b.kind === 'item') {
+      /* v3's lettered sub-items, "(a)" hanging in its own column under the clause text */
+      const at = para(b.text, { size: 9.5, indent: 52, gap: 2 });
+      at.page.drawText(b.label, { x: M + 28, y: at.baseline, size: 9.5, font, color: ink });
     } else para(b.text);
   }
 

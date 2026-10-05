@@ -53,7 +53,10 @@ console.log('── Gone up means beyond the band, pooled ──');
   const after = rows(QS, 6, [6, 6, 2, 1]);    // one more named cell pair
   const c = compareMeasurements(before, after, { businessName: 'X' });
   ok(c.ratePpDelta !== null && c.ratePpDelta > 0 && Math.abs(c.ratePpDelta) <= NOISE_BAND_PP, `a small rise (${c.ratePpDelta?.toFixed(1)} pp) sits inside the band`);
-  ok(c.withinNoise && !numberWentUp(c), 'inside the band is NOT gone up — the client would qualify for the refund (Paul, 2026-09-13)');
+  /* 🔴 2026-10-05 (Paul; v3 clause 5.4): ANY increase in the named count is "gone up" — the ±5-point band
+     no longer decides the guarantee. This exact case (one more named answer, inside the old band) flips. */
+  ok(c.withinNoise && c.after.named > c.before.named && numberWentUp(c), 'one more named answer IS gone up, even inside the old band (any increase counts — 2026-10-05)');
+  ok(!numberWentUp(compareMeasurements(before, before, { businessName: 'X' })), 'the same count is NOT gone up');
 }
 
 /* The terms gate has its own block below; these cases are about the NUMBERS, so they are
@@ -173,7 +176,7 @@ console.log("-- The monthly: Stripe's date from sign-up, not the claim window (2
   for (const text of [...withMonthly, ...rem.paragraphs, CARD_SAVED_NOTICE, cardSavedNoticeFor('optimise')]) {
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
-  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /Nothing is charged after/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and that nothing is charged after it');
+  ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /continues at £29\.99 a month until you cancel/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and the Continuing Service after it (v3 clause 9A)');
 }
 
 console.log("-- Billing notices: the right message, and never the wrong one --");
@@ -215,7 +218,9 @@ console.log('── The words ──');
   const notUp = resultsEmailParagraphs({ ...base, wentUp: false, withinNoise: true });
   ok(notUp.some((p) => p.includes(REMEASURE_CLAIM_SENTENCE)), 'not gone up → the email carries the locked claim sentence verbatim');
   ok(notUp.some((p) => p.includes('has not gone up')), '…and says so plainly');
-  ok(notUp.some((p) => p.includes(`${NOISE_BAND_PP}-point swing`)), '…and explains the band when the change was inside it');
+  ok(!notUp.some((p) => /point swing/.test(p)) && !resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: true }).some((p) => /point swing/.test(p)), '…and never mentions a noise band to the client (any increase counts — 2026-10-05)');
+  const v3Up = resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: false, monthlyStartsOn: '22 December 2026', totalPayments: 6, v3Terms: true }).join(' ');
+  ok(/first monthly payment of £99 is on 22 December 2026, the day after your 14-day refund window closes/.test(v3Up) && /continues at £29\.99 a month until you cancel/.test(v3Up) && !/nothing is charged after/i.test(v3Up), 'v3: the email names the Payment Start Date and the Continuing Service — never "nothing is charged after"');
   /* ⛔ PAUL'S ORDER, 2026-09-13: verdict, then entitlement, then mechanism — never the offer first.
      The lead-in is ours; the sentence it introduces is the locked one, whole and unedited. */
   const verdictAt = notUp.findIndex((p) => p.includes('has not gone up'));

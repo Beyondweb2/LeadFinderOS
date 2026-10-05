@@ -232,7 +232,8 @@ console.log('── 10. OFFER AND CLAIMS ──');
   const text = allText(p);
   ok(p.offer.lines[0] === FINDABLE_OFFER_SUMMARY, 'the offer comes from findableOffer.ts: ' + FINDABLE_OFFER_SUMMARY);
   ok(p.offer.monthly.includes(termMonthsFor('build') + ' months') && /12th payment/.test(p.offer.monthly) && /6th payment/.test(p.offer.monthly) && !/check current offer/i.test(text), 'both routes\' terms are stated (Build 12, Optimise 6); no "check current offer"');
-  ok(!/£29\.99|£9\.99|£49\.99/.test(text), 'no stale or invented price anywhere');
+  /* 2026-10-05: £29.99 is the v3 Continuing Service — allowed ONLY as "£29.99 a month for … / until …". */
+  ok(!/£9\.99|£49\.99/.test(text) && !/£29\.99(?! a month (for|until))/.test(text), 'no stale or invented price anywhere (£29.99 only as the Continuing Service)');
   ok(!/guarantee (you|that you)|will (rank|be named|show up)|you'll definitely/i.test(text), 'no guaranteed outcome anywhere');
   ok(!/is why you (don't|do not|aren't)|caused|because of your (site|website)/i.test(text), 'no website finding is stated as the cause');
   const objections = p.objections.map((o) => o.objection);
@@ -306,9 +307,9 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
 
   // "How much" carries the build terms, so the default screen needs no offer block.
   const howMuch = p.objections.find((o) => o.objection === 'How much is it?')?.answer ?? '';
-  ok(howMuch.startsWith(FINDABLE_OFFER_SUMMARY) && /the site's yours at the end/.test(howMuch) && /Nothing's charged after the last payment\./.test(howMuch)
+  ok(howMuch.startsWith(FINDABLE_OFFER_SUMMARY) && /the site's yours once the minimum-term payments are made/.test(howMuch) && !/Nothing's charged after/.test(howMuch)
     && howMuch.split(/(?<=[.?!])\s+/).length <= 3,
-    '"How much is it?" is the canonical offer sentence plus two short spoken lines (ownership, nothing after the last payment)');
+    '"How much is it?" is the canonical offer sentence (which names the £29.99 Continuing Service) plus the ownership line — never "nothing after the last payment" (v3)');
 
   // The panel: the new hierarchy, the old A–H headings gone.
   const ui = readFileSync(new URL('../src/components/ColdCallPlaybook.tsx', import.meta.url), 'utf8');

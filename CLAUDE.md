@@ -180,6 +180,19 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
+- ⛔ **The signed Client Service Agreement v3 is authoritative over LeadFinderOS** (record:
+  `docs/pre-sales-certification/client-agreement-commercial-alignment.md`). Signed on the agreement page BEFORE any
+  payment (`findable-checkout` refuses a Stripe session without it — `src/lib/signupGate.ts`); the rep sends ONE sign-up
+  link, never a Stripe URL. Dates (Access → Results → Refund Window → Approval = Payment Start, the 30-day fallback, the
+  Continuing Service at `FINDABLE_CONTINUING_GBP`) live ONLY in `src/lib/clientTimeline.ts`, derived, citing clauses. Guarantee = ANY increase
+  in the named count. v3 rules (incl. commission: 5 trailing, initial pending until Approval) apply ONLY to a client with
+  a `client_service_terms` row — never re-rule Ronnie, MCL, RG or QA clients. Continuing Service is MANUAL
+  (`CONTINUING_SERVICE_AUTOMATION` all false): nothing may charge it automatically until Paul switches it on.
+  ⛔ An alert after an unsigned payment is NOT a gate: the webhook HOLDS any Findable payment without a valid v3 signature
+  (`client_payment_holds` — no lifecycle, no subscription, no ledger/commission). Pre-switch Stripe objects are closed by
+  fn `legacy-checkout-cutover` (report → execute with the reviewed plan hash). The signing copy and findable.live's
+  public `/agreement` must stay word-for-word equal: `npx tsx scripts/check-agreement-parity.ts --site-ref <ref>`.
+
 - **Offer (Paul, 2026-09-29): £99 to start, then £99/month from six weeks after sign-up — TWO ROUTES,
   same price, different LENGTH** (`docs/business-and-offer.md` §00). **Findable Build** (we build, host
   and manage a new website): **12 payments in total**. **Findable Optimise** (they keep their own site):
@@ -682,7 +695,8 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **A directory listing is CONFIRMED only by an identifier** (a link from their own site, the place id, their phone/domain, name + postcode) — never by a name; an inconsistency needs a confirmed listing; nothing is "worth adding" without positive evidence; absence never downgrades (`directoryPresence.ts`, `docs/directory-presence.md`). Discovery only — nothing creates a listing.
 
 **Derived, never stored** — `serveGate`, `townVerdict`, `nameIsJudgeable`, `needsQ2`, the free-check
-progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`. A stored verdict freezes
+progress stage, the coverage rung, `townRequiredFor`/`audienceUsefulFor`, READY TO SELL
+(`onboardingSummary`). A stored verdict freezes
 old rows at a stale rule.
 
 **The market model is the MARKET, never the delivery** (`src/lib/marketModel.ts`, 2026-09-20).
@@ -1178,6 +1192,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `noindex, nofollow, noarchive, nosnippet`, a Discovery code and an unknown code answer 404 "Welcome pack
   unavailable", `/r/<code>` is unchanged. The stale primary findable-site checkout's two dirty edits are already
   on `master` (`b9286ad`); nothing unique is left in it.
+- **TPS/CTPS screening is POSTPONED by Paul (2026-10-05)** — a future compliance enhancement, not a launch blocker.
+  Dormant groundwork only (`phone_tps_checks`, `src/lib/tpsCheck.ts`); no provider, no call block, not in Ready to
+  Sell (`docs/salesperson-onboarding.md` §5).
 - Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
   lists and Paul's decisions. (The `instantly-poll-run` cron is gone.) Step 5 is SPA-only but Paul's standing
   decision is to see the file list before any deletion; step 6 redeploys `stripe-webhook` and eight others.
@@ -1222,6 +1239,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Campaigns, the lead popup's four tabs, the Close branching, the sales talking points and their sources, tap ≠ contact | `docs/pre-sales-certification/sales-workspace-v2.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
+| The v3 agreement, sign-up link, payment gate, Option B dates, Continuing Service, v3 commission | `docs/pre-sales-certification/client-agreement-commercial-alignment.md` |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
 | The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |
@@ -1249,6 +1267,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
+| Salesperson onboarding, the ENFORCED Ready to Sell gate, approved-only documents, right to work, business type (display only), leavers, TPS/CTPS (postponed) | `docs/salesperson-onboarding.md` — the rule is `public.salesperson_onboarding_missing()`; onboarding rows are admin-only by having NO policy |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 | The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
 

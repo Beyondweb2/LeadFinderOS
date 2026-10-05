@@ -3,6 +3,15 @@ import {
   serviceRouteForTotal, totalPaymentsFor, type ServiceRoute,
 } from "../../../src/lib/findableOffer.ts";
 import { FIRST_PAYMENT_FILTERS, subscriptionRefusal } from "../../../src/lib/paymentState.ts";
+import { OPTION_B_TIMING, PAYMENT_START_HOLD_DAYS } from "../../../src/lib/clientTimeline.ts";
+
+/** The provisional first-charge instant for a v3 subscription: PAYMENT_START_HOLD_DAYS after sign-up. */
+export function paymentStartHoldIso(signupIso: string | null | undefined): string | null {
+  if (!signupIso) return null;
+  const t = new Date(signupIso).getTime();
+  if (!Number.isFinite(t)) return null;
+  return new Date(t + PAYMENT_START_HOLD_DAYS * 86_400_000).toISOString();
+}
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -174,12 +183,25 @@ export function resolvePaidRoute(
  * ⛔ AT MOST ONE PER CHECKOUT: claimed on the lead, then created with an Idempotency-Key keyed by the
  *   checkout session (claimKey). `signupAtIso` must be the EVENT's time so every delivery sends Stripe
  *   identical parameters. */
+/**
+ * 🔴 v3 / OPTION B (2026-10-05): `timing === "option_b"` creates the subscription on a HOLD — its trial
+ * ends PAYMENT_START_HOLD_DAYS after sign-up, far past any Refund Window the contract allows — because the
+ * real Payment Start Date (the day after the Refund Window, clause 5.6) is not knowable at sign-up. LeadFinder
+ * then sets the real date with _shared/client-terms.ts schedulePaymentStart, which READS STRIPE BACK before
+ * recording it. Stripe moves the billing anchor to the new trial_end (API: "The billing_cycle_anchor will
+ * be updated to the trial_end value"), so every later payment falls on the same date each month (3.1).
+ * ⛔ Failing to set the date can only ever charge LATER, never inside the Refund Window.
+ * Absent = legacy timing (six weeks from sign-up) for a checkout made before v3.
+ */
+export type SubscriptionTiming = "legacy" | typeof OPTION_B_TIMING;
+
 export async function createDelayedSubscription(
   service: Client,
   lead: DelayedSubscriptionLead,
   signupAtIso: string,
   route: ServiceRoute | null,
   claimKey: string,
+  timing: SubscriptionTiming = "legacy",
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
   const refusal = subscriptionRefusal(lead);
@@ -193,7 +215,7 @@ export async function createDelayedSubscription(
   if (!customerId) return { kind: "failed", reason: "no stripe_customer_id on the lead" };
 
   /* The one calculation (findableOffer.ts) — the same function the customer-facing dates use. */
-  const startsAt = firstRecurringPaymentIso(signupAtIso);
+  const startsAt = timing === OPTION_B_TIMING ? paymentStartHoldIso(signupAtIso) : firstRecurringPaymentIso(signupAtIso);
   if (!startsAt) return { kind: "failed", reason: `invalid signup timestamp ${JSON.stringify(signupAtIso)}` };
   const trialEnd = Math.floor(new Date(startsAt).getTime() / 1000);
 
@@ -237,6 +259,8 @@ export async function createDelayedSubscription(
     "metadata[service_route]": route,
     "metadata[total_payments]": String(totalPaymentsFor(route)),
     "metadata[checkout_session]": claimKey,
+    /* v3: the marker the Payment Start scheduler requires before it will move this subscription. */
+    ...(timing === OPTION_B_TIMING ? { "metadata[payment_timing]": OPTION_B_TIMING, "metadata[payment_start]": "on_hold_until_set" } : {}),
   }), { "Idempotency-Key": subscriptionIdempotencyKey(claimKey) });
   /* 409 = another delivery of this same checkout is creating it with the same key right now. It is not a
      failure: that delivery stores the id. Reported as skipped so no false "no schedule" alarm goes out. */

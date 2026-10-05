@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTeamDirectory } from '@/hooks/useSalesCrm';
 import { useEarnings } from '@/hooks/useEarnings';
 import { EarnedCelebration } from '@/components/salesDash/EarnedCelebration';
+import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { MonthlyLadder } from '@/components/salesDash/MonthlyLadder';
 import { CommissionForecastCard, EarningsStats } from '@/components/salesDash/CommissionForecastCard';
 import { BySellerTable, CommissionExplainer, PaymentsTable, PayoutDialog, RecentWins } from '@/components/salesDash/earningsParts';
@@ -104,6 +105,7 @@ export default function SalesDashboard() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-8">
       <EarnedCelebration lines={e?.lines} enabled={viewingSelf && !!e?.commissionable} />
+      <NotReadyToSellBanner />
       <PageHeader
         eyebrow={`${greeting()}${personName ? `, ${personName}` : ''}`}
         title="Sales dashboard"

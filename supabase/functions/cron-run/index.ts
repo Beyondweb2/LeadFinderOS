@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { notifyTimelineActions } from "../_shared/client-terms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -127,6 +128,9 @@ serve(async (req) => {
     for (const [name, fn] of [
       ["cleanupExpiredCaches", () => cleanupExpiredCaches(supabase)],
       ["logDailySummary", () => logDailySummary(supabase)],
+      /* v3 Client Service Agreement (2026-10-05): Paul's daily notices — Access Date, results due, Payment
+         Start not in Stripe, and the Continuing Service reminder ahead of the 30-day notice (clause 9A.3). */
+      ["clientTimelineNotices", async () => { logStep("Task:clientTimelineNotices", await notifyTimelineActions(supabase)); }],
     ] as const) {
       try {
         await (fn as () => Promise<void>)();

@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
+import { AttributionReviewsCard, OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel, type AttributionReview } from '@/components/SalespersonOnboardingPanel';
+import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
  * action below goes to admin-users, which refuses anyone without the admin role. No password is ever
@@ -41,6 +43,7 @@ const ERR: Record<string, string> = {
   cannot_change_self: 'You cannot disable your own account.',
   cannot_change_book_owner: 'The book owner cannot be disabled.',
   cannot_change_admin: 'An admin cannot be disabled here.',
+  not_ready_to_sell: 'That salesperson is not Ready to Sell, so leads cannot be moved to them.',
   not_an_active_member: 'Pick an active team member.',
 };
 
@@ -74,6 +77,38 @@ export default function Team() {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [moveTo, setMoveTo] = useState<Record<string, string>>({});
+  const [openOnboarding, setOpenOnboarding] = useState<string | null>(null);
+  /* Salesperson onboarding (2026-10-05): admin-users is the only way to the records (no RLS policy). */
+  const onboarding = useQuery({
+    queryKey: ['team', 'onboarding'],
+    queryFn: async () => {
+      const r = await call('team_onboarding_list');
+      if (!r.ok) throw new Error(String(r.error ?? 'could not load onboarding'));
+      return {
+        rows: new Map(((r.rows ?? []) as OnboardingRecord[]).map((x) => [x.user_id, x])),
+        documents: (r.documents ?? []) as DocumentVersion[],
+        /** The gate's own answer per member (null = could not be read). */
+        missing: (r.missing ?? {}) as Record<string, string[] | null>,
+      };
+    },
+  });
+  const reviews = useQuery({
+    queryKey: ['team', 'attribution-reviews'],
+    queryFn: async () => {
+      const r = await call('attribution_reviews_list');
+      if (!r.ok) throw new Error(String(r.error ?? 'could not load attribution reviews'));
+      return (r.reviews ?? []) as AttributionReview[];
+    },
+  });
+  const saveOnboarding = async (userId: string, patch: Partial<OnboardingRecord>): Promise<boolean> => {
+    const r = await call('team_onboarding_save', { user_id: userId, patch });
+    if (!r.ok) {
+      toast({ title: 'Not saved', description: ONBOARDING_SAVE_ERRORS[String(r.error)] ?? String(r.error ?? 'Try again'), variant: 'destructive' });
+      return false;
+    }
+    await qc.invalidateQueries({ queryKey: ['team', 'onboarding'] });
+    return true;
+  };
   const refresh = () => qc.invalidateQueries({ queryKey: ['team'] });
   const fail = (r: Record<string, unknown>) => toast({ title: 'Not done', description: ERR[String(r.error)] ?? String(r.error ?? 'Try again'), variant: 'destructive' });
 
@@ -96,6 +131,8 @@ export default function Team() {
       <div>
         <h1 className="text-xl font-semibold">Team</h1>
         <p className="text-sm text-muted-foreground">Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings.</p>
+        <p className="text-xs text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing. Until they are Ready to Sell they can sign in and see their onboarding, but every sales action is blocked. Only you can see these records.</p>
+        {onboarding.error && <p className="text-xs text-destructive">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</p>}
       </div>
 
       <Card className="p-4 space-y-3">
@@ -124,6 +161,11 @@ export default function Team() {
                 </div>
                 <Badge variant={m.status === 'active' ? 'secondary' : 'outline'}>{m.status === 'active' ? (m.role ?? 'no role') : m.disabled_at ? `ended ${new Date(m.disabled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })}` : 'ended'}</Badge>
                 {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
+                {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
+                  <button type="button" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
+                    <OnboardingBadge summary={onboardingSummary(onboarding.data.rows.get(m.user_id) ?? null, m, onboarding.data.documents, undefined, onboarding.data.missing[m.user_id] ?? null)} />
+                  </button>
+                )}
                 {m.role !== 'admin' && !m.is_book_owner && (
                   <div className="flex flex-wrap items-center gap-2">
                     {m.status === 'active' && !m.has_signed_in && (
@@ -156,6 +198,11 @@ export default function Team() {
                     )}
                   </div>
                 )}
+                {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
+                  <div className="w-full pl-11">
+                    <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.rows.get(m.user_id) ?? null} member={m} docs={onboarding.data.documents} serverMissing={onboarding.data.missing[m.user_id] ?? null} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
+                  </div>
+                )}
                 {m.assigned_leads > 0 && (
                   <div className="w-full flex flex-wrap items-center gap-2 pl-11">
                     <span className="text-xs text-muted-foreground">Move all {m.assigned_leads} leads to</span>
@@ -179,6 +226,30 @@ export default function Team() {
           </ul>
         )}
       </Card>
+
+      {reviews.data && reviews.data.some((r) => r.status === 'open') && (
+        <Card className="p-4 space-y-2 border-amber-500/50">
+          <h2 className="font-semibold">Sales needing an attribution review</h2>
+          <p className="text-xs text-muted-foreground">These clients paid on a lead held by a salesperson who was not authorised to create the sale. The seller has not been changed. Decide each one.</p>
+          <AttributionReviewsCard reviews={reviews.data} sellerName={(id) => members.find((x) => x.user_id === id)?.display_name ?? 'A former team member'} call={call} onChanged={(message, error) => {
+            if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
+            else toast({ title: message ?? 'Saved' });
+            void qc.invalidateQueries({ queryKey: ['team', 'attribution-reviews'] });
+          }} />
+        </Card>
+      )}
+
+      {onboarding.data && (
+        <Card className="p-4 space-y-2">
+          <h2 className="font-semibold">Salesperson documents</h2>
+          <p className="text-xs text-muted-foreground">Only the approved (current) contractor agreement and privacy notice count towards Ready to Sell. Drafts can be recorded for history but never count.</p>
+          <SalespersonDocumentsCard docs={onboarding.data.documents} call={call} onChanged={(message, error) => {
+            if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
+            else toast({ title: message ?? 'Saved' });
+            void qc.invalidateQueries({ queryKey: ['team', 'onboarding'] });
+          }} />
+        </Card>
+      )}
 
       <Card className="p-4 space-y-2">
         <h2 className="font-semibold">What each role can do</h2>

@@ -12,7 +12,7 @@ import { newClientSetupLines, newClientSubject } from "../../../src/lib/newClien
 import { handoffSummaryLines } from "../../../src/lib/salesHandoff.ts";
 import { agencyCellText, agencyCheckDomain } from "../../../src/lib/agencyCheck.ts";
 import { operatorAppUrl } from "../../../src/config/operatorApp.ts";
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, SERVICE_ROUTE_NAME, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, serviceRouteFromRow, subscriptionEndedEmail, termCompleteEmail, totalPaymentsFor, type FindableSiteKind, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REPORT_PUBLIC_ORIGIN, SERVICE_ROUTE_NAME, findableSiteKind, monthlyStartingSoonEmail, paymentFailedEmail, serviceRouteFromRow, subscriptionEndedEmail, termCompleteEmail, totalPaymentsFor, type FindableSiteKind, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
 /* The customer payment confirmation goes through the SHARED module, in-process — not an HTTP call
    to send-whatsapp-message. That function authenticates an OPERATOR user JWT and has no cron or
    service branch, so a webhook cannot call it; and giving the function that sends WhatsApp a new
@@ -26,6 +26,10 @@ import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapsho
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
+import { appendTermsEvent } from "../_shared/client-terms.ts";
+import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
+import { sendOperatorAlert } from "../_shared/operator-alert.ts";
+import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
 import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
 import { loadQaPaymentFacts, qaSendHold } from "../_shared/qa-guard.ts";
 
@@ -920,6 +924,25 @@ Deno.serve(async (req) => {
           if (s.status === "complete") {
             const findableLeadId = (s.metadata?.lead_id as string) || "";
             const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : FINDABLE_SETUP_PRICE_GBP;
+            /* ══ THE v3 BACKSTOP (2026-10-05) — defence in depth behind findable-checkout's gate ════════════
+               A completed Findable checkout is processed as a sale ONLY if it is a valid v3 sale: the session
+               names a v3 signature that, read back, passes the gate for THIS client, sign-up, service and
+               version. Anything else (a session opened before the cutover, a forged one) is HELD: recorded in
+               client_payment_holds, Paul told, and NOTHING else — the lead is not marked paid, no subscription,
+               no ledger row (no commission), no baseline, no client email. A replay of a payment the ledger
+               already holds is history and is never re-judged. Read errors throw (Stripe retries). */
+            {
+              const piForHold = typeof s.payment_intent === "string" ? s.payment_intent : (s.payment_intent as { id?: string } | null)?.id ?? null;
+              if (!(await paymentAlreadyRecorded(service, piForHold, s.id))) {
+                const verdict = await verifyV3Checkout(service, s as unknown as Parameters<typeof verifyV3Checkout>[1], findableLeadId || null, onboardingId);
+                if (!verdict.ok) {
+                  await holdPayment(service, s as unknown as Parameters<typeof holdPayment>[1], { leadId: findableLeadId || null, onboardingId, reason: verdict.reason, eventId: event.id });
+                  if (findableLeadId) await appendTermsEvent(service, findableLeadId, "paid_without_v3_agreement", null, { checkout_session: s.id, reason: verdict.reason });
+                  console.warn(`[stripe-webhook] HELD ${s.id}: ${verdict.reason}`);
+                  break;
+                }
+              }
+            }
             /* ⛔ IS THIS CLIENT ALREADY CLOSED (ended / refunded)? Read FIRST, because a late replay for a
                closed client must not start anything new: no agreement acceptance or PDF, no baseline, no
                subscription, no new-client email (src/lib/paymentState.ts). A failed read is not "open":
@@ -1104,7 +1127,11 @@ Deno.serve(async (req) => {
                payment gets retried. Every failure lands in client_error_reports instead.
                ⛔ NEVER FOR A CLOSED CLIENT: a late replay must not create an acceptance or email an
                agreement PDF to somebody whose engagement has ended or been refunded. */
-            if (findableLeadId && !closedBefore) {
+            /* 🔴 v3 (2026-10-05): a v3 checkout has NO tick — the agreement was signed on the agreement page
+               BEFORE this session could exist (findable-checkout, src/lib/signupGate.ts), and that row is the
+               record. Only a legacy (pre-v3) session is recorded here, on ITS OWN version (its metadata). */
+            const v3Checkout = s.metadata?.commercial_terms === COMMERCIAL_TERMS_V3;
+            if (findableLeadId && !closedBefore && !v3Checkout) {
               try {
                 const { data: agreeLead } = await service.from("outreach_leads").select("id, business_name").eq("id", findableLeadId).maybeSingle();
                 if (agreeLead) await recordCheckoutAcceptance(service, s as unknown as Parameters<typeof recordCheckoutAcceptance>[1], agreeLead as { id: string; business_name: string | null });
@@ -1263,6 +1290,12 @@ Deno.serve(async (req) => {
                 established = await establishLeadPayment(service, findableLeadId, {
                   amountGbp, paymentDay: paymentDayOf(event.created), paidFor: paidForLabel,
                   stripeCustomerId, stripePaymentIntentId,
+                  /* The paid session AND the paid sign-up: the database stamps the seller as the authorised
+                     person who CREATED this sign-up (sale_creations, keyed by the onboarding row), not who owns
+                     the lead now and not whoever opened this session after the client signed (migration
+                     20261010130000; docs/salesperson-onboarding.md §3a). ⛔ Never a seller from here. */
+                  checkoutSessionId: s.id,
+                  paidSignupId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(onboardingId) ? onboardingId : null,
                 });
               } catch (e) {
                 await recordPaymentFailure("stripe_write_failed", { what: "findable lead -> payment_received", table: "outreach_leads", row_id: findableLeadId, reason: (e as Error).message });
@@ -1286,6 +1319,26 @@ Deno.serve(async (req) => {
                   closed: closedBefore, owns_payment: ownsPayment,
                 });
               }
+              /* ⚠️ BEFORE THE LEDGER WRITE, deliberately: recordLedger announces the seller's commission, and a v3
+                 sale's initial commission is PENDING — the terms row must exist when that notice is worked out. */
+              /* ══ v3 TERMS, STAMPED ONCE (2026-10-05) ══════════════════════════════════════════════════════
+                 The sale is on the v3 Client Service Agreement's commercial terms: Access Date → Results Date →
+                 Refund Window → Payment Start Date (src/lib/clientTimeline.ts). One row per client, inserted
+                 only if absent (a replay is a no-op); its terms and acceptance are immutable by trigger.
+                 ⛔ A payment WITHOUT a v3 signature (a Stripe session made before the agreement-first flow,
+                 still open) is NOT silently put on v3 terms: Paul is told, and it keeps the legacy timing. */
+              if (ownsPayment && v3Checkout) {
+                const paidAtIso = new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+                const { error: tErr } = await service.from("client_service_terms").upsert({
+                  lead_id: findableLeadId, commercial_terms: COMMERCIAL_TERMS_V3,
+                  agreement_acceptance_id: s.metadata?.agreement_acceptance_id ?? null,
+                  service_route: paid.route, initial_paid_at: paidAtIso,
+                }, { onConflict: "lead_id", ignoreDuplicates: true });
+                if (tErr) await recordPaymentFailure("v3_terms_stamp_failed", { lead_id: findableLeadId, reason: tErr.message });
+                else await appendTermsEvent(service, findableLeadId, "terms_stamped", null, { checkout_session: s.id, acceptance_id: s.metadata?.agreement_acceptance_id ?? null, route: paid.route, initial_paid_at: paidAtIso });
+              }
+              /* (A non-v3 payment never reaches here as a NEW sale: the backstop above held it. Only a replay of a
+                 payment recorded before v3 does, and it keeps the legacy path it was sold on.) */
               /* ⛔ THE PAYMENT LEDGER (2026-09-28): a RECORD of the money that just landed, after the
                  payment write above so sold_by_user_id is already stamped. Never throws, never blocks
                  the payment; unique by the payment intent, so a retried event writes nothing twice. */
@@ -1337,6 +1390,7 @@ Deno.serve(async (req) => {
                   new Date((typeof event.created === "number" && event.created > 0 ? event.created : Math.floor(Date.now() / 1000)) * 1000).toISOString(),
                   paid.route,
                   s.id,
+                  v3Checkout && s.metadata?.payment_timing === OPTION_B_TIMING ? OPTION_B_TIMING : "legacy",
                 );
                 if (subscription.kind === "failed") {
                   billingProblem = paid.route ? subscription.reason : paid.problem;
@@ -1551,6 +1605,18 @@ Deno.serve(async (req) => {
           }
           break;
         }
+        /* ══ v3 BACKSTOP FOR A PAYMENT WITH NO SIGN-UP (2026-10-05) ════════════════════════════════════════
+           A Stripe PAYMENT LINK (hand-made in the dashboard — the founder-era one was "kept for sending manually
+           on WhatsApp") produces a completed session with no onboarding_id. Until now it fell into this barber
+           branch and left NO trace. A payment-mode session with no generated site is never the barber product:
+           it is money taken outside the agreement-first sign-up, so it is HELD and Paul is told. */
+        if (s.status === "complete" && !((s.metadata?.generated_site_id as string) || "") && (s.payment_link || s.mode === "payment")) {
+          await holdPayment(service, s as unknown as Parameters<typeof holdPayment>[1], {
+            leadId: null, onboardingId: null, eventId: event.id,
+            reason: s.payment_link ? "payment_link: paid through a Stripe Payment Link, outside the v3 sign-up" : "unidentified_payment: a one-off payment with no Findable sign-up",
+          });
+          break;
+        }
         // subscription mode → the session is 'complete' once the first invoice paid.
         if (s.status === "complete") {
           await setPaid(
@@ -1664,7 +1730,7 @@ Deno.serve(async (req) => {
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
           /* The count this client is told is the one this subscription was created for (its metadata). */
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }) });
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1760,6 +1826,19 @@ Deno.serve(async (req) => {
                Anything absent or different falls to the existing two endings. */
             const termComplete = subscriptionEndedByTerm(sub as { cancel_at?: unknown; trial_end?: unknown; ended_at?: unknown; metadata?: unknown }, becauseOfPayment);
             const termTotal = subscriptionTotalPayments(sub as { metadata?: unknown });
+            /* 🔴 v3 (clause 9A): the minimum term ending is NOT the end — the Continuing Service (FINDABLE_CONTINUING_GBP) follows
+               until the client cancels. It is manual for now (CONTINUING_SERVICE_AUTOMATION), so the client is
+               NOT sent "it stops": Paul is told to set up or close the Continuing Service by hand. */
+            if (termComplete && (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING) {
+              await recordPaymentFailure("v3_minimum_term_complete", { lead_id: leadId, subscription: sub.id });
+              await sendOperatorAlert("Minimum term complete - Continuing Service is manual", [
+                `The minimum-term subscription ${sub.id} has ended after its last £${FINDABLE_MONTHLY_GBP} payment.`,
+                `Under clause 9A the service continues at £${FINDABLE_CONTINUING_GBP} a month unless the client cancelled. Nothing was charged automatically.`,
+                "Open the client's page: record their decision and set up the Continuing Service payment in Stripe by hand.",
+                `Lead: ${leadId}`,
+              ]);
+              break;
+            }
             /* Whose website it is decides the ownership words (findableSiteKind: positive, else unknown). */
             const siteKind = await siteKindForLead(leadId);
             await emailClientForLead(

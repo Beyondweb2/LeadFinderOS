@@ -3,7 +3,11 @@ import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
 import { mayGenerateLink, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
-import { AGREEMENT_BLANK_URL, agreementUrl, checkoutConsentText, CLIENT_AGREEMENT_VERSION } from "../../../src/lib/clientAgreement.ts";
+import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
+import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
+import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
+import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
+import { openHoldFor } from "../_shared/payment-hold.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
    host filter that keeps a preview domain out of a customer-facing URL. A second copy of that
@@ -247,6 +251,18 @@ Deno.serve(async (req) => {
         });
         return json({ ok: false, error: "already_client" }, 403);
       }
+      /* ⛔ A HELD PAYMENT IS OPEN (v3 backstop, _shared/payment-hold.ts): money was already taken outside the
+         signed sign-up and Paul has not resolved it. A second payment would charge them twice — refuse until
+         he refunds or migrates it. An unreadable hold table refuses too (fails closed). */
+      try {
+        if (await openHoldFor(service, effectiveLeadId)) {
+          await recordRefusal("checkout_refused_payment_held", { lead_id: effectiveLeadId });
+          return json({ ok: false, error: "payment_held" }, 409);
+        }
+      } catch (e) {
+        await recordRefusal("checkout_refused_hold_unreadable", { lead_id: effectiveLeadId, error: (e as Error).message });
+        return json({ ok: false, error: "agreement_unavailable" }, 503);
+      }
       /* NO TRADE — the last line of defence, and the reason this check lives HERE rather than only
          in the senders. Every route to a Stripe session for this product passes through this
          function: the two WhatsApp templates, the copy-link button, a link pasted by hand, and a
@@ -385,55 +401,94 @@ Deno.serve(async (req) => {
        saying so is the indefensible part of this, and Stripe's submit message is the only place
        the words sit beside the card field itself. */
     form.set("custom_text[submit][message]", cardSavedNoticeFor(route));
-    /* ══ THE CLIENT SERVICE AGREEMENT — A REQUIRED TICK BEFORE PAYING (Paul, 2026-10-02) ══════════
-       Stripe will not let the payer pay without ticking it, and that tick is binding on its own
-       (stripe-webhook records it). The words link to THIS client's own agreement page, with their
-       business and THIS route filled in; the link row is created here if it does not exist and its
-       route is set to the route this page charges for.
-       ⚠️ Stripe also needs a Terms of Service URL in Dashboard → Settings → Public details, or it
-       refuses to create the session — AGREEMENT_BLANK_URL is that address.
-       ⛔ A failed link write never blocks the payment page: the tick then links to the general
-       agreement, and the failure is recorded. */
-    let agreementLink = AGREEMENT_BLANK_URL;
-    if (effectiveLeadId) {
-      try {
-        const { data: link, error: linkErr } = await service.from("client_agreement_links")
-          .upsert({ lead_id: effectiveLeadId, service_route: route }, { onConflict: "lead_id" })
-          .select("token").single();
-        if (linkErr) throw linkErr;
-        if (link?.token) agreementLink = agreementUrl(String(link.token));
-      } catch (e) {
-        await recordRefusal("checkout_agreement_link_failed", {
-          onboarding_id: onboardingId, lead_id: effectiveLeadId,
-          error: (e as { message?: string })?.message ?? String(e),
-        });
-      }
+    /* ══ THE CLIENT SERVICE AGREEMENT v3 — SIGNED BEFORE ANY STRIPE SESSION EXISTS (Paul, 2026-10-05) ══
+       Clause 1.2: the client accepts by clicking "I agree and sign" on their agreement page BEFORE the
+       initial payment. This is the block that makes that true: nothing below creates a session unless a
+       v3 acceptance exists for THIS lead, THIS sign-up (onboarding row) and THIS route
+       (src/lib/signupGate.ts). There is no checkout tick any more — v3 has no such route to acceptance.
+       ⛔ THE ONE SIGN-UP LINK. The client's agreement page (findable.live/agree/<token>) is where every
+          path lands first: Quick Close asks for it outright (purpose "signup_link" — it never gets a
+          Stripe URL), the self-service questionnaire's pay button is answered with it while unsigned
+          (the site already navigates to whatever `url` comes back), and the page's own "Continue to
+          secure payment" comes back here once signed.
+       ⛔ FAILS CLOSED: no link row, no token, an unreadable acceptance → no session. */
+    const purpose = body.purpose === "signup_link" ? "signup_link" : "pay";
+    let signupUrl: string;
+    try {
+      const { data: link, error: linkErr } = await service.from("client_agreement_links")
+        .upsert({ lead_id: effectiveLeadId, service_route: route }, { onConflict: "lead_id" })
+        .select("token").single();
+      if (linkErr) throw linkErr;
+      if (!link?.token) throw new Error("no agreement token returned");
+      signupUrl = agreementUrl(String(link.token));
+    } catch (e) {
+      await recordRefusal("checkout_agreement_link_failed", {
+        onboarding_id: onboardingId, lead_id: effectiveLeadId,
+        error: (e as { message?: string })?.message ?? String(e),
+      });
+      return json({ ok: false, error: "agreement_unavailable" }, 503);
     }
-    form.set("consent_collection[terms_of_service]", "required");
-    form.set("custom_text[terms_of_service_acceptance][message]", checkoutConsentText(agreementLink));
+    if (purpose === "signup_link") {
+      /* Every refusal above has run; the link is ready to hand to the client. No Stripe session. */
+      return json({ ok: true, kind: "signup_link", url: signupUrl, session_id: null, expires_at: Math.floor((Date.now() + SIGNUP_LINK_LIFETIME_MS) / 1000) });
+    }
+    let acceptance: (GateAcceptance & { agreed_text: string }) | null = null;
+    {
+      const { data: acc, error: accErr } = await service.from("client_agreement_acceptances")
+        .select("id, lead_id, onboarding_id, agreement_version, service_route, method, authority_confirmed, agreed_text, agreed_text_sha256")
+        .eq("lead_id", effectiveLeadId).eq("onboarding_id", onboardingId).eq("agreement_version", CLIENT_AGREEMENT_VERSION)
+        .order("accepted_at", { ascending: false }).limit(1).maybeSingle();
+      if (accErr) {
+        await recordRefusal("checkout_agreement_unreadable", { lead_id: effectiveLeadId, error: accErr.message });
+        return json({ ok: false, error: "agreement_unavailable" }, 503);
+      }
+      acceptance = acc ?? null;
+    }
+    const gateResult = checkoutAgreementGate({
+      acceptance, leadId: effectiveLeadId, onboardingId, route, currentVersion: CLIENT_AGREEMENT_VERSION,
+      recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null,
+    });
+    if (!gateResult.ok) {
+      await recordRefusal("checkout_needs_signed_agreement", { lead_id: effectiveLeadId, refusal: gateResult.refusal });
+      /* Not an error to the visitor: they are sent to sign. The site navigates to `url`; no session exists. */
+      return json({ ok: true, kind: "agreement_required", url: signupUrl, refusal: gateResult.refusal });
+    }
+    /* ⛔ The binding facts, carried to the webhook: which signature this payment rests on, the terms it
+       put the sale on, and the timing the monthly must follow (the webhook creates the subscription on a
+       hold and LeadFinder sets the real Payment Start Date later — _shared/client-terms.ts). */
     form.set("metadata[agreement_version]", CLIENT_AGREEMENT_VERSION);
+    form.set("metadata[agreement_acceptance_id]", gateResult.acceptanceId);
+    form.set("metadata[commercial_terms]", COMMERCIAL_TERMS_V3);
+    form.set("metadata[payment_timing]", OPTION_B_TIMING);
+    /* ⛔ THE SALE CREATOR, FOR TRACING ONLY (F + H integration, 2026-10-05). Stripe session → onboarding_id (THE
+       sign-up) → agreement_acceptance_id → the person who CREATED that sign-up (sale_creations, append-only).
+       The seller is decided by the DATABASE from sale_creations when the payment lands (migration
+       20261010130000) — never from this value, never from who owns the lead, never from whoever opened this
+       session. Recorded here so the Stripe object alone names the chain. "multiple" / "none" / "unknown" are
+       honest answers, never a guess; an unreadable table never blocks a signed client from paying. */
+    {
+      let creator = "unknown";
+      try {
+        const { data: cr, error: crErr } = await service.from("sale_creations").select("creator_user_id").eq("onboarding_id", onboardingId).limit(50);
+        if (!crErr) {
+          const ids = [...new Set(((cr ?? []) as { creator_user_id: string }[]).map((r) => r.creator_user_id))];
+          creator = ids.length === 1 ? ids[0] : ids.length > 1 ? "multiple" : "none";
+        }
+      } catch { /* "unknown" */ }
+      form.set("metadata[signup_creator]", creator);
+    }
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */
     /* The subscription's own metadata is set where the subscription is created, in
        _shared/delayed-subscription.ts (from stripe-webhook). Nothing recurring exists here. */
     form.set("success_url", `${back}${back.includes("?") ? "&" : "?"}paid=1`);
-    // The cancel URL carries the onboarding row, the success URL deliberately does not.
-    //
-    // A payer who backs out has to be able to try again, and the plan screen's button is dead
-    // without this id. The client also keeps it in sessionStorage, but storage is unavailable in
-    // private mode and gone if the tab was replaced - and that customer must not be the one who
-    // cannot buy. Re-answering is not a fallback: the questionnaire refuses a second submit inside
-    // ten minutes.
-    //
-    // Safe to expose: this endpoint already accepts onboarding_id from the client, checks the row
-    // exists, and takes the lead FROM THE ROW rather than from the caller, so a substituted id
-    // cannot attach a payment to someone else's lead. Kept off success_url so a paid receipt does
-    // not carry a live retry token.
-    form.set(
-      "cancel_url",
-      `${back}${back.includes("?") ? "&" : "?"}cancelled=1&onboarding=${onboardingId}`,
-    );
+    /* 🔴 v3 (2026-10-05): a payer who backs out returns to THEIR agreement page, which shows they have
+       signed and offers "Continue to secure payment" again — the sign-up link is the one place to retry
+       from. (Until v3 the cancel URL carried ?onboarding=<id> back to the questionnaire's plan screen; that
+       screen now only ever forwards to the agreement page, so the id is no longer needed there.) The
+       success URL still carries no retry token. */
+    form.set("cancel_url", signupUrl);
     form.set("metadata[onboarding_id]", onboardingId);
     if (effectiveLeadId) form.set("metadata[lead_id]", effectiveLeadId);
     /* ⛔ THE ROUTE THE CUSTOMER IS SHOWN, CARRIED TO THE WEBHOOK. stripe-webhook creates the schedule
