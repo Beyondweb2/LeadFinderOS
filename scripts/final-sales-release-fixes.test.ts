@@ -146,6 +146,11 @@ console.log('\n── 3. a not-ready refusal names onboarding ──');
   ok(guardRefusalReason('not_onboarded') === 'not_ready' && /Complete your onboarding before starting checks/.test(reasonText('not_ready')), 'pre-call checks: not_onboarded → "Complete your onboarding…", never "allowance used"');
   ok(guardRefusalReason('rate_limit') === 'allowance_used' && guardRefusalReason('paused') === 'paused' && guardRefusalReason('suspended') === 'not_allowed', 'pre-call checks: the other reasons are unchanged');
   ok(startRefusalReason({ error: 'not_ready_to_sell' }).reason === 'not_ready' && startRefusalReason({ error: 'usage_paused' }).reason === 'paused', 'create-ai-audit refusals map the same way');
+  const ei = read('src/lib/edgeInvoke.ts');
+  ok(/export function edgeErrorMessage\(e: unknown, fallback\?: string\): string \{/.test(ei) && /e\.code === 'not_ready_to_sell'/.test(ei)
+    && /e\.code === 'usage_paused'\) \{ const w = onboardingWordsForPausedRefusal\(\); if \(w\) return w; \}/.test(ei) && /return coreEdgeErrorMessage\(e, fallback\);/.test(ei)
+    && !/export \{[^}]*edgeErrorMessage[^}]*\} from '\.\/edgeInvokeCore'/.test(ei),
+    'every edge refusal shown through edgeErrorMessage gets the same onboarding words (functions not redeployed this release included); everything else unchanged');
   const idx = read('src/pages/Index.tsx');
   ok(/title: 'Complete your onboarding before using Find Leads\.'/.test(idx) && !/Find Leads is paused/.test(idx), 'Find Leads\' own pre-check says the cause (and "Checking" / "Could not check" while unknown)');
   ok(/noteMyReadiness\(/.test(read('src/hooks/useMyReadiness.ts')) && (read('src/lib/readinessWords.ts').match(/noteMyReadiness/g) ?? []).length >= 1,
