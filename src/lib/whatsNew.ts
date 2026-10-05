@@ -40,6 +40,35 @@ export const WHATS_NEW: readonly WhatsNewEntry[] = [
       removed: ['The small details overlay that scrolled inside the AI check card.'],
       effect: 'Before or during a call you can open one window and see whether AI names them, what is wrong with their site and what to say. Crawling never uses your AI checks.',
     } },
+  { id: '2026-10-05-csv-import-admin', date: '2026-10-05', title: 'CSV import works again', audience: 'admin',
+    body: 'Import on Outreach adds leads from a CSV again. It had been adding nothing while saying it had. Every row is checked first, and new leads are yours. Nobody is messaged.',
+    report: {
+      added: [
+        'A column-matching step: business name, contact, phone, email, website, address, postcode, town, trade, notes and Google Maps link, each picked from your file.',
+        'Check rows before importing. It shows rows found, valid, invalid, repeated in the file, already in the system, new, fill-in-blanks and skipped, with every problem row by its spreadsheet row number and the reason.',
+        'A salesperson who is Ready to Sell can import too. Their new leads are theirs.',
+      ],
+      changed: [
+        'The database decides everything: duplicates, the owner (always the person importing) and what is valid. A duplicate is the same Google Place ID, phone number or Google Maps listing as a lead already in the system — no second lead is made.',
+        'The same business name alone is only a "possible match": the row is still added and flagged, because many businesses share a name across towns. The same website, or the same name and the same postcode or address, is held until you tick "import these too".',
+        'A lead that is already yours only has its blank contact, email, website, address or trade filled in. Nothing is overwritten.',
+        'Someone else’s lead, or an unassigned one, is skipped and listed. It is never taken over. Claim unassigned ones from Unassigned.',
+        'Imported leads show "Source: CSV import" in their history.',
+      ],
+      removed: ['The old import, which wrote leads straight from the browser and was refused by the database every time.'],
+      effect: 'You can bring in a list from a spreadsheet and see exactly what will happen before anything is saved. An import never messages, queues or changes the stage of anyone.',
+    } },
+  { id: '2026-10-05-csv-import-sales', date: '2026-10-05', title: 'Import leads from a CSV', audience: 'sales',
+    body: 'Outreach has an Import button. Bring in a list of businesses from a spreadsheet; the new ones become your leads. Nobody is messaged.',
+    report: {
+      added: [
+        'Import on Outreach: choose a CSV, match its columns, press Check rows to see what will happen, then Import.',
+        'Every row that cannot be added is listed with the reason: no business name, phone or email not valid, repeated in the file, already your lead, or already belongs to another team member.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'New businesses from your list land in your leads, ready to work. Anything already owned by someone else is left alone.',
+    } },
   { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
     body: 'Outreach now opens on My leads — only the leads you own. Unassigned leads, a salesperson’s leads or the whole team show only when you choose them, and queueing WhatsApp across several people’s leads asks you first. Leads you add from Find Leads are now yours from the start.',
     report: {

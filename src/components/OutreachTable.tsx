@@ -110,7 +110,7 @@ import { ContactMethodBadge } from './ContactMethodBadge';
 import { OneStatusPill } from './PipelineStatusSelect';
 import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
-import { CSVImportDialog } from './CSVImportDialog';
+import { CSVImportDialog, type CsvImportResult } from './CSVImportDialog';
 import { townGated } from '@/lib/townVerdict';
 import { Badge } from '@/components/ui/badge';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
@@ -206,7 +206,8 @@ interface OutreachTableProps {
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
-  onImportLeads?: (leads: Array<Partial<OutreachLead>>) => Promise<void>;
+  /** After a CSV import (the dialog runs import_leads itself): the ids it created / filled in. */
+  onImportLeads?: (result: CsvImportResult) => Promise<void> | void;
   onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
@@ -3257,8 +3258,8 @@ export function OutreachTable({
         <CSVImportDialog
           open={showImportDialog}
           onOpenChange={setShowImportDialog}
-          onImport={onImportLeads}
-          existingLeads={leads}
+          onImported={onImportLeads}
+          isAdmin={isAdmin}
         />
       )}
 

@@ -92,6 +92,9 @@ export interface LeadPermissions {
   editLeadRecord: boolean;
   /** Remove, reset, reset-to-fresh, archive-everything. */
   removeLeads: boolean;
+  /** CSV import (2026-10-05, fix/csv-lead-import): both roles, the new leads owned by the person importing.
+   *  import_leads decides the owner itself and a salesperson's rows go through the usage guard (lead_import);
+   *  a salesperson who is not Ready to Sell has no import, like every selling action. */
   importLeads: boolean;
   /** Enrichment admin: enrich, find emails, phone lookups, fix town, bulk set trade. */
   enrichLeads: boolean;
@@ -149,7 +152,7 @@ export function leadPermissions(role: AppRole | null, readyToSell = true): LeadP
   return {
     editLeadRecord: admin,
     removeLeads: admin,
-    importLeads: admin,
+    importLeads: admin || sellingSales,
     enrichLeads: admin,
     bulkAudits: admin,
     salesChecks: sellingSales,
@@ -192,6 +195,7 @@ export const PERMISSION_MATRIX: ReadonlyArray<{ feature: string; admin: string; 
   { feature: 'Coverage', admin: 'yes', sales: 'yes (counts)' },
   { feature: 'Find Leads', admin: 'yes', sales: 'yes' },
   { feature: 'Add a new business', admin: 'yes', sales: 'yes (never a duplicate)' },
+  { feature: 'Import leads from a CSV (nobody is messaged)', admin: 'yes — new leads owned by the admin', sales: 'yes — new leads owned by them; never another rep, never unassigned, limited and logged' },
   { feature: 'Claim an unassigned, never-contacted lead met again in Find Leads ("Claim lead")', admin: 'assigns instead', sales: 'yes' },
   { feature: 'Claim / add a contacted or owned lead', admin: 'reassigns', sales: 'no' },
   { feature: 'Assign / reassign / unassign', admin: 'yes', sales: 'no' },

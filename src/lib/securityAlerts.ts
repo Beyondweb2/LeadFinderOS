@@ -44,6 +44,7 @@ const ACTION_WORDS: Record<string, string> = {
   whatsapp_send: 'WhatsApp sends',
   whatsapp_queue: 'queued openers',
   sales_check: 'pre-call checks (Check before calling)',
+  lead_import: 'CSV lead imports (rows checked or imported)',
 };
 export const actionWords = (a: string | null | undefined): string => (a && ACTION_WORDS[a]) || (a ?? 'an action');
 
