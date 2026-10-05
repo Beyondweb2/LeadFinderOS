@@ -28,7 +28,7 @@ import { MyWhatsAppQueuePanel } from '@/components/MyWhatsAppQueuePanel';
 import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
-import { SalesCheckDialog, SalesCheckPanel } from '@/components/SalesCheckPanel';
+import { SalesCheckDialog } from '@/components/SalesCheckDialog';
 import { useSalesChecks } from '@/hooks/useSalesChecks';
 import type { WorkspaceTabInput } from '@/components/LeadDetailDialog';
 import { UserPlus } from 'lucide-react';
@@ -377,9 +377,9 @@ const Outreach = () => {
         </div>
       )}
 
-      {perms.salesChecks && (
-        <SalesCheckPanel checks={checks} onOpenLead={(leadId) => setLaunchIntent({ leadId, channel: 'open', tab: 'call' })} />
-      )}
+      {/* ⛔ NO RESULTS PANEL HERE (2026-10-05, improve/outreach-compact-audit-rows). The batch shows on the
+          rows themselves (Waiting / Checking… / ChatGPT · Gemini) and in the table's one-line check bar
+          (counts, checks left today, Stop, Open next ready). Only the press's confirm dialog lives here. */}
       {perms.salesChecks && (
         <SalesCheckDialog
           open={checkIds !== null}
@@ -478,6 +478,9 @@ const Outreach = () => {
         bulkJobActive={!!activeJob || creatingJob}
         onSalesCheck={perms.salesChecks ? (ids) => setCheckIds(ids.filter((id) => !isDemoLead(id))) : undefined}
         salesCheckBlocked={checks.view?.batch?.status === 'active' ? 'Your last checks are still starting — wait a moment, or stop them first.' : checks.starting ? 'Starting…' : null}
+        salesCheckView={perms.salesChecks ? checks.view : null}
+        onStopSalesCheck={perms.salesChecks ? (batchId) => { void checks.cancel(batchId); } : undefined}
+        salesCheckError={perms.salesChecks ? checks.lastError ?? checks.error : null}
       />}
 
       {/* First-time outreach tips */}
