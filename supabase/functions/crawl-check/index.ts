@@ -33,7 +33,9 @@ import {
   resolveCrawlMode, STANDARD_CRAWL, cleanRequestSource, toServedUrl, isPageUrl, internalPageLinks,
   orderSitemapChildren, mayReplaceLeadCrawl,
 } from "../../../src/lib/fullCrawl.ts";
-import { createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
+import { activeJobFor, createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
+import { crawlPageCapFor, prospectCrawlReuse } from "../../../src/lib/prospectCrawl.ts";
+import { classifyFetchError, type HomeFetchIssue } from "../../../src/lib/siteAudit.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
 import { canWorkLead, isClientLead, type AppRole } from "../../../src/lib/roleRules.ts";
@@ -88,6 +90,9 @@ interface Fetched {
   html: string;
   blocked: boolean;
   responded: boolean;
+  /** The network error's message when nothing answered (timeout, TLS, DNS, redirect loop…) — read by
+   *  classifyFetchError so a failed crawl says WHY (2026-10-05). */
+  error?: string;
 }
 
 /** Read a response body up to MAX_BODY_BYTES, then stop. Falls back to res.text() when the body is
@@ -136,8 +141,9 @@ async function get(url: string, ua: string, timeoutMs: number): Promise<Fetched>
       blocked,
       responded: true,
     };
-  } catch {
-    return { url, finalUrl: url, ok: false, status: 0, xRobotsTag: null, html: "", blocked: false, responded: false };
+  } catch (e) {
+    const err = e as Error;
+    return { url, finalUrl: url, ok: false, status: 0, xRobotsTag: null, html: "", blocked: false, responded: false, error: err?.name === "AbortError" ? "timeout" : String(err?.message ?? e).slice(0, 200) };
   } finally {
     clearTimeout(t);
   }
@@ -328,6 +334,40 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: `That doesn't look like a website: ${rawUrl}` }, 400);
     }
 
+    /* ══ THE PROSPECT CRAWL: PAGE LIMIT + REUSE (2026-10-05, src/lib/prospectCrawl.ts) ════════════
+       A user-pressed crawl of a PROSPECT reads at most PROSPECT_CRAWL_PAGE_CAP pages and records the
+       rest as found-but-not-read; a paying client's (or a Paid Clients / Website Build) crawl stays
+       exhaustive. A prospect's saved full crawl younger than PROSPECT_CRAWL_REUSE_MS is REUSED — the
+       press opens it ("saved"), and the site is not crawled again — unless `force` is sent by an
+       admin, or by a rep once the saved crawl is a day old. A running job always wins (the press
+       watches it). Nothing here spends AI or audit allowance. */
+    let pageCap: number | null = null;
+    if (mode === "full") {
+      let isClient = false;
+      if (leadId && !salesLead) {
+        const { data: lr } = await service.from("outreach_leads").select("id, user_id, assigned_to_user_id, amount_paid, status").eq("id", leadId).maybeSingle();
+        isClient = !!lr && isClientLead(lr);
+      }
+      pageCap = crawlPageCapFor({ isClient, requestedFrom });
+      if (leadId && pageCap !== null) {
+        const running = await activeJobFor(service, leadId, homeUrl);
+        if (!running) {
+          const { data: saved } = await service.from("lead_crawl_checks")
+            .select("url, created_at, mode, job_id, full_evidence:full_evidence->version, completeness:full_evidence->completeness, fetch_failed:result->signals->fetchFailed")
+            .eq("lead_id", leadId).maybeSingle();
+          const savedRow = saved ? {
+            url: saved.url, created_at: saved.created_at, mode: saved.mode, job_id: saved.job_id,
+            full_evidence: saved.full_evidence != null ? { version: Number(saved.full_evidence), completeness: saved.completeness ?? null } : null,
+            result: { signals: { fetchFailed: saved.fetch_failed === true } },
+          } : null;
+          const reuse = prospectCrawlReuse(savedRow, { nowMs: Date.now(), websiteUrl: homeUrl, force: body?.force === true, role });
+          if (reuse.reuse) {
+            return json({ ok: true, mode: "full", cached: true, job_id: reuse.jobId, crawled_at: reuse.crawledAt, age_ms: reuse.ageMs, status: "complete", url: homeUrl });
+          }
+        }
+      }
+    }
+
     /* THE BUDGET. Every fetch in this handler goes through `budgeted`, so the ceilings hold however
        the branches below are reordered later. A refused fetch returns the same never-throws shape a
        failed one does, so nothing downstream needs a second code path for "we ran out". */
@@ -368,7 +408,7 @@ Deno.serve(async (req) => {
        inline check below records that honestly (as a standard row). */
     if (mode === "full" && home && home.html) {
       const job = await createCrawlJob(service, {
-        leadId, userId: rowOwnerId, requestedFrom,
+        leadId, userId: rowOwnerId, requestedFrom, pageCap,
         probe: {
           homeUrl, servedUrl: home.finalUrl || homeUrl, town: town || null, readableUa,
           readableAs: readableProbe?.c.label ?? null, searchBlocked, respondedAny,
@@ -385,7 +425,7 @@ Deno.serve(async (req) => {
         });
         if (actErr) console.warn(`[crawl-check] crawl_run activity not recorded: ${actErr.message}`);
       }
-      return json({ ok: true, mode: "full", job_id: job.jobId, reused: job.reused, status: "running", url: homeUrl, served_url: home.finalUrl || homeUrl });
+      return json({ ok: true, mode: "full", job_id: job.jobId, reused: job.reused, status: "running", url: homeUrl, served_url: home.finalUrl || homeUrl, page_cap: pageCap });
     }
     if (mode === "full") mode = "standard";
 
@@ -595,10 +635,22 @@ Deno.serve(async (req) => {
 
     /* ⚠️ `evidence` / `evidenceVersion` are OMITTED ENTIRELY when nothing was built, rather than
        written as null. A row with no key is the same shape every pre-Phase-1 row already has. */
+    /* WHY THE HOMEPAGE COULD NOT BE READ (2026-10-05): a failed crawl says what happened — timeout,
+       certificate, DNS, redirect loop, refused, blocked, an error status — instead of a bare failure.
+       Present only when no search crawler got a readable page; absent otherwise. */
+    let homeFetch: HomeFetchIssue | null = null;
+    if (!home || !home.html) {
+      const blocked = probes.some((p) => p.r.blocked);
+      const answered = probes.find((p) => p.r.responded) ?? null;
+      const first = probes[0]?.r;
+      const kind = classifyFetchError({ message: first?.error ?? null, status: answered?.r.status ?? null, responded: !!answered, blocked });
+      homeFetch = { kind, status: answered?.r.status ?? null, detail: answered ? null : (first?.error ?? null) };
+    }
     const storedResult = {
       version: CRAWL_CHECK_VERSION, siteInfoVersion: SITE_INFO_VERSION,
       checked_at: checkedAt, url: homeUrl, town: town || null, signals, verdict, siteInfo,
       ...(evidence ? { evidence, evidenceVersion: SITE_EVIDENCE_VERSION } : {}),
+      ...(homeFetch ? { homeFetch } : {}),
     };
 
     /* ⛔ ONE CANONICAL ROW PER LEAD, WHICHEVER SCREEN STARTED THE CRAWL. Every entry point — Outreach,

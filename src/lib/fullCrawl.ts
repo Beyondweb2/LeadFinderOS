@@ -27,7 +27,8 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { crawlPageKind, visibleText, THIN_WORDS, MAX_CRAWL_PAGES } from './crawlCheck.ts';
-import { sameSite } from './crawlUrl.ts';
+import { sameSite, classifyCrawlUrl } from './crawlUrl.ts';
+import type { SiteAudit } from './siteAudit.ts';
 
 export type CrawlMode = 'standard' | 'full';
 
@@ -265,6 +266,14 @@ export interface PageDigest {
   excerpt: string;
   internalLinks: number;
   schemaTypes: string[];
+  /* ── added 2026-10-05 (prospect site audit). ABSENT on every page crawled before that date: a
+     reader must treat a missing key as "not checked", never as false (CLAUDE.md §4). ── */
+  /** A <meta name="viewport"> is present. */
+  viewport?: boolean;
+  /** JSON-LD blocks on the page that do not parse as JSON. */
+  jsonLdInvalid?: number;
+  /** H3 headings (question-style headings are read from H2 + H3). */
+  h3?: string[];
 }
 
 /** One piece of evidence: what was seen, and where. */
@@ -290,7 +299,13 @@ export interface PageEvidence {
   /** Navigation labels + footer text: the homepage only. */
   nav?: Array<{ label: string; url: string }>;
   footer?: string;
+  /** Same-site pages this page links to, as PATHS (+ kept query), deduped, capped at PAGE_LINKS_MAX —
+   *  the link graph the site audit walks for click depth and sitemap-only pages. Added 2026-10-05. */
+  l?: string[];
 }
+
+/** Outgoing same-site links kept per page for the link graph. */
+export const PAGE_LINKS_MAX = 300;
 
 /** Exported for presenceSources.ts, which names these entries instead of keeping a second copy. */
 export const CREDENTIALS: Array<{ name: string; re: RegExp }> = [
@@ -367,6 +382,9 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
     words: text ? text.split(/\s+/).filter(Boolean).length : 0,
     excerpt: clip(text, 700), internalLinks: internal,
     schemaTypes: [...new Set(nodes.flatMap(typesOf))].slice(0, 12),
+    viewport: /<meta\b[^>]*name=["']viewport["']/i.test(head),
+    jsonLdInvalid: jsonLdBlocks(html).filter((b) => { try { JSON.parse(b); return false; } catch { return true; } }).length,
+    h3: headings(html, 3, 12),
   };
 
   const b: PageBusiness = { names: [], phones: [], emails: [], addresses: [], people: [], credentials: [], guarantees: [], experience: [], prices: [], reviews: [], profiles: [], schema: [], logo: '', favicon: '', ogImage: '', siteName: '' };
@@ -445,7 +463,13 @@ export function processPage(p: { url: string; finalUrl: string; status: number; 
     reviews: uniq(reviews), profiles: uniq(profiles, 12),
   });
 
-  const ev: PageEvidence = { d, b, t: text.slice(0, TEXT_CHARS), j: [], img };
+  const linkPaths = new Set<string>();
+  for (const h of links) {
+    if (linkPaths.size >= PAGE_LINKS_MAX) break;
+    const c = classifyCrawlUrl(h, url, homeUrl, null);
+    if (c.ok) { const lu = new URL(c.url); linkPaths.add(lu.pathname + lu.search); }
+  }
+  const ev: PageEvidence = { d, b, t: text.slice(0, TEXT_CHARS), j: [], img, l: [...linkPaths] };
   let jsonBudget = JSONLD_CHARS;
   for (const block of jsonLdBlocks(html)) { if (block.length > jsonBudget) break; ev.j.push(block); jsonBudget -= block.length; }
   if (p.isHome) {
@@ -518,6 +542,26 @@ export interface FullCrawlEvidence {
   };
   /** Each finding with its full page count; `urls` lists examples, the inventory holds all. */
   technical: Array<{ kind: string; detail: string; count: number; urls: string[] }>;
+  /** How much of the site this crawl READ (2026-10-05). Absent on older rows = exhaustive (the only
+   *  kind that existed). `capped` = the page limit was reached and `notCrawled` addresses were found
+   *  but never read — ⛔ a capped crawl is never "the full site". */
+  coverage?: CrawlCoverage;
+  /** The grouped site audit built at finalize (src/lib/siteAudit.ts). Absent on older rows. */
+  audit?: SiteAudit;
+}
+
+export interface CrawlCoverage {
+  /** null = no page limit (exhaustive: a paying client / Website Build crawl). */
+  pageCap: number | null;
+  capped: boolean;
+  /** Pages requested (read or failed). */
+  pagesCrawled: number;
+  /** Distinct same-site page addresses found (crawled, skipped and not crawled). */
+  urlsDiscovered: number;
+  /** Found, eligible, never read because the cap was reached. */
+  notCrawled: number;
+  /** <loc> entries the sitemaps listed (all, on- and off-site). */
+  sitemapUrls: number;
 }
 
 export interface StoredCrawlRow {
@@ -545,6 +589,8 @@ export function summariseCrawlRows(input: {
   ms: number;
   ticks: number;
   jobId?: string | null;
+  /** The job's page limit, or null/absent for an exhaustive crawl. */
+  pageCap?: number | null;
 }): FullCrawlEvidence {
   const { rows, servedUrl } = input;
   const done = rows.filter((r) => r.status === 'done');
@@ -615,7 +661,14 @@ export function summariseCrawlRows(input: {
   add('no_schema_home', 'The homepage carries no structured data (JSON-LD).', ok.filter((p) => p.family === 'homepage' && p.schemaTypes.length === 0).map((p) => p.finalUrl));
 
   const hitRunawayCeiling = (skippedByReason.safety_ceiling ?? 0) > 0;
+  const notCrawled = skippedByReason.coverage_cap ?? 0;
+  const pageCap = typeof input.pageCap === 'number' && input.pageCap > 0 ? input.pageCap : null;
+  const coverage: CrawlCoverage = {
+    pageCap, capped: notCrawled > 0, pagesCrawled: done.length + failed.length, urlsDiscovered: rows.length,
+    notCrawled, sitemapUrls: input.sitemapUrlCount,
+  };
   const warnings: string[] = [];
+  if (coverage.capped) warnings.push(`Capped crawl: ${coverage.pagesCrawled.toLocaleString('en-GB')} pages read (the prospect limit is ${pageCap?.toLocaleString('en-GB') ?? 'set'}); ${notCrawled.toLocaleString('en-GB')} more addresses were found and not read. This is not the whole site.`);
   if (failed.length) warnings.push(`${failed.length} page(s) could not be read (${Object.entries(failedByStatus).map(([k, v]) => `${v} × ${k}`).join(', ')}).`);
   if (hitRunawayCeiling) warnings.push(`The site produced more than ${RUNAWAY_URL_CEILING.toLocaleString('en-GB')} distinct addresses — an endless URL space. ${skippedByReason.safety_ceiling} were recorded but not crawled.`);
   const homeOk = !!home;
@@ -637,6 +690,7 @@ export function summariseCrawlRows(input: {
     robots: { found: !!robotsBody, sitemaps: [...robotsBody.matchAll(/^\s*sitemap\s*:\s*(\S+)/gim)].map((m) => m[1]).slice(0, 20), disallowsAll: robotsDisallowsAll(robotsBody), excerpt: clip(robotsBody.trim(), 800) },
     sitemaps: { read: input.sitemapsRead, urlCount: input.sitemapUrlCount, offSiteCount: input.offSiteSitemapLocs.count, offSiteSamples: input.offSiteSitemapLocs.samples.slice(0, 20) },
     families, navigation: home?.evidence?.nav ?? [], footerExcerpt: home?.evidence?.footer ?? '', business, technical,
+    coverage,
   };
 }
 

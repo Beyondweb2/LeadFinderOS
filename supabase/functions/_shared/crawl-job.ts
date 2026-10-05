@@ -15,8 +15,9 @@
 // ⛔ NO MODEL CALLS — deterministic extraction; the crawl costs fetches, nothing else.
 import {
   extractSitemapLocs, clusterUrls, pageSimilarity, buildVerdict, crawlPageKind, THIN_WORDS,
-  CRAWL_CHECK_VERSION, type CrawlSignals,
+  CRAWL_CHECK_VERSION, visibleText, type CrawlSignals,
 } from "../../../src/lib/crawlCheck.ts";
+import { buildSiteAudit, type SiteAuditPage } from "../../../src/lib/siteAudit.ts";
 import { extractSiteInfo, SITE_INFO_VERSION } from "../../../src/lib/siteInfo.ts";
 import { buildSiteEvidence, SITE_EVIDENCE_VERSION, MAX_SITEMAP_LOCS, type EvidencePage } from "../../../src/lib/siteEvidence.ts";
 import {
@@ -149,6 +150,8 @@ export async function activeJobFor(service: Client, leadId: string | null, start
 
 export async function createCrawlJob(service: Client, input: {
   leadId: string | null; userId: string | null; requestedFrom: string | null; probe: HomeProbe;
+  /** Pages this job may read (src/lib/prospectCrawl.ts crawlPageCapFor); null/absent = exhaustive. */
+  pageCap?: number | null;
 }): Promise<{ jobId: string; reused: boolean }> {
   const existing = await activeJobFor(service, input.leadId, input.probe.homeUrl);
   if (existing) return { jobId: existing.id, reused: true };
@@ -163,6 +166,7 @@ export async function createCrawlJob(service: Client, input: {
       town: p.town, readableUa: p.readableUa, readableAs: p.readableAs, searchBlocked: p.searchBlocked,
       respondedAny: p.respondedAny, clientRendered: p.clientRendered, missingH1: p.missingH1, noJsonLd: p.noJsonLd,
       homeWords: p.homeWords, lean: leanHtml(p.homeHtml).slice(0, 600_000), robots,
+      page_cap: typeof input.pageCap === "number" && input.pageCap > 0 ? input.pageCap : null,
     },
     summary: { sitemap_url_count: 0, offsite_sitemap_count: 0, offsite_sitemap_samples: [], sitemap_locs_sample: [], runaway_dropped: 0 },
   }).select("id").single();
@@ -257,7 +261,12 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
   await service.from("crawl_urls").update({ status: "queued" }).eq("job_id", jobId).eq("status", "processing");
 
   const servedUrl = String(job.served_url || job.start_url);
-  const home = (job.home ?? {}) as { readableUa?: string; robots?: RobotsRules; town?: string | null };
+  const home = (job.home ?? {}) as { readableUa?: string; robots?: RobotsRules; town?: string | null; page_cap?: number | null };
+  /* ⛔ THE PROSPECT PAGE LIMIT (2026-10-05, src/lib/prospectCrawl.ts). A job with a page_cap reads at
+     most that many pages (read or failed). Sitemaps are still read in full — they are how the crawl
+     knows the site's size. Once the cap is reached every still-queued page is recorded as skipped
+     with reason coverage_cap, so the result can say exactly how much was NOT read. */
+  const pageCap = typeof home.page_cap === "number" && home.page_cap > 0 ? home.page_cap : null;
   const ua = home.readableUa || CRAWL_UA_FALLBACK;
   const robots = home.robots ?? parseRobots(job.robots_txt);
   const total = await jobCounts(service, jobId);
@@ -273,8 +282,19 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
       .eq("job_id", jobId).eq("status", "queued")
       .order("kind", { ascending: false }).order("depth", { ascending: true }).order("id", { ascending: true }).limit(FULL_CRAWL.batchSize);
     if (be) throw new Error(`frontier read: ${be.message}`);
-    const rows = (batch ?? []) as Array<{ id: number; url: string; kind: "page" | "sitemap"; source: string | null; depth: number; attempts: number }>;
+    let rows = (batch ?? []) as Array<{ id: number; url: string; kind: "page" | "sitemap"; source: string | null; depth: number; attempts: number }>;
     if (!rows.length) break;
+    if (pageCap) {
+      const c = await jobCounts(service, jobId);
+      let room = Math.max(0, pageCap - (c.done + c.failed));
+      rows = rows.filter((r) => r.kind === "sitemap" || room-- > 0);
+      if (!rows.length) {
+        // The limit is reached and no sitemap is left to read: the rest of the frontier is not crawled.
+        await service.from("crawl_urls").update({ status: "skipped", skip_reason: "coverage_cap", processed_at: new Date().toISOString() })
+          .eq("job_id", jobId).eq("kind", "page").eq("status", "queued");
+        break;
+      }
+    }
     await service.from("crawl_urls").update({ status: "processing" }).in("id", rows.map((r) => r.id)).eq("status", "queued");
     for (const r of rows) r.attempts += 1;
     await Promise.all(rows.map((r) => service.from("crawl_urls").update({ attempts: r.attempts }).eq("id", r.id)));
@@ -359,6 +379,10 @@ export async function runCrawlTick(service: Client): Promise<{ jobId: string | n
 
 /* ── finalize ─────────────────────────────────────────────────────────────────────────────────── */
 
+/** Above this many read pages the finalize step does not load page links (memory); the audit then
+ *  says the link-graph checks were not made. Prospect crawls (capped) are always well under it. */
+const LINK_GRAPH_MAX_PAGES = 5_000;
+
 const median = (xs: number[]) => { if (!xs.length) return 0; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 export async function finalizeCrawlJob(service: Client, jobId: string): Promise<void> {
@@ -368,15 +392,18 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
   const home = (job.home ?? {}) as Record<string, any>;
   const summaryState = (job.summary ?? {}) as Record<string, any>;
 
-  // Every page row, paged (PostgREST caps at 1,000) — digest + business only, never the text.
-  const rows: Array<StoredCrawlRow & { id: number; depth: number }> = [];
+  // Every page row, paged (PostgREST caps at 1,000) — digest + business only, never the text. Page
+  // links (the audit's link graph) only while the site is small enough to hold them in memory.
+  const preCounts = await jobCounts(service, jobId);
+  const withLinks = preCounts.done <= LINK_GRAPH_MAX_PAGES;
+  const rows: Array<StoredCrawlRow & { id: number; depth: number; links?: string[] | null }> = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from("crawl_urls")
-      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer")
+      .select("id,url,status,skip_reason,http_status,final_url,source,depth,d:evidence->d,b:evidence->b,nav:evidence->nav,footer:evidence->footer" + (withLinks ? ",l:evidence->l" : ""))
       .eq("job_id", jobId).eq("kind", "page").order("id").range(from, from + 999);
     if (error) throw new Error(`finalize read: ${error.message}`);
     const list = (data ?? []) as Array<Record<string, any>>;
-    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null });
+    for (const r of list) rows.push({ id: r.id, depth: r.depth, url: r.url, status: r.status, skip_reason: r.skip_reason, http_status: r.http_status, final_url: r.final_url, source: r.source, evidence: r.d ? { d: r.d, b: r.b, nav: r.nav ?? undefined, footer: r.footer ?? undefined } : null, links: Array.isArray(r.l) ? r.l : null });
     if (list.length < 1000) break;
   }
   const { count: sitemapsRead } = await service.from("crawl_urls").select("id", { count: "exact", head: true }).eq("job_id", jobId).eq("kind", "sitemap").eq("status", "done");
@@ -388,6 +415,7 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     requestedUrl: job.start_url, servedUrl, robotsTxt: job.robots_txt ?? null, sitemapsRead: sitemapsRead ?? 0,
     offSiteSitemapLocs: { count: Number(summaryState.offsite_sitemap_count ?? 0), samples: summaryState.offsite_sitemap_samples ?? [] },
     sitemapUrlCount: Number(summaryState.sitemap_url_count ?? 0), ms, ticks: Number(job.ticks ?? 0), jobId,
+    pageCap: typeof home.page_cap === "number" ? home.page_cap : null,
   });
   if (runawayDropped) {
     full.stats.skipped += runawayDropped;
@@ -443,6 +471,29 @@ export async function finalizeCrawlJob(service: Client, jobId: string): Promise<
     }));
     if (pages.length) evidence = buildSiteEvidence({ servedUrl, pages, sitemapLocs: summaryState.sitemap_locs_sample ?? [], sitemapUrls: [] });
   } catch (e) { console.error("[crawl-job] evidence failed:", (e as Error).message); }
+
+  /* THE GROUPED SITE AUDIT (2026-10-05, src/lib/siteAudit.ts) — stored with the crawl so the detailed
+     view and the Call screen reopen it without re-reading thousands of rows. Best-effort: an analyser
+     that trips must never cost the crawl its result. */
+  try {
+    let lead: { name: string | null; town: string | null } | null = null;
+    if (job.lead_id) {
+      const { data: l } = await service.from("outreach_leads").select("business_name, derived_town").eq("id", job.lead_id).maybeSingle();
+      const fallbackTown = typeof home.town === "string" && home.town.trim().split(/\s+/).length <= 3 ? home.town : null;
+      lead = { name: (l?.business_name as string | null) ?? null, town: (l?.derived_town as string | null) ?? fallbackTown };
+    }
+    const auditPages: SiteAuditPage[] = rows.map((r) => ({
+      url: r.url, finalUrl: r.final_url ?? null, status: r.status, httpStatus: r.http_status ?? null, skipReason: r.skip_reason ?? null,
+      source: r.source ?? null, depth: r.depth, d: r.evidence?.d ?? null, b: r.evidence?.b ?? null, l: withLinks ? (r.links ?? null) : null,
+    }));
+    full.audit = buildSiteAudit({
+      servedUrl, requestedUrl: job.start_url, robotsTxt: job.robots_txt ?? null, pages: auditPages,
+      sitemapsRead: full.sitemaps.read, sitemapUrlCount: full.sitemaps.urlCount,
+      offSiteSitemap: { count: full.sitemaps.offSiteCount, samples: full.sitemaps.offSiteSamples },
+      coverage: full.coverage!, probe: { searchBlocked: home.searchBlocked ?? [], readableAs: home.readableAs ?? null, clientRendered: cr },
+      duplicates, lead, homeText: home.lean ? visibleText(String(home.lean)).slice(0, 6000) : null,
+    });
+  } catch (e) { console.error("[crawl-job] site audit failed:", (e as Error).message); }
 
   const checkedAt = new Date().toISOString();
   const result = {

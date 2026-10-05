@@ -241,7 +241,7 @@ function Details({ score, rivalsWithheld, legacy, issues }: { score: HookScore; 
 /* ── The card ────────────────────────────────────────────────────────────────────────────────── */
 
 /** The presentational half: no fetching, so it renders from plain data. */
-export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied }: {
+export function HookVisibilityView({ card, inFlight, state, report, onRunNew, runNewBusy, onRefresh, refreshing, defaultExpanded = false, issues, onReportCopied, onOpenFull }: {
   card: HookCardScore | null;
   inFlight: boolean;
   state: unknown;
@@ -253,6 +253,9 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
   /** The website / online-presence findings block, rendered inside the details (mounted only when they
    *  are open, so its read runs only then). HookVisibilityCard passes HookWebsiteIssues. */
   issues?: ReactNode;
+  /** Opens the large detailed audit window (ProspectAuditDialog). When given, View details opens it
+   *  instead of the small overlay (2026-10-05: the overlay was a 40vh scroller inside a scrolling page). */
+  onOpenFull?: () => void;
 } & HookRunNewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -374,20 +377,20 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
         {runNewButton}
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
+          onClick={() => (onOpenFull ? onOpenFull() : setExpanded((v) => !v))}
+          aria-expanded={onOpenFull ? undefined : expanded}
           data-testid="hook-toggle-details"
           className={ACTION_BTN}
         >
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          {expanded ? 'Hide details' : legacy ? 'View old details' : 'View details'}
+          {onOpenFull ? 'View full audit' : expanded ? 'Hide details' : legacy ? 'View old details' : 'View details'}
         </button>
         <ReportAction report={report} legacy={legacy} onRefresh={onRefresh} refreshing={refreshing} onReportCopied={onReportCopied} />
       </div>
 
       {/* ⛔ AN OVERLAY, NOT A GROWING BLOCK (2026-09-27): the details float over the thread, capped and
           scrolling on their own, so the conversation stays where it was. A click outside closes them. */}
-      {expanded && (
+      {expanded && !onOpenFull && (
         <>
           <button type="button" aria-label="Close details" className="fixed inset-0 z-20 cursor-default" onClick={() => setExpanded(false)} />
           <Details score={score} rivalsWithheld={rivalsWithheld} legacy={legacy} issues={issues} />

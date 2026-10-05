@@ -970,6 +970,11 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `crawl-worker-run` backstop) that runs until the frontier is empty — no page, request or sitemap cap
   (`docs/exhaustive-crawl.md`). Never make it finish inside one request again. Automated crawls stay
   STANDARD inline (`STANDARD_CRAWL`). The screens only WATCH a job; they never crawl.
+  ⛔ **…EXCEPT A PROSPECT** (2026-10-05, `src/lib/prospectCrawl.ts`, `docs/pre-sales-certification/prospect-full-crawl-audit-results.md`):
+  a non-client lead's pressed crawl reads at most `PROSPECT_CRAWL_PAGE_CAP` pages, records the rest as `coverage_cap` and is
+  shown as CAPPED, never "the full site"; client / Paid Clients / Website Build crawls stay exhaustive (positive match). A
+  prospect's saved full crawl is REUSED for `PROSPECT_CRAWL_REUSE_MS` (decided before any fetch). The grouped site audit is
+  `siteAudit.ts`, stored at `full_evidence.audit`; its words never claim how an AI decides, never score, never sell schema or llms.txt.
 - **`lead_crawl_checks` is ONE row per lead, read by every screen** — never a screen-specific copy.
   The crawl-wide summary lives in `full_evidence`, every URL in `crawl_urls` (never in `result`, which
   Outreach/Inbox read for the whole book). An automated crawl never replaces a fresh full one
