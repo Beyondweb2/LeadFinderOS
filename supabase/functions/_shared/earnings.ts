@@ -134,6 +134,25 @@ export async function loadEarnings(service: Service, personId: string | null, to
     }
   }
   const sellerOfLead = new Map([...leads].map(([id, l]) => [id, l.sold_by_user_id]));
+  /* v3 (Paul, 2026-10-05): WHEN each sale was excluded / disqualified — the lead itself, or its seller as
+     a test account (metric_exclusions, created_at). commission.ts applies it to v3 sales only and only
+     before their Approval Date; pre-v3 sales keep the database's stamp. */
+  const exclusionsOf = new Map<string, string>();
+  {
+    const { data: exRows, error: exErr } = await service.from("metric_exclusions").select("kind, value, created_at").in("kind", ["lead", "user"]).limit(10000);
+    if (exErr) throw new Error(exErr.message);
+    const byUser = new Map<string, string>();
+    for (const e of (exRows ?? []) as { kind: string; value: string; created_at: string }[]) {
+      if (e.kind === "lead") { const cur = exclusionsOf.get(e.value); if (!cur || e.created_at < cur) exclusionsOf.set(e.value, e.created_at); }
+      else { const cur = byUser.get(e.value); if (!cur || e.created_at < cur) byUser.set(e.value, e.created_at); }
+    }
+    for (const r of ledger) {
+      if (r.kind !== "initial" || !r.lead_id) continue;
+      const seller = r.sold_by_user_id ?? sellerOfLead.get(r.lead_id) ?? null;
+      const at = seller ? byUser.get(seller) : undefined;
+      if (at) { const cur = exclusionsOf.get(r.lead_id); if (!cur || at < cur) exclusionsOf.set(r.lead_id, at); }
+    }
+  }
   const all = commissionLines({
     ledger, payouts: ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })),
     isCommissionable: (u) => !!u && sales.has(u),
@@ -142,7 +161,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     engagement: timelines, closings,
     /* pre-sales fix 03: the CLIENT's end — no commission on money taken after it, nothing projected. */
     clientStateOf: new Map([...leads].map(([id, l]) => [id, { endedAt: l.service_terminated_at ?? null, refunded: l.status === "refunded" }])),
-    termsOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
+    termsOf, exclusionsOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));

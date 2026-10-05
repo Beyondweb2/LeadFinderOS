@@ -113,5 +113,55 @@ ok(COMMISSION_RECURRING_COUNT_V3 === 5 && COMMISSION_RECURRING_COUNT === 6, 'v3 
   ok(lines.find((l) => l.paymentNumber === 1)!.status === 'due', 'and its initial commission stays earned at payment (never re-held)');
 }
 
+console.log('\n── EXCLUDED / REFUNDED BEFORE APPROVAL DROPS OUT; AFTER APPROVAL NOTHING MOVES (Paul, 2026-10-05) ──');
+{
+  /* Thirteen v3 sales by one seller in November; every one approved 22 Dec unless stated. */
+  const sales = Array.from({ length: 13 }, (_, i) => pay(`X${i + 1}`, 'initial', `2026-11-${String(i + 2).padStart(2, '0')}T10:00:00Z`));
+  const approvals = (day: string) => Object.fromEntries(sales.map((s) => [s.lead_id!, day]));
+  const runX = (ledger: LedgerRow[], approvalByLead: Record<string, string | null>, excl: Record<string, string>, nowIso: string) => commissionLines({
+    ledger, payouts: [], isCommissionable: (u) => u === SELLER, nowIso,
+    termsOf: new Map(Object.entries(approvalByLead).map(([lead, d]) => [lead, { terms: COMMERCIAL_TERMS_V3, approvalDay: d }])),
+    exclusionsOf: new Map(Object.entries(excl)),
+  }).lines.filter((l) => l.kind === 'payment' && l.paymentNumber === 1);
+  const line = (ls: ReturnType<typeof runX>, lead: string) => ls.find((l) => l.leadId === lead)!;
+
+  const base = runX(sales, approvals('2026-12-22'), {}, '2026-12-23T10:00:00Z');
+  ok(line(base, 'X12').rate === 0.3 && line(base, 'X13').monthSeq === 13 && line(base, 'X13').rate === 0.4, 'baseline: sale 12 at 30%, sale 13 at 40%');
+
+  /* Sale 12 excluded while still pending → it is not a qualifying sale, and sale 13 becomes sale 12. */
+  const ex12 = runX(sales, approvals('2026-12-22'), { X12: '2026-12-10T09:00:00Z' }, '2026-12-23T10:00:00Z');
+  ok(line(ex12, 'X12').status === 'cancelled' && line(ex12, 'X12').commission === 0 && /excluded before approval/.test(line(ex12, 'X12').label), 'sale 12 EXCLUDED while pending → earns nothing, not a qualifying sale');
+  ok(line(ex12, 'X13').monthSeq === 12 && line(ex12, 'X13').rate === 0.3, 'sale 13 shifts down to place 12 → 30% (the threshold is not crossed)');
+
+  /* Sale 12 refunded in full INSIDE its window (before approval) → does not count either. */
+  const refunded12 = runX([...sales, refund(sales[11], '2026-12-15T10:00:00Z')], approvals('2026-12-22'), {}, '2026-12-23T10:00:00Z');
+  ok(line(refunded12, 'X12').status === 'cancelled' && line(refunded12, 'X13').monthSeq === 12 && line(refunded12, 'X13').rate === 0.3, 'refunded inside the window → does not count; sale 13 moves to 12');
+
+  /* Sale 12 excluded AFTER sale 13 was approved → sale 13 stays locked at 13 / 40%; sale 12's approved commission stands. */
+  const late = runX(sales, approvals('2026-12-22'), { X12: '2027-01-05T09:00:00Z' }, '2027-01-06T10:00:00Z');
+  ok(line(late, 'X13').monthSeq === 13 && line(late, 'X13').rate === 0.4, 'an exclusion AFTER approval never re-rates an already-approved sale (no backward cascade)');
+  ok(line(late, 'X12').status === 'due' && line(late, 'X12').rate === 0.3, 'and the excluded sale\'s own approved commission is not clawed back by a later status change');
+
+  /* Refund after the Approval Date follows the locked rule: rate and place unchanged, nothing taken back. */
+  const lateRefund = commissionLines({ ledger: [...sales, refund(sales[11], '2027-01-05T10:00:00Z')], payouts: [], isCommissionable: (u) => u === SELLER, nowIso: '2027-01-06T10:00:00Z',
+    termsOf: new Map(sales.map((s) => [s.lead_id!, { terms: COMMERCIAL_TERMS_V3, approvalDay: '2026-12-22' }])) }).lines;
+  ok(lateRefund.find((l) => l.leadId === 'X13' && l.kind === 'payment')!.rate === 0.4 && lateRefund.find((l) => l.leadId === 'X12' && l.kind === 'reversal')!.commission === 0, 'a refund after the Approval Date: commission unchanged, no re-rating of later sales');
+
+  /* Mixed approvals: sale 13 still PENDING when sale 12 is excluded after 12's own approval → 13 still counts 12 (locked sale stays a qualifying sale). */
+  const mixed = runX(sales, { ...approvals('2026-12-22'), X13: '2027-01-20' }, { X12: '2027-01-05T09:00:00Z' }, '2027-01-06T10:00:00Z');
+  ok(line(mixed, 'X12').status === 'due' && line(mixed, 'X13').status === 'pending' && line(mixed, 'X13').monthSeq === 12 && line(mixed, 'X13').provisional === true,
+    'a still-pending later sale IS recalculated when an earlier sale is excluded (it moves to 12, provisional)');
+
+  /* Test / fraudulent records never qualify: a sale stamped test_excluded never counts for anyone. */
+  const withTest = [pay('T0', 'initial', '2026-11-01T09:00:00Z', 99, { commission_rule: 'test_excluded', commission_rate: 0 }), ...sales];
+  const t = runX(withTest, { ...approvals('2026-12-22'), T0: '2026-12-22' }, {}, '2026-12-23T10:00:00Z');
+  ok(line(t, 'X13').monthSeq === 13 && line(t, 'T0').rate === 0, 'a test / invalid record is never a qualifying sale and never lifts anyone else');
+
+  /* Pre-v3 sales: an exclusion map changes nothing (the database stamp stands). */
+  const legacy = pay('OLD', 'initial', '2026-10-02T10:00:00Z', 99, { commission_rule: MONTHLY_TIER_RULE, commission_month_start: '2026-10-01', commission_month_seq: 1, commission_rate: 0.3 });
+  const lg = commissionLines({ ledger: [legacy], payouts: [], isCommissionable: (u) => u === SELLER, nowIso: '2026-12-01T10:00:00Z', exclusionsOf: new Map([['OLD', '2026-10-03T10:00:00Z']]) }).lines[0];
+  ok(lg.rate === 0.3 && lg.status === 'due', 'a pre-v3 sale is untouched by the v3 exclusion rule (historical commission exactly as-is)');
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log('\nAll v3 commission checks passed.');

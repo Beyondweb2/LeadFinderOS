@@ -107,6 +107,7 @@ const PAY_REFUSAL: Record<string, string> = {
   domain_unresolved: "We need to check who controls your website domain before you pay. Paul will be in touch.",
   cannot_serve: "We cannot take payment for this website set-up yet. Paul will be in touch.",
   agreement_unavailable: "The payment page could not be opened just now. Please try again in a minute.",
+  payment_held: "A payment from you is already with us and Paul is reviewing it, so we will not take another. He will be in touch.",
 };
 
 Deno.serve(async (req) => {

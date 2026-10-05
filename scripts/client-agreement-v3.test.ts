@@ -118,7 +118,9 @@ async function main() {
   ok(/if \(form && clip\(form\.get\("s"\)\) !== signup\.id\)/.test(ag), 'a stale page for an older sign-up can neither sign nor pay for the current one');
   ok(/if \(form\.get\("action"\) === "pay"\) \{\s*\n\s*return html\(agreementPageHtml\(\{ mode: "not_ready"[^\n]*Please sign the agreement first/.test(ag), 'pressing pay before signing is refused');
   const wh = read('supabase/functions/stripe-webhook/index.ts');
-  ok(/"paid_without_v3_agreement"/.test(wh) && /sendOperatorAlert\("Paid WITHOUT the v3 agreement/.test(wh), 'an OLD open Stripe session paid after the switch is flagged to Paul, never silently put on v3');
+  /* 2026-10-05 (correction): an alert after the fact is not a gate. An unsigned payment is HELD before any
+     lifecycle runs (scripts/legacy-cutover.test.ts proves the order and what is not written). */
+  ok(/const verdict = await verifyV3Checkout\(/.test(wh) && /await holdPayment\(/.test(wh) && !/sendOperatorAlert\("Paid WITHOUT the v3 agreement/.test(wh), 'an unsigned payment (e.g. an OLD open session) is HELD by the webhook backstop — never processed as a sale');
 
   console.log('\n── THE EMAILED COPY ──');
   ok(/logAgreementEmail\(service, acceptanceId, row\.lead_id, sent\.to, sent\.ok \? "sent" : "failed"/.test(shared), 'every copy email is logged with what the provider answered');

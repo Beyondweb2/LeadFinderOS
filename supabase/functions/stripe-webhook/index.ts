@@ -27,6 +27,7 @@ import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-led
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 import { appendTermsEvent } from "../_shared/client-terms.ts";
+import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
 import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
@@ -923,6 +924,25 @@ Deno.serve(async (req) => {
           if (s.status === "complete") {
             const findableLeadId = (s.metadata?.lead_id as string) || "";
             const amountGbp = typeof s.amount_total === "number" ? s.amount_total / 100 : FINDABLE_SETUP_PRICE_GBP;
+            /* ══ THE v3 BACKSTOP (2026-10-05) — defence in depth behind findable-checkout's gate ════════════
+               A completed Findable checkout is processed as a sale ONLY if it is a valid v3 sale: the session
+               names a v3 signature that, read back, passes the gate for THIS client, sign-up, service and
+               version. Anything else (a session opened before the cutover, a forged one) is HELD: recorded in
+               client_payment_holds, Paul told, and NOTHING else — the lead is not marked paid, no subscription,
+               no ledger row (no commission), no baseline, no client email. A replay of a payment the ledger
+               already holds is history and is never re-judged. Read errors throw (Stripe retries). */
+            {
+              const piForHold = typeof s.payment_intent === "string" ? s.payment_intent : (s.payment_intent as { id?: string } | null)?.id ?? null;
+              if (!(await paymentAlreadyRecorded(service, piForHold, s.id))) {
+                const verdict = await verifyV3Checkout(service, s as unknown as Parameters<typeof verifyV3Checkout>[1], findableLeadId || null, onboardingId);
+                if (!verdict.ok) {
+                  await holdPayment(service, s as unknown as Parameters<typeof holdPayment>[1], { leadId: findableLeadId || null, onboardingId, reason: verdict.reason, eventId: event.id });
+                  if (findableLeadId) await appendTermsEvent(service, findableLeadId, "paid_without_v3_agreement", null, { checkout_session: s.id, reason: verdict.reason });
+                  console.warn(`[stripe-webhook] HELD ${s.id}: ${verdict.reason}`);
+                  break;
+                }
+              }
+            }
             /* ⛔ IS THIS CLIENT ALREADY CLOSED (ended / refunded)? Read FIRST, because a late replay for a
                closed client must not start anything new: no agreement acceptance or PDF, no baseline, no
                subscription, no new-client email (src/lib/paymentState.ts). A failed read is not "open":
@@ -1310,16 +1330,9 @@ Deno.serve(async (req) => {
                 }, { onConflict: "lead_id", ignoreDuplicates: true });
                 if (tErr) await recordPaymentFailure("v3_terms_stamp_failed", { lead_id: findableLeadId, reason: tErr.message });
                 else await appendTermsEvent(service, findableLeadId, "terms_stamped", null, { checkout_session: s.id, acceptance_id: s.metadata?.agreement_acceptance_id ?? null, route: paid.route, initial_paid_at: paidAtIso });
-              } else if (ownsPayment && !v3Checkout) {
-                await recordPaymentFailure("paid_without_v3_agreement", { lead_id: findableLeadId, onboarding_id: onboardingId, checkout_session: s.id, agreement_version: s.metadata?.agreement_version ?? null });
-                await appendTermsEvent(service, findableLeadId, "paid_without_v3_agreement", null, { checkout_session: s.id });
-                await sendOperatorAlert("Paid WITHOUT the v3 agreement - check this client", [
-                  `A payment arrived on a Stripe session made before the agreement-first sign-up (session ${s.id}).`,
-                  "It has NOT been put on the v3 terms: its monthly keeps the old six-week timing.",
-                  "Ask the client to sign the current agreement, or decide how to handle them, before work starts.",
-                  `Lead: ${findableLeadId}`,
-                ]);
               }
+              /* (A non-v3 payment never reaches here as a NEW sale: the backstop above held it. Only a replay of a
+                 payment recorded before v3 does, and it keeps the legacy path it was sold on.) */
               /* ⛔ THE PAYMENT LEDGER (2026-09-28): a RECORD of the money that just landed, after the
                  payment write above so sold_by_user_id is already stamped. Never throws, never blocks
                  the payment; unique by the payment intent, so a retried event writes nothing twice. */
@@ -1584,6 +1597,18 @@ Deno.serve(async (req) => {
               });
             }
           }
+          break;
+        }
+        /* ══ v3 BACKSTOP FOR A PAYMENT WITH NO SIGN-UP (2026-10-05) ════════════════════════════════════════
+           A Stripe PAYMENT LINK (hand-made in the dashboard — the founder-era one was "kept for sending manually
+           on WhatsApp") produces a completed session with no onboarding_id. Until now it fell into this barber
+           branch and left NO trace. A payment-mode session with no generated site is never the barber product:
+           it is money taken outside the agreement-first sign-up, so it is HELD and Paul is told. */
+        if (s.status === "complete" && !((s.metadata?.generated_site_id as string) || "") && (s.payment_link || s.mode === "payment")) {
+          await holdPayment(service, s as unknown as Parameters<typeof holdPayment>[1], {
+            leadId: null, onboardingId: null, eventId: event.id,
+            reason: s.payment_link ? "payment_link: paid through a Stripe Payment Link, outside the v3 sign-up" : "unidentified_payment: a one-off payment with no Findable sign-up",
+          });
           break;
         }
         // subscription mode → the session is 'complete' once the first invoice paid.

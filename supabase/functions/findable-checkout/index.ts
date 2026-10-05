@@ -7,6 +7,7 @@ import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/
 import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
 import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
 import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
+import { openHoldFor } from "../_shared/payment-hold.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
    host filter that keeps a preview domain out of a customer-facing URL. A second copy of that
@@ -249,6 +250,18 @@ Deno.serve(async (req) => {
           ended: !!lead.service_terminated_at,
         });
         return json({ ok: false, error: "already_client" }, 403);
+      }
+      /* ⛔ A HELD PAYMENT IS OPEN (v3 backstop, _shared/payment-hold.ts): money was already taken outside the
+         signed sign-up and Paul has not resolved it. A second payment would charge them twice — refuse until
+         he refunds or migrates it. An unreadable hold table refuses too (fails closed). */
+      try {
+        if (await openHoldFor(service, effectiveLeadId)) {
+          await recordRefusal("checkout_refused_payment_held", { lead_id: effectiveLeadId });
+          return json({ ok: false, error: "payment_held" }, 409);
+        }
+      } catch (e) {
+        await recordRefusal("checkout_refused_hold_unreadable", { lead_id: effectiveLeadId, error: (e as Error).message });
+        return json({ ok: false, error: "agreement_unavailable" }, 503);
       }
       /* NO TRADE — the last line of defence, and the reason this check lives HERE rather than only
          in the senders. Every route to a Stripe session for this product passes through this

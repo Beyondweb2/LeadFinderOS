@@ -140,7 +140,33 @@ drop trigger if exists trg_client_service_events_no_truncate on public.client_se
 create trigger trg_client_service_events_no_truncate before truncate on public.client_service_events
   for each statement execute function public.refuse_client_service_events_change();
 
+-- ── 5. Payments HELD by the webhook backstop (no valid v3 signature) ─────────────────────────────────
+-- Defence in depth behind the payment gate: a Findable payment Stripe reports WITHOUT a valid v3
+-- acceptance for that client / sign-up / service / version (a pre-cutover session, a Payment Link, a
+-- forged session) is recorded HERE and nowhere else — no Paid Client lifecycle, no subscription, no
+-- ledger row (so no commission). Paul resolves each by hand (refund, or sign-and-migrate).
+create table if not exists public.client_payment_holds (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  checkout_session_id text not null unique,
+  payment_intent_id text,
+  payment_link_id text,
+  lead_id uuid,
+  onboarding_id uuid,
+  amount_gbp numeric(10,2),
+  customer_email text,
+  reason text not null,
+  stripe_event_id text,
+  resolved_at timestamptz,
+  resolution text check (resolution is null or resolution in ('refunded', 'signed_and_migrated', 'not_findable')),
+  resolved_by uuid
+);
+create index if not exists client_payment_holds_open_idx on public.client_payment_holds (lead_id) where resolved_at is null;
+alter table public.client_payment_holds enable row level security;
+revoke all on public.client_payment_holds from anon, authenticated;
+
 -- Read back (run after applying):
+--   select count(*) from public.client_payment_holds;                                                     -- 0
 --   select column_name from information_schema.columns where table_name = 'client_agreement_acceptances'
 --     and column_name in ('onboarding_id','authority_confirmed','marketing_opt_out','commercial_terms');   -- 4 rows
 --   select conname from pg_constraint where conname = 'v3_acceptance_is_complete';                         -- 1 row

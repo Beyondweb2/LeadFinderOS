@@ -74,6 +74,34 @@ export function checkoutAgreementGate(args: {
   return { ok: true, acceptanceId: a.id };
 }
 
+/* ══ THE WEBHOOK BACKSTOP (defence in depth — the gate above is the real block) ══════════════════════
+   When Stripe reports a completed Findable checkout, the payment is treated as a v3 sale ONLY if the
+   session says it is (commercial_terms v3, the current agreement version, an acceptance id) AND that
+   acceptance, read back from the database, passes the same gate for the lead, sign-up and service the
+   session names. Anything else is HELD. */
+export type WebhookVerdict = { ok: true; acceptanceId: string } | { ok: false; reason: string };
+export function webhookV3Verdict(args: {
+  metadata: Record<string, string | undefined> | null | undefined;
+  acceptance: GateAcceptance | null;
+  leadId: string | null;
+  onboardingId: string;
+  currentVersion: string;
+  recomputedSha: string | null;
+  v3Terms: string;
+}): WebhookVerdict {
+  const m = args.metadata ?? {};
+  if (m.commercial_terms !== args.v3Terms) return { ok: false, reason: 'not_a_v3_checkout: the session was not created by the agreement-first checkout' };
+  if (m.agreement_version !== args.currentVersion) return { ok: false, reason: `old_version: the session names agreement version ${m.agreement_version ?? 'none'}` };
+  if (!m.agreement_acceptance_id) return { ok: false, reason: 'no_acceptance_id: the session names no signature' };
+  if (!args.leadId) return { ok: false, reason: 'no_lead: the session names no client' };
+  if (!args.acceptance || args.acceptance.id !== m.agreement_acceptance_id) return { ok: false, reason: 'acceptance_not_found: the named signature does not exist' };
+  const route = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
+  if (!route) return { ok: false, reason: 'no_route: the session names no service' };
+  const g = checkoutAgreementGate({ acceptance: args.acceptance, leadId: args.leadId, onboardingId: args.onboardingId, route, currentVersion: args.currentVersion, recomputedSha: args.recomputedSha });
+  if ('refusal' in g) return { ok: false, reason: `${g.refusal}: ${g.reason}` };
+  return { ok: true, acceptanceId: g.acceptanceId };
+}
+
 /** The agreement page for one sign-up: the client's own link plus the sign-up it is for. The page signs
  *  FOR that onboarding row and its "Continue to payment" pays for it; nothing else is accepted. */
 export function signupAgreementUrl(agreementUrl: string, onboardingId: string): string {

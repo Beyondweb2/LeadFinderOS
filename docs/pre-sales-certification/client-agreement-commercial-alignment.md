@@ -70,8 +70,10 @@ Bypass protections:
   over again, and the next press stores the sign-up link and **expires the old Stripe session**.
 - The agreement page pays only via findable-checkout and only forwards to a `https://checkout.stripe.com/` URL; a stale
   page for an older sign-up can neither sign nor pay; "pay" before signing is refused.
-- Stripe sessions already open at deploy (≤ 24 h) could still be paid: the webhook does **not** put them on v3 terms,
-  writes `paid_without_v3_agreement`, and emails Paul.
+- Objects created BEFORE the switch (open Checkout Sessions, hand-made Payment Links) are invalidated by the
+  controlled cutover (§14), and anything Stripe still completes without a valid v3 signature is HELD by the webhook
+  backstop (§15). ⛔ An alert after an unsigned payment is NOT the gate — the first version of this branch did only that;
+  corrected the same day.
 
 ## 5. Access / Results / Approval dates
 
@@ -162,18 +164,22 @@ Migration (NOT applied): `supabase/migrations/20261010090000_client_agreement_v3
 check + a unique index on `client_agreement_acceptances`; new `client_agreement_emails`, `client_service_terms` (guard
 trigger), `client_service_events` (append-only); RLS on, no grants to anon/authenticated. Read-back queries at its foot.
 
-Deploy order (integration session): **SQL → read back → stripe-webhook → process-ai-audit-queue, paid-baseline,
-paid-client-hub, cron-run, sales-earnings, sales-performance, admin-overview, business-summary → client-agreement →
-quick-close → findable-checkout LAST** (it switches the gate on; a v3 session must never reach a webhook that cannot read
-it). Then expire any Stripe Checkout Session created before the switch.
+The migration also creates `client_payment_holds` (§15).
+
+Deploy order: **the cutover process in §14** — it is the deploy order.
 Functions whose code changed directly: client-agreement, cron-run, findable-checkout, paid-client-hub, quick-close,
-stripe-webhook. Every function reaching a changed shared module (`check-import-graph --reached-by`), 34 in all:
+stripe-webhook, and the NEW `legacy-checkout-cutover` (its `config.toml` entry, `verify_jwt = false`, handler-side auth,
+is in this branch). Every function reaching a changed shared module (`check-import-graph --reached-by`), 35 in all:
 admin-overview business-summary client-agreement conversation-triage create-ai-audit cron-run findable-checkout
-findable-onboarding market-view mockup niche-sample page-generator paid-baseline paid-client-hub process-ai-audit-queue
-process-whatsapp-queue prospect-preview quick-close render-audit-report render-remeasure-results render-welcome-pack
-run-seo-scan sales-earnings sales-performance send-whatsapp-media send-whatsapp-message send-whatsapp-voice site-enquiry
-stripe-webhook submissions voice-note-script warm-lead-reply weekly-visibility whatsapp-status (HELD — wording only).
-No new edge function, so no `config.toml` change.
+findable-onboarding legacy-checkout-cutover market-view mockup niche-sample page-generator paid-baseline paid-client-hub
+process-ai-audit-queue process-whatsapp-queue prospect-preview quick-close render-audit-report render-remeasure-results
+render-welcome-pack run-seo-scan sales-earnings sales-performance send-whatsapp-media send-whatsapp-message
+send-whatsapp-voice site-enquiry stripe-webhook submissions voice-note-script warm-lead-reply weekly-visibility, and
+**whatsapp-status**.
+⛔ **whatsapp-status is HELD in production (v114) and must NOT be deployed or modified by this release.** It is reached only
+through `_shared/whatsapp-inbound.ts` → the audit / offer modules (offer wording in `findableOffer.ts`, and the v3
+Access-Date guard inside `startPaidBaseline`, which the inbound path does not call). Leaving it on its deployed version
+changes nothing about payments, agreements or commission.
 
 **Owed outside this branch (findable-site, separate repo, not touched):** /refunds (checklist Part 16), /terms, the pre-pay
 screen's copy of the card notice and the plan card's "six weeks" wording, `GUARANTEE_PAYMENT_TWO_LINE` (no longer reachable
@@ -190,3 +196,110 @@ Updated to the v3 rules (17 suites): call-workspace, client-agreement, client-co
 Continuing Service, and the verbatim clause 12.2(e) sentence), cold-call-playbook, commission-six-trailing,
 customer-lifecycle, findable-offer-terms, paid-client-hub-resilience, payment-client-state, pre-sales-final, qa-safety,
 quick-close-links, quick-close, remeasure-results, sales-commission, service-route-terms, wave1-integration.
+New in the correction pass: `legacy-cutover.test.ts` (the bypass trace, the cutover against a fake Stripe, the code scan
+that exactly one place can create a session, the webhook backstop's order and what it does not write) and the ladder
+boundary cases in `commission-v3-terms.test.ts`. Agreement parity: `scripts/check-agreement-parity.ts` (§17).
+
+## 14. Legacy payment bypass — trace and controlled cutover (correction, 2026-10-05)
+
+Paul's rule: **no payment may be taken for a new v3 sale without the v3 agreement acceptance; the system fails closed.**
+
+**What could still take money before the switch (traced):**
+
+| Path | Payable? | Closed by |
+|---|---|---|
+| A new session from `findable-checkout` (Quick Close, questionnaire, agreement page, a direct POST) | No — the v3 gate refuses without a signature | the gate (§4) |
+| A Checkout Session created by the OLD checkout and still open (≤ 24 h), incl. the one behind a Quick Close link already sent to a prospect | **Yes** | cutover: EXPIRE |
+| A hand-made Stripe **Payment Link** — the docs record one "kept for sending manually on WhatsApp" (founder era); no code ever created one, so only Stripe can list them | **Yes, until deactivated** — and its payments used to leave NO trace (no onboarding id → the old barber branch) | cutover: DEACTIVATE; backstop holds any payment |
+| A Quick Close row storing a Stripe URL | Only while its session is open | never reused (`linkUsable`); its session is expired by the cutover |
+| Cached / emailed / WhatsApp-sent Stripe URLs | Only while their session is open | the session expiry |
+| The self-service onboarding URL | No — it goes through the gated checkout | the gate |
+| Any other Stripe write in code | None — the scan finds exactly one session creator (`findable-checkout`), no Payment Link creator, no stored `buy.stripe.com` URL | — |
+
+The live Stripe objects could not be listed from this session (the Stripe key exists only inside the edge functions), so
+the REAL counts come from the cutover report, run by the integration session.
+
+**The tool:** fn `legacy-checkout-cutover` (rules `src/lib/legacyCutover.ts`, I/O `_shared/legacy-cutover.ts`). Auth:
+`x-cron-secret` = CRON_SECRET, or an admin session.
+- `POST {}` → **read-only report**:
+  ```
+  LEGACY FINDABLE CHECKOUT CUTOVER
+  Open legacy Checkout Sessions: X
+  Active legacy Payment Links: X
+  Stored legacy Quick Close links: X (still payable: X)
+  Other bypass paths: X
+    EXPIRE session cs_… (Quick Close link already sent) · lead … · sign-up …
+    DEACTIVATE Payment Link plink_… — a Findable price or name
+    REVIEW Payment Link plink_… — could not tell if it is Findable
+  Left alone: … signed v3 session(s), … non-Findable session(s), … non-Findable Payment Link(s).
+  Plan hash: …
+  READY / NOT READY
+  ```
+  Targets ONLY Findable sales paths: an open session carrying `onboarding_id` and no v3 terms; an active Payment Link
+  whose metadata or line item names Findable or charges a historic Findable first-payment price (£19.99, £49.99, £99) in
+  GBP, plus its open sessions. Never touched: completed sessions (history), signed v3 sessions, sessions / links of other
+  products. A Payment Link nobody can classify is listed under REVIEW and counts as an "other bypass path" until Paul
+  decides — never guessed.
+- `POST { mode: "execute", plan_hash, confirm: "INVALIDATE LEGACY FINDABLE CHECKOUT" }` → re-reads Stripe, **refuses
+  unless the plan is byte-for-byte the one reviewed** (same hash), deactivates the listed links first (Stripe:
+  `active=false`, reversible), expires the listed sessions, logs `legacy_checkout_cutover_executed`, and reports again.
+
+**THE CUTOVER PROCESS (this is the deploy order; the integration session runs it, not this branch):**
+1. Tell the team: no new links for the next hour (sales pause for the cutover window only).
+2. Apply `20261010090000_client_agreement_v3_commercial.sql` one block at a time; read back (queries at its foot).
+3. Deploy **stripe-webhook** — the backstop is live from here: any unsigned payment is HELD.
+4. Deploy process-ai-audit-queue, paid-baseline, paid-client-hub, cron-run, sales-earnings, sales-performance,
+   admin-overview, business-summary, client-agreement, quick-close, **legacy-checkout-cutover** (+ the other functions
+   §12 lists for wording; **never whatsapp-status**).
+5. Deploy **findable-checkout** — the gate is on. Prove it by marker (`agreement_required` / `signup_link` in the bundle).
+6. Run the cutover **report**. Paul decides every REVIEW link (deactivate it in Stripe, or confirm it is not Findable).
+7. Run **execute** with that report's plan hash and the confirm phrase.
+8. Run the report again until it says **READY**. Record the before/after reports in the release record.
+9. Run the agreement parity check (§17) and deploy findable-site's v3 /agreement, /terms, /refunds.
+10. Resume selling. Watch `client_payment_holds` (it should stay empty).
+
+**PAYMENT GATE READY** — conditional, and only in this sense: in this branch's code there is no supported route to a
+Stripe payment without a valid v3 acceptance (the one session creator is gated; Quick Close never hands out a Stripe URL;
+stored Stripe links are never reused), and every pre-switch Stripe-side path (open sessions, Findable Payment Links) is
+identified and invalidated by the documented cutover, which refuses to report READY while anything payable or unclassified
+remains. It becomes true in production only when step 8 reports READY. Anything Stripe still completes after that is held
+(§15), never processed.
+
+## 15. Webhook backstop (defence in depth, not the gate)
+
+`_shared/payment-hold.ts`, run at the very start of a completed Findable checkout, BEFORE the paid state, the ledger and
+the subscription:
+- A replay of a payment the ledger already recorded is history → processed as it always was (never re-judged).
+- Otherwise the session must name a v3 signature (`commercial_terms` v3, current version, `agreement_acceptance_id`) that,
+  read back, passes the gate for the session's client, sign-up and service, with the stored text re-hashing to its
+  fingerprint (`webhookV3Verdict`).
+- If not → **HELD**: one row in `client_payment_holds` (session, payment, Payment Link, lead, sign-up, amount, payer
+  email, reason), a priority notification + an email to Paul, an error-log row — and NOTHING else: the lead is not marked
+  paid, no Paid Client lifecycle, no subscription (no recurring billing), no ledger row (so no commission), no baseline,
+  no client email. Paul refunds it in Stripe, or has them sign and migrates them by hand.
+- A completed **Payment Link** / one-off session with no sign-up (until now it left no trace) is held the same way.
+- While a hold is open for a client, `findable-checkout` refuses another payment (`payment_held`) — no double charge.
+
+## 16. Decisions applied (Paul, 2026-10-05)
+
+- **Continuing Service reminder timing — kept.** Paul's action appears 14 days before the client's 30-day reminder is due
+  (≈ 44 days before the Continuing Service starts). The client reminder and the Continuing Service switch stay manual.
+- **Excluded sales and the ladder — v3 sales only.** A sale excluded / disqualified (metric_exclusions: the lead, or its
+  seller as a test account, by `created_at`) or refunded in full BEFORE its Approval Date is not a qualifying sale: it
+  earns nothing (`cancelled`) and drops out of its UK month's 30/40/50 count, and every still-pending later sale is
+  re-placed. On and after a sale's Approval Date its rate is locked: a later exclusion or status change never re-rates it
+  and never cascades backwards through approved sales. Test / invalid records (stamped `test_excluded`) never count for
+  anyone. Pre-v3 commission is exactly as it was. Proven at the 12/13 boundary in `commission-v3-terms.test.ts`.
+
+## 17. Cross-repo agreement parity — REQUIRED before deploying either copy
+
+findable.live's public `/agreement` (findable-site `src/lib/clientAgreementV3.ts`, Session G, branch
+`legal/client-agreement-v3-alignment`, `7398b4f`) and this signing copy (`src/lib/clientAgreement.ts` v3) were generated
+independently from the SAME .docx (sha256 `d0ede629…`, re-checked against Paul's file). The integration session **MUST** run
+```
+npx tsx scripts/check-agreement-parity.ts --site-ref <the findable-site ref being deployed>
+```
+and get `IDENTICAL` before deploying either side, and again after any change to either. On 2026-10-05 against
+`origin/legal/client-agreement-v3-alignment`: **IDENTICAL — 139 signed paragraphs** (intro, both service boxes, key points,
+clauses 1.1–16.7 incl. lettered items, Schedule 1). A one-word change in a copy of the site file was caught (exit 1). The
+signed fingerprint (v3 template `3e1edf3b…`) covers the client-filled agreement; the parity check covers the shared words.

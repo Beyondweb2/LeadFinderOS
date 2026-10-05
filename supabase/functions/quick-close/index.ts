@@ -74,6 +74,7 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   payments_not_configured: "Payments are not configured.",
   checkout_failed: "The sign-up link could not be created. Try again in a moment.",
   agreement_unavailable: "The client agreement page could not be set up. Try again in a moment.",
+  payment_held: "They already paid outside the signed sign-up and that payment is held for Paul. Ask Paul before sending anything.",
 };
 
 /** What send-whatsapp-message's refusals mean to a rep on the phone. Anything else shows its own reason. */

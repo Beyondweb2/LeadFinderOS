@@ -188,6 +188,10 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   in the named count. v3 rules (incl. commission: 5 trailing, initial pending until Approval) apply ONLY to a client with
   a `client_service_terms` row — never re-rule Ronnie, MCL, RG or QA clients. Continuing Service is MANUAL
   (`CONTINUING_SERVICE_AUTOMATION` all false): nothing may charge it automatically until Paul switches it on.
+  ⛔ An alert after an unsigned payment is NOT a gate: the webhook HOLDS any Findable payment without a valid v3 signature
+  (`client_payment_holds` — no lifecycle, no subscription, no ledger/commission). Pre-switch Stripe objects are closed by
+  fn `legacy-checkout-cutover` (report → execute with the reviewed plan hash). The signing copy and findable.live's
+  public `/agreement` must stay word-for-word equal: `npx tsx scripts/check-agreement-parity.ts --site-ref <ref>`.
 
 - **Offer (Paul, 2026-09-29): £99 to start, then £99/month from six weeks after sign-up — TWO ROUTES,
   same price, different LENGTH** (`docs/business-and-offer.md` §00). **Findable Build** (we build, host

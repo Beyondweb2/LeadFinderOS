@@ -226,6 +226,11 @@ export interface CommissionInput {
   /** Per lead: the v3 commercial terms and the client's Approval Date (clientTimeline.approvalDay; null
    *  while not known). Absent = the sale is on the terms before v3 and nothing here changes it. */
   termsOf?: Map<string, { terms: string | null; approvalDay: string | null }>;
+  /** Per lead: WHEN the sale was excluded / disqualified (metric_exclusions: the lead, or its seller as a
+   *  test account — created_at). v3 only (Paul, 2026-10-05): excluded BEFORE its Approval Date it is not a
+   *  qualifying sale (earns nothing, does not count in its month's ladder); excluded AFTER, nothing that was
+   *  approved changes. Pre-v3 sales keep the database's stamp exactly as it is. */
+  exclusionsOf?: Map<string, string>;
   /** "Now", for pending vs approved (defaults to the clock). */
   nowIso?: string;
 }
@@ -236,6 +241,12 @@ export interface CommissionInput {
    (the same facts the database counts). A v3 sale's place = 1 + the earlier sales still in the count AT
    ITS APPROVAL INSTANT (or now, while pending) — so it is re-worked until approved and frozen after. */
 interface LadderEntry { id: string; leadId: string; seller: string | null; month: string; at: string; droppedAt: string | null }
+/** v3: was this sale excluded / disqualified BEFORE its commission was approved? `approvedAtIso` null =
+ *  not approved yet (any exclusion counts). An exclusion recorded on or after approval changes nothing. */
+function v3ExcludedBeforeApproval(excludedAt: string | null, approvedAtIso: string | null): boolean {
+  if (!excludedAt) return false;
+  return approvedAtIso === null || excludedAt < approvedAtIso;
+}
 function v3LadderPlace(entries: LadderEntry[], me: LadderEntry, asOfIso: string): number {
   let place = 1;
   for (const e of entries) {
@@ -310,14 +321,20 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const rows = [...rows0].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
     const init = rows.find((r) => r.kind === 'initial' && r.status === 'succeeded' && r.amount_gbp > 0);
     if (!init) continue;
+    /* When the sale stopped being a qualifying sale: a test sale never was (stamped at insert); otherwise the
+       EARLIEST of a full refund, a lost chargeback, or an exclusion recorded later (the time it became known —
+       so a sale approved before that moment keeps the place it was approved at). */
     let dropped: string | null = init.commission_rule === TEST_EXCLUDED_RULE ? '0000' : null;
+    const earliest = (at: string) => { if (dropped === null || at < dropped) dropped = at; };
     let refunded = 0;
     for (const r of rows) {
       const tied = (r.stripe_payment_intent_id && r.stripe_payment_intent_id === init.stripe_payment_intent_id) || (r.stripe_charge_id && r.stripe_charge_id === init.stripe_charge_id);
       if (!tied) continue;
-      if (r.kind === 'refund') { refunded = Math.max(refunded, r.amount_gbp); if (refunded >= init.amount_gbp && dropped === null) dropped = r.occurred_at; }
-      if (r.kind === 'chargeback' && DISPUTE_LOST.has(r.status) && dropped === null) dropped = r.occurred_at;
+      if (r.kind === 'refund') { refunded = Math.max(refunded, r.amount_gbp); if (refunded >= init.amount_gbp) earliest(r.occurred_at); }
+      if (r.kind === 'chargeback' && DISPUTE_LOST.has(r.status)) earliest(r.occurred_at);
     }
+    const excludedAt = input.exclusionsOf?.get(leadId);
+    if (excludedAt) earliest(excludedAt);
     ladder.push({ id: init.id, leadId, seller: init.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null, month: londonMonthStart(init.occurred_at), at: init.occurred_at, droppedAt: dropped });
   }
   for (const [leadId, rows] of byLead) {
@@ -353,7 +370,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         monthSeq = p.commission_rule === MONTHLY_TIER_RULE && typeof p.commission_month_seq === 'number' ? p.commission_month_seq : null;
         monthStart = p.commission_month_start ? String(p.commission_month_start).slice(0, 10) : null;
         /* 🔴 v3: the place is re-worked (refunds and exclusions removed) until the Approval Date, then frozen. */
-        if (v3 && !testSale) {
+        const v3Excluded = v3 && !testSale && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, approvedNow ? approvalIso : null);
+        if (v3 && !testSale && !v3Excluded) {
           const me = ladder.find((e) => e.id === p.id);
           if (me) {
             monthSeq = v3LadderPlace(ladder, me, approvedNow && approvalIso ? approvalIso : nowIso);
@@ -361,8 +379,9 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
             rate = monthlyTierRate(monthSeq);
           }
         }
-        label = testSale ? 'Initial payment · test sale (not counted)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
-        if (v3 && !testSale) label += approvedNow ? ` · approved ${approvalDay}` : approvalDay ? ` · pending until ${approvalDay}` : ' · pending until the Approval Date';
+        if (v3Excluded) { rate = 0; monthSeq = null; }
+        label = testSale ? 'Initial payment · test sale (not counted)' : v3Excluded ? 'Initial payment · excluded before approval (not a qualifying sale)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
+        if (v3 && !testSale && !v3Excluded) label += approvedNow ? ` · approved ${approvalDay}` : approvalDay ? ` · pending until ${approvalDay}` : ' · pending until the Approval Date';
         /* Received while the seller was not engaged: earns only if they closed it while engaged. */
         if (earns && !testSale && seller && !engagedAt(events, p.occurred_at)) {
           if (closedWhileEngaged(input.closings?.get(leadId), seller, events, p.occurred_at)) label += ' · closed before the engagement ended';
@@ -398,7 +417,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       lines.push({
         id: `pay:${p.id}`, leadId, sellerId: seller, kind: 'payment', paymentNumber: n, label, clientAmount: round2(p.amount_gbp), rate,
         commission: commissionOn(p.amount_gbp, rate), occurredAt: p.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
-        status: v3Initial && baseStatus === 'due' && !approvedNow ? 'pending' : baseStatus,
+        status: v3Initial && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, approvedNow ? approvalIso : null) ? 'cancelled'
+          : v3Initial && baseStatus === 'due' && !approvedNow ? 'pending' : baseStatus,
         ...(v3Initial ? { approvalDay, provisional: !approvedNow } : {}),
         ...(continuing ? { continuingService: true } : {}),
         ...(monthSeq ? { monthStart, monthSeq } : {}),
