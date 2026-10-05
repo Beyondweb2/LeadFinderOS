@@ -216,6 +216,56 @@ export function requiredPreviewQa(hasExistingSite: boolean): Array<(typeof QA_IT
   return QA_ITEMS.filter((q) => q.group === 'preview' && (hasExistingSite || !EXISTING_SITE_QA_KEYS.includes(q.key)));
 }
 
+/* ── WEBSITE BUILD SIMPLE (2026-10-05): Paul reviews the BUILT preview in eight plain checks; the
+   technical preview items are answered by the automatic site gate. Every preview QA key has exactly
+   ONE owner — a review item or the gate (scripts/website-build-simple.test.ts sweeps it). The ticks
+   are still the stored QA booleans, so the Advanced view and the launch rule read the same thing. */
+export interface SimpleReviewItem { key: string; label: string; help: string; qa: readonly QaKey[] }
+export const SIMPLE_REVIEW_ITEMS: readonly SimpleReviewItem[] = [
+  { key: 'business', label: 'Business details correct', help: 'Name, trade and what they do — nothing left over from a template or another business.', qa: ['no_placeholders', 'no_template_leftovers'] },
+  { key: 'services', label: 'Services correct', help: 'Only services they really offer, nothing they told us they do not do.', qa: ['pages_present'] },
+  { key: 'locations', label: 'Locations correct', help: 'Only the towns they genuinely cover; no copy-paste town pages.', qa: ['architecture_correct'] },
+  { key: 'contact', label: 'Contact details correct', help: 'Phone, WhatsApp and email right and tappable on every page.', qa: ['phone_links', 'whatsapp_links'] },
+  { key: 'branding', label: 'Branding looks right', help: 'Their logo, colours and real photos; side by side it is clearly better than the old site.', qa: ['visual_qa', 'nothing_sparse', 'old_new_upgrade', 'strengths_kept'] },
+  { key: 'claims', label: 'No invented claims', help: 'No reviews, awards, years, badges or promises they have not given us.', qa: ['no_unverified_claims'] },
+  { key: 'forms', label: 'Forms work', help: 'The enquiry form sends (on the preview it goes to the test inbox, never the client).', qa: ['forms_work'] },
+  { key: 'mobile', label: 'Mobile looks good', help: 'Open the preview on your phone: readable, nothing cut off, call button visible.', qa: ['mobile_qa'] },
+];
+/** The preview QA keys the AUTOMATIC technical gate answers, and which gate checks answer them. */
+export const GATE_ANSWERED_QA: Partial<Record<QaKey, string>> = {
+  assets_load: 'links + domain (every file is local; nothing hotlinked)',
+  no_broken_links: 'links + orphans',
+  seo_geo_qa: 'titles, descriptions, headings, intents',
+  schema_valid: 'schema',
+  sitemap_robots: 'sitemap + robots',
+  canonicals_domain: 'canonical + domain',
+  old_urls_handled: 'the build’s old-URL coverage (nothing unresolved)',
+};
+/**
+ * The technical preview ticks the gate has answered for THIS state: only when the imported build result
+ * is PREVIEW READY by LeadFinderOS's own rule (previewReadyProblems — the site gate on the build AND on the
+ * preview passed, nothing else outstanding). Old URLs count only when the build reported none unresolved.
+ * ⛔ Positive match: no result, a non-ready result, or any problem → nothing is answered.
+ */
+export function gateAnsweredQa(s: WebsiteBuildState, hasExistingSite: boolean = stateHasExistingSite(s)): QaKey[] {
+  const b = s.build_execution;
+  if (!b.result_imported_at || b.result_status !== 'preview_ready') return [];
+  if (previewReadyProblems(s, hasExistingSite).length) return [];
+  const redirectsClean = b.redirects.unresolved.length === 0 && b.redirects.issues.length === 0;
+  return (Object.keys(GATE_ANSWERED_QA) as QaKey[]).filter((k) => k !== 'old_urls_handled' || redirectsClean);
+}
+/** THE preview ticks still owed before production: required, not ticked, not answered by the gate. */
+export function outstandingPreviewQa(s: WebsiteBuildState, hasExistingSite: boolean = stateHasExistingSite(s)): Array<(typeof QA_ITEMS)[number]> {
+  const auto = new Set<string>(gateAnsweredQa(s, hasExistingSite));
+  return requiredPreviewQa(hasExistingSite).filter((q) => s.qa[q.key] !== true && !auto.has(q.key));
+}
+/** A review item's keys that apply to this client (the old-site comparisons only when there is an old site). */
+export function reviewItemKeys(item: SimpleReviewItem, hasExistingSite: boolean): QaKey[] {
+  return item.qa.filter((k) => hasExistingSite || !EXISTING_SITE_QA_KEYS.includes(k));
+}
+export const reviewItemDone = (s: WebsiteBuildState, item: SimpleReviewItem, hasExistingSite: boolean) =>
+  reviewItemKeys(item, hasExistingSite).every((k) => s.qa[k] === true);
+
 export interface CaptureState {
   status: CaptureStatus;
   url_count: number | null;
@@ -810,7 +860,7 @@ export interface StageInputs {
 export function websiteBuildStages(i: StageInputs): StageStatus[] {
   const s = i.state;
   const qaPreview = requiredPreviewQa(i.hasExistingSite);
-  const qaDone = qaPreview.filter((q) => s.qa[q.key]).length;
+  const qaDone = qaPreview.length - outstandingPreviewQa(s, i.hasExistingSite).length;
   const capApplies = captureApplies(s, i.hasExistingSite);
   const intakeDone = modeComplete(s) && i.factsAwaiting === 0;
   const archDone = s.pages.length > 0 && i.architectureErrors === 0;
