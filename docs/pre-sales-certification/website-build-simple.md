@@ -137,3 +137,16 @@ Nobody has seen it with a real sign-in.
 - The only template is the MCL locksmith template: a non-locksmith New-site client with no old site is blocked with
   "has no pages for this client's services" → Bespoke in Advanced until a trade template exists.
 - The Advanced page still treats a Discovery-only "Current website" fact as the source site (pre-existing).
+
+## Deployment (5 October 2026)
+
+- `main` merge `592656f8` (from `origin/main` `53bfece6`, unmoved before the push; HEAD == origin/main proved after it).
+- No SQL (no new stored key: the build type is derived; review ticks are the existing QA booleans).
+- Edge, deployed from the merged tree after the push was confirmed: **`paid-client-hub`** (launch rule — verified: the
+  deployed bundle contains `outstandingPreviewQa` and `GATE_ANSWERED_QA`) and **`prospect-preview`** (closure only, no
+  behaviour change — v18 deployed; its bundle does not carry the changed names as text, so only the deploy timestamp
+  proves it). **`whatsapp-status` NOT deployed** (still v114, 2026-09-30). No Meta / Move37 / Findable WhatsApp
+  credential touched.
+- SPA: Cloudflare auto-deploy from `main`; verified on `https://app.leadfinderos.com` and
+  `https://leadfinderos-next.pages.dev` — the `WebsiteBuild` chunk contains "COPY MASTER BUILD PROMPT" and
+  "Back to the simple view".
