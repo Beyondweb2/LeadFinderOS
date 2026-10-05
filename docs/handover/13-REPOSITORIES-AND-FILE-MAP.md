@@ -6,8 +6,8 @@
 
 | Repo | Local path | What it is | Ships how |
 |---|---|---|---|
-| **LeadFinderOS** | `C:\Users\paulj\LeadFinderOS` (STALE primary) + `C:\Users\paulj\LeadFinderOS-wt\<task>` worktrees | the operator app + Supabase backend (functions, migrations) | `main` → Cloudflare Pages `leadfinderos-next` (app.leadfinderos.com); edge functions by hand |
-| **findable-site** | `C:\Users\paulj\findable-site` (stale, dirty) + `C:\Users\paulj\findable-site-wt\main-mirror` (clean `origin/master`) | the public site findable.live (Astro): home, onboarding, checkout start, terms/refunds, FAQ | **no CI** — build + `wrangler pages deploy … --branch=master` from a clean worktree; default branch `master` |
+| **LeadFinderOS** | `C:\Users\paulj\LeadFinderOS-current` (PRIMARY) + `C:\Users\paulj\LeadFinderOS-wt\<task>` worktrees; `C:\Users\paulj\LeadFinderOS` = ARCHIVE (stale, keep) | the operator app + Supabase backend (functions, migrations) | `main` → Cloudflare Pages `leadfinderos-next` (app.leadfinderos.com); edge functions by hand |
+| **findable-site** | `C:\Users\paulj\findable-site-current` (clean clone of `origin/master` — what the cross-repo tests read) · `C:\Users\paulj\findable-site` (stale, dirty) · `findable-site-wt\main-mirror` (old test mirror) | the public site findable.live (Astro): home, onboarding, checkout start, terms/refunds, FAQ | **no CI** — build + `wrangler pages deploy … --branch=master` from a clean worktree; default branch `master` |
 | findable-directory | `C:\Users\paulj\findable-directory` | a separate SSR directory site reading the same Supabase (2 deployed functions belong to it) | its own deploy |
 | MCLocksmiths-New | `C:\Users\paulj\MCLocksmiths-New` | MCL's rebuilt site; **the source of the only Website Build template** (pinned commit) | engagement closed — never push to its production |
 | MCLocksmiths | `C:\Users\paulj\MCLocksmiths` | superseded first MCL build (noindexed) | reference only |

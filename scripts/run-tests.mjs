@@ -25,6 +25,7 @@
 import { readdirSync, existsSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { findableSiteDir } from './findable-site-dir.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const SCRIPTS = path.join(ROOT, 'scripts');
@@ -120,9 +121,12 @@ if (!files.length) {
    ⛔ This does NOT skip or pass anything: those suites still run against whatever the sibling holds.
    It prints which tree they read and whether it matches the last-fetched origin/master, so a red
    line that is really a stale checkout says so. Fix: point FINDABLE_SITE_DIR at a clean worktree of
-   origin/master, or refresh the mirror the sibling links to (CLAUDE.md §3). */
+   origin/master, or refresh the mirror the sibling links to (CLAUDE.md §3). Since 2026-10-05 the default is
+   the clean clone ../findable-site-current when it exists (scripts/findable-site-dir.mjs). */
 {
-  const siteDir = process.env.FINDABLE_SITE_DIR || path.resolve(ROOT, '..', 'findable-site');
+  /* One resolver (findable-site-dir.mjs); exported so every suite this runner spawns reads the SAME tree. */
+  const siteDir = findableSiteDir(ROOT);
+  process.env.FINDABLE_SITE_DIR = siteDir;
   const git = (...a) => spawnSync('git', ['-C', siteDir, ...a], { encoding: 'utf8' });
   if (!existsSync(siteDir)) {
     console.log(`⚠️  findable-site not found at ${siteDir} — the cross-repo suites will fail.\n`);

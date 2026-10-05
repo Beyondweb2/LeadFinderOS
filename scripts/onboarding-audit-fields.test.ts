@@ -23,6 +23,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import fs from 'node:fs';
 import path from 'node:path';
+import { findableSiteDir } from './findable-site-dir.mjs';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -36,7 +37,7 @@ const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? 'PASS' :
    on disk (an old worktree, or the stale primary checkout). findable-site deploys only from origin/master, so
    that is what this reads — through git, whatever the checkout's state — and it says which revision. If git
    cannot answer, it falls back to the file and says so. */
-const siteDir = process.env.FINDABLE_SITE_DIR || path.join(ROOT, '..', 'findable-site');
+const siteDir = findableSiteDir(ROOT);
 const FLOW_PATH = 'src/components/OnboardingFlow.tsx';
 const flow = (() => {
   try {

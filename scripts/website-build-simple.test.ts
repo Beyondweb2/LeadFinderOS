@@ -17,7 +17,7 @@ import { productionReadiness, websiteBuildSaveRefusal } from '../src/lib/website
 import { siteIntentMap } from '../src/lib/siteGate.ts';
 import { computeMapping } from '../src/lib/templateMapping.ts';
 import {
-  applyBuildType, autoAcceptFacts, blockers, clientServices, correctionsWithFailures, isPrepared, masterBuildPrompt, prepareWebsite, recreationRights,
+  applyBuildType, autoAcceptFacts, blockers, clientServices, correctionsWithFailures, currentWebsite, isPrepared, masterBuildPrompt, prepareWebsite, recreationRights,
   resolveBuildType, setReviewItem, simpleIssues, simpleProgress, technicalCheck, terminalSteps, type SimpleInput,
 } from '../src/lib/simpleBuild.ts';
 
@@ -51,7 +51,7 @@ function packFor(payload: RebuildContextPayload, state: WebsiteBuildState): Buil
   const rows = mergeFacts(candidateFacts(payload as never, state.canonical_domain), state.facts, template);
   const evidence = toRebuildPromptInput(payload);
   const web = rows.find((r) => r.key === 'website');
-  const existingSiteUrl = state.source_site_url || (web && web.status !== 'rejected' && web.status !== 'not_applicable' ? web.value : '');
+  const existingSiteUrl = currentWebsite(state.source_site_url, web).url;
   const route = websiteServiceRoute(payload.onboarding as never, payload.lead as never);
   const d = payload.onboarding ? domainAuthority(domainInputFromRow(payload.onboarding as never)) : null;
   const ob = (payload.onboarding ?? {}) as Record<string, unknown>;

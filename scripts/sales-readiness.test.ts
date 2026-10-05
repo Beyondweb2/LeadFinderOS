@@ -14,6 +14,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import fs from "node:fs";
 import path from "node:path";
+import { findableSiteDir } from "./findable-site-dir.mjs";
 import { foldSalesPerformance, rate, periodSinceMs, type FoldInput } from "../src/lib/salesPerformance.ts";
 import { onboardingLinkStatus, previewUrl, ONBOARDING_LINK_RE } from "../src/lib/onboardingLinkStatus.ts";
 import { creditRepliesByTemplate, creditRepliesToSends } from "../src/lib/templateAttribution.ts";
@@ -30,7 +31,7 @@ const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8").replace(
 /* findable-site sits beside this checkout (or FINDABLE_SITE_DIR). ⚠️ A sibling OLDER than this change
    (the primary checkout is often stale) is reported and skipped, never passed: its screen assertions
    run only against a findable-site that has the post-payment step at all. */
-const SITE = process.env.FINDABLE_SITE_DIR || path.resolve(root, "..", "findable-site");
+const SITE = findableSiteDir(root);
 const siteRaw = (p: string) => { try { return fs.readFileSync(path.join(SITE, p), "utf8").replace(/\r\n/g, "\n"); } catch { return null; } };
 const SITE_CURRENT = /paymentState/.test(siteRaw("src/components/OnboardingFlow.tsx") ?? "");
 if (!SITE_CURRENT) console.log(`NOTE findable-site at ${SITE} predates the post-payment step: its assertions are skipped (set FINDABLE_SITE_DIR)`);

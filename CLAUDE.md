@@ -1,6 +1,6 @@
 # CLAUDE.md — the rules. Short on purpose.
 
-**Read all of it — it is ~600 lines and it is the memory you don't have.** It holds RULES and
+**Read all of it — it is ~1,200 lines and it is the memory you don't have.** It holds RULES and
 POINTERS. The stories behind them — every dated session record, every incident narrative, every
 number that was measured on a particular day — live in **`docs/`** and are read ON DEMAND, by topic.
 `docs/INDEX.md` maps every old section number (§N) to its file; a "§N" inside `docs/` means the
@@ -19,6 +19,14 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 - 🆕 **NEW CLAUDE ACCOUNT? Start at `docs/handover/00-START-HERE.md`** (account handover, 2026-10-05) — the
   orientation, reading order, open actions and Paul's preferences. This file stays the rulebook.
+- 📁 **Where to work (since 2026-10-05):** PRIMARY checkout = **`C:/Users/paulj/LeadFinderOS-current`** (its own
+  clone; keep it clean on `main`). PARALLEL work = **`C:/Users/paulj/LeadFinderOS-wt/<task>`**, added FROM the
+  primary after `git fetch origin`:
+  `git -C C:/Users/paulj/LeadFinderOS-current worktree add -b <branch> C:/Users/paulj/LeadFinderOS-wt/<task> origin/main`.
+  ARCHIVE = **`C:/Users/paulj/LeadFinderOS`** — stale; no new work there unless Paul asks you to inspect it. Never
+  delete it: the ~95 OLDER worktrees still junction to its `node_modules`, and it holds the only copies of its
+  `SQL_FOR_PAUL_*.sql`, and the `.git` the older `LeadFinderOS-wt` folders hang off. Full note:
+  `docs/handover/09-PRODUCTION-AND-DEPLOYMENT.md` "Local machine layout".
 - **Product:** Findable — AI visibility for local UK businesses (§1). **No active paying client on 2026-10-05:**
   Ronnie and MCLocksmiths are ENDED (`client_ended_early`), RG Locksmiths and SC Plumbing are REFUNDED
   (`docs/handover/10-HISTORICAL-CLIENTS-AND-EXCEPTIONS.md`). Re-count before quoting.
@@ -37,15 +45,19 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   hand** (`npx supabase functions deploy <name>`) and keep running old code until you do.
 - **Gate: `npm run check`** = typecheck-vs-baseline (9 deliberate errors, compared as a LIST) +
   `check-edge-syntax` + `check-edge-undefined` + `check-import-graph` + `npm run build` + `npm test`
-  (268 suites). **FULLY GREEN, 268/268, on 2026-10-02** — there are NO known failures any more; a red
-  suite is a real finding. (The old "known-stale" four were stale tests fixed that day; `site-origin`
+  (313 suites on 2026-10-05; the count grows — read the runner's own total). **FULLY GREEN since 2026-10-02**
+  (313/313 on 2026-10-05) — there are NO known failures any more; a red suite is a real finding, unless the
+  runner's ⚠️ ENVIRONMENT banner says the findable-site copy is behind (refresh it, below). (The old "known-stale" four were stale tests fixed that day; `site-origin`
   runs under Node with a `Deno.env` stand-in.) Typecheck reads 9 = the deliberate baseline LIST.
-  ⚠️ **The cross-repo suites read findable-site SOURCE** via `FINDABLE_SITE_DIR` or `../findable-site`.
-  In `LeadFinderOS-wt/` that sibling is a junction to **`C:/Users/paulj/findable-site-wt/main-mirror`**, a
-  clean detached worktree of findable-site `origin/master` (it used to point at the stale, dirty primary
-  checkout, which made four suites fail against code that was not live). `npm test` prints which tree
-  it read and warns when it is behind or dirty. **Refresh it after a findable-site merge:**
-  `git -C C:/Users/paulj/findable-site-wt/main-mirror fetch -q origin && git -C … checkout -q --detach origin/master`.
+  📦 **Dependencies (2026-10-05):** `LeadFinderOS-current` has its OWN `node_modules` (`npm ci` from the lockfile;
+  `.npmrc` keeps `legacy-peer-deps`). A NEW worktree junctions to it — never to the archive's.
+  ⚠️ **The cross-repo suites read findable-site SOURCE through ONE resolver, `scripts/findable-site-dir.mjs`:**
+  `FINDABLE_SITE_DIR` → `../findable-site-current` → `../findable-site`. The clean clone is
+  **`C:/Users/paulj/findable-site-current`** (findable-site `origin/master`; `LeadFinderOS-wt/findable-site-current`
+  is a junction to it). The older `../findable-site` siblings are stale (the primary `C:/Users/paulj/findable-site`
+  is dirty; `LeadFinderOS-wt/findable-site` → `findable-site-wt/main-mirror` was 3 commits behind on 2026-10-05) —
+  a red cross-repo suite is first a question about WHICH tree it read; `npm test` prints it and warns when it is
+  behind or dirty. **Refresh after a findable-site merge:** `git -C C:/Users/paulj/findable-site-current pull --ff-only`.
 - **Deno is not installed.** `deno check` cannot run here; the deploy is the only real gate for an
   edge function (§3, §4).
 - **The deep clean is in progress — Phase 3, steps 1–3 done (Feedback, SMS, Instantly; all in
@@ -140,9 +152,11 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   `save_handoff` (seller-only after payment); `delivery_submitted_at` is the one stored setup act; History kinds
   live in the migration CHECK, `LeadEventKind` and `ACTIVITY_LABEL` (`paid-client-automation.test.ts` pins all three).
 - **Other Claude sessions may share this checkout.** Every substantial task starts from the latest
-  `origin/main` on its own named branch in its own `git worktree`
-  (`C:/Users/paulj/LeadFinderOS-wt/<task>`, junction `node_modules` and `../findable-site` in);
-  never switch branches in the primary checkout, and never touch another session's branch or worktree
+  `origin/main` (`git fetch origin` first) on its own named branch in its own `git worktree`
+  (`C:/Users/paulj/LeadFinderOS-wt/<task>`, added from `LeadFinderOS-current` as above; junction `node_modules`
+  in from `LeadFinderOS-current` — `../findable-site-current` is already a junction in `LeadFinderOS-wt/`); never switch branches in the primary
+  checkout, and never touch another session's branch or worktree. **When Paul runs sessions in parallel, a
+  parallel branch is pushed but NOT merged or deployed** until an integration session (or Paul) does it
   (Paul's session rules, 2026-09-25 — ported from the unmerged `claude-md-session-safety` branch 2026-10-02).
 - **Windows host.** PowerShell is primary, Git Bash is available. Working tree is CRLF, repo is LF
   (`core.autocrlf=true`) — match on LF-normalised text when scripting an edit.
@@ -965,7 +979,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   old job in `history`. A job is attached only if its questions all belong to the pool.
 
 **Website Build**
-- ⛔ **The operator flow is the SIMPLE screen** (`src/lib/simpleBuild.ts` + `SimpleWebsiteBuild.tsx`, 2026-10-05, `docs/pre-sales-certification/website-build-simple.md`): build type → Prepare Website → ONE Master Build Prompt → review the built preview → corrections → launch; the V2 command centre is `?view=advanced`, unchanged. Build type is DERIVED from the route (never stored). Prepare auto-accepts only uncontested contact-identity facts (`autoAcceptFacts`; a phone / email / address clash is always Paul's) and never overwrites a decision. Preview QA ticks each have ONE owner: a `SIMPLE_REVIEW_ITEMS` check or `GATE_ANSWERED_QA` (answered only by a preview-ready, problem-free result — `outstandingPreviewQa` is what the launch rule reads). Never treat a Discovery-only website as the client's (`trustedOldSite`).
+- ⛔ **The operator flow is the SIMPLE screen** (`src/lib/simpleBuild.ts` + `SimpleWebsiteBuild.tsx`, 2026-10-05, `docs/pre-sales-certification/website-build-simple.md`): build type → Prepare Website → ONE Master Build Prompt → review the built preview → corrections → launch; the V2 command centre is `?view=advanced`, unchanged. Build type is DERIVED from the route (never stored). Prepare auto-accepts only uncontested contact-identity facts (`autoAcceptFacts`; a phone / email / address clash is always Paul's) and never overwrites a decision. Preview QA ticks each have ONE owner: a `SIMPLE_REVIEW_ITEMS` check or `GATE_ANSWERED_QA` (answered only by a preview-ready, problem-free result — `outstandingPreviewQa` is what the launch rule reads). Never treat a Discovery-only website as the client's: `currentWebsite` (simpleBuild.ts) is the ONE rule, read by the simple flow AND the Advanced view (`docs/pre-sales-certification/advanced-website-truth-fix.md`).
 - ⛔ **Preview Ready = technical AND perceived quality** (`websiteQuality.ts`, 2026-09-25): read it through `previewReadyProblems`, never `previewGateProblems` alone (a test fails if the page or the retry prompt does). An existing-site rebuild is not Preview Ready until every old-site strength is decided (preserve / modernise / improve, or removed WITH a reason), every content intent is assessed, and the build reports old vs new at 1440 + a phone width as `upgrade` with nothing the old site still wins. Recon reads strengths from the RENDERED page (BS4: a JS reviews widget was invisible to an HTML read).
 - ⛔ **…AND the build standard** (`websiteBuildStandard.ts`, 2026-09-27 — what MCL + BS4 were rescued for by hand): image roles (**Areas hub → the MAP by default**; fallback a genuine local image, then a job photo only if it shows the locality, each with a reason — never an unrelated one; a map is never a hero background; phone crop keeps labels legible; never drawn / pinned), the mobile hero photo BEHIND the copy (one first screen), **genuine reviews AND the confidently sourced rating / count shown by default** (rating with a snapshot date; held only for conflict / identity / unsourced — not a routine Paul approval), a real form through fn `site-enquiry` (a mailto form always fails; a working old form never becomes none; proven by a test-mode submission), credentials prominent, no repeated photos, photographic strength preserved (judged — never a photo quota). The build reports `quality.standard`; `standardProblems` × `standardEvidence(state)` gate it inside `previewReadyProblems`. Principles, not a clone — never name a reference client in the rules.
 - ⛔ **…AND the Site Quality Gate** (`scripts/site-quality-gate.mjs` + `src/lib/siteGate.ts`, 2026-09-30, `docs/website-build-seo-gate.md`): the build's own `qa.*` is a CLAIM; the gate reads the real output (robots / sitemap / canonicals / noindex incl. `_headers` scope / links / orphans / titles / H1s / cloned pages / schema / identity / intent ownership) and its failures are imported as ERRORS that also turn the matching `qa.*` false. Not run = an error. Stored in the existing `errors` / `warnings` / `qa` keys — keep it that way (no `paid-client-hub` redeploy). The X6b **Site Intent Map** gives every service / location / content intent / frozen baseline question ONE owning page; a baseline question is a QA label, never a title / H1 (the gate fails a verbatim one). Never weaken a check to pass a build. The gate fetches from LeadFinderOS **main** — a change to it is live for every build once merged.
@@ -1160,13 +1174,15 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 9. Parked branches, other docs
 
-- ⚠️ **The PRIMARY checkout `C:/Users/paulj/LeadFinderOS` is ~453 commits behind `origin/main`** and idle since
+- ⚠️ **The ARCHIVED old checkout `C:/Users/paulj/LeadFinderOS`** (the primary until 2026-10-05; the primary is now
+  `C:/Users/paulj/LeadFinderOS-current`, §0) was ~453 commits behind `origin/main` and idle since
   2026-09-21 (audited 2026-10-02). **Its `CLAUDE.md` is stale: read `git show origin/main:CLAUDE.md`.** Class A:
   every tracked edit in it is already on main or superseded (its `whatsapp-inbound.ts` edit is for a chain
   deleted 2026-09-28 — never port it); the one unmerged test block was ported 2026-10-02. Before resetting it,
   KEEP the untracked `SQL_FOR_PAUL_*.sql` (each is the only copy; `client_error_message` and
   `unschedule_instantly_poll` look still pending). Never `git worktree remove` anything through it without
-  unlinking `node_modules` junctions first. Do not delete the folder: 49 worktrees hang off its `.git`.
+  unlinking `node_modules` junctions first. Do not delete the folder: ~95 older worktrees hang off its `.git`
+  (2026-10-05) and those older worktrees junction to its `node_modules` (new ones use `LeadFinderOS-current`'s).
 - **Do not merge:** `edge-check-gate` (`d3fd6713`), `findable-product-rename` (`a8365707`),
   `short-signup-url` (`c8896003`).
 - `HANDOFF.md`, `ONBOARDING.md` (untracked) describe the deleted barber product — the best map of it,

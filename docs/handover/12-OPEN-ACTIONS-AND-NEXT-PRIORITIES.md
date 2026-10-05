@@ -36,9 +36,9 @@ Paul may have done some of the manual ones since.*
    trades being sold (plumbers, electricians, roofers…). `05-WEBSITE-BUILD.md`.
 2. **Watch the first genuine Stripe payment end to end** — webhook, subscription (trial to day 42, 11 / 5 charges), first-
    contact notification, new-client email, commission ledger. The idempotency has never run against a real customer.
-3. **Advanced-only Website Build inconsistencies** — the Advanced page still treats a Discovery-only "Current website" fact
-   as the source site (the simple view does not, `trustedOldSite`). Sweep Advanced for other places that disagree with the
-   simple view's truth rules.
+3. **Advanced-only Website Build inconsistencies** — the current-website one is FIXED (2026-10-05, `currentWebsite`, one
+   rule for both views; `docs/pre-sales-certification/advanced-website-truth-fix.md`). Still owed: sweep Advanced for other
+   places that disagree with the simple view's truth rules.
 4. **Campaign permission tidy-up** — `leadPermissions.campaigns` (`src/lib/access.ts`) still says admin-only and the Find
    Leads "ask each time" dialog hides New for salespeople, while the server lets reps create/manage their own campaigns.
 5. **Re-register the stale WhatsApp bodies** — `explain_offer` / `explain_offer_v2` quote a retired offer and review replies;
@@ -62,8 +62,10 @@ Paul may have done some of the manual ones since.*
   ("BASELINE_QUESTIONS (10)"), several "8 weeks" comments (`remeasureResults.ts`, `remeasureFill.ts`,
   `remeasureResultsHtml.ts`, `_shared/remeasure-results.ts`), the `LeadDetailDialog.tsx` tab comment (WORK / SCRIPTS /
   PROSPECT), the `sources.ts` "MUST EQUAL" comment, `measurementCompare.ts` "SPA-only" header.
-- **The stale primary checkout** `C:\Users\paulj\LeadFinderOS` could be reset to `origin/main` — but keep its untracked
-  `SQL_FOR_PAUL_*.sql` files (only copies) and never delete the folder (worktrees hang off it).
+- **The archived old checkout** `C:\Users\paulj\LeadFinderOS` (replaced as primary by `LeadFinderOS-current` on
+  2026-10-05) is left as it is — keep its untracked `SQL_FOR_PAUL_*.sql` files (only copies) and never delete the folder
+  (older worktrees hang off it and junction to its `node_modules`). DONE 2026-10-05: `LeadFinderOS-current` has its own
+  `npm ci` and new worktrees junction to it, so the archive is no longer needed for new work.
 - **Unmerged certification report branches** `cert/a-salesperson` … `cert/e-security-reliability`, `cert/master-launch-plan`
   hold the full 2026-10-04 audit reports (main has only stubs). Merge them as docs if Paul wants them on `main`.
 - **Local-only branch** `feat/forecast-nextaction-crawl` (one commit, 2026-10-02, never pushed) — probably superseded by

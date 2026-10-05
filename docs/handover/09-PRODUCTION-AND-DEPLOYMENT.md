@@ -95,16 +95,37 @@ production**, unless it is a planning/non-live session or deploying is unsafe (`
 
 ## Local machine layout (Windows, `C:\Users\paulj`)
 
-- `LeadFinderOS` — the **primary checkout: STALE** (~450+ commits behind, on an old `main` with uncommitted edits that are
-  already on main or superseded). Do not work in it, do not switch its branch, do not delete it (50 worktrees hang off its
-  `.git`). Its untracked `SQL_FOR_PAUL_*.sql` files are the only copies — keep them. Read the real rules with
+**The workspace convention (since 2026-10-05):**
+
+| | Path | Use |
+|---|---|---|
+| **PRIMARY** | `C:\Users\paulj\LeadFinderOS-current` | the active checkout (its own clone of `Beyondweb2/LeadFinderOS`). Keep it clean on `main`; open new Code sessions here. |
+| **PARALLEL WORKTREES** | `C:\Users\paulj\LeadFinderOS-wt\<task>` | one worktree + one named branch per task, always from the latest `origin/main`. |
+| **ARCHIVE** | `C:\Users\paulj\LeadFinderOS` | the old primary — stale. No new work there unless Paul explicitly asks to inspect it. Never delete it. |
+
+- Start every task: `git -C C:\Users\paulj\LeadFinderOS-current fetch origin`, then
+  `git -C C:\Users\paulj\LeadFinderOS-current worktree add -b <branch> C:\Users\paulj\LeadFinderOS-wt\<task> origin/main`,
+  then junction `node_modules` in (below). Never switch the primary's branch; never touch another session's branch or
+  worktree.
+- **Parallel sessions push their branch and stop.** No merge to `main` and no deploy from a parallel branch — an
+  integration session (or Paul) merges and deploys them one at a time, re-checking each against the newest `main`.
+- `LeadFinderOS` (ARCHIVE) — hundreds of commits behind, on an old `main` with uncommitted edits that are already on main or
+  superseded. Do not work in it, do not switch its branch, do not reset or delete it: its untracked `SQL_FOR_PAUL_*.sql`
+  files are the only copies, and ~95 older worktrees hang off its `.git` and junction to its `node_modules`. It is NOT
+  needed for new work: since 2026-10-05 `LeadFinderOS-current` has its own `node_modules` (`npm ci`). Read the real rules with
   `git show origin/main:CLAUDE.md`.
-- `LeadFinderOS-wt\<task>` — one worktree per task, cut from fresh `origin/main`. Junction `node_modules` (from the primary)
-  and `..\findable-site` in. ⛔ **Before `git worktree remove`, unlink the `node_modules` junction first**
+- `LeadFinderOS-wt\<task>` — junction `node_modules` in
+  (`New-Item -ItemType Junction -Path <wt>\node_modules -Target C:\Users\paulj\LeadFinderOS-current\node_modules`);
+  `LeadFinderOS-wt\findable-site-current` is already a junction to the clean findable-site clone (below). Older folders in
+  `LeadFinderOS-wt\` belong to the ARCHIVE's `.git` — leave them; new ones belong to `LeadFinderOS-current`'s.
+  ⛔ **Before `git worktree remove`, unlink the `node_modules` junction first**
   (`[System.IO.Directory]::Delete($nm, $false)` in PowerShell) — git follows junctions and once wiped the shared
   `node_modules`.
-- `findable-site` (primary, stale + dirty) and `findable-site-wt\main-mirror` — a clean detached worktree of `origin/master`
-  that the cross-repo tests read (refresh it after a findable-site merge).
+- **`findable-site-current`** — a clean clone of findable-site `origin/master` (2026-10-05). The cross-repo tests read it by
+  default (`scripts/findable-site-dir.mjs`: `FINDABLE_SITE_DIR` → `..\findable-site-current` → `..\findable-site`). Refresh
+  it after a findable-site merge: `git -C C:\Users\paulj\findable-site-current pull --ff-only`. Never edit or deploy from it.
+  `findable-site` (old primary, stale + dirty) and `findable-site-wt\main-mirror` (was 3 commits behind) are left as they
+  are for older worktrees; deploy findable-site from its own clean worktree as before.
 - Client repos: `MCLocksmiths-New`, `MCLocksmiths`, `BS4ElectricalServices` (+ `-wt` folders), `ablm-site`.
 - Unrelated personal projects also live here (e.g. `life-os`) — not part of Findable.
 - Windows host: PowerShell primary, Git Bash available; repo LF / working tree CRLF. Never edit source with PowerShell

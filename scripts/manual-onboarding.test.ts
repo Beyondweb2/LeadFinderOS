@@ -10,6 +10,7 @@
    ============================================================ */
 import fs from 'node:fs';
 import path from 'node:path';
+import { findableSiteDir } from './findable-site-dir.mjs';
 import {
   ONBOARDING_COPY, DOMAIN_OPTIONS, AGENCY_OPTIONS, ACCESS_OPTIONS, SELF_SITE_OPTIONS,
   siteAccessFromBranch, websiteManagerFromBranch, permissionAckText, accessConsequenceText, websiteRouteFor,
@@ -55,7 +56,7 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
 {
   /* FINDABLE_SITE_DIR points at a specific findable-site checkout (a worktree on its latest
      master); by default the sibling checkout. */
-  const site = path.resolve(process.env.FINDABLE_SITE_DIR || path.resolve(ROOT, '..', 'findable-site'), 'src');
+  const site = path.resolve(findableSiteDir(ROOT), 'src');
   const flowPath = path.join(site, 'components', 'OnboardingFlow.tsx');
   const accessPath = path.join(site, 'lib', 'siteAccess.ts');
   if (!fs.existsSync(flowPath)) {
@@ -74,7 +75,9 @@ console.log('\n── SAME QUESTIONS: every string is the customer flow\'s own (
     for (const opts of [DOMAIN_OPTIONS, AGENCY_OPTIONS, ACCESS_OPTIONS, SELF_SITE_OPTIONS]) for (const o of opts) strings.push(o.label);
     strings.push(permissionAckText(null), permissionAckText('yes_access'), permissionAckText('want_new'), accessConsequenceText('yes_access'), accessConsequenceText('no_website'));
     const missing = strings.filter((s) => !customer.includes(norm(s)));
-    ok(missing.length === 0, `all ${strings.length} question texts, helpers and option labels appear verbatim in the customer flow${missing.length ? ' — MISSING: ' + missing.join(' | ') : ''}`);
+    /* A MISSING string is first a question about WHICH findable-site was read: a sibling checkout
+       left behind its master reports the new wording as missing (2026-10-05, the Q2 sub). */
+    ok(missing.length === 0, `all ${strings.length} question texts, helpers and option labels appear verbatim in the customer flow${missing.length ? ' — MISSING: ' + missing.join(' | ') + ' — compared against ' + site + ' (is it at findable-site origin/master? set FINDABLE_SITE_DIR)' : ''}`);
     const chipsSrc = fs.readFileSync(path.join(site, 'lib', 'onboardingChips.ts'), 'utf8').replace(/\r\n/g, '\n');
     const mine = read('src/lib/onboardingChips.ts');
     const body = (s: string) => s.slice(s.indexOf('export interface ChipSet'));

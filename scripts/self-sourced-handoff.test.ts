@@ -15,6 +15,7 @@
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import fs from "node:fs";
 import path from "node:path";
+import { findableSiteDir } from "./findable-site-dir.mjs";
 import { handoffReadiness, handoffLine, HANDOFF_GBP_CHECKLIST_KEY, type HandoffLead, type HandoffOnboarding } from "../src/lib/handoffReadiness.ts";
 import { reportShareStatus, staffPreviewUrl, type ReportLinkEvent } from "../src/lib/reportShare.ts";
 import { LEAD_SOURCE_LABELS } from "../src/lib/salesPerformance.ts";
@@ -114,7 +115,7 @@ ok(HANDOFF_GBP_CHECKLIST_KEY === GBP_ACCESS_CHECKLIST_KEY, "the handoff's GBP ti
   ok(/href=\{staffPreviewUrl\(report\.link\.url\)\}/.test(view) && /href=\{staffPreviewUrl\(link\.url\)\}/.test(view), "every in-app Open report / Previous report link is a staff preview");
   ok(/navigator\.clipboard\?\.writeText\(link\.url\)/.test(view), "Copy link copies the CLEAN public URL (no preview flag) for the prospect");
   ok(/preview=1/.test(read("src/components/ClientHandoffCard.tsx")), "the paid-client handoff's report link is a staff preview too");
-  const SITE = process.env.FINDABLE_SITE_DIR || path.resolve(root, "..", "findable-site");
+  const SITE = findableSiteDir(root);
   for (const p of ["functions/r/[code].ts", "functions/report/[id].ts"]) {
     let src: string | null = null;
     try { src = fs.readFileSync(path.join(SITE, p), "utf8"); } catch { /* sibling absent */ }

@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findableSiteDir } from './findable-site-dir.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -53,7 +54,7 @@ console.log('\n-- q2_prefill is deliberately NOT changed --');
 ok(/THIS ONE IS DELIBERATELY LEFT ALONE/.test(fn), 'and the reason is written down beside it');
 
 console.log('\n-- the page says the right thing, and never blames the link --');
-const flow = read('../findable-site/src/components/OnboardingFlow.tsx');
+const flow = fs.readFileSync(path.join(findableSiteDir(ROOT), 'src', 'components', 'OnboardingFlow.tsx'), 'utf8');
 ok(/case "lookup_failed":/.test(flow), 'the flow handles lookup_failed');
 const msg = flow.slice(flow.indexOf('case "lookup_failed":'), flow.indexOf('case "unknown_lead":'));
 ok(/that's us, not you/.test(msg), 'it says the fault is ours');

@@ -145,8 +145,8 @@ same preview), which ends in a new result to paste back. A later failing result 
 
 `?view=advanced` is the full V2 command centre (recon import, template mapping, stage prompts, build pack). It still works
 and keeps every record readable, but **it is not the normal workflow** — add complexity there, never back onto the simple
-view. Known: the Advanced page still treats a Discovery-only "Current website" fact as the source site (pre-existing
-inconsistency; the simple view does not).
+view. The current website is ONE rule in both views (`currentWebsite`, 2026-10-05): a Discovery-only URL is shown as
+research, never used as the source site (`docs/pre-sales-certification/advanced-website-truth-fix.md`).
 
 ## ⚠️ Current limitation — only ONE template
 

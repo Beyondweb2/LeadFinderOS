@@ -65,7 +65,8 @@ fifth and went with Instantly.
 
 1. `git fetch origin`; prove `main == origin/main`; branch `cleanup/<step>` off `main`. Paul has
    closed other sessions, so the primary checkout is fine; if another session may be open, use a
-   worktree (CLAUDE.md §0).
+   worktree (CLAUDE.md §0). (Since 2026-10-05 the primary is `C:/Users/paulj/LeadFinderOS-current`;
+   `C:/Users/paulj/LeadFinderOS` is the archive — never do a step there.)
 2. Derive the file list from the repo (grep + `node scripts/check-import-graph.mjs --reached-by
    <file>`), not from this document alone. **Show Paul the list — files, sizes, edits, comment-only
    rewordings, what is kept — and wait for "approved as scoped".**

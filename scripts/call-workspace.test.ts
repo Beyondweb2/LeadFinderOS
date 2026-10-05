@@ -22,6 +22,8 @@
      9. Another rep cannot alter the lead: every write in the migration goes through _require_work.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { findableSiteDir } from './findable-site-dir.mjs';
 import { buildColdCallPlaybook, spokenDay, WHO_ASKED_RE, type PlaybookInput, type PlaybookMessage } from '../src/lib/coldCallPlaybook.ts';
 import { buildCallClose, GUARANTEE_HEADLINE, routeOffer, routesFor } from '../src/lib/callClose.ts';
 import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_OPTIMISE_TOTAL_PAYMENTS } from '../src/lib/findableOffer.ts';
@@ -115,8 +117,8 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
 console.log('── 3. NO FALSE GUARANTEE ──');
 {
   ok(GUARANTEE_HEADLINE === 'We improve AI visibility or you get your money back.', 'the headline is the agreed line');
-  const site = '../findable-site/src/components/Guarantee.astro';
-  if (existsSync(new URL('../' + site, import.meta.url))) ok(read(site).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').includes(GUARANTEE_HEADLINE), '…word for word what findable.live says (Guarantee.astro)');
+  const site = path.join(findableSiteDir(path.resolve(import.meta.dirname, '..')), 'src', 'components', 'Guarantee.astro');
+  if (existsSync(site)) ok(readFileSync(site, 'utf8').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').includes(GUARANTEE_HEADLINE), '…word for word what findable.live says (Guarantee.astro)');
   else console.log('  · findable-site not beside this checkout — headline cross-check skipped');
   for (const p of [buildColdCallPlaybook(base()), buildColdCallPlaybook(noSite()), buildColdCallPlaybook(base({ report: null, reportAudit: null }))]) {
     const t = said(p) + ' ' + p.close.guarantee.caution;
