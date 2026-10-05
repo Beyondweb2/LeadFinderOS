@@ -52,7 +52,9 @@ console.log('── 1. unsaved drafts: the one leave guard ──');
   const main = dlg.slice(dlg.indexOf('export function LeadDetailDialog'), dlg.indexOf('interface LeadDetailBodyProps'));
   ok(/<Dialog open=\{open\} onOpenChange=\{requestOpenChange\}>/.test(main) && /drafts\.guard\(\(\) => onOpenChange\(false\)\)/.test(main),
     'the workspace Dialog closes ONLY through the guard (Escape, outside click and the X are all Radix onOpenChange)');
-  ok(/onEscapeKeyDown=\{\(e\) => \{ if \(escapeBelongsToField\(e\.target\)\) e\.preventDefault\(\); \}\}/.test(main), 'Escape in an inline edit never reaches the popup');
+  ok(/if \(escapeBelongsToField\(e\.target\)\) e\.preventDefault\(\);/.test(main), 'Escape in an inline edit never reaches the popup');
+  ok(/if \(drafts\.asking\) \{ e\.preventDefault\(\); drafts\.keepEditing\(\); return; \}/.test(main) && /onInteractOutside=\{\(e\) => \{ if \(drafts\.asking\) e\.preventDefault\(\); \}\}/.test(main),
+    'while the prompt shows, Escape = Keep editing and a click never counts as another leave (found in visual QA)');
   ok(/<StepperBar s=\{guardedStepper\} \/>/.test(main) && /guardedStepper\.onNext\(\)/.test(main) && /guardedStepper\.onPrev\(\)/.test(main) && !/stepper\.onNext\(\)/.test(main.replace(/guardedStepper/g, '')),
     'Previous / Next (buttons and ← / →) go through the same guard — a remount would lose the draft too');
   ok(/<DraftRegistryProvider registry=\{drafts\.registry\}>/.test(main) && /\{drafts\.confirm\}/.test(main), 'the body is inside the registry and the confirm is mounted');

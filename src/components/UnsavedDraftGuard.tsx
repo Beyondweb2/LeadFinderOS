@@ -77,7 +77,11 @@ export function useDraftGuard() {
       </AlertDialogContent>
     </AlertDialog>
   );
-  return { guard, confirm, registry };
+  /* While the prompt shows, the popup underneath must not treat Escape or a click as another "leave" (seen in the
+     QA harness: the lead popup took the prompt's Escape and asked again). Escape there = Keep editing. */
+  const asking = !!pending;
+  const keepEditing = useCallback(() => setPending(null), []);
+  return { guard, confirm, registry, asking, keepEditing };
 }
 
 /** Wraps the workspace body so its fields can mark their drafts. */

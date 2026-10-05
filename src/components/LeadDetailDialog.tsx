@@ -240,7 +240,11 @@ export function LeadDetailDialog({
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0"
-        onEscapeKeyDown={(e) => { if (escapeBelongsToField(e.target)) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => {
+          if (drafts.asking) { e.preventDefault(); drafts.keepEditing(); return; }
+          if (escapeBelongsToField(e.target)) e.preventDefault();
+        }}
+        onInteractOutside={(e) => { if (drafts.asking) e.preventDefault(); }}
         onKeyDown={(e) => {
           if (!guardedStepper || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
           if (e.key === 'ArrowRight' && guardedStepper.onNext) { e.preventDefault(); guardedStepper.onNext(); }
