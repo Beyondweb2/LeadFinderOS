@@ -160,4 +160,22 @@ Order followed: gate green → the three migrations one at a time, each read bac
 functions, each marker-verified → integration branch merged to `main` (`--no-ff`) and pushed → the SPA ships from `main`
 → production check below.
 
-PRODUCTION_RESULT_PENDING (recorded in the follow-up commit after the live check)
+**`main` = `0617ef89`** (merge of `integration/ownership-client-info`, pushed over `52b15962` after proving origin unmoved).
+
+**Frontend live (the bundle, not a dashboard):** both `https://app.leadfinderos.com` and
+`https://leadfinderos-next.pages.dev` serve entry `index-B95QkM-E.js`; crawling every chunk from the HTML finds all eight
+markers — the two What's New ids, `All team (owned)`, `Claim for me`, `Queue across team` (chunk `Outreach-…`),
+`Find what we already have` (`ClientSetupCard-…`), `Need from this client` (`Inbox-…`), `CLIENT INFO NEEDED`
+(`QuickCloseDialog-…`). The same crawler first proved it could see the previous deploy's `Master Build Prompt`, and the
+markers were ABSENT on the build before this one. `leadfinderos.pages.dev` was not used.
+
+**Live database, read-only role check (one DO block ending in RAISE, nothing written):** trigger, owner-scoped
+`campaign_launch` and `client_info_requests` all live; unassigned still 2,694; open info requests 0. As the Test
+salesperson: `sales_leads` 26 rows, **0 owned by anyone else**, direct `outreach_leads` read 0 rows, info requests visible 0.
+As test1: 9 rows, **0 foreign**. As the admin, the rows split My leads 2,815 / Unassigned 2,694 — the scope the page applies
+(Test's 32 leads are all archived QA fixtures; the view shows 26 of them, unchanged by this release).
+
+**Not done, on purpose:** no sign-in to any account (no magic link minted), so **nobody has seen these screens signed in on
+production** — the screen proof is the fixture-data visual QA (§8) plus the live bundle. No message was sent, no prospect or
+client contacted, no Stripe session created, no request row created. **Paul's one look:** open Outreach (it should say
+"My leads", amber tag only when you switch) and one Paid Client with missing information.
