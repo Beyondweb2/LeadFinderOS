@@ -36,9 +36,9 @@ Paul may have done some of the manual ones since.*
    trades being sold (plumbers, electricians, roofers…). `05-WEBSITE-BUILD.md`.
 2. **Watch the first genuine Stripe payment end to end** — webhook, subscription (trial to day 42, 11 / 5 charges), first-
    contact notification, new-client email, commission ledger. The idempotency has never run against a real customer.
-3. **Advanced-only Website Build inconsistencies** — the Advanced page still treats a Discovery-only "Current website" fact
-   as the source site (the simple view does not, `trustedOldSite`). Sweep Advanced for other places that disagree with the
-   simple view's truth rules.
+3. **Advanced-only Website Build inconsistencies** — the current-website one is FIXED (2026-10-05, `currentWebsite`, one
+   rule for both views; `docs/pre-sales-certification/advanced-website-truth-fix.md`). Still owed: sweep Advanced for other
+   places that disagree with the simple view's truth rules.
 4. **Campaign permission tidy-up** — `leadPermissions.campaigns` (`src/lib/access.ts`) still says admin-only and the Find
    Leads "ask each time" dialog hides New for salespeople, while the server lets reps create/manage their own campaigns.
 5. **Re-register the stale WhatsApp bodies** — `explain_offer` / `explain_offer_v2` quote a retired offer and review replies;

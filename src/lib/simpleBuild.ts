@@ -181,16 +181,54 @@ export function autoAcceptFacts(rows: readonly FactRow[]): BuildFact[] {
   return out;
 }
 
+/** Why a current website is trusted: Paul / Prepare recorded it as the source · Paul or the client
+ *  confirmed the Current website fact · the client's own records (onboarding, the paid lead row, the
+ *  stored crawl of their own site) hold it, uncontested. */
+export type CurrentWebsiteBasis = 'recorded_source' | 'confirmed_fact' | 'client_record' | '';
+export interface CurrentWebsite {
+  /** THE client's current website — the only URL a build may rebuild from, crawl as theirs or keep the
+   *  address of. '' = none trusted. */
+  url: string;
+  basis: CurrentWebsiteBasis;
+  /** A URL on record that is NOT trusted (only a Discovery scan / a baseline context offered it, or the
+   *  client's own records contest it). Research to show Paul — never the client's site. */
+  research: string;
+  researchSource: string;
+  /** True when the research value is the client's own record that another record of the same standing
+   *  contradicts (a human decides) — not a Discovery-only guess. */
+  contested: boolean;
+}
+
 /**
- * The current website as the simple flow trusts it: what Paul recorded as the source, else the "Current
- * website" fact ONLY when it is verified or Prepare would accept it (the client, their record, their own
- * crawled site). A URL that only a Discovery scan or a baseline context offered is never the client's site
- * (it once was, on the Website Build page's own derivation: a Discovery guess became the rebuild source).
+ * ⛔ THE ONE RULE for "what is this client's current website" — the simple flow and the Advanced view
+ * both read it (fix/advanced-website-truth, 2026-10-05: the Advanced page used to take ANY non-rejected
+ * Current website fact, so a Discovery-only guess became the rebuild source there while the simple flow
+ * refused it). Trusted, in order: the source URL recorded on the build (Paul typed it, or Prepare wrote it
+ * from this rule) · a VERIFIED Current website fact (the client said so at onboarding, or Paul approved
+ * it) · a value Prepare accepts by the truth order (the client's onboarding answer, the paid lead row) when
+ * nothing of equal standing contests it. Anything else — a URL only a Discovery scan or a baseline context
+ * offered — is research: shown, never used.
  */
+export function currentWebsite(sourceSiteUrl: string | null | undefined, row: FactRow | undefined): CurrentWebsite {
+  const none = { research: '', researchSource: '', contested: false };
+  const recorded = String(sourceSiteUrl ?? '').trim();
+  if (recorded) return { url: recorded, basis: 'recorded_source', ...none };
+  if (!row || !row.value.trim() || row.status === 'rejected' || row.status === 'not_applicable') return { url: '', basis: '', ...none };
+  if (isPublishable(row)) return { url: row.value, basis: 'confirmed_fact', ...none };
+  if (autoAcceptFacts([row]).length) return { url: row.value, basis: 'client_record', ...none };
+  const own = ONBOARDING_SOURCE.test(row.source) || RECORD_SOURCE.test(row.source) || CRAWL_SOURCE.test(row.source);
+  return { url: '', basis: '', research: row.value, researchSource: row.source || 'an unconfirmed source', contested: own && contestOf(row) === 'strong' };
+}
+
+/** The one sentence both views show for a URL on record that is not trusted ('' when there is none). */
+export const researchSiteNote = (c: CurrentWebsite): string => !c.research ? ''
+  : c.contested
+    ? 'Not settled: the client’s records disagree about their current website (' + c.research + ' from the ' + c.researchSource + '). Confirm the right address under Client Build Facts, or enter it here.'
+    : 'Research only: ' + c.research + ' was suggested by the ' + c.researchSource + ' — it is not confirmed as the client’s current website, so nothing is rebuilt from it. Approve the Current website fact (Client Build Facts) or enter the address if it is theirs.';
+
+/** The current website as every build path trusts it (see currentWebsite). */
 export function trustedOldSite(i: BuildPackInput): string {
-  if (i.state.source_site_url) return i.state.source_site_url;
-  const r = i.facts.find((f) => f.key === 'website');
-  return r && (isPublishable(r) || autoAcceptFacts([r]).length) ? r.value : '';
+  return currentWebsite(i.state.source_site_url, i.facts.find((f) => f.key === 'website')).url;
 }
 /** The pack with the trusted current website in place of the page's broader one. Idempotent. */
 export const trustedPack = (i: BuildPackInput): BuildPackInput => (i.existingSiteUrl === trustedOldSite(i) ? i : { ...i, existingSiteUrl: trustedOldSite(i) });
@@ -414,7 +452,8 @@ export function simpleIssues(x: SimpleInput): BuildIssue[] {
   if (type === 'optimise') return out;
   const oldSite = i.existingSiteUrl;
   if ((type === 'visual_rebuild' || type === 'close_recreation') && !oldSite) {
-    out.push({ id: 'no-old-site', level: 'blocker', title: 'No current website on record to rebuild from', detail: 'A rebuild needs the live site to work from.', fixes: [{ kind: 'switch_type', to: 'template', label: 'Use a Findable template instead' }, { kind: 'fact', key: 'website', label: 'Current website', options: options(row('website')), input: true }] });
+    const research = researchSiteNote(currentWebsite(s.source_site_url, row('website')));
+    out.push({ id: 'no-old-site', level: 'blocker', title: 'No current website on record to rebuild from', detail: 'A rebuild needs the live site to work from.' + (research ? ' ' + research : ''), fixes: [{ kind: 'switch_type', to: 'template', label: 'Use a Findable template instead' }, { kind: 'fact', key: 'website', label: 'Current website', options: options(row('website')), input: true }] });
   }
   if (type === 'close_recreation') {
     const rights = recreationRights(s, x.onboarding);
