@@ -16,7 +16,11 @@
 --    · lead_activity: a not-ready salesperson acting in their own session may only write notes, opt-outs,
 --      give leads back, and finish handoffs for sales already made (calls, contacts, stages… refused);
 --    · outreach_leads: a lead cannot be assigned to a not-ready salesperson by a signed-in session;
---    · attribution: a sale stamped to a not-ready salesperson is credited to the book owner instead.
+--    · Ready to Sell gates CREATING a sale (quick-close save / link / share, claims, outreach). Seller
+--      attribution is NOT rewritten: the existing stamp (sold_by_user_id, set once at payment, immutable)
+--      stands, and the Quick Close link the seller generated is the creation evidence. A sale that lands on
+--      a salesperson who was not authorised to create it is HELD FOR ADMIN REVIEW
+--      (sale_attribution_reviews) — never moved to Paul, never rewritten. Commission is Session F's.
 --    The admin is never gated.
 -- 5. phone_tps_checks — DORMANT groundwork (TPS/CTPS postponed by Paul 2026-10-05): nothing writes it,
 --    nothing reads it to allow or block anything.
@@ -340,31 +344,101 @@ drop trigger if exists trg_outreach_leads_assign_ready on public.outreach_leads;
 create trigger trg_outreach_leads_assign_ready before insert or update of assigned_to_user_id on public.outreach_leads
   for each row execute function public.trg_outreach_leads_assign_ready();
 
-/* Attribution: when a lead first becomes a client (trg_outreach_leads_sold_by stamps sold_by_user_id —
-   it fires first, by name), a not-ready salesperson does not get the commission-bearing credit; the sale
-   is credited to the book owner and a security event says why. Historic stamps never move (only a stamp
-   made in THIS statement is looked at). Commission itself is not changed here. */
-create or replace function public.trg_outreach_leads_sold_by_ready()
+/* ATTRIBUTION (corrected, Paul 2026-10-05): Ready to Sell gates CREATING a sale, never who a sale
+   belongs to afterwards.
+   ⛔ THE SELLER IS NEVER REWRITTEN HERE. trg_outreach_leads_sold_by (existing) stamps sold_by_user_id once,
+      when the lead first becomes a client, and freezes it; nothing in this migration changes that stamp,
+      so a rep who created a sale while ready keeps it if they later become not ready, are disabled, or the
+      client pays days later.
+   ⛔ THE CREATION EVIDENCE ALREADY EXISTS: a Quick Close payment link the seller generated for the lead
+      (quick_close_events 'link_generated' / 'link_reused' — server-written, server-timed; the commission
+      code already reads it). Since this migration, quick-close refuses a not-ready salesperson, so such
+      an event proves they were authorised when they created the sale.
+   ⛔ AN ABNORMAL SALE IS HELD FOR REVIEW, NOT MOVED: if the stamped seller is a salesperson (or an ex-one)
+      who is NOT Ready to Sell at payment AND generated no payment link for this lead, one
+      sale_attribution_reviews row is opened (status 'open' = ATTRIBUTION REVIEW NEEDED) with the evidence,
+      plus a security event. The seller stays as stamped; nobody else is credited; Paul resolves it
+      (resolve_sale_attribution_review). Whether anyone is PAID stays with the commission rules (Session F):
+      sale_attribution_held() is the one question they ask. Historic stamps are never looked at (only the
+      first stamp, made in the same statement). */
+drop trigger if exists trg_outreach_leads_sold_by_ready on public.outreach_leads;
+drop function if exists public.trg_outreach_leads_sold_by_ready();
+
+create table if not exists public.sale_attribution_reviews (
+  lead_id uuid primary key references public.outreach_leads(id) on delete cascade,
+  claimed_seller_user_id uuid not null,
+  reason text not null check (reason in ('seller_not_authorised')),
+  evidence jsonb not null default '{}'::jsonb,
+  status text not null default 'open' check (status in ('open', 'confirmed', 'not_credited')),
+  resolution_note text check (char_length(resolution_note) <= 500),
+  resolved_by uuid references auth.users(id) on delete set null,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint sale_attribution_reviews_resolution check ((status = 'open') = (resolved_at is null))
+);
+alter table public.sale_attribution_reviews enable row level security;
+revoke all on public.sale_attribution_reviews from public, anon, authenticated;
+
+create or replace function public.trg_outreach_leads_attribution_review()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_seller uuid := new.sold_by_user_id;
+  v_links jsonb;
 begin
-  if new.sold_by_user_id is null then return new; end if;
-  if tg_op = 'UPDATE' and old.sold_by_user_id is not null then return new; end if;
-  if not exists (select 1 from public.user_roles where user_id = new.sold_by_user_id and role = 'sales') then return new; end if;
-  if exists (select 1 from public.user_roles where user_id = new.sold_by_user_id and role = 'admin') then return new; end if;
-  if public.salesperson_ready_to_sell(new.sold_by_user_id) then return new; end if;
+  if v_seller is null then return new; end if;
+  if tg_op = 'UPDATE' and old.sold_by_user_id is not null then return new; end if;   -- not the first stamp: history
+  if exists (select 1 from public.user_roles where user_id = v_seller and role = 'admin') then return new; end if;
+  if not exists (select 1 from public.team_members where user_id = v_seller) then return new; end if;
+  if public.salesperson_ready_to_sell(v_seller) then return new; end if;               -- authorised now
+  if exists (select 1 from public.quick_close_events e
+              where e.lead_id = new.id and e.actor_user_id = v_seller and e.kind in ('link_generated', 'link_reused')) then
+    return new;                                                                          -- created the sale while authorised
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('kind', e.kind, 'actor', e.actor_user_id, 'at', e.created_at) order by e.created_at), '[]'::jsonb)
+    into v_links from public.quick_close_events e where e.lead_id = new.id and e.kind in ('link_generated', 'link_reused');
+  insert into public.sale_attribution_reviews (lead_id, claimed_seller_user_id, reason, evidence)
+  values (new.id, v_seller, 'seller_not_authorised', jsonb_build_object(
+    'missing_at_payment', to_jsonb(public.salesperson_onboarding_missing(v_seller)),
+    'assigned_to', new.assigned_to_user_id, 'payment_links', v_links, 'stamped_at', now()))
+  on conflict (lead_id) do nothing;
   insert into public.security_events (actor_user_id, actor_role, kind, severity, action, lead_id, detail, alert_key, alert_wanted)
-  values (new.sold_by_user_id, 'sales', 'attribution_withheld_not_onboarded', 'warning', 'sale_attribution', new.id,
-          jsonb_build_object('withheld_from', new.sold_by_user_id, 'credited_to', new.user_id,
-                             'missing', to_jsonb(public.salesperson_onboarding_missing(new.sold_by_user_id))),
-          'attribution_withheld:' || new.id::text, true)
+  values (v_seller, 'sales', 'attribution_review_needed', 'warning', 'sale_attribution', new.id,
+          jsonb_build_object('claimed_seller', v_seller, 'missing', to_jsonb(public.salesperson_onboarding_missing(v_seller))),
+          'attribution_review:' || new.id::text, true)
   on conflict (alert_key) do nothing;
-  new.sold_by_user_id := new.user_id;
   return new;
 end $$;
-revoke all on function public.trg_outreach_leads_sold_by_ready() from public, anon, authenticated;
-drop trigger if exists trg_outreach_leads_sold_by_ready on public.outreach_leads;
-create trigger trg_outreach_leads_sold_by_ready before insert or update of amount_paid, status, sold_by_user_id, sold_at on public.outreach_leads
-  for each row execute function public.trg_outreach_leads_sold_by_ready();
+revoke all on function public.trg_outreach_leads_attribution_review() from public, anon, authenticated;
+drop trigger if exists trg_outreach_leads_attribution_review on public.outreach_leads;
+create trigger trg_outreach_leads_attribution_review after insert or update of amount_paid, status, sold_by_user_id, sold_at on public.outreach_leads
+  for each row execute function public.trg_outreach_leads_attribution_review();
+
+/* Is this sale's attribution held? True while a review is open, or after Paul decided it is not credited
+   to the salesperson. THE question the commission rules (Session F) ask; this migration does not change
+   any commission calculation. */
+create or replace function public.sale_attribution_held(_lead_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.sale_attribution_reviews where lead_id = _lead_id and status in ('open', 'not_credited'))
+$$;
+revoke all on function public.sale_attribution_held(uuid) from public, anon, authenticated;
+grant execute on function public.sale_attribution_held(uuid) to service_role;
+
+/* Paul resolves a review explicitly (fn admin-users, after its admin check). The stamped seller is never
+   rewritten (the product does not support moving a seller): 'confirmed' = the attribution stands;
+   'not_credited' = the salesperson is not credited for this sale. Each review is resolved once. */
+create or replace function public.resolve_sale_attribution_review(_lead_id uuid, _decision text, _note text, _actor uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if _decision is null or _decision not in ('confirmed', 'not_credited') then return jsonb_build_object('ok', false, 'error', 'bad_decision'); end if;
+  if char_length(coalesce(_note, '')) > 500 then return jsonb_build_object('ok', false, 'error', 'too_long'); end if;
+  update public.sale_attribution_reviews
+     set status = _decision, resolution_note = nullif(btrim(coalesce(_note, '')), ''), resolved_by = _actor, resolved_at = now()
+   where lead_id = _lead_id and status = 'open';
+  if not found then return jsonb_build_object('ok', false, 'error', 'no_open_review'); end if;
+  return jsonb_build_object('ok', true, 'status', _decision);
+end $$;
+revoke all on function public.resolve_sale_attribution_review(uuid, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.resolve_sale_attribution_review(uuid, text, text, uuid) to service_role;
 
 -- ── 5. phone_tps_checks — DORMANT (TPS/CTPS postponed by Paul, 2026-10-05) ──────────────────────────
 -- Groundwork only: no provider, nothing writes it, nothing reads it to allow or block a call.

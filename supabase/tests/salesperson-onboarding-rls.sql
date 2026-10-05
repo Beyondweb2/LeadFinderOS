@@ -3,29 +3,36 @@
 -- nothing commits (fake users on example.invalid; real leads borrowed and changed only inside this
 -- transaction). Before the migration is applied, prepend the migration's text after `begin;` — DDL is
 -- transactional, so it is rolled back with everything else.
--- Sales A = fully onboarded (approved documents). Sales B = incomplete. The admin = the book owner.
+-- Sales A = fully onboarded (approved documents). Sales B = incomplete. Sales C = a rep who closes a sale and
+-- is then disabled. The admin = the book owner.
 begin;
 create temp table t_results (n serial, name text, ok boolean, detail text);
 grant all on t_results to authenticated, anon, service_role; grant usage, select on sequence t_results_n_seq to authenticated, anon, service_role;
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at) values
   ('ffffffff-0000-4000-8000-0000000005a1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-onb-a@example.invalid', '{}', '{}', now(), now()),
-  ('ffffffff-0000-4000-8000-0000000005b1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-onb-b@example.invalid', '{}', '{}', now(), now());
-insert into public.user_roles (user_id, role) values ('ffffffff-0000-4000-8000-0000000005a1', 'sales'), ('ffffffff-0000-4000-8000-0000000005b1', 'sales');
-insert into public.team_members (user_id, display_name) values ('ffffffff-0000-4000-8000-0000000005a1', 'ONB A'), ('ffffffff-0000-4000-8000-0000000005b1', 'ONB B');
+  ('ffffffff-0000-4000-8000-0000000005b1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-onb-b@example.invalid', '{}', '{}', now(), now()),
+  ('ffffffff-0000-4000-8000-0000000005c1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-onb-c@example.invalid', '{}', '{}', now(), now());
+insert into public.user_roles (user_id, role) values ('ffffffff-0000-4000-8000-0000000005a1', 'sales'), ('ffffffff-0000-4000-8000-0000000005b1', 'sales'), ('ffffffff-0000-4000-8000-0000000005c1', 'sales');
+insert into public.team_members (user_id, display_name) values ('ffffffff-0000-4000-8000-0000000005a1', 'ONB A'), ('ffffffff-0000-4000-8000-0000000005b1', 'ONB B'), ('ffffffff-0000-4000-8000-0000000005c1', 'ONB C');
 
 create temp table t_fx as select
   (select user_id from public.team_members where is_book_owner limit 1) as admin_id,
   array(select l.id from public.outreach_leads l where l.assigned_to_user_id is null and l.is_archived is not true
           and not public.lead_is_client(l.amount_paid, l.status) and coalesce(l.status, '') = 'not_contacted'
           and public.lead_contact_attempt_at(l.id) is null
-        order by l.created_at limit 6) as leads;
+        order by l.created_at limit 8) as leads,
+  (select count(*) from public.outreach_leads where sold_by_user_id is not null) as sold_before,
+  (select md5(string_agg(id::text || ':' || sold_by_user_id::text, ',' order by id)) from public.outreach_leads where sold_by_user_id is not null) as sold_hash_before,
+  (select count(*) from public.sale_attribution_reviews) as reviews_before;
 grant select on t_fx to authenticated, anon, service_role;
-insert into t_results (name, ok, detail) select 'fixtures: the admin and six untouched unassigned leads', admin_id is not null and cardinality(leads) = 6, cardinality(leads)::text from t_fx;
--- leads[1] → A (own lead, to call), leads[2] → B (own lead), leads[3] claim target, leads[4]/[5] payment, leads[6] admin assign
+insert into t_results (name, ok, detail) select 'fixtures: the admin and eight untouched unassigned leads', admin_id is not null and cardinality(leads) = 8, cardinality(leads)::text from t_fx;
+-- leads[1] → A (own lead, to call), leads[2] → B (own lead), leads[3] claim target, leads[4]/[5]/[7] payments, leads[6] admin assign
 update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005a1', assigned_at = now() where id = (select leads[1] from t_fx);
 update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005b1', assigned_at = now() where id = (select leads[2] from t_fx);
 update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005b1', assigned_at = now() where id = (select leads[4] from t_fx);
 update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005a1', assigned_at = now() where id = (select leads[5] from t_fx);
+update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005c1', assigned_at = now() where id = (select leads[7] from t_fx);
+insert into t_results (name, ok, detail) select 'HISTORY: the migration opens no review on any existing sale', reviews_before = 0, reviews_before::text from t_fx;
 
 -- ── documents: the seeds, then approved QA versions (what Paul does when the final documents arrive) ──
 insert into t_results (name, ok, detail) select 'seed: agreement draft v2 is a DRAFT, the privacy notice is a DRAFT with 10 outstanding, the team guide is approved',
@@ -178,13 +185,48 @@ do $$ declare r jsonb; begin
 end $$;
 reset role;
 
--- ── attribution at payment (stripe-webhook runs as the service role) ──
+-- ── attribution: Ready to Sell gates CREATING a sale; the seller is never rewritten afterwards ──
+-- MONDAY: ready reps A and C generate the client's payment link (what quick-close writes once its gate passes).
 set local role service_role;
-update public.outreach_leads set amount_paid = 99, status = 'payment_received', payment_date = now() where id in ((select leads[4] from t_fx), (select leads[5] from t_fx));
-insert into t_results (name, ok, detail) select 'ATTRIBUTION: a sale on an incomplete rep''s lead is credited to the book owner, not them',
-  sold_by_user_id = user_id and sold_by_user_id <> 'ffffffff-0000-4000-8000-0000000005b1', sold_by_user_id::text from public.outreach_leads where id = (select leads[4] from t_fx);
-insert into t_results (name, ok, detail) select '…with a security event saying why', exists (select 1 from public.security_events where alert_key = 'attribution_withheld:' || (select leads[4] from t_fx)::text), null;
-insert into t_results (name, ok, detail) select 'ATTRIBUTION: a ready rep''s sale is theirs', sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005a1', sold_by_user_id::text from public.outreach_leads where id = (select leads[5] from t_fx);
+insert into public.quick_close_events (lead_id, actor_user_id, kind, data) values
+  ((select leads[5] from t_fx), 'ffffffff-0000-4000-8000-0000000005a1', 'link_generated', '{"qa": true}'),
+  ((select leads[7] from t_fx), 'ffffffff-0000-4000-8000-0000000005c1', 'link_generated', '{"qa": true}');
+-- TUESDAY: a newer agreement is approved, so A is temporarily NOT ready; C is disabled (role removed).
+insert into public.salesperson_document_versions (id, kind, label, status, outstanding) values ('qa-agreement-final-3', 'contractor_agreement', 'QA agreement final 3', 'draft', '{}');
+select public.approve_salesperson_document('qa-agreement-final-3', (select admin_id from t_fx));
+update public.team_members set status = 'disabled', disabled_at = now() where user_id = 'ffffffff-0000-4000-8000-0000000005c1';
+delete from public.user_roles where user_id = 'ffffffff-0000-4000-8000-0000000005c1' and role = 'sales';
+insert into t_results (name, ok, detail) select 'setup: A is now NOT ready (a newer agreement), C is disabled',
+  not public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1') and not public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005c1'),
+  public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1')::text;
+-- WEDNESDAY: the clients pay (stripe-webhook runs as the service role). B's lead pays too — B never created a sale.
+update public.outreach_leads set amount_paid = 99, status = 'payment_received', payment_date = now()
+ where id in ((select leads[4] from t_fx), (select leads[5] from t_fx), (select leads[7] from t_fx));
+insert into t_results (name, ok, detail) select 'ATTRIBUTION: the rep who created the sale while ready keeps it after becoming not ready and the client paying later',
+  sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005a1', sold_by_user_id::text from public.outreach_leads where id = (select leads[5] from t_fx);
+insert into t_results (name, ok, detail) select '…and no review is opened for it', not exists (select 1 from public.sale_attribution_reviews where lead_id = (select leads[5] from t_fx)), null;
+insert into t_results (name, ok, detail) select 'ATTRIBUTION: disabling a rep after a legitimate sale does not transfer it',
+  sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005c1' and not exists (select 1 from public.sale_attribution_reviews where lead_id = (select leads[7] from t_fx)),
+  sold_by_user_id::text from public.outreach_leads where id = (select leads[7] from t_fx);
+insert into t_results (name, ok, detail) select 'ABNORMAL: a sale claiming a rep who was never authorised keeps that recorded seller — NOT moved to Paul',
+  sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005b1' and sold_by_user_id <> user_id, sold_by_user_id::text from public.outreach_leads where id = (select leads[4] from t_fx);
+insert into t_results (name, ok, detail) select '…and is held: ATTRIBUTION REVIEW NEEDED, with the evidence',
+  status = 'open' and claimed_seller_user_id = 'ffffffff-0000-4000-8000-0000000005b1' and jsonb_array_length(evidence -> 'missing_at_payment') > 0, evidence::text
+  from public.sale_attribution_reviews where lead_id = (select leads[4] from t_fx);
+insert into t_results (name, ok, detail) select '…a security event flags it for Paul', exists (select 1 from public.security_events where alert_key = 'attribution_review:' || (select leads[4] from t_fx)::text), null;
+insert into t_results (name, ok, detail) select '…and the commission rules (Session F) are told it is held', public.sale_attribution_held((select leads[4] from t_fx))
+  and not public.sale_attribution_held((select leads[5] from t_fx)), null;
+update public.outreach_leads set sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005a1' where id = (select leads[4] from t_fx);
+insert into t_results (name, ok, detail) select 'the recorded seller cannot be quietly rewritten afterwards (existing stamp rule)',
+  sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005b1', sold_by_user_id::text from public.outreach_leads where id = (select leads[4] from t_fx);
+insert into t_results (name, ok, detail) select 'RESOLVE: Paul resolves it explicitly (not credited)',
+  (r ->> 'ok')::boolean and public.sale_attribution_held((select leads[4] from t_fx)), r::text
+  from (select public.resolve_sale_attribution_review((select leads[4] from t_fx), 'not_credited', 'QA', (select admin_id from t_fx)) r) x;
+insert into t_results (name, ok, detail) select 'RESOLVE: a resolved review cannot be resolved again',
+  r ->> 'error' = 'no_open_review', r::text from (select public.resolve_sale_attribution_review((select leads[4] from t_fx), 'confirmed', null, (select admin_id from t_fx)) r) x;
+insert into t_results (name, ok, detail) select 'HISTORY: every sale that existed before is untouched (same sellers, same count)',
+  (select md5(string_agg(id::text || ':' || sold_by_user_id::text, ',' order by id)) from public.outreach_leads
+    where sold_by_user_id is not null and not exists (select 1 from t_fx where outreach_leads.id = any (t_fx.leads))) = (select sold_hash_before from t_fx), null;
 reset role;
 
 -- ── anon, and the structure ──
@@ -196,8 +238,8 @@ do $$ begin
   exception when others then insert into t_results (name, ok, detail) values ('anon cannot read document versions', sqlstate = '42501', sqlerrm); end;
 end $$;
 reset role;
-insert into t_results (name, ok, detail) select 'no policy exists on the onboarding tables (admin-users only)', count(*) = 0, string_agg(policyname, ', ')
-  from pg_policies where schemaname = 'public' and tablename in ('salesperson_onboarding', 'salesperson_onboarding_log', 'salesperson_document_versions');
+insert into t_results (name, ok, detail) select 'no policy exists on the onboarding or review tables (admin-users only)', count(*) = 0, string_agg(policyname, ', ')
+  from pg_policies where schemaname = 'public' and tablename in ('salesperson_onboarding', 'salesperson_onboarding_log', 'salesperson_document_versions', 'sale_attribution_reviews');
 insert into t_results (name, ok, detail) select 'signed-in users cannot call the readiness functions for someone else',
   not has_function_privilege('authenticated', 'public.salesperson_ready_to_sell(uuid)', 'execute')
   and not has_function_privilege('authenticated', 'public.salesperson_onboarding_missing(uuid)', 'execute'), null;

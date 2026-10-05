@@ -575,5 +575,7 @@ export const ONBOARDING_SAVE_ERRORS: Record<string, string> = {
   not_found: 'That version no longer exists.',
   has_outstanding: 'Resolve every outstanding item before approving.',
   not_draft: 'Only a draft can be approved.',
+  bad_decision: 'Pick Confirm or Not credited.',
+  no_open_review: 'That review has already been resolved.',
   draft_named_version: 'A version named as a draft can never be approved. Add the final document as a new version, then approve that.',
 };

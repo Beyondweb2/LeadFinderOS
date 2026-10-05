@@ -614,6 +614,34 @@ serve(async (req) => {
     /* DOCUMENT VERSIONS (2026-10-05): Paul adds the final agreement / notice himself and approves it.
        A new version is always a DRAFT; approving needs every outstanding item resolved and supersedes the
        previous approved version of that kind (public.approve_salesperson_document, one transaction). */
+    /* ATTRIBUTION REVIEWS (2026-10-05): a sale that landed on a salesperson who was not authorised to create
+       it is held (sale_attribution_reviews), never moved to Paul. Paul decides: 'confirmed' (it stands) or
+       'not_credited'. The stamped seller is never rewritten; commission (Session F) reads
+       public.sale_attribution_held(). */
+    if (action === 'attribution_reviews_list') {
+      const { data, error } = await serviceClient.from('sale_attribution_reviews')
+        .select('lead_id, claimed_seller_user_id, reason, evidence, status, resolution_note, resolved_at, created_at')
+        .order('created_at', { ascending: false }).limit(200);
+      if (error) return jsonResponse({ ok: false, error: 'read_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
+      const ids = [...new Set((data ?? []).map((r: { lead_id: string }) => r.lead_id))];
+      const names = new Map<string, string>();
+      if (ids.length) {
+        const { data: leads } = await serviceClient.from('outreach_leads').select('id, business_name').in('id', ids);
+        for (const l of (leads ?? []) as { id: string; business_name: string | null }[]) names.set(l.id, l.business_name ?? '');
+      }
+      return jsonResponse({ ok: true, reviews: (data ?? []).map((r: { lead_id: string }) => ({ ...r, business_name: names.get(r.lead_id) ?? null })) }, 200, corsHeaders, rlHeaders);
+    }
+    if (action === 'attribution_review_resolve') {
+      if (!uuidOk(body.lead_id)) return jsonResponse({ ok: false, error: 'bad_lead' }, 400, corsHeaders, rlHeaders);
+      const { data, error } = await serviceClient.rpc('resolve_sale_attribution_review', {
+        _lead_id: body.lead_id, _decision: String(body.decision ?? ''), _note: typeof body.note === 'string' ? body.note : null, _actor: adminUserId,
+      });
+      if (error) return jsonResponse({ ok: false, error: 'write_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
+      const r = data as { ok: boolean; error?: string };
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, lead: body.lead_id, decision: body.decision ?? null, result: r, timestamp: new Date().toISOString() }));
+      return jsonResponse(r, r.ok ? 200 : 409, corsHeaders, rlHeaders);
+    }
+
     if (action === 'team_document_add') {
       const v = validateNewDocument(body.document);
       if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400, corsHeaders, rlHeaders);

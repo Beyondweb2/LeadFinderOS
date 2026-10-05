@@ -39,7 +39,7 @@ ok(!/TPS|CTPS/.test(strip(read("src/components/ProspectFacts.tsx"))), "the lead 
 
 console.log("\n── TPS/CTPS is NOT part of Ready to Sell, and does NOT block a call ──");
 ok(!BLOCKING_KEYS.some((k) => /tps/i.test(k)), "not a Ready to Sell item");
-const gateFns = ["salesperson_onboarding_missing", "trg_lead_activity_ready_to_sell", "trg_outreach_leads_assign_ready", "trg_outreach_leads_sold_by_ready"];
+const gateFns = ["salesperson_onboarding_missing", "trg_lead_activity_ready_to_sell", "trg_outreach_leads_assign_ready", "trg_outreach_leads_attribution_review"];
 for (const fn of gateFns) {
   const start = MIG.indexOf(`create or replace function public.${fn}`);
   const body = MIG.slice(start, MIG.indexOf("$$;", start));

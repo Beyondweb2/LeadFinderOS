@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
-import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
+import { AttributionReviewsCard, OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel, type AttributionReview } from '@/components/SalespersonOnboardingPanel';
 import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
@@ -90,6 +90,14 @@ export default function Team() {
         /** The gate's own answer per member (null = could not be read). */
         missing: (r.missing ?? {}) as Record<string, string[] | null>,
       };
+    },
+  });
+  const reviews = useQuery({
+    queryKey: ['team', 'attribution-reviews'],
+    queryFn: async () => {
+      const r = await call('attribution_reviews_list');
+      if (!r.ok) throw new Error(String(r.error ?? 'could not load attribution reviews'));
+      return (r.reviews ?? []) as AttributionReview[];
     },
   });
   const saveOnboarding = async (userId: string, patch: Partial<OnboardingRecord>): Promise<boolean> => {
@@ -218,6 +226,18 @@ export default function Team() {
           </ul>
         )}
       </Card>
+
+      {reviews.data && reviews.data.some((r) => r.status === 'open') && (
+        <Card className="p-4 space-y-2 border-amber-500/50">
+          <h2 className="font-semibold">Sales needing an attribution review</h2>
+          <p className="text-xs text-muted-foreground">These clients paid on a lead held by a salesperson who was not authorised to create the sale. The seller has not been changed. Decide each one.</p>
+          <AttributionReviewsCard reviews={reviews.data} sellerName={(id) => members.find((x) => x.user_id === id)?.display_name ?? 'A former team member'} call={call} onChanged={(message, error) => {
+            if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
+            else toast({ title: message ?? 'Saved' });
+            void qc.invalidateQueries({ queryKey: ['team', 'attribution-reviews'] });
+          }} />
+        </Card>
+      )}
 
       {onboarding.data && (
         <Card className="p-4 space-y-2">

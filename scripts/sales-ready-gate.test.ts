@@ -1,10 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    THE READY TO SELL GATE — its wiring (2026-10-05, docs/salesperson-onboarding.md §3).
    ⛔ The gate is enforced on the SERVER: guard_action ('not_onboarded'), the lead_activity trigger, the
-      assignment trigger, the attribution trigger and quick-close. This suite fences that each piece is
+      assignment trigger and quick-close; attribution is never rewritten (abnormal sales are held for review). This suite fences that each piece is
       there, that the admin is exempt everywhere, that no WhatsApp code was touched, and that business
       type stays display-only. Its BEHAVIOUR is proven live by supabase/tests/salesperson-onboarding-rls.sql
-      (rolled back; 47/47 on 2026-10-05).
+      (rolled back; 57/57 on 2026-10-05).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -44,10 +44,24 @@ console.log("\n── the database gates ──");
   const asg = fnBody("trg_outreach_leads_assign_ready");
   ok(/auth\.uid\(\) is null then return new/.test(asg) && /role = 'admin'\) then return new/.test(asg), "assignment: signed-in sessions only; an admin assignee is never gated");
   ok(/before insert or update of assigned_to_user_id on public\.outreach_leads/.test(MIG), "assignment: claims, sales adds and admin assigns all pass through it");
-  const sold = fnBody("trg_outreach_leads_sold_by_ready");
-  ok(/old\.sold_by_user_id is not null then return new/.test(sold), "attribution: an existing stamp never moves (history intact)");
-  ok(/new\.sold_by_user_id := new\.user_id/.test(sold) && /attribution_withheld_not_onboarded/.test(sold), "attribution: a not-ready rep's new sale goes to the book owner, with a security event");
-  ok("trg_outreach_leads_sold_by" < "trg_outreach_leads_sold_by_ready", "attribution: runs after the existing stamp trigger (triggers fire by name)");
+  /* ATTRIBUTION (corrected 2026-10-05): Ready to Sell gates CREATING a sale; the seller is never rewritten. */
+  const live = strip(MIG.replace(/^\s*--.*$/gm, ""));
+  ok(!/sold_by_user_id\s*:=/.test(live) && !/set\s+sold_by_user_id\s*=/i.test(live), "attribution: nothing in this migration writes the seller (no transfer to Paul, no rewrite)");
+  ok(/drop trigger if exists trg_outreach_leads_sold_by_ready/.test(MIG) && !/create trigger trg_outreach_leads_sold_by_ready/.test(MIG), "attribution: the earlier 'credit it to Paul' trigger is gone");
+  const review = fnBody("trg_outreach_leads_attribution_review");
+  ok(/old\.sold_by_user_id is not null then return new/.test(review), "review: only the FIRST stamp is looked at (historic sales untouched)");
+  ok(/salesperson_ready_to_sell\(v_seller\) then return new/.test(review), "review: a seller who is ready at payment is never flagged");
+  ok(/e\.actor_user_id = v_seller and e\.kind in \('link_generated', 'link_reused'\)/.test(review), "review: a payment link the seller created (only possible while ready) is the creation evidence");
+  ok(/role = 'admin'\) then return new/.test(review), "review: the admin's sales are never flagged");
+  ok(/insert into public\.sale_attribution_reviews/.test(review) && /'attribution_review_needed'/.test(review), "review: an abnormal sale is HELD (review row + security event), not credited elsewhere");
+  ok(/after insert or update of amount_paid, status, sold_by_user_id, sold_at on public\.outreach_leads/.test(MIG), "review: runs AFTER the existing stamp, reading the final seller");
+  ok(/status in \('open', 'not_credited'\)/.test(fnBody("sale_attribution_held")), "held = an open review or Paul's 'not credited' (the one question for the commission rules)");
+  const au = read("supabase/functions/admin-users/index.ts");
+  ok(au.indexOf("'attribution_review_resolve'") > au.indexOf("Not authorized - no admin role") && /resolve_sale_attribution_review/.test(au), "resolve: an explicit admin-only action");
+  for (const f of ["src/lib/commission.ts", "supabase/functions/_shared/earnings.ts", "supabase/functions/_shared/payment-ledger.ts", "supabase/functions/stripe-webhook/index.ts"]) {
+    ok(!/salesperson_ready|sale_attribution|not_onboarded|salespersonOnboarding/.test(read(f)), `commission stays Session F's: ${f} is untouched by this work`);
+  }
+  ok(!/payment_ledger|commission_rule|commission_rate/.test(live.replace(/create or replace function public\.guard_action[\s\S]*$/, "")), "no commission calculation or ledger row is changed here");
   ok(/function public\.my_acknowledge_team_guide/.test(MIG) && /function public\.my_onboarding_status/.test(MIG), "a not-ready rep can see their status and acknowledge the guide");
 }
 

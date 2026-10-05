@@ -205,6 +205,54 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
   );
 }
 
+export interface AttributionReview {
+  lead_id: string;
+  business_name: string | null;
+  claimed_seller_user_id: string;
+  status: 'open' | 'confirmed' | 'not_credited';
+  evidence: { missing_at_payment?: string[] };
+  resolution_note: string | null;
+  created_at: string;
+}
+
+/* ATTRIBUTION REVIEW NEEDED (Team page, admin): a sale that landed on a salesperson who was not authorised
+   to create it. The seller is never changed here; Paul confirms it, or records that the salesperson is not
+   credited. Whether anyone is paid stays with the commission rules. */
+export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }: {
+  reviews: readonly AttributionReview[];
+  sellerName: (id: string) => string;
+  call: (action: string, body?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  onChanged: (message?: string, error?: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const open = reviews.filter((r) => r.status === 'open');
+  const decide = async (r: AttributionReview, decision: 'confirmed' | 'not_credited') => {
+    const note = window.prompt(decision === 'confirmed' ? 'Confirm this sale belongs to the salesperson. Note (optional):' : 'Record that the salesperson is NOT credited for this sale. Note (optional):', '');
+    if (note === null) return;
+    setBusy(true);
+    try {
+      const res = await call('attribution_review_resolve', { lead_id: r.lead_id, decision, note });
+      if (!res.ok) onChanged(undefined, String(res.error ?? 'failed'));
+      else onChanged(decision === 'confirmed' ? 'Attribution confirmed.' : 'Recorded: not credited to the salesperson.');
+    } finally { setBusy(false); }
+  };
+  if (!open.length) return <p className="text-xs text-muted-foreground">No sales need an attribution review.</p>;
+  return (
+    <ul className="divide-y text-sm" data-testid="attribution-reviews">
+      {open.map((r) => (
+        <li key={r.lead_id} className="flex flex-wrap items-center gap-2 py-2">
+          <div className="min-w-0 mr-auto">
+            <div className="font-medium">{r.business_name || 'A client'} <span className="text-xs font-normal text-amber-700 dark:text-amber-400">ATTRIBUTION REVIEW NEEDED</span></div>
+            <div className="text-xs text-muted-foreground">Recorded seller: {sellerName(r.claimed_seller_user_id)} — not Ready to Sell when the client paid, and no payment link of theirs on file{r.evidence?.missing_at_payment?.length ? ` (missing: ${r.evidence.missing_at_payment.join(', ')})` : ''}.</div>
+          </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void decide(r, 'confirmed')}>Confirm seller</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void decide(r, 'not_credited')}>Not credited</Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /* DOCUMENTS (Team page, admin): every version of the contractor agreement, the privacy notice and the team
    guide. Paul adds the final version himself (never invented here), clears its outstanding items, and
    approves it — which supersedes the previous approved one. */
