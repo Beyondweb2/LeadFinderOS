@@ -82,7 +82,7 @@ const CAPABILITIES = ["dry_run", "build_phase_hold", "routing_leaf", "any_approv
    gone; the capability reads any_approved_opener).
    2026-09-30b: an explicit opt-out refuses MARKETING templates here too (src/lib/marketingConsent.ts).
    2026-10-04a: QA safety — a QA fixture is simulated, a test-account lead is refused (src/lib/qaSafety.ts). */
-const BUILD_ID = "2026-10-04a-qa";
+const BUILD_ID = "2026-10-05a-contact-guard";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -422,6 +422,20 @@ Deno.serve(async (req) => {
           .limit(1);
         if (Array.isArray(priorAny) && priorAny.length > 0) {
           return json({ ok: false, error: "phone_already_contacted", template: templateName }, 200);
+        }
+      }
+      /* ⛔ THE REAL-CONTACT GUARD (2026-10-05, opener consistency fix): a COLD template never goes to a lead
+         with a genuine logged conversation — the ONE rule (SQL opener_contact_block) the queue and campaign
+         launches use. NOT overridable by allow_resend: that flag confirms repeating a pitch, and a cold opener
+         after a real conversation is never the right message — a continuation template, or a reply in the open
+         24-hour window, is. Free-form replies and continuations never reach this (isColdOutreachTemplate).
+         Fails closed: an unreadable answer refuses the cold send. */
+      if (isColdOutreachTemplate(templateName) && resolvedLeadId) {
+        const { data: block, error: blockErr } = await service.rpc("opener_contact_block", { _lead_id: resolvedLeadId });
+        if (blockErr) return json({ ok: false, error: "contact_guard_unreadable", template: templateName, reason: "Could not check the lead's logged contact history — nothing was sent." }, 200);
+        if (block === "contacted_by_phone" || block === "contacted_logged") {
+          return json({ ok: false, error: block, template: templateName,
+            reason: `${block === "contacted_by_phone" ? "Already contacted by phone" : "Already in conversation (a logged contact)"} — initial opener not sent. Use a follow-up template, or reply once they have messaged.` }, 200);
         }
       }
       /* ⚠️ `let` for ONE reason: a template that names three competitors and cannot get three falls
