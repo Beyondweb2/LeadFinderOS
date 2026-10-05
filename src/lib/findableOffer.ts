@@ -67,7 +67,7 @@ export const FINDABLE_CONTINUING_GBP = 29.99;
 export const MONTHLY_START_V3_WORDS = 'the day after your 14-day refund window closes (normally about six weeks after you give us access)';
 
 /* 🔴 TWO ROUTES, ONE PRICE, TWO LENGTHS (Paul, 2026-09-29). The price never changes — £99 at sign-up,
-   then £99 a month from six weeks after sign-up — but the NUMBER of payments depends on the website
+   then £99 a month (v3: from MONTHLY_START_V3_WORDS) — but the NUMBER of payments depends on the website
    route the client takes:
      · FINDABLE BUILD — Findable builds, hosts and manages a new website: 12 payments in total.
      · FINDABLE OPTIMISE — the client keeps their own website and gives us access: 6 payments in total.

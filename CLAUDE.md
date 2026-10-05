@@ -288,8 +288,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   monthly. Verified against the code 2026-10-01. `findable.live/refunds` is the
   customer-facing authority. ⛔ **No hedge beside it** ("the engines decide", "anyone who promises is
   guessing") — a promise with a disclaimer stapled on reads as walking it back.
-- **"Gone up" = `movement === 'improved'`, beyond `NOISE_BAND_PP`.** Inside the band qualifies for the
-  refund. Paul's reading; do not soften to "unchanged".
+- **"Gone up" (v3 guarantee, Paul 2026-10-05) = ANY increase in the named count** —
+  `guaranteeNumberWentUp` (`clientTimeline.ts`) / `numberWentUp`: 39 → 40 is up; 39 → 39 and 39 → 38 are not.
+  ⛔ `NOISE_BAND_PP` / "within noise" never decides the guarantee — it survives only as an operator display label
+  (`ReportBeforeAfter`, compare screens, export), so an operator screen can say "within noise" for a +1 that the
+  guarantee counts as gone up. (The pre-v3 "beyond the band" reading is retired.)
 - ⛔ **RG Locksmiths is pinned at 8 weeks** (legacy outcome guarantee, `remeasure_due_date`
   2026-10-06, stored by hand). The 28-day default (`REMEASURE_OFFSET_DAYS`) only fills a NULL date.
 - ⛔ **THE DOMAIN RULE (Paul, 2026-09-28, `docs/domain-authority.md`): we only build / connect the standard

@@ -126,11 +126,13 @@ export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?
 
 /** The commercial consequence of a route, as the rep sees it the moment it is chosen. From the
  *  constants — the rep can change none of it (price, count, cadence, discount).
- *  🔴 M-011 (2026-10-04): the MINIMUM TERM is said before the link, not discovered at checkout. */
+ *  🔴 M-011 (2026-10-04): the MINIMUM TERM is said before the link, not discovered at checkout.
+ *  ⛔ E2E-11 (2026-10-05): the start is the v3 Option B words (MONTHLY_START_V3_WORDS, as the script and
+ *  offerSummaryFor) — never "six weeks after sign-up", which contradicted the agreement the client signs. */
 export function routeTermsLines(route: ServiceRoute): string[] {
   return [
     `£${FINDABLE_SETUP_PRICE_GBP} today`,
-    `Then £${FINDABLE_MONTHLY_GBP} a month, starting six weeks after sign-up`,
+    `Then £${FINDABLE_MONTHLY_GBP} a month, starting ${MONTHLY_START_V3_WORDS}`,
     `${totalPaymentsFor(route)} payments in total, today's included — a ${termMonthsFor(route)}-month minimum term`,
   ];
 }
