@@ -1828,79 +1828,19 @@ export function useOutreach({ history = true, progressive = false }: { history?:
      return { updated: updatedCount, skipped: skippedCount, failed: failedCount, total };
    }, [user, leads, archivedLeads, fetchLeads]);
 
-  // Bulk import leads from CSV
-  const bulkImportLeads = useCallback(async (
-    leadsToImport: Array<Partial<OutreachLead>>,
-    country: Country = 'UK'
-  ) => {
-    if (isSales()) { refuseForSales('Importing leads'); return; }
-    if (!user) {
-      toast({
-        title: 'Not authenticated',
-        description: 'Please log in to import leads.',
-        variant: 'destructive',
-      });
-      return { imported: 0, skipped: 0 };
-    }
-
-    let imported = 0;
-    let skipped = 0;
-    const importedIds: string[] = [];
-
-    for (const lead of leadsToImport) {
-      if (!lead.business_name) {
-        skipped++;
-        continue;
-      }
-
-      // Check for existing lead
-      const { data: existing } = await supabase
-        .from('outreach_leads')
-        .select('id')
-        .eq('business_name', lead.business_name)
-        .limit(1)
-        .maybeSingle();
-
-      if (existing) {
-        skipped++;
-        continue;
-      }
-
-      const { data: created, error } = await supabase
-        .from('outreach_leads')
-        .insert({
-          user_id: user.id,
-          business_name: lead.business_name,
-          phone: lead.phone || null,
-          email: lead.email || null,
-          google_maps_url: lead.google_maps_url || null,
-          address: lead.address || null,
-          category: lead.category || null,
-          notes: lead.notes || null,
-          status: 'not_contacted' as LeadStatus,
-          next_action: 'none' as NextActionType,
-          next_action_date: null,
-          country: lead.country || country,
-          list_type: 'imported',
-        })
-        .select('id')
-        .single();
-
-      if (!error) {
-        imported++;
-        if (created?.id) importedIds.push(created.id);
-
-        // Also add to history
-        await supabase.from('outreach_history').insert({
-          user_id: user.id,
-          business_name: lead.business_name,
-          google_maps_url: lead.google_maps_url || null,
-          phone: lead.phone || null,
-          country: lead.country || country,
-        });
-      } else {
-        skipped++;
-      }
+  /* After a CSV import (2026-10-05, fix/csv-lead-import; docs/pre-sales-certification/csv-import-fix.md).
+     ⛔ THE IMPORT ITSELF IS THE SERVER'S: CSVImportDialog sends the rows to import_leads, which validates them, finds
+     duplicates with the canonical identity lookup, stamps the owner (always the person importing — a salesperson
+     can never name anyone else) and writes. It used to be a browser loop here inserting list_type 'imported', which
+     the database refuses, so every row failed while the dialog said "Successfully imported".
+     This only refreshes the list and, for the ADMIN, verifies the towns of the leads just created. A salesperson's
+     import is not town-checked: backfill-lead-towns pays per lead and reads only the caller's own data rows (a
+     salesperson owns none), exactly as their "Add a lead" without a lookup today. */
+  const afterCsvImport = useCallback(async (createdIds: string[]) => {
+    const importedIds = createdIds;
+    if (isSales() || !importedIds.length) {
+      await fetchLeads();
+      return { verified: 0, unverifiable: 0 };
     }
 
     /* ── VERIFY AS IT LANDS — Paul's Layer 1, 2026-08-14 ─────────────────────────────────────────
@@ -1939,9 +1879,9 @@ export function useOutreach({ history = true, progressive = false }: { history?:
 
     await fetchLeads();
 
-    return { imported, skipped, verified, unverifiable };
-  }, [user, fetchLeads, toast]);
- 
+    return { verified, unverifiable };
+  }, [fetchLeads, toast]);
+
   const updateClientDetails = useCallback(async (
     leadId: string,
     details: Partial<Pick<OutreachLead, 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes'>>
@@ -1980,7 +1920,7 @@ export function useOutreach({ history = true, progressive = false }: { history?:
     logActivity,
     isInOutreach,
     bulkLookupPhones,
-    bulkImportLeads,
+    afterCsvImport,
     fetchLeads,
     refetch: fetchLeads,
     leadLoad,

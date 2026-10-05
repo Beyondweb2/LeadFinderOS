@@ -34,7 +34,9 @@ Paul may have done some of the manual ones since.*
 
 ## PRODUCT NEXT (likely priorities)
 
-0. **CSV IMPORT — BROKEN / NEEDS FIX** (found 2026-10-05 by the ownership work, pre-existing, separate bug): Outreach CSV
+0. **CSV IMPORT — FIXED ON BRANCH `fix/csv-lead-import`, NOT MERGED / NOT DEPLOYED** (2026-10-05;
+   `docs/pre-sales-certification/csv-import-fix.md` — SQL first, then `security-admin`). The original report:
+   **CSV IMPORT — BROKEN / NEEDS FIX** (found 2026-10-05 by the ownership work, pre-existing, separate bug): Outreach CSV
    import (`bulkImportLeads`, `src/hooks/useOutreach.ts`) inserts `list_type: 'imported'`, but the live
    `outreach_leads_list_type_check` allows only `no_website` / `broken_website` / `manual`, so every imported row is
    refused and the import appears to add nothing. Decide the right `list_type` (or widen the CHECK) in its own branch.

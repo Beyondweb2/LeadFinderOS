@@ -61,8 +61,10 @@ ok(/orderNavForRole\(/.test(sidebar), "the sidebar orders its items through orde
 
 console.log("\n── what each role may do on the shared screens ──");
 const A = leadPermissions("admin"), S = leadPermissions("sales"), N = leadPermissions(null);
-const adminOnly = ["editLeadRecord", "removeLeads", "importLeads", "enrichLeads", "bulkAudits", "campaigns", "product", "crawlSite", "clientDelivery", "queueControls", "assignOwner", "auditAdmin", "privateNote", "exportData"] as const;
+const adminOnly = ["editLeadRecord", "removeLeads", "enrichLeads", "bulkAudits", "campaigns", "product", "crawlSite", "clientDelivery", "queueControls", "assignOwner", "auditAdmin", "privateNote", "exportData"] as const;
 for (const k of adminOnly) ok(A[k] === true && S[k] === false && N[k] === false, `${k}: admin yes, sales no, no role no`);
+/* CSV import (2026-10-05, fix/csv-lead-import): both roles — import_leads makes the importer the owner. */
+ok(A.importLeads === true && S.importLeads === true && leadPermissions("sales", false).importLeads === false && N.importLeads === false, "importLeads: admin yes, ready sales yes (own leads), not-ready sales no, no role no");
 ok(!("claimPool" in S) && !("claimPool" in A), "no Available-to-claim permission any more (Paul, 2026-09-28: the claim workflow is gone from Sales)");
 ok(A.settableStatuses === null && maySetStatus(A, "payment_received"), "the admin sets every status");
 for (const st of ["interested", "price_given", "not_interested", "won_pending_onboarding"]) ok(maySetStatus(S, st), `sales may set ${st}`);

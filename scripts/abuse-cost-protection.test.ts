@@ -30,7 +30,7 @@ console.log("── the thresholds live once ──");
   const m = MIG.match(/insert into public\.protection_settings \(id, mode, limits\) values \(1, 'running', '(\{.*?\})'::jsonb\)/);
   /* 2026-10-04 (fix/07): an action added after the seed reaches the live row through its OWN migration
      (jsonb_set, only when absent). The defaults must equal the seed PLUS exactly those additions. */
-  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261006070000_sales_prospect_checks.sql" };
+  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261006070000_sales_prospect_checks.sql", lead_import: "supabase/migrations/20261010170000_csv_lead_import.sql" };
   const seeded = m ? JSON.parse(m[1]) : null;
   if (seeded) for (const [action, file] of Object.entries(LATER_ACTIONS)) {
     const am = read(file).match(new RegExp(`'\{actions,${action}\}', '(\{[^']*\})'::jsonb`));

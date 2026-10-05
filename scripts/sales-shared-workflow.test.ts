@@ -73,7 +73,7 @@ console.log("\n── every salesperson edit is a server function, positive matc
   ok(planSalesPatch({ whatsapp_status: "yes", contact_method: "whatsapp" }).steps.length === 0 && planSalesPatch({ whatsapp_status: "yes", contact_method: "whatsapp" }).refused.length === 0, "server-written / cosmetic keys are an accepted no-op");
   const hook = read("src/hooks/useOutreach.ts");
   ok(/if \(isSales\(\)\) return salesUpdateLead\(leadId, updates as Record<string, unknown>\);\n\s+const \{ data, error \} = await supabase\n\s+\.from\('outreach_leads'\)\n\s+\.update\(updates\)/.test(hook), "useOutreach.updateLead routes a salesperson before the direct write");
-  for (const fn of ["deleteLead", "deleteMultiple", "resetMultiple", "resetToFreshMultiple", "deleteAllLeads", "bulkImportLeads", "bulkLookupPhones", "removeFreshLead", "retryPhoneFetch"]) {
+  for (const fn of ["deleteLead", "deleteMultiple", "resetMultiple", "resetToFreshMultiple", "deleteAllLeads", "bulkLookupPhones", "removeFreshLead", "retryPhoneFetch"]) {
     const at = hook.indexOf(`const ${fn} = useCallback(`);
     ok(at > 0 && /if \(isSales\(\)\) \{ refuseForSales\(/.test(hook.slice(at, at + 400)), `${fn} refuses a salesperson before writing`);
   }

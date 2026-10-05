@@ -359,7 +359,7 @@ const EMAIL_SOURCE_WORDS: Record<string, string> = { website_crawl: 'their websi
 const DETAIL_FIELD_LABEL: Record<string, string> = {
   services: 'services', service_areas: 'service areas', address: 'address', website: 'website',
   contact_name: 'contact', search_keyword: 'trade', search_location: 'town', email: 'email', email_source: 'found in', wrong_number: 'wrong number',
-  social: 'social profile', facebook_url: 'Facebook', instagram_url: 'Instagram', cleanup: 'why', original: 'was',
+  social: 'social profile', facebook_url: 'Facebook', instagram_url: 'Instagram', cleanup: 'why', original: 'was', source: 'from',
 };
 
 /** One activity row in words, for the lead's History and the paid client's handoff. ONE rule, so the
@@ -411,7 +411,9 @@ export function activityDetail(
       d.note ? `Note: ${String(d.note)}` : null,
     ].filter(Boolean).join('\n');
     case 'marked_interested': return d.on === false ? 'Unstarred' : 'Starred';
-    case 'lead_added': return d.source ? `Source: ${String(d.source).replace(/_/g, ' ')}` : null;
+    /* import_leads writes source 'csv_import' with the file name (2026-10-05, fix/csv-lead-import). */
+    case 'lead_added': return d.source === 'csv_import' ? `Source: CSV import${d.file ? ` (${String(d.file)}, row ${String(d.row ?? '?')})` : ''}`
+      : d.source ? `Source: ${String(d.source).replace(/_/g, ' ')}` : null;
     case 'lead_assigned':
     case 'lead_unassigned': return `${actorName((d.from as string) ?? null)} → ${d.to ? actorName(d.to as string) : 'Unassigned'}`;
     case 'details_set': {

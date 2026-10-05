@@ -49,7 +49,7 @@ export interface ProtectionLimits {
 export const GUARD_ACTIONS = [
   'lead_search', 'place_details', 'enrich', 'site_scrape', 'hook_audit', 'hook_preview', 'ai_draft',
   'prospect_preview', 'niche_check', 'audit_manual', 'admin_ai', 'claim', 'lead_add', 'lead_lookup',
-  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check',
+  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import',
 ] as const;
 export type GuardAction = typeof GUARD_ACTIONS[number];
 
@@ -89,6 +89,10 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
        one. Planned with the Apify monthly cap confirmed / raised to about $150 (fixes-07 §6); change it on
        the Security panel once real usage is seen. */
     sales_check: { paid: true, per_day: 30 },
+    /* CSV import (2026-10-05, fn-less: public.import_leads, migration 20261010170000). One guard row per call — the
+       check AND the import each count — with the call's row count as its units. Unpaid (no provider is called), so
+       the prospecting pause never blocks it. max_rows equals import_leads' own per-call ceiling. */
+    lead_import: { paid: false, per_hour: 30, max_rows: 500, rows_per_day: 3000 },
   },
 };
 

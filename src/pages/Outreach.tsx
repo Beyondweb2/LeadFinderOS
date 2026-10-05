@@ -56,7 +56,7 @@ const Outreach = () => {
     archiveLead,
     archiveMultiple,
     markMultipleAsInterested,
-    bulkImportLeads,
+    afterCsvImport,
     bulkLookupPhones,
     fetchLeads,
     leadLoad,
@@ -434,8 +434,8 @@ const Outreach = () => {
         onResetToFreshSelected={perms.removeLeads ? resetToFreshMultiple : undefined}
         onMarkAsInterested={markMultipleAsInterested}
         onRefreshLeads={fetchLeads}
-        onImportLeads={perms.importLeads ? async (leadsToImport) => {
-          await bulkImportLeads(leadsToImport as any, 'UK');
+        onImportLeads={perms.importLeads ? async ({ createdIds }) => {
+          await afterCsvImport(createdIds);
         } : undefined}
         onBulkLookupPhones={perms.enrichLeads ? (ids, onProgress) => bulkLookupPhones(ids, onProgress) : undefined}
         showArchiveButton={false}
