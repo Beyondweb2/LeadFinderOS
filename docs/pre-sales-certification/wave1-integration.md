@@ -164,7 +164,8 @@ Archived leads and expired links: scenario 5.
 3. **First-contact cutoff** — the activation stamp (§3.1). No date in the code.
 4. **Apify / budget** — WS-4's pools kept; constants equal Paul's launch configuration (guarantee $10/day, client
    $8/day, prospecting $12/day; tested). The Apify reserve: prospecting stops at 85%, client work at 95%, guarantee
-   work runs to Apify's own cap. **Paul action:** raise / confirm the Apify monthly cap (~$100) before any bulk-audit
+   work runs to Apify's own cap. **Paul action:** raise / confirm the Apify monthly cap — **about $150** (updated 2026-10-05
+   with WS-7's 30 checks per rep per day, `fixes-07-sales-bulk-audit.md` §6; was ~$100) — before any bulk-audit
    rollout. Not changed here.
 5. **Results email** — the hold stays (`REMEASURE_RESULTS_COPY_APPROVED = false`, unchanged). Exact copy in §6. The
    causal claim stays removed.
@@ -359,7 +360,8 @@ refusal sentence, not a prompt (cosmetic). The Build pack page is long on a phon
 - Paul: the WhatsApp hold stands — no `whatsapp-status` deploy until the Findable Meta App + App Secret exist.
 
 **Paul actions (no code):**
-- Apify monthly cap → ~$100 (or confirm) before bulk-audit rollout.
+- Apify monthly cap → **about $150** (or confirm) before bulk-audit rollout (updated 2026-10-05 for WS-7's 30 checks per rep
+  per day; was ~$100). Keep the daily prospecting guard and the protected client pools; review real spend after launch.
 - Approve (or edit) the results email copy in §6, then flip `REMEASURE_RESULTS_COPY_APPROVED`.
   ⛔ RG's results were due 2026-10-06 (pinned date) — RG is refunded; check the sender's view of RG before flipping.
 - Deactivate the two old Stripe Payment Links (WS-1 §4.2). Look once in Stripe for any subscription / schedule on

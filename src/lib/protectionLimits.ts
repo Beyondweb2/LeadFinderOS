@@ -85,9 +85,10 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
     /* "Check before calling" (2026-10-04, fn sales-prospect-check): one guard row per FRESH paid check a
        salesperson's batch starts (reused results are free and never counted). per_day IS the rep's daily
        allowance — src/lib/salesCheck.ts reads it from the live row and falls back to this value.
-       Launch value (Paul, 2026-10-04): one full batch a day per rep — headroom under the Apify monthly
-       cap; raise it on the Security panel once real usage is seen. */
-    sales_check: { paid: true, per_day: 20 },
+       Launch value (Paul, 2026-10-05): one full batch of SALES_CHECK_BATCH_MAX plus a second, partial
+       one. Planned with the Apify monthly cap confirmed / raised to about $150 (fixes-07 §6); change it on
+       the Security panel once real usage is seen. */
+    sales_check: { paid: true, per_day: 30 },
   },
 };
 

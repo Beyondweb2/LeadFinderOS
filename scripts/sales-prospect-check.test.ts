@@ -133,8 +133,8 @@ console.log('── the rules ──');
   ok(!normalizeLeadIds([]).ok && !normalizeLeadIds(null).ok, 'no leads → refused');
   ok(SALES_CHECK_BATCH_MAX === 20, 'the launch batch maximum is 20 (brief)');
   ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > 0, 'the per-rep allowance lives once (protectionLimits sales_check.per_day)');
-  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 20, 'the launch allowance is 20 fresh checks per rep per day (Paul, 2026-10-04)');
-  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === SALES_CHECK_BATCH_MAX, '…exactly one full batch a day; the per-batch maximum is unchanged');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 30, 'the launch allowance is 30 fresh checks per rep per day (Paul, 2026-10-05)');
+  ok(SALES_CHECK_BATCH_MAX === 20 && SALES_CHECK_DEFAULT_PER_REP_PER_DAY > SALES_CHECK_BATCH_MAX, '…one full batch plus a partial second; the per-batch maximum stays 20');
   ok(perRepDailyAllowance(null) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY && perRepDailyAllowance({ actions: { sales_check: { per_day: 'x' } } }) === SALES_CHECK_DEFAULT_PER_REP_PER_DAY, 'absent / malformed allowance → the default, never unlimited');
   ok(perRepDailyAllowance({ actions: { sales_check: { per_day: 0 } } }) === 0, 'Paul can set the allowance to 0 (switch off fresh checks)');
   ok([...CLIENT_STATUSES].every((s) => leadEligibility(REP_A, { id: 'x', assigned_to_user_id: REP_A, status: s, business_name: 'n', search_keyword: 't', derived_town: 'x' }).ok === false), 'every client status is refused (held equal to roleRules CLIENT_STATUSES)');
@@ -343,6 +343,24 @@ console.log('── budget: per-rep allowance, prospecting pool, guarantee untou
 }
 
 /* ═══ 5. Caching / reuse ═══════════════════════════════════════════════════════════════════════ */
+console.log('── the launch allowance end to end: 30 fresh a day, reuse free ──');
+{
+  const w = world(); // the default limits — no per-day override
+  const fresh = [...Array(31)].map(() => addLead(w));
+  const cached = addLead(w); addAudit(w, cached.id, 3); addCrawl(w, cached.id, 3);
+  const b1 = await run(w, A, fresh.slice(0, SALES_CHECK_BATCH_MAX).map((l) => l.id));
+  ok(b1.status === 200 && items(w).filter((i) => i.status === 'running').length === SALES_CHECK_BATCH_MAX, 'batch 1: a full batch of 20 fresh checks starts');
+  const tooBig = await startBatch(w.deps, A, { lead_ids: fresh.slice(0, SALES_CHECK_BATCH_MAX + 1).map((l) => l.id), client_request_id: req() });
+  ok(tooBig.status === 400, 'the batch maximum is still 20 even though the day allows 30');
+  await run(w, A, [...fresh.slice(SALES_CHECK_BATCH_MAX).map((l) => l.id), cached.id]);
+  const second = fresh.slice(SALES_CHECK_BATCH_MAX).map((l) => itemFor(w, l.id));
+  ok(second.filter((i) => i.status === 'running').length === 10 && second.filter((i) => i.reason === 'allowance_used').length === 1, 'batch 2: ten more fresh checks start (30 in the day), the 31st is refused with the plain sentence');
+  ok(itemFor(w, cached.id).status === 'reused', 'a cached result still comes through after the allowance is used — reuse is free');
+  ok(w.calls.start.length === 30 && w.calls.guard.length === 30, 'exactly 30 paid checks and 30 guard rows; the reused one made neither');
+  const v = await batchView(w.deps, A);
+  ok(v.allowance?.used === 30 && v.allowance?.limit === 30 && v.allowance?.remaining === 0, 'the rep sees "Checks left today: 0 of 30"');
+}
+
 console.log('── caching: reuse costs nothing ──');
 {
   const w = world();

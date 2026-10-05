@@ -50,7 +50,8 @@ export const SALES_CHECK_REFRESH_MIN_DAYS = 2;
  *  not name one (actions.sales_check.per_day). Absent never means unlimited. Reused results do not
  *  count. The number lives ONCE, in protectionLimits.ts (the value the migration adds to the live
  *  row); sized from the measured cost of one check (_shared/outreach-audit.ts OUTREACH_AUDIT_EST_USD):
- *  one full batch a day per rep at launch (Paul, 2026-10-04). Admin-configurable on the Security panel. */
+ *  one full batch plus a partial second a day per rep at launch (Paul, 2026-10-05). Admin-configurable on
+ *  the Security panel. */
 export const SALES_CHECK_DEFAULT_PER_REP_PER_DAY: number = Number(DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day);
 
 /** Items worked at once inside one advance (each is one create-ai-audit call or one crawl). */
