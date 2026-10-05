@@ -66,7 +66,10 @@ console.log("\n── the gate ──");
   ok(quickCloseState("answers_saved", { answers: flagged, review_approved_at: "2026-09-29T10:00:00Z" }) === "ready", "…Paul can release it, so the opportunity is kept");
   ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes" } }) === "in_progress" && quickCloseState(null, null) === "not_started", "partial answers: in progress; nothing: not started");
   const recent = new Date(Date.now() - 3_600_000).toISOString();
-  ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: recent }) === "link_generated" && quickCloseState("paid", { answers: SAFE }) === "paid", "link generated (and still usable); the row's own paid status is Paid");
+  /* 2026-10-05 (v3): only a SIGN-UP link is ever usable; a stored Stripe payment link reads expired. */
+  ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: recent, link_kind: "signup" }) === "link_generated"
+    && quickCloseState("answers_saved", { answers: SAFE, link_url: "https://checkout.stripe.com/c/pay/cs_x", link_generated_at: recent }) === "link_expired"
+    && quickCloseState("paid", { answers: SAFE }) === "paid", "sign-up link generated (and still usable); a pre-v3 Stripe link is never ready; the row's own paid status is Paid");
   ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: "2026-09-29T10:00:00Z" }) === "link_expired", "2026-10-04 (M-014): an old stored link is EXPIRED, never 'ready'");
   ok(LINK_REUSE_MS < 24 * 3_600_000, "a link is reused only while its Stripe session is still valid (under 24h)");
   /* Recreation: rights unclear never blocks Build, never promises an exact copy. */
@@ -107,7 +110,7 @@ console.log("\n── source: security, the canonical checkout, idempotency ─�
 const fn = read("supabase/functions/quick-close/index.ts");
 ok(/const \[access, all\] = await Promise\.all\(\[leadAccess\(service, actor, leadId\)/.test(fn) && /if \(!access\.ok\) return json\(\{ ok: false, error: "not_your_lead"/.test(fn), "only a lead the caller may work (leadAccess, server-side) — never another rep's");
 ok(/lead\.sold_by_user_id === actor\.id \|\| lead\.assigned_to_user_id === actor\.id/.test(fn) && /row\?\.status === "paid"/.test(fn), "after payment the seller may still SEE the outcome (read-only)");
-ok(/functions\/v1\/findable-checkout/.test(fn) && /body: JSON\.stringify\(\{ onboarding_id: rowId, lead_id: leadId \}\)/.test(fn), "the link is the EXISTING findable-checkout, sent only the row and the lead");
+ok(/functions\/v1\/findable-checkout/.test(fn) && /body: JSON\.stringify\(\{ onboarding_id: rowId, lead_id: leadId, purpose: "signup_link" \}\)/.test(fn), "the link is the EXISTING findable-checkout, sent only the row, the lead and the sign-up purpose (v3: never a Stripe URL)");
 ok(!/price|unit_amount|amount|discount|coupon|line_items/i.test(fn.slice(fn.indexOf('if (mode === "generate_link")'))), "nothing in the link path can set a price, amount, discount or line item");
 ok(/const step = linkStep\(row!\.status, qc\); \/\/ the gate, re-checked before any Stripe call/.test(fn) && /if \(step\.kind === "refuse"\)/.test(fn), "the server re-checks the gate before any Stripe call (blocked / review / incomplete refused)");
 /* 2026-10-04: the claim RPC was replaced by rev-conditional writes (writeQc); quick-close-links.test.ts drives it. */

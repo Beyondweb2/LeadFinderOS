@@ -14,7 +14,8 @@ import {
   commissionForecast, commissionLines, commissionOn, earningsTotals, engagementEndedNow, COMMISSION_RECURRING_RATE, ENGAGEMENT_END_UNKNOWN,
   type CommissionForecast, type EngagementEvent, type SaleClosing, type CommissionLine, type ClientEarnings, type EarningsTotals, type LedgerRow, type PayoutRow, type ProjectionInput,
 } from "../../../src/lib/commission.ts";
-import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
+import { FINDABLE_MONTHLY_GBP, SERVICE_ROUTE_NAME, isServiceRoute, serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
+import { approvalDay } from "../../../src/lib/clientTimeline.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -94,10 +95,10 @@ export async function loadEarnings(service: Service, personId: string | null, to
   const sales = new Set([...roles.filter((r) => r.role === "sales").map((r) => r.user_id), ...disabledNow]);
   for (const a of admins) sales.delete(a);
   const leadIds = [...new Set(ledger.map((r) => r.lead_id).filter((x): x is string => !!x))];
-  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null; service_terminated_at: string | null; status: string | null };
+  type LeadBits = { business_name: string | null; sold_by_user_id: string | null; subscription_status: string | null; contract_total_payments: number | null; subscription_renews_at: string | null; service_terminated_at: string | null; status: string | null; remeasure_results_sent_at: string | null };
   const leads = new Map<string, LeadBits>();
   for (let i = 0; i < leadIds.length; i += 150) {
-    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at, service_terminated_at, status").in("id", leadIds.slice(i, i + 150));
+    const { data, error } = await service.from("outreach_leads").select("id, business_name, sold_by_user_id, subscription_status, contract_total_payments, subscription_renews_at, service_terminated_at, status, remeasure_results_sent_at").in("id", leadIds.slice(i, i + 150));
     if (error) throw new Error(error.message);
     for (const l of (data ?? []) as (LeadBits & { id: string })[]) leads.set(l.id, l);
   }
@@ -111,6 +112,27 @@ export async function loadEarnings(service: Service, personId: string | null, to
       const a = closings.get(e.lead_id) ?? []; a.push({ actorUserId: e.actor_user_id, at: e.created_at }); closings.set(e.lead_id, a);
     }
   }
+  /* 🔴 v3 COMMERCIAL TERMS (2026-10-05): which clients are on them, and each one's Approval Date — the day
+     its initial commission stops being Pending (commission.ts). Derived from the stored facts by the SAME
+     function the client timeline uses (clientTimeline.approvalDay), never stored.
+     ⚠️ Only a MISSING table (the migration not applied yet) reads as "no v3 clients" — v3 sales cannot
+     exist without it. Any other read error throws, as every read here does. */
+  const termsOf = new Map<string, { terms: string | null; approvalDay: string | null }>();
+  for (let i = 0; i < leadIds.length; i += 150) {
+    const { data, error } = await service.from("client_service_terms")
+      .select("lead_id, commercial_terms, service_route, initial_paid_at, access_date, guarantee_ceased_at").in("lead_id", leadIds.slice(i, i + 150));
+    if (error) { if ((error as { code?: string }).code === "42P01") break; throw new Error(error.message); }
+    for (const r of (data ?? []) as { lead_id: string; commercial_terms: string; service_route: string | null; initial_paid_at: string | null; access_date: string | null; guarantee_ceased_at: string | null }[]) {
+      const l = leads.get(r.lead_id);
+      termsOf.set(r.lead_id, {
+        terms: r.commercial_terms,
+        approvalDay: approvalDay({
+          terms: r.commercial_terms, route: isServiceRoute(r.service_route) ? r.service_route : serviceRouteForTotal(l?.contract_total_payments ?? null),
+          initialPaidAt: r.initial_paid_at, accessDate: r.access_date, resultsSentAt: l?.remeasure_results_sent_at ?? null, guaranteeCeasedAt: r.guarantee_ceased_at,
+        }),
+      });
+    }
+  }
   const sellerOfLead = new Map([...leads].map(([id, l]) => [id, l.sold_by_user_id]));
   const all = commissionLines({
     ledger, payouts: ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })),
@@ -120,6 +142,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     engagement: timelines, closings,
     /* pre-sales fix 03: the CLIENT's end — no commission on money taken after it, nothing projected. */
     clientStateOf: new Map([...leads].map(([id, l]) => [id, { endedAt: l.service_terminated_at ?? null, refunded: l.status === "refunded" }])),
+    termsOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));

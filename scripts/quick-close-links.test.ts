@@ -14,7 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  adoptLink, answersKey, buildConsentsFor, BUILD_CONSENT_NO_DOMAIN, BUILD_CONSENTS, cleanAnswers, LINK_CLAIM_MS, LINK_REUSE_MS, linkStep, linkUsable, linkUsableUntilMs,
+  adoptLink, answersKey, buildConsentsFor, BUILD_CONSENT_NO_DOMAIN, BUILD_CONSENTS, cleanAnswers, LINK_CLAIM_MS, linkStep, linkUsable, linkUsableUntilMs, SIGNUP_LINK_LIFETIME_MS,
   closeFlow, mergeAnswers, missingQuestions, planQuickCloseSave, quickCloseEmail, quickCloseGreeting, quickCloseMessage, quickCloseScript, quickCloseState,
   QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_PROMISE, QUICK_CLOSE_QUESTIONS, routeOwnershipLine, routeTermsLines, stripeSessionIdFromUrl,
   type QcRecord, type QuickCloseAnswers,
@@ -56,11 +56,13 @@ function save(row: Row, answers: Record<string, string>, o: { expectRoute?: unkn
   }
   return { ok: false as const, error: "busy", detail: "" };
 }
-/** A fake Stripe: numbered sessions, and a list of those we expired. */
+/** 🔴 v3 (2026-10-05): findable-checkout answers Quick Close with the client's SIGN-UP LINK (their agreement
+ *  page) — no Stripe session exists until the client has signed. `expired` still records any OLD Stripe
+ *  session a sign-up link replaces (a pre-v3 stored payment link). */
 let sessionSeq = 0;
 const expired: string[] = [];
 let checkoutCalls = 0;
-const checkout = () => { checkoutCalls++; const id = `cs_test_S${++sessionSeq}`; return { url: `https://checkout.stripe.com/c/pay/${id}#frag`, session: id }; };
+const checkout = () => { checkoutCalls++; const n2 = ++sessionSeq; return { url: `https://findable.live/agree/${String(n2).padStart(64, 'a')}`, session: null as string | null, kind: 'signup' as const }; };
 /** mode generate_link, split at the Stripe call so two tabs can interleave. */
 function claim(row: Row): { kind: "refuse" | "reuse" | "wait" | "claimed"; key?: string; state?: string } {
   const qc = clone(row.quick_close);
@@ -69,11 +71,11 @@ function claim(row: Row): { kind: "refuse" | "reuse" | "wait" | "claimed"; key?:
   const stored = writeQc(row, qc?.rev ?? null, { ...(qc ?? {}), link_claimed_at: iso(), link_claimed_by: REP });
   return stored ? { kind: "claimed", key: answersKey(stored.answers) } : { kind: "wait" };
 }
-function adopt(row: Row, key: string, ours: { url: string; session: string }) {
+function adopt(row: Row, key: string, ours: { url: string; session: string | null; kind?: 'signup' }) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const fq = clone(row.quick_close);
-    const a = adoptLink(row.status, fq, key, { ...ours, expiresIso: new Date(clock + 24 * 3_600_000).toISOString() }, REP, iso(), clock);
-    if (a.kind !== "store") { expired.push(ours.session); return a.kind; }
+    const a = adoptLink(row.status, fq, key, { ...ours, expiresIso: new Date(clock + SIGNUP_LINK_LIFETIME_MS).toISOString() }, REP, iso(), clock);
+    if (a.kind !== "store") { if (ours.session) expired.push(ours.session); return a.kind; }
     if (!writeQc(row, fq?.rev ?? null, a.next)) continue;
     if (a.replaced) expired.push(a.replaced);
     return "stored";
@@ -131,8 +133,8 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
   const raced = save(row, { build_consents: "yes" }, { expectRoute: "build", readAt: seen });
   ok(raced.ok && cleanAnswers(row.quick_close!.answers).build_consents === "yes", "a racing duplicate loses the version check, re-reads, and still lands on the same answers");
   // The link.
-  ok(generate(row) === "stored" && state(row) === "link_generated" && linkUsable(row.quick_close, clock), "the payment link becomes available");
-  ok(row.quick_close!.link_session_id === "cs_test_S1" && stripeSessionIdFromUrl(row.quick_close!.link_url) === "cs_test_S1", "the session behind the link is kept (so it can be expired later)");
+  ok(generate(row) === "stored" && state(row) === "link_generated" && linkUsable(row.quick_close, clock), "the sign-up link becomes available");
+  ok(row.quick_close!.link_kind === "signup" && row.quick_close!.link_session_id === null && /^https:\/\/findable\.live\/agree\/[0-9a-f]{64}$/.test(String(row.quick_close!.link_url)) && stripeSessionIdFromUrl(row.quick_close!.link_url) === null, "v3: the link is the client's agreement page — no Stripe session exists before they sign");
 }
 
 /* ═══ OPTIMISE ════════════════════════════════════════════════════════════════════════════════════ */
@@ -157,7 +159,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   const row = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row, { [k]: v });
   checkoutCalls = 0;
-  ok(generate(row) === "stored" && generate(row) === "reuse" && checkoutCalls === 1, "double generation → one Checkout Session, the second press reuses it");
+  ok(generate(row) === "stored" && generate(row) === "reuse" && checkoutCalls === 1, "double generation → one sign-up link, the second press reuses it");
   const first = row.quick_close!.link_url;
 
   // Two tabs press at the same moment: one claims, the other is told to wait for that link.
@@ -166,7 +168,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   checkoutCalls = 0;
   const tabA = claim(row2);
   const tabB = claim(row2);
-  ok(tabA.kind === "claimed" && tabB.kind === "wait", "two tabs: the first claims, the second waits (no second session)");
+  ok(tabA.kind === "claimed" && tabB.kind === "wait", "two tabs: the first claims, the second waits (no second link)");
   ok(adopt(row2, tabA.key!, checkout()) === "stored" && claim(row2).kind === "reuse" && checkoutCalls === 1, "…and then reuses the first tab's link");
   // A claim abandoned past LINK_CLAIM_MS is taken over; if both sessions come back, only one becomes THE link.
   const row3 = newRow();
@@ -176,21 +178,23 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   const fast = claim(row3);
   ok(slow.kind === "claimed" && fast.kind === "claimed", "a stuck claim is taken over after LINK_CLAIM_MS");
   const sFast = checkout(); const sSlow = checkout();
-  ok(adopt(row3, fast.key!, sFast) === "stored" && adopt(row3, slow.key!, sSlow) === "other_won", "both sessions came back: the first stored is THE link, the other is refused");
-  ok(row3.quick_close!.link_session_id === sFast.session && expired.includes(sSlow.session), "…the loser's session is expired at Stripe — the two tabs can never hold contradictory current links");
+  ok(adopt(row3, fast.key!, sFast) === "stored" && adopt(row3, slow.key!, sSlow) === "other_won", "both links came back: the first stored is THE link, the other is refused");
+  ok(row3.quick_close!.link_url === sFast.url, "…the two tabs can never hold contradictory current links");
 
-  // Stale link → never ready; a fresh one replaces it and the old session is expired.
-  clock += LINK_REUSE_MS + 60_000;
-  ok(!linkUsable(row.quick_close, clock) && state(row) === "link_expired", "a link past LINK_REUSE_MS is EXPIRED, not 'Payment link ready'");
-  ok(linkStep(row.status, row.quick_close, clock).kind === "claim", "…so the next press makes a fresh one (it is not reused)");
-  const oldSession = row.quick_close!.link_session_id as string;
-  ok(generate(row) === "stored" && row.quick_close!.link_url !== first && state(row) === "link_generated" && expired.includes(oldSession), "Create fresh payment link: a new session, the old one expired");
-  // A link close to Stripe's own expiry is not handed over either.
-  const nearly: QcRecord = { answers: { decision_maker: "yes" }, link_url: "https://checkout.stripe.com/c/pay/cs_test_X", link_generated_at: new Date(clock - 3_600_000).toISOString(), link_expires_at: new Date(clock + 3_600_000).toISOString() };
-  ok(!linkUsable(nearly, clock), "a link with under four hours before Stripe closes it is not usable");
-  ok(!linkUsable({ link_url: "x", link_generated_at: "not a date" }, clock) && !linkUsable(null, clock), "no link / an unreadable time is never usable (positive match)");
-  const made = { link_url: "https://checkout.stripe.com/c/pay/cs_test_Y", link_generated_at: new Date(clock - 2 * 3_600_000).toISOString(), link_expires_at: new Date(clock + 22 * 3_600_000).toISOString() };
-  ok(linkUsableUntilMs(made) === clock + 18 * 3_600_000, "the rep is told how long they may still SEND it (18 h here), not Stripe's own 22 h");
+  // Stale link → never ready; a fresh one replaces it.
+  clock += SIGNUP_LINK_LIFETIME_MS + 60_000;
+  ok(!linkUsable(row.quick_close, clock) && state(row) === "link_expired", "a sign-up link past its lifetime is EXPIRED, not 'Sign-up link ready'");
+  ok(linkStep(row.status, row.quick_close, clock).kind === "claim", "…so the next press makes a fresh one (it is not reused — every refusal re-runs)");
+  ok(generate(row) === "stored" && row.quick_close!.link_url !== first && state(row) === "link_generated", "Make a fresh sign-up link: a new link is stored");
+  /* 🔴 v3: a NAKED STRIPE LINK stored before the agreement-first flow is never handed over again, however
+     fresh — the next press makes the sign-up link and closes that Stripe session. */
+  const legacy: Row = { status: "answers_saved", cols: {}, quick_close: { ...clone(row.quick_close!), link_kind: null, link_url: "https://checkout.stripe.com/c/pay/cs_test_OLD#f", link_session_id: "cs_test_OLD", link_generated_at: new Date(clock - 60_000).toISOString(), link_expires_at: new Date(clock + 23 * 3_600_000).toISOString() } };
+  ok(!linkUsable(legacy.quick_close, clock) && state(legacy) === "link_expired", "a stored Stripe payment link (pre-v3) is NOT usable, even one minute old");
+  ok(generate(legacy) === "stored" && legacy.quick_close!.link_kind === "signup" && expired.includes("cs_test_OLD"), "…the next press stores the sign-up link and the old Stripe session is EXPIRED (no bypass of the agreement)");
+  ok(!linkUsable({ link_url: "x", link_generated_at: "not a date", link_kind: "signup" }, clock) && !linkUsable(null, clock), "no link / an unreadable time is never usable (positive match)");
+  const made = { link_kind: "signup" as const, link_url: "https://findable.live/agree/x", link_generated_at: new Date(clock - 2 * 3_600_000).toISOString(), link_expires_at: new Date(clock - 2 * 3_600_000 + SIGNUP_LINK_LIFETIME_MS).toISOString() };
+  ok(linkUsableUntilMs(made) === clock - 2 * 3_600_000 + SIGNUP_LINK_LIFETIME_MS - 4 * 3_600_000, "the rep is told how long they may still send the sign-up link");
+  ok(linkUsableUntilMs({ link_url: "https://checkout.stripe.com/c/pay/cs_test_Y", link_generated_at: new Date(clock).toISOString(), link_expires_at: new Date(clock + 22 * 3_600_000).toISOString() }) === null, "a Stripe link has no sending window at all under v3");
 
   // An answer changed while Stripe was making the session: that session is cancelled, nothing stored.
   const row4 = newRow();
@@ -198,13 +202,13 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   const c4 = claim(row4);
   save(row4, { manager: "employee" });
   const s4 = checkout();
-  ok(adopt(row4, c4.key!, s4) === "answers_changed" && !row4.quick_close!.link_url && expired.includes(s4.session), "answers changed during generation → the new session is expired, no link stored");
+  ok(adopt(row4, c4.key!, s4) === "answers_changed" && !row4.quick_close!.link_url, "answers changed during generation → no link stored");
   // Paid while the session was being made.
   const row5 = newRow();
   for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row5, { [k]: v });
   const c5 = claim(row5); row5.status = "paid";
   const s5 = checkout();
-  ok(adopt(row5, c5.key!, s5) === "paid" && expired.includes(s5.session), "paid meanwhile → the new session is expired");
+  ok(adopt(row5, c5.key!, s5) === "paid" && !row5.quick_close!.link_url, "paid meanwhile → no link stored");
   ok(linkStep("paid", row5.quick_close, clock).kind === "refuse", "a paid row never makes a link");
 }
 
@@ -223,7 +227,7 @@ console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberat
   const a = cleanAnswers(row.quick_close!.answers);
   ok(sw.ok && a.route === "optimise" && a.build_consents === undefined, "confirmed switch → Optimise, and the Build consents do NOT come along");
   ok(row.cols.plan_tier === "keep" && row.cols.website_addon === false && row.cols.dns_permission === null && row.cols.materials_confirmed === null, "the row's columns follow: Optimise, consent columns cleared");
-  ok(!row.quick_close!.link_url && sw.ok && sw.expired === buildSession, "the Build link is cleared AND its session handed back to be expired (it can never be paid for an Optimise row)");
+  ok(!row.quick_close!.link_url && sw.ok && buildSession === null && !sw.expired, "the Build sign-up link is cleared (it never had a Stripe session) — it can never be paid for an Optimise row");
   ok(row.quick_close!.build_consents_confirmed === null, "the stored consent evidence goes with them");
   const back = save(row, { route: "build" }, { expectRoute: "optimise", routeChange: true });
   ok(back.ok && state(row) === "in_progress" && missingQuestions(cleanAnswers(row.quick_close!.answers)).includes("build_consents"), "back to Build → the consents must be confirmed again (never carried over from earlier)");
@@ -258,17 +262,17 @@ for (const route of ["build", "optimise"] as const) {
   ok(terms.includes("£99 today") && terms.includes("£99 a month") && terms.includes(`${n} payments in total`) && terms.includes(`${n}-month minimum term`), `${route}: the card says £99 today, £99 a month, ${n} payments, a ${n}-month minimum term`);
   const own = routeOwnershipLine(route);
   ok(route === "build" ? /builds, hosts and manages a new website/.test(own) && /once all 12 payments/.test(own) : /keep their existing website/.test(own) && /stays theirs/.test(own), `${route}: who owns the website is said`);
-  const url = "https://checkout.stripe.com/c/pay/cs_test_Z";
+  const url = "https://findable.live/agree/" + "b".repeat(64);
   for (const [label, text] of [["script", quickCloseScript(route)], ["message", quickCloseMessage("Bob Smith", url, route)], ["email", quickCloseEmail({ greetName: "Bob", businessName: "ABC Ltd", url, route, senderName: "Sumi" }).text]] as const) {
-    ok(text.includes(`${n} payments in total`) && text.includes(`${n}-month minimum term`) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /tick to accept the client agreement/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and the agreement tick`);
+    ok(text.includes(`${n} payments in total`) && text.includes(`${n}-month minimum term`) && text.includes(QUICK_CLOSE_PROMISE) && text.includes(FINDABLE_GUARANTEE) && /read and sign the Client Service Agreement/.test(text) && !/tick to accept/.test(text), `${route} ${label}: payments, minimum term, the guarantee (exact) and signing the agreement before paying (v3)`);
     ok(!/guaranteed|rank|top of|recommend|cited|citation|week six/i.test(text), `${route} ${label}: no ranking / recommendation / citation promise, no "week six"`);
     ok(!/\([^)]*\(/.test(text), `${route} ${label}: no nested brackets (A-29)`);
   }
   ok(!quickCloseMessage(null, url, route).includes(n === 12 ? "6 payments" : "12 payments"), `${route}: never names the other route's count`);
 }
 ok(quickCloseGreeting("Bob Smith") === "Hi Bob" && quickCloseGreeting("BRIAN SLATTERY PLUMBERS LIMITED") === "Hi BRIAN" && quickCloseGreeting(null) === "Hi" && quickCloseGreeting("07700 900000") === "Hi", "greets the contact's first name; never a phone number");
-ok(quickCloseEmail({ greetName: null, businessName: "ABC Ltd", url: "u", route: "build", senderName: "Sumi" }).subject === "Your Findable Build payment link - ABC Ltd", "email subject names the route and the business");
-ok(QUICK_CLOSE_AGREEMENT_LINE.includes("tick to accept the client agreement"), "the agreement tick is on the rep's card");
+ok(quickCloseEmail({ greetName: null, businessName: "ABC Ltd", url: "u", route: "build", senderName: "Sumi" }).subject === "Your Findable Build sign-up link - ABC Ltd", "email subject names the route and the business");
+ok(QUICK_CLOSE_AGREEMENT_LINE.includes("read and sign the Client Service Agreement") && /payment only opens after they sign/.test(QUICK_CLOSE_AGREEMENT_LINE), "the rep's card says the client signs before payment can open (v3)");
 const dlg = read("src/components/QuickCloseDialog.tsx");
 ok(/data-testid="qc-route-terms"/.test(dlg) && /QUICK_CLOSE_GUARANTEE_LINES\[0\]/.test(dlg) && /QUICK_CLOSE_AGREEMENT_LINE/.test(dlg) && /routeOwnershipLine\(route\)/.test(dlg), "the rep's card shows terms, ownership, guarantee and agreement tick");
 ok(dlg.indexOf('data-testid="qc-route-terms"') < dlg.indexOf('data-testid="qc-handoff"') && dlg.indexOf('data-testid="qc-link"') < dlg.indexOf('data-testid="qc-handoff"'), "M-013: the terms and the link come BEFORE the handoff");
@@ -280,15 +284,15 @@ console.log("\n── SHARING: copy, email, WhatsApp — each recorded, none ove
   const fn = read("supabase/functions/quick-close/index.ts");
   const share = fn.slice(fn.indexOf('if (mode === "share_link")'));
   ok(/if \(!linkUsable\(qc\)\) return json\(\{ ok: false, error: "link_expired"/.test(share), "an expired link cannot be shared (server refuses)");
-  ok(/channel === "copy"/.test(share) && /Payment link copied \(to send by hand — not confirmed as sent\)/.test(share), "copy is recorded as COPIED, never as sent");
+  ok(/channel === "copy"/.test(share) && /Sign-up link copied \(to send by hand — not confirmed as sent\)/.test(share), "copy is recorded as COPIED, never as sent");
   ok(/checkSuppressed\(service, \{ email: to, leadId \}\)/.test(share) && /qaEmailHold\(service, leadId, to\)/.test(share) && /api\.resend\.com\/emails/.test(share) && /quick_close_link_email_failed/.test(share), "email: do-not-contact check, QA guard (fails closed), Resend, failure recorded");
   ok(/reply_to: FINDABLE_CONTACT_EMAIL/.test(share), "a reply to the email reaches Findable");
   ok(/serviceWindowState\(await lastInboundAt\(\)\)\.open\) return json\(\{ ok: false, error: "window_closed"/.test(share) && /functions\/v1\/send-whatsapp-message/.test(share) && /Authorization: req\.headers\.get\("authorization"\)/.test(share), "WhatsApp: only with the window open, through the canonical sender AS THE CALLER");
   ok(/if \(!res\.ok \|\| !out\.ok\) \{[\s\S]{0,200}"link_share_failed"/.test(share) && /share\.status = out\.simulated \? "simulated"/.test(share), "a failed WhatsApp is not recorded as sent; a test-mode one says so");
   ok(/kind: "payment_link_shared"/.test(share) && /"link_shared", \{ channel/.test(share), "every share writes History and the audit trail");
-  ok(ACTIVITY_LABEL.payment_link_shared === "Payment link" && activityDetail({ kind: "payment_link_shared", body: "Payment link emailed to a@b.co" }, () => "x") === "Payment link emailed to a@b.co", "History shows how the link was shared");
+  ok(ACTIVITY_LABEL.payment_link_shared === "Sign-up link" && activityDetail({ kind: "payment_link_shared", body: "Sign-up link emailed to a@b.co" }, () => "x") === "Sign-up link emailed to a@b.co", "History shows how the link was shared");
   ok(/disabled=\{!v\.share\?\.email/.test(dlg) && /disabled=\{!v\.windowOpen \|\| !v\.share\?\.hasPhone/.test(dlg) && /data-testid="qc-share-availability"/.test(dlg) && /data-testid="qc-share-history"/.test(dlg), "the screen says which ways are available and shows what was shared, when");
-  ok(/Create fresh payment link/.test(dlg) && /url: usable \? cur\.link_url : null/.test(fn), "an expired link offers 'Create fresh payment link' and its URL is never sent to the screen");
+  ok(/Make a fresh sign-up link/.test(dlg) && /Copy sign-up link/.test(dlg) && /url: usable \? cur\.link_url : null/.test(fn), "COPY SIGN-UP LINK is the primary action; an expired link offers a fresh one and its URL is never sent to the screen");
   const mig = read("supabase/migrations/20261006020000_quick_close_link_sharing.sql");
   ok(/'link_shared', 'link_share_failed', 'link_superseded'/.test(mig) && /'payment_link_shared'/.test(mig) && /if not \(v = any\(v_vals\)\)/.test(mig), "migration widens both checks from their LIVE definition (never clobbers another workstream's kinds)");
   ok(/\.in\("kind", \["link_generated", "link_reused"\]\)/.test(read("supabase/functions/_shared/earnings.ts")), "sharing is not commission evidence (earnings still read link_generated / link_reused only)");
@@ -321,7 +325,7 @@ console.log("\n── M-022: starting a Quick Close is not 'submitted, not paid'
   const by = (id: string) => att.find((i) => i.leadId === id);
   ok(!by("QC-STARTED"), "a Quick Close that was only STARTED (no link) never becomes 'Chase the sign-up'");
   ok(!by("QC-LINK-NEW"), "a Quick Close link made two hours ago is not chased (the clock is the LINK, not the first answer)");
-  ok(!!by("QC-LINK-OLD") && /Quick Close payment link made 2 days ago and not paid/.test(by("QC-LINK-OLD")!.why), "a Quick Close link unpaid for days IS listed, named as Quick Close, timed from the link");
+  ok(!!by("QC-LINK-OLD") && /Quick Close sign-up link made 2 days ago and not paid/.test(by("QC-LINK-OLD")!.why), "a Quick Close link unpaid for days IS listed, named as Quick Close, timed from the link");
   ok(!!by("SELF-SERVE") && /Filled the sign-up 2 days ago/.test(by("SELF-SERVE")!.why), "self-service sign-ups are unchanged");
 }
 
@@ -334,6 +338,7 @@ console.log("\n── the edge function uses the tested decisions ──");
   ok(/q\.is\("quick_close->>rev", null\) : q\.eq\("quick_close->>rev", String\(expect\)\)/.test(fn), "every quick_close write is conditional on its rev");
   ok(!/quick_close_claim_link/.test(fn) && !/cleanAnswers\(body\.answers\)/.test(fn), "no unconditional claim RPC and no cleaning of the lone incoming answer remain");
   ok(/sessions\/\$\{encodeURIComponent\(sessionId\)\}\/expire/.test(fn), "superseded sessions are expired at Stripe (POST /v1/checkout/sessions/:id/expire)");
+  ok(/purpose: "signup_link"/.test(fn) && /out\.kind !== "signup_link"/.test(fn) && /kind: "signup" as const/.test(fn), "v3: Quick Close asks checkout for the SIGN-UP LINK and refuses anything else (never a Stripe URL)");
   ok(/\.or\("is_archived\.is\.null,is_archived\.eq\.false"\)/.test(fn), "M-008: an archived sale is not listed as owing a handoff");
 }
 

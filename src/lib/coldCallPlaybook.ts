@@ -49,7 +49,7 @@ import { HOOK_ENGINE_LABELS, HOOK_SCORE_RESULTS } from './hookScore.ts';
 import { isRealSend } from './realSend.ts';
 import { REPORT_LINK_TEMPLATES } from './templateAttribution.ts';
 import { readableTemplateBody } from './templateBodies.ts';
-import { FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
+import { FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_OFFER_SUMMARY, FINDABLE_SETUP_PRICE_GBP, reportPublicUrl, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { shortReportUrl } from './reportSlug.ts';
 import { classifyLeadWebsite, type SiteSource } from './leadWebsiteKind.ts';
 import { buildCallClose, type CallClose } from './callClose.ts';
@@ -747,7 +747,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       FINDABLE_GUARANTEE,
     ],
     /* Paul's two routes (findableOffer.ts, 2026-09-29) — the build terms apply only to a site we build. */
-    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; nothing is charged after the " + build + 'th payment. If they keep their own site (Findable Optimise): it stays theirs, and nothing is charged after the ' + optimise + 'th payment. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
+    monthly: 'If we build the site (Findable Build): we build, host and manage it for the ' + termMonthsFor('build') + " months, and once the term is complete and paid, it's theirs; after the " + build + 'th payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month for hosting and monitoring until they cancel with 30 days\' notice. If they keep their own site (Findable Optimise): it stays theirs; after the ' + optimise + 'th payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month for monitoring until they cancel. The sign-up £' + FINDABLE_SETUP_PRICE_GBP + ' is the first payment either way.',
     nextSteps,
   };
 
@@ -825,7 +825,9 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
       objection: 'How much is it?',
       /* ⛔ STARTS WITH THE CANONICAL SENTENCE (scripts/findable-offer-terms.test.ts), so the price said on
          a call can never drift from the checkout. The tail is only what a caller asks next. */
-      answer: FINDABLE_OFFER_SUMMARY + ' If we build it, the site\'s yours at the end. Nothing\'s charged after the last payment.',
+      /* 🔴 v3 (clause 9A): the old tail "Nothing's charged after the last payment" is no longer true —
+         the summary itself now names the Continuing Service (FINDABLE_CONTINUING_GBP). */
+      answer: FINDABLE_OFFER_SUMMARY + ' If we build it, the site\'s yours once the minimum-term payments are made.',
     },
     {
       objection: 'Why is it monthly?',
@@ -834,11 +836,11 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     },
     {
       objection: 'Why twelve months?',
-      answer: 'Twelve is when we build you a new site (Findable Build). We build it, host it and look after it. Once the ' + build + ' payments are done, the site\'s yours and nothing more is charged.',
+      answer: 'Twelve is when we build you a new site (Findable Build). We build it, host it and look after it. Once the ' + build + ' payments are done, the site\'s yours, then it\'s £' + FINDABLE_CONTINUING_GBP + ' a month for hosting and monitoring until you cancel.',
     },
     {
       objection: 'Why six months?',
-      answer: 'Six is when you keep your own website (Findable Optimise). It stays yours and we work on it. That\'s ' + optimise + ' payments including the first, then it stops.',
+      answer: 'Six is when you keep your own website (Findable Optimise). It stays yours and we work on it. That\'s ' + optimise + ' payments including the first, then £' + FINDABLE_CONTINUING_GBP + ' a month for monitoring until you cancel.',
     },
     {
       objection: 'That\'s a lot / £' + FINDABLE_SETUP_PRICE_GBP + '?',
@@ -855,7 +857,7 @@ export function buildColdCallPlaybook(input: PlaybookInput): ColdCallPlaybook {
     {
       objection: 'Can I cancel?',
       /* ⛔ The minimum term is said BEFORE payment (Session A objection audit), from the constants. */
-      answer: 'It\'s a minimum term, so it\'s ' + build + ' payments if we build the site and ' + optimise + ' if we work on yours, the £' + FINDABLE_SETUP_PRICE_GBP + ' today included. After the last payment nothing more is charged. And if the number hasn\'t gone up at four weeks, a valid claim gets your £' + FINDABLE_SETUP_PRICE_GBP + ' back and stops the monthly too.',
+      answer: 'It\'s a minimum term, so it\'s ' + build + ' payments if we build the site and ' + optimise + ' if we work on yours, the £' + FINDABLE_SETUP_PRICE_GBP + ' today included. After the last payment it carries on at £' + FINDABLE_CONTINUING_GBP + ' a month until you cancel with 30 days\' notice. And if the number hasn\'t gone up at four weeks, a valid claim gets your £' + FINDABLE_SETUP_PRICE_GBP + ' back and stops the monthly too.',
     },
     {
       objection: 'How long does it take?',

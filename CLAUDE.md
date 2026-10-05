@@ -180,6 +180,15 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
 
 Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 
+- ⛔ **The signed Client Service Agreement v3 is authoritative over LeadFinderOS** (record:
+  `docs/pre-sales-certification/client-agreement-commercial-alignment.md`). Signed on the agreement page BEFORE any
+  payment (`findable-checkout` refuses a Stripe session without it — `src/lib/signupGate.ts`); the rep sends ONE sign-up
+  link, never a Stripe URL. Dates (Access → Results → Refund Window → Approval = Payment Start, the 30-day fallback, the
+  Continuing Service at `FINDABLE_CONTINUING_GBP`) live ONLY in `src/lib/clientTimeline.ts`, derived, citing clauses. Guarantee = ANY increase
+  in the named count. v3 rules (incl. commission: 5 trailing, initial pending until Approval) apply ONLY to a client with
+  a `client_service_terms` row — never re-rule Ronnie, MCL, RG or QA clients. Continuing Service is MANUAL
+  (`CONTINUING_SERVICE_AUTOMATION` all false): nothing may charge it automatically until Paul switches it on.
+
 - **Offer (Paul, 2026-09-29): £99 to start, then £99/month from six weeks after sign-up — TWO ROUTES,
   same price, different LENGTH** (`docs/business-and-offer.md` §00). **Findable Build** (we build, host
   and manage a new website): **12 payments in total**. **Findable Optimise** (they keep their own site):
@@ -1222,6 +1231,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Campaigns, the lead popup's four tabs, the Close branching, the sales talking points and their sources, tap ≠ contact | `docs/pre-sales-certification/sales-workspace-v2.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
+| The v3 agreement, sign-up link, payment gate, Option B dates, Continuing Service, v3 commission | `docs/pre-sales-certification/client-agreement-commercial-alignment.md` |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |
 | Prepare Baseline, `baseline_status`, the `starting` claim, the hub poller, the approve gate | `docs/paid-baseline-flow.md` (2026-09-22) |
 | The recommended 20, Hook questions locked in, the Opportunity Backlog, the replay run-2 fix, collapsible sections | `docs/baseline-workflow.md` (2026-09-30) |

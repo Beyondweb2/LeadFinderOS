@@ -969,7 +969,7 @@ function attentionItems(
     if (d < SIGNUP_CHASE_DAYS) continue;
     const ago = d === 1 ? 'yesterday' : `${d} days ago`;
     out.push({ key: `signup:${leadId}`, group: 'today', kind: 'signup_unpaid', leadId, business: l.business_name ?? 'Lead',
-      why: quickClose ? `Quick Close payment link made ${ago} and not paid` : `Filled the sign-up ${ago} and hasn't paid`, owner: nameOf(factsById.get(leadId)?.holder ?? null),
+      why: quickClose ? `Quick Close sign-up link made ${ago} and not paid` : `Filled the sign-up ${ago} and hasn't paid`, owner: nameOf(factsById.get(leadId)?.holder ?? null),
       sinceIso: since, state: stateOf(l), action: quickClose ? 'Check with the salesperson, then chase in the Inbox' : 'Chase the sign-up in the Inbox', open: 'inbox' });
   }
   // REVIEW — one line: live leads with no trade cannot be sold to.

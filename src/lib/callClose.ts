@@ -17,7 +17,7 @@
    ⛔ AFTER PAYMENT reads QUICK_CLOSE_AFTER_PAYMENT (quickClose.ts) — the dialog's own list, not a copy.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_MONTHLY_DELAY_DAYS, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, REMEASURE_WEEKS_STANDARD,
+  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, REMEASURE_WEEKS_STANDARD,
   SERVICE_ROUTE_NAME, termMonthsFor, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
@@ -28,13 +28,10 @@ import type { SiteSource } from './leadWebsiteKind.ts';
  *  link can never word the guarantee differently. */
 export const GUARANTEE_HEADLINE = QUICK_CLOSE_PROMISE;
 
-/** The first monthly payment, said aloud: "six weeks after today" from FINDABLE_MONTHLY_DELAY_DAYS. */
+/** The first monthly payment, said aloud. 🔴 v3 (2026-10-05, clause 5.6): the day after the refund window
+ *  closes — never "six weeks after today" any more (FINDABLE_MONTHLY_DELAY_DAYS is legacy timing). */
 const WEEKS_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-const weeksWord = (days: number): string => {
-  const w = days / 7;
-  return Number.isInteger(w) && w < WEEKS_WORDS.length ? `${WEEKS_WORDS[w]} weeks` : `${days} days`;
-};
-export const MONTHLY_STARTS_SPOKEN = `${weeksWord(FINDABLE_MONTHLY_DELAY_DAYS)} after today`;
+export const MONTHLY_STARTS_SPOKEN = MONTHLY_START_V3_WORDS;
 const REMEASURE_SPOKEN = `${WEEKS_WORDS[REMEASURE_WEEKS_STANDARD] ?? REMEASURE_WEEKS_STANDARD} weeks`;
 
 export interface CallRouteOffer {
@@ -73,7 +70,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
         `We build you a new website, host it and look after it. ${spokenPrice}`,
-        `${spokenTerm} Once the ${total} payments are done the site is yours and nothing more is charged.`,
+        `${spokenTerm} Once the ${total} payments are done the site is yours, and it carries on at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel.`,
       ],
       site: 'A new website built, hosted and managed by Findable — theirs once the term is paid',
     }
@@ -82,7 +79,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
       summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
       spoken: [
         `You keep your own website and it stays yours. We work on it with your access, and we never take it offline. ${spokenPrice}`,
-        `${spokenTerm} After the last payment nothing more is charged.`,
+        `${spokenTerm} After that it carries on at £${FINDABLE_CONTINUING_GBP} a month for monitoring until you cancel.`,
       ],
       site: 'They keep their existing website and its ownership',
     };
