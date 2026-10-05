@@ -110,7 +110,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
         <DialogTitle className="sr-only">Quick Close</DialogTitle>
-        <DialogDescription className="sr-only">Close this lead: the questions, the terms and the payment link</DialogDescription>
+        <DialogDescription className="sr-only">Close this lead: the questions, the terms and the sign-up link</DialogDescription>
         <QuickClosePanel leadId={leadId} active={open} framed />
       </DialogContent>
     </Dialog>
@@ -186,13 +186,13 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
   const doCopy = async (what: 'link' | 'message' | 'script', text: string) => {
     if (await copy(text)) {
       setCopied(what); window.setTimeout(() => setCopied(null), 2000);
-      toast({ title: what === 'link' ? 'Payment link copied' : 'Copied' });
+      toast({ title: what === 'link' ? 'Sign-up link copied' : 'Copied' });
       if (what !== 'script') void run('share-copy', { mode: 'share_link', channel: 'copy' }, true);
     } else toast({ title: 'Copy blocked by the browser', description: 'Select the text and copy it by hand.', variant: 'destructive' });
   };
   const sendEmail = async () => {
     const r = await run('email', { mode: 'share_link', channel: 'email' });
-    if (r) toast({ title: 'Payment link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
+    if (r) toast({ title: 'Sign-up link emailed', description: v?.share?.email ? `To ${v.share.email}` : undefined });
   };
   const sendWhatsApp = async () => {
     const r = await run('wa', { mode: 'share_link', channel: 'whatsapp' });
@@ -238,7 +238,7 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           {v && v.state === 'paid' && v.closed === 'client_closed' && (
             <section className="rounded-2xl border border-border/60 p-5" data-testid="qc-client-closed">
               <p className="text-lg font-bold">This client's engagement has ended.</p>
-              <p className="mt-1 text-sm text-muted-foreground">Nothing more happens here: no payment link can be made or sent. Ask Paul if anything looks wrong.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Nothing more happens here: no sign-up link can be made or sent. Ask Paul if anything looks wrong.</p>
             </section>
           )}
 
@@ -314,12 +314,12 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
           {v && v.state === 'blocked' && (
             <section className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm">
               <p className="flex items-center gap-2 font-semibold text-red-700 dark:text-red-300"><AlertTriangle className="h-4 w-4" />The decision maker needs to approve this</p>
-              <p className="mt-1 text-muted-foreground">No payment link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</p>
+              <p className="mt-1 text-muted-foreground">No sign-up link can be created. Ask who makes the decision, and send them the sign-up link or arrange a call with them.</p>
             </section>
           )}
           {v && v.state === 'consents_needed' && (
             <section className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm" data-testid="qc-consents-needed">
-              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />Build consents needed before the payment link</p>
+              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />Build consents needed before the sign-up link</p>
               <p className="mt-1 text-muted-foreground">A new website can only go ahead once they confirm all three. When they can, change the answer to Yes. If they would rather keep their current site, choose Optimise instead.</p>
             </section>
           )}
@@ -369,20 +369,20 @@ export function QuickClosePanel({ leadId, active = true, framed = false }: { lea
                     <>
                       {v.state === 'link_expired' && (
                         <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200" data-testid="qc-link-expired">
-                          The link made {hhmm(v.link?.generated_at)} has expired (or is about to) and must not be sent. Make a fresh one — the old one is cancelled.
+                          The link made {hhmm(v.link?.generated_at)} is no longer usable and must not be sent. Make the sign-up link — any old payment page is closed.
                         </p>
                       )}
                       <Button className="h-14 w-full gap-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700" onClick={() => void generate()} disabled={!!busy}>
                         {busy === 'link' ? <Loader2 className="h-5 w-5 animate-spin" /> : v.state === 'link_expired' ? <RefreshCw className="h-5 w-5" /> : <PoundSterling className="h-5 w-5" />}
-                        {v.state === 'link_expired' ? 'Create fresh payment link' : `Generate £${FINDABLE_SETUP_PRICE_GBP} payment link`}
+                        {v.state === 'link_expired' ? 'Make a fresh sign-up link' : 'Create sign-up link'}
                       </Button>
-                      <p className="text-center text-xs text-muted-foreground">The same Stripe page as the sign-up link.</p>
+                      <p className="text-center text-xs text-muted-foreground">One link for the client: they check their details, read and sign the Client Service Agreement, then pay £{FINDABLE_SETUP_PRICE_GBP}. Payment cannot open before they sign.</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Payment link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Sign-up link ready · <span className="font-normal normal-case">{timeLeft(v.link?.usable_until ?? v.link?.expires_at)}</span></p>
                       <Button className="h-14 w-full gap-2 bg-emerald-600 text-base font-bold text-white hover:bg-emerald-700" onClick={() => void doCopy('link', usableUrl)}>
-                        {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy payment link'}
+                        {copied === 'link' ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}{copied === 'link' ? 'Copied' : 'Copy sign-up link'}
                       </Button>
                       <p className="line-clamp-2 break-all rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground" title={usableUrl}>{usableUrl}</p>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">

@@ -29,6 +29,8 @@ import {
 } from "../../../src/lib/remeasureResults.ts";
 import { REPORT_PUBLIC_ORIGIN, remeasureWeeksFor } from "../../../src/lib/findableOffer.ts";
 import { reportOnceAnHour } from "./audit-baseline.ts";
+import { isV3Terms, paymentStart } from "../../../src/lib/clientTimeline.ts";
+import { loadTimelineFacts, schedulePaymentStart } from "./client-terms.ts";
 import { storedRemeasureWeeks } from "../../../src/lib/remeasureFill.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -214,10 +216,18 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
      The billing date is Stripe's own, from the subscription created at sign-up (resultsBillingStartIso);
      no subscription, or one already billing, names no date. */
   const nowIso = new Date().toISOString();
-  const billingStartIso = resultsBillingStartIso({
-    subscriptionId: lead.stripe_subscription_id, subscriptionStatus: lead.subscription_status,
-    subscriptionRenewsAt: lead.subscription_renews_at, nowIso,
-  });
+  /* 🔴 v3 (2026-10-05): THIS SEND IS THE RESULTS DATE (clause 5.3), and the Payment Start Date is the day
+     after the Refund Window that starts now (5.6) — derived from the stamp about to be written, never from
+     Stripe's hold date. Legacy clients keep reading Stripe's own date. */
+  const v3 = await loadTimelineFacts(service, lead.id).catch(() => null);
+  const v3Terms = !!v3 && isV3Terms(v3.facts.terms);
+  const v3StartDay = v3Terms ? paymentStart({ ...v3!.facts, resultsSentAt: nowIso }).day : null;
+  const billingStartIso = v3Terms
+    ? (v3StartDay ? `${v3StartDay}T12:00:00.000Z` : null)
+    : resultsBillingStartIso({
+      subscriptionId: lead.stripe_subscription_id, subscriptionStatus: lead.subscription_status,
+      subscriptionRenewsAt: lead.subscription_renews_at, nowIso,
+    });
   const copy = {
     businessName, town,
     beforeNamed: comparison.before.named, beforeAnswered: comparison.before.answered,
@@ -227,6 +237,7 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
     weeks: bundle.weeks,
     monthlyStartsOn: prettyDate(billingStartIso),
     totalPayments: lead.contract_total_payments ?? null,
+    v3Terms,
   };
   const paragraphs = resultsEmailParagraphs(copy);
   const subject = resultsEmailSubject(copy);
@@ -296,6 +307,25 @@ export async function maybeSendRemeasureResults(service: Client, auditId: string
   }
 
   await service.from("client_error_reports").insert({ error_id: "remeasure_results_sent", context: { lead_id: lead.id, remeasure_audit_id: audit.id, to, provider_message_id: providerMessageId, at: nowIso, went_up: copy.wentUp, subscription } });
+  /* ══ v3: SET THE PAYMENT START DATE IN STRIPE NOW THAT THE RESULTS DATE EXISTS ════════════════════════
+     Only after Resend accepted the email (the stamp stands). schedulePaymentStart re-derives the date
+     from the stored facts, refuses anything inside the Refund Window, and records it only when Stripe's
+     read-back agrees. A failure is Paul's action on the client page — Stripe stays on its hold, so the
+     only possible error is charging LATE, never early. */
+  if (v3Terms) {
+    try {
+      const sched = await schedulePaymentStart(service, lead.id, null);
+      if (sched.kind !== "scheduled") {
+        await reportOnceAnHour(service, "payment_start_not_scheduled", lead.id, sched.reason, { remeasure_audit_id: audit.id, kind: sched.kind });
+        await emailOperator(`PAYMENT START NOT SET — ${businessName}`, [
+          `The results for <b>${businessName}</b> were sent. Their first monthly payment should start on ${v3StartDay ?? "(unknown)"}, but Stripe was not updated: ${sched.reason}`,
+          "Nothing will be charged early. Open the client's page and press Set Payment Start Date.",
+        ]);
+      }
+    } catch (e) {
+      await reportOnceAnHour(service, "payment_start_not_scheduled", lead.id, e instanceof Error ? e.message : String(e), { remeasure_audit_id: audit.id });
+    }
+  }
   return { kind: "sent", to, providerMessageId };
 }
 

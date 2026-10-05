@@ -69,6 +69,8 @@ const RENDERERS: Array<[string, string]> = [
   ["prospect preview card layout (prospect)", "src/lib/prospectPreview/evidenceCard.ts"],
   /* 2026-10-04: the Quick Close payment-link message and email (prospect) and the rep's spoken words. */
   ["Quick Close link message + email (prospect)", "src/lib/quickClose.ts"],
+  /* 2026-10-05 (v3): the Access Date confirmation email (clause 5.1) sent to a paying client. */
+  ["Access Date email (paying client)", "supabase/functions/_shared/client-terms.ts"],
 ];
 
 /* Each pattern is a claim that has been false since a dated change. Keep the date in the label. */
@@ -88,15 +90,37 @@ const STALE: Array<[RegExp, string]> = [
    template EXCEPT the two blocked in STALE_OFFER_TEMPLATES (their Meta-registered bodies are kept on
    purpose until re-registered) and the dead barber product's own templates (its price, not ours). */
 const OFFER_STALE: Array<[RegExp, string]> = [
-  [/29\.99/, "£29.99 — one £99 plan since 2026-09-18, the words since 2026-09-23"],
+  /* 🔴 2026-10-05 (v3 Client Service Agreement, clause 9A): £29.99 is TRUE again — as the Continuing
+     Service after the minimum term, never as the monthly. A £29.99 is allowed only when the words around it
+     say so (continuingServiceContext below); a bare "£29.99 a month" offer still fails. */
+  [/29\.99/, "£29.99 not described as the Continuing Service — the monthly is £99; £29.99 is only the clause 9A Continuing Service after the minimum term (2026-10-05)"],
   [/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i, "a free exit — a 12-month minimum term since 2026-09-23 (the guarantee is the only early exit)"],
   [/that same day/i, "billing 'that same day' as the claim window — billing runs from sign-up since 2026-09-18"],
 ];
 
+/* TRUE sentences that a rule would otherwise catch — Paul's own legal text, verbatim. Removed before the
+   scan; add one only when it is true and binding, never to silence a stale claim. */
+const ALLOWED_TRUE: readonly string[] = [
+  /* v3 clause 12.2(e): where the data may be accessed from — a fact, not the retired founder offer. */
+  "including from Thailand where our founder is based",
+];
+/** Every £29.99 in `text` sits beside words that make it the Continuing Service (v3 clause 9A). */
+const CONTINUING_WORDS = /Continuing Service|until you cancel|until cancelled|after the minimum term|clause 9A|FINDABLE_CONTINUING_GBP|continuingGbp|minimum term\)?, then|After that|Then £/i;
+function bare2999(text: string): string | null {
+  for (const m of text.matchAll(/29\.99/g)) {
+    const at = m.index ?? 0;
+    const around = text.slice(Math.max(0, at - 220), at + 220);
+    if (!CONTINUING_WORDS.test(around)) return around.replace(/\s+/g, " ").slice(150, 290);
+  }
+  return null;
+}
+
 console.log("── NO CLIENT-FACING RENDERER CARRIES A STALE CLAIM ──");
 for (const [label, path] of RENDERERS) {
-  const text = renderedText(read(path));
+  let text = renderedText(read(path));
+  for (const s of ALLOWED_TRUE) text = text.split(s).join("");
   for (const [re, why] of [...STALE, ...OFFER_STALE]) {
+    if (re.source.startsWith("29")) { const bad = bare2999(text); ok(!bad, `${label}: no bare £29.99 — ${why}${bad ? ` (near "${bad}")` : ""}`.slice(0, 220)); continue; }
     const m = text.match(re);
     ok(!m, `${label}: no "${m?.[0] ?? re.source}" — ${why}`.slice(0, 160));
   }
@@ -130,6 +154,9 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["shared delivery checklist (operator)", "src/components/delivery/DeliveryChecklist.tsx"],
   ["client pages hook (operator)", "src/hooks/useClientPages.ts"],
   ["monthly update panel (operator)", "src/components/MonthlyUpdatePanel.tsx"],
+  /* 2026-10-05 (v3): the Paid Client timeline card — Access Date, Results Date, Payment Start, Continuing Service. */
+  ["client timeline card (operator)", "src/components/ClientTimelineCard.tsx"],
+  ["client timeline rules (operator)", "src/lib/clientTimeline.ts"],
   /* Read aloud to prospects on the phone — a stale claim here is said to a client verbatim. */
   ["cold call playbook logic (operator)", "src/lib/coldCallPlaybook.ts"],
   ["cold call playbook panel (operator)", "src/components/ColdCallPlaybook.tsx"],

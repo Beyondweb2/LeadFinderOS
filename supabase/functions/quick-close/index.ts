@@ -72,7 +72,9 @@ const CHECKOUT_REFUSAL_TEXT: Record<string, string> = {
   no_lead_attribution: "This payment could not be tied to the lead.",
   unknown_onboarding: "The onboarding record was not found.",
   payments_not_configured: "Payments are not configured.",
-  checkout_failed: "Stripe did not create the payment page. Try again in a moment.",
+  checkout_failed: "The sign-up link could not be created. Try again in a moment.",
+  agreement_unavailable: "The client agreement page could not be set up. Try again in a moment.",
+  payment_held: "They already paid outside the signed sign-up and that payment is held for Paul. Ask Paul before sending anything.",
 };
 
 /** What send-whatsapp-message's refusals mean to a rep on the phone. Anything else shows its own reason. */
@@ -534,25 +536,28 @@ Deno.serve(async (req) => {
         }
       };
       // THE CANONICAL CHECKOUT, server to server (no browser origin → the configured site origin).
+      /* 🔴 v3 (2026-10-05): Quick Close asks for the client's SIGN-UP LINK (purpose "signup_link") — every
+         checkout refusal runs, and the answer is their agreement page, never a Stripe URL. The client signs
+         the Client Service Agreement there and only then can pay (findable-checkout refuses otherwise). */
       const startedMs = Date.now();
       const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
       const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/findable-checkout`, {
         method: "POST", headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ onboarding_id: rowId, lead_id: leadId }),
+        body: JSON.stringify({ onboarding_id: rowId, lead_id: leadId, purpose: "signup_link" }),
       });
       const out = await res.json().catch(() => ({})) as Obj;
-      if (!res.ok || !out.ok || typeof out.url !== "string") {
+      if (!res.ok || !out.ok || typeof out.url !== "string" || out.kind !== "signup_link") {
         await release();
         await event(service, leadId, rowId, actor.id, "link_refused", { checkout_error: out.error ?? res.status, reason: out.reason ?? out.reasons ?? null });
-        return json({ ok: false, error: out.error ?? "checkout_failed", detail: CHECKOUT_REFUSAL_TEXT[out.error] ?? "The payment link could not be created." }, res.status >= 400 && res.status < 500 ? res.status : 502);
+        return json({ ok: false, error: out.error ?? "checkout_failed", detail: CHECKOUT_REFUSAL_TEXT[out.error] ?? "The sign-up link could not be created." }, res.status >= 400 && res.status < 500 ? res.status : 502);
       }
-      const ours = { url: out.url as string, session: (typeof out.session_id === "string" ? out.session_id : null) ?? stripeSessionIdFromUrl(out.url) };
+      const ours = { url: out.url as string, session: null as string | null, kind: "signup" as const };
       const expiresMs = typeof out.expires_at === "number" ? out.expires_at * 1000 : startedMs + STRIPE_SESSION_LIFETIME_MS;
       for (let attempt = 0; attempt < 4; attempt++) {
         const fresh = await loadRow(service, rowId);
         const fq = (fresh?.quick_close ?? null) as QcRecord | null;
         const now = new Date().toISOString();
-        const adopt = adoptLink(fresh?.status ?? "paid", fq, claimedKey, { url: ours.url, session: ours.session, expiresIso: new Date(expiresMs).toISOString() }, actor.id, now);
+        const adopt = adoptLink(fresh?.status ?? "paid", fq, claimedKey, { url: ours.url, session: ours.session, expiresIso: new Date(expiresMs).toISOString(), kind: ours.kind }, actor.id, now);
         if (adopt.kind === "paid") {
           await expireSession(ours.session);
           return json({ ok: false, error: "already_paid", detail: "This client has already paid." }, 409);
@@ -596,7 +601,7 @@ Deno.serve(async (req) => {
       if (channel !== "copy" && channel !== "email" && channel !== "whatsapp") return json({ ok: false, error: "bad_request" }, 400);
       if (!row) return json({ ok: false, error: "not_started", detail: "Answer the questions first." }, 409);
       const qc = (row.quick_close ?? null) as (QuickCloseRecord & Obj) | null;
-      if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "This payment link has expired. Make a fresh link first." }, 409);
+      if (!linkUsable(qc)) return json({ ok: false, error: "link_expired", detail: "Make the sign-up link first." }, 409);
       const route = cleanAnswers(qc!.answers).route;
       if (!route) return json({ ok: false, error: "route_undecided", detail: CHECKOUT_REFUSAL_TEXT.route_undecided }, 409);
       const url = qc!.link_url as string;
@@ -663,9 +668,9 @@ Deno.serve(async (req) => {
         break;
       }
       await event(service, leadId, row!.id, actor.id, "link_shared", { channel, to: share.to ?? null, status: share.status ?? null, session });
-      const bodyText = channel === "copy" ? "Payment link copied (to send by hand — not confirmed as sent)"
-        : channel === "email" ? `Payment link emailed to ${share.to}`
-        : share.status === "simulated" ? "Payment link sent on WhatsApp (test mode — not delivered)" : "Payment link sent on WhatsApp";
+      const bodyText = channel === "copy" ? "Sign-up link copied (to send by hand — not confirmed as sent)"
+        : channel === "email" ? `Sign-up link emailed to ${share.to}`
+        : share.status === "simulated" ? "Sign-up link sent on WhatsApp (test mode — not delivered)" : "Sign-up link sent on WhatsApp";
       const { error: hErr } = await service.from("lead_activity").insert({
         lead_id: leadId, actor_user_id: actor.id, kind: "payment_link_shared", body: bodyText,
         data: { source: actor.role === "admin" ? "admin" : "sales", channel, status: share.status ?? null, session, route },

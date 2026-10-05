@@ -44,15 +44,36 @@
      — a live subscription Paul has not yet cancelled is not a sale — and an ended or refunded client
      projects nothing more. A TEST lead's recurring payments earn 0% like its initial one (the initial
      is stamped test_excluded). Historic commission earned before the end is never touched.
+   🔴 v3 COMMERCIAL TERMS (2026-10-05, the Sales Contractor Agreement v2 + Client Service Agreement v3),
+   applied ONLY to a sale whose client is stamped COMMERCIAL_TERMS_V3 (client_service_terms) — every sale
+   before that keeps exactly the rules above, so no historical commission moves:
+   - INITIAL commission is PENDING until the client's Approval Date (the day after the 14-day Refund
+     Window that follows the Results Date; or the six-week fallback when the guarantee ceased —
+     clientTimeline.approvalDay), then APPROVED and paid on the 1st working day of the month after the
+     Approval Date. A full refund inside the window CANCELS it; a partial refund reduces it in proportion;
+     a refund after the Approval Date (late goodwill) does not change it (contractor 6.2, 6.4).
+   - ITS PLACE IN THE MONTH (30/40/50) is the seller's London-month sale count, with refunded / excluded
+     sales removed, re-worked for every sale NOT YET APPROVED and LOCKED at its Approval Date (contractor
+     5.3) — derived as of that instant, never stored, so a later refund can never re-rate an approved sale.
+   - TRAILING: 20% of the first COMMISSION_RECURRING_COUNT_V3 (five) £99 recurring payments actually
+     collected, on Build AND Optimise; payment six onward 0%; the Continuing Service (FINDABLE_CONTINUING_GBP) 0%
+     (contractor 5.4, 1.2(c)). Approved the moment each is collected.
    Pure: ledger rows in, lines and totals out. Read by fn sales-earnings and fn sales-performance.
    The money facts come ONLY from payment_ledger (Stripe); never from a CRM status.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+import { isV3Terms, ukDayAtHourIso } from './clientTimeline.ts';
+import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
 
 /** The flat initial rate every sale earned BEFORE the tiers (and the rate of tier 1). Applied only to a
  *  ledger row with no stamped rate. */
 export const COMMISSION_INITIAL_RATE = 0.30;
 export const COMMISSION_RECURRING_RATE = 0.20;
 export const COMMISSION_RECURRING_COUNT = 6;
+/** v3 terms: trailing commission on the first FIVE recurring £99 payments (Build and Optimise alike). */
+export const COMMISSION_RECURRING_COUNT_V3 = 5;
+/** The rule name a v3 initial sale's derived place is shown under (never stamped in the database). */
+export const MONTHLY_TIER_V3_RULE = 'monthly_tier_v3_as_of_approval';
 
 /** 🔴 THE MONTHLY TIERS (Paul, 2026-10-01). `upTo` is the last sale number in the month at that rate.
  *  ⛔ MIRRORED by public.monthly_tier_rate() in the database, which is what actually stamps a sale —
@@ -110,7 +131,9 @@ export interface LedgerRow {
 export interface PayoutRow { user_id: string; period_month: string; amount_gbp: number; paid_at: string }
 
 export type LineKind = 'payment' | 'reversal';
-export type LineStatus = 'due' | 'paid' | 'reversed' | 'not_commissionable';
+/** 'pending' = v3 initial commission waiting for the client's Approval Date (not owed yet, not in due);
+ *  'cancelled' = v3 initial commission cancelled by a refund inside the Refund Window. */
+export type LineStatus = 'due' | 'paid' | 'reversed' | 'not_commissionable' | 'pending' | 'cancelled';
 export interface CommissionLine {
   id: string;
   leadId: string;
@@ -138,6 +161,12 @@ export interface CommissionLine {
   afterEngagementEnded?: boolean;
   /** A monthly payment received after the CLIENT's service ended: 0%, still listed. */
   afterClientEnded?: boolean;
+  /** v3 terms: the client's Approval Date (UK day) this line waits for / was approved on. */
+  approvalDay?: string | null;
+  /** v3 terms: a the Continuing Service price Continuing Service payment — never commissionable. */
+  continuingService?: boolean;
+  /** v3 terms: the place in the month is provisional until the Approval Date (contractor 5.3, 6.7). */
+  provisional?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -194,6 +223,40 @@ export interface CommissionInput {
   /** Per lead: whether the client's engagement is over (outreach_leads.service_terminated_at; status
    *  refunded). Absent = open. Recurring payments at/after endedAt earn 0%; a closed client projects 0. */
   clientStateOf?: Map<string, { endedAt: string | null; refunded: boolean }>;
+  /** Per lead: the v3 commercial terms and the client's Approval Date (clientTimeline.approvalDay; null
+   *  while not known). Absent = the sale is on the terms before v3 and nothing here changes it. */
+  termsOf?: Map<string, { terms: string | null; approvalDay: string | null }>;
+  /** Per lead: WHEN the sale was excluded / disqualified (metric_exclusions: the lead, or its seller as a
+   *  test account — created_at). v3 only (Paul, 2026-10-05): excluded BEFORE its Approval Date it is not a
+   *  qualifying sale (earns nothing, does not count in its month's ladder); excluded AFTER, nothing that was
+   *  approved changes. Pre-v3 sales keep the database's stamp exactly as it is. */
+  exclusionsOf?: Map<string, string>;
+  /** "Now", for pending vs approved (defaults to the clock). */
+  nowIso?: string;
+}
+
+/* ══ THE v3 LADDER — derived as of each sale's Approval Date (contractor 5.3) ═══════════════════════
+   Every initial sale of a seller in a London month, in collection order. A sale "drops out" of the
+   count from the moment it was fully refunded or lost to a chargeback, or always when it is a test sale
+   (the same facts the database counts). A v3 sale's place = 1 + the earlier sales still in the count AT
+   ITS APPROVAL INSTANT (or now, while pending) — so it is re-worked until approved and frozen after. */
+interface LadderEntry { id: string; leadId: string; seller: string | null; month: string; at: string; droppedAt: string | null }
+/** v3: was this sale excluded / disqualified BEFORE its commission was approved? `approvedAtIso` null =
+ *  not approved yet (any exclusion counts). An exclusion recorded on or after approval changes nothing. */
+function v3ExcludedBeforeApproval(excludedAt: string | null, approvedAtIso: string | null): boolean {
+  if (!excludedAt) return false;
+  return approvedAtIso === null || excludedAt < approvedAtIso;
+}
+function v3LadderPlace(entries: LadderEntry[], me: LadderEntry, asOfIso: string): number {
+  let place = 1;
+  for (const e of entries) {
+    if (e.id === me.id) continue;
+    if (e.seller !== me.seller || e.month !== me.month) continue;
+    if (e.at.localeCompare(me.at) > 0 || (e.at === me.at && e.id.localeCompare(me.id) > 0)) continue;
+    if (e.droppedAt !== null && e.droppedAt <= asOfIso) continue;
+    place += 1;
+  }
+  return place;
 }
 
 export interface EngagementEvent { kind: 'ended' | 'resumed'; at: string }
@@ -250,7 +313,38 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
   for (const r of input.ledger) { if (!r.lead_id) continue; const a = byLead.get(r.lead_id); if (a) a.push(r); else byLead.set(r.lead_id, [r]); }
   const lines: CommissionLine[] = [];
   const clients: ClientEarnings[] = [];
+  const nowIso = input.nowIso ?? new Date().toISOString();
+  const todayDay = londonDayOf(nowIso);
+  /* The v3 ladder's inputs: every lead's first initial payment, and when (if ever) it dropped out. */
+  const ladder: LadderEntry[] = [];
+  for (const [leadId, rows0] of byLead) {
+    const rows = [...rows0].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
+    const init = rows.find((r) => r.kind === 'initial' && r.status === 'succeeded' && r.amount_gbp > 0);
+    if (!init) continue;
+    /* When the sale stopped being a qualifying sale: a test sale never was (stamped at insert); otherwise the
+       EARLIEST of a full refund, a lost chargeback, or an exclusion recorded later (the time it became known —
+       so a sale approved before that moment keeps the place it was approved at). */
+    let dropped: string | null = init.commission_rule === TEST_EXCLUDED_RULE ? '0000' : null;
+    const earliest = (at: string) => { if (dropped === null || at < dropped) dropped = at; };
+    let refunded = 0;
+    for (const r of rows) {
+      const tied = (r.stripe_payment_intent_id && r.stripe_payment_intent_id === init.stripe_payment_intent_id) || (r.stripe_charge_id && r.stripe_charge_id === init.stripe_charge_id);
+      if (!tied) continue;
+      if (r.kind === 'refund') { refunded = Math.max(refunded, r.amount_gbp); if (refunded >= init.amount_gbp) earliest(r.occurred_at); }
+      if (r.kind === 'chargeback' && DISPUTE_LOST.has(r.status)) earliest(r.occurred_at);
+    }
+    const excludedAt = input.exclusionsOf?.get(leadId);
+    if (excludedAt) earliest(excludedAt);
+    ladder.push({ id: init.id, leadId, seller: init.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null, month: londonMonthStart(init.occurred_at), at: init.occurred_at, droppedAt: dropped });
+  }
   for (const [leadId, rows] of byLead) {
+    const termsRow = input.termsOf?.get(leadId) ?? null;
+    const v3 = !!termsRow && isV3Terms(termsRow.terms);
+    const approvalDay = v3 ? termsRow!.approvalDay : null;
+    /* The instant the initial commission is approved: 00:00 UK on the Approval Date. */
+    const approvalIso = approvalDay ? ukDayAtHourIso(approvalDay, 0) : null;
+    const approvedNow = !!approvalDay && todayDay >= approvalDay;
+    const trailingCount = v3 ? COMMISSION_RECURRING_COUNT_V3 : COMMISSION_RECURRING_COUNT;
     rows.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
     const payments = rows.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded' && r.amount_gbp > 0);
     const seller = payments.find((p) => p.sold_by_user_id)?.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null;
@@ -275,21 +369,38 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         if (testSale) rate = 0;
         monthSeq = p.commission_rule === MONTHLY_TIER_RULE && typeof p.commission_month_seq === 'number' ? p.commission_month_seq : null;
         monthStart = p.commission_month_start ? String(p.commission_month_start).slice(0, 10) : null;
-        label = testSale ? 'Initial payment · test sale (not counted)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
+        /* 🔴 v3: the place is re-worked (refunds and exclusions removed) until the Approval Date, then frozen. */
+        const v3Excluded = v3 && !testSale && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, approvedNow ? approvalIso : null);
+        if (v3 && !testSale && !v3Excluded) {
+          const me = ladder.find((e) => e.id === p.id);
+          if (me) {
+            monthSeq = v3LadderPlace(ladder, me, approvedNow && approvalIso ? approvalIso : nowIso);
+            monthStart = me.month;
+            rate = monthlyTierRate(monthSeq);
+          }
+        }
+        if (v3Excluded) { rate = 0; monthSeq = null; }
+        label = testSale ? 'Initial payment · test sale (not counted)' : v3Excluded ? 'Initial payment · excluded before approval (not a qualifying sale)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
+        if (v3 && !testSale && !v3Excluded) label += approvedNow ? ` · approved ${approvalDay}` : approvalDay ? ` · pending until ${approvalDay}` : ' · pending until the Approval Date';
         /* Received while the seller was not engaged: earns only if they closed it while engaged. */
         if (earns && !testSale && seller && !engagedAt(events, p.occurred_at)) {
           if (closedWhileEngaged(input.closings?.get(leadId), seller, events, p.occurred_at)) label += ' · closed before the engagement ended';
           else { afterEnd = true; rate = 0; label += ' · after the engagement ended, not closed before it'; }
         }
       }
+      else if (p.kind === 'recurring' && v3 && p.amount_gbp < FINDABLE_MONTHLY_GBP - 0.005) {
+        /* 🔴 v3: a payment below the £99 monthly is the Continuing Service (FINDABLE_CONTINUING_GBP) (clause 9A) — never
+           commissionable (contractor 1.2(c)) and not one of the five trailing payments. */
+        n = 1 + recurringSeen + 1; rate = 0; label = 'Continuing Service · no commission';
+      }
       else if (p.kind === 'recurring') {
         recurringSeen += 1; n = 1 + recurringSeen;
         /* It still takes its place in the count (month 4 is month 4 whoever it pays). */
-        afterEnd = earns && recurringSeen <= COMMISSION_RECURRING_COUNT && !engagedAt(events, p.occurred_at);
+        afterEnd = earns && recurringSeen <= trailingCount && !engagedAt(events, p.occurred_at);
         /* ⛔ Received at or after the CLIENT's service ended: 0%, permanently (an unreadable time fails closed). */
         afterClientEnd = !!clientState?.endedAt && (!Number.isFinite(clientEndMs) || !(Date.parse(p.occurred_at) < clientEndMs));
         testSale = testLead;
-        rate = recurringSeen <= COMMISSION_RECURRING_COUNT && !afterEnd && !afterClientEnd && !testSale ? COMMISSION_RECURRING_RATE : 0;
+        rate = recurringSeen <= trailingCount && !afterEnd && !afterClientEnd && !testSale ? COMMISSION_RECURRING_RATE : 0;
         label = afterClientEnd ? `Month ${recurringSeen} · after the client's service ended`
           : testSale ? `Month ${recurringSeen} · test sale (not counted)`
           : afterEnd ? `Month ${recurringSeen} · after the engagement ended` : `Month ${recurringSeen}`;
@@ -297,12 +408,19 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       else { n = 1; rate = 0; label = 'Additional one-off payment'; }
       if (!earns) rate = 0;
       rateOf.set(p.id, { rate, n });
-      const day = londonDayOf(p.occurred_at);
+      const continuing = v3 && p.kind === 'recurring' && p.amount_gbp < FINDABLE_MONTHLY_GBP - 0.005;
+      const v3Initial = v3 && n === 1 && p.kind === 'initial' && !testSale;
+      /* v3 initial: owed in the month of its Approval Date, paid on the first working day after it. */
+      const day = v3Initial && approvalDay ? approvalDay : londonDayOf(p.occurred_at);
       const pm = monthOf(day);
+      const baseStatus: LineStatus = !earns || afterEnd || afterClientEnd || continuing || (testSale && p.kind === 'recurring') ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due';
       lines.push({
         id: `pay:${p.id}`, leadId, sellerId: seller, kind: 'payment', paymentNumber: n, label, clientAmount: round2(p.amount_gbp), rate,
         commission: commissionOn(p.amount_gbp, rate), occurredAt: p.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
-        status: !earns || afterEnd || afterClientEnd || (testSale && p.kind === 'recurring') ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
+        status: v3Initial && v3ExcludedBeforeApproval(input.exclusionsOf?.get(leadId) ?? null, approvedNow ? approvalIso : null) ? 'cancelled'
+          : v3Initial && baseStatus === 'due' && !approvedNow ? 'pending' : baseStatus,
+        ...(v3Initial ? { approvalDay, provisional: !approvedNow } : {}),
+        ...(continuing ? { continuingService: true } : {}),
         ...(monthSeq ? { monthStart, monthSeq } : {}),
         ...(testSale ? { testSale: true } : {}),
         ...(afterEnd ? { afterEngagementEnded: true } : {}),
@@ -323,20 +441,39 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       if (!p) continue; // a refund we cannot tie to a payment reverses nothing we counted
       const pr = rateOf.get(p.id)!;
       const back = Math.min(r.amount_gbp, p.amount_gbp);
+      const v3Init = v3 && pr.n === 1 && p.kind === 'initial';
+      /* 🔴 v3 (contractor 6.2 / 6.4): a refund ON or AFTER the Approval Date is a late goodwill refund and
+         does not change Approved commission — listed, taking nothing back. */
+      if (v3Init && approvalIso && r.kind === 'refund' && r.occurred_at >= approvalIso) {
+        lines.push({
+          id: `rev:${r.id}`, leadId, sellerId: seller, kind: 'reversal', paymentNumber: pr.n, label: 'Refunded after the Approval Date — commission unchanged',
+          clientAmount: round2(back), rate: pr.rate, commission: 0, occurredAt: r.occurred_at, periodMonth: monthOf(londonDayOf(r.occurred_at)), payoutDate: payoutDateFor(londonDayOf(r.occurred_at)),
+          status: 'not_commissionable',
+        });
+        continue;
+      }
       const amount = commissionOn(back, pr.rate);
-      const day = londonDayOf(r.occurred_at);
+      /* v3: a refund inside the window comes off the commission in the Approval month (it was never owed earlier). */
+      const day = v3Init && approvalDay ? approvalDay : londonDayOf(r.occurred_at);
       const pm = monthOf(day);
       if (!held) reversedTotal += amount;
       lines.push({
         id: `rev:${r.id}`, leadId, sellerId: seller, kind: 'reversal', paymentNumber: pr.n,
         label: r.kind === 'refund' ? (back >= p.amount_gbp ? 'Refunded' : 'Partly refunded') : held ? 'Held — dispute open' : 'Chargeback',
         clientAmount: round2(back), rate: pr.rate, commission: -amount, occurredAt: r.occurred_at, periodMonth: pm, payoutDate: payoutDateFor(day),
-        status: !earns ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
+        status: !earns ? 'not_commissionable' : v3Init && !approvedNow ? 'pending' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due',
         ...(held ? { held: true } : {}),
       });
       // The payment line reads Reversed once fully taken back (never for a hold — that may be released).
       const payLine = lines.find((l) => l.id === `pay:${p.id}`);
       if (!held && payLine && back >= p.amount_gbp && payLine.status === 'due') payLine.status = 'reversed';
+      /* v3: fully refunded inside the window → the pending commission is CANCELLED, and so is its reversal
+         (nothing was ever owed, so nothing is offset). */
+      if (!held && payLine && back >= p.amount_gbp && v3Init && r.kind === 'refund' && (!approvalIso || r.occurred_at < approvalIso)) {
+        payLine.status = 'cancelled';
+        const revLine = lines[lines.length - 1];
+        if (revLine.id === `rev:${r.id}`) revLine.status = 'cancelled';
+      }
     }
     const earned = lines.filter((l) => l.leadId === leadId && l.kind === 'payment').reduce((s, l) => s + l.commission, 0);
     /* ⛔ NEVER PROJECT PAST THE CONTRACT (2026-09-29). The commission rule is unchanged (the next
@@ -350,7 +487,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const clientClosed = !!clientState && (!!clientState.endedAt || clientState.refunded);
     clients.push({
       leadId, business, sellerId: seller, payments: payments.length, earned: round2(earned), reversed: round2(reversedTotal),
-      commissionablePaymentsLeft: earns && !ended && !clientClosed && !testLead ? Math.max(0, Math.min(COMMISSION_RECURRING_COUNT - Math.min(recurringSeen, COMMISSION_RECURRING_COUNT), contractRecurringLeft)) : 0,
+      commissionablePaymentsLeft: earns && !ended && !clientClosed && !testLead ? Math.max(0, Math.min(trailingCount - Math.min(recurringSeen, trailingCount), contractRecurringLeft)) : 0,
       commissionable: earns,
       ...(ended ? { engagementEnded: true } : {}),
       ...(clientClosed ? { clientClosed: true } : {}),
@@ -369,6 +506,8 @@ export interface EarningsTotals {
   reversed: number;
   /** Commission held back by disputes still open (included in due / offset, NOT in reversed). */
   held: number;
+  /** v3: initial commission waiting for its Approval Date — never in earned, due or offset. */
+  pending: number;
   paidOut: number;
   /** Owed at the next payout: every unpaid line, net. Never negative — see offset. */
   due: number;
@@ -383,7 +522,7 @@ export interface ProjectionInput { leadId: string; paymentsLeft: number; monthly
 export function earningsTotals(lines: CommissionLine[], payouts: PayoutRow[], projections: ProjectionInput[], todayIso: string): EarningsTotals {
   const today = todayIso.slice(0, 10);
   const month = `${today.slice(0, 7)}-01`;
-  const counted = lines.filter((l) => l.status !== 'not_commissionable');
+  const counted = lines.filter((l) => l.status !== 'not_commissionable' && l.status !== 'pending' && l.status !== 'cancelled');
   const sum = (ls: CommissionLine[]) => round2(ls.reduce((s, l) => s + l.commission, 0));
   const unpaid = sum(counted.filter((l) => l.status !== 'paid'));
   return {
@@ -392,6 +531,7 @@ export function earningsTotals(lines: CommissionLine[], payouts: PayoutRow[], pr
     earnedToday: sum(counted.filter((l) => londonDayOf(l.occurredAt) === today)),
     reversed: round2(-sum(counted.filter((l) => l.kind === 'reversal' && !l.held))),
     held: round2(-sum(counted.filter((l) => l.held))),
+    pending: sum(lines.filter((l) => l.status === 'pending')),
     paidOut: round2(payouts.reduce((s, p) => s + Number(p.amount_gbp), 0)),
     due: Math.max(0, unpaid),
     offset: Math.min(0, unpaid),
@@ -416,6 +556,8 @@ export interface LadderSale {
   commission: number;
   /** False once fully refunded / lost to a chargeback: no longer lifts the next sale. */
   counted: boolean;
+  /** v3: the place and rate are provisional until the Approval Date (contractor 5.3, 6.7). */
+  provisional?: boolean;
 }
 export interface MonthlyTracker {
   monthStart: string;
@@ -445,7 +587,7 @@ export function monthlyTracker(lines: CommissionLine[], todayIso: string): Month
     const back = revs.reduce((s, r) => s + r.commission, 0);
     /* The database's rule (commission_sale_stuck): fully refunded or lost to a chargeback = no longer counted. */
     const gone = revs.some((r) => r.clientAmount >= l.clientAmount);
-    return { leadId: l.leadId, seq: l.monthSeq!, occurredAt: l.occurredAt, rate: l.rate, commission: round2(l.commission + back), counted: !gone };
+    return { leadId: l.leadId, seq: l.monthSeq!, occurredAt: l.occurredAt, rate: l.rate, commission: round2(l.commission + back), counted: !gone && l.status !== 'cancelled', ...(l.provisional ? { provisional: true } : {}) };
   }).sort((a, b) => a.seq - b.seq || a.occurredAt.localeCompare(b.occurredAt));
   const counted = sales.filter((s) => s.counted).length;
   const nextSaleRate = monthlyTierRate(counted + 1);
@@ -515,12 +657,21 @@ export const FORECAST_MONTHS = 6;
 
 export function commissionForecast(lines: CommissionLine[], clients: ForecastClient[], todayIso: string, monthCount = FORECAST_MONTHS): CommissionForecast {
   const first = londonMonthStart(todayIso);
+  const pendingUndated: ForecastItem[] = [];
   const months: ForecastMonth[] = Array.from({ length: monthCount }, (_, i) => ({ monthStart: addMonths(first, i), earnedNewSale: 0, earnedRecurring: 0, expected: 0, total: 0, items: [] }));
   const at = (ms: string) => months.find((m) => m.monthStart === ms);
   const businessOf = new Map(clients.map((c) => [c.leadId, c.business]));
   // Earned: the month's own lines (later months have none yet).
   for (const l of lines) {
-    if (l.status === 'not_commissionable' || l.commission === 0) continue;
+    if (l.status === 'not_commissionable' || l.status === 'cancelled' || l.commission === 0) continue;
+    if (l.status === 'pending') {
+      /* v3: not earned until the Approval Date — shown as expected in that month, or undated. */
+      const pm = l.approvalDay ? londonMonthStart(`${l.approvalDay}T12:00:00Z`) : null;
+      const mm = pm ? at(pm) : null;
+      const item: ForecastItem = { leadId: l.leadId, business: businessOf.get(l.leadId) ?? 'Client', amount: l.commission, at: l.approvalDay ? `${l.approvalDay}T12:00:00Z` : null, kind: l.kind === 'reversal' ? 'reversal' : 'new_sale', state: 'expected' };
+      if (mm) { mm.expected += l.commission; mm.items.push(item); } else if (!pm) pendingUndated.push(item);
+      continue;
+    }
     const m = at(l.periodMonth); if (!m) continue;
     // Net: a reversal comes off the bucket of the payment it reverses, and is listed as itself.
     if (l.paymentNumber === 1) m.earnedNewSale += l.commission; else m.earnedRecurring += l.commission;
@@ -528,7 +679,7 @@ export function commissionForecast(lines: CommissionLine[], clients: ForecastCli
     m.items.push({ leadId: l.leadId, business: businessOf.get(l.leadId) ?? 'Client', amount: l.commission, at: l.occurredAt, kind, state: 'earned' });
   }
   // Expected: live subscriptions' remaining commission-earning payments.
-  const undated: ForecastItem[] = [];
+  const undated: ForecastItem[] = [...pendingUndated];
   const now = Date.parse(todayIso);
   for (const c of clients) {
     if (!c.live || c.paymentsLeft <= 0 || !c.monthlyGbp || c.monthlyGbp <= 0) continue;

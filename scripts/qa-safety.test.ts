@@ -114,7 +114,9 @@ for (const to of ["owner@realbusiness.co.uk", "paul@findable.live", "", null]) o
 const read2 = (p: string) => readFileSync(path.join(FN, p), "utf8").replace(/\r\n/g, "\n");
 const hub = read2("paid-client-hub/index.ts");
 ok(/qaEmailHold\(service, String\(L\.id\), to\)[\s\S]{0,200}qa_email_sink_only[\s\S]{0,600}api\.resend\.com/.test(hub), "agreement_send_link asks the email guard before Resend");
-ok(/qaEmailHold\(service, ctx\.lead\.id, values\.email[\s\S]{0,1500}storeAndSendAcceptance\(/.test(read2("client-agreement/index.ts")), "the agree page refuses before anything is stored");
+/* 2026-10-05: both signing paths (v3 sign-up, legacy v1) validate through signatureErrors — which asks the QA guard — BEFORE storing. */
+ok(/async function signatureErrors[\s\S]{0,900}qaEmailHold\(service, leadId, values\.email/.test(read2("client-agreement/index.ts"))
+  && (read2("client-agreement/index.ts").match(/await signatureErrors\([\s\S]{0,1400}?storeAndSendAcceptance\(/g) ?? []).length === 2, "the agree page refuses before anything is stored");
 ok(/qaEmailHold\(service, row\.lead_id, row\.email[\s\S]{0,600}emailSignedAgreement\(/.test(read2("_shared/client-agreement.ts")), "the signed-copy sender has the backstop");
 
 if (f) { console.log(`\n${f} FAILED`); process.exit(1); }

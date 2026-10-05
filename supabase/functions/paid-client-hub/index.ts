@@ -27,6 +27,8 @@ import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgr
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
+import { accessDateEmail, appendTermsEvent, loadTimelineFacts, schedulePaymentStart, sendAccessDateEmail, todayUk } from "../_shared/client-terms.ts";
+import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, RESULTS_TARGET_DAYS, accessReadiness, addDays, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
 import { clientContactRoutes, clientInfoRequestView, clientItems, missingInformation, sellerAskState, sellerItems, cleanInfoKeys, gatherKnown, patchForCandidate, type MissingInfoItem } from "../../../src/lib/clientMissingInfo.ts";
 import { whatsAppCapabilityOf } from "../../../src/lib/whatsAppCapability.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
@@ -818,6 +820,121 @@ Deno.serve(async (req) => {
           acceptances,
         },
       });
+    }
+
+    /* ══ THE v3 CLIENT TIMELINE (Client Service Agreement v3, 2026-10-05) ═══════════════════════════════
+       Access Date (5.1) → baseline → Results Date (5.3) → Refund Window (5.4) → Approval / Payment Start
+       Date (5.6) → minimum term → the Continuing Service price Continuing Service (9A). Dates are DERIVED (clientTimeline.ts);
+       the actions below record only the facts Paul establishes, each logged in client_service_events.
+       ⛔ ONLY FOR A CLIENT ON v3 TERMS (a client_service_terms row). Every other client answers on_v3:false
+       and every write refuses — Ronnie, MCL, RG and the QA clients are never re-ruled.
+       ⛔ NOTHING HERE CHARGES ANYONE. The one Stripe write is schedulePaymentStart (a trialing
+       subscription's first charge moved to the contract's date, read back before it is recorded); the
+       Continuing Service is bookkeeping only until CONTINUING_SERVICE_AUTOMATION is switched on. */
+    if (action === "terms_status" || action === "confirm_access_date" || action === "record_guarantee_ceased"
+      || action === "schedule_payment_start" || action === "continuing_prepared" || action === "continuing_reminder_sent"
+      || action === "continuing_decision") {
+      const leadId = text(body.lead_id);
+      const { data: own } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const loaded = await loadTimelineFacts(service, leadId);
+      const nowIso = new Date().toISOString();
+      if (action === "terms_status") {
+        if (!loaded) return json({ ok: true, on_v3: false });
+        const setup = await loadClientSetup(service, leadId);
+        const access = accessReadiness(loaded.facts.route, (setup?.setup.readiness.items ?? []) as AccessItem[]);
+        const { data: events } = await service.from("client_service_events").select("kind, actor_user_id, detail, created_at").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(40);
+        return json({
+          ok: true, on_v3: true, terms: loaded.terms, view: timelineView(loaded.facts, nowIso), access,
+          automation: CONTINUING_SERVICE_AUTOMATION, ceased_reasons: GUARANTEE_CEASED_REASONS, events: events ?? [],
+        });
+      }
+      if (!loaded) return json({ ok: false, error: "not_v3", detail: "This client is not on the v3 agreement, so its timeline is not managed here." }, 409);
+      const facts = loaded.facts;
+      if (facts.refundedAt || facts.endedAt) return json({ ok: false, error: "client_closed", detail: "This client has been refunded or has ended — nothing more is scheduled." }, 409);
+
+      if (action === "confirm_access_date") {
+        /* 5.1 — Paul confirms; the checklist only stops him confirming while a required item is missing. */
+        if (loaded.terms.access_date) return json({ ok: false, error: "already_confirmed", detail: `The Access Date is already ${loaded.terms.access_date}.` }, 409);
+        if (loaded.terms.guarantee_ceased_at) return json({ ok: false, error: "guarantee_ceased", detail: "The guarantee was recorded as not applying, so the Access Date no longer starts the measurement clock." }, 409);
+        const today = todayUk(nowIso);
+        const day = /^\d{4}-\d{2}-\d{2}$/.test(text(body.access_date)) ? text(body.access_date) : today;
+        const paidDay = ukDay(facts.initialPaidAt);
+        if (day > today) return json({ ok: false, error: "future_date", detail: "The Access Date cannot be in the future." }, 400);
+        if (paidDay && day < paidDay) return json({ ok: false, error: "before_payment", detail: "The Access Date cannot be before the initial payment." }, 400);
+        const setup = await loadClientSetup(service, leadId);
+        const access = accessReadiness(facts.route, (setup?.setup.readiness.items ?? []) as AccessItem[]);
+        if (!access.ready) return json({ ok: false, error: "access_incomplete", detail: `Still missing for ${facts.route === "build" ? "Build" : "Optimise"}: ${access.missing.join(", ")}.`, missing: access.missing }, 409);
+        const { data: upd, error: uErr } = await service.from("client_service_terms")
+          .update({ access_date: day, access_confirmed_at: nowIso, access_confirmed_by: user.id })
+          .eq("lead_id", leadId).is("access_date", null).select("lead_id");
+        if (uErr) throw uErr;
+        if (!Array.isArray(upd) || upd.length === 0) return json({ ok: false, error: "already_confirmed", detail: "Someone confirmed it a moment ago." }, 409);
+        await appendTermsEvent(service, leadId, "access_confirmed", user.id, { access_date: day, checked: access.checked });
+        /* 5.1 — "We will confirm the date to you by email." Recorded as sent ONLY when Resend accepted it. */
+        const { data: obRows } = await service.from("onboarding_responses").select("contact_email,status,updated_at").eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(5);
+        const to = (((obRows ?? []) as { contact_email: string | null; status: string | null }[]).find((r) => r.status === "paid")?.contact_email
+          ?? String(loaded.lead.email ?? "")).trim().toLowerCase();
+        let emailed = false; let emailDetail = "no client email on record";
+        if (to && to.includes("@")) {
+          const qa = await qaEmailHold(service, leadId, to);
+          if (qa) emailDetail = qa;
+          else {
+            const mail = accessDateEmail({ businessName: String(loaded.lead.business_name ?? "your business"), accessDay: day, resultsTargetDay: addDays(day, RESULTS_TARGET_DAYS) });
+            const sent = await sendAccessDateEmail(to, mail);
+            emailed = sent.ok; emailDetail = sent.detail;
+          }
+        }
+        if (emailed) {
+          await service.from("client_service_terms").update({ access_email_sent_at: new Date().toISOString() }).eq("lead_id", leadId);
+          await appendTermsEvent(service, leadId, "access_email_sent", user.id, { to, access_date: day });
+        } else {
+          await appendTermsEvent(service, leadId, "access_email_failed", user.id, { to: to || null, detail: emailDetail.slice(0, 300) });
+        }
+        return json({ ok: true, access_date: day, emailed, email_detail: emailed ? null : emailDetail });
+      }
+
+      if (action === "record_guarantee_ceased") {
+        /* 5.8 — the guarantee no longer applies; 5.6 — the six-week fallback Payment Start Date. */
+        const reason = text(body.reason) as GuaranteeCeasedReason;
+        if (!(reason in GUARANTEE_CEASED_REASONS)) return json({ ok: false, error: "bad_reason", detail: "Choose which part of clause 5.8 applies." }, 400);
+        if (facts.resultsSentAt) return json({ ok: false, error: "results_sent", detail: "The formal results have already been sent; the Refund Window runs from them." }, 409);
+        if (loaded.terms.guarantee_ceased_at) return json({ ok: false, error: "already_recorded", detail: "Already recorded." }, 409);
+        const note = text(body.note).slice(0, 500);
+        const { error: cErr } = await service.from("client_service_terms")
+          .update({ guarantee_ceased_at: nowIso, guarantee_ceased_reason: `${reason}: ${GUARANTEE_CEASED_REASONS[reason]}${note ? ` — ${note}` : ""}` })
+          .eq("lead_id", leadId).is("guarantee_ceased_at", null);
+        if (cErr) throw cErr;
+        await appendTermsEvent(service, leadId, "guarantee_ceased", user.id, { reason, note: note || null });
+        const sched = await schedulePaymentStart(service, leadId, user.id);
+        return json({ ok: true, payment_start: sched });
+      }
+
+      if (action === "schedule_payment_start") {
+        const sched = await schedulePaymentStart(service, leadId, user.id);
+        return json({ ok: sched.kind === "scheduled", payment_start: sched }, sched.kind === "failed" ? 502 : sched.kind === "refused" ? 409 : 200);
+      }
+
+      /* ── 9A, MANUAL: bookkeeping only. ⛔ Nothing here touches Stripe or charges the Continuing Service price. ── */
+      if (action === "continuing_prepared") {
+        await service.from("client_service_terms").update({ continuing_prepared_at: nowIso }).eq("lead_id", leadId);
+        await appendTermsEvent(service, leadId, "continuing_prepared", user.id, {});
+        return json({ ok: true });
+      }
+      if (action === "continuing_reminder_sent") {
+        /* Paul sent the 9A.3 reminder himself (email). Recorded as he says — the app did not send it. */
+        if (loaded.terms.continuing_reminder_sent_at) return json({ ok: false, error: "already_recorded", detail: `Recorded on ${loaded.terms.continuing_reminder_sent_at.slice(0, 10)}.` }, 409);
+        await service.from("client_service_terms").update({ continuing_reminder_sent_at: nowIso, continuing_reminder_sent_by: user.id }).eq("lead_id", leadId);
+        await appendTermsEvent(service, leadId, "continuing_reminder_sent", user.id, { note: text(body.note).slice(0, 300) || null });
+        return json({ ok: true });
+      }
+      if (action === "continuing_decision") {
+        const decision = text(body.decision);
+        if (decision !== "continue" && decision !== "cancel") return json({ ok: false, error: "bad_decision", detail: "Continue or cancel." }, 400);
+        await service.from("client_service_terms").update({ continuing_decision: decision, continuing_decision_at: nowIso }).eq("lead_id", leadId);
+        await appendTermsEvent(service, leadId, decision === "continue" ? "continuing_will_continue" : "continuing_will_cancel", user.id, { note: text(body.note).slice(0, 300) || null });
+        return json({ ok: true, decision, stripe_automatic: CONTINUING_SERVICE_AUTOMATION.stripeSwitch });
+      }
     }
 
     /* ══ FIRST CONTACT (pre-sales fix 03, M-018) ═════════════════════════════════════════════════════

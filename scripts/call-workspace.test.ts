@@ -99,7 +99,9 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
   ok(/new website, host it and look after it/.test(b.spoken.join(' ')) && /built, hosted and managed by Findable/.test(b.site), 'Build: a new Findable-built, hosted and managed website');
   ok(/keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')) && /keep their existing website and its ownership/.test(o.site), 'Optimise: they keep their existing site and its ownership; we never take it offline');
   ok(/12 payments in total, the £99 today included, so a 12-month minimum/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included, so a 6-month minimum/.test(o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term');
-  ok(/starting six weeks after today/.test(b.spoken.join(' ')), 'the first monthly payment is "six weeks after today" (FINDABLE_MONTHLY_DELAY_DAYS)');
+  /* 2026-10-05 (v3 clause 5.6): never "six weeks after today" — the day after the refund window. */
+  ok(/starting the day after your 14-day refund window closes/.test(b.spoken.join(' ')) && !/six weeks after today/.test(b.spoken.join(' ')), 'the first monthly payment is the day after the refund window (v3), never "six weeks after today"');
+  ok(/£29\.99 a month for hosting and monitoring until you cancel/.test(b.spoken.join(' ')), 'Build names the £29.99 Continuing Service after the minimum term (9A)');
   ok(!/\b(12|6) (more|further) payments|then (12|6) payments|13 payments|7 payments/i.test(b.spoken.join(' ') + o.spoken.join(' ')), 'no wording that implies an extra payment on top of the 12 / 6');
   const src = read('src/lib/callClose.ts').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   ok(!/£\s?\d|\b(12|6) payments\b/.test(src), 'callClose.ts types no price and no payment count — every figure is a constant');

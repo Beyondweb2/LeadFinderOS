@@ -337,7 +337,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   payment_received: 'Payment received',
   handoff_saved: 'Sales handoff',
   /* fn quick-close share_link (2026-10-04): how the payment link reached them — copied / emailed / WhatsApp. */
-  payment_link_shared: 'Payment link',
+  payment_link_shared: 'Sign-up link',
   onboarding_submitted: 'Client submitted onboarding',
   delivery_submitted: 'Ready for delivery',
   discovery_run: 'Discovery run',

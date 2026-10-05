@@ -56,6 +56,7 @@ import { pickAuditTown } from "./place-town.ts";
 import { dedupeQuestions } from "../../../src/lib/seedGuard.ts";
 import { orderedFrozenQuestions } from "../../../src/lib/baselineReplay.ts";
 import { reconcileActionPlan } from "./action-plan.ts";
+import { baselineMayStart } from "../../../src/lib/clientTimeline.ts";
 
 /** Towns this is not. Mirrors findable-onboarding: forcing scope='local' needs a real town. */
 const NON_TOWN = new Set([
@@ -991,6 +992,19 @@ export async function startPaidBaseline(
     if (!row) return { ok: false, error: "onboarding row not found" };
     const leadId = row.lead_id as string | null;
     if (!leadId) return { ok: false, skipped: "no_lead_id" };
+
+    /* ══ v3: THE BASELINE WAITS FOR THE ACCESS DATE (clause 5.2, 2026-10-05) ════════════════════════════
+       "On or shortly after the Access Date, before we make changes." A client on the v3 terms has a
+       client_service_terms row; until Paul confirms their Access Date the baseline does not start, so the
+       before-side can never be measured on a clock the contract has not started. A client with no row
+       (every sale before v3) is untouched. ⛔ An unreadable terms table HOLDS (a baseline spends money). */
+    {
+      const { data: terms, error: tErr } = await service.from("client_service_terms").select("commercial_terms, access_date").eq("lead_id", leadId).maybeSingle();
+      if (tErr) return { ok: false, error: `terms read failed: ${tErr.message}` };
+      if (!baselineMayStart(terms as { commercial_terms?: string | null; access_date?: string | null } | null)) {
+        return { ok: true, skipped: "awaiting_access_date" };
+      }
+    }
 
     /* Payment prepares the client; only an operator-approved question set may start paid work.
        ⚠️ AND APPROVAL IS ENOUGH — every caller that reaches this line with an `approved` row WILL

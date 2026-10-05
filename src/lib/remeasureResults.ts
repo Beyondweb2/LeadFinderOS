@@ -6,12 +6,14 @@
    This module is the pure half of the sender (supabase/functions/_shared/remeasure-results.ts):
    Deno-free so the tsx suite drives it, imported by the edge sender, the public renderer and the SPA.
 
-   ⛔ THE DECISION IS POOLED ACROSS BOTH ENGINES — Paul's call, 2026-09-13, stated knowing that RG's
-   own pair reads +0.3 points pooled and therefore "has not gone up". "Gone up" means the product's
-   own verdict, `improved`: a rise BEYOND the ±NOISE_BAND_PP swing. A rise inside the band is the
-   swing we see between repeat measurements with no work done, and the refund sentence promises a
-   refund when the number "has not gone up", so inside the band counts as not gone up. That reading
-   is what the client is told, in the same words as /refunds.
+   ⛔ THE DECISION IS POOLED ACROSS BOTH ENGINES — Paul's call, 2026-09-13.
+   🔴 "GONE UP" = ANY INCREASE IN THE COUNT (Paul, 2026-10-05; v3 Client Service Agreement clause 5.4:
+   "If the number of answers that name your business at the re-measurement is not higher than at the
+   baseline"). 39/120 → 40/120 HAS gone up; 39 → 39 and 39 → 38 have not. The ±NOISE_BAND_PP band no
+   longer decides anything about the guarantee — it was a percentage test the agreement never stated.
+   The band stays in measurementCompare.ts for the OPERATOR's comparison screens only; no client-facing
+   sentence mentions it. Comparability (same questions, both engines, enough runs) is still a gate that
+   HOLDS the results for Paul — never a threshold on the number (clientTimeline.guaranteeNumberWentUp).
 
    ⛔ IT DOES NOT SEND — IT ROUTES TO A TASK — WHEN THE NUMBER CANNOT BE PROVEN: the replay gave up
    (fewer complete runs than its target, or a run failed/capped), the sides share no question, or
@@ -22,8 +24,9 @@
    approves the draft below; while false the sender holds every result as a task instead of sending.
    Flipping it is a deliberate commit and deploy, never a runtime switch.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { MIN_CELLS_FOR_QUESTION_CLAIM, NOISE_BAND_PP, type MeasurementComparison } from './measurementCompare.ts';
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
+import { MIN_CELLS_FOR_QUESTION_CLAIM, type MeasurementComparison } from './measurementCompare.ts';
+import { guaranteeNumberWentUp } from './clientTimeline.ts';
+import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, GUARANTEE_PAYMENT_TWO_SENTENCE, REMEASURE_CLAIM_SENTENCE, REMEASURE_WEEKS_STANDARD, serviceRouteForTotal, termMonthsFor, totalPaymentsFor } from './findableOffer.ts';
 import { defaultRemeasureDue, remeasureOffsetDays } from './deliveryCockpit.ts';
 
 /** "four" / "eight" — the client's re-measure clock in words (remeasureWeeksFor). */
@@ -173,9 +176,10 @@ export function remeasureResultsDecision(input: {
   return { send: true };
 }
 
-/** "Gone up" = the pooled rate rose beyond the noise band. Inside the band is NOT gone up. */
+/** 🔴 "Gone up" = MORE named answers after than before, on the matched questions and engines (clause 5.4;
+ *  Paul 2026-10-05: any increase counts). One more named answer is gone up; equal or fewer is not. */
 export function numberWentUp(c: MeasurementComparison): boolean {
-  return c.movement === 'improved';
+  return guaranteeNumberWentUp(c.before.named, c.after.named);
 }
 
 /** When the 14-day window closes, from the stamp. Null when nothing has been sent. */
@@ -234,6 +238,9 @@ export interface ResultsCopyInput {
   /** The client's contracted payment count (outreach_leads.contract_total_payments, stamped at
    *  payment). Absent/unknown → the billing sentence names no count. */
   totalPayments?: number | null;
+  /** v3 terms (2026-10-05): the Continuing Service (FINDABLE_CONTINUING_GBP) follows the minimum term (clause 9A), and the
+   *  first monthly payment is the Payment Start Date, the day after the Refund Window (5.6). */
+  v3Terms?: boolean;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -273,17 +280,12 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     /* ⛔ NO CAUSAL CLAIM (2026-10-04, Session C C-28). This used to say "The pages and listings we built
        are what the engines are now reading" — the data shows the number rose, not why. The sentence
        says what was measured and what we keep doing, nothing more. */
-    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named more often than ${weeksWord(i.weeks)} weeks ago, by more than the ${NOISE_BAND_PP}-point swing we see between repeat checks. We keep the work live and keep measuring.`);
+    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named in more answers than ${weeksWord(i.weeks)} weeks ago. We keep the work live and keep measuring.`);
   } else {
     /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
        It used to read as an apology followed by an offer. "That means the guarantee applies" is
        ours to write; the sentence after it is NOT — see the note above resultsClaimParagraph. */
-    out.push(
-      i.withinNoise
-        ? `Your number has not gone up. The change is inside the ${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, so we count it as no movement.`
-        : `Your number has not gone up.`,
-      resultsClaimParagraph(),
-    );
+    out.push(`Your number has not gone up.`, resultsClaimParagraph());
   }
   /* ⛔ THIS EMAIL IS THE EARLY BILLING NOTICE. Stripe's own trial-ending event fires three days out
      and nothing can move it, so the date and the amount are named here too.
@@ -295,7 +297,12 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
   /* ⛔ ONLY WHEN THE NUMBER WENT UP (Paul, 2026-10-05). The not-gone-up email has just said a valid
      claim stops the monthly; a "your first monthly payment is on…" paragraph straight after it reads
      as taking that back. That version names no upcoming payment. */
-  if (i.wentUp && i.monthlyStartsOn) {
+  if (i.wentUp && i.monthlyStartsOn && i.v3Terms) {
+    /* v3: the date is the Payment Start Date (the day after the 14-day Refund Window); after the minimum
+       term the Continuing Service follows (9A) — never "nothing is charged after". */
+    const route = serviceRouteForTotal(i.totalPayments);
+    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`);
+  } else if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);
     out.push(route
       ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(route)}, for the rest of your ${termMonthsFor(route)}-month minimum term. That first monthly payment is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
@@ -330,10 +337,5 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
       `We keep the work live and keep measuring.`,
     ];
   }
-  return [
-    i.withinNoise
-      ? `The number has not gone up. The change is inside the ${NOISE_BAND_PP}-point swing we see between repeat measurements with no work done, so we count it as no movement.`
-      : `The number has not gone up.`,
-    resultsClaimParagraph(),
-  ];
+  return [`The number has not gone up.`, resultsClaimParagraph()];
 }

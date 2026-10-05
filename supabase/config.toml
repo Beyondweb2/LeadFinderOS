@@ -12,6 +12,10 @@ verify_jwt = false
 [functions.cron-run]
 verify_jwt = false
 
+# legacy-checkout-cutover (2026-10-05): the v3 cutover report / execute. Handler-side auth (CRON_SECRET or admin).
+[functions.legacy-checkout-cutover]
+verify_jwt = false
+
 [functions.admin-users]
 verify_jwt = false
 

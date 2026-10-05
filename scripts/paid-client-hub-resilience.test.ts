@@ -101,6 +101,10 @@ const live: Record<string, string[]> = {
      day). client_agreement_links.service_route is the follow-up column (SQL_FOR_PAUL, same day). */
   client_agreement_links: ['lead_id','token','created_at','last_sent_at','last_sent_to','service_route'],
   client_agreement_acceptances: ['method','accepted_at','typed_name','typed_role','email','agreement_version','service_route','stripe_session_id'],
+  /* ⚠️ NOT LIVE YET: migration 20261010090000_client_agreement_v3_commercial.sql (branch
+     feature/client-agreement-commercial-alignment, 2026-10-05) — must be applied and read back BEFORE
+     paid-client-hub is deployed. Its client_service_events columns, from that file. */
+  client_service_events: ['kind','actor_user_id','detail','created_at'],
 };
 const known = new Set(Object.values(live).flat());
 /* An aliased JSON path (family:evidence->d->>family) is checked on its base column. */

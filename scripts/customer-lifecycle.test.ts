@@ -138,7 +138,8 @@ const texts: Array<[string, string]> = [
 const pb = buildColdCallPlaybook({ lead: { id: 'l', business_name: 'Acme Plumbing', phone: '07700900123', website: null }, reportAudit: null, report: null, runCrawls: [], leadCrawl: null, messages: [], nowMs: Date.now() });
 texts.push(['cold call playbook offer', JSON.stringify(pb.offer)]);
 for (const [label, t] of texts) {
-  ok(!/29\.99/.test(t), `${label}: no £29.99`);
+  /* 2026-10-05 (v3 clause 9A): £29.99 only as the Continuing Service after the minimum term. */
+  ok(!/29\.99(?! a month (for|until))/.test(t), `${label}: no £29.99 except the Continuing Service`);
   ok(!/(cancel|stop)( it)?( at)? any ?time|not binding|cancel before (it|week)/i.test(t), `${label}: no "cancel/stop any time", "not binding" or "cancel before it starts"`);
   ok(!/13 payments|7 payments|(12|6) (more|further) payments|plus (12|6)\b/i.test(t), `${label}: nothing that implies an extra payment`);
 }

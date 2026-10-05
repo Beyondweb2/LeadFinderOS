@@ -27,7 +27,7 @@
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
+  FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
   type ServiceRoute,
 } from './findableOffer.ts';
 
@@ -152,8 +152,9 @@ export function routeOwnershipLine(route: ServiceRoute): string {
 export const QUICK_CLOSE_PROMISE = 'We improve AI visibility or you get your money back.';
 export const QUICK_CLOSE_GUARANTEE_LINES: readonly string[] = [QUICK_CLOSE_PROMISE, FINDABLE_GUARANTEE];
 
-/** M-011: the payer must tick the client agreement on the Stripe page (findable-checkout, consent_collection). */
-export const QUICK_CLOSE_AGREEMENT_LINE = 'On the payment page they tick to accept the client agreement before they pay.';
+/** M-011 → v3 (2026-10-05): the client signs the agreement on the sign-up link before payment can open
+ *  (findable-checkout refuses a Stripe session without that signature — src/lib/signupGate.ts). */
+export const QUICK_CLOSE_AGREEMENT_LINE = 'On the sign-up link they read and sign the Client Service Agreement — payment only opens after they sign.';
 
 /** Optimise needs a site to optimise: with no website only Build is offered. */
 export function routeAvailable(a: QuickCloseAnswers, route: ServiceRoute): boolean {
@@ -260,7 +261,7 @@ export function routeAfterAnswer(a: QuickCloseAnswers, key: QcKey, value: string
 
 /** The one confirmation for an answer that switches Build ⇄ Optimise (the money changes). */
 export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: boolean): string {
-  const extra = [hasLink ? 'The current payment link will be cancelled.' : '', from === 'build' ? 'The Build consents will be cleared.' : ''].filter(Boolean).join(' ');
+  const extra = [hasLink ? 'The current sign-up link will be remade for the new route.' : '', from === 'build' ? 'The Build consents will be cleared.' : ''].filter(Boolean).join(' ');
   return `Switch to ${SERVICE_ROUTE_NAME[to]}? That is ${totalPaymentsFor(to)} payments in total instead of ${totalPaymentsFor(from)}. ${extra}`.trim();
 }
 
@@ -376,14 +377,24 @@ export interface QuickCloseRecord {
   answers?: QuickCloseAnswers | null; review_approved_at?: string | null; link_url?: string | null; link_generated_at?: string | null;
   /** The Stripe Checkout Session behind link_url (so a superseded one can be expired) and when Stripe closes it. */
   link_session_id?: string | null; link_expires_at?: string | null;
+  /** 🔴 v3 (2026-10-05): 'signup' = the client's sign-up link (their agreement page; Stripe is reached only
+   *  after they sign). Anything else — a link stored before v3 — is a naked Stripe URL and is NEVER usable. */
+  link_kind?: 'signup' | null;
   link_shared?: QcLinkShare[] | null;
   /** Optimistic-concurrency counter: every write to quick_close is conditional on it (fn quick-close). */
   rev?: number | null;
 }
 export const QUICK_CLOSE_STATE_LABEL: Record<QuickCloseState, string> = {
   not_started: 'Not started', in_progress: 'In progress', blocked: 'Decision maker needed', consents_needed: 'Build consents needed', needs_review: 'Paul review required',
-  ready: 'Ready for payment', link_generated: 'Payment link ready', link_expired: 'Payment link expired', paid: 'Paid',
+  ready: 'Ready for sign-up', link_generated: 'Sign-up link ready', link_expired: 'Sign-up link expired', paid: 'Paid',
 };
+
+/** 🔴 THE SIGN-UP LINK (v3 Client Service Agreement, 2026-10-05). What a salesperson sends is ONE link:
+ *  findable.live/agree/<token> — the client checks their details, reads and signs the agreement, then pays.
+ *  It carries no Stripe session, so it does not run out after a day; findable-checkout stamps it with this
+ *  lifetime so a link left unused for a month is remade (re-running every refusal) rather than trusted. */
+export const SIGNUP_LINK_LIFETIME_MS = 30 * 24 * 3_600_000;
+const isSignupLink = (qc: QuickCloseRecord | null | undefined) => qc?.link_kind === 'signup';
 
 /** A Stripe Checkout Session is good for 24 hours from creation (findable-checkout sets no other expiry). */
 export const STRIPE_SESSION_LIFETIME_MS = 24 * 3_600_000;
@@ -412,8 +423,8 @@ export function linkExpiresAtMs(qc: QuickCloseRecord | null | undefined): number
 export function linkUsableUntilMs(qc: QuickCloseRecord | null | undefined): number | null {
   const gen = qc?.link_generated_at ? Date.parse(qc.link_generated_at) : NaN;
   const exp = linkExpiresAtMs(qc);
-  if (!Number.isFinite(gen) || exp === null) return null;
-  return Math.min(gen + LINK_REUSE_MS, exp - LINK_MIN_LEFT_MS);
+  if (!Number.isFinite(gen) || exp === null || !isSignupLink(qc)) return null;
+  return Math.min(gen + SIGNUP_LINK_LIFETIME_MS, exp - LINK_MIN_LEFT_MS);
 }
 
 /** 🔴 M-014 (2026-10-04): IS THE STORED LINK SAFE TO HAND OVER RIGHT NOW? A link is never "ready" just
@@ -421,8 +432,11 @@ export function linkUsableUntilMs(qc: QuickCloseRecord | null | undefined): numb
  *  Stripe closes it. ⛔ Positive: no link, no time, an unreadable time — all NOT usable. */
 export function linkUsable(qc: QuickCloseRecord | null | undefined, nowMs: number = Date.now()): boolean {
   if (!qc?.link_url || !qc.link_generated_at) return false;
+  /* ⛔ v3: a stored Stripe URL (made before the agreement-first flow) is never handed over again — the
+     next press makes the sign-up link and closes that Stripe session (adoptLink → replaced). */
+  if (!isSignupLink(qc)) return false;
   const gen = Date.parse(qc.link_generated_at);
-  if (!Number.isFinite(gen) || nowMs - gen >= LINK_REUSE_MS || nowMs < gen - 60_000) return false;
+  if (!Number.isFinite(gen) || nowMs - gen >= SIGNUP_LINK_LIFETIME_MS || nowMs < gen - 60_000) return false;
   const exp = linkExpiresAtMs(qc);
   return exp !== null && exp - nowMs >= LINK_MIN_LEFT_MS;
 }
@@ -591,7 +605,7 @@ export type AdoptStep =
   | { kind: 'store'; next: QcRecord; replaced: string | null };
 export function adoptLink(
   rowStatus: string | null | undefined, fresh: QcRecord | null | undefined, claimedAnswersKey: string,
-  ours: { url: string; session: string | null; expiresIso: string }, actorId: string, nowIso: string, nowMs: number = Date.now(),
+  ours: { url: string; session: string | null; expiresIso: string; kind?: 'signup' | null }, actorId: string, nowIso: string, nowMs: number = Date.now(),
 ): AdoptStep {
   if (rowStatus === 'paid') return { kind: 'paid' };
   if (answersKey(fresh?.answers) !== claimedAnswersKey) return { kind: 'answers_changed' };
@@ -599,7 +613,7 @@ export function adoptLink(
   const replaced = fresh?.link_url ? ((fresh.link_session_id as string | null | undefined) ?? stripeSessionIdFromUrl(fresh.link_url)) : null;
   return {
     kind: 'store', replaced: replaced && replaced !== ours.session ? replaced : null,
-    next: { ...(fresh ?? {}), link_url: ours.url, link_session_id: ours.session, link_generated_at: nowIso, link_generated_by: actorId, link_expires_at: ours.expiresIso, link_claimed_at: null, link_claimed_by: null },
+    next: { ...(fresh ?? {}), link_url: ours.url, link_session_id: ours.session, link_kind: ours.kind ?? null, link_generated_at: nowIso, link_generated_by: actorId, link_expires_at: ours.expiresIso, link_claimed_at: null, link_claimed_by: null },
   };
 }
 
@@ -608,21 +622,26 @@ export function adoptLink(
    🔴 M-011 (2026-10-04): every version — the rep's card, the spoken words, the WhatsApp / copied message
    and the email — carries the price, the payment count, the MINIMUM TERM, who owns the website, the
    guarantee (QUICK_CLOSE_GUARANTEE_LINES) and the agreement tick, BEFORE the link is sent. One phrase for
-   the timing ("six weeks after sign-up", as offerSummaryFor), no nested brackets (A-29). */
+   the timing (MONTHLY_START_V3_WORDS, as offerSummaryFor), no nested brackets (A-29).
+   🔴 v3 (2026-10-05): the link is the SIGN-UP link — the client reads and signs the Client Service Agreement
+   on it BEFORE paying (clause 1.2); the timing is the day after the refund window (5.6); the the Continuing Service price
+   Continuing Service follows the minimum term (9A). */
 const priceSentence = (route: ServiceRoute) =>
-  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting six weeks after sign-up — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. After that it continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.`;
+/** What happens on the link, in the client's words. */
+export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */
 const ownershipToClient = (route: ServiceRoute) => route === 'build'
   ? `We build, host and manage a new website for you, and it becomes yours once all ${totalPaymentsFor(route)} payments are made.`
   : 'You keep your own website — it stays yours, and we work on it.';
-const AFTER_PAYMENT_SENTENCE = "Once it's paid we run your full baseline AI visibility measurement, and Paul will be in touch within two working days to take over the setup — website, domain and access.";
+const AFTER_PAYMENT_SENTENCE = "Once it's paid, Paul will be in touch within two working days to take over the setup — website, domain and access — and we take your baseline AI visibility measurement once we have the access we need.";
 
 /** What the rep says once the route is chosen. ⛔ Not shown before a route exists (it would name no terms). */
 export function quickCloseScript(route: ServiceRoute | null | undefined): string {
   if (!route) return '';
-  return `I'll send you the payment link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
+  return `I'll send you your sign-up link now. It's ${SERVICE_ROUTE_NAME[route]}: ${ownershipToClient(route)} ` +
     `It's ${priceSentence(route)} ${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE} ` +
-    `On the payment page you'll tick to accept the client agreement. ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;
+    `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE} You don't need to sort any of that out today.`;
 }
 
 /** The greeting: the contact's first name when we have one, never the business's legal name (A-29). */
@@ -634,16 +653,16 @@ export function quickCloseGreeting(contactName: string | null | undefined): stri
 /** The message that carries the link (WhatsApp, copy, email body). `greetName` is the contact's name. */
 export function quickCloseMessage(greetName: string | null | undefined, url: string, route: ServiceRoute): string {
   return [
-    `${quickCloseGreeting(greetName)}, here's your ${SERVICE_ROUTE_NAME[route]} payment link:`,
+    `${quickCloseGreeting(greetName)}, here's your ${SERVICE_ROUTE_NAME[route]} sign-up link:`,
     url,
     '',
     `What you're signing up to: ${priceSentence(route)} ${ownershipToClient(route)}`,
     '',
     `${QUICK_CLOSE_PROMISE} ${FINDABLE_GUARANTEE}`,
     '',
-    `On the payment page you'll tick to accept the client agreement. ${AFTER_PAYMENT_SENTENCE}`,
+    `${SIGNUP_LINK_SENTENCE} ${AFTER_PAYMENT_SENTENCE}`,
     '',
-    'The link stays open for up to 24 hours. If it runs out, just reply and we will send a fresh one.',
+    'If anything on the link looks wrong, just reply before you sign.',
   ].join('\n');
 }
 
@@ -652,7 +671,7 @@ export function quickCloseEmail(i: { greetName: string | null | undefined; busin
   const biz = String(i.businessName ?? '').trim();
   const sender = String(i.senderName ?? '').trim();
   return {
-    subject: `Your ${SERVICE_ROUTE_NAME[i.route]} payment link${biz ? ` - ${biz}` : ''}`,
+    subject: `Your ${SERVICE_ROUTE_NAME[i.route]} sign-up link${biz ? ` - ${biz}` : ''}`,
     text: `${quickCloseMessage(i.greetName, i.url, i.route)}\n\nAny questions, just reply to this email.\n\n${sender ? `${sender}\n` : ''}Findable`,
   };
 }

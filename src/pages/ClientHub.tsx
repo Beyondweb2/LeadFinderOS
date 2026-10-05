@@ -40,6 +40,7 @@ import { onboardingStatus } from '@/lib/manualOnboarding';
 import { baselineReadiness } from '@/lib/baselineReadiness';
 import type { LeadCrawlSummary } from '@/lib/leadCrawlSummary';
 import { WORK_LABEL, type ClientContract } from '@/lib/clientContract';
+import { ClientTimelineCard } from '@/components/ClientTimelineCard';
 
 type AnyRecord = Record<string, any>;
 type Baseline = PaidBaseline;
@@ -644,6 +645,8 @@ export default function ClientHub() {
   <BaselineSetupDialog leadId={lead.id} open={baselineOpen} onOpenChange={setBaselineOpen} onChanged={refresh}/>
   <ManualOnboardingDialog leadId={lead.id} open={onboardingOpen} onOpenChange={setOnboardingOpen} onSaved={refresh}/>
   <div className="grid gap-4 lg:grid-cols-2">
+    {/* v3 Client Service Agreement (2026-10-05): Access Date, Results Date, refund window, Payment Start, Continuing Service. */}
+    <div className="lg:col-span-2"><ClientTimelineCard leadId={lead.id} ended={!!ended}/></div>
     <OnboardingStage onboarding={onboarding} unpaid={hub.onboarding_unpaid} onOpen={() => setOnboardingOpen(true)}/>
     <Stage k="evidence" title="Website evidence">
       {/* The lead's ONE crawl row — the same one the Outreach and Inbox Crawl site buttons write. */}
