@@ -208,16 +208,22 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
 export interface AttributionReview {
   lead_id: string;
   business_name: string | null;
-  claimed_seller_user_id: string;
+  claimed_seller_user_id: string | null;
+  reason: 'no_authorised_creator' | 'creator_not_authorised' | 'claimed_seller_mismatch';
   status: 'open' | 'confirmed' | 'not_credited';
-  evidence: { missing_at_payment?: string[] };
+  evidence: { claimed_seller_readiness?: string[] | null };
   resolution_note: string | null;
   created_at: string;
 }
 
-/* ATTRIBUTION REVIEW NEEDED (Team page, admin): a sale that landed on a salesperson who was not authorised
-   to create it. The seller is never changed here; Paul confirms it, or records that the salesperson is not
-   credited. Whether anyone is paid stays with the commission rules. */
+/* ATTRIBUTION REVIEW NEEDED (Team page, admin): a client paid but no AUTHORISED creator of the sale is on
+   record (SALE CREATOR ≠ CURRENT LEAD OWNER). No seller was stamped. Paul confirms the claimed seller, or
+   records that nobody is credited. Whether anyone is paid stays with the commission rules. */
+const REVIEW_REASON: Record<AttributionReview['reason'], string> = {
+  no_authorised_creator: 'no sign-up link from an authorised salesperson is on record for this payment',
+  creator_not_authorised: 'the sign-up link was made by someone who was not Ready to Sell at the time',
+  claimed_seller_mismatch: 'the seller written with the payment does not match who created the sign-up link',
+};
 export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }: {
   reviews: readonly AttributionReview[];
   sellerName: (id: string) => string;
@@ -227,7 +233,7 @@ export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }:
   const [busy, setBusy] = useState(false);
   const open = reviews.filter((r) => r.status === 'open');
   const decide = async (r: AttributionReview, decision: 'confirmed' | 'not_credited') => {
-    const note = window.prompt(decision === 'confirmed' ? 'Confirm this sale belongs to the salesperson. Note (optional):' : 'Record that the salesperson is NOT credited for this sale. Note (optional):', '');
+    const note = window.prompt(decision === 'confirmed' ? 'Confirm the claimed seller. They become this sale\'s seller for good. Note (optional):' : 'Record that the salesperson is NOT credited for this sale. Note (optional):', '');
     if (note === null) return;
     setBusy(true);
     try {
@@ -243,9 +249,9 @@ export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }:
         <li key={r.lead_id} className="flex flex-wrap items-center gap-2 py-2">
           <div className="min-w-0 mr-auto">
             <div className="font-medium">{r.business_name || 'A client'} <span className="text-xs font-normal text-amber-700 dark:text-amber-400">ATTRIBUTION REVIEW NEEDED</span></div>
-            <div className="text-xs text-muted-foreground">Recorded seller: {sellerName(r.claimed_seller_user_id)} — not Ready to Sell when the client paid, and no payment link of theirs on file{r.evidence?.missing_at_payment?.length ? ` (missing: ${r.evidence.missing_at_payment.join(', ')})` : ''}.</div>
+            <div className="text-xs text-muted-foreground">Claimed seller: {r.claimed_seller_user_id ? sellerName(r.claimed_seller_user_id) : 'nobody'} — {REVIEW_REASON[r.reason] ?? r.reason}. No seller has been recorded.</div>
           </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void decide(r, 'confirmed')}>Confirm seller</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || !r.claimed_seller_user_id} onClick={() => void decide(r, 'confirmed')}>Confirm seller</Button>
           <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void decide(r, 'not_credited')}>Not credited</Button>
         </li>
       ))}

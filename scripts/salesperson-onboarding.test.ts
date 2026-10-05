@@ -3,7 +3,7 @@
    The checklist rules in src/lib/salespersonOnboarding.ts (approved documents only), the save validation
    fn admin-users runs, the parity of its keys with the database rule, and the structure that keeps the
    records admin-only. The gate's BEHAVIOUR is proven live by supabase/tests/salesperson-onboarding-rls.sql
-   (run against the database, rolled back: 57/57 on 2026-10-05); scripts/sales-ready-gate.test.ts fences
+   (run against the database, rolled back: 70/70 on 2026-10-05); scripts/sales-ready-gate.test.ts fences
    the gate's wiring.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync, statSync } from "node:fs";

@@ -7,8 +7,8 @@ Branch `feature/salesperson-onboarding-compliance`. Migration `20261010120000_sa
 
 Three rounds of instruction from Paul on the same day, in order: (1) the onboarding record; (2) drafts must
 not count, Ready to Sell must be a REAL gate, TPS via TPS Services; (3) **TPS/CTPS POSTPONED** — keep the
-gate, drop every TPS dependency; (4) attribution corrected: Ready to Sell gates CREATING a sale, the seller is
-preserved afterwards, abnormal sales are held for review (§3a). This record describes the final state.
+gate, drop every TPS dependency; (4)+(5) attribution: Ready to Sell gates CREATING a sale, and the seller is the
+authorised CREATOR of the sign-up the client paid through — never the lead's owner at payment (§3a). This record describes the final state.
 
 **WhatsApp behaviour is unchanged.** The draft agreement's clause 4.3(c) (call first, WhatsApp only after a
 recorded yes) does not match Paul's operating model and will be amended separately; nothing here encodes it.
@@ -75,7 +75,7 @@ write notes; record an opt-out; give leads back / archive; finish the handoff fo
 | Log a call or any other contact, set stages / follow-ups / interest | the `lead_activity` trigger (only their own session; allowlist: note, opted_out, lead_unassigned, archived_set, handoff_saved, details_set, delivery_submitted, client_info_answered) |
 | Queue outreach, send WhatsApp | `guard_action` ('whatsapp_queue', 'whatsapp_send') — no WhatsApp code changed |
 | Quick Close save / payment link / share | fn `quick-close` (`_shared/sales-ready.ts`, fails closed) |
-| CREATING a new sale (Quick Close answers, payment link, sharing it) | fn `quick-close` (above) — this is where Ready to Sell controls selling; see §3a for what happens to attribution afterwards |
+| CREATING a new sale (Quick Close answers, payment link, sharing it) | fn `quick-close` (above) — this is where Ready to Sell controls selling. The seller is then the authorised CREATOR of the sign-up, never the owner at payment (§3a) |
 
 The admin is never gated anywhere. The screens also hide selling actions (`leadPermissions(role, ready)`),
 but the server is what enforces.
@@ -84,32 +84,58 @@ but the server is what enforces.
 onboarding is recorded with approved documents — and no approved agreement or notice exists yet. That is the
 intended effect.
 
-## 3a. Seller attribution — gated at CREATION, preserved afterwards (corrected 2026-10-05)
+## 3a. Seller attribution — SALE CREATOR ≠ CURRENT LEAD OWNER (final, 2026-10-05)
 
-An earlier version of this branch moved a not-ready rep's new sale to Paul at payment. **That is gone.**
-Ready to Sell controls whether a salesperson may CREATE a sale; it never decides who a sale belongs to later.
+Two corrections the same day: first, a not-ready rep's sale was no longer moved to Paul; then **the seller
+stopped being "whoever owns the lead when the client pays"**. Final rule:
 
-- **Who is recorded:** the existing stamp — `outreach_leads.sold_by_user_id`, set once when the lead first
-  becomes a client (the lead's owner at that moment) and frozen by the existing trigger. This branch writes
-  no seller anywhere. The creation evidence is the Quick Close payment link the seller generated
-  (`quick_close_events` 'link_generated' / 'link_reused', server-written and timed — the commission code
-  already reads it); since quick-close refuses a not-ready rep, such a link proves they were authorised.
-- **Rep later becomes not ready / is disabled / the client pays days later:** nothing changes. Monday: a ready
-  rep generates the link. Tuesday: a newer agreement is approved, so they are temporarily not ready (or they
-  are disabled). Wednesday: the client pays. The seller is still that rep; commission follows the normal rules.
-- **Abnormal sale** — the recorded seller is a salesperson (or an ex-one) who is NOT Ready to Sell when the
-  client pays AND generated no payment link for that lead: the seller is NOT rewritten and nobody else is
-  credited. One `sale_attribution_reviews` row is opened (**ATTRIBUTION REVIEW NEEDED**, with the evidence:
-  what was missing, the owner, every payment link on the lead) and a security event is raised. Team page →
-  "Sales needing an attribution review": Paul presses **Confirm seller** or **Not credited** (fn admin-users
-  `attribution_review_resolve`, once per review). The product does not support moving a stamped seller, so a
-  decision is recorded rather than the seller rewritten.
-- **Commission stays Session F's.** No commission calculation, ledger row or payout is changed here.
-  `public.sale_attribution_held(lead)` (true while a review is open, or after "Not credited") is the one
-  question the commission rules need to ask. ⚠️ Until Session F reads it, a held sale is only flagged — the
-  commission code would still count it under its own rules.
-- **History:** only the FIRST stamp is ever looked at; every existing sale keeps its seller (proven live: same
-  sellers, same count) and no review is opened for anything that already happened.
+**SELLER = the authorised person who CREATED the sign-up the client paid through.** Lead ownership and sale
+attribution are different things once a sale exists. Ready to Sell controls whether a salesperson may CREATE
+a sale; once a legitimate sign-up exists, the seller follows its recorded creator, not later ownership.
+
+**The chain (all server-side):**
+1. Quick Close → `generate_link` (refused for a not-ready salesperson) → `findable-checkout` makes a Stripe
+   Checkout Session → quick-close logs `quick_close_events` 'link_generated' (actor = creator, `data.session` =
+   the session). That log is server-written and immutable (no update, delete or truncate).
+2. A trigger snapshots each such link into **`sale_creations`** (append-only, keyed by the log row): session,
+   lead, onboarding row, creator, creator's role, and **whether they were Ready to Sell at that moment** (+ what
+   was missing). Links made before this rule are backfilled with readiness UNKNOWN (never counted as ready).
+3. The client pays → `stripe-webhook` writes **`outreach_leads.paid_checkout_session_id`** (write-once) in the
+   SAME update that marks the lead paid (`firstPaymentPatch`, `checkoutSessionId: s.id`).
+4. `trg_outreach_leads_sold_by` (its body replaced; same trigger) asks `sale_attribution_decision(lead)` and
+   stamps **`sold_by_user_id`** — the existing seller field — **once, frozen forever**:
+   - the paid session's creator, if they were Ready to Sell when they made it (or are the admin) → that creator;
+   - no session on the payment (a manual Mark Paid) → the most recent sign-up link's creator, same test;
+   - no sign-up link at all and the lead is Paul's (or nobody's) → Paul, exactly as before (admin never reviewed);
+   - otherwise → **NO seller** (`sold_by_user_id` stays empty; `sold_at` records that it was decided) and an
+     **ATTRIBUTION REVIEW NEEDED** row in `sale_attribution_reviews`, plus a security event.
+
+**Abnormal = review** (never Paul, never the current owner, nothing rewritten): `no_authorised_creator` (no link
+by an authorised person; the owner is only the *claimed* seller), `creator_not_authorised` (the link's creator
+was not Ready to Sell when they made it), `claimed_seller_mismatch` (a seller written with the payment does not
+match the creator evidence). The review keeps: the paid session, the creation record, every link on the lead,
+the owner at payment, the owner history (adds / claims / assignments), and the claimed seller's readiness.
+Paul resolves once on the Team page: **Confirm seller** (the claimed seller is stamped — then frozen — and filled
+into that lead's ledger rows that had no seller, so the normal commission rules apply) or **Not credited** (no
+seller is ever stamped; the claimed seller and evidence stay on the review).
+
+**Immutable:** reassignment, a rep becoming not ready, being disabled or leaving, later payments, status changes,
+and a direct attempt to write `sold_by_user_id` or `paid_checkout_session_id` all leave the stamp as it was. A held
+sale gets a seller only through Paul's resolution. Historic stamps are never re-read (proven live: same sellers,
+same count).
+
+### The interface Session F (commission) must consume
+
+- **`public.sale_attribution_held(lead_id uuid) → boolean`** (service role). TRUE ⇔ the lead's review is
+  `open` or `not_credited` ⇒ the sale must NOT produce salesperson commission. FALSE after `confirmed`, or when
+  the lead has no review ⇒ the normal commission rules apply to the preserved seller.
+- **`public.sale_attribution_holds`** (view, service role): `lead_id, review_status, claimed_seller_user_id,
+  reason, held, created_at, resolved_at` — one row per reviewed lead, for reading a whole ledger at once.
+- **`src/lib/saleAttribution.ts`**: `ATTRIBUTION_HELD_STATUSES = ['open', 'not_credited']`,
+  `isAttributionHeld(status)` (an unknown status is held) — the TypeScript mirror, pinned to the SQL by tests.
+- The seller to credit is `outreach_leads.sold_by_user_id` (and `payment_ledger.sold_by_user_id`). A held sale has
+  NO seller stamped, so today's commission code (which needs a seller) already pays nobody; Session F should still
+  read the hold explicitly. No commission calculation was changed here.
 
 ## 4. Right to work — factual
 
@@ -158,19 +184,22 @@ login. Commission does not read any of it.
   display-only), `scripts/tps-check.test.ts` (postponed: no provider, no API, not in the gate, no call block),
   `scripts/business-type.test.ts`.
 - `supabase/tests/salesperson-onboarding-rls.sql` — run live 2026-10-05 with the migration prepended inside
-  one rolled-back transaction: **57/57**. Read back afterwards: no table, function, fake user, borrowed lead, QA payment link or
+  one rolled-back transaction: **70/70**. Read back afterwards: no table, function, fake user, borrowed lead, QA payment link or
   security event left; the live `guard_action` unchanged.
 - ⚠️ Older live SQL tests that act as fake salespeople (`supabase/tests/*.sql`) will now see those fake
   users refused as not onboarded; give their fixtures a complete onboarding row before re-running them.
 
 ## 9. To ship (NOT done — no merge, no deploy)
 
-1. Apply the migration; read back the tables (incl. sale_attribution_reviews), the functions, the triggers (incl.
-   trg_outreach_leads_attribution_review), the grants,
-   `pg_policies`, and that `guard_action` contains `not_onboarded`.
-2. Deploy fns `admin-users` and `quick-close` (the only edge functions changed; `quick-close` now imports
-   `_shared/sales-ready.ts`).
-3. Release the SPA (Team panel + Documents, the banner, permissions).
-4. Hand Session F (commission) public.sale_attribution_held(): a held sale must not earn automatically.
+1. **Apply the migration FIRST.** ⛔ stripe-webhook now writes `outreach_leads.paid_checkout_session_id`; deployed
+   before the column exists, the payment write would fail. Read back: the tables (incl. `sale_creations`,
+   `sale_attribution_reviews`), the new column, the functions, the triggers (incl.
+   `trg_quick_close_events_sale_creation`, `trg_outreach_leads_attribution_review`, the replaced
+   `trg_outreach_leads_sold_by` body), the grants, `pg_policies`, and that `guard_action` contains `not_onboarded`.
+2. Deploy the edge functions that changed or reach a changed module: `stripe-webhook` (passes the paid session),
+   `quick-close` (the gate; imports `_shared/sales-ready.ts`), `admin-users` (onboarding, documents, reviews),
+   `client-agreement` and `paid-client-hub` (both import the changed `src/lib/paymentState.ts`; behaviour unchanged).
+3. Release the SPA (Team panel, Documents, attribution reviews, the banner, permissions).
+4. Session F wires `sale_attribution_held` / `sale_attribution_holds` into commission (§3a).
 5. Before any real salesperson starts: add and approve the final contractor agreement and the completed
    privacy notice, then record each person's onboarding.

@@ -614,10 +614,9 @@ serve(async (req) => {
     /* DOCUMENT VERSIONS (2026-10-05): Paul adds the final agreement / notice himself and approves it.
        A new version is always a DRAFT; approving needs every outstanding item resolved and supersedes the
        previous approved version of that kind (public.approve_salesperson_document, one transaction). */
-    /* ATTRIBUTION REVIEWS (2026-10-05): a sale that landed on a salesperson who was not authorised to create
-       it is held (sale_attribution_reviews), never moved to Paul. Paul decides: 'confirmed' (it stands) or
-       'not_credited'. The stamped seller is never rewritten; commission (Session F) reads
-       public.sale_attribution_held(). */
+    /* ATTRIBUTION REVIEWS (2026-10-05): a client paid with no AUTHORISED sale creator on record, so no seller
+       was stamped (never Paul, never the current owner). Paul decides once: 'confirmed' (the claimed seller
+       becomes the seller, frozen) or 'not_credited'. Commission (Session F) reads sale_attribution_held(). */
     if (action === 'attribution_reviews_list') {
       const { data, error } = await serviceClient.from('sale_attribution_reviews')
         .select('lead_id, claimed_seller_user_id, reason, evidence, status, resolution_note, resolved_at, created_at')

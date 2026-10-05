@@ -4,13 +4,14 @@
       assignment trigger and quick-close; attribution is never rewritten (abnormal sales are held for review). This suite fences that each piece is
       there, that the admin is exempt everywhere, that no WhatsApp code was touched, and that business
       type stays display-only. Its BEHAVIOUR is proven live by supabase/tests/salesperson-onboarding-rls.sql
-      (rolled back; 57/57 on 2026-10-05).
+      (rolled back; 70/70 on 2026-10-05).
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { leadPermissions } from "../src/lib/access.ts";
 import { refusalText } from "../src/lib/salesCrm.ts";
 import { SEED_DOCUMENT_VERSIONS } from "../src/lib/salespersonOnboarding.ts";
+import { ATTRIBUTION_HELD_STATUSES, isAttributionHeld } from "../src/lib/saleAttribution.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -44,24 +45,48 @@ console.log("\n── the database gates ──");
   const asg = fnBody("trg_outreach_leads_assign_ready");
   ok(/auth\.uid\(\) is null then return new/.test(asg) && /role = 'admin'\) then return new/.test(asg), "assignment: signed-in sessions only; an admin assignee is never gated");
   ok(/before insert or update of assigned_to_user_id on public\.outreach_leads/.test(MIG), "assignment: claims, sales adds and admin assigns all pass through it");
-  /* ATTRIBUTION (corrected 2026-10-05): Ready to Sell gates CREATING a sale; the seller is never rewritten. */
+  /* ATTRIBUTION (Paul, 2026-10-05): SALE CREATOR ≠ CURRENT LEAD OWNER. */
   const live = strip(MIG.replace(/^\s*--.*$/gm, ""));
-  ok(!/sold_by_user_id\s*:=/.test(live) && !/set\s+sold_by_user_id\s*=/i.test(live), "attribution: nothing in this migration writes the seller (no transfer to Paul, no rewrite)");
-  ok(/drop trigger if exists trg_outreach_leads_sold_by_ready/.test(MIG) && !/create trigger trg_outreach_leads_sold_by_ready/.test(MIG), "attribution: the earlier 'credit it to Paul' trigger is gone");
+  const stamp = fnBody("trg_outreach_leads_sold_by");
+  const decision = fnBody("sale_attribution_decision");
+  ok(/if old\.sold_by_user_id is not null then\s+new\.sold_by_user_id := old\.sold_by_user_id;/.test(stamp), "stamp: a seller, once stamped, never changes (history and later events cannot move it)");
+  ok(/if old\.paid_checkout_session_id is not null then new\.paid_checkout_session_id := old\.paid_checkout_session_id/.test(stamp), "stamp: the paid session is write-once too");
+  ok(/current_setting\('app\.attribution_resolve', true\) is distinct from new\.id::text then\s+new\.sold_by_user_id := null/.test(stamp), "stamp: a held sale gets a seller ONLY through Paul's resolution");
+  ok(/new\.sold_by_user_id := nullif\(d ->> 'seller', ''\)::uuid/.test(stamp) && !/coalesce\(new\.assigned_to_user_id, new\.user_id\)/.test(stamp), "stamp: the seller comes from the decision — never 'whoever owns the lead now'");
+  ok(/where checkout_session_id = _lead\.paid_checkout_session_id/.test(decision), "decision: the PAID checkout session finds its creator first");
+  ok(/c\.creator_role = 'admin' or c\.creator_ready is true/.test(decision), "decision: only a creator who was Ready to Sell (or the admin) when the link was made is authorised");
+  ok(/v_reason := 'no_authorised_creator'; v_claimed := v_owner;/.test(decision), "decision: no authorised creator + a salesperson owner → review, the owner only CLAIMED");
+  ok(/v_seller := v_owner; v_source := 'owner_admin';/.test(decision) && /role = 'admin'\)/.test(decision), "decision: Paul's own sales stamp to him exactly as before");
+  for (const k of ["owner_history", "all_links", "owner_at_payment", "creation", "paid_checkout_session"]) ok(decision.includes(`'${k}'`), `review evidence keeps: ${k}`);
+  const snap = fnBody("trg_quick_close_events_sale_creation");
+  ok(/new\.kind <> 'link_generated'/.test(snap) && /public\.salesperson_ready_to_sell\(new\.actor_user_id\)/.test(snap), "creation: every sign-up link is snapshotted with its creator's readiness at that moment");
+  ok(/sale_creations is append-only/.test(MIG) && /references public\.quick_close_events\(id\)/.test(MIG), "creation: the snapshot is append-only and tied to the immutable link log");
+  ok(/case when exists \(select 1 from public\.user_roles r where r\.user_id = e\.actor_user_id and r\.role = 'admin'\) then true else null end/.test(MIG), "history: links made before this rule are evidence with readiness UNKNOWN, never 'ready'");
   const review = fnBody("trg_outreach_leads_attribution_review");
-  ok(/old\.sold_by_user_id is not null then return new/.test(review), "review: only the FIRST stamp is looked at (historic sales untouched)");
-  ok(/salesperson_ready_to_sell\(v_seller\) then return new/.test(review), "review: a seller who is ready at payment is never flagged");
-  ok(/e\.actor_user_id = v_seller and e\.kind in \('link_generated', 'link_reused'\)/.test(review), "review: a payment link the seller created (only possible while ready) is the creation evidence");
-  ok(/role = 'admin'\) then return new/.test(review), "review: the admin's sales are never flagged");
-  ok(/insert into public\.sale_attribution_reviews/.test(review) && /'attribution_review_needed'/.test(review), "review: an abnormal sale is HELD (review row + security event), not credited elsewhere");
-  ok(/after insert or update of amount_paid, status, sold_by_user_id, sold_at on public\.outreach_leads/.test(MIG), "review: runs AFTER the existing stamp, reading the final seller");
-  ok(/status in \('open', 'not_credited'\)/.test(fnBody("sale_attribution_held")), "held = an open review or Paul's 'not credited' (the one question for the commission rules)");
+  ok(/tg_op = 'UPDATE' and old\.sold_at is not null then return new/.test(review), "review: only the first decision opens one (history untouched)");
+  ok(/'claimed_seller_mismatch'/.test(review) && /'attribution_review_needed'/.test(review), "review: a mismatch between the claimed seller and the creator evidence is held too, with a security event");
+  ok(/drop trigger if exists trg_outreach_leads_sold_by_ready/.test(MIG) && !/create trigger trg_outreach_leads_sold_by_ready/.test(MIG), "the earlier 'credit it to Paul' trigger is gone");
+  /* The webhook carries the paid session in the SAME write that makes the lead a client. */
+  const wh = read("supabase/functions/stripe-webhook/index.ts");
+  ok(/establishLeadPayment\(service, findableLeadId, \{[\s\S]{0,400}checkoutSessionId: s\.id,/.test(wh), "stripe-webhook passes the paid checkout session with the payment");
+  const ps = read("src/lib/paymentState.ts");
+  ok(/paid_checkout_session_id: p\.checkoutSessionId/.test(ps.slice(ps.indexOf("export function firstPaymentPatch"))), "…and the first-payment patch writes it in the same update");
+  /* The hold: one rule, SQL and TypeScript in step. */
+  ok(/status in \('open', 'not_credited'\)/.test(fnBody("sale_attribution_held")), "held = an open review or Paul's 'not credited' (SQL)");
+  ok(/status in \('open', 'not_credited'\) as held/.test(MIG) && /grant select on public\.sale_attribution_holds to service_role/.test(MIG), "the bulk view says the same and is service-role only");
+  ok(JSON.stringify([...ATTRIBUTION_HELD_STATUSES]) === JSON.stringify(["open", "not_credited"]), "held statuses (TypeScript) = the SQL's");
+  ok(isAttributionHeld("open") && isAttributionHeld("not_credited") && !isAttributionHeld("confirmed") && !isAttributionHeld(null) && isAttributionHeld("something_new"),
+    "isAttributionHeld: open / not credited held, confirmed and no review not held, an unknown status held");
+  const resolve = fnBody("resolve_sale_attribution_review");
+  ok(/r\.status <> 'open' then return jsonb_build_object\('ok', false, 'error', 'no_open_review'\)/.test(resolve), "resolve: one decision only");
+  ok(/update public\.payment_ledger set sold_by_user_id = r\.claimed_seller_user_id where lead_id = _lead_id and sold_by_user_id is null/.test(resolve),
+    "confirm: the seller is filled only into this lead's ledger rows that had none (the commission rules then apply as normal)");
   const au = read("supabase/functions/admin-users/index.ts");
   ok(au.indexOf("'attribution_review_resolve'") > au.indexOf("Not authorized - no admin role") && /resolve_sale_attribution_review/.test(au), "resolve: an explicit admin-only action");
-  for (const f of ["src/lib/commission.ts", "supabase/functions/_shared/earnings.ts", "supabase/functions/_shared/payment-ledger.ts", "supabase/functions/stripe-webhook/index.ts"]) {
-    ok(!/salesperson_ready|sale_attribution|not_onboarded|salespersonOnboarding/.test(read(f)), `commission stays Session F's: ${f} is untouched by this work`);
+  for (const f of ["src/lib/commission.ts", "supabase/functions/_shared/earnings.ts", "supabase/functions/_shared/payment-ledger.ts"]) {
+    ok(!/salesperson_ready|sale_attribution|not_onboarded|salespersonOnboarding|sale_creations/.test(read(f)), `commission stays Session F's: ${f} is untouched by this work`);
   }
-  ok(!/payment_ledger|commission_rule|commission_rate/.test(live.replace(/create or replace function public\.guard_action[\s\S]*$/, "")), "no commission calculation or ledger row is changed here");
+  ok(!/commission_rule|commission_rate|stamp_monthly_commission/.test(live.replace(/create or replace function public\.guard_action[\s\S]*$/, "")), "no commission calculation is changed here");
   ok(/function public\.my_acknowledge_team_guide/.test(MIG) && /function public\.my_onboarding_status/.test(MIG), "a not-ready rep can see their status and acknowledge the guide");
 }
 

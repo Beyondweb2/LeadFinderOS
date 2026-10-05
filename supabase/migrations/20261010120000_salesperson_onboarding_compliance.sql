@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 -- SALESPERSON ONBOARDING + THE READY-TO-SELL GATE (2026-10-05, docs/salesperson-onboarding.md).
--- Additive and idempotent, except ONE replaced function: public.guard_action (the live body, unchanged,
--- plus the 'not_onboarded' refusal — section 7). No WhatsApp function, template, queue rule or opt-out is
+-- Additive and idempotent, except TWO replaced function bodies: public.guard_action (the live body,
+-- unchanged, plus the 'not_onboarded' refusal) and public.trg_outreach_leads_sold_by (section 5). No WhatsApp function, template, queue rule or opt-out is
 -- changed; a salesperson who is not Ready to Sell is refused the way a suspended one already is.
 --
 -- 1. salesperson_document_versions — every contractor agreement / privacy notice / team guide version,
@@ -16,15 +16,17 @@
 --    · lead_activity: a not-ready salesperson acting in their own session may only write notes, opt-outs,
 --      give leads back, and finish handoffs for sales already made (calls, contacts, stages… refused);
 --    · outreach_leads: a lead cannot be assigned to a not-ready salesperson by a signed-in session;
---    · Ready to Sell gates CREATING a sale (quick-close save / link / share, claims, outreach). Seller
---      attribution is NOT rewritten: the existing stamp (sold_by_user_id, set once at payment, immutable)
---      stands, and the Quick Close link the seller generated is the creation evidence. A sale that lands on
---      a salesperson who was not authorised to create it is HELD FOR ADMIN REVIEW
---      (sale_attribution_reviews) — never moved to Paul, never rewritten. Commission is Session F's.
+--    · Ready to Sell gates CREATING a sale (quick-close save / link / share, claims, outreach).
 --    The admin is never gated.
--- 5. phone_tps_checks — DORMANT groundwork (TPS/CTPS postponed by Paul 2026-10-05): nothing writes it,
+-- 5. SELLER ATTRIBUTION = THE AUTHORISED CREATOR OF THE SALE, not the lead's owner at payment: the paid
+--    Stripe Checkout Session → the Quick Close link that created it (sale_creations, snapshotted with the
+--    creator's readiness) → sold_by_user_id, stamped once and frozen. ONE replaced function body:
+--    trg_outreach_leads_sold_by (same trigger + paid_checkout_session_id). No authorised creator → no
+--    seller, ATTRIBUTION REVIEW NEEDED (sale_attribution_reviews); Paul resolves. Commission is Session F's:
+--    sale_attribution_held(lead) / view sale_attribution_holds.
+-- 6. phone_tps_checks — DORMANT groundwork (TPS/CTPS postponed by Paul 2026-10-05): nothing writes it,
 --    nothing reads it to allow or block anything.
--- 6. lead_business_type_records — display / evidence only.
+-- 7. lead_business_type_records — display / evidence only.
 -- ════════════════════════════════════════════════════════════════════════════════════════════════
 
 -- ── 1. document versions ────────────────────────────────────────────────────────────────────────────
@@ -344,78 +346,245 @@ drop trigger if exists trg_outreach_leads_assign_ready on public.outreach_leads;
 create trigger trg_outreach_leads_assign_ready before insert or update of assigned_to_user_id on public.outreach_leads
   for each row execute function public.trg_outreach_leads_assign_ready();
 
-/* ATTRIBUTION (corrected, Paul 2026-10-05): Ready to Sell gates CREATING a sale, never who a sale
-   belongs to afterwards.
-   ⛔ THE SELLER IS NEVER REWRITTEN HERE. trg_outreach_leads_sold_by (existing) stamps sold_by_user_id once,
-      when the lead first becomes a client, and freezes it; nothing in this migration changes that stamp,
-      so a rep who created a sale while ready keeps it if they later become not ready, are disabled, or the
-      client pays days later.
-   ⛔ THE CREATION EVIDENCE ALREADY EXISTS: a Quick Close payment link the seller generated for the lead
-      (quick_close_events 'link_generated' / 'link_reused' — server-written, server-timed; the commission
-      code already reads it). Since this migration, quick-close refuses a not-ready salesperson, so such
-      an event proves they were authorised when they created the sale.
-   ⛔ AN ABNORMAL SALE IS HELD FOR REVIEW, NOT MOVED: if the stamped seller is a salesperson (or an ex-one)
-      who is NOT Ready to Sell at payment AND generated no payment link for this lead, one
-      sale_attribution_reviews row is opened (status 'open' = ATTRIBUTION REVIEW NEEDED) with the evidence,
-      plus a security event. The seller stays as stamped; nobody else is credited; Paul resolves it
-      (resolve_sale_attribution_review). Whether anyone is PAID stays with the commission rules (Session F):
-      sale_attribution_held() is the one question they ask. Historic stamps are never looked at (only the
-      first stamp, made in the same statement). */
+/* ══ SELLER ATTRIBUTION = THE AUTHORISED CREATOR OF THE SALE (Paul, 2026-10-05) ═══════════════════════
+   SALE CREATOR ≠ CURRENT LEAD OWNER. Once a legitimate sign-up exists, the seller follows the person who
+   CREATED it while authorised — never who owns the lead when the client pays.
+
+   The chain: Quick Close → generate_link → findable-checkout makes a Stripe Checkout Session → quick-close
+   logs 'link_generated' (actor = creator, data.session = the session; quick_close_events is server-written
+   and immutable) → THIS FILE snapshots it into sale_creations WITH the creator's role and Ready-to-Sell
+   state at that moment (append-only) → the client pays that session → stripe-webhook writes
+   paid_checkout_session_id in the SAME update that marks the lead paid → trg_outreach_leads_sold_by stamps
+   sold_by_user_id = that session's creator, once, frozen forever.
+
+   ⛔ IMMUTABLE: a stamped seller never changes (reassignment, not-ready, disabled, leaving, later payments,
+      status changes). Historic stamps are never re-read.
+   ⛔ NO SILENT DEFAULT: when there is no authorised creator — or a claimed seller does not match the
+      creator evidence — the seller is LEFT EMPTY (sold_at marks that attribution was decided) and one
+      sale_attribution_reviews row opens: ATTRIBUTION REVIEW NEEDED. Never Paul, never the current owner.
+      With no seller, the commission code finds nobody to pay (it requires a seller).
+   ⛔ PAUL'S OWN SALES are unchanged: a lead he (or nobody) owns, with no salesperson's link, is stamped to
+      the owner exactly as before. The admin is never reviewed.
+   Commission rules stay Session F's: sale_attribution_held(lead) / view sale_attribution_holds. */
+
 drop trigger if exists trg_outreach_leads_sold_by_ready on public.outreach_leads;
 drop function if exists public.trg_outreach_leads_sold_by_ready();
 
+alter table public.outreach_leads add column if not exists paid_checkout_session_id text;
+comment on column public.outreach_leads.paid_checkout_session_id is
+  'The Stripe Checkout Session the first payment came through (stripe-webhook, with the payment). The seller is that session''s creator (sale_creations). Write-once.';
+
+-- ── the creation snapshot ──────────────────────────────────────────────────────────────────────────
+create table if not exists public.sale_creations (
+  event_id uuid primary key references public.quick_close_events(id) on delete restrict,
+  checkout_session_id text unique,
+  lead_id uuid not null,
+  onboarding_id uuid,
+  creator_user_id uuid not null,
+  creator_role text check (creator_role in ('admin', 'sales')),
+  /* Ready to Sell when the link was made. NULL = made before this rule existed (unknown, never "yes"). */
+  creator_ready boolean,
+  creator_missing text[],
+  created_at timestamptz not null default now()
+);
+create index if not exists sale_creations_lead on public.sale_creations (lead_id, created_at desc);
+alter table public.sale_creations enable row level security;
+revoke all on public.sale_creations from public, anon, authenticated;
+
+create or replace function public.sale_creations_append_only()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'sale_creations is append-only';
+end $$;
+drop trigger if exists sale_creations_no_change on public.sale_creations;
+create trigger sale_creations_no_change before update or delete on public.sale_creations
+  for each row execute function public.sale_creations_append_only();
+drop trigger if exists sale_creations_no_truncate on public.sale_creations;
+create trigger sale_creations_no_truncate before truncate on public.sale_creations
+  for each statement execute function public.sale_creations_append_only();
+
+create or replace function public.trg_quick_close_events_sale_creation()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_role text;
+begin
+  if new.kind <> 'link_generated' or new.actor_user_id is null or new.lead_id is null then return new; end if;
+  select case when bool_or(role::text = 'admin') then 'admin' when bool_or(role::text = 'sales') then 'sales' end
+    into v_role from public.user_roles where user_id = new.actor_user_id;
+  insert into public.sale_creations (event_id, checkout_session_id, lead_id, onboarding_id, creator_user_id, creator_role, creator_ready, creator_missing, created_at)
+  values (new.id, nullif(new.data ->> 'session', ''), new.lead_id, new.onboarding_id, new.actor_user_id, v_role,
+          case when v_role = 'admin' then true when v_role = 'sales' then public.salesperson_ready_to_sell(new.actor_user_id) else false end,
+          case when v_role = 'sales' then public.salesperson_onboarding_missing(new.actor_user_id) else null end,
+          new.created_at)
+  on conflict do nothing;
+  return new;
+end $$;
+revoke all on function public.trg_quick_close_events_sale_creation() from public, anon, authenticated;
+drop trigger if exists trg_quick_close_events_sale_creation on public.quick_close_events;
+create trigger trg_quick_close_events_sale_creation after insert on public.quick_close_events
+  for each row execute function public.trg_quick_close_events_sale_creation();
+
+-- Links made before this rule: kept as evidence with readiness UNKNOWN (never counted as authorised).
+insert into public.sale_creations (event_id, checkout_session_id, lead_id, onboarding_id, creator_user_id, creator_role, creator_ready, creator_missing, created_at)
+select e.id, nullif(e.data ->> 'session', ''), e.lead_id, e.onboarding_id, e.actor_user_id,
+       (select case when bool_or(role::text = 'admin') then 'admin' when bool_or(role::text = 'sales') then 'sales' end from public.user_roles r where r.user_id = e.actor_user_id),
+       case when exists (select 1 from public.user_roles r where r.user_id = e.actor_user_id and r.role = 'admin') then true else null end,
+       null, e.created_at
+  from public.quick_close_events e
+ where e.kind = 'link_generated' and e.actor_user_id is not null and e.lead_id is not null
+on conflict do nothing;
+
+-- ── the decision (ONE function; the stamp and the review both ask it) ───────────────────────────────
+/* For a lead becoming a client: who sold it, or why it needs review. Keys: seller (uuid or null),
+   source, review_reason (null = no review), claimed_seller, evidence. */
+create or replace function public.sale_attribution_decision(_lead public.outreach_leads)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  c public.sale_creations%rowtype;
+  v_found boolean := false;
+  v_owner uuid := coalesce(_lead.assigned_to_user_id, _lead.user_id);
+  v_owner_is_paul boolean;
+  v_seller uuid;
+  v_source text;
+  v_reason text;
+  v_claimed uuid;
+  v_evidence jsonb;
+begin
+  if _lead.paid_checkout_session_id is not null then
+    select * into c from public.sale_creations where checkout_session_id = _lead.paid_checkout_session_id;
+    v_found := found;
+  else
+    -- No session on the payment (a manual Mark Paid): the most recent sign-up link made for this lead.
+    select * into c from public.sale_creations where lead_id = _lead.id order by created_at desc limit 1;
+    v_found := found;
+  end if;
+  v_owner_is_paul := v_owner = _lead.user_id
+    or exists (select 1 from public.user_roles where user_id = v_owner and role = 'admin')
+    or not exists (select 1 from public.team_members where user_id = v_owner);
+  if v_found and (c.creator_role = 'admin' or c.creator_ready is true) then
+    v_seller := c.creator_user_id; v_source := 'sale_creator';
+  elsif v_found then
+    v_reason := 'creator_not_authorised'; v_claimed := c.creator_user_id;
+  elsif v_owner_is_paul then
+    v_seller := v_owner; v_source := 'owner_admin';
+  else
+    v_reason := 'no_authorised_creator'; v_claimed := v_owner;
+  end if;
+  v_evidence := jsonb_build_object(
+    'paid_checkout_session', _lead.paid_checkout_session_id,
+    'creation', case when v_found then jsonb_build_object('event_id', c.event_id, 'session', c.checkout_session_id, 'creator', c.creator_user_id,
+                 'creator_role', c.creator_role, 'creator_ready', c.creator_ready, 'creator_missing', to_jsonb(c.creator_missing), 'at', c.created_at) end,
+    'owner_at_payment', v_owner,
+    'all_links', (select coalesce(jsonb_agg(jsonb_build_object('creator', s.creator_user_id, 'session', s.checkout_session_id, 'ready', s.creator_ready, 'at', s.created_at) order by s.created_at), '[]'::jsonb)
+                    from public.sale_creations s where s.lead_id = _lead.id),
+    'owner_history', (select coalesce(jsonb_agg(jsonb_build_object('kind', a.kind, 'by', a.actor_user_id, 'data', a.data, 'at', a.created_at) order by a.created_at), '[]'::jsonb)
+                        from public.lead_activity a where a.lead_id = _lead.id and a.kind in ('lead_added', 'lead_claimed', 'lead_assigned', 'lead_unassigned')));
+  return jsonb_build_object('seller', v_seller, 'source', v_source, 'review_reason', v_reason, 'claimed_seller', coalesce(v_claimed, v_seller), 'evidence', v_evidence);
+end $$;
+revoke all on function public.sale_attribution_decision(public.outreach_leads) from public, anon, authenticated;
+
+-- ── the stamp (REPLACES the existing trg_outreach_leads_sold_by body; same trigger, one more column) ──
+create or replace function public.trg_outreach_leads_sold_by()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  d jsonb;
+  v_claimed uuid;
+begin
+  if tg_op = 'UPDATE' then
+    -- The payment session is write-once, like the seller.
+    if old.paid_checkout_session_id is not null then new.paid_checkout_session_id := old.paid_checkout_session_id; end if;
+    -- ⛔ IMMUTABLE: a seller, once stamped, never changes.
+    if old.sold_by_user_id is not null then
+      new.sold_by_user_id := old.sold_by_user_id;
+      new.sold_at := old.sold_at;
+      return new;
+    end if;
+    -- Attribution was decided with NO seller (held for review): only Paul's explicit resolution sets one.
+    if old.sold_at is not null then
+      if new.sold_by_user_id is not null and current_setting('app.attribution_resolve', true) is distinct from new.id::text then
+        new.sold_by_user_id := null;
+      end if;
+      new.sold_at := old.sold_at;
+      return new;
+    end if;
+  end if;
+  if not public.lead_is_client(new.amount_paid, new.status) then return new; end if;
+  d := public.sale_attribution_decision(new);
+  v_claimed := new.sold_by_user_id;   -- a seller written explicitly with the payment (not the normal path)
+  if v_claimed is not null and v_claimed is distinct from nullif(d ->> 'seller', '')::uuid then
+    new.sold_by_user_id := null;      -- held: the review trigger records the mismatch
+    perform set_config('app.attribution_claimed', v_claimed::text, true);
+  else
+    new.sold_by_user_id := nullif(d ->> 'seller', '')::uuid;
+  end if;
+  new.sold_at := now();
+  return new;
+end $$;
+revoke all on function public.trg_outreach_leads_sold_by() from public, anon, authenticated;
+drop trigger if exists trg_outreach_leads_sold_by on public.outreach_leads;
+create trigger trg_outreach_leads_sold_by before insert or update of amount_paid, status, sold_by_user_id, sold_at, paid_checkout_session_id
+  on public.outreach_leads for each row execute function public.trg_outreach_leads_sold_by();
+
+-- ── the review ──────────────────────────────────────────────────────────────────────────────────────
 create table if not exists public.sale_attribution_reviews (
   lead_id uuid primary key references public.outreach_leads(id) on delete cascade,
-  claimed_seller_user_id uuid not null,
-  reason text not null check (reason in ('seller_not_authorised')),
+  claimed_seller_user_id uuid,
+  reason text not null check (reason in ('no_authorised_creator', 'creator_not_authorised', 'claimed_seller_mismatch')),
   evidence jsonb not null default '{}'::jsonb,
   status text not null default 'open' check (status in ('open', 'confirmed', 'not_credited')),
   resolution_note text check (char_length(resolution_note) <= 500),
   resolved_by uuid references auth.users(id) on delete set null,
   resolved_at timestamptz,
   created_at timestamptz not null default now(),
-  constraint sale_attribution_reviews_resolution check ((status = 'open') = (resolved_at is null))
+  constraint sale_attribution_reviews_resolution check ((status = 'open') = (resolved_at is null)),
+  constraint sale_attribution_reviews_confirm_needs_seller check (status <> 'confirmed' or claimed_seller_user_id is not null)
 );
 alter table public.sale_attribution_reviews enable row level security;
 revoke all on public.sale_attribution_reviews from public, anon, authenticated;
 
+/* AFTER the stamp: a first decision that left NO seller opens the review, with all the evidence. */
 create or replace function public.trg_outreach_leads_attribution_review()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  v_seller uuid := new.sold_by_user_id;
-  v_links jsonb;
+  d jsonb;
+  v_reason text;
+  v_claimed uuid;
+  v_explicit uuid;
 begin
-  if v_seller is null then return new; end if;
-  if tg_op = 'UPDATE' and old.sold_by_user_id is not null then return new; end if;   -- not the first stamp: history
-  if exists (select 1 from public.user_roles where user_id = v_seller and role = 'admin') then return new; end if;
-  if not exists (select 1 from public.team_members where user_id = v_seller) then return new; end if;
-  if public.salesperson_ready_to_sell(v_seller) then return new; end if;               -- authorised now
-  if exists (select 1 from public.quick_close_events e
-              where e.lead_id = new.id and e.actor_user_id = v_seller and e.kind in ('link_generated', 'link_reused')) then
-    return new;                                                                          -- created the sale while authorised
+  if new.sold_at is null or new.sold_by_user_id is not null then return new; end if;
+  if tg_op = 'UPDATE' and old.sold_at is not null then return new; end if;     -- decided before: history
+  d := public.sale_attribution_decision(new);
+  v_reason := d ->> 'review_reason';
+  v_claimed := nullif(d ->> 'claimed_seller', '')::uuid;
+  if v_reason is null then
+    -- The decision found a seller, so the stamp left it empty because a different seller was written explicitly.
+    v_reason := 'claimed_seller_mismatch';
+    v_explicit := nullif(current_setting('app.attribution_claimed', true), '')::uuid;
+    d := jsonb_set(d, '{evidence,creator_evidence_seller}', coalesce(to_jsonb(v_claimed), 'null'::jsonb));
+    v_claimed := v_explicit;
+    perform set_config('app.attribution_claimed', '', true);
   end if;
-  select coalesce(jsonb_agg(jsonb_build_object('kind', e.kind, 'actor', e.actor_user_id, 'at', e.created_at) order by e.created_at), '[]'::jsonb)
-    into v_links from public.quick_close_events e where e.lead_id = new.id and e.kind in ('link_generated', 'link_reused');
   insert into public.sale_attribution_reviews (lead_id, claimed_seller_user_id, reason, evidence)
-  values (new.id, v_seller, 'seller_not_authorised', jsonb_build_object(
-    'missing_at_payment', to_jsonb(public.salesperson_onboarding_missing(v_seller)),
-    'assigned_to', new.assigned_to_user_id, 'payment_links', v_links, 'stamped_at', now()))
+  values (new.id, v_claimed, v_reason, (d -> 'evidence') || jsonb_build_object(
+    'claimed_seller_readiness', case when v_claimed is null then null else to_jsonb(public.salesperson_onboarding_missing(v_claimed)) end,
+    'decided_at', now()))
   on conflict (lead_id) do nothing;
   insert into public.security_events (actor_user_id, actor_role, kind, severity, action, lead_id, detail, alert_key, alert_wanted)
-  values (v_seller, 'sales', 'attribution_review_needed', 'warning', 'sale_attribution', new.id,
-          jsonb_build_object('claimed_seller', v_seller, 'missing', to_jsonb(public.salesperson_onboarding_missing(v_seller))),
+  values (v_claimed, null, 'attribution_review_needed', 'warning', 'sale_attribution', new.id,
+          jsonb_build_object('reason', v_reason, 'claimed_seller', v_claimed),
           'attribution_review:' || new.id::text, true)
   on conflict (alert_key) do nothing;
   return new;
 end $$;
 revoke all on function public.trg_outreach_leads_attribution_review() from public, anon, authenticated;
 drop trigger if exists trg_outreach_leads_attribution_review on public.outreach_leads;
-create trigger trg_outreach_leads_attribution_review after insert or update of amount_paid, status, sold_by_user_id, sold_at on public.outreach_leads
-  for each row execute function public.trg_outreach_leads_attribution_review();
+create trigger trg_outreach_leads_attribution_review after insert or update of amount_paid, status, sold_by_user_id, sold_at, paid_checkout_session_id
+  on public.outreach_leads for each row execute function public.trg_outreach_leads_attribution_review();
 
-/* Is this sale's attribution held? True while a review is open, or after Paul decided it is not credited
-   to the salesperson. THE question the commission rules (Session F) ask; this migration does not change
-   any commission calculation. */
+-- ── THE INTERFACE FOR THE COMMISSION RULES (Session F) ──────────────────────────────────────────────
+/* HELD = must NOT produce salesperson commission: a review is OPEN, or Paul decided NOT CREDITED.
+   After CONFIRM SELLER it is not held and the preserved seller follows the normal commission rules.
+   (Independently, a held sale has no seller stamped, so today's commission code already pays nobody.) */
 create or replace function public.sale_attribution_held(_lead_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.sale_attribution_reviews where lead_id = _lead_id and status in ('open', 'not_credited'))
@@ -423,18 +592,37 @@ $$;
 revoke all on function public.sale_attribution_held(uuid) from public, anon, authenticated;
 grant execute on function public.sale_attribution_held(uuid) to service_role;
 
-/* Paul resolves a review explicitly (fn admin-users, after its admin check). The stamped seller is never
-   rewritten (the product does not support moving a seller): 'confirmed' = the attribution stands;
-   'not_credited' = the salesperson is not credited for this sale. Each review is resolved once. */
+/* The same, for a whole ledger at once (service role only): one row per lead that has a review. */
+create or replace view public.sale_attribution_holds with (security_invoker = true) as
+  select lead_id, status as review_status, claimed_seller_user_id, reason,
+         status in ('open', 'not_credited') as held, created_at, resolved_at
+    from public.sale_attribution_reviews;
+revoke all on public.sale_attribution_holds from public, anon, authenticated;
+grant select on public.sale_attribution_holds to service_role;
+
+/* Paul resolves a review once (fn admin-users, after its admin check).
+   CONFIRM SELLER: the claimed seller becomes the seller — stamped once (then frozen like any other) and
+   filled into this lead's ledger rows that have no seller yet, so the normal commission rules apply.
+   NOT CREDITED: no seller is ever stamped; the review keeps the claimed seller and all the evidence. */
 create or replace function public.resolve_sale_attribution_review(_lead_id uuid, _decision text, _note text, _actor uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  r public.sale_attribution_reviews%rowtype;
 begin
   if _decision is null or _decision not in ('confirmed', 'not_credited') then return jsonb_build_object('ok', false, 'error', 'bad_decision'); end if;
   if char_length(coalesce(_note, '')) > 500 then return jsonb_build_object('ok', false, 'error', 'too_long'); end if;
+  select * into r from public.sale_attribution_reviews where lead_id = _lead_id for update;
+  if not found or r.status <> 'open' then return jsonb_build_object('ok', false, 'error', 'no_open_review'); end if;
+  if _decision = 'confirmed' then
+    if r.claimed_seller_user_id is null then return jsonb_build_object('ok', false, 'error', 'no_claimed_seller'); end if;
+    perform set_config('app.attribution_resolve', _lead_id::text, true);
+    update public.outreach_leads set sold_by_user_id = r.claimed_seller_user_id where id = _lead_id and sold_by_user_id is null;
+    perform set_config('app.attribution_resolve', '', true);
+    update public.payment_ledger set sold_by_user_id = r.claimed_seller_user_id where lead_id = _lead_id and sold_by_user_id is null;
+  end if;
   update public.sale_attribution_reviews
      set status = _decision, resolution_note = nullif(btrim(coalesce(_note, '')), ''), resolved_by = _actor, resolved_at = now()
-   where lead_id = _lead_id and status = 'open';
-  if not found then return jsonb_build_object('ok', false, 'error', 'no_open_review'); end if;
+   where lead_id = _lead_id;
   return jsonb_build_object('ok', true, 'status', _decision);
 end $$;
 revoke all on function public.resolve_sale_attribution_review(uuid, text, text, uuid) from public, anon, authenticated;
