@@ -298,3 +298,39 @@ was hidden inside a folded section (now always visible).
   loads from the new function ("Question 1 of 2": authority, then the approach). No console errors. Nothing was
   answered, created or sent.
 - **Not done live:** a payment link (Stripe) and any campaign write — covered by the rolled-back probe and the suites.
+
+## 12. One real-contact guard for every cold opener (follow-up fix, 5 Oct 2026)
+
+Branch `fix/outreach-whatsapp-contact-guard`, migration `20261008110000_opener_contact_guard.sql`.
+
+**The gap §2 left open.** Campaign launches and the sales queues asked "has this prospect had a genuine
+conversation?"; the admin's Outreach bulk queue and per-lead queue toggle (which write status `queued`
+directly), the drip that sends them, and the one-off template send (`send-whatsapp-message`) did not — they
+checked only WhatsApp history on the number. A lead someone had spoken to on the phone could be sent a cold opener.
+
+**One rule, one function.** `opener_contact_block(lead)` → `contacted_by_phone` | `contacted_logged` | null, built
+on `lead_reached_contact`, whose outcome list is `lead_conversation_outcomes()` = `CONVERSATION_OUTCOMES`
+(spoke to owner, interested, call back, meeting booked, not interested, agency controls the site). Not contact:
+a Call tap / `tel:` (writes nothing), no answer, voicemail, opening the lead, the Interested star on its own.
+Server-only (service role). Every cold-opener door now asks it:
+
+| Door | How |
+|---|---|
+| Campaign launch, the sales bulk queue, the sales per-lead queue | `sales_queue_opener` → `opener_contact_block` (re-created; its other reasons unchanged) |
+| The admin's Outreach bulk queue | `contact_check` (+ `lead_ids`) → `opener_contact_blocks`; those leads are not queued: "N not queued — already contacted by phone — initial opener not queued." |
+| The admin's per-lead queue toggle | the same `contact_check` before queueing; fails closed |
+| The drip, at send time (the enforcement for every way a lead reaches the queue) | `opener_contact_block`; a hit leaves the queue exactly as before it was queued (previous status, `queued_at` cleared, delivery status says why); unreadable → nothing sent, nothing changed |
+| The one-off template send (Inbox, bulk Inbox) | `send-whatsapp-message` → `opener_contact_block`; refused with the reason; **not** overridable by `allow_resend` (that flag confirms repeating a pitch) |
+
+**Only COLD templates are guarded** (`isColdOutreachTemplate`: `initial_contact`, `initial_opener_v2`,
+`video_template`, `competitor_hook`, `book_call` and anything unknown). Continuations — `audit_reply`,
+`audit_reply_warm`, `audit_followup*`, `explain_offer*`, `report_followup`, `contact_followup`,
+`onboarding_followup`, `re_engage_49` — and free-form replies in an open 24-hour window never reach it, so an
+engaged prospect can always be messaged (the call script's "I'll WhatsApp you the report" goes as a continuation).
+
+Nothing else about a refused lead changes: it stays in the CRM and its campaign, its status is what it was before
+queueing, no Next Action is created. A salesperson asking `contact_check` is answered only for their own leads.
+
+Tests: `scripts/opener-contact-guard.test.ts` (each outcome; the star; the tap; one list; every door calls the one
+function; fail-closed; the wording; the untouched fields; continuations and free-form exempt) + `pre-sales-final`
+(the later-migration list). Gate: 312 / 312.

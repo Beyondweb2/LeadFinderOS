@@ -790,13 +790,32 @@ Deno.serve(async (req) => {
        and in send-whatsapp-message; this makes the queue dialog honest before an operator commits.
        A caller that cannot reach this endpoint must fail towards NOT queueing - see the SPA side. */
     if (mode === "contact_check") {
+      /* ══ + THE REAL-CONTACT GUARD, PER LEAD (2026-10-05, opener consistency fix) ══════════════════
+         Sent `lead_ids`, it also answers "has this prospect had a genuine conversation with us?" from the ONE
+         shared rule (SQL opener_contact_block — the same function sales_queue_opener and the drip read).
+         ⛔ A salesperson is answered only for leads assigned to them (no probing other reps' leads).
+         ⛔ Fails closed: an unreadable answer is not "no conversation". */
+      const askedLeads: string[] = (Array.isArray(body.lead_ids) ? body.lead_ids : [])
+        .map((x: unknown) => String(x ?? "")).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 2000);
+      let conversation: Record<string, string> = {};
+      if (askedLeads.length) {
+        let ids = askedLeads;
+        if (salesActor) {
+          const { data: mine, error: mineErr } = await service.from("outreach_leads").select("id").in("id", askedLeads).eq("assigned_to_user_id", salesActor.id);
+          if (mineErr) return json({ ok: false, error: "contact_check_failed", detail: "could not read the leads" }, 200);
+          ids = ((mine ?? []) as Array<{ id: string }>).map((r) => r.id);
+        }
+        const { data: blocks, error: blockErr } = ids.length ? await service.rpc("opener_contact_blocks", { _lead_ids: ids }) : { data: [], error: null };
+        if (blockErr) return json({ ok: false, error: "contact_check_failed", detail: "could not read the logged contact history" }, 200);
+        for (const b of (blocks ?? []) as Array<{ lead_id: string; reason: string | null }>) if (b.reason) conversation[b.lead_id] = b.reason;
+      }
       const raw: unknown[] = Array.isArray(body.phones) ? body.phones : [];
       const asked: string[] = [];
       for (const x of raw) {
         const d = String(x ?? "").replace(/\D/g, "");
         if (d && !asked.includes(d)) asked.push(d);
       }
-      if (asked.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [] });
+      if (asked.length === 0) return json({ ok: true, mode, contacted: [], suppressed: [], conversation });
 
       /* 🔴 THIS USED TO REFUSE ANY BATCH OVER 500 PHONES, AND THAT BROKE ALL OUTREACH (2026-09-03).
          Queueing 909 leads returned 400 too_many_phones, the SPA fails closed on a non-ok answer, and
@@ -888,6 +907,7 @@ Deno.serve(async (req) => {
         checked: asked.length,
         contacted: asked.filter((d) => contactedAll.has(d)),
         suppressed: asked.filter((d) => suppressedAll.has(d)),
+        conversation,
       });
     }
 
@@ -1912,6 +1932,33 @@ Deno.serve(async (req) => {
           ok: true,
           skipped: "phone_already_contacted",
           reason: `${lead.business_name ?? "That lead"}'s number (+${toNumber}) already has a WhatsApp conversation${(prior[0] as { lead_id?: string | null }).lead_id && (prior[0] as { lead_id?: string | null }).lead_id !== lead.id ? " on another lead row" : ""}. A cold opener never goes to a number we have already messaged — this row is probably a duplicate of the lead that owns the thread.`,
+          lead_id: lead.id, business: lead.business_name, ...statusPayload,
+        }, 200);
+      }
+    }
+    /* ⛔ THE REAL-CONTACT GUARD AT SEND TIME (2026-10-05, opener consistency fix). A COLD template never goes to
+       a lead who has had a genuine logged conversation (spoke to the owner, interested, call back, meeting booked,
+       not interested, agency runs the site) — the ONE rule, SQL opener_contact_block, the same function
+       sales_queue_opener uses for campaign launches. This is the server's enforcement for EVERY way a lead
+       reaches the queue (the admin's Outreach bulk queue and per-lead toggle write status 'queued' directly).
+       A no-answer / voicemail / Call tap / Interested star is not a conversation and never stops it.
+       On a hit the lead leaves the queue exactly as it was before it was queued: its previous status, its
+       campaign, no Next Action — only the delivery status says why. Continuations never reach this branch.
+       ⛔ Fails closed on an unreadable answer: the lead stays queued untouched and nothing is sent this tick. */
+    if (isColdOutreachTemplate(templateName)) {
+      const { data: block, error: blockErr } = await service.rpc("opener_contact_block", { _lead_id: lead.id });
+      if (blockErr) {
+        console.error(`[process-whatsapp-queue] opener_contact_block failed for ${lead.id}: ${blockErr.message}`);
+        return json({ ok: true, skipped: "contact_guard_unreadable", lead_id: lead.id, business: lead.business_name, ...statusPayload }, 200);
+      }
+      if (block === "contacted_by_phone" || block === "contacted_logged") {
+        const back = (lead.previous_status as string | null) && lead.previous_status !== "queued" ? (lead.previous_status as string) : "not_contacted";
+        await service.from("outreach_leads").update({
+          status: back, previous_status: null, queued_at: null, whatsapp_delivery_status: block, contact_method: null,
+        }).eq("id", lead.id);
+        return json({
+          ok: true, skipped: block,
+          reason: `${lead.business_name ?? "That lead"}: ${block === "contacted_by_phone" ? "Already contacted by phone" : "Already in conversation (a logged contact)"} — initial opener not queued.`,
           lead_id: lead.id, business: lead.business_name, ...statusPayload,
         }, 200);
       }

@@ -1412,11 +1412,15 @@ export function OutreachTable({
     const phones = [...new Set(ids.map((id) => e164(leadOf(id))).filter(Boolean))];
     let suppressed = new Set<string>();
     let contacted = new Set<string>();
-    if (phones.length) {
+    /* ⛔ THE REAL-CONTACT GUARD (2026-10-05): for a COLD template the same check also answers, per lead, "has this
+       prospect had a genuine logged conversation with us?" — the ONE shared rule (SQL opener_contact_block), the
+       same answer a campaign launch gets. The drip refuses it again at send time; this says so before queueing. */
+    let conversation: Record<string, string> = {};
+    if (phones.length || wantsColdGuard) {
       const { data: chk, error: chkErr } = await supabase.functions.invoke('process-whatsapp-queue', {
-        body: { mode: 'contact_check', phones },
+        body: { mode: 'contact_check', phones, ...(wantsColdGuard ? { lead_ids: ids } : {}) },
       });
-      const res = chk as { ok?: boolean; contacted?: string[]; suppressed?: string[] } | null;
+      const res = chk as { ok?: boolean; contacted?: string[]; suppressed?: string[]; conversation?: Record<string, string> } | null;
       if (chkErr || !res?.ok) {
         toast({
           title: 'Could not check contact history',
@@ -1430,6 +1434,7 @@ export function OutreachTable({
       const bare = (v: string) => v.replace(/\D/g, '');
       suppressed = new Set((res.suppressed ?? []).map(bare));
       contacted = new Set((res.contacted ?? []).map(bare));
+      conversation = res.conversation ?? {};
     }
     // A SUCCESSFUL prior WhatsApp = already contacted → never re-queue (Decision 1: only a real
     // success blocks; 'simulated'/failed don't).
@@ -1437,6 +1442,7 @@ export function OutreachTable({
     // Exclude: not-on-WhatsApp (permanent), already queued (in-flight), already successfully sent,
     // suppressed, or - for a COLD template - a number with any prior conversation on ANY lead row.
     let blockedContacted = 0;
+    let blockedConversation = 0;
     const queueable = ids.filter((id) => {
       const l = leadOf(id);
       if (!l) return false;
@@ -1449,6 +1455,8 @@ export function OutreachTable({
          history, so blocking them here would make them unqueueable for their only audience - the
          same reasoning as the drip's guard, reading the same leaf. */
       if (wantsColdGuard && digits && contacted.has(digits)) { blockedContacted++; return false; }
+      /* A genuine logged conversation: no cold opener. The lead keeps its status, campaign and Next Action. */
+      if (wantsColdGuard && conversation[id]) { blockedConversation++; return false; }
       return true;
     });
     const skipped = ids.length - queueable.length;
@@ -1491,8 +1499,9 @@ export function OutreachTable({
        block came from a DIFFERENT lead row carrying the same phone. That distinction is the whole
        finding of 2026-09-02, and it is what tells you a duplicate row exists. */
     const notes = [
+      blockedConversation ? `${blockedConversation} not queued — ${QUEUE_SKIP_LABEL.contacted_by_phone}.` : '',
       blockedContacted ? `${blockedContacted} skipped — that number is already in a conversation (probably a duplicate lead row).` : '',
-      skipped - blockedContacted > 0 ? `${skipped - blockedContacted} skipped (already contacted, queued or suppressed).` : '',
+      skipped - blockedContacted - blockedConversation > 0 ? `${skipped - blockedContacted - blockedConversation} skipped (already contacted, queued or suppressed).` : '',
       blockedNonMobile ? `${blockedNonMobile} landline — flagged, not queued.` : '',
     ].filter(Boolean).join(' ');
     toast({

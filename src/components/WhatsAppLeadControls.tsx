@@ -12,6 +12,8 @@ import { getTemplateSendability } from '@/lib/whatsappTemplates';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { salesQueueOpener } from '@/lib/leadRpc';
 import { QUEUE_SKIP_LABEL, refusalText } from '@/lib/salesCrm';
+import { isColdOutreachTemplate } from '@/lib/coldOutreach';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueueState } from '@/hooks/useQueueState';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
@@ -92,6 +94,16 @@ export function WhatsAppLeadControls({
         // Tier-1 offline line-type gate: only mobiles may be queued. A non-mobile
         // (landline/VoIP/etc.) is flagged 'no_whatsapp_needs_sms' instead of queued — the
         // status name is historical; it is the landline marker, and no send is ever attempted.
+        /* ⛔ THE REAL-CONTACT GUARD (2026-10-05): a COLD template is not queued for a lead with a genuine logged
+           conversation — the ONE shared rule (SQL opener_contact_block, via contact_check), the same answer a
+           campaign launch and the sales queue get; the drip refuses it again at send time. Fails closed. */
+        if (isColdOutreachTemplate(template)) {
+          const { data: chk, error: chkErr } = await supabase.functions.invoke('process-whatsapp-queue', { body: { mode: 'contact_check', phones: [], lead_ids: [lead.id] } });
+          const res = chk as { ok?: boolean; conversation?: Record<string, string> } | null;
+          if (chkErr || !res?.ok) { toast({ title: 'Not queued', description: 'Could not check the contact history, so nothing was queued.', variant: 'destructive' }); return; }
+          const block = res.conversation?.[lead.id];
+          if (block) { toast({ title: 'Not queued', description: (QUEUE_SKIP_LABEL[block] ?? QUEUE_SKIP_LABEL.contacted_by_phone).replace(/^./, (c) => c.toUpperCase()) + '.', variant: 'destructive' }); return; }
+        }
         const { lineType, whatsappEligible } = classifyLineType(lead.phone, lead.country);
         if (!whatsappEligible) {
           await onUpdate(lead.id, {

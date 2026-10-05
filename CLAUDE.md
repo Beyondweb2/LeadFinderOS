@@ -815,6 +815,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `contact_method`). `sales_queue_opener` refuses `contacted_by_phone` / `contacted_logged` only for an outcome in
   `CONVERSATION_OUTCOMES` — SQL `lead_conversation_outcomes()` is the same list (tested); no answer / voicemail
   never stop it. Campaign MEMBERSHIP never reads contact history; the reason the opener will not go is said on the lead.
+  ⛔ EVERY cold-opener door asks the ONE function `opener_contact_block` (sales_queue_opener, contact_check →
+  Outreach admin bulk + per-lead queue, the drip at send time, send-whatsapp-message — not overridable by
+  allow_resend). Cold templates only; continuations and in-window replies never reach it. A new opener door must
+  ask it too (`scripts/opener-contact-guard.test.ts`).
 - **A campaign is a container** (name · niche · Call/WhatsApp · optional area; `campaign_new`/`campaign_update`):
   no lead-choosing wizard, leads join from Find Leads. A Call campaign never sends (`campaign_launch` →
   `call_campaign`). Delete = `campaign_archive` (leads, `campaign_id` and history stay) — never a hard delete.
