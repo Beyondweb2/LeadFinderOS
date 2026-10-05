@@ -105,7 +105,9 @@ for (const route of ['build', 'optimise'] as const) {
   ok(cols.plan_tier === planTierForRoute(route) && cols.website_addon === (route === 'build'), `${route}: writes plan_tier=${cols.plan_tier}, website_addon=${cols.website_addon}`);
   ok(serviceRouteFromRow(cols) === route, `${route}: the checkout reads ${route} back off those columns`);
   ok(totalPaymentsFor(serviceRouteFromRow(cols)!) === (route === 'build' ? 12 : 6), `${route}: → ${route === 'build' ? 12 : 6} payments`);
-  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99/month from week six | ${route === 'build' ? 12 : 6} payments total`, `${route}: the screen shows £99 today / £99/month from week six / ${route === 'build' ? 12 : 6} payments total`);
+  /* 2026-10-04 (M-011 / A-29): the minimum term is on the card, and the timing reads "six weeks after sign-up" like offerSummaryFor. */
+  const n = route === 'build' ? 12 : 6;
+  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99 a month, starting six weeks after sign-up | ${n} payments in total, today's included — a ${n}-month minimum term`, `${route}: the screen shows £99 today / £99 a month from six weeks / ${n} payments, a ${n}-month minimum term`);
   const msg = quickCloseMessage('ABC', 'https://checkout.stripe.com/x', route) + quickCloseScript(route);
   ok(msg.includes(`${route === 'build' ? 12 : 6} payments in total`) && !msg.includes(`${route === 'build' ? 6 : 12} payments`), `${route}: the message and script name ONLY this route's count`);
 }
@@ -114,7 +116,10 @@ ok(!routeAvailable({ manager: 'no_website' }, 'optimise') && routeAvailable({ ma
 ok(cleanAnswers({ ...base, manager: 'no_website', route: 'optimise' }).route === undefined, 'a stale Optimise is dropped when the site answer becomes "No website"');
 ok(cleanAnswers({ ...base, route: 'forever' }).route === undefined, 'an unknown route value is not an answer');
 const qcFn = code('supabase/functions/quick-close/index.ts');
-ok(/cleanAnswers\(\{ \.\.\.prev, \.\.\.incoming \}\)/.test(qcFn) && /if \(prev\.route && !answers\.route\) \{ patch\.plan_tier = null; patch\.website_addon = null; \}/.test(qcFn), 'the server re-cleans merged answers and clears a dropped route from the row');
+{
+  const lib = code('src/lib/quickClose.ts');
+  ok(/const answers = mergeAnswers\(prev, rawIncoming\);/.test(lib) && /if \(prev\.route && !answers\.route\) \{ cols\.plan_tier = null; cols\.website_addon = null; \}/.test(lib) && /planQuickCloseSave\(qcNow, rawIncoming/.test(qcFn), 'the server merges the answer OVER the saved set, then re-cleans (mergeAnswers, M-001) and clears a dropped route from the row');
+}
 ok(!/price|amount|discount|total_payments|cadence/i.test(qcFn.slice(qcFn.indexOf('body: JSON.stringify({ onboarding_id'), qcFn.indexOf('body: JSON.stringify({ onboarding_id') + 80)), 'the checkout call carries only the row and lead ids — the rep cannot set price, count, cadence or discount');
 ok(/"route_undecided"|route_undecided:/.test(read('supabase/functions/quick-close/index.ts')), 'a checkout refusal for an undecided route is explained to the rep');
 
@@ -159,12 +164,15 @@ const mig = read('supabase/migrations/20260929170000_service_route.sql');
 ok(/create trigger trg_onboarding_paid_route_lock before update on public\.onboarding_responses/.test(mig), 'a trigger guards the onboarding row');
 ok(/old\.status = 'paid'/.test(mig) && /new\.plan_tier is distinct from old\.plan_tier or new\.website_addon is distinct from old\.website_addon/.test(mig) && /in \('anon', 'authenticated', 'service_role'\)/.test(mig), '…refusing a route change on a PAID row from any API role (app, sales, edge functions)');
 ok(/create trigger trg_outreach_leads_contract_immutable/.test(mig) && /old\.contract_total_payments is not null/.test(mig), 'the stamped contract on the lead is immutable through the API too');
-ok(/if \(row\?\.status === "paid"\) return json\(\{ ok: false, error: "already_paid"/.test(qcFn), 'Quick Close refuses any change once paid (unchanged)');
+/* Wave 1 integration: the refusal is judged on the LEAD (money, a paid-or-beyond status, refunded, ended),
+   with the row's status as a second signal — a row that reads 'paid' is still refused. */
+ok(/const closedRefusal = quickCloseClosedRefusal\(lead as never, row as never\);\s*if \(closedRefusal\) return json\(\{ ok: false, error: closedRefusal\.error/.test(qcFn), 'Quick Close refuses any change once paid (now judged on the lead, the row as a second signal)');
 ok(!/update\([^)]*plan_tier/.test(code('supabase/functions/paid-client-hub/index.ts')), 'Paid Clients never writes the route');
 
 console.log('── 7. DOUBLE CLICK → ONE CHECKOUT (unchanged) ──');
-ok(/quick_close_claim_link/.test(qcFn) && /Date\.now\(\) - Date\.parse\(qc\.link_generated_at\) < LINK_REUSE_MS/.test(qcFn), 'a recent link is reused; a concurrent click waits on the claim lock');
-ok(/if \(changed\.length && qc\?\.link_url\)/.test(qcFn), 'changing the route (an answer) invalidates the old link, so a link always matches its route');
+/* 2026-10-04: the claim is a rev-conditional write now (quick-close-links.test.ts drives it end to end). */
+ok(/if \(step\.kind === "reuse"\)/.test(qcFn) && /link_claimed_at: new Date\(\)\.toISOString\(\), link_claimed_by: actor\.id/.test(qcFn), 'a usable link is reused; a concurrent click waits on the claim');
+ok(/if \(changed\.length && cur\?\.link_url\)/.test(code('src/lib/quickClose.ts')) && /reason: "answers_changed"/.test(qcFn), 'changing the route (an answer) invalidates the old link — and expires it at Stripe — so a link always matches its route');
 
 console.log('── 8, 9. THE WEBHOOK: ROUTE FROM THE SESSION, LEDGER AND ATTRIBUTION UNCHANGED ──');
 ok(resolvePaidRoute({ service_route: 'build', total_payments: '12' }, 'build').route === 'build', 'session build + row build → build');
@@ -175,11 +183,11 @@ ok(resolvePaidRoute({ service_route: 'optimise', total_payments: '12' }, 'optimi
 ok(resolvePaidRoute({}, 'build').route === null && /created before routes existed/.test(resolvePaidRoute({}, 'build').problem ?? ''), 'a session with no route (pre-change) → no schedule, with the reason');
 const wh = code('supabase/functions/stripe-webhook/index.ts');
 ok(/const paid = resolvePaidRoute\(s\.metadata \?\? null, rowReadOk \? rowRoute : undefined\)/.test(wh), 'the webhook resolves the route from the session + row');
-ok(/createDelayedSubscription\([\s\S]{0,400}paid\.route,\s*\)/.test(wh), 'and creates the subscription for THAT route');
+ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
 ok(/\.update\(\{ contract_total_payments: totalPaymentsFor\(paid\.route\) \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
 ok(/NO MONTHLY SCHEDULE WAS CREATED/.test(wh), 'a payment with no schedule says so in Paul\'s PAID email');
 ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: totalPaymentsFor'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');
-ok(/mustWrite\(\s*"outreach_leads",\s*\{\s*status: "payment_received"/.test(wh), 'the payment itself is still the must-write');
+ok(/establishLeadPayment\(service, findableLeadId/.test(wh) && /throw e;/.test(wh), 'the payment itself is still a must-write (conditional since pre-sales fix 03; a missing row still throws)');
 ok(/charge\.refunded|refund/.test(wh) && /charge\.dispute/.test(wh), 'refund and dispute handling is still in the webhook');
 
 console.log('── 8b, 9b, 10. COMMISSION: SAME RULE, NEVER PROJECTED PAST THE CONTRACT ──');

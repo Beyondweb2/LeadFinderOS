@@ -31,7 +31,7 @@ One prompt, `LostReasonPrompt` (mounted once in AppLayout), opened by `askLostRe
   lead then reads Not interested and nothing failed.
 - The Work panel's "Why they said no" line (only while Not interested): Change / Add reason.
 Not asked: Outreach bulk status changes (those leads read "Reason not recorded"), automation
-(hook-not-interested), Closed / opted out.
+(hook-not-interested — retired 2026-10-04, no audit sets Not interested now), Closed / opted out.
 
 ## 3. Dashboard
 

@@ -15,7 +15,7 @@
 
    ⛔ ONE RULER. "Named" is cellNamed() from namedSignal.ts with the SAME NamedContext the report
    passes (business name, trade, town). This file never matches a name itself. The Inbox card, the
-   report, the auto Not Interested rule and the deep-crawl gate all call scoreHookRun(), so a result
+   report and the deep-crawl gate all call scoreHookRun() (the auto Not Interested rule that also did was removed 2026-10-04), so a result
    cannot be named in one place and not named in another.
 
    ⛔ A FAILURE IS NEVER A "NOT NAMED". A failed row or an engine that returned no answer is

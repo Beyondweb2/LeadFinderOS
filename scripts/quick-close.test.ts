@@ -7,9 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   cleanAnswers, missingQuestions, mayGenerateLink, onboardingColumnsFor, quickCloseGate, quickCloseHandoffLines, quickCloseMessage,
-  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT,
+  quickCloseState, LINK_REUSE_MS, QUICK_CLOSE_QUESTIONS, quickCloseScript, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE,
 } from "../src/lib/quickClose.ts";
-import { FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
+import { FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP } from "../src/lib/findableOffer.ts";
 
 let f = 0;
 const ok = (c: boolean, l: string) => { if (!c) f++; console.log(`${c ? "PASS" : "FAIL"} ${l}`); };
@@ -50,7 +50,9 @@ console.log("\n── the gate ──");
   const flagged = { ...SAFE, domain: "not_sure" } as const;
   ok(quickCloseState("answers_saved", { answers: flagged, review_approved_at: "2026-09-29T10:00:00Z" }) === "ready", "…Paul can release it, so the opportunity is kept");
   ok(quickCloseState("answers_saved", { answers: { decision_maker: "yes" } }) === "in_progress" && quickCloseState(null, null) === "not_started", "partial answers: in progress; nothing: not started");
-  ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: "2026-09-29T10:00:00Z" }) === "link_generated" && quickCloseState("paid", { answers: SAFE }) === "paid", "link generated; the row's own paid status is Paid");
+  const recent = new Date(Date.now() - 3_600_000).toISOString();
+  ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: recent }) === "link_generated" && quickCloseState("paid", { answers: SAFE }) === "paid", "link generated (and still usable); the row's own paid status is Paid");
+  ok(quickCloseState("answers_saved", { answers: SAFE, link_url: "https://x", link_generated_at: "2026-09-29T10:00:00Z" }) === "link_expired", "2026-10-04 (M-014): an old stored link is EXPIRED, never 'ready'");
   ok(LINK_REUSE_MS < 24 * 3_600_000, "a link is reused only while its Stripe session is still valid (under 24h)");
 }
 
@@ -61,11 +63,16 @@ ok(onboardingColumnsFor({ manager: "agency", authority: "yes" }).website_manager
 ok(onboardingColumnsFor({ authority: "not_sure" }).authority_confirmed === undefined, "'not sure' never writes a yes");
 
 console.log("\n── the words ──");
-const QUICK_CLOSE_SCRIPT = quickCloseScript("build") + " " + quickCloseScript("optimise") + " " + quickCloseScript(null);
-ok([quickCloseScript("build"), quickCloseScript("optimise"), quickCloseScript(null)].every((s) => s.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && s.includes(`£${FINDABLE_MONTHLY_GBP} a month`)), "the script names both figures on every route (house rule: never one without the other)");
+const QUICK_CLOSE_SCRIPT = quickCloseScript("build") + " " + quickCloseScript("optimise");
+ok([quickCloseScript("build"), quickCloseScript("optimise")].every((s) => s.includes(`£${FINDABLE_SETUP_PRICE_GBP} today`) && s.includes(`£${FINDABLE_MONTHLY_GBP} a month`)), "the script names both figures on every route (house rule: never one without the other)");
+ok(quickCloseScript(null) === "", "2026-10-04 (A-07): no script before a route is chosen — it would name no terms");
 const msg = quickCloseMessage("ABC Plumbing", "https://checkout.stripe.com/c/pay/x", "build");
 ok(msg.includes("https://checkout.stripe.com/c/pay/x") && msg.includes(`£${FINDABLE_MONTHLY_GBP} a month`), "the WhatsApp / copy message carries the link and both figures");
-ok(!/guarantee|guaranteed|improve|rank|top of/i.test(QUICK_CLOSE_SCRIPT + msg + QUICK_CLOSE_AFTER_PAYMENT.join(" ")), "no promised result, no guaranteed improvement");
+/* 2026-10-04 (M-011, Paul's brief): the guarantee IS said before payment — but only as the approved
+   sentences (the headline + the byte-locked FINDABLE_GUARANTEE), and nothing that promises an outcome
+   the engines decide: no ranking, no recommendation, no citation, no "guaranteed". */
+ok(!/guaranteed|rank|top of|recommend|cited|citation|will name you|be named/i.test(QUICK_CLOSE_SCRIPT + msg + QUICK_CLOSE_AFTER_PAYMENT.join(" ")), "no promised ranking, recommendation or citation; no 'guaranteed'");
+ok([quickCloseScript("build"), quickCloseScript("optimise"), msg].every((s) => s.includes(QUICK_CLOSE_PROMISE) && s.includes(FINDABLE_GUARANTEE)), "the guarantee is said, exactly as written, in the script and the message");
 
 console.log("\n── the handoff ──");
 {
@@ -80,14 +87,18 @@ console.log("\n── source: security, the canonical checkout, idempotency ─�
 const fn = read("supabase/functions/quick-close/index.ts");
 ok(/const \[access, all\] = await Promise\.all\(\[leadAccess\(service, actor, leadId\)/.test(fn) && /if \(!access\.ok\) return json\(\{ ok: false, error: "not_your_lead"/.test(fn), "only a lead the caller may work (leadAccess, server-side) — never another rep's");
 ok(/lead\.sold_by_user_id === actor\.id \|\| lead\.assigned_to_user_id === actor\.id/.test(fn) && /row\?\.status === "paid"/.test(fn), "after payment the seller may still SEE the outcome (read-only)");
-ok(/functions\/v1\/findable-checkout/.test(fn) && /body: JSON\.stringify\(\{ onboarding_id: row\.id, lead_id: leadId \}\)/.test(fn), "the link is the EXISTING findable-checkout, sent only the row and the lead");
+ok(/functions\/v1\/findable-checkout/.test(fn) && /body: JSON\.stringify\(\{ onboarding_id: rowId, lead_id: leadId \}\)/.test(fn), "the link is the EXISTING findable-checkout, sent only the row and the lead");
 ok(!/price|unit_amount|amount|discount|coupon|line_items/i.test(fn.slice(fn.indexOf('if (mode === "generate_link")'))), "nothing in the link path can set a price, amount, discount or line item");
-ok(/if \(!mayGenerateLink\(row\.status, qc\)\)/.test(fn), "the server re-checks the gate before any Stripe call (blocked / review / incomplete refused)");
-ok(/Date\.now\(\) - Date\.parse\(qc\.link_generated_at\) < LINK_REUSE_MS/.test(fn) && /quick_close_claim_link/.test(fn), "a double click reuses the link / waits on the claim — one Stripe session");
+ok(/const step = linkStep\(row!\.status, qc\); \/\/ the gate, re-checked before any Stripe call/.test(fn) && /if \(step\.kind === "refuse"\)/.test(fn), "the server re-checks the gate before any Stripe call (blocked / review / incomplete refused)");
+/* 2026-10-04: the claim RPC was replaced by rev-conditional writes (writeQc); quick-close-links.test.ts drives it. */
+ok(/if \(step\.kind === "reuse"\) \{\s*await event\(service, leadId, rowId, actor\.id, "link_reused"/.test(fn) && /link_claimed_at: new Date\(\)\.toISOString\(\), link_claimed_by: actor\.id/.test(fn), "a double click reuses the usable link / waits on the claim — one Stripe session");
 ok(/service\.rpc\("quick_close_row"/.test(fn), "one onboarding row per lead, via the locked find-or-create");
 ok(/approve_review/.test(fn) && /if \(actor\.role !== "admin"\) \{ await recordDenial/.test(fn), "only Paul releases a flagged Quick Close");
 ok((fn.match(/await event\(service/g) ?? []).length >= 6, "every save / request / release / link / refusal is in the audit trail");
-ok(/if \(changed\.length && qc\?\.link_url\)/.test(fn) && /if \(changed\.length && qc\?\.review_approved_at\)/.test(fn), "changing an answer invalidates an old link and an old release");
+{
+  const lib = read("src/lib/quickClose.ts");
+  ok(/if \(changed\.length && cur\?\.link_url\)/.test(lib) && /if \(changed\.length && cur\?\.review_approved_at\)/.test(lib) && /planQuickCloseSave\(qcNow, rawIncoming/.test(fn), "changing an answer invalidates an old link and an old release (planQuickCloseSave, which fn quick-close runs)");
+}
 const mig = read("supabase/migrations/20260929160000_quick_close.sql");
 ok(/pg_advisory_xact_lock\(hashtext\('quick_close:' \|\| _lead_id::text\)\)/.test(mig) && /revoke all on function public\.quick_close_row\(uuid, text\) from public, anon, authenticated/.test(mig), "find-or-create is locked and server-only");
 ok(/revoke insert, update, delete on public\.quick_close_events from authenticated/.test(mig), "the audit trail cannot be edited from the browser");
@@ -101,7 +112,7 @@ const dlg = read("src/components/QuickCloseDialog.tsx");
 ok(/<QuickCloseButton leadId=\{lead\.id\}( variant="quiet")? \/>/.test(read("src/components/LeadDetailDialog.tsx")), "in the lead workspace (Outreach + WhatsApp Inbox; Focus Mode retired 2026-10-01)");
 ok(/min-h-\[56px\]/.test(dlg) && /h-\[100dvh\]/.test(dlg) && /answers\.decision_maker === 'no' \? null/.test(dlg), "phone: full screen, one question at a time, big targets; a 'No' ends the questions");
 ok(/mode: 'save', answers: \{ \[key\]: value \}/.test(dlg), "every tap is saved (a dropped call resumes)");
-ok(/disabled=\{!v\.windowOpen/.test(dlg) && /send-whatsapp-message/.test(dlg), "WhatsApp send uses the canonical sender and respects the 24-hour window");
+ok(/disabled=\{!v\.windowOpen/.test(dlg) && /functions\/v1\/send-whatsapp-message/.test(fn) && /Authorization: req\.headers\.get\("authorization"\)/.test(fn), "WhatsApp send uses the canonical sender AS THE CALLER (server-side since 2026-10-04) and respects the 24-hour window");
 ok(/self-service sign-up link is still/.test(dlg), "the self-service onboarding link remains the fallback");
 
 if (f) { console.log(`\n${f} FAILURES`); process.exit(1); }

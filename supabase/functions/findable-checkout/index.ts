@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { slugifyBusinessName } from "../../../src/lib/reportSlug.ts";
 import { FINDABLE_GUARANTEE, cardSavedNoticeFor, checkoutLineNameFor, serviceRouteFromRow, totalPaymentsFor } from "../../../src/lib/findableOffer.ts";
-import { mayGenerateLink, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
+import { mayGenerateLink, quickCloseClosedRefusal, type QuickCloseRecord } from "../../../src/lib/quickClose.ts";
 import { offerPrice } from "../_shared/offer-price.ts";
 import { AGREEMENT_BLANK_URL, agreementUrl, checkoutConsentText, CLIENT_AGREEMENT_VERSION } from "../../../src/lib/clientAgreement.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
@@ -233,12 +233,17 @@ Deno.serve(async (req) => {
     if (effectiveLeadId) {
       const { data: lead } = await service
         .from("outreach_leads")
-        .select("id, business_name, status, amount_paid, category, search_keyword")
+        .select("id, business_name, status, amount_paid, category, search_keyword, service_terminated_at")
         .eq("id", effectiveLeadId).maybeSingle();
       leadBusinessName = (lead?.business_name as string | null) ?? null;
-      if (lead && (PAID_OR_BEYOND.has(lead.status as string) || ((lead.amount_paid as number) ?? 0) > 0)) {
+      /* ⛔ ONE RULE WITH QUICK CLOSE (2026-10-05, pre-sales final): money on the lead, a paid-or-beyond
+         status, REFUNDED, or an ENDED engagement (service_terminated_at) — quickCloseClosedRefusal. The
+         old test here read only the money and three statuses, so an ended or refunded client whose amount
+         was ever cleared could start a new session. PAID_OR_BEYOND stays as a second signal. */
+      if (lead && (quickCloseClosedRefusal(lead as { amount_paid?: number | null; status?: string | null; service_terminated_at?: string | null }) || PAID_OR_BEYOND.has(lead.status as string))) {
         await recordRefusal("checkout_refused_already_client", {
           lead_id: effectiveLeadId, lead_status: lead.status, amount_paid: lead.amount_paid,
+          ended: !!lead.service_terminated_at,
         });
         return json({ ok: false, error: "already_client" }, 403);
       }

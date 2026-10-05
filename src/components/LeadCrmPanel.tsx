@@ -34,7 +34,7 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, type SalesStateView } from '@/lib/leadState';
+import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, CONVERSATION_OUTCOMES, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { askLostReason } from '@/lib/lostReasonAsk';
 import { DetectedAgency } from '@/components/DetectedAgency';
@@ -43,6 +43,7 @@ import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/componen
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
 import { londonInstant, londonLocalInput, meetingDayTime } from '@/lib/nextActionView';
 import { SalesStatePill } from '@/components/SalesStatePill';
+import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { WorkSection } from '@/components/WorkSection';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -163,7 +164,8 @@ function useSave(leadId: string): SaveFn {
       notifyLeadChanged(leadId, undefined, patch, true); // Outreach, the Inbox, other tabs: at once
     }
     const r = await leadRpc(name, { _lead_id: leadId, ...args });
-    if (r.ok) { toast({ title: okText }); notifyLeadChanged(leadId, undefined, patch); }
+    /* A double-submitted call outcome is ONE call (migration 20261007105000): the server answers ok + duplicate. */
+    if (r.ok) { toast({ title: r.duplicate === true ? 'Already logged a moment ago — not recorded twice' : okText }); notifyLeadChanged(leadId, undefined, patch); }
     else {
       if (patch) { qc.setQueryData(key, before ?? null); notifyLeadChanged(leadId); } // everyone re-reads the true row
       toast({ title: 'Not saved', description: refusalText(r.error), variant: 'destructive' });
@@ -345,7 +347,7 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
   const agency = lead.website_control === 'agency_controls';
   return (
     <div className="space-y-3">
-      <LogContact save={save} followOn={followOn} defaultOpen={logContactOpen} />
+      <LogContact leadId={leadId} save={save} followOn={followOn} defaultOpen={logContactOpen} />
 
       {/* Why they said no: shown only while the lead is Not interested. Add one (skipped, or before this
           existed: "Reason not recorded", never guessed) or correct it; History keeps every version. */}
@@ -541,8 +543,15 @@ const WHATSAPP_RESULT_OUTCOMES = ['interested', 'meeting_booked', 'call_back', '
  *  when they came to log a call (defaultOpen). Every channel and every outcome is still inside. After a
  *  successful log it closes again; the result line (what was recorded, the state, the suggested Next Action)
  *  stays visible under the closed header. */
-function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; followOn: FollowOn; defaultOpen?: boolean }) {
+/** Outcomes after which the prospect may be ready to pay: the result line offers Quick Close right there. */
+const CLOSE_READY_OUTCOMES: ReadonlySet<string> = new Set(['interested', 'spoke_to_owner', 'meeting_booked']);
+
+function LogContact({ leadId, save, followOn, defaultOpen = false }: { leadId: string; save: SaveFn; followOn: FollowOn; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  /* ⛔ ONE TAP, ONE CALL (Session E E-12): `busy` disables the buttons only after React re-renders, so two taps in
+     the same frame both got through. The ref closes that gap here; the server refuses an identical second row too. */
+  const inFlight = useRef(false);
+  const [lastOutcome, setLastOutcome] = useState<string | null>(null);
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -552,6 +561,8 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (defaultOpen) rootRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [defaultOpen]);
   const tap = async (outcome: string, logged: boolean) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(outcome);
     try {
       const label = contactMethodLabel(channel);
@@ -563,7 +574,8 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
       const res = await followOn(outcome, channel, logged);
       setOpen(false);
       setResult({ ...res, contact:`${logged ? CONTACT_METHODS.find((m) => m.value === channel)?.short ?? label : 'WhatsApp'} · ${outcomeLabel(outcome)}` });
-    } finally { setBusy(null); }
+      setLastOutcome(outcome);
+    } finally { inFlight.current = false; setBusy(null); }
   };
   const outcomeButton = (o: { value: string; label: string }, logged: boolean) => (
     <Button key={o.value} type="button" size="sm" variant="outline" disabled={busy !== null} title={outcomeRule(o.value).does} data-testid={`outcome-${o.value}`}
@@ -598,6 +610,13 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
       {result.said.length > 0 && <p className="text-muted-foreground">{result.said.join(' · ')}</p>}
       {result.failed.length > 0 && <p className="text-destructive">{result.failed.join(' · ')}</p>}
       {result.suggestion && <p className="font-medium text-amber-700 dark:text-amber-300" data-testid="suggestion">{result.suggestion}</p>}
+      {/* They are interested: the close is one tap away, not a hunt for the header button (call-first, 2026-10-04). */}
+      {lastOutcome && CLOSE_READY_OUTCOMES.has(lastOutcome) && result.state.state !== 'not_interested' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-1.5" data-testid="logged-quick-close">
+          <span className="text-muted-foreground">Ready to pay now? Take the £99 on the call.</span>
+          <QuickCloseButton leadId={leadId} />
+        </div>
+      )}
     </div>
   ) : null;
   return (
@@ -637,9 +656,19 @@ function LogContact({ save, followOn, defaultOpen = false }: { save: SaveFn; fol
         </div>
       </>) : (<>
       <Input value={note} onChange={(e) => setNote(e.target.value)} className="mb-2 h-9 text-xs" placeholder="Note (optional), saved with the outcome" />
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-        {offeredOutcomes(outcomesFor(channel)).map((o) => outcomeButton(o, true))}
-      </div>
+      {(() => {
+        /* Two plain groups so the rep picks what happened, not a state: they did not reach anyone, or they spoke. */
+        const offered = offeredOutcomes(outcomesFor(channel));
+        const spoke = offered.filter((o) => CONVERSATION_OUTCOMES.has(o.value));
+        const notReached = offered.filter((o) => !CONVERSATION_OUTCOMES.has(o.value));
+        if (current?.kind !== 'call' || !spoke.length || !notReached.length) return <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{offered.map((o) => outcomeButton(o, true))}</div>;
+        return (<div className="space-y-2" data-testid="outcome-groups">
+          <div><p className="mb-1 text-[11px] font-medium text-muted-foreground">Didn't speak to them</p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{notReached.map((o) => outcomeButton(o, true))}</div></div>
+          <div><p className="mb-1 text-[11px] font-medium text-muted-foreground">Spoke to them</p>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">{spoke.map((o) => outcomeButton(o, true))}</div></div>
+        </div>);
+      })()}
       </>)}
     </WorkSection>
     </div>

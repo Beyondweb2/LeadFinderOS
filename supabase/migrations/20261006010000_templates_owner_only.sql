@@ -1,0 +1,24 @@
+-- Saved texts ("templates", the Inbox Quick reply) are private to the person who saved them.
+-- 2026-10-04, pre-sales certification M-002 (A-02, E "Saved Quick Reply exposure");
+-- docs/pre-sales-certification/fixes-01-security-inbound.md.
+--
+-- THE LEAK. sales_select_templates (20260927100100, re-created 20260927100500) let EVERY salesperson
+-- SELECT every row owned by the book owner: Paul's personal working note (his login email and account
+-- id), a "Pricing" text holding two old live Stripe Payment Links, old "eight weeks" prices and
+-- barber-era texts. A rep could read all of them and send any of them from the Inbox.
+--
+-- THE MODEL AFTER THIS (the smallest safe one; there is no shared-template concept):
+--   * everyone, admin included, reads only their OWN rows ("Users can view their own templates",
+--     auth.uid() = user_id), and the existing owner-only INSERT / UPDATE / DELETE policies stand;
+--   * a salesperson therefore sees their own saved texts and none of Paul's;
+--   * Paul (admin) sees exactly what he saw before: his rows are his own.
+-- Nothing is deleted or moved: Paul's 15 rows stay where they are, untouched.
+-- Sending: a saved text is only message text the browser inserts into the composer; a rep can no
+-- longer READ Paul's rows, so there is nothing of his to send. Every send is still re-checked by
+-- send-whatsapp-message (lead ownership, window, QA guard).
+--
+-- Idempotent. Read back with:
+--   select policyname, cmd, qual from pg_policies where tablename = 'templates' order by 1;
+--   (expect 4 owner policies and NO sales_select_templates)
+
+drop policy if exists sales_select_templates on public.templates;

@@ -4,7 +4,9 @@
    one, and a form must GENUINELY submit before production — never a fake form.
 
    ⛔ THE RECIPIENT IS NEVER FROM THE REQUEST. The form sends a site key; the recipient, the business
-      name and the allowed origins come from CLIENT_SITES below. A visitor can inject no recipient.
+      name and the allowed origins come from the client's own Website Build record (website_build.form,
+      src/lib/siteForm.ts — fix workstream 6, 2026-10-04: no more per-client code edit and deploy). A
+      visitor can inject no recipient, and a key no Build client has switched on is refused.
    ⛔ ONLY THE PRODUCTION ORIGIN DELIVERS. A submission from a preview (*.pages.dev), localhost or any
       origin not listed as production is TEST MODE: it goes to Resend's test inbox, never to the
       client — so reviewing the preview can never hand the client a fake lead. Decided HERE, from the
@@ -12,20 +14,13 @@
    Pure (no Deno, no fetch): the tests reach it; the edge function does the IO.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export interface ClientSite {
-  key: string;
-  businessName: string;
-  /** Where real enquiries go. */
-  to: string;
-  /** Origins that deliver for real (the live domain, with and without www). */
-  productionOrigins: string[];
-  /** Origins allowed to submit in TEST mode (preview, local dev). Anything else is refused. */
-  testOriginPatterns: RegExp[];
-  /** Where a no-JavaScript form post is sent back to (a path on the submitting origin). */
-  thanksPath: string;
-}
+import { clientSiteFromRecord, SITE_KEY_RE, type ClientSite, type FormRecord } from "../../../src/lib/siteForm.ts";
+export type { ClientSite } from "../../../src/lib/siteForm.ts";
 
-export const CLIENT_SITES: Record<string, ClientSite> = {
+/** ⚠️ TRANSITIONAL — BS4's form was registered in code before the registry existed. Used ONLY when no
+ *  Website Build record claims the key. Once Paul switches BS4's form on in Website Build (key "bs4",
+ *  recipient its verified email), that record wins and this entry is deleted. Never add another. */
+export const LEGACY_CLIENT_SITES: Record<string, ClientSite> = {
   bs4: {
     key: 'bs4',
     businessName: 'BS4 Electrical Services Ltd',
@@ -35,6 +30,29 @@ export const CLIENT_SITES: Record<string, ClientSite> = {
     thanksPath: '/contact/?sent=1#enquiry',
   },
 };
+
+/** A site key worth a database read: the same shape the Website Build save stores. */
+export const isSiteKey = (key: string) => SITE_KEY_RE.test(key);
+
+export type SiteResolution = { site: ClientSite; source: 'registry' | 'legacy' } | { site: null; reason: string };
+/**
+ * The site for a key, from the Website Build records that claim it (already fetched by the function:
+ * outreach_leads where website_build->form->>site_key = key, each with its route).
+ * ⛔ Two records claiming one key → refused (never a guess which client's inbox). A record that claims
+ *    the key but cannot be served → refused, never the legacy fallback. No record → the legacy entry,
+ *    else unknown.
+ */
+export function resolveClientSite(key: string, records: ReadonlyArray<{ row: FormRecord; route: 'build' | 'optimise' | null }>): SiteResolution {
+  const k = String(key ?? '').toLowerCase();
+  if (!isSiteKey(k)) return { site: null, reason: 'unknown_site' };
+  if (records.length > 1) return { site: null, reason: 'ambiguous_site_key' };
+  if (records.length === 1) {
+    const r = clientSiteFromRecord(k, records[0].row, records[0].route);
+    return 'site' in r ? { site: r.site, source: 'registry' } : { site: null, reason: r.refused };
+  }
+  const legacy = LEGACY_CLIENT_SITES[k];
+  return legacy ? { site: legacy, source: 'legacy' } : { site: null, reason: 'unknown_site' };
+}
 
 /** Resend's own test address: accepted and delivered to nobody. */
 export const TEST_RECIPIENT = 'delivered@resend.dev';

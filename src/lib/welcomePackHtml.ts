@@ -67,6 +67,9 @@ export interface WelcomePackInput {
 
 export interface WelcomePackAgreement {
   url: string | null;
+  /** The route the agreement is on (agreementRoute.resolveAgreementRoute: the paid contract first, else
+   *  the link). Decides the ownership key points; null names no ownership terms at all. */
+  route?: 'build' | 'optimise' | null;
   /** ⛔ TRUE ONLY WHEN THE RECORD SAYS THE CURRENT AGREEMENT APPLIES (Paul, 2026-10-02, a general rule
    *  for older clients): a route on the client's agreement link (set by today's checkout, or by Paul
    *  choosing Build / Optimise) or a route stamped by today's checkout. Anything else — absent, false —
@@ -453,13 +456,36 @@ Thanks,
    page itself shows that. ⛔ The link is printed verbatim or not at all; a pack with no link says it
    comes separately rather than printing a dead button.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-const AGREEMENT_KEY_POINTS = [
-  'Your service has a minimum term: 12 payments (Build) or 6 (Optimise). The remaining payments are owed even if you stop early.',
-  'Monthly payments start six weeks after your first payment.',
-  'We own the website and our work until your final payment. Then it\u2019s yours.',
-  'If a payment is 14 days late, we can take the site down until it\u2019s paid.',
-  'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.',
-];
+/* ⛔ PER ROUTE (pre-sales fix 03, M-024 / B-08). The pack used to print the BUILD ownership lines to every
+   client — "We own the website… we can take the site down" — which told an Optimise client the opposite
+   of their agreement (9.4: "We will never take your own website offline"; Schedule 1: "Your site is
+   always yours"). Each list below says only what that route's agreement says (clauses 3.3, 8, 9.4).
+   An unknown route names no ownership or take-down terms at all. */
+const GUARANTEE_KEY_POINT = 'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.';
+const MONTHLY_KEY_POINT = 'Monthly payments start six weeks after your first payment.';
+export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', readonly string[]> = {
+  build: [
+    `Your service has a minimum term: ${totalPaymentsFor('build')} payments, counting your first. The remaining payments are owed even if you stop early.`,
+    MONTHLY_KEY_POINT,
+    'We build, host and manage your new website during the term.',
+    'We own the website and our work until your final payment. Then it\u2019s yours.',
+    'If a payment is 14 days late, we can take down the website we built until it\u2019s paid. We will tell you first.',
+    GUARANTEE_KEY_POINT,
+  ],
+  optimise: [
+    `Your service has a minimum term: ${totalPaymentsFor('optimise')} payments, counting your first. The remaining payments are owed even if you stop early.`,
+    MONTHLY_KEY_POINT,
+    'Your website is always yours. We will never take it offline.',
+    'The pages and content we add become yours on your final payment.',
+    'If a payment is 14 days late, we can remove the pages and content we added until it\u2019s paid. We will tell you first.',
+    GUARANTEE_KEY_POINT,
+  ],
+  unknown: [
+    'Your service has a minimum term. The remaining payments are owed even if you stop early.',
+    MONTHLY_KEY_POINT,
+    GUARANTEE_KEY_POINT,
+  ],
+};
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
 function agreementPage(a: WelcomePackAgreement): string {
@@ -488,7 +514,7 @@ function agreementPage(a: WelcomePackAgreement): string {
       <h1 class="wp-h1">Your agreement: the key points</h1>
       <p>Your Findable Client Service Agreement sets out exactly what we do and what you pay. In short:</p>
       <ul class="wp-keys">
-        ${AGREEMENT_KEY_POINTS.map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
+        ${AGREEMENT_KEY_POINTS[a.route ?? 'unknown'].map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
       </ul>
       <p><b>${esc(AGREEMENT_ALWAYS_YOURS)}</b></p>
       ${action}`;
@@ -544,6 +570,14 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
   const n = esc(name);
   const current = agreedCurrentOffer(totalPayments, amountPaid);
   const W = remeasure ? weeksWord(remeasure.weeks) : '';
+  /* ⛔ WHAT YOU GET, PER ROUTE (M-024): a Build client's main purchase is the new website, so it is named;
+     an Optimise client's pages go on THEIR site. Unknown route: the neutral line. */
+  const route = serviceRouteForTotal(totalPayments);
+  const pagesLine = route === 'build'
+    ? '<li><b>A new website, built and hosted by us.</b> One dedicated page for each key service, answering what customers really ask.</li>'
+    : route === 'optimise'
+      ? '<li><b>Clearer pages on your own website.</b> One dedicated page for each key service, answering what customers really ask. Your website stays yours.</li>'
+      : '<li><b>Clearer website pages.</b> One dedicated page for each key service, answering what customers really ask.</li>';
   return `
       <div class="wp-eyebrow">Your plan</div>
       <h1 class="wp-h1">Your Findable plan</h1>
@@ -561,7 +595,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
         <p class="wp-boxtitle">What you get</p>
         <ul class="wp-ticks">
           <li><b>Your starting point, measured.</b> Real customer questions, asked several times on ChatGPT and Gemini.</li>
-          <li><b>Clearer website pages.</b> One dedicated page for each key service, answering what customers really ask.</li>
+          ${pagesLine}
           <li><b>Your Google Business Profile corrected,</b> so it matches your website.</li>
           <li><b>The right directories for your trade.</b> Added where you are missing, fixed where you are wrong.</li>
           <li><b>A before and after.</b> The same questions asked again, shown side by side.</li>
@@ -784,7 +818,11 @@ export function buildWelcomePackHtml(input: WelcomePackInput): string {
   const name = (input.businessName || 'your business').trim();
   const reviewLink = (input.reviewLink ?? '').trim();
 
-  const reportHtml = renderReportHtml({ ...input.report, hidePitch: true });
+  /* ⛔ THE SEO GRADE STAYS IN THE PACK — AS A SEPARATE WEBSITE MEASURE (Paul's ruling, wave 1 integration,
+     2026-10-04; fix 03 had removed it pending that ruling). 'pack' prints the measured grade as BEFORE, an
+     AFTER only when one was genuinely measured, and says the guarantee is judged on AI visibility alone —
+     never a projected or promised grade, never the money-back number. */
+  const reportHtml = renderReportHtml({ ...input.report, hidePitch: true, seoStyle: 'pack' });
   const reportCss = slice(reportHtml, /<style>/i, '</style>', 'stylesheet');
   const reportBody = slice(reportHtml, /<body>/i, '</body>', 'body');
 

@@ -32,7 +32,9 @@ const ENTRIES = [
 const COLUMN_LISTS = "src/lib/outreachLeadColumns.ts";
 /* The row audit popup (2026-09-28) takes only id + business_name off the list row; the panel inside it
    reads its own row by id (useLeadCrmRow), exactly as the detail dialog does — the walk stops there. */
-const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", COLUMN_LISTS];
+/* Quick Close (2026-10-04, on the call screen and the Log-a-contact result line): the dialog loads its own state by
+   lead id through quick-close — it takes only the lead id from whoever opens it, never a list row. */
+const STOP_AT = ["src/components/LeadDetailDialog.tsx", "src/components/HookAuditDialog.tsx", "src/components/QuickCloseDialog.tsx", COLUMN_LISTS];
 
 /* ── Hand-checked 2026-09-27: these files NAME the column, but never read it off a list row. ──────
    Pinned per FILE: the same column read in any other file still fails. */
@@ -57,6 +59,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   website_build: { files: ["src/lib/fullCrawl.ts"], why: "the crawl request-source constant 'website_build'" },
   lead_source: { files: ["src/lib/salesPerformance.ts"], why: "the Sales Dashboard fold's own rows, read on the server by sales-performance; Outreach imports it only for LEAD_SOURCE_LABELS (2026-09-28)" },
   sold_by_user_id: { files: ["src/lib/salesPerformance.ts"], why: "the same fold: who made the sale, read on the server by sales-performance (2026-09-28)" },
+  service_terminated_at: { files: ["src/lib/quickClose.ts"], why: "quickCloseClosedRefusal is run only by fn quick-close and fn findable-checkout, each on its OWN lead row (both selects name service_terminated_at) — never on a list row (wave 1 integration, 2026-10-04; checkout, pre-sales final 2026-10-05)" },
 };
 
 // 1–2. Every column the list-side code reads is downloaded, or is a pinned, hand-checked exception.

@@ -23,7 +23,7 @@ import { newestUsableAudit, resolveLeadReportAudit, type ResolvableAudit } from 
 import { RUN_USABLE } from '@/lib/queueAuditStatus';
 import { buildReportData, type QueueRow, type RunRow } from '@/lib/auditReport';
 import { isAggregatorUrl } from '@/lib/aggregators';
-import { buildColdCallPlaybook, type ColdCallPlaybook, type PlaybookLead, type PlaybookMessage } from '@/lib/coldCallPlaybook';
+import { buildColdCallPlaybook, callCardAudit, type ColdCallPlaybook, type PlaybookLead, type PlaybookMessage } from '@/lib/coldCallPlaybook';
 import type { FindingsSource } from '@/lib/siteFindings';
 import type { CrawlStoredResult } from '@/lib/crawlResult';
 
@@ -117,6 +117,85 @@ async function loadPlaybook(leadId: string, callerName: string | null): Promise<
     messages: msgRes.rows,
     nowMs: Date.now(),
     callerName,
+  });
+}
+
+/* ── THE CALL CARD'S ONE LINE FOR MANY LEADS AT ONCE ("Check before calling" results, fix/07) ─────
+   The SAME reads and the SAME rules as loadPlaybook above — resolveLeadReportAudit picks the report,
+   buildReportData reads it, the crawl sources are ordered the same way, callCardAudit writes the line —
+   batched across the leads so twenty finished checks cost four reads, not a hundred and twenty. Reads
+   only, through the rep's own session (RLS). */
+export interface CallCardLead { id: string; business_name: string | null; website: string | null; phone?: string | null }
+export type CallCardSummary = ReturnType<typeof callCardAudit>;
+
+export async function loadCallCardSummaries(leads: CallCardLead[]): Promise<Record<string, CallCardSummary>> {
+  const ids = leads.map((l) => l.id);
+  if (!ids.length) return {};
+  const [auditsRes, crawlRes] = await Promise.all([
+    fetchAllRows<PlaybookAuditRow>('Check before calling (audits)', (from, to) =>
+      sb.from('ai_audits').select(PLAYBOOK_AUDIT_COLUMNS).in('lead_id', ids)
+        .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+    sb.from('lead_crawl_checks').select('lead_id, result, created_at').in('lead_id', ids),
+  ]);
+  if (crawlRes.error) throw crawlRes.error;
+  const audits = auditsRes.rows;
+  const reportAudits = new Map<string, PlaybookAuditRow>();
+  for (const id of ids) { const a = resolveLeadReportAudit(audits, id); if (a) reportAudits.set(id, a); }
+  const reportIds = [...new Set([...reportAudits.values()].map((a) => a.id))];
+  const runsByAudit = new Map<string, RunRow>();
+  const rowsByAudit = new Map<string, QueueRow[]>();
+  if (reportIds.length) {
+    const [runRes, rowsRes] = await Promise.all([
+      fetchAllRows<RunRow & { audit_id: string }>('Check before calling (runs)', (from, to) =>
+        sb.from('ai_audit_runs').select('id, audit_id, run_number, status, mention_rate, results, created_at').in('audit_id', reportIds)
+          .order('run_number', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+      fetchAllRows<QueueRow & { audit_id: string }>('Check before calling (queue rows)', (from, to) =>
+        sb.from('ai_audit_queue').select('id, audit_id, question, status, result').in('audit_id', reportIds)
+          .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)),
+    ]);
+    for (const r of runRes.rows) {
+      const cur = runsByAudit.get(r.audit_id) as (RunRow & { run_number?: number | null }) | undefined;
+      if (!cur || Number((r as { run_number?: number | null }).run_number ?? 0) > Number(cur.run_number ?? 0)) runsByAudit.set(r.audit_id, r);
+    }
+    for (const q of rowsRes.rows) (rowsByAudit.get(q.audit_id) ?? rowsByAudit.set(q.audit_id, []).get(q.audit_id)!).push(q);
+  }
+  const crawlByLead = new Map<string, { result: CrawlStoredResult | null; created_at: string }>();
+  for (const c of (crawlRes.data ?? []) as Array<{ lead_id: string; result: CrawlStoredResult | null; created_at: string }>) {
+    const cur = crawlByLead.get(c.lead_id);
+    if (!cur || Date.parse(c.created_at) > Date.parse(cur.created_at)) crawlByLead.set(c.lead_id, c);
+  }
+  const out: Record<string, CallCardSummary> = {};
+  for (const l of leads) {
+    const leadAudits = audits.filter((a) => a.lead_id === l.id);
+    const reportAudit = reportAudits.get(l.id) ?? null;
+    const website = (l.website ?? '').trim();
+    const report = reportAudit ? buildReportData(rowsByAudit.get(reportAudit.id) ?? [], runsByAudit.get(reportAudit.id) ?? null, {
+      businessName: reportAudit.business_name ?? l.business_name ?? '', businessType: reportAudit.business_type ?? '',
+      locationText: reportAudit.location_text ?? '', specialisms: '', isAggregatorUrl, ownWebsite: website || undefined,
+    }) : null;
+    const crawl = crawlByLead.get(l.id);
+    out[l.id] = callCardAudit({
+      lead: { id: l.id, business_name: l.business_name, phone: l.phone ?? null, website: l.website },
+      reportAudit, report,
+      auditRunning: leadAudits.some((a) => (a.ai_audit_runs ?? []).some((r) => r.status === 'pending' || r.status === 'running')),
+      runCrawls: runCrawlSources(newestUsableAudit(leadAudits, l.id)),
+      leadCrawl: crawl ? { result: crawl.result, createdAtMs: new Date(crawl.created_at).getTime() } : null,
+      nowMs: Date.now(),
+    });
+  }
+  return out;
+}
+
+/** The call card's line for each finished lead in a batch. Re-read when the set of finished leads changes. */
+export function useCallCardSummaries(leads: CallCardLead[]) {
+  const key = leads.map((l) => l.id).sort().join(',');
+  return useQuery({
+    queryKey: ['call-card-summaries', key],
+    queryFn: () => loadCallCardSummaries(leads),
+    enabled: leads.length > 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 }
 

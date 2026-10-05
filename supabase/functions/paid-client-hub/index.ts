@@ -8,12 +8,17 @@ import { renderWelcomePack } from "../_shared/welcome-pack-render.ts";
 import { buildReportData, seoStyleForAudit, type QueueRow, type RunRow } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { normaliseWebsiteBuild } from "../../../src/lib/websiteBuildState.ts";
+import { websiteBuildSaveRefusal } from "../../../src/lib/websiteLaunch.ts";
+import { websiteServiceRoute } from "../../../src/lib/websiteRoute.ts";
+import { domainAuthority, domainInputFromRow, DOMAIN_REASON_TEXT, DOMAIN_ROW_COLUMNS } from "../../../src/lib/domainAuthority.ts";
 import { isPaidClient, paidClientSource, PAID_CLIENT_OR_FILTER } from "../../../src/lib/paidClient.ts";
 import { summariseLeadCrawl, LEAD_CRAWL_SUMMARY_COLUMNS, type LeadCrawlRowLike, type CrawlJobLike } from "../../../src/lib/leadCrawlSummary.ts";
 import { cleanCounts, progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
-import { answerProblems, buildOnboardingPatch, cleanAnswers, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
+import { answerProblems, buildOnboardingPatch, changedOnboardingPatch, cleanAnswers, consentsCleared, leadPatchFromAnswers } from "../../../src/lib/manualOnboarding.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
-import { loadClientSetup, loadClientSetups, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
+import { loadClientSetup, loadClientSetups, recordFirstContact, recordLeadEvent, submitForDelivery, SETUP_LEAD_COLUMNS, type ClientSetup } from "../_shared/client-setup.ts";
+import { agreementRouteLock, maySetAgreementRoute, resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
+import { carriesMoney, clientClosed } from "../../../src/lib/paymentState.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { handoffPrefill, handoffWithPrefill, type SalesHandoffRecord } from "../../../src/lib/salesHandoff.ts";
 import { cleanAnswers as cleanQuickClose } from "../../../src/lib/quickClose.ts";
@@ -69,7 +74,7 @@ const CLIENT_PAGES_COLUMNS = "id,status,primary_question,service,town";
 /* ⚠️ READ BACK AGAINST THE LIVE SCHEMA 2026-09-22 (information_schema.columns), including
    `website_build`, which its own migration adds. */
 const HUB_LEAD_COLUMNS =
-  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments";
+  "id,business_name,address,search_location,derived_town,website,email,phone,contact_name,amount_paid,payment_date,status,next_action,next_action_date,next_action_time,baseline_audit_id,remeasure_audit_id,remeasure_due_date,delivery_checklist,category,search_keyword,services_included,delivery_ref,notes,delivery_notes,project_overview,project_status,paid_for,place_id,website_build,service_areas,website_control,website_control_note,lead_source,assigned_to_user_id,added_by_user_id,sold_by_user_id,sold_at,domain_control,service_terminated_at,service_termination_reason,service_termination_note,stripe_subscription_id,subscription_status,subscription_renews_at,contract_total_payments,client_contacted_at,client_contacted_via";
 
 /* The handoff (2026-09-28, src/lib/handoffReadiness.ts): what Sales collected, who sold it, and whether
    Paul can start. The list reads the same readiness, so these columns ride on the list too. */
@@ -84,7 +89,9 @@ const HANDOFF_ACTIVITY_KINDS = ["note", "call_outcome", "contact_logged", "repor
 /* The onboarding answers Section 5 and the rebuild prompt read. Everything added here is a fact the
    CLIENT stated; nothing is derived and nothing is operator workflow. */
 const HUB_ONBOARDING_COLUMNS =
-  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at";
+  "id,business_name,business_website,confirmed_location,business_address,services,services_list,areas_list,areas_wanted,contact_name,contact_email,confirmed_phone,baseline_status,baseline_questions,baseline_approved_at,website_route,domain_status,access_status,client_source,audit_id,standout,accreditations,must_not_say,website_platform,website_platform_other,willing_to_migrate,competitor_name,gbp_consent,gbp_exists,gbp_status,gbp_verified,gbp_manager_email,incomplete,status,website_manager,website_manager_email,website_addon,plan_tier,operator_edited_at,domain_owned,domain_access,domain_third_party,site_rights,authority_confirmed,dns_permission,materials_confirmed,domain_escalated_at," +
+  /* wave 1 integration: Workstream 4 service truth for Website Build (migration 20261007040100 — run it first). */
+  "services_not_offered";
 
 /* `audit_purpose` is why this list grew: welcomePackReadiness ASSERTS the purpose of the row rather
    than trusting the claim trigger that set baseline_audit_id (CLAUDE.md §4 — test the property). */
@@ -215,6 +222,8 @@ function setupView(s: ClientSetup) {
   return {
     ready: r.ready, label: r.label, missing: r.missing, done: r.done, total: r.total, waiting_on: r.waitingOn,
     stage: s.stage.stage, stage_label: s.stage.stageLabel, state: s.stage.state, state_label: s.stage.stateLabel, next: s.stage.next,
+    /* Paul owns first contact after payment (src/lib/firstContact.ts): owed / overdue + the due day. */
+    first_contact: s.stage.firstContact,
   };
 }
 
@@ -470,7 +479,19 @@ Deno.serve(async (req) => {
     if (action === "save_website_build") {
       const leadId = text(body.lead_id);
       const patch = normaliseWebsiteBuild(body.website_build);
-      const { data: before } = await service.from("outreach_leads").select("website_build").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      const { data: before } = await service.from("outreach_leads").select("website_build,contract_total_payments,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      /* ⛔ LAUNCH GATE (fix workstream 6, src/lib/websiteLaunch.ts): a save that NEWLY records production,
+         ticks "Production checked" or switches the enquiry form on is refused unless the one launch rule
+         allows it — Build client only, preview ready, QA ticked, live gate passed. Never for Optimise. */
+      const { data: routeRow } = await service.from("onboarding_responses").select(DOMAIN_ROW_COLUMNS)
+        .eq("lead_id", leadId).eq("status", "paid").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      const rv = websiteServiceRoute(routeRow as never, before as never);
+      const dv = routeRow ? domainAuthority(domainInputFromRow(routeRow as never)) : null;
+      const refusal = websiteBuildSaveRefusal((before as { website_build?: unknown } | null)?.website_build ?? null, patch, {
+        route: rv.route, routeSource: rv.source, ended: !!(before as { service_terminated_at?: unknown } | null)?.service_terminated_at,
+        domain: dv ? { applies: dv.applies, ready: dv.ready, reasons: dv.reasons.map((r) => DOMAIN_REASON_TEXT[r]) } : null,
+      });
+      if (refusal) return json({ ok: false, error: "launch_refused", detail: refusal }, 409);
       const { data: updated, error: saveErr } = await service.from("outreach_leads")
         .update({ website_build: patch }).eq("id", leadId).eq("user_id", user.id)
         .select("id,website_build").maybeSingle();
@@ -539,10 +560,16 @@ Deno.serve(async (req) => {
     if (action === "agreement_status" || action === "agreement_set_route" || action === "agreement_send_link") {
       const leadId = text(body.lead_id);
       const { data: lead, error: leadErr } = await service.from("outreach_leads")
-        .select("id,business_name,email,contract_total_payments").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+        .select("id,business_name,email,contract_total_payments,service_terminated_at,status").eq("id", leadId).eq("user_id", user.id).maybeSingle();
       if (leadErr) throw leadErr;
       if (!lead) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
-      const L = lead as { id: string; business_name: string | null; email: string | null; contract_total_payments: number | null };
+      const L = lead as { id: string; business_name: string | null; email: string | null; contract_total_payments: number | null; service_terminated_at: string | null; status: string | null };
+      /* ⛔ AN ENDED OR REFUNDED CLIENT IS ASKED FOR NO AGREEMENT (pre-sales fix 03): the route cannot be set
+         and no link is sent. The status view stays readable (history is kept). */
+      const closed = clientClosed(L);
+      if (closed && (action === "agreement_set_route" || action === "agreement_send_link")) {
+        return json({ ok: false, error: "client_closed", detail: closed === "ended" ? "This engagement has ended — no agreement is asked for." : "This client was refunded — no agreement is asked for." }, 409);
+      }
       const loadLink = async () => {
         const { data, error } = await service.from("client_agreement_links")
           .select("token,service_route,created_at,last_sent_at,last_sent_to").eq("lead_id", L.id).maybeSingle();
@@ -560,10 +587,11 @@ Deno.serve(async (req) => {
       if (action === "agreement_set_route") {
         const route = text(body.route);
         if (route !== "build" && route !== "optimise") return json({ ok: false, error: "bad_route", detail: "Choose Build or Optimise." }, 400);
-        const signed = (await loadAcceptances()).find((a) => a.method === "agree_page");
-        if (signed && signed.service_route !== route) {
-          return json({ ok: false, error: "already_signed", detail: `They have already signed the agreement for ${signed.service_route === "build" ? "Build" : "Optimise"}. The route on a signed agreement cannot change.` }, 409);
-        }
+        /* ⛔ THE ROUTE LOCKS AT THE FIRST BINDING FACT (M-021, src/lib/agreementRoute.ts): the checkout's
+           stamped contract OR any acceptance — checkout included, not only an agree-page signature. */
+        const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances: await loadAcceptances() });
+        const allowed = maySetAgreementRoute(lock, route);
+        if (!allowed.ok) return json({ ok: false, error: "route_locked", detail: allowed.reason }, 409);
         const { error: upErr } = await service.from("client_agreement_links")
           .upsert({ lead_id: L.id, service_route: route }, { onConflict: "lead_id" });
         if (upErr) throw upErr;
@@ -571,7 +599,7 @@ Deno.serve(async (req) => {
 
       if (action === "agreement_send_link") {
         const link = await loadLink();
-        const route = (link?.service_route === "build" || link?.service_route === "optimise") ? link.service_route : serviceRouteForTotal(L.contract_total_payments);
+        const route = resolveAgreementRoute(link?.service_route, L.contract_total_payments);
         if (!link || !route) return json({ ok: false, error: "route_not_set", detail: "Set Build or Optimise first, then send the link." }, 409);
         const { data: ob } = await service.from("onboarding_responses").select("contact_email")
           .eq("lead_id", L.id).order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -619,17 +647,36 @@ Deno.serve(async (req) => {
       const link = await loadLink();
       const linkRoute = (link?.service_route === "build" || link?.service_route === "optimise") ? link.service_route : null;
       const stampedRoute = serviceRouteForTotal(L.contract_total_payments);
+      const acceptances = await loadAcceptances();
+      const lock = agreementRouteLock({ contractTotalPayments: L.contract_total_payments, acceptances });
       return json({
         ok: true,
         agreement: {
           url: link ? agreementUrl(link.token) : null,
-          route: linkRoute ?? stampedRoute,
-          route_source: linkRoute ? "set" : stampedRoute ? "checkout" : null,
+          /* What the client PAID on outranks the link (the same resolver the agreement page uses). */
+          route: resolveAgreementRoute(linkRoute, L.contract_total_payments),
+          route_source: stampedRoute ? "checkout" : linkRoute ? "set" : null,
+          route_locked: lock.locked,
+          route_lock_reason: lock.reason,
+          closed,
           last_sent_at: link?.last_sent_at ?? null,
           last_sent_to: link?.last_sent_to ?? null,
-          acceptances: await loadAcceptances(),
+          acceptances,
         },
       });
+    }
+
+    /* ══ FIRST CONTACT (pre-sales fix 03, M-018) ═════════════════════════════════════════════════════
+       Paul records that he introduced himself and sent the setup link (phone / email / WhatsApp / other).
+       Once only; never for an ended or refunded client; History gets a contact_logged line. Until it is
+       recorded, a client paid since the rule shipped shows WAITING FOR FINDABLE with a due date. */
+    if (action === "record_first_contact") {
+      const leadId = text(body.lead_id);
+      const { data: own } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+      if (!own) return json({ ok: false, error: "client_not_found", detail: "This client is not in your paid-client list." }, 404);
+      const out = await recordFirstContact(service, leadId, user.id, body.via, text(body.note) || null);
+      if (!out.ok) return json({ ok: false, error: out.error, detail: out.detail }, out.error === "bad_channel" ? 400 : out.error === "not_saved" ? 500 : 409);
+      return json({ ok: true, already: out.already, at: out.at });
     }
 
     /* ══ WELCOME PACK — the operator's Download button ════════════════════════════════════════════
@@ -758,8 +805,16 @@ Deno.serve(async (req) => {
       const problems = answerProblems(answers);
       if (problems.length) return json({ ok: false, error: "invalid_answers", detail: problems.map((p) => p.message).join(" "), problems }, 400);
       const now = new Date().toISOString();
-      const patch = buildOnboardingPatch(answers, user.id, now);
       const existing = await onboardingRowFor(service, leadId);
+      /* ⛔ AN EDIT CHANGES ONLY WHAT WAS CHANGED (M-020, manualOnboarding.changedOnboardingPatch): adding a
+         service no longer rewrites the site / domain answers, so the Build consents taken on the call stay.
+         A save that WOULD take a stored consent away (the operator changed the site answers) is refused
+         unless they confirm it: it records that the client withdrew something. */
+      const patch = existing ? changedOnboardingPatch(answers, existing, user.id, now) : buildOnboardingPatch(answers, user.id, now);
+      const cleared = existing ? consentsCleared(existing, patch) : [];
+      if (cleared.length && body.confirm_clear_consents !== true) {
+        return json({ ok: false, error: "would_clear_consents", cleared, detail: `This would remove what the client confirmed: ${cleared.join("; ")}. Save again to confirm the client withdrew it.` }, 409);
+      }
       let saved: unknown = null;
       if (existing) {
         const promote = existing.status !== "paid"
@@ -822,8 +877,13 @@ Deno.serve(async (req) => {
       }
       let leadId = text(body.lead_id);
       if (leadId) {
-        const { data: matched } = await service.from("outreach_leads").select("id").eq("id", leadId).eq("user_id", user.id).maybeSingle();
+        const { data: matched } = await service.from("outreach_leads").select("id,amount_paid,status,service_terminated_at").eq("id", leadId).eq("user_id", user.id).maybeSingle();
         if (!matched) return json({ ok: false, error: "matching_lead_not_found", detail: "The matched lead could not be found under your account." }, 404);
+        /* ⛔ A PAID, REFUNDED OR ENDED CLIENT IS NEVER OVERWRITTEN BY "Add paid client" (pre-sales fix 03,
+           M-023): it would replace the recorded amount, date and status of a real payment. */
+        if (carriesMoney(matched as never) || clientClosed(matched as never)) {
+          return json({ ok: false, error: "already_paid", detail: "This business is already a paid client. Open it in Paid Clients instead of adding it again." }, 409);
+        }
       } else {
         const { data: created, error } = await service.from("outreach_leads").insert({
           user_id: user.id, business_name: businessName, contact_name: text(body.contact_name) || null,

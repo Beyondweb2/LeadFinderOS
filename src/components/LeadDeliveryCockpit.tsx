@@ -122,10 +122,21 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
     : rm.state === 'ok' ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-600'
     : 'border-border/60 bg-muted/30 text-muted-foreground';
 
+  /* 🔴 ONE RE-CLICK USED TO CANCEL THE CLIENT'S RE-MEASURE (Session C C-09, fixed 2026-10-04).
+     react-day-picker passes `undefined` when the selected day is clicked again, and this wrote that as
+     remeasure_due_date = NULL — the day-28 replay and the overdue alert both need a date, so the
+     guarantee re-measure silently never happened. ⛔ Now: an empty selection is IGNORED (the picker is
+     also `required`), and MOVING a stored date asks first, naming both dates. Clearing is refused by
+     the database as well (migration 20261007040200_remeasure_date_guard.sql). */
   const setRemeasureDue = (d: Date | undefined) => {
     setDueOpen(false);
-    const iso = d ? format(d, 'yyyy-MM-dd') : null;
-    if (iso !== (lead.remeasure_due_date ?? null)) void onUpdateLead(lead.id, { remeasure_due_date: iso } as Partial<OutreachLead>);
+    if (!d) return;
+    const iso = format(d, 'yyyy-MM-dd');
+    const stored = lead.remeasure_due_date ?? null;
+    if (iso === stored) return;
+    const from = stored ? format(new Date(stored + 'T00:00:00'), 'd MMM yyyy') : '';
+    if (stored && !window.confirm(`Move this client's guarantee re-measure from ${from} to ${format(d, 'd MMM yyyy')}?\n\nThe re-measure runs automatically on the new date, on the same frozen questions.`)) return;
+    void onUpdateLead(lead.id, { remeasure_due_date: iso } as Partial<OutreachLead>);
   };
 
   // ── CHECKLIST ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +188,9 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
               <div className="font-semibold text-foreground">{format(new Date(`${baselineDate}T00:00:00`), 'd MMM yyyy')}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Re-measure due (8 wks)</div>
+              {/* The label names no number of weeks: the clock is the client's own (four weeks for every
+                  new client; pinned legacy dates differ), and the stored date is the only truth. */}
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Re-measure due{lead.remeasure_due_date ? '' : ' (not scheduled yet)'}</div>
               <Popover open={dueOpen} onOpenChange={setDueOpen}>
                 <PopoverTrigger asChild>
                   <button className="inline-flex items-center gap-1.5 font-semibold hover:underline">
@@ -186,7 +199,7 @@ export function LeadDeliveryCockpit({ lead, onUpdateLead, context, onClose }: {
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={remeasureDue ? new Date(`${remeasureDue}T00:00:00`) : undefined} onSelect={setRemeasureDue} initialFocus className="p-3 pointer-events-auto" />
+                  <Calendar mode="single" required selected={remeasureDue ? new Date(`${remeasureDue}T00:00:00`) : undefined} onSelect={setRemeasureDue} initialFocus className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>

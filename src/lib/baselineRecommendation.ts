@@ -30,6 +30,17 @@
 
 import { buildBalancedBaseline, classifyQuestion, INTENT_LABELS, normTown, sameIntent, type IntentType, type MixContext } from './baselineMix.ts';
 import type { EngineTally } from './discoveryOpportunity.ts';
+import { describeScope, inScope, questionScope, type ServiceScope } from './serviceScope.ts';
+import { MAX_QUESTIONS_PER_SERVICE } from './baselineQuality.ts';
+
+/* ══ 2026-10-04 (fix/04-ai-measurement, Session C C-03 / C-04) ═══════════════════════════════════════
+   · BUSINESS TRUTH FIRST: with a `scope` (serviceScope.ts), a question about a service the client does
+     not offer or never confirmed is NOT RECOMMENDED, and never goes to the backlog.
+   · THE CORE QUESTIONS ARE MANDATORY: `core` (customerQuestion.coreQuestions) is admitted right after
+     the Hook Audit's questions, so the 20 always asks the plain "a good <trade> in <home town>".
+   · ONE SERVICE CANNOT BE A GRID: at most MAX_QUESTIONS_PER_SERVICE per service in the balanced fill.
+   · "Core" is said only of a genuinely core question — an unmatched service is no longer explained
+     to Paul as "core locksmiths query in Faversham". */
 
 export type RecVerdict = 'recommended' | 'future' | 'not_recommended';
 export const REC_LABELS: Record<RecVerdict, string> = {
@@ -37,8 +48,8 @@ export const REC_LABELS: Record<RecVerdict, string> = {
   future: 'Keep as future opportunity',
   not_recommended: 'Not recommended',
 };
-export type QuestionSource = 'hook' | 'discovery' | 'manual';
-export const SOURCE_LABELS: Record<QuestionSource, string> = { hook: 'Hook Audit', discovery: 'Discovery', manual: 'Added by hand' };
+export type QuestionSource = 'hook' | 'core' | 'discovery' | 'manual';
+export const SOURCE_LABELS: Record<QuestionSource, string> = { hook: 'Hook Audit', core: 'Core question', discovery: 'Discovery', manual: 'Added by hand' };
 
 const ENGINE_NAME: Record<string, string> = { chatgpt: 'ChatGPT', gemini: 'Gemini' };
 
@@ -60,7 +71,7 @@ export interface PoolRec {
   engines: EngineTally[] | null;
 }
 export interface RecSummary {
-  total: number; target: number; fromHook: number; fromDiscovery: number; manual: number;
+  total: number; target: number; fromHook: number; fromCore: number; fromDiscovery: number; manual: number;
   intents: Record<IntentType, number>;
   services: { covered: number; total: number };
   towns: { covered: number; total: number; home: number };
@@ -113,15 +124,24 @@ function visibilityPhrase(i: RecInput | undefined): string {
   return `named in some answers (${namedLine(i.engines)}) — room to grow`;
 }
 
-function subjectPhrase(m: { town: string | null; service: string | null; intent: IntentType }, trade: string): string {
+function subjectPhrase(m: { town: string | null; service: string | null; intent: IntentType }, trade: string, q?: string, scope?: ServiceScope): string {
   const where = m.town ?? 'no approved town';
-  if (m.intent === 'emergency') return `emergency / problem intent in ${where}`;
+  const s = q && scope ? questionScope(q, scope) : null;
+  if (m.intent === 'emergency') return `emergency / problem intent in ${where}${s?.service ? ` (${s.service})` : ''}`;
   if (m.service) return `${m.service} in ${where}`;
-  return `core ${(trade || 'business').toLowerCase()} query in ${where}`;
+  if (s?.verdict === 'service' && s.service) return `${s.service} in ${where}`;
+  /* ⛔ "core" only for a question that IS about the business in general (C-03). Without a scope the
+     old reading stands; with one, anything else is called what it is. */
+  if (!s || s.verdict === 'core') return `core ${(trade || 'business').toLowerCase()} question in ${where}`;
+  return `${describeScope(s)} (${where})`;
 }
 
 /** The verdict for a question before selection: null = eligible. */
-function exclusion(q: string, input: RecInput | undefined, m: { town: string | null }): string | null {
+function exclusion(q: string, input: RecInput | undefined, m: { town: string | null }, scope?: ServiceScope): string | null {
+  if (scope) {
+    const s = questionScope(q, scope);
+    if (!inScope(s)) return `${describeScope(s)} It cannot be part of the measurement without a reason.`;
+  }
   if (!m.town) return 'Names none of the approved towns — it would measure an area the business has not confirmed it serves.';
   if (input && consistentlyNamed(input.engines)) return `Business already named in every answer (${namedLine(input.engines)}) — there is no room to improve, so it cannot show progress.`;
   if (input?.verdict === 'no-local-race') return 'AI names no local business for this question, so it cannot show local visibility either way.';
@@ -138,6 +158,10 @@ export interface RecommendArgs {
   ctx: MixContext;
   trade: string;
   target: number;
+  /** The client's service scope (serviceScope.ts). Absent = no service check (legacy callers only). */
+  scope?: ServiceScope;
+  /** The mandatory core questions (customerQuestion.coreQuestions), admitted after the Hook ones. */
+  core?: string[];
 }
 
 export function recommendBaseline(a: RecommendArgs): Recommendation {
@@ -148,17 +172,27 @@ export function recommendBaseline(a: RecommendArgs): Recommendation {
   for (const i of a.hookMeasures ?? []) hookByQ.set(norm(i.question), i);
   const hook = a.hook.map((q) => q.trim()).filter(Boolean).filter((q, i, arr) => arr.findIndex((x) => norm(x) === norm(q)) === i);
 
+  const core = (a.core ?? []).map((q) => q.trim()).filter(Boolean).filter((q) => !hook.some((h) => norm(h) === norm(q)));
+  const isCore = (q: string) => core.some((c) => norm(c) === norm(q));
   const excluded = new Map<string, string>();
   const eligible: RecInput[] = [];
   for (const i of a.pool) {
     const m = classifyQuestion(i.question.trim(), a.ctx);
     if (hook.some((h) => norm(h) === norm(i.question))) continue;            // already locked in
-    const why = exclusion(i.question, i, m);
+    if (isCore(i.question)) continue;                                        // admitted as core
+    const why = exclusion(i.question, i, m, a.scope);
     if (why) excluded.set(norm(i.question), why); else eligible.push(i);
   }
   const chosen = buildBalancedBaseline(
-    [...hook.map((q) => ({ question: q, source: 'locked' as const })), ...eligible.map((i) => ({ question: i.question, source: 'discovery' as const }))],
-    a.ctx, a.target, { rank: (q) => opportunityRank(byQ.get(norm(q))) },
+    [
+      ...hook.map((q) => ({ question: q, source: 'locked' as const })),
+      ...core.map((q) => ({ question: q, source: 'core' as const })),
+      ...eligible.map((i) => ({ question: i.question, source: 'discovery' as const })),
+    ],
+    a.ctx, a.target, {
+      rank: (q) => opportunityRank(byQ.get(norm(q))), serviceCap: MAX_QUESTIONS_PER_SERVICE, hardServiceCap: true,
+      ...(a.scope ? { serviceOf: (q: string) => questionScope(q, a.scope!).service } : {}),
+    },
   );
   const chosenSet = new Set(chosen.map(norm));
 
@@ -168,8 +202,10 @@ export function recommendBaseline(a: RecommendArgs): Recommendation {
     const input = isHook ? (byQ.get(norm(q)) ?? hookByQ.get(norm(q))) : byQ.get(norm(q));
     const reason = isHook
       ? `The Hook Audit asked this — kept for continuity from the first check to the re-measure; ${visibilityPhrase(input)}.`
-      : `${INTENT_LABELS[m.intent]}: ${subjectPhrase(m, a.trade)}; ${visibilityPhrase(input)}.`;
-    return { question: q, source: isHook ? 'hook' : 'discovery', town: m.town, service: m.service, intent: m.intent, reason, engines: input?.engines ?? null };
+      : isCore(q)
+        ? `Core question — the plain question customers ask most, always in the baseline; ${visibilityPhrase(input)}.`
+        : `${INTENT_LABELS[m.intent]}: ${subjectPhrase(m, a.trade, q, a.scope)}; ${visibilityPhrase(input)}.`;
+    return { question: q, source: isHook ? 'hook' : isCore(q) ? 'core' : 'discovery', town: m.town, service: m.service, intent: m.intent, reason, engines: input?.engines ?? null };
   });
 
   const pool: PoolRec[] = a.pool.map((i) => {
@@ -228,6 +264,7 @@ export function summarise(rows: Array<Pick<RecRow, 'source' | 'town' | 'service'
   return {
     total: rows.length, target: a.target,
     fromHook: rows.filter((r) => r.source === 'hook').length,
+    fromCore: rows.filter((r) => r.source === 'core').length,
     fromDiscovery: rows.filter((r) => r.source === 'discovery').length,
     manual: rows.filter((r) => r.source === 'manual').length,
     intents, services: { covered: services.size, total: a.ctx.services.length },
@@ -244,12 +281,14 @@ export function describeDraft(questions: string[], a: Omit<RecommendArgs, 'targe
   return questions.map((q) => q.trim()).filter(Boolean).map((q) => {
     const m = classifyQuestion(q, a.ctx);
     const isHook = a.hook.some((h) => norm(h) === norm(q));
+    const isCore = (a.core ?? []).some((c) => norm(c) === norm(q));
     const inPool = a.pool.some((p) => norm(p.question) === norm(q));
     const input = byQ.get(norm(q));
-    const source: QuestionSource = isHook ? 'hook' : inPool ? 'discovery' : 'manual';
+    const source: QuestionSource = isHook ? 'hook' : isCore ? 'core' : inPool ? 'discovery' : 'manual';
     const reason = source === 'hook' ? `From the Hook Audit — ${visibilityPhrase(input)}.`
-      : source === 'discovery' ? `${INTENT_LABELS[m.intent]}: ${subjectPhrase(m, a.trade)}; ${visibilityPhrase(input)}.`
-      : `Added by hand: ${subjectPhrase(m, a.trade)}.`;
+      : source === 'core' ? `Core question — the plain question customers ask most; ${visibilityPhrase(input)}.`
+      : source === 'discovery' ? `${INTENT_LABELS[m.intent]}: ${subjectPhrase(m, a.trade, q, a.scope)}; ${visibilityPhrase(input)}.`
+      : `Added by hand: ${subjectPhrase(m, a.trade, q, a.scope)}.`;
     return { question: q, source, town: m.town, service: m.service, intent: m.intent, reason, engines: input?.engines ?? null };
   });
 }
@@ -285,13 +324,15 @@ export function hookProtection(approved: string[], hook: string[], replacements:
  * already named everywhere, no local race). Duplicates of a baseline question DO go — "useful, but
  * similar intent already represented" is exactly what the backlog is for.
  */
-export function backlogCandidates(approved: string[], pool: RecInput[], ctx: MixContext): Array<RecInput & { town: string | null; service: string | null; intent: IntentType }> {
+/* ⛔ AND NEVER A SERVICE THE CLIENT DOES NOT OFFER (C-04): with a scope, a not-offered or unconfirmed
+   question is not seeded — Session C's "car keys" reached the backlog as a "useful" future page. */
+export function backlogCandidates(approved: string[], pool: RecInput[], ctx: MixContext, scope?: ServiceScope): Array<RecInput & { town: string | null; service: string | null; intent: IntentType }> {
   const inSet = new Set(approved.map(norm));
   const out: Array<RecInput & { town: string | null; service: string | null; intent: IntentType }> = [];
   for (const i of pool) {
     if (inSet.has(norm(i.question))) continue;
     const m = classifyQuestion(i.question.trim(), ctx);
-    if (exclusion(i.question, i, m)) continue;
+    if (exclusion(i.question, i, m, scope)) continue;
     if (out.some((o) => norm(o.question) === norm(i.question))) continue;
     out.push({ ...i, town: m.town, service: m.service, intent: m.intent });
   }

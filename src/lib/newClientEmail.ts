@@ -11,6 +11,7 @@
 import type { HandoffReadiness, HandoffWho } from './handoffReadiness.ts';
 import type { StageResult } from './deliveryStage.ts';
 import type { HandoffApplies } from './salesHandoff.ts';
+import { firstContactDueLabel } from './firstContact.ts';
 
 export interface NewClientFacts {
   packageName: string | null;
@@ -51,9 +52,15 @@ export function newClientSetupLines(f: NewClientFacts): string[] {
     for (const i of waiting) out.push(`  - ${i.label} (${WHO_WORDS[i.who]})`);
   }
   out.push('');
+  /* ⛔ FIRST CONTACT IS PAUL'S (pre-sales fix 03, firstContact.ts): the client was told "within two working
+     days" and the salesperson that their part is done — so the email says, first, whose move it is. */
+  const contact = f.stage.firstContact;
+  if (contact && (contact.state === 'owed' || contact.state === 'overdue')) {
+    out.push(`FIRST CONTACT IS YOURS: introduce yourself and send the setup link by ${firstContactDueLabel(contact.due)}. Record it on the client page when done.`);
+  }
   out.push(`Next step: ${f.stage.next.label}`);
   out.push(`Open the client: ${f.clientLink}`);
-  if (f.setupLink && waiting.some((i) => i.who === 'client')) out.push(`Client's setup link (send it if they still owe details): ${f.setupLink}`);
+  if (f.setupLink && (f.stage.next.key === 'contact_client' || waiting.some((i) => i.who === 'client'))) out.push(`Client's setup link (send it if they still owe details): ${f.setupLink}`);
   return out;
 }
 

@@ -36,7 +36,9 @@ import {
 import { createCrawlJob, jobCounts, kickCrawlWorker } from "../_shared/crawl-job.ts";
 import { progressLabel, type JobStatus } from "../../../src/lib/crawlJob.ts";
 import { CRAWL_FRESH_MS } from "../../../src/lib/crawlCheck.ts";
-import { canWorkLead, isClientLead, pickRole, type AppRole } from "../../../src/lib/roleRules.ts";
+import { canWorkLead, isClientLead, type AppRole } from "../../../src/lib/roleRules.ts";
+import { refusalBody, resolveActor } from "../_shared/access.ts";
+import { salesCrawlIdsRefusal } from "../../../src/lib/crawlAccess.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -195,15 +197,16 @@ Deno.serve(async (req) => {
     let role: AppRole | null = null;
     const internal = req.headers.get("x-internal-job") === "1"
       && (req.headers.get("x-cron-secret") || "") === (Deno.env.get("CRON_SECRET") || "\u0000__unset__");
+    /* ⛔ THE SHARED ACTOR CHECK (2026-10-04, E-09 / E-15 / M-054). This used getClaims, which verifies
+       the token LOCALLY — a signed-out session kept working here until its token expired (≤1 h), and an
+       auth outage answered 401 (read by the browser as "signed out"). resolveActor asks the auth
+       service (a revoked session is refused), reads the role from user_roles on EVERY call (removing
+       the role — Team → Disable — refuses the very next request), and answers 503 on an outage. */
     if (!internal) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader?.startsWith("Bearer ")) return json({ ok: false, error: "Auth required" }, 401);
-      const { data: claims, error: claimsErr } = await service.auth.getClaims(authHeader.replace("Bearer ", ""));
-      userId = (claims?.claims?.sub as string | undefined) ?? null;
-      if (claimsErr || !userId) return json({ ok: false, error: "Invalid token" }, 401);
-      const { data: roleRows } = await service.from("user_roles").select("role").eq("user_id", userId);
-      role = pickRole(roleRows);
-      if (!role) return json({ ok: false, error: "Not authorised" }, 403);
+      const who = await resolveActor(req, service);
+      if (!who.ok) return json(refusalBody(who), who.status);
+      userId = who.actor.id;
+      role = who.actor.role;
     }
 
     const body = await req.json().catch(() => ({}));
@@ -229,6 +232,21 @@ Deno.serve(async (req) => {
         .select("id, user_id, assigned_to_user_id, amount_paid, status").eq("id", targetLead).maybeSingle();
       if (!wl || isClientLead(wl) || !canWorkLead({ id: userId!, role }, wl)) return json({ ok: false, error: "not_your_lead" }, 403);
       if (body?.url || body?.audit_id) return json({ ok: false, error: "lead_website_only", detail: "Sales crawls the lead's own website." }, 403);
+      /* ⛔ THE IDS MUST BELONG TO THAT SAME LEAD (2026-10-04, M-006 / E-06). The lead check above proved
+         the rep works lead X, and then the status read preferred `job_id` — any job, so another lead's
+         crawl result could be read — and a `run_id` merged the rep's crawl into ANY audit run's
+         results, a paying client's baseline report included. Now: a run id is refused outright for a
+         salesperson (only the audit pipeline, an internal caller, files a crawl into a run), and a job
+         id is accepted only when that job's lead IS the lead just checked. Pure rule:
+         src/lib/crawlAccess.ts (scripts/crawl-check-access.test.ts). */
+      let jobLeadId: string | null = null;
+      if (jobIdIn) {
+        const { data: jr, error: jrErr } = await service.from("crawl_jobs").select("lead_id").eq("id", jobIdIn).maybeSingle();
+        if (jrErr) return json({ ok: false, error: "lookup_failed" }, 503);
+        jobLeadId = (jr?.lead_id as string | null | undefined) ?? null;
+      }
+      const idsRefusal = salesCrawlIdsRefusal({ leadId: wl.id as string, jobId: jobIdIn || null, jobLeadId, runId: body?.run_id ?? null });
+      if (idsRefusal) return json({ ok: false, error: idsRefusal }, 403);
       salesLead = { id: wl.id as string, user_id: wl.user_id as string };
     }
 
@@ -263,9 +281,9 @@ Deno.serve(async (req) => {
        It governs the EVIDENCE half only — the cheap crawl (fault signals + site info) runs for every
        caller either way, because that is what Paul reads before a conversation and it costs nothing.
        The caller that says `deep: false` is process-ai-audit-queue, for a HOOK audit that did not
-       find a visibility gap: a lead named in every question is auto-marked not interested in the
-       same block, so paying the extra fetches to build a sales argument for somebody we will not
-       contact is waste.
+       find a visibility gap: a lead named in every question has no missed search to argue from, so
+       paying the extra fetches for sales evidence is waste. (Since 2026-10-04 that lead keeps its
+       status — no audit sets "Not interested"; the rep decides.)
        🔴 DEFAULTING TO TRUE IS THE FAIL-SAFE DIRECTION AND IT IS THE POINT. An absent flag means
        "an ordinary audit" — a paid baseline, a remeasure, a free check, the operator's own button —
        and every one of those keeps the behaviour it has always had. If this defaulted to false, a

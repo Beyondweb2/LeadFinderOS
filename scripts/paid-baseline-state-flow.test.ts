@@ -138,7 +138,10 @@ async function main() {
       lead: { search_keyword: 'Locksmiths', website: 'https://mc-locksmiths.com/' },
       discovery: { business_type: 'Locksmiths', location_text: 'Canterbury', specialism: 'Emergency entry, Lock changes' },
     });
-    check('8. discovery services prefill with their source named', merged.services.join('|') === 'Emergency entry|Lock changes' && merged.service_sources['Emergency entry']?.includes('discovery') === true);
+    /* 2026-10-04 (fix/04, Session C C-08): REVERSED ON PURPOSE. A Discovery scan's `specialism` is what a
+       previous Discovery was GIVEN, not something the client said — it fed itself back as "services".
+       It is never a source of services now; town / category / website still fall back to it. */
+    check('8. discovery specialism is NEVER a source of services (business truth outranks generated ideas)', merged.services.length === 0 && !Object.values(merged.service_sources).some((s) => s.includes('discovery')) && merged.primary_location === 'Canterbury');
     const bare = mergeClientContext({ onboarding: { confirmed_location: 'Canterbury' }, lead: { search_keyword: 'Locksmiths' }, discovery: { specialism: null } });
     check('8. nothing is invented when no verified source holds services (MCLocksmiths today)', bare.services.length === 0 && bare.business_category === 'Locksmiths');
   }

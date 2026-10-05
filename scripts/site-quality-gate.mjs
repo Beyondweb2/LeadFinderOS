@@ -560,9 +560,14 @@ export function auditSite(site, opts) {
       const owners = new Map();
       for (const it of expect.intents) {
         const label = it.intent || [it.service, it.town].filter(Boolean).join(' in ');
-        const page = it.page ? pageFor(it.page) : null;
+        /* "section on /" (an intent served by a SECTION of a page) is that page, never a path of its own
+           (certification D-03: it failed every build as "not in the build"). */
+        const at = intentPage(it.page);
+        const page = at.path ? pageFor(at.path) : null;
         if (!it.page) { fails.push('"' + label + '": no owning page assigned'); continue; }
-        if (!page) { fails.push('"' + label + '": its page ' + it.page + ' is not in the build'); continue; }
+        if (!at.path) { fails.push('"' + label + '": "' + it.page + '" is not a page address'); continue; }
+        if (!page) { fails.push('"' + label + '": its page ' + at.path + ' is not in the build'); continue; }
+        if (at.section || it.section) { owners.set(norm(page), [...(owners.get(norm(page)) ?? []), label]); if (metaNoindex(page)) fails.push('"' + label + '": ' + page + ' is noindexed'); continue; }
         owners.set(norm(page), [...(owners.get(norm(page)) ?? []), label]);
         const x = parsed.get(page);
         const head = [x.titles[0] ?? '', ...x.headings.filter((h) => h.level === 1).map((h) => h.text)].join(' ');
@@ -588,6 +593,67 @@ export function auditSite(site, opts) {
       }
       result('intents', 'intent', 'Every approved intent has one crawlable, linked owning page that states it', fails, warns);
     }
+  }
+
+  /* ── I2 location pages: genuinely local, never the home page again (certification D-10) ── */
+  if (!expect?.locations?.length) add('locations', 'intent', 'Location pages are genuinely local, not the home page with a town name', 'skip', ['No location pages in --expect.']);
+  else {
+    const warns = [];
+    const home = pageFor('/');
+    const shingles = (t) => { const w = words(t), sh = new Set(); for (let k = 0; k + 5 <= w.length; k++) sh.add(w.slice(k, k + 5).join(' ')); return sh; };
+    const strip = (t, names) => { let s = t.toLowerCase(); for (const n of names.filter(Boolean)) s = s.replace(new RegExp('(^|[^a-z0-9])' + escapeRe(n.toLowerCase()) + '(?=[^a-z0-9]|$)', 'g'), '$1 '); return s; };
+    const townNames = [expect.homeTown, ...expect.locations.map((l) => l.name)];
+    const homeSh = home ? shingles(strip(parsed.get(home).mainText, townNames)) : new Set();
+    const locPages = [];
+    for (const l of expect.locations) {
+      const p = l.page ? pageFor(intentPage(l.page).path) : null;
+      if (!p) continue;
+      locPages.push(p);
+      const own = strip(parsed.get(p).mainText, townNames);
+      const n = words(own).length;
+      if (expect.homeTown && squashName(l.name).includes(squashName(expect.homeTown))) warns.push(p + ' is a page for the HOME town (' + expect.homeTown + ') — the home page owns "<trade> in ' + expect.homeTown + '"; keep it only with genuinely local content of its own, or remove it');
+      if (n < 250) warns.push(p + ' has ' + n + ' words once the town names are taken out — a thin location page');
+      if (homeSh.size) { const sh = shingles(own); let inter = 0; for (const x of sh) if (homeSh.has(x)) inter++; const j = inter / (sh.size + homeSh.size - inter || 1); if (j >= 0.3) warns.push(p + ' repeats ' + Math.round(j * 100) + '% of the home page once the town names are taken out — say what is genuinely local (real jobs, access, travel), or remove it'); }
+    }
+    for (let a = 0; a < locPages.length; a++) for (let b = a + 1; b < locPages.length; b++) {
+      const A = shingles(strip(parsed.get(locPages[a]).mainText, townNames)), B = shingles(strip(parsed.get(locPages[b]).mainText, townNames));
+      let inter = 0; for (const x of A) if (B.has(x)) inter++;
+      const j = inter / (A.size + B.size - inter || 1);
+      if (j >= 0.3) warns.push(locPages[a] + ' and ' + locPages[b] + ' share ' + Math.round(j * 100) + '% once the town names are taken out — a town name swapped is not a local page');
+    }
+    result('locations', 'intent', 'Location pages are genuinely local, not the home page with a town name', [], warns);
+  }
+
+  /* ── C2 claims: only what a verified fact backs (certification D-05) ── */
+  if (!expect?.claims?.rules?.length) add('claims', 'content', 'Every trust claim (24/7, insured, years, response time, credentials, reviews, awards, counts) is backed by a verified fact', 'skip', ['No claims block in --expect: claims were NOT checked. Paul reads every page.']);
+  else {
+    const fails = [], seen = new Map();
+    for (const [p, x] of parsed) {
+      if (is404(p)) continue;
+      const hay = x.text + ' . ' + x.titles.join(' . ') + ' . ' + x.description.join(' . ');
+      for (const h of scanClaims(hay, expect.claims)) {
+        const k = h.rule + '|' + h.text.toLowerCase();
+        if (!h.supported) fails.push(p + ': "' + h.text + '" (' + h.label + ') — ' + h.why);
+        else seen.set(k, [...(seen.get(k) ?? []), p]);
+      }
+    }
+    const inventory = [...seen].map(([k, ps]) => 'backed by a verified fact: "' + k.split('|')[1] + '" on ' + ps.length + ' page(s)');
+    if (fails.length) add('claims', 'content', 'Every trust claim (24/7, insured, years, response time, credentials, reviews, awards, counts) is backed by a verified fact', 'fail', [...new Set(fails), ...inventory]);
+    else add('claims', 'content', 'Every trust claim (24/7, insured, years, response time, credentials, reviews, awards, counts) is backed by a verified fact', 'pass', inventory.length ? inventory : ['No trust claim of these kinds on the site.']);
+  }
+
+  /* ── C3 the enquiry form posts to the registered backend (certification D-12) ── */
+  if (!expect?.form?.siteKey) add('form', 'content', 'The enquiry form posts to its registered Findable backend', 'skip', ['No form registered in --expect (Paul has not switched the form on in LeadFinderOS): the form was not checked.']);
+  else {
+    const fails = [], warns = [];
+    const target = 'site-enquiry?site=' + expect.form.siteKey;
+    const posting = [...site.pages].filter(([p, html]) => !is404(p) && html.includes(target)).map(([p]) => p);
+    if (!posting.length) fails.push('No page posts to ' + (expect.form.endpoint || 'site-enquiry') + '?site=' + expect.form.siteKey + ' — the enquiry form is missing or posts somewhere else');
+    for (const [p, html] of site.pages) { const other = [...html.matchAll(/site-enquiry\?site=([a-z0-9-]+)/gi)].map((m) => m[1].toLowerCase()).filter((k) => k !== expect.form.siteKey); if (other.length) fails.push(p + ' posts to another site key: ' + [...new Set(other)].join(', ')); }
+    for (const [p, html] of site.pages) if (/<form\b[^>]*action\s*=\s*["']mailto:/i.test(html)) fails.push(p + ': a mailto form — never a real enquiry form');
+    if (site.live?.formPreflight) { const f = site.live.formPreflight; if (!f.ok) fails.push('The enquiry backend refuses this site (' + f.detail + ') — ' + (opts.preview ? 'the preview test would not reach the test inbox' : 'the live form would not deliver')); }
+    else if (site.live) warns.push('The form backend was not asked (no endpoint in --expect).');
+    result('form', 'content', 'The enquiry form posts to its registered Findable backend', fails, warns);
   }
 
   /* ── M1 mobile and page weight ── */
@@ -619,7 +685,8 @@ export function auditSite(site, opts) {
   }
 
   human.push(
-    'Is every claim on the site true TODAY (services still offered, hours, credentials current)? The gate checks consistency, not truth.',
+    'Is every claim on the site true TODAY (services still offered, hours, credentials current)? The gate checks the listed claim classes against the verified facts and consistency everywhere; it cannot prove every sentence true.',
+    'Do the baseline questions LeadFinderOS listed as unowned stay unanswered on the site (no 24-hour copy, no out-of-area town, no service they do not offer)?',
     'Does each page answer its customer question plainly first, with evidence after — or is it filler? (The gate only checks a direct-answer paragraph EXISTS.)',
     'Are location pages genuinely local (real work, access, travel, landmarks) — not just the town name changed? The duplicate check catches clones, not blandness.',
     'Is the LocalBusiness subtype the right one for this trade, and does the schema describe only what the page shows?',
@@ -639,9 +706,54 @@ export function auditSite(site, opts) {
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => '\\' + c);
 const squashName = (s) => String(s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 
+/** "section on /" → { path: '/', section: true }. ⛔ THE SAME RULE as parseIntentPage in LeadFinderOS
+ *  src/lib/websiteQuality.ts (this file is copied standalone into client repositories and cannot import
+ *  it) — scripts/website-build-launch.test.ts runs both over one table. */
+export function intentPage(raw) {
+  const t = String(raw ?? '').trim();
+  if (!t) return { path: '', section: false };
+  const section = /\bsection\b|#/i.test(t);
+  const p = /\/[^\s#?"'()]*/.exec(t)?.[0] ?? (/\bhome\s*-?\s*page\b|\bhomepage\b/i.test(t) ? '/' : '');
+  if (!p) return { path: '', section };
+  return { path: p === '/' ? '/' : p.replace(/\/?$/, '/'), section };
+}
+
+/** Every trust-claim hit in `text`, judged against the expect file's claims block. ⛔ THE SAME
+ *  ALGORITHM as scanClaims in LeadFinderOS src/lib/claimRules.ts (the rules themselves come FROM the
+ *  expect file, written by that module) — scripts/website-build-claims.test.ts runs both over one
+ *  corpus and fails on any disagreement. */
+export function scanClaims(text, claims) {
+  const out = [];
+  const sq = (s) => String(s).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9?]+/g, ' ').trim();
+  const nums = (s) => (String(s).match(/\d+(?:\.\d+)?/g) ?? []);
+  const all = sq((claims.verified ?? []).join(' | '));
+  const neg = new RegExp(claims.negation, 'i');
+  for (const r of claims.rules ?? []) {
+    const backing = r.supportedBy ?? [];
+    const re = new RegExp(r.pattern, 'gi');
+    let m;
+    while ((m = re.exec(String(text)))) {
+      if (!m[0]) { re.lastIndex++; continue; }
+      if (neg.test(String(text).slice(Math.max(0, m.index - 60), m.index))) continue;
+      const t = m[0];
+      let why = '';
+      const named = r.named ? new RegExp(r.named, 'i').exec(t) : null;
+      if (named) { if (!all.includes(sq(named[0]))) why = '"' + named[0] + '" is not in any verified fact'; }
+      else if (!backing.length) why = 'no verified fact says this';
+      if (!why && r.numbersMatch) {
+        const have = new Set(nums(backing.concat(claims.verified ?? []).join(' ')));
+        const missing = nums(t).filter((n) => !have.has(n));
+        if (missing.length) why = 'the figure ' + missing.join(', ') + ' is not in a verified fact';
+      }
+      out.push({ rule: r.id, label: r.label, text: t, supported: !why, why });
+    }
+  }
+  return out;
+}
+
 /* ── live crawl (--url) ──────────────────────────────────────────────────────────────────────── */
 
-export async function crawlSite(startUrl, { max = 300, preview = false, domain = '' } = {}) {
+export async function crawlSite(startUrl, { max = 300, preview = false, domain = '', form = null } = {}) {
   const start = new URL(startUrl);
   const base = start.origin;
   const pages = new Map(), files = new Set(), sitemaps = new Map();
@@ -687,7 +799,16 @@ export async function crawlSite(startUrl, { max = 300, preview = false, domain =
       else if (!loc.startsWith('https://' + domain + '/')) transport.push(from + ' redirects to ' + loc + ' — expected https://' + domain + '/ in one hop');
     }
   }
-  return { mode: 'url', pages, files, sizes: null, sitemaps, robots: robotsTxt, headers: null, redirects: null, llms: (await get(base + '/llms.txt')).status === 200, pagesComplete: queue.length === 0, live: { homeRobotsHeader, botFetch, transport } };
+  /* The enquiry backend asked — an OPTIONS preflight from THIS origin, never a submission: 204 = this
+     origin may post (the live domain delivers; a preview is test mode), 403 = it would be refused. */
+  let formPreflight = null;
+  if (form?.siteKey && form?.endpoint) {
+    try {
+      const r = await fetch(form.endpoint + '?site=' + encodeURIComponent(form.siteKey), { method: 'OPTIONS', headers: { origin: base, 'access-control-request-method': 'POST', 'user-agent': UA } });
+      formPreflight = { ok: r.status === 204 && (r.headers.get('access-control-allow-origin') ?? '') === base, detail: 'HTTP ' + r.status + (r.headers.get('access-control-allow-origin') ? '' : ', no CORS for ' + base) };
+    } catch (e) { formPreflight = { ok: false, detail: String(e.message || e) }; }
+  }
+  return { mode: 'url', pages, files, sizes: null, sitemaps, robots: robotsTxt, headers: null, redirects: null, llms: (await get(base + '/llms.txt')).status === 200, pagesComplete: queue.length === 0, live: { homeRobotsHeader, botFetch, transport, formPreflight } };
 }
 
 /* ── CLI ─────────────────────────────────────────────────────────────────────────────────────── */
@@ -713,7 +834,7 @@ async function main(argv) {
   const expect = expectPath ? JSON.parse(readFileSync(expectPath, 'utf8')) : null;
   const opts = { domain: domain || expect?.domain, expect, preview: flag('preview'), forbidHosts: (arg('forbid-host') ?? '').split(',').concat(expect?.forbidHosts ?? []).filter(Boolean) };
   let site;
-  if (arg('url')) site = await crawlSite(arg('url'), { preview: opts.preview, domain: String(opts.domain || '') });
+  if (arg('url')) site = await crawlSite(arg('url'), { preview: opts.preview, domain: String(opts.domain || ''), form: expect?.form ?? null });
   else site = loadDist(arg('dist') ?? 'dist');
   const report = auditSite(site, opts);
   if (arg('json')) writeFileSync(arg('json'), JSON.stringify(report, null, 2));

@@ -84,6 +84,8 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
     "src/lib/nextActionWrite.ts": "THE one next-action write (lead_set_follow_up / lead_set_call_booked), both roles",
     "src/components/NextActionForm.tsx": "the one form: hands the person's pick to the write on Save / Clear",
     "src/components/NextActionEditor.tsx": "the Outreach cell: the form, and its ✓ Done ('none')",
+    /* 2026-10-04 (fix workstream 5): the stale-screen EXPECTATION sent beside a write — what the screen showed. */
+    "src/lib/nextActionStale.ts": "the snapshot a screen showed, sent as lead_set_follow_up's _expected — never a write itself",
   };
   const files = walk("src").filter((p) => !p.startsWith("src/integrations/") && !p.startsWith("src/types/"));
   const writers = files.filter((p) => WRITE.test(strip(read(p))));

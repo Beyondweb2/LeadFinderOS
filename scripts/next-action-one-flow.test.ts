@@ -28,12 +28,12 @@ const table = read('src/components/OutreachTable.tsx');
 const card = read('src/components/OutreachMobileCard.tsx');
 const write = read('src/lib/nextActionWrite.ts');
 const mig = read('supabase/migrations/20261002160100_next_action_time.sql');
-ok(editor.includes("import { saveNextAction, type NextActionInput } from '@/lib/nextActionWrite';") && editor.includes('const r = await saveNextAction(lead.id, a, lead);'), 'the Outreach cell saves through saveNextAction');
+ok(editor.includes("import { saveNextAction, snapshotOf, type NextActionInput } from '@/lib/nextActionWrite';") && editor.includes('const r = await saveNextAction(lead.id, a, lead);'), 'the Outreach cell saves through saveNextAction');
 ok(table.includes('<NextActionEditor lead={lead} />') && card.includes('<NextActionEditor lead={lead} />'), '…for the table row and the phone card alike');
 ok(/<NextActionForm compact/.test(editor) && /<NextActionForm key=/.test(crm), 'the cell and the lead workspace draw the SAME form (NextActionForm)');
 ok(crm.includes('afterWrite(await saveNextAction(leadId, a, stateLead()),') && crm.includes('afterWrite(await bookMeeting(leadId, iso, note ?? lead.next_action_note, stateLead()),'), 'the workspace saves through the same write (Next Action and the meeting box)');
 ok(/const r = await saveNextAction\(leadId, \{/.test(hook) && !/next_action: nextAction/.test(hook), 'the bulk menu / Inbox popup (useOutreach.updateNextAction) use the same write; no direct row write');
-ok(write.includes("leadRpc('lead_set_follow_up', { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) })"), 'the write is lead_set_follow_up (role + ownership checked, History) for both roles, with the time and ✓ Done');
+ok(write.includes("const args = { _lead_id: leadId, _next_action: a.nextAction, _date: date, _note: note, _time: time, _done: !!(none && a.done) };") && write.includes("leadRpc('lead_set_follow_up', a.expected ? { ...args, _expected: toSnapshotArg(a.expected) } : args)"), 'the write is lead_set_follow_up (role + ownership checked, History) for both roles, with the time and ✓ Done (and the stale-screen expectation when the screen has one)');
 ok(/notifyLeadChanged\(leadId, undefined, patch\)/.test(write), '…and announces the change, so Outreach, the Inbox and the workspace show it at once');
 const walk = (dir: string): string[] => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })
   .flatMap((e) => e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.(ts|tsx)$/.test(e.name) && !/\.test\./.test(e.name) ? [`${dir}/${e.name}`] : []);
@@ -128,7 +128,7 @@ ok(h({ next_action: 'none', change: 'completed', from: { next_action: 'chase_pay
 ok(h({ next_action: 'none', change: 'cleared', from: { next_action: 'email', date: '2026-10-06' } }) === 'Cleared: Email · Tue 6 Oct', 'cleared');
 ok(h({ next_action: 'send_info', date: '2026-10-02' }) === 'Send information on 2026-10-02', 'an older History row (no "change") still reads, in words');
 ok(/return jsonb_build_object\('ok', true, 'unchanged', true\);/.test(mig), 'a save that changes nothing writes no History row (no duplicates)');
-ok(editor.includes("onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true })}"), '✓ Done is recorded as completed; Clear as cleared');
+ok(editor.includes("onClick={() => void save({ nextAction: 'none', date: null, note: lead.next_action_note ?? null, done: true, expected: snapshotOf(lead) })}"), '✓ Done is recorded as completed; Clear as cleared');
 
 console.log('\n── view, edit, reschedule, complete, remove ──');
 ok(editor.includes('lead={{ next_action: lead.next_action ?? null, next_action_date: lead.next_action_date ?? null, next_action_note: lead.next_action_note ?? null, next_action_time: lead.next_action_time ?? null }}'), 'clicking the cell opens the form with the saved values, time included');

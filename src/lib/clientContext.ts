@@ -5,7 +5,11 @@
      2. build_facts    — Client Build Facts Paul has VERIFIED on the Website Build page
      3. lead           — the client record (business name, category, town, services_included)
      4. discovery      — facts the operator typed into an earlier Discovery scan of the same lead
+                         (town / category / website only — NEVER services, since 2026-10-04)
      5. website        — the latest crawl: DETECTED ONLY, never merged (see below)
+
+   ⛔ SERVICES AND AREAS ARE NOT MERGED (2026-10-04): the highest-ranked non-empty list wins whole
+   (serviceScope.resolveServiceTruth, the clientFacts.ts rule). See mergeClientContext.
 
    🔴 THE CRAWL USED TO BE MERGED STRAIGHT INTO SERVICES AND AREAS (until 2026-09-23). A town that
    merely has a page on the old site, or a menu item that is not a service at all ("Gallery"), went
@@ -21,6 +25,7 @@
  *  'build_facts' = a Client Build Fact Paul marked VERIFIED on the Website Build page. */
 export type ContextSource = 'onboarding' | 'build_facts' | 'lead' | 'discovery' | 'website';
 import { CRAWL_CHECK_VERSION, CRAWL_FRESH_MS } from './crawlCheck.ts';
+import { resolveServiceTruth } from './serviceScope.ts';
 
 export type ClientContext = {
   business_name: string;
@@ -36,6 +41,11 @@ export type ClientContext = {
   /** What the latest crawl SAW that no approved source lists — suggestions, never measured. */
   detected_services: string[];
   detected_areas: string[];
+  /** True only when the services are the client's own answer or a VERIFIED build fact (serviceScope.ts). */
+  services_client_confirmed: boolean;
+  /** Lower-ranked lists holding entries the winner does not — shown to Paul to ask about, NEVER merged. */
+  unconfirmed_services: string[];
+  unconfirmed_areas: string[];
 };
 
 type CrawlInfo = { services?: unknown; towns?: unknown; category?: unknown; specialisms?: unknown } | null | undefined;
@@ -132,27 +142,44 @@ export function mergeClientContext(input: {
   const website = clean(onboarding.website) || clean(lead.website) || clean(discovery.website);
   const country = clean(onboarding.country) || clean(lead.country);
 
-  add(services, service_sources, onboarding.services_list, 'onboarding');
-  add(services, service_sources, onboarding.services, 'onboarding');
-  add(services, service_sources, facts.services, 'build_facts');
-  add(services, service_sources, lead.services_included, 'lead');
-  add(services, service_sources, discovery.specialism, 'discovery');
-  add(service_areas, area_sources, onboarding.areas_list, 'onboarding');
-  add(service_areas, area_sources, onboarding.areas_wanted, 'onboarding');
-  add(service_areas, area_sources, facts.service_areas, 'build_facts');
-  /* The towns Sales recorded on the prospect (2026-09-28) — the twin of lead.services_included above,
-     below the client's own answers and verified build facts, so the client never re-enters them. */
-  add(service_areas, area_sources, lead.service_areas, 'lead');
+  /* 🔴 THE LISTS USED TO BE CONCATENATED (until 2026-10-04, Session C C-08). Onboarding + build facts +
+     what Sales typed + the newest Discovery audit's `specialism` were all merged, so a town the client
+     UNTICKED came back from the lead row, Discovery's own output fed itself, and "Save client context"
+     then wrote the merged list onto the onboarding row as if the client had said it.
+     ⛔ NOW THE clientFacts.ts RULE: the highest-ranked NON-EMPTY list WINS WHOLE (client onboarding →
+     verified build fact → what Sales recorded). Lower lists are returned as `unconfirmed_*` for Paul to
+     ask about — never measured. Discovery's `specialism` is never a source of services: it is what a
+     previous Discovery was GIVEN, not something the client said. */
+  const truth = resolveServiceTruth({ onboardingList: onboarding.services_list, onboardingText: onboarding.services, buildFacts: facts.services, lead: lead.services_included });
+  const serviceSource: ContextSource | null = truth.source;
+  if (serviceSource) add(services, service_sources, truth.services, serviceSource);
+  const areaLists: Array<{ source: ContextSource; values: string[] }> = [
+    { source: 'onboarding', values: [...list(onboarding.areas_list), ...list(onboarding.areas_wanted)] },
+    { source: 'build_facts', values: list(facts.service_areas) },
+    /* The towns Sales recorded on the prospect (2026-09-28) — used only when the client has not answered. */
+    { source: 'lead', values: list(lead.service_areas) },
+  ];
+  const areaWinner = areaLists.find((l) => l.values.length > 0) ?? null;
+  if (areaWinner) add(service_areas, area_sources, areaWinner.values, areaWinner.source);
+  const haveArea = new Set(service_areas.map(key));
+  const unconfirmed_areas = areaLists.filter((l) => l !== areaWinner).flatMap((l) => l.values)
+    .filter((v, i, a) => !haveArea.has(key(v)) && a.findIndex((x) => key(x) === key(v)) === i);
+  const unconfirmed_services = truth.unconfirmed.flatMap((u) => u.values)
+    .filter((v, i, a) => a.findIndex((x) => key(x) === key(v)) === i);
   add(specialisms, {}, onboarding.specialisms, 'onboarding');
   add(specialisms, {}, lead.specialisms, 'lead');
 
   /* DETECTED, NOT MERGED — anything the crawl saw that no approved list already holds. The home town
      is never offered as an extra area. */
   const have = (xs: string[]) => new Set(xs.map(key));
-  const knownServices = have(services);
-  const knownAreas = have([...service_areas, primary_location].filter(Boolean));
+  /* Anything already shown as an unconfirmed list entry is not offered a second time as "detected". */
+  const knownServices = have([...services, ...unconfirmed_services]);
+  const knownAreas = have([...service_areas, ...unconfirmed_areas, primary_location].filter(Boolean));
   const detected_services = list(input.crawl?.services).filter((s, i, a) => !knownServices.has(key(s)) && a.findIndex((x) => key(x) === key(s)) === i);
   const detected_areas = list(input.crawl?.towns).filter((s, i, a) => !knownAreas.has(key(s)) && a.findIndex((x) => key(x) === key(s)) === i);
 
-  return { business_name, primary_location, services, service_areas, specialisms, business_category, website, country, service_sources, area_sources, detected_services, detected_areas };
+  return {
+    business_name, primary_location, services, service_areas, specialisms, business_category, website, country, service_sources, area_sources,
+    detected_services, detected_areas, services_client_confirmed: truth.clientConfirmed, unconfirmed_services, unconfirmed_areas,
+  };
 }

@@ -20,7 +20,16 @@ import {
 import { coverageReport, nearDuplicates } from "../../../src/lib/baselineMix.ts";
 import { backlogCandidates, describeDraft, hookProtection, recommendBaseline, type HookReplacement, type RecInput } from "../../../src/lib/baselineRecommendation.ts";
 import { normaliseOpportunity } from "../../../src/lib/opportunityBacklog.ts";
-import { discoveryState, generateDiscoveryPool, hookQuestionsFor, mixContext, opportunityCheckResults, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_USD_PER_QUESTION_RUN, type DiscoveryState, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
+import { discoveryScope, discoveryState, generateDiscoveryPool, hookQuestionsFor, mixContext, opportunityCheckResults, startDiscoveryRun, storePoolVersion, DISCOVERY_MAX_QUESTIONS, DISCOVERY_RUNS, DISCOVERY_USD_PER_QUESTION_RUN, type DiscoveryState, type DiscoveryStore } from "../_shared/baseline-discovery.ts";
+import { resolveServiceTruth, splitServiceList } from "../../../src/lib/serviceScope.ts";
+import { assessBaselineQuality, acceptedOverrides, unresolvedBlocks, QUALITY_OVERRIDE_MIN_REASON, type QualityOverride } from "../../../src/lib/baselineQuality.ts";
+import { coreQuestions } from "../../../src/lib/customerQuestion.ts";
+import { placeSuffixForCountry } from "../../../src/lib/seedGuard.ts";
+import { loadMeasurementHealth, retryMissingCells } from "../_shared/audit-baseline.ts";
+import { budgetState } from "../_shared/audit-budget.ts";
+import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
+import { SOURCES } from "../_shared/enrichment/sources.ts";
+import type { MeasurementHealth } from "../../../src/lib/measurementHealth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,6 +50,14 @@ function cleanList(value: unknown): string[] {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return [...new Set(raw.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
 }
+
+/** The compact health line the hub shows (src/lib/measurementHealth.ts). */
+const summariseHealth = (h: MeasurementHealth) => ({
+  state: h.state, expected: h.expectedCells, answered: h.answeredCells, missing: h.missing.length,
+  retryable: h.retryableRowIds.length, label: h.label, action: h.action,
+});
+/** A written reason for accepting a measurement as partial must say something. */
+const PARTIAL_MIN_REASON = 10;
 
 /** Recommendation inputs from the Discovery state: each pool question with its measurement. */
 const recInputsOf = (d: DiscoveryState): RecInput[] => d.pool.map((p) => ({ question: p.question, engines: p.opportunity?.engines ?? null, verdict: p.opportunity?.verdict ?? null }));
@@ -102,7 +119,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL")!;
     const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
     let q = service.from("onboarding_responses")
-      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery, baseline_meta")
+      .select("id, lead_id, status, confirmed_location, services, services_list, areas_list, areas_wanted, baseline_status, baseline_questions, baseline_approved_at, baseline_approved_by, audit_id, baseline_discovery, baseline_meta, services_not_offered, top_requests, must_not_say")
       .eq("status", "paid");
     if (onboardingId) q = q.eq("id", onboardingId);
     else q = q.eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(1);
@@ -118,7 +135,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: lead, error: leadErr } = await service.from("outreach_leads")
-      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, service_areas, website_build, baseline_audit_id")
+      .select("id, user_id, business_name, category, search_keyword, search_location, derived_town, website, country, services_included, service_areas, website_build, baseline_audit_id, remeasure_audit_id, remeasure_results_sent_at")
       .eq("id", row.lead_id).eq("user_id", user.id).maybeSingle();
     if (leadErr) throw leadErr;
     if (!lead) return json({ ok: false, error: "lead_not_found" }, 404);
@@ -156,10 +173,20 @@ Deno.serve(async (req) => {
     const questions = cleanQuestions(row.baseline_questions);
     /* DISCOVERY (before the baseline): the stored pool and, when a Discovery audit has answers, each
        question's opportunity. Read only — opening this screen asks no AI engine. */
+    /* ⛔ BUSINESS TRUTH (2026-10-04, src/lib/serviceScope.ts). The client's own "we do NOT offer" list
+       travels with every Discovery generation and every check below; the services are the winning
+       list only (mergeClientContext no longer concatenates sources). */
+    const notOffered = splitServiceList((row as { services_not_offered?: unknown }).services_not_offered);
     const discoveryInput = {
       businessName: String(lead.business_name ?? ""), businessCategory: merged.business_category, website: merged.website,
       country: String(lead.country ?? ""), primaryTown: merged.primary_location, areas: merged.service_areas, services: merged.services,
+      notOffered, mustNotSay: String((row as { must_not_say?: unknown }).must_not_say ?? "").trim(),
     };
+    const scope = discoveryScope(discoveryInput);
+    /* The two mandatory core questions for the home town (customerQuestion.ts, C-03). */
+    const core = merged.business_category && merged.primary_location
+      ? coreQuestions(merged.business_category, merged.primary_location, placeSuffixForCountry(String(lead.country ?? "")))
+      : [];
     const store = (row.baseline_discovery && typeof row.baseline_discovery === "object") ? row.baseline_discovery as DiscoveryStore : null;
     const biz = { name: discoveryInput.businessName, location: merged.primary_location, website: merged.website, trade: merged.business_category };
     const [discovery, hook] = await Promise.all([
@@ -171,8 +198,25 @@ Deno.serve(async (req) => {
     /* THE RECOMMENDED OFFICIAL 20 (src/lib/baselineRecommendation.ts): the Hook Audit's questions
        locked in, the rest balanced from Discovery, opportunity only as a tie-break. Read only —
        computed on every read from the stored pool and answers, never stored. */
-    const recArgs = (d: DiscoveryState) => ({ hook: hook.questions, pool: recInputsOf(d), hookMeasures: hook.measures, ctx: mixCtx, trade: merged.business_category });
+    const recArgs = (d: DiscoveryState) => ({ hook: hook.questions, pool: recInputsOf(d), hookMeasures: hook.measures, ctx: mixCtx, trade: merged.business_category, scope, core });
     const recommendation = recommendBaseline({ ...recArgs(discovery), target: BASELINE_QUESTIONS });
+    /* THE FINAL-20 CHECKS (src/lib/baselineQuality.ts) — computed on every read for whatever draft is
+       stored, and again at approval for the exact set being frozen. */
+    const qualityOf = (qs: string[]) => assessBaselineQuality({
+      questions: qs, scope, primaryTown: merged.primary_location, areas: mixCtx.areas, businessName: String(lead.business_name ?? ""),
+      trade: merged.business_category, hookQuestions: hook.questions, servicesClientConfirmed: merged.services_client_confirmed,
+    });
+    const quality = qualityOf(questions);
+    /* THE MEASUREMENT'S HEALTH (src/lib/measurementHealth.ts) and the BUDGET (src/lib/auditBudget.ts):
+       read only, so Paul sees complete / partial / capped / failed and whether client measurement has
+       room — never a silent "Baseline running". */
+    const pointer = (lead as { baseline_audit_id?: string | null }).baseline_audit_id ?? (typeof row.audit_id === "string" ? row.audit_id : null);
+    const replayId = (lead as { remeasure_audit_id?: string | null }).remeasure_audit_id ?? null;
+    const [baselineHealth, replayHealth, budget] = await Promise.all([
+      pointer ? loadMeasurementHealth(service, pointer) : Promise.resolve(null),
+      replayId ? loadMeasurementHealth(service, replayId) : Promise.resolve(null),
+      budgetState(service, String((lead as { user_id?: string }).user_id ?? ""), SOURCES.ai_search.estCostUsd).catch(() => null),
+    ]);
     const details = {
       onboarding_id: row.id, lead_id: row.lead_id, business_name: merged.business_name,
       business_type: merged.business_category, location: merged.primary_location,
@@ -187,10 +231,23 @@ Deno.serve(async (req) => {
       meta: (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta : null,
       canonical_services: mixCtx.services.map((x) => x.label),
       ...(typeof row.audit_id === "string" && row.audit_id ? { audit_id: row.audit_id } : {}),
+      /* 2026-10-04 (fix/04): business truth, the final-20 checks, the measurement's health, the budget. */
+      services_not_offered: notOffered,
+      top_requests: String((row as { top_requests?: unknown }).top_requests ?? ""),
+      services_client_confirmed: merged.services_client_confirmed,
+      unconfirmed: { services: merged.unconfirmed_services, areas: merged.unconfirmed_areas },
+      core_questions: core,
+      quality: { blocking: quality.blocking, warnings: quality.warnings, coverage: quality.coverage, override_min_reason: QUALITY_OVERRIDE_MIN_REASON },
+      health: baselineHealth ? { audit_id: pointer, ...summariseHealth(baselineHealth.health), frozen_at: baselineHealth.frozenAt, retry_rounds: baselineHealth.retryRounds } : null,
+      remeasure: replayId ? {
+        audit_id: replayId, results_sent_at: (lead as { remeasure_results_sent_at?: string | null }).remeasure_results_sent_at ?? null,
+        health: replayHealth ? { ...summariseHealth(replayHealth.health), frozen_at: replayHealth.frozenAt } : null,
+      } : null,
+      budget,
     };
     if (action === "get") return json({ ok: true, baseline: details });
 
-    if (["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve", "run", "save_context", "reopen_approved", "opportunities", "opportunity_save", "opportunity_check"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
+    if (["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve", "run", "save_context", "reopen_approved", "opportunities", "opportunity_save", "opportunity_check", "retry_missing", "accept_partial", "send_results"].indexOf(action) < 0) return json({ ok: false, error: "unsupported_action" }, 400);
     const leadOwner = String((lead as { user_id?: string }).user_id ?? user.id);
     const callEnvEarly = { url, secret: Deno.env.get("CRON_SECRET") ?? "", serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", userId: user.id };
 
@@ -285,10 +342,67 @@ Deno.serve(async (req) => {
       requireUpdatedRow(updated, "baseline_state_changed");
       return json({ ok: true, baseline: { ...details, status: "needs_approval", meta } });
     }
+    /* ══ RECOVERY (2026-10-04, fix/04 — Session C C-10 / C-11) ═════════════════════════════════════
+       retry_missing  — re-ask ONLY the failed cells of the baseline (or the day-28 replay) inside its
+                        existing runs. The claim is the conditional failed → pending update in
+                        retryMissingCells: no duplicate cell, no new run, no second pointer, the frozen
+                        question text untouched. Refused once the measurement has frozen.
+       accept_partial — Paul accepts a measurement whose missing cells cannot be re-asked, with a written
+                        reason kept on baseline_meta.partial_accepted; the next tick freezes it, and the
+                        snapshot records it as partial. Never fabricates an answer.
+       send_results   — the four-week results, through the SAME claim-first sender as the queue
+                        (remeasure-results.ts): still held while REMEASURE_RESULTS_COPY_APPROVED is false,
+                        still refused for an ended client, never sent twice. */
+    if (action === "retry_missing" || action === "accept_partial") {
+      const target = body.target === "remeasure" ? "remeasure" : "baseline";
+      const auditId = target === "remeasure" ? replayId : pointer;
+      if (!auditId) return json({ ok: false, error: "no_measurement", detail: target === "remeasure" ? "There is no re-measure for this client yet." : "This client has no baseline measurement yet." }, 409);
+      if (action === "retry_missing") {
+        const r = await retryMissingCells(service, auditId, `operator:${user.id}`);
+        if (!r.ok) {
+          return json({ ok: false, error: r.reason === "frozen" ? "measurement_frozen" : "retry_failed", detail: r.reason === "frozen" ? "This measurement has already frozen — its answers can no longer change." : `Nothing was re-asked: ${r.reason}.` }, 409);
+        }
+        await recordLeadEvent(service, String(row.lead_id), "baseline_run", { actor: user.id, source: "admin", body: r.requeued ? `Missing answers re-asked (${r.requeued})` : "Retry pressed — nothing was missing", data: { audit_id: auditId, requeued: r.requeued, target } });
+        return json({ ok: true, baseline: details, requeued: r.requeued, ...(r.requeued ? {} : { skipped: r.reason ?? "nothing_to_retry" }) });
+      }
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < PARTIAL_MIN_REASON) return json({ ok: false, error: "partial_reason_required", detail: "Write why this measurement should be frozen with answers missing." }, 400);
+      const h = target === "remeasure" ? replayHealth : baselineHealth;
+      if (!h || h.frozenAt) return json({ ok: false, error: "measurement_frozen", detail: "This measurement has already frozen." }, 409);
+      /* Only a measurement whose missing cells CANNOT be re-asked. Retryable cells are retried first —
+         accepting them as missing would settle the refund on answers we could still get. */
+      if (h.health.retryableRowIds.length > 0) {
+        return json({ ok: false, error: "retry_first", detail: `${h.health.retryableRowIds.length} missing question(s) can still be re-asked. Press Retry missing answers first.` }, 409);
+      }
+      if (h.health.state !== "partial") return json({ ok: false, error: "not_partial", detail: `The measurement is ${h.health.state.replace("_", " ")}, not partial.` }, 409);
+      const now = new Date().toISOString();
+      const prior = (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta as Record<string, unknown> : {};
+      const accepted = (prior.partial_accepted && typeof prior.partial_accepted === "object") ? prior.partial_accepted as Record<string, unknown> : {};
+      const meta = { ...prior, partial_accepted: { ...accepted, [auditId]: { at: now, by: user.id, reason, answered: h.health.answeredCells, expected: h.health.expectedCells } } };
+      const { error } = await service.from("onboarding_responses").update({ baseline_meta: meta, updated_at: now }).eq("id", row.id).eq("status", "paid");
+      if (error) throw error;
+      await recordLeadEvent(service, String(row.lead_id), "baseline_run", { actor: user.id, source: "admin", body: `Measurement accepted as partial (${h.health.answeredCells} of ${h.health.expectedCells})`, data: { audit_id: auditId, reason, target } });
+      return json({ ok: true, baseline: { ...details, meta } });
+    }
+    if (action === "send_results") {
+      if (!replayId) return json({ ok: false, error: "no_remeasure", detail: "There is no re-measure for this client yet." }, 409);
+      const outcome = await maybeSendRemeasureResults(service, replayId, { quietHold: false });
+      return json({ ok: outcome.kind === "sent", baseline: details, results: outcome, ...(outcome.kind === "sent" ? {} : { error: `results_${outcome.kind}`, detail: outcome.reason }) }, outcome.kind === "sent" ? 200 : 409);
+    }
+
     /* starting / running / complete: the measurement has begun (or is being claimed by another
        starter this second). Every mutation answers with the row as it is — including `run`, so the
        screen that lost the claim shows "Starting baseline" and polls, never a second start. */
     if (isStartedBaselineStatus(status)) return json({ ok: true, baseline: details, skipped: "already_started" });
+    /* ⛔ A LEAD THAT ALREADY HAS A BASELINE POINTER IS NEVER RE-DRAFTED (C-26, 2026-10-04). A legacy
+       client paid before baseline_status existed (RG, Ronnie) reads as `needs_questions`, and the hub
+       only HID the buttons — the server let a new set be generated, saved and approved. The replay is
+       safe either way (it reads the pointer), but a second "approved" set beside a frozen baseline is
+       a document that contradicts the measurement. */
+    if ((lead as { baseline_audit_id?: string | null }).baseline_audit_id
+      && ["generate", "balanced", "discovery_generate", "discovery_run", "save", "approve"].includes(action)) {
+      return json({ ok: false, error: "baseline_already_measured", detail: "This client already has a baseline measurement. Its questions are frozen; nothing new can be drafted or approved for it." }, 409);
+    }
 
     /* Context is saved on the same lead/onboarding pair the baseline already reads. This is only
        an operator convenience for incomplete manual/onboarding records; it never creates a second
@@ -296,16 +410,24 @@ Deno.serve(async (req) => {
        `approved`: the questions are frozen, the context is not, and a row approved without services
        needs exactly this edit to become startable. */
     if (action === "save_context") {
-      const location = typeof body.location === "string" ? body.location.trim() : String(details.location ?? "").trim();
-      const services = typeof body.services === "string" ? body.services.trim() : String(details.services ?? "").trim();
-      const serviceList = cleanList(Array.isArray(body.services_list) ? body.services_list : details.services_list);
-      const areas = cleanList(Array.isArray(body.areas_list) ? body.areas_list : details.areas_list);
+      /* 🔴 THIS USED TO WRITE THE MERGED LISTS BACK (Session C C-08): a field the screen did not send
+         fell back to `details`, i.e. onboarding + build facts + what Sales typed + Discovery, and was
+         then stored on the onboarding row as if the client had said it. ⛔ Now only what Paul actually
+         SENT is written; a list he did not send keeps the row's own value, never the merged one. */
+      const location = typeof body.location === "string" ? body.location.trim() : String(row.confirmed_location ?? "").trim();
+      const services = typeof body.services === "string" ? body.services.trim() : String(row.services ?? "").trim();
+      const serviceList = cleanList(Array.isArray(body.services_list) ? body.services_list : row.services_list);
+      const areas = cleanList(Array.isArray(body.areas_list) ? body.areas_list : row.areas_list);
       const businessType = typeof body.business_type === "string" ? body.business_type.trim() : String(details.business_type ?? "").trim();
       const website = typeof body.website === "string" ? body.website.trim() : String(details.website ?? "").trim();
+      /* The client's negatives and top requests (2026-10-04) — written only when sent. */
+      const truthPatch: Record<string, unknown> = {};
+      if (typeof body.services_not_offered === "string") truthPatch.services_not_offered = body.services_not_offered.trim().slice(0, 2000) || null;
+      if (typeof body.top_requests === "string") truthPatch.top_requests = body.top_requests.trim().slice(0, 2000) || null;
       if (!location || !businessType) return json({ ok: false, error: "location_and_business_type_required" }, 400);
       const now = new Date().toISOString();
       const { data: updatedOnboarding, error: onErr } = await service.from("onboarding_responses").update({
-        confirmed_location: location, services, services_list: serviceList, areas_list: areas, updated_at: now,
+        confirmed_location: location, services, services_list: serviceList, areas_list: areas, ...truthPatch, updated_at: now,
       }).eq("id", row.id).eq("status", "paid").select("id").maybeSingle();
       if (onErr) throw onErr;
       requireUpdatedRow(updatedOnboarding, "paid_onboarding_update_conflict");
@@ -314,7 +436,13 @@ Deno.serve(async (req) => {
       }).eq("id", lead.id).eq("user_id", user.id).select("id").maybeSingle();
       if (leadUpdateErr) throw leadUpdateErr;
       requireUpdatedRow(updatedLead, "lead_update_conflict");
-      return json({ ok: true, baseline: { ...details, location, services, services_list: serviceList, areas_list: areas, business_type: businessType, website } });
+      return json({
+        ok: true, baseline: {
+          ...details, location, services, services_list: serviceList, areas_list: areas, business_type: businessType, website,
+          ...(typeof truthPatch.services_not_offered !== "undefined" ? { services_not_offered: splitServiceList(truthPatch.services_not_offered) } : {}),
+          ...(typeof truthPatch.top_requests !== "undefined" ? { top_requests: String(truthPatch.top_requests ?? "") } : {}),
+        },
+      });
     }
 
     let next = questions;
@@ -491,6 +619,23 @@ Deno.serve(async (req) => {
           detail: `The Hook Audit question${hp.unexplained.length === 1 ? "" : "s"} ${hp.unexplained.map((q) => `"${q}"`).join(", ")} ${hp.unexplained.length === 1 ? "is" : "are"} not in the set. Keep ${hp.unexplained.length === 1 ? "it" : "them"}, or give a reason for replacing ${hp.unexplained.length === 1 ? "it" : "each"} (a factual or business error).`,
         }, 409);
       }
+      /* ⛔ THE CONTENT CHECKS (2026-10-04, C-05 / M-028). A branded question, a service the client does
+         not offer or never confirmed, a question naming no approved town, or a set with no core
+         question about the home town is REFUSED until each is replaced or carries a written reason
+         (≥ QUALITY_OVERRIDE_MIN_REASON characters). The Hook Audit's questions are checked like every
+         other one. The reasons and the warnings are kept on baseline_meta with the approval. */
+      const qualityNow = qualityOf(next);
+      const overrides: QualityOverride[] = Array.isArray(body.quality_overrides)
+        ? (body.quality_overrides as unknown[]).filter((o): o is QualityOverride => !!o && typeof o === "object" && typeof (o as QualityOverride).code === "string" && typeof (o as QualityOverride).reason === "string")
+        : [];
+      const unresolved = unresolvedBlocks(qualityNow.blocking, overrides);
+      if (unresolved.length) {
+        return json({
+          ok: false, error: "baseline_quality_blocked",
+          detail: `${unresolved.length} check${unresolved.length === 1 ? "" : "s"} must be fixed or explained before freezing: ${unresolved.slice(0, 3).map((u) => (u.question ? `"${u.question}" — ${u.message}` : u.message)).join(" · ")}${unresolved.length > 3 ? " …" : ""}`,
+          blocking: unresolved,
+        }, 409);
+      }
       const now = new Date().toISOString();
       const prior = (row.baseline_meta && typeof row.baseline_meta === "object") ? row.baseline_meta as Record<string, unknown> : {};
       /* THE APPROVAL RECORD. It describes the frozen set; it never changes what is measured (that is
@@ -500,6 +645,10 @@ Deno.serve(async (req) => {
         hook_audit_id: hook.audit_id, hook_questions: hook.questions, hook_replacements: hp.explained,
         sources: describeDraft(next, recArgs(discovery)).map((r) => ({ question: r.question, source: r.source })),
         corrections: Array.isArray(prior.corrections) ? prior.corrections : [],
+        quality_overrides: acceptedOverrides(qualityNow.blocking, overrides),
+        quality_warnings: qualityNow.warnings.map((w) => ({ code: w.code, question: w.question, message: w.message })),
+        services_not_offered: notOffered,
+        ...(prior.partial_accepted ? { partial_accepted: prior.partial_accepted } : {}),
       };
       const { data: updated, error } = await service.from("onboarding_responses").update({
         baseline_questions: next, baseline_status: "approved", baseline_approved_at: now, baseline_approved_by: user.id, baseline_meta: meta, updated_at: now,
@@ -511,7 +660,21 @@ Deno.serve(async (req) => {
          failure here never undoes the approval; it is reported. */
       let backlogAdded = 0, backlogError: string | null = null;
       try {
-        const cands = backlogCandidates(next, recInputsOf(discovery), mixCtx);
+        /* C-19: a question now IN the frozen set is not also "future work". A backlog row seeded by an
+           earlier approval (before a reopen) that is still untouched ('new', from Discovery) is moved
+           to not_pursuing with a note — kept, never deleted, history appended. */
+        const inSet = new Set(next.map((q) => q.trim().toLowerCase()));
+        const { data: seeded } = await service.from("client_opportunities").select("id, question, status, source, history").eq("lead_id", row.lead_id).eq("source", "discovery").eq("status", "new");
+        for (const s of (seeded ?? []) as Array<{ id: string; question: string; history: unknown }>) {
+          if (!inSet.has(String(s.question ?? "").trim().toLowerCase())) continue;
+          const history = Array.isArray(s.history) ? s.history as unknown[] : [];
+          await service.from("client_opportunities").update({
+            status: "not_pursuing", updated_at: now,
+            history: [...history, { at: now, by: user.id, from: "new", status: "not_pursuing", note: "now part of the official baseline — measured by the guarantee, not ongoing work" }].slice(-50),
+          }).eq("id", s.id).eq("status", "new");
+        }
+        /* ⛔ Never a question the client does not offer or never confirmed (C-04): the scope decides. */
+        const cands = backlogCandidates(next, recInputsOf(discovery), mixCtx, scope);
         if (cands.length) {
           const { data: existing } = await service.from("client_opportunities").select("question").eq("lead_id", row.lead_id);
           const have = new Set(((existing ?? []) as Array<{ question: string }>).map((e) => e.question.trim().toLowerCase()));

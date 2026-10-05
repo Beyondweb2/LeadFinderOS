@@ -150,7 +150,9 @@ console.log('\n── 7/8. THE BACKLOG GROWS WITHOUT TOUCHING THE BASELINE OR TH
   const cands = backlogCandidates(recQs, pool, ctx);
   ok(cands.length > 0 && cands.every((c) => !recQs.includes(c.question)), '7. the Discovery questions NOT in the 20 seed the backlog');
   ok(!cands.some((c) => c.question === 'best electrician in Swindon UK' || c.question === 'electrician in Frome UK'), '7. …never an unapproved town or an already-named-everywhere question');
-  ok(/const cands = backlogCandidates\(next, recInputsOf\(discovery\), mixCtx\);/.test(pb) && /have\.has\(c\.question\.trim\(\)\.toLowerCase\(\)\)/.test(pb), '7. approval seeds the backlog additively — an existing row is never touched');
+  /* 2026-10-04 (fix/04): the seeding is scoped (never a service the client does not offer), and an untouched
+     'new' Discovery row that is now IN the frozen set moves to not_pursuing with a history note (C-19). */
+  ok(/const cands = backlogCandidates\(next, recInputsOf\(discovery\), mixCtx, scope\);/.test(pb) && /have\.has\(c\.question\.trim\(\)\.toLowerCase\(\)\)/.test(pb), '7. approval seeds the backlog additively — an existing row is never deleted or rewritten');
   for (const p of ['supabase/functions/_shared/remeasure-results.ts', 'src/lib/measurementCompare.ts', 'src/lib/remeasureResults.ts', 'src/lib/baselineReplay.ts', 'supabase/functions/_shared/audit-baseline.ts', 'src/lib/baselineView.ts']) {
     ok(!/client_opportunities|opportunityBacklog|recheck_audit_id/.test(read(p)), `8. ${p} never reads the backlog or its checks`);
   }
@@ -212,7 +214,9 @@ console.log('\n── 12. EXISTING FROZEN BASELINES ARE UNTOUCHED ──');
   const pb = read('supabase/functions/paid-baseline/index.ts');
   for (const a of ['generate', 'approve']) {
     const blk = pb.slice(pb.indexOf(a === 'generate' ? 'if (action === "generate" || action === "balanced")' : 'if (action === "approve")'));
-    ok(/\.or\(EDITABLE_BASELINE_STATUS_FILTER\)/.test(blk.slice(0, 6000)), `12. ${a} writes only an editable (not frozen) row`);
+    /* The approve block grew the final-20 content checks (fix/04, 2026-10-04), so the window is the block
+       up to the approval write itself rather than a fixed 6,000 characters. */
+    ok(/\.or\(EDITABLE_BASELINE_STATUS_FILTER\)/.test(blk.slice(0, 10000)), `12. ${a} writes only an editable (not frozen) row`);
   }
   ok(!/baseline_questions/.test(pb.slice(pb.indexOf('if (action === "reopen_approved")'), pb.indexOf('if (action === "reopen_approved")') + 2200).replace(/questions_before: questions/, '')), '12. reopening never rewrites the questions — it only lifts the freeze on an unstarted set');
   const draft = describeDraft(recQs, { hook: HOOK, pool, ctx, trade: 'electrician' });

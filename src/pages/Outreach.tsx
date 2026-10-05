@@ -28,6 +28,9 @@ import { MyWhatsAppQueuePanel } from '@/components/MyWhatsAppQueuePanel';
 import { CampaignsButton } from '@/components/campaigns/CampaignsButton';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
+import { SalesCheckDialog, SalesCheckPanel } from '@/components/SalesCheckPanel';
+import { useSalesChecks } from '@/hooks/useSalesChecks';
+import type { WorkspaceTab } from '@/components/LeadDetailDialog';
 import { UserPlus } from 'lucide-react';
 
 const Outreach = () => {
@@ -90,6 +93,11 @@ const Outreach = () => {
     fetchLeads();
   });
 
+  /* "Check before calling" (sales, fix/07): the batch lives server-side; this reads it and moves it on
+     while the page is open. The press opens a dialog that says what will happen before anything starts. */
+  const checks = useSalesChecks(perms.salesChecks);
+  const [checkIds, setCheckIds] = useState<string[] | null>(null);
+
   // Campaign filter (null = all campaigns). Persisted per-user so it survives
   // navigation + reload + re-login (restored in an effect once campaigns load).
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
@@ -107,7 +115,7 @@ const Outreach = () => {
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).
   const location = useLocation();
-  type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null };
+  type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null; tab?: WorkspaceTab };
   /* ⛔ /outreach?lead=<id> (salesLinks.ts outreachLeadLink, 2026-09-30) is the addressable form: it
      stays in the URL while the lead's workspace is open, so a refresh reopens it and Back returns to
      where the click came from; closing the workspace removes it. Router state is still read for an
@@ -337,6 +345,23 @@ const Outreach = () => {
         </div>
       )}
 
+      {perms.salesChecks && (
+        <SalesCheckPanel checks={checks} onOpenLead={(leadId, tab) => setLaunchIntent({ leadId, channel: 'open', tab })} />
+      )}
+      {perms.salesChecks && (
+        <SalesCheckDialog
+          open={checkIds !== null}
+          onOpenChange={(o) => { if (!o) setCheckIds(null); }}
+          selected={checkIds?.length ?? 0}
+          checks={checks}
+          onConfirm={async (refresh) => {
+            if (!checkIds) return;
+            const r = await checks.start(checkIds, refresh);
+            if (r.ok) setCheckIds(null);
+          }}
+        />
+      )}
+
       {/* ⛔ NEVER A SILENT PARTIAL LIST: while the rest load (or after they failed) the page says so. */}
       {loadNotice && (
         <div role="status" aria-live="polite" data-testid="lead-load-notice"
@@ -417,6 +442,8 @@ const Outreach = () => {
         onClearPreset={clearPreset}
         onBulkJob={perms.bulkAudits ? createJob : undefined}
         bulkJobActive={!!activeJob || creatingJob}
+        onSalesCheck={perms.salesChecks ? (ids) => setCheckIds(ids.filter((id) => !isDemoLead(id))) : undefined}
+        salesCheckBlocked={checks.view?.batch?.status === 'active' ? 'Your last checks are still starting — wait a moment, or stop them first.' : checks.starting ? 'Starting…' : null}
       />}
 
       {/* First-time outreach tips */}

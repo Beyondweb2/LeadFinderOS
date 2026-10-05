@@ -41,6 +41,15 @@ import { cloudflareBranches, cloudflareModeProblem, stablePreviewUrl } from '@/l
 import { AREA_STATUS_LABELS, serviceAreaView, withAreas, withServes, type AreaStatus } from '@/lib/serviceAreaCandidates';
 import { CLOUDFLARE_MODE_LABELS, CLOUDFLARE_MODES } from '@/lib/websiteBuildState';
 import { crawlOldUrls, summariseLeadCrawl } from '@/lib/leadCrawlSummary';
+import { websiteServiceRoute } from '@/lib/websiteRoute';
+import { domainAuthority, domainInputFromRow, DOMAIN_REASON_TEXT } from '@/lib/domainAuthority';
+import { productionGateProblems } from '@/lib/websiteLaunch';
+import { readSiteForm, siteFormProblems, suggestSiteKey, productionOriginsFor, DEFAULT_THANKS_PATH } from '@/lib/siteForm';
+import { readSiteGateReport, siteIntentMap } from '@/lib/siteGate';
+import { correctionPrompt } from '@/lib/buildExecution';
+import { launchProblems, PRODUCTION_GATE_REPORT_FILE } from '@/lib/buildPack';
+import { EXISTING_SITE_QA_KEYS, type ManifestAsset, type AssetType, ASSET_TYPES } from '@/lib/websiteBuildState';
+import { LOCATION_NOTE_MIN_WORDS } from '@/lib/templateMapping';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    WEBSITE BUILD COMMAND CENTRE (V2) — /paid-clients/:leadId/website-build
@@ -99,7 +108,7 @@ function Pick<T extends string>({ label, value, options, labels, onChange }: { l
 
 function PackCard({ item, onCopy }: { item: PackItem; onCopy: (item: PackItem) => void }) {
   const [open, setOpen] = useState(false);
-  const refusing = item.id === 'production' && item.blockedBy.length > 0;
+  const refusing = item.refused === true || (item.id === 'production' && item.blockedBy.length > 0);
   return <div className="rounded-md border p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
@@ -121,7 +130,7 @@ function PackCard({ item, onCopy }: { item: PackItem; onCopy: (item: PackItem) =
 /** A stage prompt: one line, a Copy button, the text on demand. */
 function PromptCard({ p, onCopy }: { p: StagePrompt; onCopy: (p: StagePrompt) => void }) {
   const [open, setOpen] = useState(false);
-  const refusing = p.id === 'production_deploy' && p.blockedBy.length > 0;
+  const refusing = p.refused === true || (p.id === 'production_deploy' && p.blockedBy.length > 0);
   return <div className="rounded-md border border-primary/30 bg-primary/[0.03] p-3">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0 flex-1"><p className="font-medium">{p.label.replace(/^Copy /, '')}</p><p className="text-xs text-muted-foreground">{p.help}</p></div>
@@ -240,9 +249,28 @@ export default function WebsiteBuild() {
   const issues = useMemo(() => state ? checkArchitecture(state.pages, state.redirects) : [], [state]);
   const archErrors = issues.filter((i) => i.level === 'error').length;
   const businessName = rows.find((r) => r.key === 'business_name')?.value || String((payload?.lead as { business_name?: string } | null)?.business_name ?? '');
+  /* ⛔ FIX WORKSTREAM 6: Build or Optimise, and the domain-authority rule, from the client's own records
+     (websiteRoute.ts / domainAuthority.ts). An Optimise client gets no Build tooling; production needs
+     the one launch rule (websiteLaunch.ts) — the server's save refuses the same things. */
+  const routeVerdict = useMemo(() => websiteServiceRoute((payload?.onboarding ?? null) as never, (payload?.lead ?? null) as never), [payload]);
+  const domainVerdict = useMemo(() => {
+    if (!payload?.onboarding) return null;
+    const d = domainAuthority(domainInputFromRow(payload.onboarding as never));
+    return { applies: d.applies, ready: d.ready, reasons: d.reasons.map((r) => DOMAIN_REASON_TEXT[r]) };
+  }, [payload]);
+  const ended = !!(payload?.lead as { service_terminated_at?: string | null } | null)?.service_terminated_at;
   const packInput = useMemo(() => (state && evidence) ? {
     state, template, facts: rows, evidence, businessName, existingSiteUrl, mustNotSay: evidence.facts.mustNotSay.value ?? '',
-  } : null, [state, template, rows, evidence, businessName, existingSiteUrl]);
+    serviceRoute: routeVerdict.route, routeSource: routeVerdict.source, domain: domainVerdict,
+    /* WAVE 1 INTEGRATION: Workstream 4 service truth from the client own records (siteGate.siteTruthFromBuild). */
+    clientTruth: {
+      onboardingList: (payload?.onboarding as { services_list?: unknown } | null)?.services_list,
+      onboardingText: (payload?.onboarding as { services?: unknown } | null)?.services,
+      notOffered: (payload?.onboarding as { services_not_offered?: unknown } | null)?.services_not_offered,
+      leadServices: (payload?.lead as { services_included?: unknown } | null)?.services_included,
+    },
+  } : null, [state, template, rows, evidence, businessName, existingSiteUrl, routeVerdict, domainVerdict]);
+  const launch = useMemo(() => packInput ? launchProblems(packInput) : [], [packInput]);
   const pack = useMemo(() => packInput ? buildPack(packInput) : [], [packInput]);
   const prompts = useMemo(() => packInput ? stagePrompts(packInput) : [], [packInput]);
   const packById = (id: PackItemId) => pack.find((p) => p.id === id)!;
@@ -250,6 +278,8 @@ export default function WebsiteBuild() {
   const mapping = useMemo(() => state ? computeMapping(state, template, rows, businessName) : null, [state, template, rows, businessName]);
   /* ⛔ THE readiness: the same blockers gate the prompt, the Build pack stage and the Ready badge (F14). */
   const buildBlockers = useMemo(() => packInput && mapping ? executionBlockers(packInput, mapping) : undefined, [packInput, mapping]);
+  /* WAVE 1 INTEGRATION: planned service pages the client never confirmed (Workstream 4 truth) — shown here, not only in the prompt. */
+  const unconfirmedServices = useMemo(() => packInput && mapping ? siteIntentMap(packInput, mapping).unconfirmedServices : [], [packInput, mapping]);
   const stages = useMemo(() => state ? websiteBuildStages({
     state, hasExistingSite: !!existingSiteUrl, factsAwaiting: summary.awaiting, architectureErrors: archErrors,
     setupMissing: setupProblems(state).map((p) => p.label),
@@ -302,6 +332,10 @@ export default function WebsiteBuild() {
           {save === 'error' && <><span>— {saveError}</span><Button size="sm" variant="outline" onClick={() => void flush()}>Retry save</Button></>}
         </div>
       </div>
+      {routeVerdict.route === 'optimise' && <div role="alert" className="mt-3 flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Findable Optimise client — Website Build is switched off.</b> They keep their own website: nothing here builds, deploys, connects a domain or registers a form for them. Use the page generator for their pages. <span className="text-xs">(Route from {routeVerdict.source}.)</span></span></div>}
+      {routeVerdict.route === null && <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Build or Optimise is not settled</b> — {routeVerdict.source}. Preview work can go on; production and the live enquiry form stay locked until the client's route is recorded as Build.</span></div>}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {stages.map((s) => <button key={s.stage} type="button" onClick={() => goStep(s.stage)}
           className={`rounded-md border p-2 text-left text-xs transition ${step === s.stage ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'} ${!s.applicable ? 'opacity-60' : ''}`}>
@@ -312,14 +346,14 @@ export default function WebsiteBuild() {
       {/* The eight Claude tasks, one click each. Each prompt carries only its stage's context. */}
       <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-3">
         <span className="mr-1 text-xs text-muted-foreground">Claude tasks:</span>
-        {prompts.map((p) => { const refusing = p.id === 'production_deploy' && p.blockedBy.length > 0;
+        {prompts.map((p) => { const refusing = p.refused === true || (p.id === 'production_deploy' && p.blockedBy.length > 0);
           return <Button key={p.id} size="sm" variant={p.stage === step ? 'default' : 'outline'} className="h-7 px-2 text-xs" disabled={refusing}
             title={p.blockedBy.length ? `${p.label} — missing: ${p.blockedBy.join(', ')}` : p.label} aria-label={p.label} onClick={() => void copyPrompt(p)}>
             <Clipboard className="mr-1 h-3 w-3" />{p.short}{p.blockedBy.length > 0 && !refusing && <span className="ml-1 text-amber-500">•</span>}</Button>; })}
       </div>
     </CardContent></Card>
 
-    <ProjectDetails key={step === 'build_pack' ? 'open' : 'closed'} defaultOpen={step === 'build_pack'} state={state} set={set} businessName={businessName}
+    <ProjectDetails key={step === 'build_pack' ? 'open' : 'closed'} defaultOpen={step === 'build_pack'} state={state} set={set} businessName={businessName} productionLocked={launch.length > 0}
       template={template} existingSiteUrl={existingSiteUrl} factSiteUrl={factSiteUrl} tradeRow={tradeRow} crawlLabel={crawl.label} crawledAt={crawl.crawledAt} />
 
     {cur && <p className="text-xs text-muted-foreground">{STAGE_LABELS[cur.stage]}: {cur.detail}</p>}
@@ -415,11 +449,15 @@ export default function WebsiteBuild() {
 
     {/* ══ BUILD PACK ═══════════════════════════════════════════════════════════════════════ */}
     {step === 'build_pack' && <>
+      {unconfirmedServices.length > 0 && <div role="status" className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><b>Not confirmed by the client:</b> {unconfirmedServices.join(', ')}. The page plan has a page for it, but it is not in the client's own services (onboarding answer or a verified fact). It answers no baseline question, and must claim nothing beyond the verified facts. Confirm it with the client before launch, or remove the page.</span></div>}
       {state.route && <QualityPanel state={state} update={update} hasExistingSite={!!existingSiteUrl} />}
       {state.route && mapping && packInput && <BuildExecutionPanel state={state} update={update} mapping={mapping} input={packInput}
         execPrompt={promptById('build_execution')} onCopy={copyPrompt} toast={toast} />}
       {state.route && mapping && <MappingPanel mapping={mapping} buildBlockers={buildBlockers ?? []} state={state} update={update} set={set} rows={rows} onDecide={decideRow} onEdit={editRow} template={template}
         assetPrompt={promptById('asset_download')} onCopy={copyPrompt} />}
+      {state.route && routeVerdict.route !== 'optimise' && <ClientAssetsPanel state={state} update={update} rows={rows} onPut={putFact} />}
+      {state.route && <SiteFormPanel state={state} update={update} rows={rows} clientRoute={routeVerdict.route} ended={ended} />}
       <Section title="Claude tasks — one prompt per stage" right={<span className="text-xs text-muted-foreground">Generated from the saved decisions — always current.</span>}>
         <p className="text-xs text-muted-foreground">Open Claude Code on the client folder{state.local_repo_path ? <> (<code>{state.local_repo_path}</code>)</> : ''} and paste one prompt at a time, in order. Each carries only what its stage needs.</p>
         {prompts.map((p) => <PromptCard key={p.id} p={p} onCopy={copyPrompt} />)}
@@ -466,24 +504,27 @@ export default function WebsiteBuild() {
       </Section>
       {faithful ? <VisualComparison state={state} update={update} existingSiteUrl={existingSiteUrl} prompt={promptById('visual_compare')} onCopy={copyPrompt} toast={toast} />
         : <Section title="Visual check"><PromptCard p={promptById('visual_compare')} onCopy={copyPrompt} /></Section>}
+      {packInput && <CorrectionsPanel state={state} set={set} input={packInput} onCopy={(text, missing) => void copyText('Corrections prompt', text, missing)} />}
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('build_pack')}>Back</Button><Button onClick={() => goStep('qa')}>Next: QA</Button></div>
     </>}
 
     {/* ══ QA ═══════════════════════════════════════════════════════════════════════════════ */}
     {step === 'qa' && <>
       <Section title="QA prompts"><PromptCard p={promptById('qa')} onCopy={copyPrompt} /><PackCard item={packById('visual_qa')} onCopy={copyItem} /></Section>
-      <Checklist state={state} group="preview" set={set} title="Definition of done — before production" />
+      <Checklist state={state} group="preview" set={set} title="Definition of done — before production" hasExistingSite={!!existingSiteUrl} />
       <div className="flex justify-between"><Button variant="outline" onClick={() => goStep('preview')}>Back</Button><Button onClick={() => goStep('live')}>Next: Live</Button></div>
     </>}
 
     {/* ══ LIVE ═════════════════════════════════════════════════════════════════════════════ */}
     {step === 'live' && <>
+      <LaunchPanel problems={launch} />
       <Section title="Production">
+        {launch.length > 0 && !state.production_url && <p className="text-xs text-amber-700 dark:text-amber-300">Production fields unlock when the site is cleared above (the server refuses them until then).</p>}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} />
+          <LockedField locked={launch.length > 0 && !state.production_url}><Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} /></LockedField>
           <Field label="Latest commit" value={state.latest_commit} placeholder="output of: git log -1 --format=&quot;%h %s&quot;" onChange={(v) => set('latest_commit', v)} />
-          <Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} />
-          <Pick label="Custom domain" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} />
+          <LockedField locked={launch.length > 0 && state.production_status === 'not_live'}><Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} /></LockedField>
+          <LockedField locked={launch.length > 0 && state.custom_domain_status !== 'active'}><Pick label="Custom domain" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} /></LockedField>
           <Pick label="www redirect" value={state.www_redirect_status} options={WWW_REDIRECT_STATUSES} labels={WWW_REDIRECT_STATUS_LABELS} onChange={(v) => set('www_redirect_status', v)} />
           <Field label="GitHub repository URL" value={state.repo_url} placeholder="https://github.com/…" onChange={(v) => set('repo_url', v.trim())} />
         </div>
@@ -492,7 +533,12 @@ export default function WebsiteBuild() {
         <PackCard item={packById('production')} onCopy={copyItem} />
         <PackCard item={packById('final_qa')} onCopy={copyItem} />
       </Section>
-      <Checklist state={state} group="live" set={set} title="Live checks" />
+      <ProductionGatePanel state={state} update={update} toast={toast} />
+      <Checklist state={state} group="live" set={set} title="Live checks" hasExistingSite={!!existingSiteUrl}
+        lockedKeys={{
+          ...(launch.length > 0 ? { production_deployed: 'Cleared for production first', redirects_tested: 'Cleared for production first' } : {}),
+          ...(productionGateProblems(state.production_gate, state.canonical_domain).length || !state.production_url ? { production_checked: 'Import a passing live site gate first' } : {}),
+        }} />
       {state.route === 'bespoke' && <PromotionPanel state={state} update={update} />}
       <div className="flex justify-start"><Button variant="outline" onClick={() => goStep('qa')}>Back</Button></div>
     </>}
@@ -523,13 +569,145 @@ function CloudflareModeFields({ state, set }: { state: WebsiteBuildState; set: S
   </div>;
 }
 
-function Checklist({ state, group, set, title }: { state: WebsiteBuildState; group: 'preview' | 'live'; set: SetFn; title: string }) {
+function Checklist({ state, group, set, title, hasExistingSite, lockedKeys = {} }: { state: WebsiteBuildState; group: 'preview' | 'live'; set: SetFn; title: string; hasExistingSite: boolean; lockedKeys?: Partial<Record<string, string>> }) {
+  /* The same list the production gate requires (requiredPreviewQa): the old-site comparisons are not
+     asked of a client with no old site. A locked tick says why (the server refuses it too). */
+  const notNeeded = (k: string) => !hasExistingSite && (EXISTING_SITE_QA_KEYS as readonly string[]).includes(k);
   const items = QA_ITEMS.filter((q) => q.group === group);
-  const done = items.filter((q) => state.qa[q.key]).length;
-  return <Section title={title} right={<span className="text-xs text-muted-foreground">{done} of {items.length}</span>}>
-    <div className="grid gap-1.5 sm:grid-cols-2">{items.map((q) => <label key={q.key} className="flex cursor-pointer items-start gap-2 text-sm">
-      <input type="checkbox" aria-label={q.label} className="mt-1" checked={state.qa[q.key] === true} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} /><span>{q.label}</span></label>)}</div>
+  const counted = items.filter((q) => !notNeeded(q.key));
+  const done = counted.filter((q) => state.qa[q.key]).length;
+  return <Section title={title} right={<span className="text-xs text-muted-foreground">{done} of {counted.length}</span>}>
+    <div className="grid gap-1.5 sm:grid-cols-2">{items.map((q) => { const lock = lockedKeys[q.key]; const na = notNeeded(q.key);
+      return <label key={q.key} className={`flex items-start gap-2 text-sm ${na || (lock && state.qa[q.key] !== true) ? 'opacity-60' : 'cursor-pointer'}`}>
+        <input type="checkbox" aria-label={q.label} className="mt-1" disabled={na || (!!lock && state.qa[q.key] !== true)} checked={state.qa[q.key] === true} onChange={(e) => set('qa', { ...state.qa, [q.key]: e.target.checked })} />
+        <span>{q.label}{na && <span className="text-xs text-muted-foreground"> — no old site, not needed</span>}{lock && state.qa[q.key] !== true && <span className="text-xs text-amber-700 dark:text-amber-300"> — {lock}</span>}</span></label>; })}</div>
     <p className="text-xs text-muted-foreground">Tick only what the QA prompts reported as PASS, or what you checked yourself.</p>
+  </Section>;
+}
+
+/** A production field, disabled (with the reason above it) until the site is cleared for production. */
+function LockedField({ locked, children }: { locked: boolean; children: ReactNode }) {
+  return <fieldset disabled={locked} className={locked ? 'opacity-60' : ''} title={locked ? 'Locked until the site is cleared for production' : undefined}>{children}</fieldset>;
+}
+
+/** THE launch rule, in words: what still stops production (websiteLaunch.ts productionReadiness). */
+function LaunchPanel({ problems }: { problems: string[] }) {
+  return <Section title="Cleared for production?" right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${problems.length ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'}`}>{problems.length ? 'Not yet' : 'Cleared'}</span>}>
+    {problems.length
+      ? <><p className="text-xs">No production prompt or command is generated, and the server will not record a launch, until every one of these is cleared:</p>
+        <ul className="list-disc space-y-0.5 pl-5 text-xs">{problems.map((p) => <li key={p}>{p}</li>)}</ul></>
+      : <p className="text-xs">Build client · preview ready by the site gate, the quality standard and the build standard · this client&apos;s project and domain · every preview QA tick. The production prompt below still asks you before it deploys.</p>}
+  </Section>;
+}
+
+/** The live-domain gate report, pasted after the production deploy. "Production checked" waits for it. */
+function ProductionGatePanel({ state, update, toast }: { state: WebsiteBuildState; update: UpdateFn; toast: ReturnType<typeof useToast>['toast'] }) {
+  const [text, setText] = useState('');
+  const g = state.production_gate;
+  const problems = productionGateProblems(g, state.canonical_domain);
+  const importIt = () => {
+    let v: unknown;
+    try { v = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { toast({ title: 'Not a gate report', description: 'Paste the whole of ' + PRODUCTION_GATE_REPORT_FILE + ' (one JSON object).', variant: 'destructive' }); return; }
+    const r = readSiteGateReport(v);
+    if (!r.reported) { toast({ title: 'Not a gate report', description: 'That JSON has no site gate checks in it.', variant: 'destructive' }); return; }
+    update((s) => ({ ...s, production_gate: {
+      imported_at: new Date().toISOString(), version: r.version, domain: r.domain, mode: r.mode, preview: r.preview, passed: r.passed,
+      fails: r.checks.filter((c) => c.level === 'fail').map((c) => c.label + (c.details[0] ? ' (' + c.details[0] + ')' : '')).slice(0, 40),
+      warns: r.checks.filter((c) => c.level === 'warn').map((c) => c.label).slice(0, 40),
+    } }));
+    setText('');
+    toast({ title: r.passed ? 'Live gate imported — passed' : 'Live gate imported — FAILED', description: r.domain + ' · ' + r.checks.length + ' checks' });
+  };
+  return <Section title="Live site check (after the production deploy)" right={g.imported_at ? <span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${problems.length ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'}`}>{problems.length ? 'Not passed' : 'Passed'}</span> : undefined}>
+    <p className="text-xs text-muted-foreground">The Final production QA prompt runs the site gate on the real domain (HTTPS, every page, robots with OAI-SearchBot allowed, sitemap, canonicals, schema, no noindex, the crawlers getting the real page, the enquiry form backend, the trust claims) and prints <code>{PRODUCTION_GATE_REPORT_FILE}</code>. Paste it here. <b>Production checked</b> stays locked until it has passed.</p>
+    {g.imported_at && <p className="text-xs">Last import {new Date(g.imported_at).toLocaleString('en-GB')} · {g.domain || 'no domain'} · {g.mode}{g.preview ? ' (preview)' : ''}</p>}
+    {g.imported_at && problems.length > 0 && <ul className="list-disc space-y-0.5 pl-5 text-xs text-red-700 dark:text-red-300">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
+    {g.warns.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Warnings to read: {g.warns.join('; ')}</p>}
+    <Textarea rows={3} className="font-mono text-xs" value={text} placeholder={'{ "siteGateVersion": 1, "domain": "…", "mode": "url", … }'} onChange={(e) => setText(e.target.value)} />
+    <Button size="sm" disabled={!text.trim()} onClick={importIt}>Import live gate report</Button>
+  </Section>;
+}
+
+/** Corrections before launch: Paul's own list, the main call to action, and the prompt that applies them
+ *  to the generated site (buildExecution.ts correctionPrompt). The generated site is never final. */
+function CorrectionsPanel({ state, set, input, onCopy }: { state: WebsiteBuildState; set: SetFn; input: BuildPackInput; onCopy: (text: string, missing: string[]) => void }) {
+  const p = correctionPrompt(input);
+  const [open, setOpen] = useState(false);
+  return <Section title="Corrections before launch" right={<span className="text-xs text-muted-foreground">titles, meta, pages, CTA, wording</span>}>
+    <p className="text-xs text-muted-foreground">Write what is wrong on the preview, one change per line (&quot;Remove the sentence about next year on /about/&quot;, &quot;Services hub title: Locksmith services in Shrewsbury&quot;). Page titles, <b>meta descriptions</b> and pages to <b>remove</b> are set in the page plan (Architecture); this prompt carries those too.</p>
+    <Textarea aria-label="Corrections" rows={4} className="text-xs" value={state.corrections} placeholder={'- Remove "the same engineer is there next year" from /about/\n- Contact page: lead with the phone number'} onChange={(e) => set('corrections', e.target.value)} />
+    <Field label="Main call to action (every page)" value={state.primary_cta} placeholder="e.g. Call Gareth on 01632 960471" onChange={(v) => set('primary_cta', v)} />
+    <div className="flex flex-wrap items-center gap-2">
+      <Button size="sm" disabled={p.blockedBy.length > 0} onClick={() => onCopy(p.text, p.blockedBy)}><Clipboard className="mr-1 h-4 w-4" />Copy Corrections Prompt</Button>
+      <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)}>{open ? 'Hide' : 'Show'}</Button>
+      {p.blockedBy.length > 0 && <span className="text-xs text-amber-700 dark:text-amber-300">{p.blockedBy.join(' · ')}</span>}
+    </div>
+    {open && <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded bg-muted p-3 font-mono text-[11px] leading-relaxed">{p.text}</pre>}
+  </Section>;
+}
+
+/** The enquiry form, switched on HERE — site-enquiry reads it from this record (siteForm.ts). No code
+ *  change, no deploy per client. The recipient is the VERIFIED business email only. */
+function SiteFormPanel({ state, update, rows, clientRoute, ended }: { state: WebsiteBuildState; update: UpdateFn; rows: FactRow[]; clientRoute: 'build' | 'optimise' | null; ended: boolean }) {
+  const f = state.form;
+  const verifiedEmails = rows.filter((r) => r.key === 'email' && r.status === 'verified' && r.value).map((r) => r.value.trim());
+  const draft = { ...f, site_key: f.site_key || suggestSiteKey(state.cloudflare_project), recipient: f.recipient || verifiedEmails[0] || '' };
+  const problems = siteFormProblems({ form: draft, canonicalDomain: state.canonical_domain, cloudflareProject: state.cloudflare_project, verifiedEmails, clientRoute, ended });
+  const put = (over: Partial<typeof f>) => update((s) => ({ ...s, form: readSiteForm({ ...s.form, ...over }) }));
+  const origins = productionOriginsFor(state.canonical_domain);
+  return <Section title="Enquiry form" right={<span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${f.enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-muted text-muted-foreground'}`}>{f.enabled ? 'On' : 'Off'}</span>}>
+    <p className="text-xs text-muted-foreground">The site&apos;s form posts to Findable&apos;s enquiry backend with this key. Only {origins.length ? origins.join(' / ') : 'the live domain'} delivers to the client; the {state.cloudflare_project || '<project>'}.pages.dev preview is test mode (nothing reaches the client). Switching it on here registers it — no code change, no deploy.</p>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Field label="Form key" value={f.site_key} placeholder={suggestSiteKey(state.cloudflare_project) || 'client-name'} onChange={(v) => put({ site_key: v.trim().toLowerCase(), enabled: false })} />
+      <div><Label className="text-xs">Enquiries go to (verified email)</Label>
+        <select aria-label="Enquiries go to" className={sel} value={f.recipient || draft.recipient} onChange={(e) => put({ recipient: e.target.value, enabled: false })}>
+          {verifiedEmails.length ? verifiedEmails.map((e) => <option key={e} value={e.toLowerCase()}>{e}</option>) : <option value="">No verified email — approve one in Client Build Facts</option>}
+        </select></div>
+      <Field label="Thank-you address (no JavaScript)" value={f.thanks_path} placeholder={DEFAULT_THANKS_PATH} onChange={(v) => put({ thanks_path: v.trim() })} />
+    </div>
+    {problems.length > 0 && !f.enabled && <p className="text-xs text-amber-700 dark:text-amber-300">Cannot switch on yet: {problems.join(' · ')}</p>}
+    <div className="flex flex-wrap gap-2">
+      {f.enabled
+        ? <Button size="sm" variant="outline" onClick={() => put({ enabled: false })}>Switch the form off</Button>
+        : <Button size="sm" disabled={problems.length > 0} onClick={() => put({ ...draft, enabled: true, enabled_at: new Date().toISOString() })}>Switch the form on</Button>}
+    </div>
+  </Section>;
+}
+
+/** Client-supplied assets: the route in for a Build client with NO old website (D-08). Photos, a logo or
+ *  a map the client sent, by shared link or a file on this machine, and their public profile links. */
+function ClientAssetsPanel({ state, update, rows, onPut }: { state: WebsiteBuildState; update: UpdateFn; rows: FactRow[]; onPut: (f: BuildFact) => void }) {
+  const [src, setSrc] = useState(''); const [type, setType] = useState<AssetType>('photo'); const [what, setWhat] = useState(''); const [owned, setOwned] = useState(false);
+  const [profile, setProfile] = useState('');
+  const client = state.manifest.assets.filter((a) => a.origin === 'client');
+  const toSource = (v: string) => { const t = v.trim().replace(/^"|"$/g, ''); if (/^https:\/\//i.test(t)) return t; if (/^[a-z]:[\\/]/i.test(t)) return 'file:///' + t.replace(/\\/g, '/'); if (t.startsWith('/')) return 'file://' + t; return ''; };
+  const source = toSource(src);
+  const add = () => {
+    if (!source || !owned) return;
+    const name = (source.split(/[\\/]/).pop() || 'asset').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').slice(0, 80);
+    const a: ManifestAsset = { source_url: source, type, purpose: what.trim() || type, location: '', approval: 'approved', page_url: '', suggested_filename: name, ownership: 'client_owned', origin: 'client' };
+    update((s) => ({ ...s, manifest: { ...s.manifest, assets: [...s.manifest.assets.filter((x) => x.source_url !== source), a] } }));
+    setSrc(''); setWhat(''); setOwned(false);
+  };
+  const remove = (u: string) => update((s) => ({ ...s, manifest: { ...s.manifest, assets: s.manifest.assets.filter((x) => !(x.origin === 'client' && x.source_url === u)) } }));
+  const profiles = rows.find((r) => r.key === 'review_profiles');
+  return <Section title="Client assets — photos, logo, map, profiles" right={<span className="text-xs text-muted-foreground">{client.length} supplied</span>}>
+    <p className="text-xs text-muted-foreground">For a client with no old website (or anything they sent separately). Optional: a site with no photos is fine and is designed without them. Add only what the <b>client owns and gave us</b> — never a stock or AI image presented as their work, never a before / after we were not given. Map: an OpenStreetMap-based render with its credit, or one the client sent — never a Google Maps screenshot.</p>
+    {client.length > 0 && <ul className="space-y-1 text-xs">{client.map((a) => <li key={a.source_url} className="flex items-start justify-between gap-2 rounded border p-1.5"><span className="min-w-0 break-all"><b>{a.type}</b> · {a.purpose} · <span className="text-muted-foreground">{a.source_url}</span></span><Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Remove" onClick={() => remove(a.source_url)}><X className="h-3.5 w-3.5" /></Button></li>)}</ul>}
+    <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+      <Field label="Shared link (https://…) or a file on this computer (C:\…)" value={src} placeholder="https://drive.google.com/… or C:\Users\paulj\Clients\…\van.jpg" onChange={setSrc} />
+      <div><Label className="text-xs">Type</Label><select aria-label="Asset type" className={sel} value={type} onChange={(e) => setType(e.target.value as AssetType)}>{ASSET_TYPES.filter((t) => ['photo', 'logo', 'favicon', 'badge', 'document', 'other'].includes(t)).map((t) => <option key={t} value={t}>{t === 'other' ? 'map / other' : t}</option>)}</select></div>
+    </div>
+    <Field label="What it shows (used for alt text and where it goes)" value={what} placeholder="Gareth fitting an anti-snap cylinder, Shrewsbury" onChange={setWhat} />
+    <label className="flex items-start gap-2 text-xs"><input type="checkbox" aria-label="The client owns this and gave it to us" checked={owned} onChange={(e) => setOwned(e.target.checked)} className="mt-0.5" /><span>The client owns this (their own photo, logo or map) and gave it to us to use.</span></label>
+    {src.trim() && !source && <p className="text-xs text-amber-700 dark:text-amber-300">Use an https:// link or a full file path (C:\…).</p>}
+    <Button size="sm" variant="outline" disabled={!source || !owned} onClick={add}><Plus className="mr-1 h-3.5 w-3.5" />Add asset</Button>
+    <div className="border-t pt-2">
+      <p className="text-xs font-medium">Public profiles (Google Business Profile, Checkatrade…) — the evidence a third party can check</p>
+      <p className="text-[11px] text-muted-foreground">Now: {profiles && profiles.value ? `${profiles.value} (${FACT_STATUS_LABELS[profiles.status]})` : 'none recorded'}. Adding one here records it as a fact you approved.</p>
+      <div className="mt-1 flex gap-2"><Input aria-label="Profile link" className="h-8 text-xs" value={profile} placeholder="https://g.page/…" onChange={(e) => setProfile(e.target.value)} />
+        <Button size="sm" variant="outline" disabled={!/^https:\/\/\S+\.\S+/.test(profile.trim())} onClick={() => { const v = [profiles?.value, profile.trim()].filter(Boolean).join(', '); onPut({ key: 'review_profiles', label: 'Review profiles (Google, Checkatrade…)', value: v, status: 'verified', source: 'added by Paul', source_url: profile.trim(), notes: '', basis: 'operator' }); setProfile(''); }}>Add</Button></div>
+    </div>
   </Section>;
 }
 
@@ -588,8 +766,8 @@ function TemplatePicker({ state, set, template }: { state: WebsiteBuildState; se
   </div>;
 }
 
-function ProjectDetails({ defaultOpen, state, set, businessName, template, existingSiteUrl, factSiteUrl, tradeRow, crawlLabel, crawledAt }: {
-  defaultOpen: boolean; state: WebsiteBuildState; set: SetFn; businessName: string; template: ReturnType<typeof templateById>;
+function ProjectDetails({ defaultOpen, state, set, businessName, template, existingSiteUrl, factSiteUrl, tradeRow, crawlLabel, crawledAt, productionLocked }: {
+  defaultOpen: boolean; state: WebsiteBuildState; set: SetFn; businessName: string; template: ReturnType<typeof templateById>; productionLocked: boolean;
   existingSiteUrl: string; factSiteUrl: string; tradeRow: FactRow | undefined; crawlLabel: string; crawledAt: string | null;
 }) {
   const repoSuggestion = suggestRepoName(businessName);
@@ -636,9 +814,9 @@ function ProjectDetails({ defaultOpen, state, set, businessName, template, exist
         <label className="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" aria-label="Preview noindex confirmed" checked={state.preview_noindex_confirmed} onChange={(e) => set('preview_noindex_confirmed', e.target.checked)} />Preview noindex confirmed</label>
       </G>
       <G title="Production">
-        <Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} />
-        <Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} />
-        <Pick label="Custom domain status" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} />
+        <LockedField locked={productionLocked && !state.production_url}><Field label="Production URL" value={state.production_url} placeholder={state.canonical_domain ? `https://${state.canonical_domain}` : 'https://…'} onChange={(v) => set('production_url', v.trim())} /></LockedField>
+        <LockedField locked={productionLocked && state.production_status === 'not_live'}><Pick label="Production status" value={state.production_status} options={PRODUCTION_STATUSES} labels={PRODUCTION_STATUS_LABELS} onChange={(v) => set('production_status', v)} /></LockedField>
+        <LockedField locked={productionLocked && state.custom_domain_status !== 'active'}><Pick label="Custom domain status" value={state.custom_domain_status} options={CUSTOM_DOMAIN_STATUSES} labels={CUSTOM_DOMAIN_STATUS_LABELS} onChange={(v) => set('custom_domain_status', v)} /></LockedField>
         <Pick label="www redirect status" value={state.www_redirect_status} options={WWW_REDIRECT_STATUSES} labels={WWW_REDIRECT_STATUS_LABELS} onChange={(v) => set('www_redirect_status', v)} />
       </G>
       {problems.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">Setup commands need: {problems.map((p) => `${p.label} (${p.problem})`).join(' · ')}</p>}
@@ -964,6 +1142,10 @@ function MappingPanel({ mapping, buildBlockers, state, update, set, rows, onDeci
         <label className={`flex items-center gap-1 ${x.serves ? '' : 'opacity-50'}`}><input type="checkbox" aria-label={`Dedicated page for ${x.name}`} disabled={!x.serves} checked={x.page} onChange={(e) => setMap((m) => ({ ...m, locations: { ...m.locations, [x.key]: { ...m.locations[x.key], page: e.target.checked } } }))} />Dedicated page</label>
         {x.status === 'needs_review' && <Chip tone="needs_review">Needs review</Chip>}
         <span className="w-full text-[11px] text-muted-foreground">{x.evidence}</span>
+        {x.page && <div className="w-full"><Input aria-label={`What is genuinely local about ${x.name}`} className="h-8 text-xs" value={x.note}
+          placeholder={x.isBase ? 'The HOME page already owns this town — only with genuinely local content (real jobs, access, landmarks)…' : 'Real jobs there, access, travel, landmarks — what this page says that no other page does…'}
+          onChange={(e) => setMap((m) => ({ ...m, locations: { ...m.locations, [x.key]: { ...m.locations[x.key], note: e.target.value } } }))} />
+          {x.note.trim().split(/\s+/).filter(Boolean).length < LOCATION_NOTE_MIN_WORDS && <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">A town page needs a note of what is genuinely local (at least {LOCATION_NOTE_MIN_WORDS} words), or turn it off — the town name alone is not a page.</p>}</div>}
       </div>)}</div>
     </details>}
 
@@ -1344,12 +1526,14 @@ function ArchitectureSection({ state, template, rows, issues, checkedPages, cite
       {pasteOpen && <div className="space-y-2"><Textarea rows={6} className="font-mono text-xs" value={pageText} placeholder={'action | family | /new-path/ | Title | old url | redirect target | note\nkeep | service | /services/boiler-repair/ | Boiler repair | https://old.co.uk/boiler-repair | | '} onChange={(e) => setPageText(e.target.value)} />
         <Button size="sm" disabled={!pageText.trim()} onClick={() => { addPages(parsePageLines(pageText, PAGE_ACTIONS, PAGE_FAMILIES), 'Pasted from the capture.'); setPageText(''); setPasteOpen(false); }}>Add pages</Button></div>}
       {state.pages.length > 0 && <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs">
-        <thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-1">Action</th><th className="py-1 pr-1">Family</th><th className="py-1 pr-1">New path</th><th className="py-1 pr-1">Title</th><th className="py-1 pr-1">Old URL</th><th className="py-1 pr-1">Goes to (consolidate / redirect)</th><th className="py-1 pr-1">Notes</th><th /></tr></thead>
+        <thead><tr className="border-b text-left text-muted-foreground"><th className="py-1 pr-1">Action</th><th className="py-1 pr-1">Family</th><th className="py-1 pr-1">New path</th><th className="py-1 pr-1">Title / meta description</th><th className="py-1 pr-1">Old URL</th><th className="py-1 pr-1">Goes to (consolidate / redirect)</th><th className="py-1 pr-1">Notes</th><th /></tr></thead>
         <tbody>{state.pages.map((p) => <tr key={p.id} className={`border-b align-top ${p.action === 'undecided' ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}`}>
           <td className="py-1 pr-1"><select aria-label={`Action for ${p.old_url || p.path || p.title || 'page'}`} className={sel} value={p.action} onChange={(e) => setPages((ps) => ps.map((x) => x.id === p.id ? applyAction(x, e.target.value as ArchPage['action']) : x))}>{PAGE_ACTIONS.map((a) => <option key={a} value={a}>{PAGE_ACTION_LABELS[a]}</option>)}</select></td>
           <td className="py-1 pr-1"><select aria-label={`Page family for ${p.old_url || p.path || p.title || 'page'}`} className={sel} value={p.family} onChange={(e) => patch(p.id, { family: e.target.value as ArchPage['family'] })}>{PAGE_FAMILIES.map((f) => <option key={f} value={f}>{PAGE_FAMILY_LABELS[f]}</option>)}</select></td>
           <td className="py-1 pr-1"><Input aria-label={`New path for ${p.old_url || p.title || 'page'}`} className="h-8 text-xs" value={p.path} placeholder="/services/…/" disabled={p.action === 'remove'} onChange={(e) => patch(p.id, { path: e.target.value })} /></td>
-          <td className="py-1 pr-1"><Input aria-label={`Title for ${p.old_url || p.path || 'page'}`} className="h-8 text-xs" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} /></td>
+          <td className="py-1 pr-1"><Input aria-label={`Title for ${p.old_url || p.path || 'page'}`} className="h-8 text-xs" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} />
+            {(p.action === 'keep' || p.action === 'create') && <Input aria-label={`Meta description for ${p.old_url || p.path || p.title || 'page'}`} className="mt-1 h-8 text-xs" value={p.meta ?? ''} placeholder="Meta description (optional — blank: the builder writes one from verified facts)" onChange={(e) => patch(p.id, { meta: e.target.value })} />}
+            {p.family === 'location' && (p.action === 'keep' || p.action === 'create') && p.notes.trim().split(/\s+/).filter(Boolean).length < LOCATION_NOTE_MIN_WORDS && <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-300">A location page needs a note of what is genuinely local (Notes column), or remove it.</p>}</td>
           <td className="py-1 pr-1"><Input aria-label={`Old URL ${p.old_url}`} className="h-8 text-xs" value={p.old_url} placeholder="—" onChange={(e) => patch(p.id, { old_url: e.target.value })} /></td>
           <td className="py-1 pr-1"><Input aria-label={`Goes to, for ${p.old_url || p.path || p.title || 'page'}`} className="h-8 text-xs" value={p.target} placeholder={p.action === 'redirect' || p.action === 'consolidate' ? '/new-page/' : '—'} disabled={!(p.action === 'redirect' || p.action === 'consolidate')} onChange={(e) => patch(p.id, { target: e.target.value })} /></td>
           <td className="py-1 pr-1"><Input aria-label={`Notes for ${p.old_url || p.path || p.title || 'page'}`} className="h-8 text-xs" value={p.notes} onChange={(e) => patch(p.id, { notes: e.target.value })} /></td>

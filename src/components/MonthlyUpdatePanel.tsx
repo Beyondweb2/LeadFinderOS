@@ -47,6 +47,8 @@ const ERRORS: Record<string, string> = {
   no_draft: 'Save the draft first.',
   empty_message: 'The update is empty.',
   bad_channel: 'Choose how it was sent.',
+  service_ended: 'This client’s engagement has ended, so no monthly update is prepared or sent.',
+  refunded: 'This client was refunded, so no monthly update is prepared or sent.',
   upstream_timeout: 'The database did not answer in time. Try again in a moment.',
 };
 /* A bare code is never shown on its own (CLAUDE.md §4): known ones in words, anything else quoted in a sentence. */

@@ -67,6 +67,8 @@ const RENDERERS: Array<[string, string]> = [
   ["prospect preview homepage (prospect)", "src/lib/prospectPreview/templates/localTrade.ts"],
   ["prospect preview evidence card + message (prospect)", "src/lib/prospectPreview/copy.ts"],
   ["prospect preview card layout (prospect)", "src/lib/prospectPreview/evidenceCard.ts"],
+  /* 2026-10-04: the Quick Close payment-link message and email (prospect) and the rep's spoken words. */
+  ["Quick Close link message + email (prospect)", "src/lib/quickClose.ts"],
 ];
 
 /* Each pattern is a claim that has been false since a dated change. Keep the date in the label. */
@@ -141,6 +143,8 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["team board wording (operator)", "src/lib/teamBoard.ts"],
   ["team board (salesperson)", "src/components/team/TeamBoard.tsx"],
   ["send to sales team composer (admin)", "src/components/team/TeamComposer.tsx"],
+  /* 2026-10-04: read aloud on the closing call — terms, minimum term, guarantee (fixes-02-quick-close.md). */
+  ["Quick Close screen (salesperson)", "src/components/QuickCloseDialog.tsx"],
 ];
 const OPERATOR_ALLOWED: string[] = [
   "(RG Locksmiths: eight weeks, by his contract)",

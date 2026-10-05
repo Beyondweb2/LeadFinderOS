@@ -28,7 +28,15 @@ const MIG = read("supabase/migrations/20260929100000_abuse_cost_protection.sql")
 console.log("── the thresholds live once ──");
 {
   const m = MIG.match(/insert into public\.protection_settings \(id, mode, limits\) values \(1, 'running', '(\{.*?\})'::jsonb\)/);
-  ok(m && JSON.stringify(JSON.parse(m[1])) === JSON.stringify(DEFAULT_PROTECTION_LIMITS), "the migration's seed JSON == DEFAULT_PROTECTION_LIMITS");
+  /* 2026-10-04 (fix/07): an action added after the seed reaches the live row through its OWN migration
+     (jsonb_set, only when absent). The defaults must equal the seed PLUS exactly those additions. */
+  const LATER_ACTIONS: Record<string, string> = { sales_check: "supabase/migrations/20261006070000_sales_prospect_checks.sql" };
+  const seeded = m ? JSON.parse(m[1]) : null;
+  if (seeded) for (const [action, file] of Object.entries(LATER_ACTIONS)) {
+    const am = read(file).match(new RegExp(`'\{actions,${action}\}', '(\{[^']*\})'::jsonb`));
+    if (am) seeded.actions[action] = JSON.parse(am[1]);
+  }
+  ok(seeded && JSON.stringify(seeded) === JSON.stringify(DEFAULT_PROTECTION_LIMITS), "the migration's seed JSON (+ actions later migrations add) == DEFAULT_PROTECTION_LIMITS");
   ok(validateLimits(DEFAULT_PROTECTION_LIMITS).ok, "the defaults validate");
   ok(GUARD_ACTIONS.every((a) => a in DEFAULT_PROTECTION_LIMITS.actions), "every guard action has a default entry");
   const L = DEFAULT_PROTECTION_LIMITS;
@@ -131,7 +139,9 @@ console.log("\n── the guard's placement ──");
 console.log("\n── the pause modes reach the background work ──");
 {
   const aq = read("supabase/functions/process-ai-audit-queue/index.ts");
-  ok(/if \(candidateIds\.length < START_BATCH && tickMode === "running"\)/.test(aq), "audit queue: under the prospecting pause only measurement (baseline-priority) rows start");
+  /* 2026-10-04 (fix/04): the candidate selection is one ranked scan now (guarantee → other measurement →
+     prospecting); prospecting (rank 2) is offered only while the mode is `running`. */
+  ok(/\.filter\(\(c\) => c\.rank < 2 \|\| tickMode === "running"\)/.test(aq), "audit queue: under the prospecting pause only measurement (baseline-priority) rows start");
   ok(/if \(tickMode === "all_stop"\) candidateIds\.length = 0;/.test(aq), "audit queue: the emergency stop starts no new run");
   ok(aq.indexOf("PHASE A: POLL") < aq.indexOf('if (tickMode === "all_stop") candidateIds.length = 0;'), "…while runs already started are still polled (nothing stranded)");
   ok(/if \(tickMode === "all_stop"\) \{\n\s+console\.log\("\[process-ai-audit-queue\] emergency stop is on - no SEO scan this tick"\);/.test(aq), "audit queue: no SEO scan under the emergency stop");
@@ -192,10 +202,13 @@ console.log("\n── Meta webhook signature ──");
   const uni = new TextEncoder().encode('{"text":"café 👍"}');
   ok(await validMetaSignature(uni, "sha256=" + (await metaSignatureHex(uni, "s")), "s"), "non-ASCII bodies are judged on their bytes");
   const ws = read("supabase/functions/whatsapp-status/index.ts");
-  ok(/new Uint8Array\(await req\.arrayBuffer\(\)\)/.test(ws) && /validMetaSignature\(rawBytes, req\.headers\.get\("x-hub-signature-256"\), appSecret\)/.test(ws), "whatsapp-status checks the RAW bytes");
-  ok(/if \(!ok\) \{\n\s+console\.error\("\[whatsapp-status\] bad or missing signature — rejecting"\);\n\s+return new Response\("invalid signature", \{ status: 401 \}\);/.test(ws), "…and refuses 401 before reading anything");
-  ok(ws.indexOf("validMetaSignature(") < ws.indexOf("JSON.parse(rawBody"), "…before the body is parsed");
-  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp webhook signatures are NOT being checked/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent");
+  /* 2026-10-04 (M-003): the gate moved to src/lib/metaWebhookGate.ts and now FAILS CLOSED; its full
+     behaviour is scripts/whatsapp-webhook-gate.test.ts. Here: the raw bytes are what is judged, and the
+     refusal happens before the body is parsed. */
+  ok(/new Uint8Array\(await req\.arrayBuffer\(\)\)/.test(ws) && /judgeWhatsAppWebhookPost\(\{\s+rawBytes,\s+signatureHeader: req\.headers\.get\("x-hub-signature-256"\)/.test(ws), "whatsapp-status checks the RAW bytes");
+  ok(/if \(!verdict\.accept\) \{[\s\S]{0,300}status: verdict\.status/.test(ws), "…and refuses with the gate's status before reading anything");
+  ok(ws.indexOf("judgeWhatsAppWebhookPost(") < ws.indexOf("JSON.parse(rawBody"), "…before the body is parsed");
+  ok(/webhookSignatureEnforced/.test(read("supabase/functions/security-admin/index.ts")) && /WhatsApp webhook signatures are not verified/.test(read("src/components/SecurityPanel.tsx")) && /held until the Findable Meta App is ready/.test(read("src/components/SecurityPanel.tsx")), "an unset secret is SHOWN to the admin, never silent — in words true whichever webhook is live (wave 1: the fail-closed one is held)");
 }
 
 console.log("\n── alerts ──");

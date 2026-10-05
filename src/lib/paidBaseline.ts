@@ -3,6 +3,8 @@ import type { PaidBaselineStatus } from './paidBaselineState';
 import type { DiscoveryProgress, QuestionProgress } from './discoveryProgress';
 import type { EngineTally } from './discoveryOpportunity';
 import type { HookReplacement, Recommendation } from './baselineRecommendation';
+import type { QualityIssue } from './baselineQuality';
+import type { MeasurementState } from './measurementHealth';
 
 export type PaidBaseline = {
   onboarding_id: string;
@@ -29,6 +31,8 @@ export type PaidBaseline = {
       progress?: Omit<QuestionProgress, 'question'> | null;
     }>;
     towns_failed: string[];
+    /** Generated questions kept out of the pool, with why (not offered / not confirmed — serviceScope.ts). */
+    rejected?: Array<{ question: string; reason: string }>;
     /** The ONE Discovery job for this pool — server-side, read back from the stored rows. */
     audit: { id: string; created_at: string | null; runs_done: number; runs_target: number; complete: boolean; progress?: Omit<DiscoveryProgress, 'by_question'> } | null;
     /** A Discovery audit that measured a different question set — shown, never attached. */
@@ -56,7 +60,31 @@ export type PaidBaseline = {
   approved_at: string | null;
   audit_id?: string;
   start_note?: string;
+  /* ── 2026-10-04, fix/04-ai-measurement ─────────────────────────────────────────────────────── */
+  /** The client's explicit "we do NOT offer" list (onboarding services_not_offered). */
+  services_not_offered?: string[];
+  /** What customers contact them for most (onboarding top_requests). */
+  top_requests?: string;
+  /** True only when the services are the client's own answer or a verified build fact. */
+  services_client_confirmed?: boolean;
+  /** Lower-ranked lists the winner does not contain — shown, never measured (clientContext.ts). */
+  unconfirmed?: { services: string[]; areas: string[] };
+  /** The two mandatory home-town core questions (customerQuestion.ts). */
+  core_questions?: string[];
+  /** The final-20 checks for the stored draft (baselineQuality.ts). */
+  quality?: { blocking: QualityIssue[]; warnings: QualityIssue[]; coverage: { servicesCovered: number; servicesTotal: number; coreHome: number }; override_min_reason: number };
+  /** The baseline measurement's health (measurementHealth.ts). */
+  health?: (HealthLine & { audit_id: string | null; frozen_at: string | null; retry_rounds?: number }) | null;
+  /** The day-28 replay, its health and whether its results were sent. */
+  remeasure?: { audit_id: string; results_sent_at: string | null; health: (HealthLine & { frozen_at: string | null }) | null } | null;
+  /** The audit budget pools (auditBudget.ts) — whether client measurement has room today. */
+  budget?: {
+    pools: Array<{ pool: 'guarantee' | 'client' | 'prospecting'; spentUsd: number | null; capUsd: number; pooledLedger: boolean; apifyReservePct: number; decision: { allowed: boolean; reason: string; message: string } | null }>;
+    apify: { usedUsd: number | null; capUsd: number | null; pct: number | null; capturedAt: string | null; cycleEnd: string | null } | null;
+  } | null;
 };
+
+export interface HealthLine { state: MeasurementState; expected: number; answered: number; missing: number; retryable: number; label: string; action: string | null }
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   onboarding_id_or_lead_id_required: 'Baseline needs a linked client lead.',
@@ -93,6 +121,17 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   opportunity_not_found: 'That opportunity no longer exists. Reload and try again.',
   opportunity_ids_required: 'Choose at least one opportunity to check.',
   opportunity_check_failed: 'The check did not start. Nothing was measured — try again.',
+  baseline_quality_blocked: 'Some questions must be fixed or explained before freezing — see the checks above the approve button.',
+  baseline_already_measured: 'This client already has a baseline measurement; nothing new can be drafted for it.',
+  no_measurement: 'There is no measurement to retry yet.',
+  measurement_frozen: 'This measurement has already frozen — its answers can no longer change.',
+  retry_first: 'Some missing answers can still be re-asked. Press Retry missing answers first.',
+  partial_reason_required: 'Write why this measurement should be frozen with answers missing.',
+  not_partial: 'Only a measurement whose missing answers cannot be re-asked can be accepted as partial.',
+  no_remeasure: 'There is no re-measure for this client yet.',
+  results_held: 'The four-week results were not sent — the reason is shown.',
+  results_skipped: 'The four-week results were not sent — the reason is shown.',
+  prospecting_budget_used: "Today's checking budget is used — your leads are still here, try tomorrow or ask Paul.",
 };
 
 /** The whole response (the opportunity actions answer with more than the baseline). */

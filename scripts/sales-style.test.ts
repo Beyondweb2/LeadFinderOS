@@ -144,7 +144,9 @@ for (const t of TRADES) {
   const facts = checkVoiceNoteScript(short, { evidence: ev, site: fullSite, town: t.town, trade: t.trade, business: t.name }).problems
     .filter((x) => !/too short|main website finding/i.test(x));
   ok(facts.length === 0, t.trade + ': short voice note passes the voice note\'s own fact checks (names, engine, ownership question) ' + JSON.stringify(facts));
-  ok(short.split('\n').length === 3 && short.split(/\s+/).length <= 55, t.trade + ': short voice note is three lines, about 20 seconds (' + short.split(/\s+/).length + ' words)');
+  /* 62 words (was 55): the first line now says who is speaking ("hi mate, it's Paul from Findable.", fix workstream 5,
+     2026-10-04) — about two seconds more, still a 20-to-25-second note. */
+  ok(short.split('\n').length === 3 && short.split(/\s+/).length <= 62 && /^hi mate, it's \w+ from Findable\./.test(short), t.trade + ': short voice note is three lines, about 20 seconds, and says who is speaking first (' + short.split(/\s+/).length + ' words)');
 }
 ok(shortVoiceNote({ engineLabel: 'Google AI', competitors: [], trade: 'plumber', area: 'Rugby', site: { mode: 'clean', source: 'own_site', sourceLabel: null } }) === null, 'short voice note: no competitor names → none (never "other firms")');
 ok(shortVoiceNote({ engineLabel: 'Google AI', competitors: ['A Ltd'], trade: '', area: 'Rugby', site: { mode: 'clean', source: 'own_site', sourceLabel: null } }) === null, 'short voice note: no readable trade → none');

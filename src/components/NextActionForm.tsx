@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { NEXT_ACTION_OPTIONS } from '@/lib/salesCrm';
 import { NEXT_ACTION_LABEL, hhmmOf, nextActionView, nextActionText } from '@/lib/nextActionView';
-import type { NextActionInput } from '@/lib/nextActionWrite';
+import { snapshotOf, type NextActionInput } from '@/lib/nextActionWrite';
 
 /* ⛔ THE ONE NEXT ACTION FORM (2026-10-02, Paul). The lead workspace's Work tab, the Outreach row and the phone
    card draw THIS form; it saves through src/lib/nextActionWrite.ts (lead_set_follow_up, both roles). Every
@@ -47,12 +47,15 @@ export function NextActionForm({ lead, onSave, preset, onDismiss, onCancel, comp
   const [time, setTime] = useState(preset ? '' : (hhmmOf(lead.next_action_time) ?? ''));
   const [note, setNote] = useState(preset?.note ?? lead.next_action_note ?? '');
   const [busy, setBusy] = useState(false);
+  /* ⛔ WHAT THIS FORM SHOWED WHEN IT OPENED (stale-tab guard, 2026-10-04). Sent with every Save / Clear so the
+     server can refuse to replace a Next Action someone changed meanwhile. Captured once, at mount. */
+  const [expected] = useState(() => snapshotOf(lead));
   const has = !!lead.next_action && lead.next_action !== 'none';
   const isMeeting = nextAction === 'meeting';
   const needsDay = !!time && !date;
   const now = nextActionView(lead);
   const chip = 'rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium hover:bg-muted';
-  const run = async (a: NextActionInput) => { setBusy(true); try { await onSave(a); } finally { setBusy(false); } };
+  const run = async (a: NextActionInput) => { if (busy) return; setBusy(true); try { await onSave({ ...a, expected }); } finally { setBusy(false); } };
   const save = () => {
     if (nextAction === 'none') return run({ nextAction: 'none', date: null, note: note.trim() || null });
     return run({ nextAction, date: date || null, time: date && time ? time : null, note: note.trim() || null });

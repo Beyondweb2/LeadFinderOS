@@ -28,6 +28,7 @@
 import { ALL_ROUTE_CHECK_IDS } from './buildRoutes.ts';
 import { EMPTY_QUALITY, EMPTY_UPGRADE, qualityGateProblems, readQuality, readUpgradeReview, type QualityState, type UpgradeReview } from './websiteQuality.ts';
 import { EMPTY_STANDARD, readStandardReport, standardProblems, type StandardEvidence, type StandardReport } from './websiteBuildStandard.ts';
+import { EMPTY_SITE_FORM, readSiteForm, type SiteFormState } from './siteForm.ts';
 
 export const WEBSITE_BUILD_VERSION = 2;
 
@@ -135,6 +136,9 @@ export interface ArchPage {
   /** Where a consolidated / redirected page's intent now lives. */
   target: string;
   notes: string;
+  /** Paul's meta description for the page (optional — blank lets the builder write one from the
+   *  verified facts). Fix workstream 6: the page plan is where titles AND meta are corrected. */
+  meta?: string;
 }
 
 export interface Redirect { from: string; to: string; reason: string }
@@ -204,6 +208,13 @@ export const QA_ITEMS = [
 ] as const;
 export type QaKey = (typeof QA_ITEMS)[number]['key'];
 const QA_KEYS = QA_ITEMS.map((q) => q.key) as readonly string[];
+/** Ticks that only mean something when an OLD site is being replaced. */
+export const EXISTING_SITE_QA_KEYS: readonly QaKey[] = ['old_urls_handled', 'old_new_upgrade', 'strengths_kept'];
+/** THE preview QA list Paul must tick before production (fix workstream 6): every preview item, less
+ *  the old-site comparisons when there is no old site. One list for the QA stage and the production gate. */
+export function requiredPreviewQa(hasExistingSite: boolean): Array<(typeof QA_ITEMS)[number]> {
+  return QA_ITEMS.filter((q) => q.group === 'preview' && (hasExistingSite || !EXISTING_SITE_QA_KEYS.includes(q.key)));
+}
 
 export interface CaptureState {
   status: CaptureStatus;
@@ -235,6 +246,9 @@ export interface ManifestAsset {
   source_url: string; type: AssetType; purpose: string; location: string; approval: AssetApproval;
   /** Phase 2 (recon): the page it was seen on, the filename it should get locally, who owns it. */
   page_url: string; suggested_filename: string; ownership: AssetOwnership;
+  /** 'client' = supplied by the client (photos, logo, a map reference) and added by Paul — the route in
+   *  for a Build client with NO old website to recon (fix workstream 6, D-08). Absent = from a recon. */
+  origin?: 'client';
 }
 export interface ManifestInteraction { kind: InteractionKind; where: string; notes: string }
 export interface SourceManifest {
@@ -341,8 +355,10 @@ export interface MappingState {
   services: Record<string, boolean>;
   /** source service candidate (normalised name) → template service id, or 'ignore'. */
   candidate_map: Record<string, string>;
-  /** town key → { serves, page }. Absent = no decision. page defaults OFF (no doorway pages). */
-  locations: Record<string, { serves?: boolean; page?: boolean }>;
+  /** town key → { serves, page, note }. Absent = no decision. page defaults OFF (no doorway pages) — the
+   *  home town too: the HOME PAGE owns "<trade> in <home town>". `note` = the genuinely local content
+   *  that justifies a town page (real jobs there, access, landmarks); a page without one blocks. */
+  locations: Record<string, { serves?: boolean; page?: boolean; note?: string }>;
   /** asset slot id → assigned asset source URLs (only USE assets are ever published). */
   assets: Record<string, string[]>;
   /** template field id → an operator value for a field the ledger has no fact for (choices). */
@@ -362,14 +378,17 @@ function readMapping(v: unknown): MappingState {
   for (const [k, b] of Object.entries(obj(o.candidate_map)).slice(0, 300)) { const key = str(k, 120).toLowerCase(); const val = str(b, 80); if (key && MAP_KEY.test(val)) out.candidate_map[key] = val; }
   for (const [k, b] of Object.entries(obj(o.locations)).slice(0, 300)) {
     const key = str(k, 120).toLowerCase(); const l = obj(b); if (!key) continue;
-    const e: { serves?: boolean; page?: boolean } = {};
+    const e: { serves?: boolean; page?: boolean; note?: string } = {};
     if (typeof l.serves === 'boolean') e.serves = l.serves;
     if (typeof l.page === 'boolean') e.page = l.page;
-    if ('serves' in e || 'page' in e) out.locations[key] = e;
+    const note = str(l.note, 600);
+    if (note) e.note = note;
+    if ('serves' in e || 'page' in e || 'note' in e) out.locations[key] = e;
   }
   for (const [k, list] of Object.entries(obj(o.assets)).slice(0, 40)) {
     if (!MAP_KEY.test(mapKey(k))) continue;
-    const urls = [...new Set(arr(list).map((u) => str(u, 500)).filter((u) => /^https?:\/\//i.test(u)))].slice(0, 60);
+    /* https, or file:/// for a client-supplied file on the build machine (fix workstream 6). */
+    const urls = [...new Set(arr(list).map((u) => str(u, 500)).filter((u) => /^(https?:\/\/|file:\/\/\/)/i.test(u)))].slice(0, 60);
     if (urls.length) out.assets[mapKey(k)] = urls;
   }
   for (const [k, val] of Object.entries(obj(o.fields)).slice(0, 100)) if (MAP_KEY.test(mapKey(k))) { const s = str(val, 500); if (s) out.fields[mapKey(k)] = s; }
@@ -458,6 +477,40 @@ export interface WebsiteBuildState {
   checks: Record<string, true>;
   /** The Findable quality standard: existing-site strengths + their decisions, content completeness. */
   quality: QualityState;
+  /** Fix workstream 6 (2026-10-04): the enquiry form, switched on HERE (siteForm.ts) — site-enquiry
+   *  reads it, so a new client's form needs no code edit or deploy. */
+  form: SiteFormState;
+  /** The site quality gate run on the LIVE domain (--url, not a preview), imported by Paul after the
+   *  production deploy. "Production checked" cannot be ticked until it passed (websiteLaunch.ts). */
+  production_gate: ProductionGateRecord;
+  /** Paul's corrections to the generated site before launch, in his words — printed into the
+   *  Corrections prompt (buildExecution.ts correctionPrompt). */
+  corrections: string;
+  /** The site's main call to action, in Paul's words ("Call Gareth", "Send an enquiry"). Blank = the
+   *  builder chooses from the verified contact routes. */
+  primary_cta: string;
+}
+
+/** The production gate report, kept small: the verdict and the failing / warning check labels. */
+export interface ProductionGateRecord {
+  imported_at: string;
+  version: number | null;
+  domain: string;
+  mode: string;
+  preview: boolean;
+  passed: boolean | null;
+  fails: string[];
+  warns: string[];
+}
+export const EMPTY_PRODUCTION_GATE: ProductionGateRecord = { imported_at: '', version: null, domain: '', mode: '', preview: false, passed: null, fails: [], warns: [] };
+export function readProductionGate(v: unknown): ProductionGateRecord {
+  const o = obj(v);
+  const list = (x: unknown) => arr(x).map((y) => str(y, 300)).filter(Boolean).slice(0, 40);
+  return {
+    imported_at: str(o.imported_at, 40), version: typeof o.version === 'number' ? o.version : null,
+    domain: str(o.domain, 253).toLowerCase(), mode: str(o.mode, 10), preview: o.preview === true,
+    passed: o.passed === true ? true : o.passed === false ? false : null, fails: list(o.fails), warns: list(o.warns),
+  };
 }
 
 /* The plain string fields and their caps. One list, read by both the parser and the normaliser. */
@@ -468,6 +521,7 @@ const STRING_FIELDS = {
   canonical_domain: 253, latest_commit: 80, notes: 8000,
   source_site_url: 500, source_platform: 100, last_captured_at: 40,
   dev_command: 200, build_command: 200, build_output_dir: 200, design_references: 2000,
+  corrections: 4000, primary_cta: 200,
 } as const;
 type StringField = keyof typeof STRING_FIELDS;
 
@@ -503,6 +557,7 @@ export const EMPTY_WEBSITE_BUILD: WebsiteBuildState = {
   mapping: { services: {}, candidate_map: {}, locations: {}, assets: {}, fields: {} },
   build_execution: EMPTY_BUILD_EXECUTION,
   facts: [], pages: [], redirects: [], qa: {}, checks: {}, quality: EMPTY_QUALITY,
+  form: EMPTY_SITE_FORM, production_gate: EMPTY_PRODUCTION_GATE, corrections: '', primary_cta: '',
 };
 
 const obj = (v: unknown): Record<string, unknown> =>
@@ -549,6 +604,7 @@ function readPage(raw: unknown, i: number): ArchPage | null {
     old_url: str(o.old_url, 500),
     target: str(o.target, 500),
     notes: str(o.notes, 1000),
+    meta: str(o.meta, 300),
   };
   /* A row with nothing in it is not a page. */
   return (page.title || page.path || page.old_url) ? page : null;
@@ -577,7 +633,8 @@ export function parseManifest(raw: unknown): SourceManifest {
       const a = obj(x);
       return { source_url: str(a.source_url, 500), type: tok(ASSET_TYPES, a.type, 'other'), purpose: str(a.purpose, 200),
         location: str(a.location, 300), approval: tok(ASSET_APPROVALS, a.approval, 'pending'),
-        page_url: str(a.page_url, 500), suggested_filename: str(a.suggested_filename, 120), ownership: tok(ASSET_OWNERSHIPS, a.ownership, 'unknown') };
+        page_url: str(a.page_url, 500), suggested_filename: str(a.suggested_filename, 120), ownership: tok(ASSET_OWNERSHIPS, a.ownership, 'unknown'),
+        ...(a.origin === 'client' ? { origin: 'client' as const } : {}) };
     }).filter((a) => a.source_url || a.location).slice(0, MAX_MANIFEST_ASSETS),
     redirect_candidates: arr(o.redirect_candidates).map(readRedirect).filter((r): r is Redirect => !!r).slice(0, MAX_REDIRECTS),
     interactions: arr(o.interactions).map((x) => {
@@ -674,6 +731,8 @@ export function parseWebsiteBuild(raw: unknown): WebsiteBuildState {
   out.checks = {};
   for (const k of ALL_ROUTE_CHECK_IDS) if (ch[k] === true) out.checks[k] = true;
   out.quality = readQuality(o.quality);
+  out.form = readSiteForm(o.form);
+  out.production_gate = readProductionGate(o.production_gate);
   return out;
 }
 
@@ -750,7 +809,7 @@ export interface StageInputs {
 
 export function websiteBuildStages(i: StageInputs): StageStatus[] {
   const s = i.state;
-  const qaPreview = QA_ITEMS.filter((q) => q.group === 'preview');
+  const qaPreview = requiredPreviewQa(i.hasExistingSite);
   const qaDone = qaPreview.filter((q) => s.qa[q.key]).length;
   const capApplies = captureApplies(s, i.hasExistingSite);
   const intakeDone = modeComplete(s) && i.factsAwaiting === 0;
@@ -771,8 +830,10 @@ export function websiteBuildStages(i: StageInputs): StageStatus[] {
     })(),
     { stage: 'preview', applicable: true, done: !!s.preview_url, detail: s.preview_url ? `${s.preview_url} · ${PREVIEW_STATUS_LABELS[s.preview_status].toLowerCase()}` : 'No preview URL yet' },
     { stage: 'qa', applicable: true, done: qaDone === qaPreview.length, detail: `${qaDone} of ${qaPreview.length} checks` },
+    /* The rule weeklyCheck.weeklyStart reads too (production URL + "Production checked"); the SAVE refuses
+       that tick until the live-domain gate passed (websiteLaunch.ts), so the shared rule stays honest. */
     { stage: 'live', applicable: true, done: !!s.production_url && s.qa.production_checked === true,
-      detail: s.production_url ? (s.qa.production_checked ? `${s.production_url} · verified` : `${s.production_url} · not verified`) : 'Not live' },
+      detail: s.production_url ? (s.qa.production_checked ? `${s.production_url} · verified` : `${s.production_url} · ${s.production_gate.passed === true ? 'live gate passed — tick Production checked' : 'not verified (import the live gate report)'}`) : 'Not live' },
   ];
 }
 

@@ -12,19 +12,19 @@ import { runSeoScanCore } from "../_shared/enrichment/seo-scan-core.ts";
 import { refreshApifyUsage } from "../_shared/enrichment/apify-usage.ts";
 import { advanceBaseline, sweepStalledBaselines, ensureBaselinesForPaidOnboardings, fireDueRemeasures } from "../_shared/audit-baseline.ts";
 import { maybeSendFreeCheckResult } from "../_shared/free-check-result.ts";
-import { maybeSendRemeasureResults } from "../_shared/remeasure-results.ts";
+import { maybeSendRemeasureResults, resultsSweepDue, sweepUnsentRemeasureResults } from "../_shared/remeasure-results.ts";
 import { toWhatsAppNumber } from "../_shared/whatsapp-send.ts";
 import { reconcileFirstReplyAuditIntents } from "../_shared/first-reply-audit.ts";
-import { autoMarkHookLeadNotInterested, autoMarkSixOfSixNotInterested } from "../_shared/hook-not-interested.ts";
 import { AUDIT_ONLY_STATUS, autoReplyEnvOn, phoneSuppressed } from "../_shared/auto-reply-rules.ts";
 import { seoScanAllowed } from "../../../src/lib/auditKind.ts";
 import { cellNamed } from "../../../src/lib/namedSignal.ts";
 import { CRAWL_CHECK_VERSION } from "../../../src/lib/crawlCheck.ts";
 import { SITE_EVIDENCE_VERSION } from "../../../src/lib/siteEvidence.ts";
 import { HOOK_DECIDING_ENGINE, advanceHookState, evaluateHookQuestion, isHookState, shouldDeepCrawl } from "../../../src/lib/hookAudit.ts";
-import { isHookStateV2 } from "../../../src/lib/hookScore.ts";
 import { RETRY_CLEAN_CAP, runSettlement, shouldInvokeCleaning, finaliseReadiness, markCleaningExhausted } from "../_shared/run-finalise.ts";
 import { cleaningSweepDue } from "../_shared/cleaning-sweep.ts";
+import { POOL_DAILY_CAP_USD, budgetDecision, budgetPoolForPurpose, refusalRowError, type ApifyUsage, type BudgetPool } from "../../../src/lib/auditBudget.ts";
+import { latestApifyUsage } from "../_shared/audit-budget.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 
 // process-ai-audit-queue — cron-driven drain of ai_audit_queue, modelled on
@@ -94,8 +94,13 @@ const CAP_USD = 1.0;             // per-RUN Apify cost ceiling (this audit run)
    Apify account's own balance, which is what actually took the audit engine down for five hours — that
    is only visible in the Apify dashboard.
    Note the SEO scan is ~76% of an outreach audit, so days dominated by no-website leads (which skip
-   the scan) cost far less. */
-const DAILY_CAP_USD = 12.0;      // per-USER rolling-24h ceiling (across audits) via the runner
+   the scan) cost far less.
+
+   ⛔ SUPERSEDED 2026-10-04 BY THE BUDGET POOLS (src/lib/auditBudget.ts POOL_DAILY_CAP_USD). The one
+   shared ceiling above let a day of prospecting refuse a paying client's baseline or re-measure.
+   Prospecting keeps that same ceiling as its own pool; the guarantee (baseline, remeasure) and other
+   client work each have their own, summed over their own spend, plus an Apify reserve so the last
+   slice of the month is kept for the guarantee. */
 const MAX_ATTEMPTS = 3;          // per queue row (= actor runs STARTED) before it's marked failed
 // Async guards (RUN_TIMEOUT_MS is gone — nothing blocks on the scrape any more):
 const MAX_RUN_AGE_MS = 12 * 60 * 1000;  // a started run must reach terminal within 12 min, else the
@@ -233,6 +238,11 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.warn("[process-ai-audit-queue] apify usage refresh failed:", e instanceof Error ? e.message : String(e));
     }
+    /* The reading the Apify reserve is judged on this tick: the fresh snapshot when this tick took
+       one, else the newest stored one (refreshed every 15 min). Null = unknown = never refuses. */
+    const apifyNow: ApifyUsage | null = apifyUsage
+      ? { usedUsd: apifyUsage.monthlyUsageUsd, capUsd: apifyUsage.maxMonthlyUsageUsd }
+      : await latestApifyUsage(service);
 
     // 0a3) PAID CLIENT baseline backstop. The stripe webhook starts the baseline on the payment
     //      event, but that is a single network attempt. This guarantees the outcome: any PAID
@@ -255,6 +265,18 @@ Deno.serve(async (req) => {
       console.error("[process-ai-audit-queue] day-28 replay tick failed:", e instanceof Error ? e.message : String(e));
     }
 
+    // 0a5) HELD FOUR-WEEK RESULTS (2026-10-04, C-10). A result held at finalisation (copy not approved,
+    //      unproven, …) used to be held for ever. Every RESULTS_SWEEP_EVERY_MS the unsent, frozen replays
+    //      are re-offered to the same claim-first sender — quietly, so a standing hold is not re-emailed.
+    if (resultsSweepDue(Date.now())) {
+      try {
+        const swept = await sweepUnsentRemeasureResults(service);
+        for (const s of swept) if (s.outcome.kind === "sent") console.log(`[process-ai-audit-queue] held four-week results sent for ${s.auditId}`);
+      } catch (e) {
+        console.error("[process-ai-audit-queue] results sweep failed:", e instanceof Error ? e.message : String(e));
+      }
+    }
+
     // NOTE: the SEO step used to live HERE, before question draining, and it returned from the
     // tick as soon as it scanned one run. That made every website audit cost a whole tick before
     // any question could start: measured on a 6-audit batch (4 with websites), the first question
@@ -268,17 +290,20 @@ Deno.serve(async (req) => {
        "DK Gas Professional" where the answer says exactly that but the stored core demands more.
        Distinctiveness is judged by stripping the trade and the town, so it needs both. Absent, the
        matcher keeps its strict behaviour. */
-    const auditCache = new Map<string, { businessName: string; businessType: string; locationText: string; countryCode: string; userId: string }>();
+    /* `pool` — the audit's budget pool, from its STORED purpose (src/lib/auditBudget.ts). A missing
+       purpose reads as prospecting: the most restricted pool, never the guarantee's. */
+    const auditCache = new Map<string, { businessName: string; businessType: string; locationText: string; countryCode: string; userId: string; pool: BudgetPool }>();
     async function getAudit(auditId: string) {
       if (auditCache.has(auditId)) return auditCache.get(auditId)!;
       const { data: a } = await service
-        .from("ai_audits").select("business_name, business_type, location_text, country, user_id").eq("id", auditId).maybeSingle();
+        .from("ai_audits").select("business_name, business_type, location_text, country, user_id, audit_purpose").eq("id", auditId).maybeSingle();
       const v = {
         businessName: a?.business_name ?? "",
         businessType: a?.business_type ?? "",
         locationText: a?.location_text ?? "",
         countryCode: toCountryCode(a?.country ?? null),
         userId: a?.user_id ?? "",
+        pool: budgetPoolForPurpose(a?.audit_purpose),
       };
       auditCache.set(auditId, v);
       return v;
@@ -352,6 +377,7 @@ Deno.serve(async (req) => {
                 estimatedUsd: estCost,
                 actualUsd: usageTotalUsd,
                 note: "ai_search_poll_reconcile",
+                budgetPool: audit.pool,
               });
             }
             result._compute_units = computeUnits;
@@ -398,34 +424,39 @@ Deno.serve(async (req) => {
        straggler rule and the finaliser key on. Two reads rather than an embedded join, per the
        house rule (bulk-jobs): a wrong relationship name returns rows with the field silently
        absent, which would read as "no baselines" forever. */
-    const { data: baselineAuditRows } = await service
-      .from("ai_audits")
-      .select("id")
-      .not("baseline_target_runs", "is", null);
-    const baselineAuditIds = ((baselineAuditRows ?? []) as Row[]).map((r) => r.id);
-    const candidateIds: string[] = [];
-    if (baselineAuditIds.length > 0) {
-      const { data: prio } = await service
-        .from("ai_audit_queue")
-        .select("id")
-        .eq("status", "pending")
-        .in("audit_id", baselineAuditIds)
-        .order("created_at", { ascending: true })
-        .limit(START_BATCH);
-      for (const r of (prio ?? []) as Row[]) candidateIds.push(r.id);
-    }
-    if (candidateIds.length < START_BATCH && tickMode === "running") {
-      const { data: rest } = await service
-        .from("ai_audit_queue")
-        .select("id")
-        .eq("status", "pending")
-        .order("created_at", { ascending: true })
-        .limit(START_BATCH);
-      for (const r of (rest ?? []) as Row[]) {
-        if (candidateIds.length >= START_BATCH) break;
-        if (!candidateIds.includes(r.id)) candidateIds.push(r.id);
+    /* ⛔ REBUILT 2026-10-04 (fix/04, the budget pools). The old version read EVERY multi-run audit id
+       ever created (no limit — PostgREST silently stops at 1,000, CLAUDE.md §4) and sent them all back
+       in one `.in()`. It now reads the oldest pending rows once and ranks them by their audit:
+         0 — the GUARANTEE (audit_purpose baseline / remeasure): a paying client's money-back measurement;
+         1 — any other multi-run measurement (baseline_target_runs set: discovery, full measure, legacy
+             baselines with no purpose);
+         2 — everything else (prospecting), and only while the paid-action mode is `running`.
+       Same atomic claim below; only which ids are OFFERED changed. */
+    const PENDING_SCAN = 400;
+    const { data: pendingScan } = await service
+      .from("ai_audit_queue")
+      .select("id, audit_id, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(PENDING_SCAN);
+    const pendingList = (pendingScan ?? []) as Row[];
+    const pendingAuditIds = [...new Set(pendingList.map((r) => String(r.audit_id)))];
+    const auditRank = new Map<string, number>();
+    for (let i = 0; i < pendingAuditIds.length; i += 200) {
+      const { data: auds } = await service.from("ai_audits")
+        .select("id, audit_purpose, baseline_target_runs").in("id", pendingAuditIds.slice(i, i + 200));
+      for (const a of (auds ?? []) as Row[]) {
+        const rank = budgetPoolForPurpose(a.audit_purpose) === "guarantee" ? 0 : a.baseline_target_runs != null ? 1 : 2;
+        auditRank.set(String(a.id), rank);
       }
     }
+    const rankOf = (auditId: string) => auditRank.get(String(auditId)) ?? 2;
+    const candidateIds: string[] = pendingList
+      .map((r, i) => ({ id: String(r.id), rank: rankOf(r.audit_id), i }))
+      .filter((c) => c.rank < 2 || tickMode === "running")
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .slice(0, START_BATCH)
+      .map((c) => c.id);
     if (tickMode === "all_stop") candidateIds.length = 0;
     if (candidateIds.length > 0) {
       const { data: claimedRows } = await service
@@ -439,8 +470,7 @@ Deno.serve(async (req) => {
          and the in-flight headroom below is handed out in iteration order — without this sort, a
          baseline row could be DEFERRED while a market row two places later took the last Apify
          slot, which is the exact inversion the two-phase selection exists to prevent. */
-      const baselineIdSet = new Set(baselineAuditIds);
-      claimed.sort((a, b) => Number(baselineIdSet.has(b.audit_id)) - Number(baselineIdSet.has(a.audit_id)));
+      claimed.sort((a, b) => rankOf(a.audit_id) - rankOf(b.audit_id));
       for (const r of claimed) touchedRuns.add(r.run_id);
 
       /* ══ TWO GATES, AND THEY MEAN OPPOSITE THINGS ═════════════════════════════════════════
@@ -523,6 +553,16 @@ Deno.serve(async (req) => {
       // actor run started. noCacheWrite: a cached start-marker would replay a dead runId on retry.
       async function startRow(row: Row): Promise<boolean> {
         const audit = await getAudit(row.audit_id);
+        /* ⛔ THE APIFY RESERVE (src/lib/auditBudget.ts). Prospecting and client work stop starting
+           before Apify's monthly cap so the last slice is kept for baselines and re-measures. A
+           missing reading never refuses. Terminal like the pool cap: the row is refused, not spent. */
+        const reserve = budgetDecision({ pool: audit.pool, poolSpentUsd: 0, estCostUsd: 0, apify: apifyNow, capUsd: Number.POSITIVE_INFINITY });
+        if (!reserve.allowed && reserve.reason === "apify_reserve") {
+          cappedRuns.add(row.run_id);
+          await service.from("ai_audit_queue")
+            .update({ status: "failed", result: { error: refusalRowError("apify_reserve"), pool: audit.pool } }).eq("id", row.id);
+          return false;
+        }
         try {
           const outcome = await runEnrichSource<{ runId: string; datasetId: string | null }>({
             service,
@@ -530,7 +570,10 @@ Deno.serve(async (req) => {
             type: "ai_search",
             cacheKey: `aiaudit:${row.id}`,
             estCostUsd: estCost,
-            capUsd: DAILY_CAP_USD,
+            /* ⛔ THE POOL'S OWN CEILING, summed over the POOL's spend only — prospecting can no longer
+               use up a paying client's baseline or re-measure (M-010). */
+            capUsd: POOL_DAILY_CAP_USD[audit.pool],
+            budgetPool: audit.pool,
             noCacheWrite: () => true, // never cache the start marker (would poison retries)
             run: async () => {
               const { runId, datasetId } = await startAiSearch(String(row.question), audit.countryCode, apifyToken);
@@ -540,7 +583,7 @@ Deno.serve(async (req) => {
           if (outcome.capReached) {
             cappedRuns.add(row.run_id);
             await service.from("ai_audit_queue")
-              .update({ status: "failed", result: { error: "daily_cap" } }).eq("id", row.id);
+              .update({ status: "failed", result: { error: refusalRowError("pool_cap"), pool: audit.pool } }).eq("id", row.id);
             return false;
           }
           if (!outcome.result?.runId) throw new Error("no_run_id");
@@ -721,7 +764,10 @@ async function maybeRunSeoStep(service: any, apifyToken: string): Promise<boolea
         type: "seo_audit",
         cacheKey: `seo:${run.id}`,             // unique per run → re-runs fetch fresh
         estCostUsd: SOURCES.seo_audit.estCostUsd,
-        capUsd: DAILY_CAP_USD,
+        /* The scan is booked to the audit's own pool (seoScanAllowed admits the baseline only, so in
+           practice the guarantee pool) — prospecting spend can no longer refuse it. */
+        capUsd: POOL_DAILY_CAP_USD[budgetPoolForPurpose(audit.audit_purpose)],
+        budgetPool: budgetPoolForPurpose(audit.audit_purpose),
         run: async () => {
           const r = await runSeoScanCore(website, { token: apifyToken });
           if (!r.ok) throw new Error(r.error + (r.detail ? `: ${r.detail}` : ""));
@@ -971,6 +1017,15 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     let total = 0;
     let doneQuestions = 0;
     let failedQuestions = 0;
+    /* The run's stored mention_rate reads `named` with the business, trade and town (namedSignal.ts) —
+       the answer text for a judgeable name, the same ruler as the client report (C-32, 2026-10-04).
+       An unreadable audit falls back to the old reading, exactly as before. */
+    const { data: namedAudit } = runRow?.audit_id
+      ? await service.from("ai_audits").select("business_name, business_type, location_text").eq("id", runRow.audit_id).maybeSingle()
+      : { data: null };
+    const namedCtx = namedAudit
+      ? { businessName: (namedAudit as Row).business_name ?? null, trade: (namedAudit as Row).business_type ?? null, town: (namedAudit as Row).location_text ?? null }
+      : undefined;
     const questions = rows.map((r: Row) => {
       const engines: string[] = Array.isArray(r.engines) && r.engines.length ? r.engines : DEFAULT_ENGINES;
       const result = r.status === "done" ? (r.result ?? null) : null;
@@ -984,7 +1039,7 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
         for (const e of engines) {
           if (!result?.[e]) continue;
           total++;
-          if (cellNamed(result?.[e])) named++;
+          if (cellNamed(result?.[e], namedCtx)) named++;
         }
       }
       return { question: r.question, status: r.status, engines: result };
@@ -1137,22 +1192,12 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     finalised++;
     processingRuns.push({ runId, auditId: runRow?.audit_id as string, finalStatus: runStatus, allFailed });
 
-    /* ── AUTO "NOT INTERESTED" ON A 3/3 GEMINI HOOK (2026-09-21, _shared/hook-not-interested.ts) ──
-       Fires ONCE per run's completion (same atomic transition winner as the crawl below), only for
-       a hook run whose three questions all settled with Gemini genuinely naming the business — see
-       geminiNamedAllThree (src/lib/hookAudit.ts) for the exact, ChatGPT-independent rule. Every
-       other audit type never reaches here with a `results.hook`, so this is inert for them. */
-    if (isHookState((results as Row).hook) && (results as Row).hook.executed === 3 && rows.length === 3) {
-      const outcome = await autoMarkHookLeadNotInterested(service, runRow?.audit_id, rows);
-      if (outcome.applied) {
-        console.log(`[process-ai-audit-queue] hook run ${runId}: Gemini named the business in all 3 questions — lead ${outcome.leadId} auto-marked not interested`);
-      } else if (outcome.reason !== "gemini_not_3_of_3") {
-        console.log(`[process-ai-audit-queue] hook run ${runId}: not auto-marking not interested — ${outcome.reason}`);
-      }
-    }
-    /* The VERSION-2 hook's 6/6 rule is NOT here. It runs after the run is released (below, beside
-       readyRuns), because "named" must be read after extract-competitors has written its verdicts.
-       That way the rule, the report and the Inbox card read one set of cells. */
+    /* ⛔ AN AUDIT RESULT NEVER CHANGES A LEAD'S STATUS (Paul, 2026-10-04, fix/07). The two rules that
+       used to sit here and beside readyRuns below — Google AI named them in 3/3 (version 1) and named
+       in 6/6 (version 2) → "Not interested" — are removed, for the single check and the bulk check
+       alike. "Not interested" is a sales outcome a person records, never an inference from an audit.
+       A strong result is shown as a finding ("Strong AI visibility — named in all 6 answers",
+       coldCallPlaybook.ts callCardAudit) and the lead keeps its status. The stored result is unchanged. */
 
     /* ── AUTOMATIC SITE CRAWL (2026-09-17) ───────────────────────────────────────────────────────
        Every audit that finalises crawls its lead's site — complete, capped OR failed, because the
@@ -1172,9 +1217,10 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
        precisely one outcome:
 
          · visibility_gap_found   → DEEP. This is the lead we are about to message.
-         · max_questions_reached  → shallow. Gemini named them every time; hook-not-interested.ts
-                                    auto-marks the lead not interested a few lines above this, so
-                                    building an argument for them is work for a message never sent.
+         · max_questions_reached  → shallow. AI named them every time, so there is no missed search
+                                    to build a sales argument for. (The lead keeps its status — no
+                                    audit sets "Not interested" since 2026-10-04 — and the cheap
+                                    crawl's fault signals are still taken.)
          · provider_failure       → shallow. No hook, nothing to attach findings to.
          · still running / absent → handled by the line below, not by this list.
 
@@ -1403,23 +1449,6 @@ async function finaliseSettledRuns(service: any, runIds: string[], estCost: numb
     if (readiness.ready) {
       const { error } = await service.from("ai_audit_runs").update({ status: p.finalStatus }).eq("id", p.runId).eq("status", "processing");
       if (!error) readyRuns.add(p.runId);
-      /* ── VERSION 2 HOOK: 6/6 ON CHATGPT + GOOGLE AI (2026-09-25, _shared/hook-not-interested.ts) ──
-         Here, after release, because only now has extract-competitors written the model's named
-         verdicts. The rule reads the queue rows with the report's own ruler, so it agrees with the
-         Inbox card and the report. Only a COMPLETE six-result hook where all six results named the
-         business moves the lead. Any miss (5/6 down to 0/6) keeps it as an opportunity, and an
-         incomplete audit decides nothing. It deletes nothing, sends nothing, and is idempotent (a
-         conditional write that skips an already-moved lead). The reason is recorded on
-         results.hook. Runs before the completion auto-send below. That send would refuse anyway
-         (audit-reply's hookForbidsAbsenceCopy), but the lead should already be out of outreach. */
-      if (!error && isHookStateV2(current.hook)) {
-        const outcome = await autoMarkSixOfSixNotInterested(service, p.auditId, p.runId);
-        if (outcome.applied) {
-          console.log(`[process-ai-audit-queue] hook run ${p.runId}: named in all six results — lead ${outcome.leadId} auto-marked not interested`);
-        } else if (outcome.reason !== "not_six_of_six") {
-          console.log(`[process-ai-audit-queue] hook run ${p.runId}: not auto-marking not interested — ${outcome.reason}`);
-        }
-      }
     } else {
       await service.from("ai_audit_runs").update({ status: "pending" }).eq("id", p.runId).eq("status", "processing");
       console.warn(`[process-ai-audit-queue] run ${p.runId} held pending: crawlReady=${readiness.crawlReady}, cleaning=${readiness.cleaning}`);

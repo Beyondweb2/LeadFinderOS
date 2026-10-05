@@ -162,7 +162,7 @@ the baseline); i18n `pipelineStatuses` (the tour/i18n deep-clean step); `email_s
 Writers/readers per status, the 7 label maps and where they disagree (won had four labels), every
 control that changes status: summarised above; the raw map is in this session's transcript. Key readers:
 `process-whatsapp-queue` eligibility, `sales_queue_opener` (not_contacted only), `sales_pool`,
-`hook-not-interested` PROTECTED, `dashboardTasks` DEAD/NOT_ACTIONABLE, `REPLIED_OR_BEYOND`.
+`hook-not-interested` PROTECTED (that module was deleted 2026-10-04 — no audit sets a status now), `dashboardTasks` DEAD/NOT_ACTIONABLE, `REPLIED_OR_BEYOND`.
 
 ## 12. Paul's decisions (2026-09-30, follow-up — built and live)
 

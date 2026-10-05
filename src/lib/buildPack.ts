@@ -34,9 +34,16 @@ import type { RebuildPromptInput } from './websiteBuildPrompt.ts';
 import { AI_VISIBILITY, baselineProtection, confirmationsSection, crawlSection, doNotBreak } from './websiteBuildPrompt.ts';
 import { RECON_RULES_LINES, RECON_SCHEMA_LINES } from './reconSchema.ts';
 import { SITE_GATE_EXPECT_FILE, SITE_GATE_FETCH } from './siteGate.ts';
+/** The live-domain gate report Paul imports on the Live step (websiteLaunch.ts productionGateProblems). */
+export const PRODUCTION_GATE_REPORT_FILE = 'qa/site-gate-production.json';
 import { manifestBuildLines } from './manifestSummary.ts';
 import { QUALITY_STANDARD_LINES } from './websiteQuality.ts';
 import { computeMapping, type Mapping } from './templateMapping.ts';
+import { DO_NOT_INVENT_LINES } from './claimRules.ts';
+import { productionReadiness, type DomainReadiness } from './websiteLaunch.ts';
+import { buildToolingRefusal } from './websiteLaunch.ts';
+import type { ServiceRoute } from './findableOffer.ts';
+import { stateHasExistingSite } from './websiteBuildState.ts';
 
 export const PACK_ITEM_IDS = ['setup', 'capture', 'master', 'local', 'preview', 'visual_qa', 'seo_qa', 'production', 'final_qa'] as const;
 export type PackItemId = (typeof PACK_ITEM_IDS)[number];
@@ -54,6 +61,8 @@ export interface PackItem {
   /** Where the output lands / what to paste back into LeadFinderOS. */
   expect: string;
   text: string;
+  /** No text was generated and Copy is disabled (an Optimise client — fix workstream 6). */
+  refused?: boolean;
 }
 
 export interface BuildPackInput {
@@ -65,7 +74,24 @@ export interface BuildPackInput {
   existingSiteUrl: string;
   mustNotSay: string;
   generatedAt?: string;
+  /** Fix workstream 6: the client's service route (websiteRoute.ts) and the domain-authority verdict.
+   *  Absent = not known → production is never offered (productionReadiness treats it as not Build). */
+  serviceRoute?: ServiceRoute | null;
+  routeSource?: string;
+  domain?: DomainReadiness | null;
+  /** WAVE 1 INTEGRATION — Workstream 4's service truth, from the client's own records (the onboarding row
+   *  and the lead): what they said they do, and what they said they do NOT. Absent → siteGate derives the
+   *  truth from the evidence and the fact ledger (siteTruthFromBuild). */
+  clientTruth?: { onboardingList?: unknown; onboardingText?: unknown; notOffered?: unknown; leadServices?: unknown } | null;
 }
+
+/** The launch rule for this input (websiteLaunch.ts) — the production prompt, the production commands
+ *  and the Live stage all read it, so none of them can unlock on a recorded preview URL alone. */
+export function launchProblems(i: BuildPackInput): string[] {
+  return productionReadiness({ state: i.state, route: i.serviceRoute ?? null, routeSource: i.routeSource, hasExistingSite: !!i.existingSiteUrl || stateHasExistingSite(i.state), domain: i.domain ?? null });
+}
+/** '' = Build tooling may be used for this client; else the sentence that says why not (Optimise). */
+export const toolingRefusal = (i: BuildPackInput) => buildToolingRefusal(i.serviceRoute ?? null);
 
 /* ── the route, read one way everywhere ─────────────────────────────────────────────────────────── */
 
@@ -429,7 +455,10 @@ export function pageLines(s: WebsiteBuildState): string[] {
   for (const p of build) {
     out.push('- ' + p.path + '  [' + PAGE_FAMILY_LABELS[p.family] + ', ' + PAGE_ACTION_LABELS[p.action].toLowerCase() + ']  ' + (p.title || '') +
       (p.old_url ? '  (replaces ' + p.old_url + ')' : '') + (p.notes ? '  — ' + p.notes : ''));
+    /* Paul's own meta description wins over the builder's (fix workstream 6: operator control). */
+    if (p.meta) out.push('    meta description (Paul\'s, use as written): ' + p.meta);
   }
+  if (s.primary_cta) out.push('', 'MAIN CALL TO ACTION (Paul\'s words, every page): ' + s.primary_cta);
   if (fold.length) {
     out.push('', 'OLD PAGES FOLDED INTO ANOTHER (' + fold.length + ') — their useful, true content moves to the target:');
     for (const p of fold) out.push('- ' + (p.old_url || p.path) + ' → ' + p.target + '  [' + PAGE_ACTION_LABELS[p.action].toLowerCase() + ']' + (p.notes ? '  — ' + p.notes : ''));
@@ -529,6 +558,8 @@ function contentRules(i: BuildPackInput): string[] {
     '  doorway or cloned town pages · hundreds of thin FAQs · hidden text · schema stuffing · fake',
     '  citations · an automatic llms.txt',
     'If a fact is not in VERIFIED FACTS, it does not go on the site — it goes on your list for Paul.',
+    '',
+    ...DO_NOT_INVENT_LINES,
     '⛔ PRICES (Paul, 2026-09-30): a price appears ONLY when it is a VERIFIED fact in section D. Never carry a price from the current site — not in preserved copy, a table, a card, schema or a meta description — just because it is publicly stated there: prices go stale and bind the client. Remove it and list it for Paul. The site quality gate fails any £ figure that is not an approved price.',
     ...(i.mustNotSay ? ['', '⛔ THE CLIENT HAS SAID WE MUST NOT SAY: ' + i.mustNotSay, 'This applies to every page, heading, meta description and schema field.'] : []),
   ];
@@ -921,16 +952,20 @@ export function seoQaPrompt(i: BuildPackInput): PackItem {
 export function productionCommands(i: BuildPackInput): PackItem {
   const s = i.state;
   const problem = cloudflareProblem(s);
-  const blockedBy = [
+  /* ⛔ FIX WORKSTREAM 6 (D-04): a recorded preview URL is NOT permission. The one launch rule
+     (websiteLaunch.ts) — Build client, PREVIEW READY by LeadFinderOS's own gate, this client's project
+     and domain, every preview QA tick — must pass, or no command is generated. */
+  const blockedBy = [...new Set([
     ...(problem ? [problem] : []),
     ...(!s.preview_url ? ['Preview URL (deploy and review a preview first)'] : []),
     ...(!s.canonical_domain ? ['Domain (canonical)'] : []),
     ...(!s.local_repo_path ? ['Local folder'] : []),
-  ];
+    ...launchProblems(i),
+  ])];
   if (blockedBy.length) {
     return {
       id: 'production', title: '8. Production deployment commands', kind: 'commands', applicable: true, blockedBy,
-      help: 'Production commands are not generated until the items below are recorded. Nothing here guesses a project or a domain.',
+      help: 'Production commands are not generated until the site is cleared for production (below). Nothing here guesses a project or a domain.',
       expect: '',
       text: ['PRODUCTION IS NOT READY — no command has been generated.', '', 'Record these first:', ...blockedBy.map((b) => '- ' + b)].join('\n'),
     };
@@ -992,7 +1027,9 @@ export function finalQaPrompt(i: BuildPackInput): PackItem {
     '- All assets load from the new domain; nothing is hotlinked from the old site.',
     '- No placeholder text, no template leftovers, no unverified claim anywhere (compare with VERIFIED FACTS).',
     '- Mobile check on the live site at 375x812.',
-    '- THE GATE ON PRODUCTION: node scripts/findable-site-gate.mjs --url ' + prod + ' --domain ' + (s.canonical_domain || MARK.domain) + ' --expect ' + SITE_GATE_EXPECT_FILE + ' (fetch it first if missing: ' + SITE_GATE_FETCH + '). It checks http / www / apex in one hop, no noindex header, the search crawlers\' user agents getting the real page (Cloudflare WAF / Bot Fight Mode), and Cloudflare email obfuscation. Every FAIL is reported to Paul — a DNS or Cloudflare setting is his to change, never yours.',
+    '- THE GATE ON PRODUCTION: node scripts/findable-site-gate.mjs --url ' + prod + ' --domain ' + (s.canonical_domain || MARK.domain) + ' --expect ' + SITE_GATE_EXPECT_FILE + ' --json ' + PRODUCTION_GATE_REPORT_FILE + ' (fetch it first if missing: ' + SITE_GATE_FETCH + '). It checks the domain answers over HTTPS, http / www / apex in one hop, the home page and every page in the sitemap, robots.txt (OAI-SearchBot and the other search crawlers allowed) and the sitemap, canonicals, the schema, no noindex header, the search crawlers\' user agents getting the real page (Cloudflare WAF / Bot Fight Mode), the enquiry backend accepting this origin (an OPTIONS check — nothing is submitted), the trust claims, and Cloudflare email obfuscation. Every FAIL is reported to Paul — a DNS or Cloudflare setting is his to change, never yours.',
+    '- Paste the WHOLE of ' + PRODUCTION_GATE_REPORT_FILE + ' at the end of your report: Paul imports it into LeadFinderOS (Live step). "Production checked" cannot be ticked until it has passed.',
+    '- ⛔ No llms.txt, no "AI ranking" file or claim: the gate warns on an llms.txt, and nothing on the site promises a recommendation.',
     '',
     'VERIFIED FACTS:', ...verifiedFactLines(i.facts),
     '', 'Redirects to test:', ...(s.redirects.length ? s.redirects.map((r) => '    ' + r.from + ' -> ' + r.to) : ['    (none recorded)']),
@@ -1011,10 +1048,13 @@ export function finalQaPrompt(i: BuildPackInput): PackItem {
 
 /** The complete pack, in order. Items that do not apply are returned with applicable=false. */
 export function buildPack(i: BuildPackInput): PackItem[] {
-  return [
+  const all = [
     setupCommands(i), capturePrompt(i), masterPrompt(i), localCommands(i), previewCommands(i),
     visualQaPrompt(i), seoQaPrompt(i), productionCommands(i), finalQaPrompt(i),
   ];
+  /* ⛔ An OPTIMISE client: no command or prompt that builds, deploys or connects a domain (D-06). */
+  const refusal = toolingRefusal(i);
+  return refusal ? all.map((p) => ({ ...p, blockedBy: [refusal], refused: true, text: refusal })) : all;
 }
 
 /** Every generated command line, for the safety test: nothing destructive may ever be emitted. */

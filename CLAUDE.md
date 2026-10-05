@@ -276,6 +276,11 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The four-week results sender** (`_shared/remeasure-results.ts`) is claim-first on
   `remeasure_results_sent_at` and **holds behind `REMEASURE_RESULTS_COPY_APPROVED = false`** until Paul
   approves the copy. **RG is due 2026-10-06** — approve before then or his results hold.
+  ⛔ **Paul's wording (2026-10-05):** signed `RESULTS_SIGN_OFF` ("Paul, Findable"); the monthly is described as
+  the real service (`monthlyCoversPhrase` — never "every week", no "maintenance"); the not-gone-up version names
+  NO upcoming monthly payment after saying a claim stops it. Exact copy: `final-certification.md` §8.
+  ⛔ **findable-checkout refuses with `quickCloseClosedRefusal`** — one closed-client rule with Quick Close
+  (money, paid-or-beyond, refunded, ended).
   ⛔ **Billing and the claim window are TWO clocks**: billing = `firstRecurringPaymentIso(sign-up)`
   (the Stripe trial), the window = results + 14 days. The email names the subscription's own date
   (`resultsBillingStartIso`) or none — never "that same day". The end of the route's payments (12 / 6) is
@@ -304,8 +309,9 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   sent BY HAND, as /terms says. ⛔ Only the measurement paragraph is generated, from stored `weekly_check_runs`
   counts, comparing only like-for-like checks; work done is the operator's words (stored facts are Add
   suggestions). ⛔ `client_monthly_updates` is admin-only through its three functions; a sent row is never edited.
-- **Named = the model's verdict** (`self_named` from `extract-competitors`), string-match fallback,
-  one ruler on both sides of a comparison (`src/lib/namedSignal.ts`). A name that is only trade +
+- **Named = the answer text first** for a judgeable name, then the model's verdict (`self_named`), then the
+  string flag — one ruler on both sides of a comparison (`src/lib/namedSignal.ts`); since 2026-10-04 the frozen
+  snapshot, `mention_rate`, the page generator and the action plan pass the context too. A name that is only trade +
   town is **not judgeable** (`nameIsJudgeable`, `_shared/derivable.ts`) — the report replaces its hero
   with Paul's wording, never a caveat under a false headline.
 
@@ -581,6 +587,13 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
 - **The four-minute gap between repeat runs was never a sampling safeguard**; `NOISE_BAND_PP = 5` was
   measured minutes apart. Do not restore sequencing as protection; do not stagger to zero until
   `run_number` has a unique index (§docs/measurement.md §25).
+- **Business truth outranks generated ideas** (`docs/pre-sales-certification/fixes-04-ai-measurement.md`): the
+  highest-ranked service list wins whole, Discovery is never a source of services, and every Discovery /
+  baseline question passes `serviceScope.ts`; the final-20 checks live in `baselineQuality.ts` (one copy).
+- **A guarantee measurement freezes only at questions × runs × engines answered** (`measurementHealth.ts`), or
+  a Paul-accepted partial; missing cells are retried in place (`retryMissingCells`), never fabricated.
+- **Audit spend is pooled by purpose** (`auditBudget.ts`: guarantee / client / prospecting, plus an Apify reserve).
+  ⛔ Never one shared cap again — that is how a day of prospecting could cap a client's baseline.
 
 ---
 
@@ -706,6 +719,17 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `submissions` endpoint.
 - **The browser never decides money**: `findable-checkout` reads the add-on tick from the ROW; the
   AI line stays inline `price_data` because it is the guarantee's only carrier.
+- **Payment state is monotonic** (pre-sales wave 1, `docs/pre-sales-certification/wave1-integration.md`): only
+  `establishLeadPayment` writes the paid state, as conditions ON the update; a replay never moves a client back,
+  and a closed (ended / refunded) client never gets a subscription, a live status or a first-contact chase back.
+- **Quick Close is pre-payment only, judged on the LEAD** (`quickCloseClosedRefusal`): money on it, a
+  paid-or-beyond status, refunded or ended refuses every save / link / share — never the onboarding row's
+  status alone (it moves on to `in_delivery` / `completed`).
+- **First contact is owed only from the activation stamp** (`outreach_leads.first_contact_owed_since`, written
+  by stripe-webhook on the payment that made them a client; `firstContact.ts`). ⛔ Never a hard-coded day.
+- **The Welcome Pack's SEO grade is a separate website measure** (`seoStyle: 'pack'`, Paul 2026-10-04): the
+  measured grade as Before, an After only when genuinely re-scanned, and the words saying the guarantee is
+  judged on AI visibility alone. Never a projected grade, never the money-back number.
 - ⛔ **A lead's country comes from Google's address, never from a form's remembered choice**
   (`src/lib/leadCountry.ts`, 2026-09-28): the hidden Find Leads country stored 349 UK businesses as USA.
   A stored phone → WhatsApp digits is ONE rule, `src/lib/waNumber.ts` (UK byte-identical, India's
@@ -750,6 +774,16 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   sender diagnostic. `whatsapp_messages.user_id` NULL = system-sent or unmatched inbound.
 - **Edge auth:** handler-side, always. Internal callers use CRON_SECRET + `x-internal-job`. Every
   function is listed in `config.toml`.
+- ⛔ **A salesperson's bulk check is fn `sales-prospect-check` ONLY — never `bulk-jobs`** (it keys on
+  `user_id` = the whole book; E-04). Per lead, judged when it is processed: assigned to them, not a client /
+  archived / suppressed; reuse (in flight, or a result under `SALES_CHECK_AUDIT_REUSE_DAYS`) before any spend;
+  then the rep's `sales_check` allowance → the prospecting pool → `guard_action` → `create-ai-audit` (internal
+  door, the rep's own hook body). The database is the dedupe (request id, one active batch per rep, one lead
+  per batch). It writes no lead row and refuses a NEW check while `audit_complete_template` is set or a pitch
+  waits on the lead. `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md`.
+- ⛔ **No audit result ever changes a lead's status** (Paul, 2026-10-04). "Not interested" is a sales outcome a
+  person records. The 3/3 and 6/6 auto-rules and `_shared/hook-not-interested.ts` are deleted; a 6/6 result
+  is shown as "Strong AI visibility — named in all 6 answers" (`callCardAudit`). Do not re-add one.
 - **The Dashboard "Full Reset" is gone**; `reset_my_account()` still exists in the DB until Phase 3.
 
 **WhatsApp**
@@ -850,6 +884,18 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   the real home-town page; Q&A `structured` (all blanks) for regulated trades and for ANY blank trade,
   `advice` otherwise with every figure/credential/first-person commitment held for confirmation;
   competitor names never on a client page; neighbourhoods are an operator field, never mined.
+- **A site page answers only what the client confirmed** (wave 1, `src/lib/siteServiceTruth.ts`): Workstream 4's
+  service truth (client onboarding / verified fact → Sales notes → never Discovery) feeds Website Build's scope
+  (`siteGate.siteTruthFromBuild`) and the page generator. A planned page for an unconfirmed service owns no
+  baseline question and is flagged; the client's "not offered" list joins every exclusion; a MEASURED question
+  naming an unconfirmed service or an unserved town gets no Q&A / plan page. WS-6's own rules: launch =
+  `websiteLaunch.ts`, form registry = `website_build.form`, claims = `claimRules.ts` ↔ the gate.
+- ⛔ **A not-offered entry about NEW work binds only new work** (`serviceScope.ts` `NEW_WORK`): "no new boilers"
+  must never exclude boiler repairs or servicing (wave 1 found it shrinking to "boiler").
+- ⛔ **The client's own "no" is not a word of the service** (`buildServiceScope` `NOT_OFFERED_PREAMBLE`, pre-sales
+  final): a negative matches only when EVERY one of its words is in the question, so "no" / "we don't" / "fit"
+  left in the LABEL meant "No new boilers" never matched anything. Strip them from labels only — never from
+  questions ("no hot water" is the customer's words).
 
 **Crawls, onboarding, baseline inputs** (`docs/paid-client-evidence.md`)
 - **Every manual Crawl site / Re-crawl site / Crawl check is EXHAUSTIVE** (`mode: "full"`, operator-only,
@@ -984,6 +1030,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | WhatsApp registries | `_shared/whatsapp-send.ts`, `process-whatsapp-queue` mirror, `src/types/outreach.ts`, `src/lib/whatsappTemplates.ts`, `templateBodies.ts`, `templateVars.ts`, `templateRouting.ts`, `coldOutreach.ts`, `rivalHook.ts`, `displayName.ts`, `firstReplyMode.ts` |
 | Senders | fn `send-whatsapp-message` (Inbox, `dry_run`, `test_send`), `process-whatsapp-queue` (drip, first-reply lane, `contact_check`, `suppress_lead`), `_shared/whatsapp-inbound.ts` (via `whatsapp-status`) |
 | Voice notes (Inbox, 24h only) | fn `send-whatsapp-voice`, `_shared/voice-note-send.ts`, `src/lib/oggOpus.ts` (WebM→Ogg remux), `voiceNote.ts`, `VoiceNoteRecorder`/`VoiceNotePlayer` — `docs/whatsapp-voice-notes.md` |
+| Sales pre-call checks ("Check before calling") | `src/lib/salesCheck.ts`, `_shared/sales-check.ts`, fn `sales-prospect-check`, tables `sales_check_batches` / `_items`, `SalesCheckPanel.tsx`, `SalesChecksAdminCard.tsx`, `callCardAudit` (`coldCallPlaybook.ts`) |
 | Free check | `_shared/free-check-lead.ts`, `free-check-audit.ts`, `free-check-result.ts`, `same-business.ts`, `src/lib/freeCheckProgress.ts`, fns `findable-onboarding`, `submissions`, `notify-onboarding-submit` |
 | Town | `src/lib/townVerdict.ts`, `_shared/place-details.ts`, `place-town.ts`, `place-resolve.ts`, `town-distance.ts`, fn `backfill-lead-towns`, table `uk_towns` |
 | Serve gate | `src/lib/serveGate.ts` (+ findable-site mirror) |
@@ -1037,6 +1084,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 
 ## 8. Known open problems — the short list (`docs/open-problems.md` has the long record)
 
+- 🔴 **The pre-sales final candidate is certified, NOT merged or deployed** (`integration/pre-sales-final` =
+  wave 1 + WS-7 + the final fixes). `docs/pre-sales-certification/final-certification.md` is the authority for
+  the migration order (10), the edge deploy list (38 + `whatsapp-status` held) and the manual pre-deploy actions;
+  it supersedes the wave-1 lists. ⛔ **`whatsapp-status` must not be
+  deployed until the Findable Meta App and its App Secret are ready** — the new code fails closed without
+  `WHATSAPP_APP_SECRET`; the post-call reply matcher rides the same deploy, so it waits too.
 - ~~`client_error_reports` has no `message` column~~ — it exists (read back 2026-10-02).
 - ✅ **The OpenAI 429 is CLEARED** (was open 2026-09-20 → 2026-09-21; it was a billing/spend-limit
   refusal, not a rate limit, fixed by Paul topping the key up). Verified live: competitor extraction
@@ -1106,6 +1159,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | The Sales Dashboard, the prospect workspace, contact logging, sign-up link tracking, the post-payment GBP step | `docs/sales-readiness.md` (+ `supabase/tests/sales-readiness.sql`, re-runnable, always rolled back) |
 | Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
 | Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
+| A salesperson's bulk pre-call check, its allowance, reuse windows, the job model | `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md` (+ `fixes-07-rollback-qa.sql`, always rolled back) |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |

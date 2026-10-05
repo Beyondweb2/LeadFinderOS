@@ -48,6 +48,11 @@ const FILLER = new Set([
   // Sales adjectives: "efficient fault finding electricians" is still fault finding (BS4, 2026-09-23).
   'efficient', 'fast', 'quick', 'quickly', 'friendly', 'honest', 'cheapest', 'lowest', 'highly', 'fully', 'decent',
   'dependable', 'competent', 'skilled', 'approved', 'certified', 'accredited', 'registered', 'licensed', 'insured',
+  /* Customer-question words (2026-10-04, fix/04): Discovery now writes questions a person asks an AI
+     ("Is there anyone who can…?", "Who should I call if…?"), and none of these words changes WHAT is
+     being asked for. Without them two phrasings of one intent read as different questions. */
+  'there', 'anyone', 'anybody', 'help', 'please', 'should', 'would', 'will', 'im', 'am', 'if', 'it', 'this', 'that',
+  'they', 'them', 'their', 'have', 'has', 'got', 'want', 'offer', 'offers', 'offering', 'whos', 'whats', 'tell',
 ]);
 /* Different words for the same thing (applied after lower-casing, before stemming). */
 const PHRASES: Array<[RegExp, string]> = [
@@ -61,6 +66,8 @@ const PHRASES: Array<[RegExp, string]> = [
   [/\b24 ?\/ ?7\b/g, 'emergency'], [/\burgent(?:ly)?\b/g, 'emergency'], [/\bout of hours\b/g, 'emergency'],
 ];
 const stem = (w: string) => (w.length > 4 && w.endsWith('ies') ? w.slice(0, -3) + 'y' : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
+/** The one stemmer the mix uses, exported so serviceScope.ts reads words the same way. */
+export const stemToken = stem;
 
 export const normTown = (t: string) => t.toLowerCase().replace(/[-–]/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -107,7 +114,9 @@ export function serviceOf(question: string, services: CanonService[], towns: str
   return best;
 }
 
-const EMERGENCY = /\bemergency\b|\burgent|\btoday\b|\btonight\b|\bright now\b|\basap\b|24 ?\/ ?7|out of hours|\bno power\b|power cut|keeps? (?:tripping|blowing)|\btripp(?:ing|ed)\b|burning smell|sparking|\bshock\b|\blocked out\b|\bleak(?:ing)?\b|\bburst\b|keeps letting me down|\bbroken\b|stopped working/i;
+/* ⚠️ "24 hour" / "24-hour" added 2026-10-04 (C-22): "24 hour locksmith" was classed as a plain service
+   question, so the urgent-intent slot never counted it. Exported: serviceScope.ts asks the same question. */
+export const EMERGENCY = /\bemergency\b|\burgent|\btoday\b|\btonight\b|\bright now\b|\basap\b|24 ?\/ ?7|\b24[- ]?hours?\b|out of hours|\bno power\b|power cut|keeps? (?:tripping|blowing)|\btripp(?:ing|ed)\b|burning smell|sparking|\bshock\b|\blocked out\b|\bleak(?:ing)?\b|\bburst\b|keeps letting me down|\bbroken\b|stopped working/i;
 
 export interface MixContext { primaryTown: string; areas: string[]; services: CanonService[] }
 
@@ -224,8 +233,10 @@ export function coverageReport(questions: string[], ctx: MixContext, target = 20
 /* ── the balanced 20 ──────────────────────────────────────────────────────────────────────────── */
 
 /** 'locked' = kept verbatim whatever else is true (the Hook Audit questions — baselineRecommendation.ts);
+ *  'core'   = the mandatory core questions (customerQuestion.coreQuestions, 2026-10-04): admitted right
+ *             after the locked ones, still de-duplicated against them;
  *  'manual' = Paul's own additions, kept first but still de-duplicated. */
-export interface Candidate { question: string; source: 'locked' | 'manual' | 'discovery' | 'generated' }
+export interface Candidate { question: string; source: 'locked' | 'core' | 'manual' | 'discovery' | 'generated' }
 
 /** Guidance for 20 (scaled for other targets): broad, service, service+area, emergency. */
 export function mixTargets(target = 20, hasAreas = true): Record<IntentType, number> {
@@ -244,22 +255,34 @@ export function mixTargets(target = 20, hasAreas = true): Record<IntentType, num
    set equally, the lower rank goes first. This module never knows what the rank means — the caller
    decides (baselineRecommendation.ts prefers questions where the business is not yet named). Balance
    always wins, so a rank cannot turn the baseline into a list of the easiest questions. */
-export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target = 20, opts: { rank?: (question: string) => number } = {}): string[] {
+/* ⚠️ opts.serviceCap (2026-10-04, C-03): the recommendation passes MAX_QUESTIONS_PER_SERVICE so one service
+   cannot become a grid across towns. Absent = the original cap. The relaxed last pass still ignores
+   caps rather than leave the set short; baselineQuality.ts then warns about it. */
+/* ⚠️ opts.hardServiceCap: the service cap holds even in the relaxed pass — the set comes back SHORT
+   rather than repeat one service (the recommendation's `short` says so and Paul adds his own). */
+/* ⚠️ opts.serviceOf: the caller's own reading of which service a question is about (serviceScope.ts
+   matches by meaning — "burglary repair" IS "Burglary repair and make safe"), so the cap counts the
+   same services the final-20 checks count. Absent = classifyQuestion's exact-token reading. */
+export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target = 20, opts: { rank?: (question: string) => number; serviceCap?: number; hardServiceCap?: boolean; serviceOf?: (question: string) => string | null } = {}): string[] {
   const towns = [ctx.primaryTown, ...ctx.areas].filter(Boolean);
   const chosen: QuestionMix[] = [];
   const admit = (m: QuestionMix) => {
     if (chosen.length >= target || chosen.some((c) => sameIntent(c.question, m.question, towns))) return false;
     chosen.push(m); return true;
   };
-  const all = pool.map((c) => ({ c, m: classifyQuestion(c.question.trim(), ctx) })).filter((x) => x.m.question);
+  const all = pool.map((c) => {
+    const m = classifyQuestion(c.question.trim(), ctx);
+    return { c, m: opts.serviceOf ? { ...m, service: opts.serviceOf(m.question) ?? m.service } : m };
+  }).filter((x) => x.m.question);
   /* Locked questions go in first, verbatim, and are never refused as a near-duplicate of each other. */
   for (const x of all) if (x.c.source === 'locked' && chosen.length < target && !chosen.some((c) => c.question === x.m.question)) chosen.push(x.m);
+  for (const x of all) if (x.c.source === 'core') admit(x.m);
   for (const x of all) if (x.c.source === 'manual') admit(x.m);
   const counts = (pred: (m: QuestionMix) => boolean) => chosen.filter(pred).length;
-  const serviceCap = Math.max(3, Math.ceil(target * 0.2));
+  const serviceCap = opts.serviceCap ?? Math.max(3, Math.ceil(target * 0.2));
   const townCap = (t: string | null) => (t && normTown(t) === normTown(ctx.primaryTown)) ? Math.ceil(target * 0.45) : Math.max(2, Math.ceil(target * 0.15));
   const goals = mixTargets(target, ctx.areas.length > 0);
-  const rest = all.filter((x) => x.c.source !== 'manual' && x.c.source !== 'locked').map((x) => x.m);
+  const rest = all.filter((x) => x.c.source !== 'manual' && x.c.source !== 'locked' && x.c.source !== 'core').map((x) => x.m);
   const rankOf = (q: string) => (opts.rank ? opts.rank(q) : 0);
   /* Fill one intent type by rotation: repeatedly take the candidate whose service and town are
      currently least used, respecting the caps. */
@@ -268,7 +291,11 @@ export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target
       if (chosen.length >= target || (type && counts((m) => m.intent === type) >= goal)) return;
       const pick = rest
         .filter((m) => (!type || m.intent === type) && !chosen.includes(m))
-        .filter((m) => relax || ((!m.service || counts((c) => c.service === m.service) < serviceCap) && counts((c) => c.town === m.town) < townCap(m.town)))
+        .filter((m) => {
+          const serviceOk = !m.service || counts((c) => c.service === m.service) < serviceCap;
+          if (relax) return !opts.hardServiceCap || serviceOk;
+          return serviceOk && counts((c) => c.town === m.town) < townCap(m.town);
+        })
         .filter((m) => !chosen.some((c) => sameIntent(c.question, m.question, towns)))
         .map((m, i) => ({ m, i, r: rankOf(m.question), s: counts((c) => c.service === m.service) * 3 + counts((c) => c.town === m.town) }))
         .sort((a, b) => a.s - b.s || a.r - b.r || a.i - b.i)[0];
@@ -279,10 +306,12 @@ export function buildBalancedBaseline(pool: Candidate[], ctx: MixContext, target
   for (const t of ['emergency', 'location', 'broad', 'service'] as IntentType[]) fill(t, goals[t]);
   fill(null, target);
   fill(null, target, true);
-  // Present in a readable order: locked (Hook Audit) first, then broad, service, location, emergency.
+  // Present in a readable order: locked (Hook Audit) first, then the core questions, then broad, service, location, emergency.
   const order: IntentType[] = ['broad', 'service', 'location', 'emergency'];
   const locked = new Set(all.filter((x) => x.c.source === 'locked').map((x) => x.m.question));
+  const core = new Set(all.filter((x) => x.c.source === 'core').map((x) => x.m.question));
   const head = chosen.filter((m) => locked.has(m.question));
-  const tail = chosen.filter((m) => !locked.has(m.question)).sort((a, b) => order.indexOf(a.intent) - order.indexOf(b.intent));
-  return [...head, ...tail].map((m) => m.question);
+  const coreRows = chosen.filter((m) => !locked.has(m.question) && core.has(m.question));
+  const tail = chosen.filter((m) => !locked.has(m.question) && !core.has(m.question)).sort((a, b) => order.indexOf(a.intent) - order.indexOf(b.intent));
+  return [...head, ...coreRows, ...tail].map((m) => m.question);
 }

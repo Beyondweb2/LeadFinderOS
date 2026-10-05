@@ -8,6 +8,9 @@ import { sourceMix, classifySource } from "../../../src/lib/sourceType.ts";
 import { isAggregatorUrl } from "../_shared/aggregators.ts";
 import { qaHeadings, ownershipFor, ownedFromWebsiteBuild, ownedFromQueue } from "../../../src/lib/intentOwnership.ts";
 import { qaModeFor, renderGuarded, confirmCount, confirmReason, confirmMark, type QaMode } from "../../../src/lib/qaAnswerGuard.ts";
+import { claimSupport, scanClaims } from "../../../src/lib/claimRules.ts";
+import { excludedFromText, namesExcluded } from "../../../src/lib/siteScope.ts";
+import { measuredQuestionRefusal, siteServiceTruth, truthSiteScope, type SiteTruth } from "../../../src/lib/siteServiceTruth.ts";
 import { preMergeQuestions, validateClusters, buildQueue, topSources, enforceTownSplit, majorityVerdict, AUTHORITY_LOCK_SHARE, AUTHORITY_LOCK_MIN_CITES, type ClusterProposal, type QuestionSignals, type WinnVerdict } from "../../../src/lib/pagePlanQueue.ts";
 
 // page-generator — service-plus-town delivery pages, from the OVERLAP of the client's
@@ -40,6 +43,8 @@ interface OnboardingRow {
   services_list: string[] | null; areas_list: string[] | null; confirmed_location: string | null;
   website_platform: string | null; accreditations: string | null; must_not_say: string | null;
   business_address: string | null; confirmed_phone: string | null; contact_name: string | null;
+  /** Workstream 4 (migration 20261007040100): the client's explicit "we do NOT offer". */
+  services_not_offered?: string | null;
 }
 
 /* supabase-js errors are PLAIN OBJECTS, not Error instances — String(e) gives "[object Object]",
@@ -150,6 +155,10 @@ ${isHomeTown
   no testimonials, NO certifications, accreditations, memberships, awards or registration numbers of
   ANY kind, and NO local landmarks, street names or area facts you were not given. If a fact was not
   given, do not state it.
+- ⛔ NEVER claim 24/7, 24-hour, round-the-clock, out-of-hours or same-day availability, an arrival
+  time ("within the hour"), insurance ("fully insured"), a number of jobs or customers, a guarantee or
+  warranty, or "cheapest" / "leading" / "No.1". Every draft is scanned for these after you write it and
+  a page that makes one is rejected.
 - ⛔ DO NOT WRITE ANY CREDENTIAL. Never say "Gas Safe", "DBS checked", "fully insured", "certified",
   "accredited", "approved", "registered", "member of", "Which? Trusted Trader" or any award — even if
   you believe it. A credentials line carrying the client's REAL, operator-entered wording is appended
@@ -420,15 +429,25 @@ Deno.serve(async (req) => {
         let ownWebsite = "";
         let planServices: string[] = [];
         let planHome = "";
+        /* ⛔ WAVE 1 INTEGRATION — Workstream 4's service truth (siteServiceTruth.ts): the services are the
+           client's own confirmed list (onboarding, else Sales notes), never Discovery's; the not-offered list
+           is a hard exclusion. Set only for a lead-linked client; a national client keeps the old rule. */
+        let planTruth: SiteTruth | null = null;
         if (qaAudit.lead_id) {
-          const { data: obTown } = await service.from("onboarding_responses")
-            .select("confirmed_location, areas_list, services_list").eq("lead_id", qaAudit.lead_id)
-            .order("created_at", { ascending: false }).limit(1).maybeSingle();
-          const o = obTown as { confirmed_location: string | null; areas_list: string[] | null; services_list?: string[] | null } | null;
+          const [{ data: obTown }, { data: leadW }] = await Promise.all([
+            service.from("onboarding_responses")
+              .select("confirmed_location, areas_list, services_list, services, services_not_offered, must_not_say").eq("lead_id", qaAudit.lead_id)
+              .order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            service.from("outreach_leads").select("website, services_included").eq("id", qaAudit.lead_id).maybeSingle(),
+          ]);
+          const o = obTown as { confirmed_location: string | null; areas_list: string[] | null; services_list?: string[] | null; services?: string | null; services_not_offered?: string | null; must_not_say?: string | null } | null;
           towns = [...new Set([(o?.confirmed_location ?? "").trim(), ...(Array.isArray(o?.areas_list) ? o!.areas_list : []).map((a) => String(a ?? "").trim())].filter(Boolean))];
-          planServices = (Array.isArray(o?.services_list) ? o!.services_list : []).map((x) => String(x ?? "").trim()).filter(Boolean);
           planHome = (o?.confirmed_location ?? "").trim();
-          const { data: leadW } = await service.from("outreach_leads").select("website").eq("id", qaAudit.lead_id).maybeSingle();
+          planTruth = siteServiceTruth({
+            onboardingList: o?.services_list, onboardingText: o?.services, leadServices: (leadW as { services_included?: unknown } | null)?.services_included,
+            notOffered: o?.services_not_offered, mustNotSay: o?.must_not_say, trade: qaAudit.business_type ?? "", towns,
+          });
+          planServices = planTruth.truth.services;
           ownWebsite = String((leadW as { website?: string } | null)?.website ?? "");
         }
 
@@ -447,6 +466,9 @@ Deno.serve(async (req) => {
            authority domains those runs cited, for the hold wording. */
         const authByQ = new Map<string, { runs: number; domains: string[] }>();
         const locText = qaAudit.location_text ?? "";
+        /* The client report's ruler (namedSignal.ts): the answer text for a judgeable name, so "already
+           named" here cannot contradict the client's score (C-32, 2026-10-04). */
+        const namedCtx = { businessName: qaAudit.business_name ?? null, trade: qaAudit.business_type ?? null, town: locText || null };
         const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } };
         for (const r of resRows ?? []) {
           const q = String((r as { question: string }).question ?? "").trim();
@@ -460,9 +482,9 @@ Deno.serve(async (req) => {
             const er = result[eng];
             if (!er) continue;
             for (const cit of er.citations ?? []) { const h = hostOf(unwrapCitationUrl(cit?.url ?? "")); if (h) { doms.push(h); rowDoms.push(h); } }
-            named[eng][1]++; if (cellNamed(er)) named[eng][0]++;
+            named[eng][1]++; if (cellNamed(er, namedCtx)) named[eng][0]++;
           }
-          const namedAnywhere = DISPLAY_ENGINES.some((e) => cellNamed(result[e]));
+          const namedAnywhere = DISPLAY_ENGINES.some((e) => cellNamed(result[e], namedCtx));
           const mixR = sourceMix(rowDoms);
           if (!namedAnywhere && mixR.total >= AUTHORITY_LOCK_MIN_CITES && mixR.business === 0
             && mixR.authority / mixR.total >= AUTHORITY_LOCK_SHARE) {
@@ -584,6 +606,16 @@ Deno.serve(async (req) => {
            whether a page the client's site already has (the Website Build plan) owns this intent. An
            owned intent is HELD with the owner named — improve that page, never add a second one —
            and a page that sits next to an existing one says so. The same rule the build uses. */
+        /* ⛔ AN UNSUPPORTED MEASURED QUESTION NEVER SEEDS A PAGE (wave 1 integration): a planned page whose
+           primary question names something the client never confirmed, a service they do NOT offer, or a
+           town they do not serve is HELD with the reason — never proposed for writing. */
+        if (planTruth) {
+          const tScope = truthSiteScope(planTruth, { homeTown: planHome, businessName: qaAudit.business_name ?? "" });
+          for (const p of pages) {
+            const why = measuredQuestionRefusal(p.primaryQuestion, tScope);
+            if (why && p.status !== "held") { p.status = "held"; p.heldReason = "Not a page for this client: the question " + why + "."; }
+          }
+        }
         if (qaAudit.lead_id) {
           const { data: planLead } = await service.from("outreach_leads").select("website_build").eq("id", qaAudit.lead_id).maybeSingle();
           const sitePages = ownedFromWebsiteBuild((planLead as { website_build?: unknown } | null)?.website_build);
@@ -666,10 +698,13 @@ Deno.serve(async (req) => {
       const qaMode: QaMode = qaModeFor(qaAudit.business_type);
       /* The client's own "must never claim" answer binds Q&A pages too (both modes passed "" until
          2026-09-30, so a Q&A page could say what the client had forbidden). Newest questionnaire row. */
-      const { data: qaOb } = qaAudit.lead_id
-        ? await service.from("onboarding_responses").select("must_not_say, services_list, areas_list, confirmed_location").eq("lead_id", qaAudit.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle()
-        : { data: null };
-      const qaObRow = (qaOb ?? null) as { must_not_say?: string | null; services_list?: string[] | null; areas_list?: string[] | null; confirmed_location?: string | null } | null;
+      const [{ data: qaOb }, { data: qaLeadSvc }] = qaAudit.lead_id
+        ? await Promise.all([
+            service.from("onboarding_responses").select("must_not_say, services_list, services, services_not_offered, areas_list, confirmed_location").eq("lead_id", qaAudit.lead_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            service.from("outreach_leads").select("services_included").eq("id", qaAudit.lead_id).maybeSingle(),
+          ])
+        : [{ data: null }, { data: null }];
+      const qaObRow = (qaOb ?? null) as { must_not_say?: string | null; services_list?: string[] | null; services?: string | null; services_not_offered?: string | null; areas_list?: string[] | null; confirmed_location?: string | null } | null;
       const qaMustNotSay = String(qaObRow?.must_not_say ?? "").trim();
 
       /* ── THE QUESTION IS THE TARGET INTENT, NEVER THE HEADING (Paul, 2026-09-30) ──────────────
@@ -677,10 +712,30 @@ Deno.serve(async (req) => {
          before anything is spent, the ONE ownership rule (intentOwnership.ts — the same one the
          Website Build's Site Intent Map uses): if another page already owns this intent, the answer
          is "improve that page", not a second one. */
-      const qaServices = (Array.isArray(qaObRow?.services_list) ? qaObRow!.services_list : []).map((x) => String(x ?? "").trim()).filter(Boolean);
       const qaHome = String(qaObRow?.confirmed_location ?? "").trim();
       const qaTowns = [...new Set([qaHome, ...(Array.isArray(qaObRow?.areas_list) ? qaObRow!.areas_list : []).map((x) => String(x ?? "").trim())].filter(Boolean))];
+      /* ⛔ WAVE 1 INTEGRATION — Workstream 4's service truth: the client's confirmed list (onboarding, else
+         Sales notes — never Discovery), and their explicit "we do NOT offer" joins the refusal below. A
+         lead-less (national) client has no truth and keeps the old behaviour. */
+      const qaTruth: SiteTruth | null = qaAudit.lead_id ? siteServiceTruth({
+        onboardingList: qaObRow?.services_list, onboardingText: qaObRow?.services, leadServices: (qaLeadSvc as { services_included?: unknown } | null)?.services_included,
+        notOffered: qaObRow?.services_not_offered, mustNotSay: qaMustNotSay, trade: qaAudit.business_type ?? "", towns: qaTowns,
+      }) : null;
+      const qaServices = qaTruth ? qaTruth.truth.services : (Array.isArray(qaObRow?.services_list) ? qaObRow!.services_list : []).map((x) => String(x ?? "").trim()).filter(Boolean);
       const heads = qaHeadings({ question, services: qaServices, towns: qaTowns, homeTown: qaHome, businessName: qaAudit.business_name ?? "", businessType: qaAudit.business_type ?? "" });
+      /* ⛔ FIX WORKSTREAM 6 (D-21): a question naming something the client said they do NOT offer, or
+         asking for 24-hour / out-of-hours work no verified fact backs, never gets a page — refused here,
+         before anything is spent (siteScope.ts, the same scope rule the Website Build intent map uses). */
+      const scopeRefusal = namesExcluded(question, { excluded: qaTruth ? qaTruth.excluded : excludedFromText(qaMustNotSay), outOfHoursVerified: false });
+      if (scopeRefusal.refused) return json({ ok: false, error: "unsupported_topic", detail: scopeRefusal.reason }, 200);
+      /* ⛔ A MEASURED question (one of this client's own measured set) that names something the client never
+         confirmed, or a town they do not serve, gets no page (wave 1 integration). A free-typed question
+         keeps the narrower check above — a Q&A page may answer a general topic. */
+      const isMeasured = qaQuestions.some((x) => String(x).trim().toLowerCase() === question.toLowerCase());
+      if (qaTruth && isMeasured) {
+        const why = measuredQuestionRefusal(question, truthSiteScope(qaTruth, { homeTown: qaHome, businessName: qaAudit.business_name ?? "" }));
+        if (why) return json({ ok: false, error: "unsupported_topic", detail: "This measured question " + why + "." }, 200);
+      }
       if (qaAudit.lead_id) {
         const [{ data: qaLead }, { data: qaQueue }] = await Promise.all([
           service.from("outreach_leads").select("website_build").eq("id", qaAudit.lead_id).maybeSingle(),
@@ -910,7 +965,7 @@ Deno.serve(async (req) => {
       /* ── INPUT 1: the newest questionnaire row. ──────────────────────────────────────────── */
       service
         .from("onboarding_responses")
-        .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say, business_address, confirmed_phone, contact_name")
+        .select("lead_id, created_at, services_list, areas_list, confirmed_location, website_platform, accreditations, must_not_say, services_not_offered, business_address, confirmed_phone, contact_name")
         .eq("lead_id", leadId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -925,7 +980,10 @@ Deno.serve(async (req) => {
     const audit = measured.anchor;
     const ob = obRow as OnboardingRow | null;
     if (!ob) return json({ ok: false, error: "no_questionnaire_for_lead" }, 404);
-    const services = Array.isArray(ob.services_list) ? ob.services_list : [];
+    /* ⛔ WAVE 1 INTEGRATION: the client's ticked list, minus anything their own "we do NOT offer" / must-not-say
+       names (a contradiction never becomes a page — siteServiceTruth.ts, Workstream 4's negatives). */
+    const svcExcluded = siteServiceTruth({ onboardingList: ob.services_list, notOffered: ob.services_not_offered, mustNotSay: ob.must_not_say, trade: "", towns: [] }).excluded;
+    const services = (Array.isArray(ob.services_list) ? ob.services_list : []).filter((x) => !namesExcluded(String(x ?? ""), { excluded: svcExcluded, outOfHoursVerified: true }).refused);
     const areas = Array.isArray(ob.areas_list) ? ob.areas_list : [];
     const homeTown = (ob.confirmed_location ?? "").trim();
     if (services.length === 0 || !homeTown) {
@@ -1109,20 +1167,40 @@ Return via return_page.`;
       stuffScore(c) + (dishonest(o.bodyHtml) ? 50 : 0);
     const honestyFeedback = `\n- ⛔ the business is NOT based in ${page.town} — remove every "based here"/"based locally"/premises-style claim; say it SERVES ${page.town}`;
 
+    /* ⛔ CLAIM GUARD (fix workstream 6, D-20): the model's title, meta, H1 and body are scanned for the
+       trust-claim classes (claimRules.ts — 24/7, insured, years, response times, credentials, reviews,
+       awards, counts, guarantees, "cheapest"). The only verified value this path holds is the client's
+       credentials wording (appended verbatim BELOW, never by the model), so any hit in model prose is
+       unsupported: the draft is regenerated with the hit named, and a page still making one after the
+       last attempt is REFUSED — never handed over for pasting with a badge. */
+    const claimFacts = claimSupport(credentials ? [{ key: "accreditations", value: credentials }] : []);
+    const strip = (h: string) => h.replace(/<[^>]+>/g, " ");
+    const unsupportedClaims = (o: { title: string; meta: string; h1: string; bodyHtml: string }) =>
+      scanClaims([o.title, o.meta, o.h1, strip(o.bodyHtml)].join(" . "), claimFacts).filter((h) => !h.supported);
+    const claimFeedback = (o: { title: string; meta: string; h1: string; bodyHtml: string }) => {
+      const hits = unsupportedClaims(o);
+      return hits.length ? "\n- ⛔ REMOVE these claims — nothing verified backs them: " + [...new Set(hits.map((h) => '"' + h.text + '"'))].join(", ") + ". Do not rephrase them into a similar claim." : "";
+    };
+
     let check = stuffingCheck(`${out.h1} ${out.bodyHtml}`, page.service, page.town);
     let best = { out, check };
     let attempts = 1;
-    while ((check.verdict === "stuffed" || dishonest(out.bodyHtml)) && attempts < 3) {
-      const fb = strictFeedback(check, attempts) + (dishonest(out.bodyHtml) ? honestyFeedback : "");
+    const badnessAll = (c: StuffingVerdict, o: { title: string; meta: string; h1: string; bodyHtml: string }) => badness(c, o) + 100 * unsupportedClaims(o).length;
+    while ((check.verdict === "stuffed" || dishonest(out.bodyHtml) || unsupportedClaims(out).length) && attempts < 3) {
+      const fb = (check.verdict === "stuffed" ? strictFeedback(check, attempts) : "Rewrite the page.") + (dishonest(out.bodyHtml) ? honestyFeedback : "") + claimFeedback(out);
       const retry = await callOpenAI(userPrompt(fb));
       attempts++;
       if (retry.kind !== "page") break; // no_credits / error mid-loop → stop, use best so far
       const rc = stuffingCheck(`${retry.h1} ${retry.bodyHtml}`, page.service, page.town);
-      if (badness(rc, retry) < badness(best.check, best.out)) best = { out: retry, check: rc };
+      if (badnessAll(rc, retry) < badnessAll(best.check, best.out)) best = { out: retry, check: rc };
       out = retry; check = rc;
-      if (rc.verdict === "ok" && !dishonest(retry.bodyHtml)) { best = { out: retry, check: rc }; break; }
+      if (rc.verdict === "ok" && !dishonest(retry.bodyHtml) && !unsupportedClaims(retry).length) { best = { out: retry, check: rc }; break; }
     }
     out = best.out;
+    const leftClaims = unsupportedClaims(out);
+    if (leftClaims.length) {
+      return json({ ok: false, error: "unsupported_claim", detail: "The draft kept making claims nothing verified backs, so it was not handed over: " + [...new Set(leftClaims.map((h) => '"' + h.text + '" (' + h.label + ')'))].join("; ") + ". Generate again, or add the fact to the client's record first.", claims: leftClaims }, 200);
+    }
 
     /* ⛔ MECHANICAL BACKSTOP — the page handed over is GUARANTEED under the town cap and to name NO
        other towns. Regeneration above does the natural writing (and, with the fixed metric, natural

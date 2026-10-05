@@ -58,11 +58,14 @@ console.log("── PAYMENT ──");
 {
   const checkout = HOOK.slice(HOOK.indexOf('case "checkout.session.completed"'), HOOK.indexOf('case "invoice.paid"'));
   const invoice = HOOK.slice(HOOK.indexOf('case "invoice.paid"'), HOOK.indexOf('case "invoice.payment_failed"'));
-  ok(/status: "payment_received",\s*amount_paid: amountGbp/.test(checkout), "1. a completed first payment writes the paid lead (the Paid Client is membership by amount_paid — no manual move)");
+  /* pre-sales fix 03: the write is now conditional (src/lib/paymentState.ts firstPaymentPatch, applied by
+     _shared/payment-state.ts establishLeadPayment) — a replay can no longer move the state backwards. */
+  ok(/establishLeadPayment\(service, findableLeadId/.test(checkout) && /status: 'payment_received', amount_paid: p\.amountGbp/.test(fs.readFileSync(path.join(root, "src/lib/paymentState.ts"), "utf8")),
+    "1. a completed first payment writes the paid lead (the Paid Client is membership by amount_paid — no manual move)");
   ok(/recordLeadEvent\(service, findableLeadId, "payment_received"/.test(checkout), "1. …and records 'Payment received' in History");
   ok(/lead_activity_one_payment_received[\s\S]*where kind = 'payment_received'/.test(MIG) && /"23505"\) return "exists"/.test(SETUP), "2. a retried event cannot add a second 'Payment received' (partial unique index; 23505 = already there)");
   ok(/\.update\(\{ new_client_email_at: new Date\(\)\.toISOString\(\) \}\)\s*\.eq\("id", findableLeadId\)\.is\("new_client_email_at", null\)\.select\("id"\)/.test(checkout), "2/6. the new-client email is a CLAIM only one delivery can win");
-  ok(/let claimedEmail = !paidEmailAlreadySent;/.test(checkout), "6. …and a client emailed before the claim existed (trace) is never emailed again");
+  ok(/let claimedEmail = !paidEmailAlreadySent(?: &&[^;]*)?;/.test(checkout), "6. …and a client emailed before the claim existed (trace) is never emailed again");
   ok(/if \(!sent && findableLeadId\) \{\s*await service\.from\("outreach_leads"\)\.update\(\{ new_client_email_at: null \}\)/.test(checkout), "6. a send Resend refused releases the claim (never silent for ever)");
   ok(/paymentHandoff\(service, findableLeadId \|\| null, onboardingId \|\| null, amountGbp,\s*paid\.route \? `\$\{SERVICE_ROUTE_NAME\[paid\.route\]\}/.test(checkout), "3. the package named is the route the SESSION was paid on");
   ok(/const seller = setup\.sellerId;/.test(HOOK) && /\(l\.sold_by_user_id \?\? l\.assigned_to_user_id\)/.test(SETUP), "4. the salesperson is sold_by_user_id (stamped at payment), the owner only for older rows");

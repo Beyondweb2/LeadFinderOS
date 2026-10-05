@@ -122,7 +122,7 @@ export interface ReplayRunLite { status: string | null }
 
 export type ResultsDecision =
   | { send: true }
-  | { send: false; reason: string; kind: 'copy_not_approved' | 'terms_differ' | 'replay_gave_up' | 'incomparable' | 'unproven' };
+  | { send: false; reason: string; kind: 'copy_not_approved' | 'terms_differ' | 'replay_gave_up' | 'incomparable' | 'unproven' | 'engine_imbalance' };
 
 /** Should the results go to the client automatically? */
 export function remeasureResultsDecision(input: {
@@ -156,6 +156,19 @@ export function remeasureResultsDecision(input: {
   const thin = c.questions.filter((q) => q.before && q.after && (q.before.cells < MIN_CELLS_FOR_QUESTION_CLAIM || q.after.cells < MIN_CELLS_FOR_QUESTION_CLAIM));
   if (thin.length) {
     return { send: false, kind: 'unproven', reason: `${thin.length} question(s) have fewer than ${MIN_CELLS_FOR_QUESTION_CLAIM} answer cells on one side, so the number cannot be proven — e.g. "${thin[0].question}"` };
+  }
+  /* ⛔ AN ENGINE SHORT ON ONE SIDE HOLDS THE VERDICT (2026-10-04, C-12). The pooled number moves with
+     the engine MIX; a Gemini drop-out on the replay can read as "gone up" and cost a client a refund
+     they were owed. measurementCompare counts each engine over the matched questions only.
+     ⛔ ABSENT HOLDS: a comparison that carries no engine count cannot show it is balanced, and this is
+     a sending path (CLAUDE.md §4). */
+  if (!Array.isArray(c.engineShort)) {
+    return { send: false, kind: 'engine_imbalance', reason: 'the comparison carries no per-engine count, so engine balance cannot be checked' };
+  }
+  const short = c.engineShort;
+  if (short.length) {
+    const lines = short.map((e) => { const b = c.engineBalance?.[e]; return b ? `${e} ${b.before.answered} before / ${b.after.answered} after` : e; });
+    return { send: false, kind: 'engine_imbalance', reason: `an engine answered unevenly between the two measurements (${lines.join('; ')}), so the pooled number cannot be compared fairly` };
   }
   return { send: true };
 }
@@ -257,7 +270,10 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     `The full before-and-after, question by question, is here: ${i.documentUrl}`,
   ];
   if (i.wentUp) {
-    out.push(`Your number has gone up. The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`);
+    /* ⛔ NO CAUSAL CLAIM (2026-10-04, Session C C-28). This used to say "The pages and listings we built
+       are what the engines are now reading" — the data shows the number rose, not why. The sentence
+       says what was measured and what we keep doing, nothing more. */
+    out.push(`Your number has gone up: on the same questions and the same AI tools, you were named more often than ${weeksWord(i.weeks)} weeks ago, by more than the ${NOISE_BAND_PP}-point swing we see between repeat checks. We keep the work live and keep measuring.`);
   } else {
     /* ⛔ THE ORDER IS PAUL'S, 2026-09-13: the verdict, then the entitlement, then the mechanism.
        It used to read as an apology followed by an offer. "That means the guarantee applies" is
@@ -276,15 +292,33 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
      (resultsBillingStartIso) and the sentence counts the payments the way the offer does:
      the sign-up £99 is payment 1, this is payment 2, and nothing follows the last. */
   /* 🔴 PER ROUTE (2026-09-29): the count is the client's own contract (Build 12, Optimise 6). */
-  if (i.monthlyStartsOn) {
+  /* ⛔ ONLY WHEN THE NUMBER WENT UP (Paul, 2026-10-05). The not-gone-up email has just said a valid
+     claim stops the monthly; a "your first monthly payment is on…" paragraph straight after it reads
+     as taking that back. That version names no upcoming payment. */
+  if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);
     out.push(route
-      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you, for the rest of your ${termMonthsFor(route)}-month minimum term. It is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
-      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. It covers the work we keep doing every week to add another way for people to find you. It is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
+      ? `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(route)}, for the rest of your ${termMonthsFor(route)}-month minimum term. That first monthly payment is payment 2 of ${totalPaymentsFor(route)}, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after the ${totalPaymentsFor(route)}th.`
+      : `Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}. The monthly covers ${monthlyCoversPhrase(null)}. That first monthly payment is payment 2, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up, and nothing is charged after your last agreed payment.`,
     );
   }
-  out.push(`Paul, findable`);
+  out.push(RESULTS_SIGN_OFF);
   return out;
+}
+
+/** Paul's sign-off, exactly (2026-10-05). */
+export const RESULTS_SIGN_OFF = 'Paul, Findable';
+
+/* ⛔ WHAT THE MONTHLY PAYS FOR — THE ACTUAL SERVICE, NEVER "EVERY WEEK" (Paul, 2026-10-02 / 2026-10-05).
+   A new page each month, a monthly check of AI visibility ("check", never "audit": /terms says the
+   monthly update is not a full re-audit), adjustments as we learn. Hosting only on Build, where we
+   host the site we built; an Optimise client keeps their own site, so it is not claimed there, and an
+   unknown route claims nothing route-specific. ⛔ No "maintenance" in a billing text (Paul's standing
+   rule, remeasure-results.test.ts: maintenance is the first thing anyone cuts). */
+export function monthlyCoversPhrase(route: 'build' | 'optimise' | null): string {
+  return route === 'build'
+    ? 'a new page each month, a monthly check of your AI visibility, adjustments as we learn, and hosting the website we built for you'
+    : 'a new page each month, a monthly check of your AI visibility, and adjustments as we learn';
 }
 
 /** The document's "what this means" paragraphs, same rule, same sentence. */
@@ -292,7 +326,8 @@ export function resultsDocumentMeaning(i: ResultsCopyInput): string[] {
   if (i.wentUp) {
     return [
       `${i.businessName} is named more often than it was ${weeksWord(i.weeks)} weeks ago, on the same questions and the same engines.`,
-      `The pages and listings we built are what the engines are now reading. Keep them live and we keep measuring.`,
+      /* No causal claim (C-28): the measurement shows the rise, not its cause. */
+      `We keep the work live and keep measuring.`,
     ];
   }
   return [

@@ -19,6 +19,7 @@ import { WAITING_ON_LABEL, type HandoffReadiness } from './handoffReadiness.ts';
 import { hubBaselineStatus } from './paidBaselineState.ts';
 import { weeklyStart } from './weeklyCheck.ts';
 import { serviceEndView } from './serviceEnd.ts';
+import { firstContact, type FirstContactView } from './firstContact.ts';
 
 export type DeliveryStage = 'setup' | 'ready' | 'discovery' | 'questions' | 'baseline' | 'build' | 'launched' | 'remeasure' | 'ended';
 export const DELIVERY_STAGES: readonly DeliveryStage[] = ['setup', 'ready', 'discovery', 'questions', 'baseline', 'build', 'launched', 'remeasure'];
@@ -56,6 +57,11 @@ export interface StageInput {
   lead: {
     status?: string | null;
     delivery_submitted_at?: string | null;
+    /** The payment day and the recorded first contact (src/lib/firstContact.ts — Paul owns first contact). */
+    payment_date?: string | null;
+    client_contacted_at?: string | null;
+    /** The first-contact activation stamp (stripe-webhook, wave 1 integration) — absent = rule never applied. */
+    first_contact_owed_since?: string | null;
     baseline_audit_id?: string | null;
     remeasure_due_date?: string | null;
     remeasure_audit_id?: string | null;
@@ -67,8 +73,12 @@ export interface StageInput {
     website_build?: { production_url?: string | null; production_status?: string | null; qa?: { production_checked?: boolean | null } | null } | null;
   };
   onboarding: { baseline_status?: string | null } | null;
-  /** The baseline audit row, when the lead points at one (completion lives there). */
-  baselineAudit: { baseline_completed_at?: string | null } | null;
+  /** The baseline audit row, when the lead points at one (completion lives there). `baseline_error`
+   *  (2026-10-04, fix/04) is the engine's own record of a measurement that stopped — held as partial /
+   *  capped / failed, or a refused repeat — written by advanceBaseline and cleared when it moves on. */
+  baselineAudit: { baseline_completed_at?: string | null; baseline_error?: string | null } | null;
+  /** The day-28 replay audit row, when there is one: it has FROZEN only when baseline_completed_at is set. */
+  remeasureAudit?: { baseline_completed_at?: string | null; baseline_error?: string | null } | null;
   discovery: DiscoverySummary;
   route: 'build' | 'optimise' | null;
   implementedOpportunities?: number;
@@ -84,6 +94,8 @@ export interface StageResult {
   next: NextStep;
   /** The required setup items still missing (labels) — shown only while in setup. */
   missing: string[];
+  /** Where Paul's first contact with the client stands (derived; firstContact.ts). */
+  firstContact: FirstContactView;
 }
 
 const step = (key: string, label: string, action: boolean, section: HubSection): NextStep => ({ key, label, action, section });
@@ -110,11 +122,12 @@ function setupStep(r: HandoffReadiness): NextStep {
 export function deliveryStage(i: StageInput): StageResult {
   const r = i.readiness;
   const L = i.lead;
+  const contact = firstContact(L, i.today);
   const result = (stage: DeliveryStage, next: NextStep, state?: DeliveryState): StageResult => {
     const st: DeliveryState = state ?? (stage === 'ended' ? 'ended' : 'in_delivery');
     const stateLabel = st === 'ended' ? 'ENDED' : st === 'ready' ? 'READY FOR DELIVERY' : st === 'ready_to_submit' ? 'READY TO SUBMIT' : st === 'in_delivery' ? `IN DELIVERY · ${DELIVERY_STAGE_LABEL[stage].toUpperCase()}`
       : st === 'waiting_sales' ? WAITING_ON_LABEL.sales : st === 'waiting_client' ? WAITING_ON_LABEL.client : WAITING_ON_LABEL.findable;
-    return { stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
+    return { firstContact: contact, stage, stageLabel: stage === 'build' ? (i.route === 'build' ? 'Build' : i.route === 'optimise' ? 'Optimise' : DELIVERY_STAGE_LABEL.build) : DELIVERY_STAGE_LABEL[stage], state: st, stateLabel, next, missing: stage === 'setup' ? r.missing : [] };
   };
 
   if (L.status === 'refunded') return result('ended', step('none', 'Refunded — nothing to do', false, 'setup'));
@@ -133,6 +146,17 @@ export function deliveryStage(i: StageInput): StageResult {
   const due = (L.remeasure_due_date ?? '').slice(0, 10);
   if (baselineDone && (L.remeasure_audit_id || (due && daysBetween(i.today, due) <= REMEASURE_STAGE_DAYS))) {
     if (L.remeasure_results_sent_at) return result('remeasure', step('done', 'Results sent', false, 'results'));
+    /* ⛔ "DONE" ONLY WHEN THE REPLAY HAS FROZEN (2026-10-04, C-20 / C-11): it used to say "Remeasure done
+       — send results" the moment the replay started. A replay that stopped needs Paul; one still
+       measuring needs nobody. A caller that does not pass the replay row keeps the old wording. */
+    if (L.remeasure_audit_id && i.remeasureAudit !== undefined) {
+      const rmErr = (i.remeasureAudit?.baseline_error ?? '').trim();
+      if (!i.remeasureAudit?.baseline_completed_at) {
+        return rmErr
+          ? result('remeasure', step('fix_remeasure', 'Re-measure stopped — open it to retry or accept', true, 'remeasure'))
+          : result('remeasure', step('wait_remeasure_run', 'Re-measure running', false, 'remeasure'));
+      }
+    }
     if (L.remeasure_audit_id) return result('remeasure', step('send_results', 'Remeasure done — send results', true, 'results'));
     return result('remeasure', step('remeasure', daysBetween(i.today, due) <= 0 ? 'Remeasure due — it runs automatically' : `Remeasure on ${due}`, false, 'remeasure'));
   }
@@ -142,6 +166,12 @@ export function deliveryStage(i: StageInput): StageResult {
     const ws = L.website_build ?? null;
     if (i.route === 'build') return result('build', ws?.production_url ? step('verify_launch', 'Verify the live site', true, 'build') : step('build', 'Build website', true, 'build'));
     return result('build', step('optimise', 'Optimise their site and mark it live', true, 'build'));
+  }
+  /* ⛔ A BASELINE THAT STOPPED IS NOT "RUNNING" (2026-10-04, C-11 / M-027). The engine records why on the
+     audit (baseline_error); while it is set, the step is Paul's (it lands in Needs attention) and says
+     so. When the chain moves on the record clears and the step goes back to waiting. */
+  if ((baseline === 'starting' || baseline === 'running') && (i.baselineAudit?.baseline_error ?? '').trim()) {
+    return result('baseline', step('fix_baseline', 'Baseline stopped — open it to retry or accept', true, 'baseline'));
   }
   if (baseline === 'starting' || baseline === 'running') return result('baseline', step('wait_baseline', 'Baseline running', false, 'baseline'));
   if (baseline === 'approved') return result('baseline', step('run_baseline', 'Run baseline', true, 'baseline'));
@@ -154,6 +184,12 @@ export function deliveryStage(i: StageInput): StageResult {
 
   // Setup until every required item is in AND the client is submitted for delivery.
   if (r.ready && L.delivery_submitted_at) return result('ready', step('run_discovery', 'Run Discovery', true, 'baseline'), 'ready');
+  /* ⛔ FIRST CONTACT IS PAUL'S (M-018, firstContact.ts): until he records that he introduced himself and
+     sent the setup link, the one next step is his — never "waiting for client" before we have asked the
+     client for anything. Applies only in setup and only to clients paid since the rule existed. */
+  if (contact.state === 'owed' || contact.state === 'overdue') {
+    return result('setup', step('contact_client', contact.label ?? 'Introduce yourself and send the setup link', true, 'setup'), 'waiting_findable');
+  }
   if (r.ready) return result('setup', step('submit', 'Submit for delivery', true, 'setup'), 'ready_to_submit');
   const waiting: DeliveryState = r.waitingOn === 'sales' ? 'waiting_sales' : r.waitingOn === 'client' ? 'waiting_client' : 'waiting_findable';
   return result('setup', setupStep(r), waiting);

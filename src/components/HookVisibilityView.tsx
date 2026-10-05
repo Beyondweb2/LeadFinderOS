@@ -358,7 +358,8 @@ export function HookVisibilityView({ card, inFlight, state, report, onRunNew, ru
           <p className="mt-1 text-xs">
             <span className="font-medium">Named in all {countWord(score.expected)} results.</span>{' '}
             <span className="text-muted-foreground">No missed-search hook.</span>
-            {autoMoved && <span className="text-muted-foreground" title={autoMoved.reason}> Moved to Not interested automatically ({HOOK_ALL_NAMED_REASON}). Nothing was deleted or sent.</span>}
+            {/* History only: runs from before 2026-10-04 carry this stamp. No audit moves a lead now. */}
+            {autoMoved && <span className="text-muted-foreground" title={autoMoved.reason}> This check moved the lead to Not interested under a rule since retired ({HOOK_ALL_NAMED_REASON}). Nothing was deleted or sent.</span>}
           </p>
         ) : score.hook ? (
           <p className="mt-1 line-clamp-2 break-words text-xs" data-testid="hook-best-miss" title={score.hook.question}>

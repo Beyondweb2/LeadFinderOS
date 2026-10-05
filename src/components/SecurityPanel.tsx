@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { invokeEdge } from '@/lib/edgeInvoke';
 import { edgeErrorMessage } from '@/lib/edgeInvokeCore';
-import { GUARD_ACTIONS, type ProtectionLimits, type ProtectionMode, validateLimits } from '@/lib/protectionLimits';
+import { GUARD_ACTIONS, type ProtectionLimits, type ProtectionMode, validateLimits, withDefaultActions } from '@/lib/protectionLimits';
 import { actionWords, describeSecurityEvent, type SecurityEventRow } from '@/lib/securityAlerts';
 
 /* SECURITY & USAGE — admin only (2026-09-29, docs/abuse-cost-protection.md). The whole page answers:
@@ -86,7 +86,9 @@ export function SecurityPanel() {
     );
   }
   const d = q.data;
-  const L = d.limits;
+  /* An action added by a newer release (sales_check) is shown from the defaults until its SQL adds it to
+     the live row, so the table never reads an undefined action and a save carries it. */
+  const L = withDefaultActions(d.limits);
   const warnings = d.events.filter((e) => e.severity !== 'info' || ['not_allowed', 'suspended', 'webhook_unsigned'].includes(e.kind));
   const exports = d.events.filter((e) => e.kind === 'data_export');
   const suspended = d.members.filter((m) => m.suspended_at);
@@ -103,7 +105,7 @@ export function SecurityPanel() {
       {!d.webhook_signature_enforced && (
         <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/10 border-destructive/30 text-destructive">
           <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-          <div className="text-sm"><span className="font-semibold">WhatsApp webhook signatures are NOT being checked.</span> WHATSAPP_APP_SECRET is not set, so anyone who finds the webhook address could post a fake inbound message. Add the Meta App Secret (see the setup note) and this warning clears.</div>
+          <div className="text-sm"><span className="font-semibold">WhatsApp webhook signatures are not verified.</span> WHATSAPP_APP_SECRET is not set. Until it is, the current webhook accepts unsigned posts (anyone who finds its address could post a fake reply), and the fail-closed webhook (built, held until the Findable Meta App is ready) would refuse every reply. Add the Meta App Secret (see the setup note) and this warning clears.</div>
         </div>
       )}
 

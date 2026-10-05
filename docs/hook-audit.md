@@ -26,6 +26,10 @@ Branch `feat/hook-audit-visibility-score`. Replaced the adaptive (early-stop) ho
 - **Hook pick:** strongest Google AI miss, else strongest ChatGPT miss, else none. The rank is
   `hookBreadthScore` (commercial and local wording), plus the core trade, plus up to 3 competitor names.
   The competitors are **that cell's own list**, never merged across questions or engines.
+- ⛔ **RETIRED 2026-10-04 (Paul, fix/07): no audit result changes a lead's status.** The rule below (and
+  the v1 Gemini-3/3 one) and `_shared/hook-not-interested.ts` are deleted. A 6/6 result now shows as
+  "Strong AI visibility — named in all 6 answers" (`callCardAudit`) and the lead keeps its status;
+  "Not interested" is a sales outcome a person records. Historical record of the old rule:
 - **6/6 → Not Interested**, the manual button's patch under the v1 conditional write (protected
   statuses, starred leads skipped). It runs **after the run is released**, beside `readyRuns`, so
   extract-competitors' `self_named` verdicts exist and the rule reads what the card and the report

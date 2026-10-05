@@ -4,7 +4,7 @@
 import { classifyWinnability, type EngineMap } from "../../../src/lib/auditReport.ts";
 import { isAggregatorUrl } from "./aggregators.ts";
 import { type CrawlSignals } from "../../../src/lib/crawlCheck.ts";
-import { cellNamed } from "../../../src/lib/namedSignal.ts";
+import { cellNamed, type NamedContext } from "../../../src/lib/namedSignal.ts";
 
 type Client = any;
 type Opportunity = {
@@ -36,7 +36,9 @@ function questionContext(question: string, services: string[], towns: string[], 
   return { service, town };
 }
 
-function mergedEngine(rows: Array<Record<string, unknown>>): { result: EngineMap; namedAny: boolean } {
+/* `ctx` (2026-10-04, C-32): the business, trade and town, so `named` reads the answer text for a
+   judgeable name — the client report's ruler — never the model's verdict alone. */
+function mergedEngine(rows: Array<Record<string, unknown>>, ctx?: NamedContext): { result: EngineMap; namedAny: boolean } {
   const result: EngineMap = {};
   let namedAny = false;
   for (const row of rows) {
@@ -44,14 +46,14 @@ function mergedEngine(rows: Array<Record<string, unknown>>): { result: EngineMap
     for (const [engine, raw] of Object.entries(engines)) {
       if (!raw || typeof raw !== "object") continue;
       const cur = result[engine] ?? { named: false, position: null, competitors: [], citations: [], answer_text: "" };
-      cur.named = cur.named || cellNamed(raw);
+      cur.named = cur.named || cellNamed(raw, ctx);
       cur.self_named = cur.self_named || raw.self_named;
       cur.position = cur.position == null ? raw.position : raw.position == null ? cur.position : Math.min(cur.position, raw.position);
       cur.competitors = uniq([...cur.competitors, ...(raw.competitors ?? [])]);
       cur.citations = uniq([...cur.citations, ...(raw.citations ?? [])].map((c) => `${c.title}|${c.url}`)).map((v) => { const [title, ...u] = v.split("|"); return { title, url: u.join("|") }; });
       cur.answer_text = cur.answer_text || raw.answer_text;
       result[engine] = cur;
-      if (cellNamed(raw)) namedAny = true;
+      if (cellNamed(raw, ctx)) namedAny = true;
     }
   }
   return { result, namedAny };
@@ -107,7 +109,7 @@ export async function reconcileActionPlan(service: Client, input: { auditId: str
   const existing = (existingRows ?? []) as Array<Record<string, unknown>>;
   const opportunities: Opportunity[] = [];
   for (const [question, qRows] of byQuestion) {
-    const merged = mergedEngine(qRows);
+    const merged = mergedEngine(qRows, { businessName: audit.business_name ?? null, trade: audit.business_type ?? null, town: audit.location_text ?? null });
     const w = classifyWinnability(merged.result, { businessName: audit.business_name ?? "", locationText: home, ownWebsite: audit.website ?? "", isAggregatorUrl });
     const kind = classification(w, merged.namedAny);
     const ctx = questionContext(question, services, towns, home);

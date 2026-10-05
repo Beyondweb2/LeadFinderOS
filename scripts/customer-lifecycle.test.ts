@@ -77,12 +77,19 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   ok(billing === renews, `a trialing subscription → its own renewal date (${billing})`);
   ok(billing !== claimWindowCloseIso(resultsSent), `billing (${billing?.slice(0, 10)}) and the claim window close (${claimWindowCloseIso(resultsSent)?.slice(0, 10)}) are two clocks, not one`);
   const base = { businessName: 'MCLocksmiths', town: 'Canterbury', beforeNamed: 4, beforeAnswered: 120, afterNamed: 11, afterAnswered: 120, questions: 20, documentUrl: 'https://findable.live/results/x', withinNoise: false };
-  for (const wentUp of [true, false]) {
-    const p = resultsEmailParagraphs({ ...base, wentUp, monthlyStartsOn: pretty(billing!), totalPayments: 12 });
+  {
+    const p = resultsEmailParagraphs({ ...base, wentUp: true, monthlyStartsOn: pretty(billing!), totalPayments: 12 });
     const line = p.find((x) => x.includes('4 November 2026')) ?? '';
-    ok(!!line && line.includes(`£${FINDABLE_MONTHLY_GBP}`), `wentUp=${wentUp}: names 4 November 2026 and £${FINDABLE_MONTHLY_GBP}`);
-    ok(/payment 2 of 12/.test(line) && /nothing is charged after the 12th/.test(line), `wentUp=${wentUp}: counts it as payment 2 of 12, nothing after the 12th`);
-    ok(!p.some((x) => /same day/i.test(x)), `wentUp=${wentUp}: no "that same day" — billing is not tied to the claim window`);
+    ok(!!line && line.includes(`£${FINDABLE_MONTHLY_GBP}`), `wentUp=true: names 4 November 2026 and £${FINDABLE_MONTHLY_GBP}`);
+    ok(/payment 2 of 12/.test(line) && /nothing is charged after the 12th/.test(line), 'wentUp=true: counts it as payment 2 of 12, nothing after the 12th');
+    ok(!p.some((x) => /same day/i.test(x)), 'wentUp=true: no "that same day" — billing is not tied to the claim window');
+  }
+  {
+    /* Paul, 2026-10-05: the not-gone-up email has just said a valid claim stops the monthly, so it names
+       no upcoming payment after that — even when a trialing subscription has a date. */
+    const p = resultsEmailParagraphs({ ...base, wentUp: false, monthlyStartsOn: pretty(billing!), totalPayments: 12 });
+    ok(!p.some((x) => x.includes('4 November 2026') || /first monthly payment/i.test(x)), 'wentUp=false: no upcoming monthly payment paragraph after the guarantee');
+    ok(!p.some((x) => /same day/i.test(x)), 'wentUp=false: no "that same day"');
   }
   /* A client like MCLocksmiths: card saved, no subscription (signed up the day before sign-up subscriptions). */
   ok(resultsBillingStartIso({ subscriptionId: null, subscriptionStatus: null, subscriptionRenewsAt: null, nowIso: resultsSent }) === null, 'no subscription → no billing date');
@@ -107,7 +114,7 @@ console.log('── 6, 7. THE FOUR-WEEK RESULTS EMAIL NAMES STRIPE\'S DATE, OR N
   ok(/subscription_status, subscription_renews_at/.test(sender), 'the bundle reads the subscription status and renewal date');
   ok(/totalPayments: lead\.contract_total_payments \?\? null/.test(sender), 'and passes the client\'s own contracted count to the words');
   const unknown = resultsEmailParagraphs({ ...base, wentUp: true, monthlyStartsOn: pretty(billing!), totalPayments: null }).join(' ');
-  ok(/It is payment 2, counting/.test(unknown) && !/payment 2 of/.test(unknown), 'no recorded contract → payment 2 with no invented total');
+  ok(/is payment 2, counting/.test(unknown) && !/payment 2 of/.test(unknown), 'no recorded contract → payment 2 with no invented total');
 }
 
 console.log('── 9, 10. NO £29.99, NO FREE EXIT, IN ANY ACTIVE LIFECYCLE TEXT ──');

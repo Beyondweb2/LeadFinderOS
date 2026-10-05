@@ -32,6 +32,8 @@ export interface RemeasureCandidate {
   status?: string | null;
   is_archived?: boolean | null;
   amount_paid?: number | null;
+  /** Set when the service ended (a dispute, or the client ended early — serviceEnd.ts). */
+  service_terminated_at?: string | null;
 }
 
 export type NotDueReason =
@@ -40,6 +42,7 @@ export type NotDueReason =
   | 'no_due_date'
   | 'not_yet_due'
   | 'refunded'
+  | 'service_ended'
   | 'archived'
   | 'not_paid';
 
@@ -71,6 +74,10 @@ export function isRemeasureDue(lead: RemeasureCandidate | null | undefined, toda
   /* ⛔ Refunded and archived are tested BEFORE the date, so a refunded client with a past date is
      refused as refunded — the load-bearing reason — not as some other thing. */
   if (lead.status === REMEASURE_STOP_STATUS) return { due: false, reason: 'refunded' };
+  /* ⛔ AN ENDED CLIENT IS NEVER RE-MEASURED (2026-10-04, fix/04). The tick's query already filters
+     service_terminated_at; the predicate says it too, so the rule is not one query clause away from
+     being lost. Ronnie (closed 4 Oct, due 13 Oct) and MCL (ended 3 Oct) are why. */
+  if ((lead.service_terminated_at ?? '').trim()) return { due: false, reason: 'service_ended' };
   if (lead.is_archived === true) return { due: false, reason: 'archived' };
   if (!(Number(lead.amount_paid ?? 0) > 0)) return { due: false, reason: 'not_paid' };
   const due = (lead.remeasure_due_date ?? '').trim().slice(0, 10);

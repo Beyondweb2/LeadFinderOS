@@ -2,6 +2,7 @@ import {
   FINDABLE_BUILD_TOTAL_PAYMENTS, FINDABLE_MONTHLY_GBP, firstRecurringPaymentIso, isServiceRoute, recurringPaymentsFor,
   serviceRouteForTotal, totalPaymentsFor, type ServiceRoute,
 } from "../../../src/lib/findableOffer.ts";
+import { FIRST_PAYMENT_FILTERS, subscriptionRefusal } from "../../../src/lib/paymentState.ts";
 
 // deno-lint-ignore no-explicit-any
 type Client = any;
@@ -13,6 +14,9 @@ export interface DelayedSubscriptionLead {
   business_name: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  /** Read so a closed client (ended / refunded) is never subscribed (paymentState.subscriptionRefusal). */
+  status?: string | null;
+  service_terminated_at?: string | null;
 }
 
 export type DelayedSubscriptionOutcome =
@@ -20,18 +24,62 @@ export type DelayedSubscriptionOutcome =
   | { kind: "skipped"; reason: string }
   | { kind: "failed"; reason: string };
 
+/** The Stripe Idempotency-Key for the monthly subscription of ONE checkout: every delivery of that
+ *  checkout sends the same key, so Stripe itself returns the first subscription instead of making a
+ *  second (M-017). ⛔ The request parameters must be identical on every delivery for the key to work —
+ *  which is why the sign-up instant passed in is the EVENT's time, never "now". */
+export const subscriptionIdempotencyKey = (checkoutSessionId: string) => `findable-monthly-${checkoutSessionId}`;
+
 const form = (pairs: Record<string, string>) => new URLSearchParams(pairs).toString();
 
-async function stripe(secret: string, path: string, body?: string): Promise<{ ok: boolean; json: Record<string, unknown>; text: string }> {
+async function stripe(secret: string, path: string, body?: string, extraHeaders: Record<string, string> = {}): Promise<{ ok: boolean; status: number; json: Record<string, unknown>; text: string }> {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { Authorization: `Bearer ${secret}`, ...(body === undefined ? {} : { "Content-Type": "application/x-www-form-urlencoded" }) },
+    headers: { Authorization: `Bearer ${secret}`, ...(body === undefined ? {} : { "Content-Type": "application/x-www-form-urlencoded" }), ...extraHeaders },
     ...(body === undefined ? {} : { body }),
   });
   const text = await res.text().catch(() => "");
   let json: Record<string, unknown> = {};
   try { json = JSON.parse(text) as Record<string, unknown>; } catch { /* Stripe error text is returned below. */ }
-  return { ok: res.ok, json, text };
+  return { ok: res.ok, status: res.status, json, text };
+}
+
+/* ══ THE CLAIM (M-017) ═══════════════════════════════════════════════════════════════════════════════
+   One checkout → at most one monthly subscription, even when Stripe delivers the same event twice at
+   once. Two locks, either sufficient on its own for the common case:
+     1. A CONDITIONAL WRITE on the lead (subscription_claim = the checkout session id, only while the
+        claim and the subscription id are both blank and the client is not closed). Only one checkout can
+        ever own a lead's subscription; a SECOND checkout for the same lead is refused here.
+     2. Stripe's Idempotency-Key, keyed by the same checkout session. A re-entry by the SAME checkout (a
+        concurrent duplicate delivery, or a retry after a crash between the Stripe call and our write) is
+        allowed through the claim and gets the SAME subscription back from Stripe — that is what lets a
+        crashed first delivery complete instead of leaving the client with no schedule for ever.
+   ⛔ FAILS CLOSED: a claim that cannot be written (an error, or the column not migrated yet) creates
+   nothing and reports a failure — the PAID email then tells Paul to set the schedule up by hand. A
+   missing subscription is fixed in a minute; a duplicate bills a customer twice. */
+export type ClaimOutcome = { kind: "proceed" } | { kind: "skipped"; reason: string } | { kind: "failed"; reason: string };
+
+export async function claimSubscription(service: Client, leadId: string, claimKey: string, nowIso: string): Promise<ClaimOutcome> {
+  if (!claimKey.trim()) return { kind: "failed", reason: "no checkout session id to claim the subscription with" };
+  const { data: won, error } = await service.from("outreach_leads")
+    .update({ subscription_claim: claimKey, subscription_claimed_at: nowIso })
+    .eq("id", leadId)
+    .is("subscription_claim", null)
+    .is("stripe_subscription_id", null)
+    .is(FIRST_PAYMENT_FILTERS.notEnded, null)
+    .or(FIRST_PAYMENT_FILTERS.notRefunded)
+    .select("id");
+  if (error) return { kind: "failed", reason: `could not claim the monthly subscription (${error.message}), so none was created` };
+  if (Array.isArray(won) && won.length > 0) return { kind: "proceed" };
+  const { data: row, error: readErr } = await service.from("outreach_leads")
+    .select("id,subscription_claim,stripe_subscription_id,status,service_terminated_at").eq("id", leadId).maybeSingle();
+  if (readErr || !row) return { kind: "failed", reason: `could not read the subscription claim back (${readErr?.message ?? "no row"}), so none was created` };
+  const r = row as { subscription_claim?: string | null; stripe_subscription_id?: string | null; status?: string | null; service_terminated_at?: string | null };
+  if (r.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${r.stripe_subscription_id})` };
+  const refusal = subscriptionRefusal(r);
+  if (refusal) return { kind: "skipped", reason: refusal };
+  if (r.subscription_claim === claimKey) return { kind: "proceed" };
+  return { kind: "skipped", reason: `the monthly subscription for this client was already claimed by another checkout (${r.subscription_claim ?? "unknown"})` };
 }
 
 /**
@@ -121,14 +169,21 @@ export function resolvePaidRoute(
 /** Creates the £99/month subscription immediately after the £99 signup payment, for the ROUTE the
  * customer paid on (Build: recurringPaymentsFor('build') more; Optimise: recurringPaymentsFor('optimise')
  * more). Stripe owns the six-week delay as a trial, so a delayed worker cannot move the first charge.
- * ⛔ NO ROUTE, NO SUBSCRIPTION: an undecided route is a failure reported to Paul, never a default. */
+ * ⛔ NO ROUTE, NO SUBSCRIPTION: an undecided route is a failure reported to Paul, never a default.
+ * ⛔ A CLOSED CLIENT (ended / refunded) IS NEVER SUBSCRIBED — checked on what was read AND on the claim.
+ * ⛔ AT MOST ONE PER CHECKOUT: claimed on the lead, then created with an Idempotency-Key keyed by the
+ *   checkout session (claimKey). `signupAtIso` must be the EVENT's time so every delivery sends Stripe
+ *   identical parameters. */
 export async function createDelayedSubscription(
   service: Client,
   lead: DelayedSubscriptionLead,
   signupAtIso: string,
   route: ServiceRoute | null,
+  claimKey: string,
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
+  const refusal = subscriptionRefusal(lead);
+  if (refusal) return { kind: "skipped", reason: refusal };
   if (!isServiceRoute(route)) return { kind: "failed", reason: "the service route (Build / Optimise) is not decided, so no payment schedule was created" };
   const recurring = recurringPaymentsFor(route);
 
@@ -141,6 +196,11 @@ export async function createDelayedSubscription(
   const startsAt = firstRecurringPaymentIso(signupAtIso);
   if (!startsAt) return { kind: "failed", reason: `invalid signup timestamp ${JSON.stringify(signupAtIso)}` };
   const trialEnd = Math.floor(new Date(startsAt).getTime() / 1000);
+
+  /* The claim comes AFTER every cheap refusal (so a refused payment never holds a claim) and BEFORE any
+     Stripe call. */
+  const claim = await claimSubscription(service, lead.id, claimKey, new Date().toISOString());
+  if (claim.kind !== "proceed") return claim;
 
   const pm = await stripe(secret, `payment_methods?customer=${encodeURIComponent(customerId)}&type=card&limit=1`);
   if (!pm.ok) return { kind: "failed", reason: `could not read the customer's cards: ${pm.text.slice(0, 200)}` };
@@ -176,16 +236,21 @@ export async function createDelayedSubscription(
        starting-soon emails, so the count a client is told is the count Stripe bills. */
     "metadata[service_route]": route,
     "metadata[total_payments]": String(totalPaymentsFor(route)),
-  }));
+    "metadata[checkout_session]": claimKey,
+  }), { "Idempotency-Key": subscriptionIdempotencyKey(claimKey) });
+  /* 409 = another delivery of this same checkout is creating it with the same key right now. It is not a
+     failure: that delivery stores the id. Reported as skipped so no false "no schedule" alarm goes out. */
+  if (created.status === 409) return { kind: "skipped", reason: "another delivery of this checkout is creating the subscription right now" };
   if (!created.ok) return { kind: "failed", reason: `Stripe refused the subscription: ${created.text.slice(0, 300)}` };
   const subscriptionId = String(created.json.id ?? "");
   if (!subscriptionId) return { kind: "failed", reason: "Stripe returned no subscription id" };
 
+  /* Stored only over a blank (or the same) id: a stored subscription is never replaced by this write. */
   const { error } = await service.from("outreach_leads").update({
     stripe_subscription_id: subscriptionId,
     subscription_status: String(created.json.status ?? "trialing") || "trialing",
     subscription_renews_at: startsAt,
-  }).eq("id", lead.id);
+  }).eq("id", lead.id).or(`stripe_subscription_id.is.null,stripe_subscription_id.eq.${subscriptionId}`);
   if (error) console.error(`[delayed-subscription] created ${subscriptionId} but could not store it: ${error.message}`);
   return { kind: "created", subscriptionId, startsAt };
 }

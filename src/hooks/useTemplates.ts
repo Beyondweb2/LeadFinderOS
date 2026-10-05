@@ -5,7 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Template, TemplateType, TemplateCategory } from '@/types/outreach';
 
-// Default templates for new users - casual, non-salesy
+// The hardcoded set a SIGNED-OUT visitor sees (GUEST_TEMPLATES below). Never written to an account
+// any more (see the query below, 2026-10-04).
 const DEFAULT_TEMPLATES: Array<{
   template_type: TemplateType;
   category: TemplateCategory;
@@ -113,26 +114,14 @@ export function useTemplates() {
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
 
-      if (data && data.length > 0) return data.map(typeRow);
-
-      /* NO TEMPLATES YET → seed the defaults, then read back what the database actually stored.
-         ⚠️ `hasCreatedDefaults` was a ref guarding against seeding twice. React Query
-         de-duplicates concurrent fetches of one key, so two components mounting at once share a
-         single run of this function — the ref's job, without the ref. */
-      const seeded = DEFAULT_TEMPLATES.map((t) => ({ ...t, user_id: user.id, is_default: true }));
-      const { error: insErr } = await supabase.from('templates').insert(seeded);
-      if (insErr) {
-        console.error('Error creating default templates:', insErr);
-        /* ⛔ RETURN THE GUEST SET RATHER THAN NOTHING. The old code returned early and left the
-           list EMPTY on a seeding failure, so the Templates page read as "you have no
-           templates" when the truth was "we could not create them". */
-        return GUEST_TEMPLATES;
-      }
-      const { data: seededRows } = await supabase
-        .from('templates')
-        .select('*')
-        .order('created_at', { ascending: true });
-      return (seededRows ?? []).map(typeRow);
+      /* ⛔ SAVED TEXTS ARE PRIVATE, AND AN EMPTY LIST STAYS EMPTY (2026-10-04, pre-sales certification
+         M-002; docs/pre-sales-certification/fixes-01-security-inbound.md). RLS now returns only the
+         caller's OWN rows (sales_select_templates, which showed every rep all of Paul's, is dropped).
+         This used to SEED DEFAULT_TEMPLATES whenever the list came back empty — which, once a rep can
+         no longer see Paul's rows, would write nine barber-era "I help local businesses get online"
+         texts into every new salesperson's account and offer them in the Inbox Quick reply. Nobody is
+         seeded now: a rep starts with none and saves their own. Paul's rows are untouched. */
+      return (data ?? []).map(typeRow);
     },
   });
 
