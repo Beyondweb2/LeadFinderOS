@@ -267,6 +267,34 @@ campaign auto-name dropped every "s" (a lost backslash — caught by the new tes
 business name (Call / WhatsApp are icons on a phone); the exact-copy note lower-cased "Findable"; the opener note
 was hidden inside a folded section (now always visible).
 
-## 11. Deployment
+## 11. Deployment (5 Oct 2026, 04:30–04:45 UTC)
 
-(Recorded after the deploy — see below.)
+- **Branch** `feature/sales-workspace-v2` (`1115808d` + `fcb21b7c` — the first held only the four file deletions,
+  because a `git add` stopped on a deleted path; the second holds the rest; nothing partial reached `main`).
+- **Merge to `main`:** `af8a930f` (`--no-ff`; `origin/main` proved unmoved at `07113431`; tree = the tested branch tip;
+  `npm test` 311 / 311 on the merge).
+- **SQL** `20261008100000_sales_workspace_v2.sql` applied and read back: `trade` / `area` / `archived_at` / `archived_by`;
+  the name index partial (`WHERE archived_at IS NULL`); the six new functions; `sales_queue_opener` keeps every old
+  reason and adds `contacted_by_phone` / `contacted_logged`; `campaign_launch` refuses `call_campaign`;
+  `campaign_usable` excludes archived; the outcome list equals `CONVERSATION_OUTCOMES`; grants (browser:
+  `campaign_new` / `campaign_update` / `campaign_archive` yes; `lead_reached_contact` / `_campaign_stats` no; anon no).
+  A **rolled-back** probe as the Test rep: create a Call campaign → listed with method, trade and stats → launch
+  refused `call_campaign` → edit → archive → gone from the list, row kept. 0 rows left afterwards. 14 leads currently
+  have a logged conversation (their cold opener would now be skipped, with the reason).
+- **Edge functions** (the import closure of `quickClose.ts`, `salesCrm.ts`, `leadState.ts` and `quick-close`),
+  deployed from `af8a930f` before the push: **quick-close and findable-checkout together** (checkout runs the Close
+  gate), stripe-webhook, paid-client-hub, sales-performance, admin-overview, business-summary, conversation-triage.
+  All 8 verified in their deployed bundles (`withRoute`, "Domain handoff to resolve before launch", "WEBSITE ACCESS
+  ISSUE"; the old "DOMAIN / AGENCY ISSUE — Paul review required" absent; `reachedInConversation` /
+  `contacted_by_phone` in the last three). **`whatsapp-status` NOT deployed** — the Meta hold stands; no Meta or
+  Move37 setting touched.
+- **Operator app:** `main` → Cloudflare; new entry `index-BvU_NHwY.js` on app.leadfinderos.com and
+  leadfinderos-next.pages.dev (102 chunks, 0 failures): Manage campaigns, Create campaign, What Findable actually does,
+  the Yext source, Website & domain, the opener note, WEBSITE ACCESS ISSUE present; the old "Already contacted" label
+  and the wizard absent.
+- **Live, read-only, as the Test rep** (one-time magic link, session revoked afterwards): Manage campaigns lists its
+  campaigns (older ones read "No niche set" · WhatsApp); the QA lead's popup opens with Call · Details · Close ·
+  History, stored evidence first (0 / 6 named, the three rivals, no website) and the six-step script; the Close tab
+  loads from the new function ("Question 1 of 2": authority, then the approach). No console errors. Nothing was
+  answered, created or sent.
+- **Not done live:** a payment link (Stripe) and any campaign write — covered by the rolled-back probe and the suites.
