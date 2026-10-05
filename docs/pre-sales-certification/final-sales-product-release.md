@@ -99,7 +99,7 @@ only) and was deliberately excluded. Held for the Findable Meta App secret.
 ## 8. Combined tests
 
 - `npm run check` on the final tree: typecheck 9 = baseline (list identical), edge syntax / undefined names / import graph
-  clean, build OK, **335/335 suites** (see §11 for the final run).
+  clean, build OK, **334/334 suites** on the final tree `88218128` (= the merged `main` tree).
 - New: `scripts/final-sales-release-fixes.test.ts` (the four fixes, the Welcome Pack wording, the edge wording wrapper).
 - **Live, rolled back, all three migrations loaded first** (Management API; each file ends by raising its results):
   CSV 52/52 · attribution review 32/32 · v3 sign-up attribution 24/24 · salesperson onboarding RLS 70/70 · ready-to-sell
@@ -164,7 +164,53 @@ not seen them.
 
 ## 11. Deployment and live verification
 
-(Filled in after the deploy — see the next section.)
+**Order followed:** snapshot → migrations one at a time, each read back → the 11 functions (from the local merge commit, i.e.
+the exact tree that became `main`) → `whatsapp-status` checked → push `main` → Cloudflare → both hosts → live checks.
+
+- **Snapshot before:** `main` `9fd5a144`; both hosts served `index-C3SPDHr5.js`; 91 functions; versions in the table below.
+- **Migrations applied** (Management API, one at a time, 2026-10-06 London):
+  1. `20261010170000_csv_lead_import` — read back: `import_leads` SECURITY DEFINER, authenticated EXECUTE yes, anon no;
+     `limits.actions.lead_import` = paid false, per_hour 30, max_rows 500, rows_per_day 3000.
+  2. `20261011100000_attribution_review_admin` — read back: the 3 columns + 4 CHECKs, `sale_attribution_review_events`
+     (RLS on, authenticated cannot read), the 5 triggers, the 3 functions service-role only; 0 reviews.
+  3. `20261011120000_ready_to_sell_start_date` — read back: `not_started` and `starts_on` live, grants unchanged; the live
+     body hashes equal the file as sent (sent with CRLF line endings — whitespace only). The one rep record (test1) lists the
+     same missing items as before.
+  Then, against the LIVE functions (no prepend, rolled back): E2E 66/66 · CSV 52/52 · attribution 32/32 · onboarding RLS
+  70/70 · v3 attribution 24/24 · paperwork 13/13.
+- **Functions deployed and proven by a marker only the new code has** (deployed bundle via the Management API):
+
+  | Function | Version | Marker |
+  |---|---|---|
+  | security-admin | v8 → v9 | `lead_import` |
+  | crawl-check | v19 → v20 | `PROSPECT_CRAWL_REUSE_MS`, `not_ready_to_sell` |
+  | crawl-worker | v4 → v5 | `buildSiteAudit`, `coverage_cap` |
+  | paid-client-hub | v62 → v63 | `saleCreditOf`, the v3 Welcome Pack words |
+  | render-welcome-pack | v32 → v33 | the v3 Welcome Pack words |
+  | admin-users | v72 → v73 | `resolve_sale_attribution_with_seller`, `not_started` |
+  | admin-overview | v42 → v43 | `saleCreditOf`, `unattributed`, `sale_attribution_holds` |
+  | business-summary | v36 → v37 | `saleCreditOf` |
+  | sales-performance | v49 → v50 | `saleCreditOf` |
+  | search-leads | v98 → v99 | `not_ready_to_sell`, "Complete your onboarding before using this" |
+  | sales-prospect-check | v1 → v2 | "Complete your onboarding before starting checks" |
+
+  Exactly these 11 changed version (the full list was diffed). All answer an OPTIONS preflight (200; `crawl-worker` 405 and
+  `render-welcome-pack` 404 are their handlers answering — booted).
+- **`whatsapp-status`: v114, 2026-09-30 06:26 UTC before and after. Not deployed.**
+- **`main` = `700b6a0c`** (merge of this branch, pushed after `origin` was proven unmoved at `9fd5a144`).
+- **Frontend:** both `app.leadfinderos.com` and `leadfinderos-next.pages.dev` serve `index-Bxu2xOa0.js` (~100 s after the
+  push). All 106 chunks resolved on each host: present — "Discard unsaved changes?", "send it within about", "Complete your
+  onboarding before using", "Open next ready", "Capped crawl", "Starts on", "awaiting attribution", the What's New id, "Full
+  audit & website evidence", "Check rows", "Who sold it?"; gone — "Find Leads is paused", the old not-ready sentence,
+  "starting six weeks after sign-up".
+- **Live safe checks:** 0 attribution reviews, 0 payment holds, 0 `lead_import` calls left by tests; all 10 paid leads keep
+  the seller they were stamped with (no migration writes a lead row); `findable-checkout` / `stripe-webhook` / `quick-close`
+  not redeployed (payment and agreement flow unchanged); `findable.live/w/<code>` answers with no old monthly wording (a QA
+  fixture client's pack shows the v3 words; two prospects show the neutral older-client wording; every real paid client is
+  ended / refunded or pre-route, so none is shown v3 timing it did not sign).
+- **Public site (read-only, not redeployed):** agreement parity IDENTICAL (139 signed paragraphs, findable-site `5af9064`);
+  home / pricing / refunds / terms / agreement: no "six weeks after sign-up", no "eight weeks", no £9.99; `/agreement` is v3.
+- Nobody has signed in and LOOKED at the live screens with real data; the visual proof is §10 (fixtures).
 
 ## 12. Open items after this release
 
