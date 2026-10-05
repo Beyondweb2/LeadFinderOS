@@ -27,6 +27,7 @@ import { agreementUrl, AGREEMENT_COPY_TO_PAUL } from "../../../src/lib/clientAgr
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow } from "../_shared/client-agreement.ts";
 import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
+import { saleCreditOf } from "../../../src/lib/saleAttribution.ts";
 import { accessDateEmail, appendTermsEvent, loadTimelineFacts, schedulePaymentStart, sendAccessDateEmail, todayUk } from "../_shared/client-terms.ts";
 import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, RESULTS_TARGET_DAYS, accessReadiness, addDays, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
 import { clientContactRoutes, clientInfoRequestView, clientItems, missingInformation, sellerAskState, sellerItems, cleanInfoKeys, gatherKnown, patchForCandidate, type MissingInfoItem } from "../../../src/lib/clientMissingInfo.ts";
@@ -298,6 +299,16 @@ async function teamNames(service: any): Promise<Map<string, string>> {
   return new Map(((data ?? []) as Array<{ user_id: string; display_name: string | null }>).map((t) => [t.user_id, t.display_name ?? "A teammate"]));
 }
 
+/* WHO SOLD IT, for display (saleCreditOf, the one rule). ⛔ A sale under attribution review, or not credited,
+   names NOBODY — never the current owner (the old fallback). Only a client paid before the seller stamp existed
+   (never decided) still shows the current owner, as before. */
+function sellerShown(l: Record<string, unknown>): { id: string | null; pending: "awaiting_attribution" | "not_credited" | null } {
+  const c = saleCreditOf({ leadSeller: (l.sold_by_user_id as string | null) ?? null, leadSoldAt: (l.sold_at as string | null) ?? null });
+  if (c.kind === "seller") return { id: c.userId, pending: null };
+  if (c.kind === "unstamped") return { id: (l.assigned_to_user_id as string | null) ?? null, pending: null };
+  return { id: null, pending: c.kind };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -334,13 +345,15 @@ Deno.serve(async (req) => {
       const clients = members.map((l) => {
         const id = String(l.id);
         const s = setups.get(id)!;
-        const soldBy = (l.sold_by_user_id ?? l.assigned_to_user_id) as string | null;
+        const seller = sellerShown(l);
+        const soldBy = seller.id;
         // The list never ships the big jsonb blobs it only needed for the rule.
         const { website_build: _wb, sales_handoff: _sh, ...rest } = l;
         return {
           ...rest, payment_source: paidClientSource(l),
           handoff: setupView(s),
           sold_by_name: soldBy ? names.get(soldBy) ?? "A teammate" : null,
+          seller_pending: seller.pending,
           contract: clientContract({ lead: l as Record<string, never>, onboarding: s.onboarding, ledger: ledger.get(id) ?? [] }),
         };
       });
@@ -464,7 +477,8 @@ Deno.serve(async (req) => {
         onboarding_id: (ob?.id as string | undefined) ?? null,
         crawl_age_days: setup.crawlAgeDays,
         history: ((hist.data ?? []) as Array<Record<string, unknown>>).map((a) => ({ ...a, actor: nameOf(a.actor_user_id) ?? ((a.data as { source?: string } | null)?.source === "client" ? "Client" : "System") })),
-        sold_by: nameOf(L.sold_by_user_id ?? L.assigned_to_user_id),
+        sold_by: nameOf(sellerShown(L).id),
+        seller_pending: sellerShown(L).pending,
         sold_by_recorded: !!L.sold_by_user_id,
         sold_at: L.sold_at ?? null,
         owner_now: nameOf(L.assigned_to_user_id),

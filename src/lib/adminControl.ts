@@ -19,6 +19,8 @@ import type { AttentionItem } from './adminMetrics.ts';
 export interface HandoffClient {
   id: string; business_name: string; payment_date?: string | null; amount_paid?: number | null;
   sold_by_user_id?: string | null; sold_by_name?: string | null;
+  /** fn paid-client-hub: the sale is under attribution review / not credited (no seller named). */
+  seller_pending?: 'awaiting_attribution' | 'not_credited' | null;
   handoff?: { stage: string; stage_label: string; state: string; state_label: string; done: number; total: number; missing: string[]; next: { label: string; action: boolean; section: string } } | null;
 }
 

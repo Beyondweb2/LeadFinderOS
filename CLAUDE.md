@@ -761,6 +761,12 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   removes a lead from revenue and keeps the amount. The dashboard's paying-customer count adds a
   floor (`PAYING_FLOOR_GBP`, derived) and churn (positive match on `canceled`/`incomplete_expired`).
   A cleared amount writes `null`, never `0`.
+- **Business revenue ≠ salesperson-attributed revenue.** Any per-person sales/revenue view credits a payment
+  through `saleCreditOf` (`saleAttribution.ts`): an open or not-credited attribution review — or a sale decided
+  with no seller — is NOBODY's (never the book owner's, the holder's or the claimed seller's); only never-stamped
+  history keeps the old fallback. Reviews are resolved only by `resolve_sale_attribution_with_seller` (admin;
+  evidence-backed candidate, or override with a reason; final; history append-only).
+  `docs/pre-sales-certification/attribution-review-admin.md`.
 - **A WhatsApp conversation's state has ONE rule** (`src/lib/conversationState.ts`: unread per person
   from `UNREAD_TRACKING_START`, waiting-on-us, failed, queued, follow-up due, template required); the ONE
   deep link is `whatsAppLinkForLead` (`/inbox?lead=`). Sales' nav item says **WhatsApp** — same `/inbox`.

@@ -1,5 +1,5 @@
 import { bookOwnerId } from "./access.ts";
-import { loadEarnings } from "./earnings.ts";
+import { loadAttributionHolds, loadEarnings } from "./earnings.ts";
 import {
   foldAdminOverview,
   type AdminActivity, type AdminLead, type AdminLedgerRow, type AdminMessage, type AdminOnboarding, type AdminSuppression, type CostRow, type DelegatedTask, type Person, type TriageRow,
@@ -106,6 +106,12 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     commissionLines = e.lines; commissionTotals = e.totals;
     for (const s of e.bySeller) { commissionDueBySeller.set(s.sellerId, s.due); payoutsBySeller.set(s.sellerId, s.paidOut); }
   } catch (err) { commissionError = err instanceof Error ? err.message : String(err); console.error("[admin-overview] earnings", commissionError); }
+
+  /* Sale-attribution reviews (view sale_attribution_holds): a held sale's revenue is on nobody's team row
+     (adminMetrics saleCreditOf). Unreadable → null: a lead decided with no seller still reads as awaiting. */
+  let attributionOf: Map<string, { status: string; resolvedAt: string | null }> | null = null;
+  try { attributionOf = await loadAttributionHolds(service); }
+  catch (err) { console.error("[admin-overview] attribution holds", err instanceof Error ? err.message : err); attributionOf = null; }
 
   const [cPeriod, cToday, cYesterday, cWeek, cMonth] = await Promise.all([period, today, yesterday, week, month].map((p) => costRows(service, p, exclusions.users)));
 
@@ -318,7 +324,7 @@ export async function loadAdminOverview(service: Service, period: ReportingPerio
     onboarding: (onboardingRes.data ?? []) as AdminOnboarding[],
     commissionLines, commissionTotals, commissionDueBySeller, payoutsBySeller,
     cost: { period: cPeriod, today: cToday, yesterday: cYesterday, week: cWeek, month: cMonth },
-    triage, clientExtras, usage, delegatedTasks, hideActivityOf,
+    triage, clientExtras, usage, delegatedTasks, attributionOf, hideActivityOf,
   });
 
   return {

@@ -45,6 +45,7 @@ import { BOTTLENECK_THRESHOLDS, findBottlenecks, foldFeatureUsage, foldNiches, f
 import { clientHealthOf, type ClientExtras, type ClientHealth } from './clientHealth.ts';
 import { attentionAssignable } from './teamBoard.ts';
 import { holderTimeline } from './holderTimeline.ts';
+import { saleCreditOf } from './saleAttribution.ts';
 
 /* ── Inputs ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -217,7 +218,12 @@ export interface Money {
   /** ⛔ Pounds and dollars kept apart — never one combined figure (apiCostLabels.ts). afterCommission is
    *  GBP; apiUsd is the recorded API spend in USD, shown beside it, not subtracted from it. */
   contribution: { revenueNet: number; commission: number; afterCommission: number; apiUsd: number };
+  /** BUSINESS revenue in the period that is NO PERSON'S performance (saleCreditOf): payments on a sale whose
+   *  attribution review is open (awaiting Paul), and on a sale he recorded as not credited. Both are in the
+   *  period / week / month money above; neither is on any team row or in bySeller. */
+  unattributed: { awaiting: UnattributedBlock; notCredited: UnattributedBlock };
 }
+export interface UnattributedBlock { amount: number; payments: number; clients: number; names: string[] }
 export interface SinceBlock { whatsappSent: number; replies: number; interested: number; meetings: number; sales: number; revenue: number; commission: number; apiUsd: number }
 export type AttentionGroup = 'urgent' | 'today' | 'review' | 'blocked';
 export interface AttentionItem {
@@ -291,6 +297,10 @@ export interface AdminInput {
    *  its actor's. ⛔ Never money, clients, delivery, attention, inventory, costs or feature usage — and a
    *  lead is never dropped because of who added, owns or delivers it. Absent / empty = everyone counts. */
   hideActivityOf?: ReadonlySet<string> | null;
+  /** Sale-attribution reviews by lead (view sale_attribution_holds: review_status). A held sale's revenue is
+   *  on nobody's row (saleCreditOf). Absent/null = not read: a lead whose attribution was decided with no
+   *  seller (sold_at set) still reads as awaiting — never handed to the book owner. */
+  attributionOf?: ReadonlyMap<string, { status: string }> | null;
 }
 /** One open lead-assignment task on the Team board: the lead, who holds the task, its state. */
 /** One reason on "Why prospects say no": how many, the share of the leads WITH a reason, and who they are. */
@@ -599,8 +609,19 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
   const claimActs = input.activity.filter((a) => a.kind === 'lead_claimed' && inPeriod(a.created_at, p));
   for (const a of claimActs) once(a.actor_user_id, 'leadsClaimed', a.lead_id);
 
-  /* Money by seller. The seller is the ledger's snapshot, else the lead's stamp, else the book owner. */
-  const sellerOf = (r: AdminLedgerRow) => r.sold_by_user_id ?? (r.lead_id ? leadById.get(r.lead_id)?.sold_by_user_id : null) ?? input.bookOwnerId;
+  /* Money by seller (saleCreditOf, the one rule): the ledger's snapshot, else the lead's stamp. ⛔ A sale under
+     an open attribution review, or recorded as not credited, is NOBODY's — null here, and summed separately
+     (money.unattributed). Only a payment from before the seller stamp existed (never decided) falls back to
+     the book owner, exactly as before. */
+  const creditOf = (r: AdminLedgerRow) => {
+    const l = r.lead_id ? leadById.get(r.lead_id) : undefined;
+    return saleCreditOf({ ledgerSeller: r.sold_by_user_id, leadSeller: l?.sold_by_user_id ?? null, leadSoldAt: l?.sold_at ?? null,
+      reviewStatus: r.lead_id ? input.attributionOf?.get(r.lead_id)?.status ?? null : null });
+  };
+  const sellerOf = (r: AdminLedgerRow): string | null => {
+    const c = creditOf(r);
+    return c.kind === 'seller' ? c.userId : c.kind === 'unstamped' ? input.bookOwnerId : null;
+  };
   const excludedLedgerLead = (r: AdminLedgerRow) => { const l = r.lead_id ? leadById.get(r.lead_id) : null; return !!l && isExcludedLead(ex, l); };
   const ledger = input.ledger.filter((r) => !excludedLedgerLead(r));
   for (const r of ledger) {
@@ -715,11 +736,21 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     if (!inPeriod(r.occurred_at, p) || r.status !== 'succeeded' || !(Number(r.amount_gbp) > 0) || (r.kind !== 'initial' && r.kind !== 'recurring')) continue;
     const rt = r.lead_id ? route(r.lead_id) : null;
     byRoute[rt ?? 'unknown'] = round2(byRoute[rt ?? 'unknown'] + Number(r.amount_gbp));
-    const s = sellerOf(r) ?? 'unknown';
-    const a = sellerAgg.get(s) ?? { gross: 0, clients: 0 };
+    const s = sellerOf(r);
+    if (s === null && creditOf(r).kind !== 'unstamped') continue;   // awaiting / not credited: money.unattributed
+    const a = sellerAgg.get(s ?? 'unknown') ?? { gross: 0, clients: 0 };
     a.gross = round2(a.gross + Number(r.amount_gbp)); if (r.kind === 'initial') a.clients += 1;
-    sellerAgg.set(s, a);
+    sellerAgg.set(s ?? 'unknown', a);
   }
+  const unattributedBlock = (kind: 'awaiting_attribution' | 'not_credited'): UnattributedBlock => {
+    const rows = ledger.filter((r) => inPeriod(r.occurred_at, p) && r.status === 'succeeded' && Number(r.amount_gbp) > 0
+      && (r.kind === 'initial' || r.kind === 'recurring') && creditOf(r).kind === kind);
+    const leadIds = [...new Set(rows.map((r) => r.lead_id).filter((x): x is string => !!x))];
+    return {
+      amount: round2(rows.reduce((s, r) => s + Number(r.amount_gbp), 0)), payments: rows.length, clients: leadIds.length,
+      names: leadIds.map((id) => leadById.get(id)?.business_name ?? 'Client'),
+    };
+  };
   const paidLeads = realLeads.filter((l) => isPaidLead(l) && !l.service_terminated_at);
   const ledgerPaidLeads = new Set(ledger.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded').map((r) => r.lead_id));
   const outside = realLeads.filter((l) => (Number(l.amount_paid) || 0) > 0 && !ledgerPaidLeads.has(l.id));
@@ -750,6 +781,7 @@ export function foldAdminOverview(input: AdminInput): AdminOverview {
     commission: { totals: input.commissionTotals, periodAdded: commissionPeriod, bySeller: [...commissionBySeller.values()] },
     cost: { period: periodCost, today: costTotal(input.cost.today), week: costTotal(input.cost.week), month: costTotal(input.cost.month) },
     contribution: { revenueNet: periodMoney.net, commission: commissionPeriod, afterCommission: round2(periodMoney.net - commissionPeriod), apiUsd: round2(periodCost.usd) },
+    unattributed: { awaiting: unattributedBlock('awaiting_attribution'), notCredited: unattributedBlock('not_credited') },
   };
 
   /* Today / yesterday — the same definitions, book-wide. The activity four follow My activity; sales,
