@@ -58,12 +58,23 @@
    - TRAILING: 20% of the first COMMISSION_RECURRING_COUNT_V3 (five) £99 recurring payments actually
      collected, on Build AND Optimise; payment six onward 0%; the Continuing Service (FINDABLE_CONTINUING_GBP) 0%
      (contractor 5.4, 1.2(c)). Approved the moment each is collected.
+   🔴 SALE ATTRIBUTION HOLD (F + H integration, 2026-10-05; src/lib/saleAttribution.ts, the database's
+   public.sale_attribution_holds): the seller is the authorised CREATOR of the client's sign-up. When that is
+   not clear the database stamps NO seller and opens an attribution review. This engine reads the review
+   EXPLICITLY (input.attributionOf) — it does not rely on the missing seller alone:
+   - OPEN or NOT CREDITED → no salesperson commission on ANY payment of that client, and the sale is not in
+     anybody's 30/40/50 count (it cannot move a seller up the ladder while held).
+   - CONFIRMED → the preserved seller follows the normal rules above, with the sale's ORIGINAL dates. It
+     joins its month's count only FROM THE MOMENT IT WAS CONFIRMED: a sale whose place was already locked at
+     its Approval Date before then keeps that place (never cascaded backwards). Anything it earns is owed no
+     earlier than the month it was confirmed in, so it never lands in a payout month already paid.
    Pure: ledger rows in, lines and totals out. Read by fn sales-earnings and fn sales-performance.
    The money facts come ONLY from payment_ledger (Stripe); never from a CRM status.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
 import { isV3Terms, ukDayAtHourIso } from './clientTimeline.ts';
 import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
+import { isAttributionHeld } from './saleAttribution.ts';
 
 /** The flat initial rate every sale earned BEFORE the tiers (and the rate of tier 1). Applied only to a
  *  ledger row with no stamped rate. */
@@ -231,6 +242,11 @@ export interface CommissionInput {
    *  qualifying sale (earns nothing, does not count in its month's ladder); excluded AFTER, nothing that was
    *  approved changes. Pre-v3 sales keep the database's stamp exactly as it is. */
   exclusionsOf?: Map<string, string>;
+  /** Per lead: its sale-attribution review, if it has one (public.sale_attribution_holds: review_status,
+   *  resolved_at). Absent = no review = the stamped seller stands. 'open' / 'not_credited' (or a status
+   *  nobody recognises) = HELD: no commission, not in any ladder. 'confirmed' = normal rules, joining the
+   *  ladder at resolvedAt (see the header). */
+  attributionOf?: Map<string, { status: string; resolvedAt: string | null }>;
   /** "Now", for pending vs approved (defaults to the clock). */
   nowIso?: string;
 }
@@ -240,7 +256,9 @@ export interface CommissionInput {
    count from the moment it was fully refunded or lost to a chargeback, or always when it is a test sale
    (the same facts the database counts). A v3 sale's place = 1 + the earlier sales still in the count AT
    ITS APPROVAL INSTANT (or now, while pending) — so it is re-worked until approved and frozen after. */
-interface LadderEntry { id: string; leadId: string; seller: string | null; month: string; at: string; droppedAt: string | null }
+/* joinedAt: a sale held for attribution review and then CONFIRMED is in the count only from its confirmation
+   (null = always was). A sale still held has no seller here, so it is in nobody's count. */
+interface LadderEntry { id: string; leadId: string; seller: string | null; month: string; at: string; droppedAt: string | null; joinedAt: string | null }
 /** v3: was this sale excluded / disqualified BEFORE its commission was approved? `approvedAtIso` null =
  *  not approved yet (any exclusion counts). An exclusion recorded on or after approval changes nothing. */
 function v3ExcludedBeforeApproval(excludedAt: string | null, approvedAtIso: string | null): boolean {
@@ -254,6 +272,7 @@ function v3LadderPlace(entries: LadderEntry[], me: LadderEntry, asOfIso: string)
     if (e.seller !== me.seller || e.month !== me.month) continue;
     if (e.at.localeCompare(me.at) > 0 || (e.at === me.at && e.id.localeCompare(me.id) > 0)) continue;
     if (e.droppedAt !== null && e.droppedAt <= asOfIso) continue;
+    if (e.joinedAt !== null && e.joinedAt > asOfIso) continue;
     place += 1;
   }
   return place;
@@ -335,7 +354,14 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     }
     const excludedAt = input.exclusionsOf?.get(leadId);
     if (excludedAt) earliest(excludedAt);
-    ladder.push({ id: init.id, leadId, seller: init.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null, month: londonMonthStart(init.occurred_at), at: init.occurred_at, droppedAt: dropped });
+    const att = input.attributionOf?.get(leadId) ?? null;
+    const attHeld = !!att && isAttributionHeld(att.status);
+    ladder.push({
+      id: init.id, leadId, seller: attHeld ? null : init.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null,
+      month: londonMonthStart(init.occurred_at), at: init.occurred_at, droppedAt: dropped,
+      /* Confirmed with no recorded time: fails closed (counts for nobody's locked place before "now"). */
+      joinedAt: att && !attHeld ? (att.resolvedAt ?? nowIso) : null,
+    });
   }
   for (const [leadId, rows] of byLead) {
     const termsRow = input.termsOf?.get(leadId) ?? null;
@@ -347,8 +373,15 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
     const trailingCount = v3 ? COMMISSION_RECURRING_COUNT_V3 : COMMISSION_RECURRING_COUNT;
     rows.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id));
     const payments = rows.filter((r) => (r.kind === 'initial' || r.kind === 'recurring') && r.status === 'succeeded' && r.amount_gbp > 0);
-    const seller = payments.find((p) => p.sold_by_user_id)?.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null;
-    const earns = input.isCommissionable(seller);
+    /* ⛔ THE ATTRIBUTION HOLD, read explicitly: a held sale has no seller for commission, whatever a row says. */
+    const att = input.attributionOf?.get(leadId) ?? null;
+    const attHeld = !!att && isAttributionHeld(att.status);
+    const confirmedAt = att && !attHeld ? (att.resolvedAt ?? nowIso) : null;
+    const confirmedDay = confirmedAt ? londonDayOf(confirmedAt) : null;
+    /* A confirmed sale's money is owed no earlier than the day it was confirmed (never into a paid month). */
+    const notBeforeConfirmed = (day: string) => (confirmedDay && confirmedDay > day ? confirmedDay : day);
+    const seller = attHeld ? null : payments.find((p) => p.sold_by_user_id)?.sold_by_user_id ?? input.sellerOfLead?.get(leadId) ?? null;
+    const earns = !attHeld && input.isCommissionable(seller);
     const events = seller ? input.engagement?.get(seller) ?? null : null;
     const business = input.businessName?.get(leadId) ?? 'Client';
     const rateOf = new Map<string, { rate: number; n: number }>(); // payment row id → its rate and number
@@ -382,6 +415,8 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
         if (v3Excluded) { rate = 0; monthSeq = null; }
         label = testSale ? 'Initial payment · test sale (not counted)' : v3Excluded ? 'Initial payment · excluded before approval (not a qualifying sale)' : monthSeq && monthStart ? `Initial payment · sale ${monthSeq} of ${monthName(monthStart)}` : 'Initial payment';
         if (v3 && !testSale && !v3Excluded) label += approvedNow ? ` · approved ${approvalDay}` : approvalDay ? ` · pending until ${approvalDay}` : ' · pending until the Approval Date';
+        if (attHeld) label += att!.status === 'not_credited' ? ' · not credited to a salesperson (attribution review)' : ' · held: attribution review open';
+        else if (confirmedDay) label += ` · seller confirmed after review ${confirmedDay}`;
         /* Received while the seller was not engaged: earns only if they closed it while engaged. */
         if (earns && !testSale && seller && !engagedAt(events, p.occurred_at)) {
           if (closedWhileEngaged(input.closings?.get(leadId), seller, events, p.occurred_at)) label += ' · closed before the engagement ended';
@@ -411,7 +446,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       const continuing = v3 && p.kind === 'recurring' && p.amount_gbp < FINDABLE_MONTHLY_GBP - 0.005;
       const v3Initial = v3 && n === 1 && p.kind === 'initial' && !testSale;
       /* v3 initial: owed in the month of its Approval Date, paid on the first working day after it. */
-      const day = v3Initial && approvalDay ? approvalDay : londonDayOf(p.occurred_at);
+      const day = notBeforeConfirmed(v3Initial && approvalDay ? approvalDay : londonDayOf(p.occurred_at));
       const pm = monthOf(day);
       const baseStatus: LineStatus = !earns || afterEnd || afterClientEnd || continuing || (testSale && p.kind === 'recurring') ? 'not_commissionable' : paidMonths.has(`${seller}|${pm}`) ? 'paid' : 'due';
       lines.push({
@@ -454,7 +489,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
       }
       const amount = commissionOn(back, pr.rate);
       /* v3: a refund inside the window comes off the commission in the Approval month (it was never owed earlier). */
-      const day = v3Init && approvalDay ? approvalDay : londonDayOf(r.occurred_at);
+      const day = notBeforeConfirmed(v3Init && approvalDay ? approvalDay : londonDayOf(r.occurred_at));
       const pm = monthOf(day);
       if (!held) reversedTotal += amount;
       lines.push({

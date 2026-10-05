@@ -69,6 +69,23 @@ export function engagementTimelines(team: TeamRow[], log: EngagementRow[]): Map<
   return out;
 }
 
+/** Every sale-attribution review (lead → status, resolved_at), for commission.ts's `attributionOf`. Optionally
+ *  for one lead. ⛔ Throws on any read error except a missing view (42P01: the migration is not applied, so no
+ *  review can exist). Shared by loadEarnings and the payment-ledger money notice. */
+export async function loadAttributionHolds(service: Service, leadId?: string): Promise<Map<string, { status: string; resolvedAt: string | null }>> {
+  const out = new Map<string, { status: string; resolvedAt: string | null }>();
+  let q = service.from("sale_attribution_holds").select("lead_id, review_status, resolved_at");
+  if (leadId) q = q.eq("lead_id", leadId);
+  const { data, error } = await q.limit(10000);
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "42P01" || code === "PGRST205") return out;
+    throw new Error(`attribution holds unreadable: ${error.message}`);
+  }
+  for (const r of (data ?? []) as { lead_id: string; review_status: string; resolved_at: string | null }[]) out.set(r.lead_id, { status: r.review_status, resolvedAt: r.resolved_at });
+  return out;
+}
+
 /** "ended" while the newest event is an end (endedAt = its time), else "active". */
 export function engagementOf(events: EngagementEvent[] | undefined): Engagement {
   return engagementEndedNow(events) ? { status: "ended", endedAt: events![events!.length - 1].at } : { status: "active", endedAt: null };
@@ -153,6 +170,12 @@ export async function loadEarnings(service: Service, personId: string | null, to
       if (at) { const cur = exclusionsOf.get(r.lead_id); if (!cur || at < cur) exclusionsOf.set(r.lead_id, at); }
     }
   }
+  /* ⛔ THE SALE-ATTRIBUTION HOLD (F + H integration, 2026-10-05): every lead with an attribution review and its
+     state (view sale_attribution_holds, service role). commission.ts pays nothing on a held sale and lets a
+     confirmed one join the ladder only from its confirmation. Fails CLOSED: any read error throws (no earnings
+     page rather than a held sale shown as earned); only a MISSING view (the migration not applied — no review
+     can exist without it) reads as "no reviews". */
+  const attributionOf = await loadAttributionHolds(service);
   const all = commissionLines({
     ledger, payouts: ((payoutsRes.data ?? []) as PayoutRow[]).map((p) => ({ ...p, amount_gbp: Number(p.amount_gbp) })),
     isCommissionable: (u) => !!u && sales.has(u),
@@ -161,7 +184,7 @@ export async function loadEarnings(service: Service, personId: string | null, to
     engagement: timelines, closings,
     /* pre-sales fix 03: the CLIENT's end — no commission on money taken after it, nothing projected. */
     clientStateOf: new Map([...leads].map(([id, l]) => [id, { endedAt: l.service_terminated_at ?? null, refunded: l.status === "refunded" }])),
-    termsOf, exclusionsOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
+    termsOf, exclusionsOf, attributionOf, nowIso: todayIso.length > 10 ? todayIso : new Date().toISOString(),
   });
   const mine = (seller: string | null) => personId === null || seller === personId;
   const lines = all.lines.filter((l) => mine(l.sellerId));

@@ -11,6 +11,7 @@
 import { commissionLines, type LedgerRow } from "../../../src/lib/commission.ts";
 import { approvalDay } from "../../../src/lib/clientTimeline.ts";
 import { isServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { loadAttributionHolds } from "./earnings.ts";
 
 // deno-lint-ignore no-explicit-any
 type Service = any;
@@ -120,10 +121,15 @@ async function notifyMoney(service: Service, leadId: string | null, kind: string
       const r = tr as { commercial_terms: string; service_route: string | null; initial_paid_at: string | null; access_date: string | null; guarantee_ceased_at: string | null } | null;
       if (r) termsOf.set(leadId, { terms: r.commercial_terms, approvalDay: approvalDay({ terms: r.commercial_terms, route: isServiceRoute(r.service_route) ? r.service_route : null, initialPaidAt: r.initial_paid_at, accessDate: r.access_date, resultsSentAt: L?.remeasure_results_sent_at ?? null, guaranteeCeasedAt: r.guarantee_ceased_at }) });
     }
+    /* ⛔ The attribution hold (F + H integration): a sale under review announces NO commission to anyone.
+       Unreadable → no notice at all (never a wrong "earned"); the ledger row stands. */
+    let attributionOf: Map<string, { status: string; resolvedAt: string | null }>;
+    try { attributionOf = await loadAttributionHolds(service, leadId); }
+    catch (e) { console.error("[payment-ledger] attribution unreadable, notice skipped:", e instanceof Error ? e.message : String(e)); return; }
     const { lines } = commissionLines({
       ledger, payouts: [], isCommissionable: (u) => !!u && u === seller && sellerIsSales,
       clientStateOf: new Map([[leadId, { endedAt: L?.service_terminated_at ?? null, refunded: L?.status === "refunded" }]]),
-      termsOf,
+      termsOf, attributionOf,
     });
     const me = ledger.find((r) => r.kind === kind && r.stripe_object_id === objectId);
     if (!me) return;

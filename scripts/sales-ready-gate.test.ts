@@ -68,7 +68,7 @@ console.log("\n── the database gates ──");
   ok(/drop trigger if exists trg_outreach_leads_sold_by_ready/.test(MIG) && !/create trigger trg_outreach_leads_sold_by_ready/.test(MIG), "the earlier 'credit it to Paul' trigger is gone");
   /* The webhook carries the paid session in the SAME write that makes the lead a client. */
   const wh = read("supabase/functions/stripe-webhook/index.ts");
-  ok(/establishLeadPayment\(service, findableLeadId, \{[\s\S]{0,400}checkoutSessionId: s\.id,/.test(wh), "stripe-webhook passes the paid checkout session with the payment");
+  ok(/establishLeadPayment\(service, findableLeadId, \{[\s\S]{0,900}checkoutSessionId: s\.id,/.test(wh), "stripe-webhook passes the paid checkout session with the payment");
   const ps = read("src/lib/paymentState.ts");
   ok(/paid_checkout_session_id: p\.checkoutSessionId/.test(ps.slice(ps.indexOf("export function firstPaymentPatch"))), "…and the first-payment patch writes it in the same update");
   /* The hold: one rule, SQL and TypeScript in step. */
@@ -83,8 +83,11 @@ console.log("\n── the database gates ──");
     "confirm: the seller is filled only into this lead's ledger rows that had none (the commission rules then apply as normal)");
   const au = read("supabase/functions/admin-users/index.ts");
   ok(au.indexOf("'attribution_review_resolve'") > au.indexOf("Not authorized - no admin role") && /resolve_sale_attribution_review/.test(au), "resolve: an explicit admin-only action");
+  /* F + H integration (2026-10-05): commission now READS THE HOLD (sale_attribution_holds via saleAttribution.ts) —
+     scripts/v3-sales-attribution-integration.test.ts proves what it does with it. It still never re-decides WHO sold
+     (no readiness, no creator records): that is the database's stamp. */
   for (const f of ["src/lib/commission.ts", "supabase/functions/_shared/earnings.ts", "supabase/functions/_shared/payment-ledger.ts"]) {
-    ok(!/salesperson_ready|sale_attribution|not_onboarded|salespersonOnboarding|sale_creations/.test(read(f)), `commission stays Session F's: ${f} is untouched by this work`);
+    ok(!/salesperson_ready|not_onboarded|salespersonOnboarding|sale_creations/.test(read(f)), `commission never re-decides the seller: ${f} reads no readiness or creator records`);
   }
   ok(!/commission_rule|commission_rate|stamp_monthly_commission/.test(live.replace(/create or replace function public\.guard_action[\s\S]*$/, "")), "no commission calculation is changed here");
   ok(/function public\.my_acknowledge_team_guide/.test(MIG) && /function public\.my_onboarding_status/.test(MIG), "a not-ready rep can see their status and acknowledge the guide");

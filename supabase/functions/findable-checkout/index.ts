@@ -460,6 +460,23 @@ Deno.serve(async (req) => {
     form.set("metadata[agreement_acceptance_id]", gateResult.acceptanceId);
     form.set("metadata[commercial_terms]", COMMERCIAL_TERMS_V3);
     form.set("metadata[payment_timing]", OPTION_B_TIMING);
+    /* ⛔ THE SALE CREATOR, FOR TRACING ONLY (F + H integration, 2026-10-05). Stripe session → onboarding_id (THE
+       sign-up) → agreement_acceptance_id → the person who CREATED that sign-up (sale_creations, append-only).
+       The seller is decided by the DATABASE from sale_creations when the payment lands (migration
+       20261010130000) — never from this value, never from who owns the lead, never from whoever opened this
+       session. Recorded here so the Stripe object alone names the chain. "multiple" / "none" / "unknown" are
+       honest answers, never a guess; an unreadable table never blocks a signed client from paying. */
+    {
+      let creator = "unknown";
+      try {
+        const { data: cr, error: crErr } = await service.from("sale_creations").select("creator_user_id").eq("onboarding_id", onboardingId).limit(50);
+        if (!crErr) {
+          const ids = [...new Set(((cr ?? []) as { creator_user_id: string }[]).map((r) => r.creator_user_id))];
+          creator = ids.length === 1 ? ids[0] : ids.length > 1 ? "multiple" : "none";
+        }
+      } catch { /* "unknown" */ }
+      form.set("metadata[signup_creator]", creator);
+    }
     /* Metadata rides on the SUBSCRIPTION too, not just the session: customer.subscription.* and
        invoice.* events carry the subscription, and without this a churn event could not be traced
        back to a lead. The session metadata below covers checkout.session.completed. */

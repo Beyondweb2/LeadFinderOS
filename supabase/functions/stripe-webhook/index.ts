@@ -1290,9 +1290,12 @@ Deno.serve(async (req) => {
                 established = await establishLeadPayment(service, findableLeadId, {
                   amountGbp, paymentDay: paymentDayOf(event.created), paidFor: paidForLabel,
                   stripeCustomerId, stripePaymentIntentId,
-                  /* The paid session: the database stamps the seller from whoever CREATED this sign-up link
-                     (sale_creations), not from who owns the lead now (docs/salesperson-onboarding.md §3a). */
+                  /* The paid session AND the paid sign-up: the database stamps the seller as the authorised
+                     person who CREATED this sign-up (sale_creations, keyed by the onboarding row), not who owns
+                     the lead now and not whoever opened this session after the client signed (migration
+                     20261010130000; docs/salesperson-onboarding.md §3a). ⛔ Never a seller from here. */
                   checkoutSessionId: s.id,
+                  paidSignupId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(onboardingId) ? onboardingId : null,
                 });
               } catch (e) {
                 await recordPaymentFailure("stripe_write_failed", { what: "findable lead -> payment_received", table: "outreach_leads", row_id: findableLeadId, reason: (e as Error).message });
