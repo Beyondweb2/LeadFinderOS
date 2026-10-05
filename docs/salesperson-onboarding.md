@@ -63,7 +63,10 @@ SERVER's answer). Ready = an active, unsuspended sales login, not past an end da
 5. individual, or limited company with the contracting entity recorded (name, number, date the contract with
    the company was confirmed) — a contractor status never recorded counts as missing (a NULL slipped through
    H's first version; fixed in `20261010140000`)
-6. start date
+6. start date, ON OR BEFORE today's London calendar day — a date still to come returns `not_started` (final sales
+   release, 2026-10-05, migration `20261011120000`; E2E-03). Ready from the start date itself. The screen says
+   "Starts on 12 October" (`startsOnWords`); `my_onboarding_status` returns the person's own `starts_on` only while it is
+   still to come.
 7. own LeadFinderOS login (live account, never stored)
 8. current approved team guide acknowledged (the salesperson can do this one themselves)
 

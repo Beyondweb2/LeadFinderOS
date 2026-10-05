@@ -130,7 +130,11 @@ Facts and warnings, not prose. Correct a stale line when you find one; add a rul
   charge — every spend total must exclude it (`.or('api_type.is.null,api_type.neq.guard')`). Two pause
   levels, one control: "prospecting paused" keeps client measurement running; "all_stop" stops everything
   paid. Suspension = `team_members.suspended_at` (role kept, reads work). ⛔ Sales never sees a cost:
-  refusals say `USAGE_PAUSED_DETAIL`. ⛔ Sales has no CSV export (Paul); Copy Numbers goes through
+  refusals say `USAGE_PAUSED_DETAIL` — EXCEPT an incomplete onboarding (`not_onboarded`), which is said as itself
+  (`NOT_READY_DETAIL`; edge body `error: 'not_ready_to_sell'`, 403). Database actions still collapse to `usage_paused`, so
+  the browser re-words those ONLY when the person's own server-read status is loaded, not ready and not suspended — one
+  rule, `src/lib/readinessWords.ts` (wired into `refusalText`, `campaignErrorText`, CSV `callErrorText`, `edgeErrorMessage`,
+  Find Leads). A genuine pause / stop / limit / suspension keeps its words. ⛔ Sales has no CSV export (Paul); Copy Numbers goes through
   `log_data_access` first. `lead_identity_lookup` is MASKED for Sales — internal code that needs the
   real lead id reads `_lead_identity_rows`.
   ⛔ **Sales readiness (2026-09-28, `docs/sales-readiness.md`)**: the Sales Dashboard's numbers come from
@@ -1030,6 +1034,10 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 **State and navigation**
 - **The URL is for WHAT you are looking at; `usePersistedState` for HOW the page is configured.**
   ⛔ Never persist an open dialog. A modal must not arrive over the thing that was clicked.
+- ⛔ **Leaving the lead workspace goes through ONE guard** (`src/components/UnsavedDraftGuard.tsx`, final sales release): a field
+  holding typed-but-unsaved text marks itself (`useUnsavedDraft`); Escape / outside click / X / Previous-Next ask "Discard
+  unsaved changes?" ([Keep editing] default) only when something is marked, and Escape on the prompt = Keep editing. A new
+  draft field in the workspace must mark itself. A save that closes the popup is not a leave.
 - ⛔ **The lead workspace header draws each fact once** (`src/lib/workspaceHeader.ts`): status pill +
   owner, then the Next Action BAR (display; Edit opens the Work tab's ONE `NextActionForm`), then a quiet
   last contact. A sales-state pill joins the status only through `headerStateShown` — never "Meeting
@@ -1212,7 +1220,8 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 - ⛔ **Salesperson paperwork (contractor agreement, privacy notice) is HANDLED EXTERNALLY BY PAUL — NOT ENFORCED IN
   LEADFINDEROS** (2026-10-05, migration `20261010140000`). Never part of Ready to Sell; never a salesperson-facing
   button, tick or upload; Team-page records are reference only. Ready to Sell = 18+, right to work, bank details, VAT,
-  individual/company, start date, own login, current team guide (`docs/salesperson-onboarding.md` §0, §3). This does
+  individual/company, a start date ON OR BEFORE today's London day (a future one = `not_started`, migration
+  `20261011120000`, "Starts on 12 October"), own login, current team guide (`docs/salesperson-onboarding.md` §0, §3). This does
   NOT touch the CLIENT v3 agreement-before-payment gate.
 - Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
   lists and Paul's decisions. (The `instantly-poll-run` cron is gone.) Step 5 is SPA-only but Paul's standing

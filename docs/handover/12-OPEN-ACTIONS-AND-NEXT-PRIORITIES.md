@@ -34,12 +34,8 @@ Paul may have done some of the manual ones since.*
 
 ## PRODUCT NEXT (likely priorities)
 
-0. **CSV IMPORT — FIXED ON BRANCH `fix/csv-lead-import`, NOT MERGED / NOT DEPLOYED** (2026-10-05;
-   `docs/pre-sales-certification/csv-import-fix.md` — SQL first, then `security-admin`). The original report:
-   **CSV IMPORT — BROKEN / NEEDS FIX** (found 2026-10-05 by the ownership work, pre-existing, separate bug): Outreach CSV
-   import (`bulkImportLeads`, `src/hooks/useOutreach.ts`) inserts `list_type: 'imported'`, but the live
-   `outreach_leads_list_type_check` allows only `no_website` / `broken_website` / `manual`, so every imported row is
-   refused and the import appears to add nothing. Decide the right `list_type` (or widen the CHECK) in its own branch.
+0. ~~CSV import~~ — **DEPLOYED 2026-10-06** in the final sales release (`docs/pre-sales-certification/final-sales-product-release.md`),
+   with the full prospect crawl + audit window, the compact Outreach rows and the attribution review admin. Not open any more.
 0. **Client agreement before payment — waits on Paul's rewritten client + salesperson agreements.** Not built; the
    payment state machine and the current agreement flow are unchanged until the final documents arrive.
 1. **Trade templates for Website Build.** Only one template exists (MCL locksmith, `mcl-local-trades`, pinned to a live
