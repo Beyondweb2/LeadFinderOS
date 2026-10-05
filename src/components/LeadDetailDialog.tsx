@@ -50,6 +50,7 @@ import { FindEmailButton } from '@/components/FindEmailButton';
 import { SocialLinks, SocialProfilesPanel } from '@/components/SocialLinks';
 import { cn } from '@/lib/utils';
 import { useLeadPermissions } from '@/hooks/useLeadPermissions';
+import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
 import { markLeadInterested } from '@/lib/leadQuickActions';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import { useToast } from '@/hooks/use-toast';
@@ -508,6 +509,8 @@ function LeadDetailBody({
           sign-up link, WhatsApp), SCRIPTS (call script / voice note), PROSPECT (who they are, the AI
           check, contact), HISTORY (everything recorded), CLIENT (admin only: delivery, payment, private
           note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
+      {/* A salesperson who is not Ready to Sell (2026-10-05): calls, messages and links are refused on the server; this says why. */}
+      <div className="mx-3 mt-2.5 sm:mx-5 empty:hidden"><NotReadyToSellBanner compact /></div>
       <QuickCloseNav.Provider value={{ openClose: () => goTab('close') }}>
       <Tabs value={tab} onValueChange={(v) => goTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
         <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
