@@ -91,7 +91,11 @@ function summariseRow(row: LeadCrawlRowLike | null | undefined): LeadCrawlSummar
   const crawledAt = r.checked_at || row.created_at || null;
   const fetchFailed = r.signals?.fetchFailed === true;
   const completeness = String(full?.completeness ?? '');
+  /* ⛔ A PROSPECT CRAWL THAT REACHED ITS PAGE LIMIT IS PARTIAL (2026-10-05, prospectCrawl.ts): it read
+     the first N pages and recorded the rest as found-but-not-read. Never "complete", never "full". */
+  const capped = exhaustive && full?.coverage?.capped === true;
   const status: CrawlStatus = fetchFailed || completeness === 'failed' ? 'failed'
+    : capped ? 'partial'
     : exhaustive ? (completeness === 'complete' ? 'complete' : 'complete_with_failures')
     : full ? 'partial'
     : 'complete';
@@ -105,7 +109,8 @@ function summariseRow(row: LeadCrawlRowLike | null | undefined): LeadCrawlSummar
   const pagesText = exhaustive
     ? `${f(pagesDiscovered ?? 0)} discovered · ${f(num(st.pagesOk) ?? 0)} fetched · ${f(pagesFailed ?? 0)} failed · ${f(pagesSkipped ?? 0)} skipped`
     : pagesFetched != null ? `${pagesFetched} page${pagesFetched === 1 ? '' : 's'} read${pagesDiscovered != null ? ` of ${f(pagesDiscovered)} found` : ''}` : 'pages not recorded';
-  const kind = mode === 'full' ? 'Full crawl' : mode === 'capped' ? 'Capped crawl (old 60-page limit — not a full crawl)' : 'Quick crawl (automatic profile, up to 12 pages)';
+  const kind = capped ? `Prospect crawl (capped at ${f(full?.coverage?.pageCap ?? num(st.pagesFetched) ?? 0)} pages — not the whole site)`
+    : mode === 'full' ? 'Full crawl' : mode === 'capped' ? 'Capped crawl (old 60-page limit — not a full crawl)' : 'Quick crawl (automatic profile, up to 12 pages)';
   return {
     status, mode, crawledAt, url: row.url || r.url || null, servedUrl: (full?.servedUrl as string | undefined) ?? null,
     requestedFrom: row.requested_from ?? null, pagesDiscovered, pagesFetched, pagesFailed, pagesSkipped,

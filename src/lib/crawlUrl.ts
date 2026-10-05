@@ -19,7 +19,7 @@
 
 export type SkipReason =
   | 'off_site' | 'not_http' | 'asset' | 'private_path' | 'robots_disallow' | 'query_trap'
-  | 'path_trap' | 'too_long' | 'safety_ceiling' | 'not_html' | 'removed_since_last_crawl';
+  | 'path_trap' | 'too_long' | 'safety_ceiling' | 'not_html' | 'removed_since_last_crawl' | 'coverage_cap';
 
 export const SKIP_REASON_LABELS: Record<SkipReason, string> = {
   off_site: 'another website',
@@ -33,6 +33,7 @@ export const SKIP_REASON_LABELS: Record<SkipReason, string> = {
   safety_ceiling: 'past the runaway-site safety ceiling',
   not_html: 'not an HTML page',
   removed_since_last_crawl: 'was on the last crawl, now gone',
+  coverage_cap: 'found but not read — the prospect crawl reached its page limit',
 };
 
 /** Parameters that never change the page: removed, never a reason to skip. */
@@ -85,6 +86,40 @@ export function parseRobots(body: string | null | undefined): RobotsRules {
   }
   out.sitemaps = [...new Set(out.sitemaps)];
   return out;
+}
+
+/** The rules ONE named crawler obeys (2026-10-05, the prospect site audit). The standard reading: a
+ *  crawler follows the group whose User-agent names its token (case-insensitive, longest match) and
+ *  ONLY that group; with no such group it follows `*`. `group` says which applied, so a finding can
+ *  quote the line it rests on. Sitemaps are not read here (parseRobots owns them). */
+export function robotsRulesFor(body: string | null | undefined, token: string): { rules: RobotsRules; group: string | null } {
+  const groups: Array<{ agents: string[]; allow: string[]; disallow: string[] }> = [];
+  let cur: { agents: string[]; allow: string[]; disallow: string[] } | null = null;
+  let inRules = false;
+  for (const raw of (body || '').split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    const m = /^([a-z-]+)\s*:\s*(.*)$/i.exec(line);
+    if (!m) continue;
+    const field = m[1].toLowerCase(), value = m[2].trim();
+    if (field === 'user-agent') {
+      if (!cur || inRules) { cur = { agents: [], allow: [], disallow: [] }; groups.push(cur); inRules = false; }
+      cur.agents.push(value.toLowerCase());
+      continue;
+    }
+    if (field !== 'allow' && field !== 'disallow') continue;
+    if (!cur) continue;
+    inRules = true;
+    if (value) (field === 'allow' ? cur.allow : cur.disallow).push(value);
+  }
+  const t = token.toLowerCase();
+  let best: { g: (typeof groups)[number]; len: number } | null = null;
+  for (const g of groups) for (const a of g.agents) if (a !== '*' && t.includes(a) && (!best || a.length > best.len)) best = { g, len: a.length };
+  const pick = best?.g ?? groups.find((g) => g.agents.includes('*')) ?? null;
+  if (!pick) return { rules: { allow: [], disallow: [], sitemaps: [] }, group: null };
+  const key = best ? pick.agents.find((a) => t.includes(a)) ?? '*' : '*';
+  // Several groups may name the same agent; the standard merges them.
+  const same = groups.filter((g) => g.agents.includes(key));
+  return { rules: { allow: same.flatMap((g) => g.allow), disallow: same.flatMap((g) => g.disallow), sitemaps: [] }, group: key };
 }
 
 function ruleMatches(rule: string, pathAndQuery: string): boolean {

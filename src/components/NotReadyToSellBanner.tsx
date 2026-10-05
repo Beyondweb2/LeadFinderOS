@@ -3,14 +3,9 @@ import { ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useMyReadiness } from '@/hooks/useMyReadiness';
-import { MISSING_KEY_WORDS } from '@/lib/salespersonOnboarding';
+import { missingItemWords } from '@/lib/readinessWords';
 
 const PAPERWORK_KEYS: ReadonlySet<string> = new Set(['agreement', 'privacy_notice']);
-/* Short words for the banner's "Waiting on" line (the Team page keeps the full checklist labels). */
-const BANNER_WORDS: Record<string, string> = {
-  age_18: '18+ confirmed', right_to_work: 'Right to work', bank_details: 'Bank details', vat: 'VAT status',
-  contractor_status: 'Individual or company', start_date: 'Start date', login: 'Your login', team_guide: 'Team guide',
-};
 
 /* "You are not Ready to Sell yet" — shown to a salesperson until their onboarding is complete
    (2026-10-05, docs/salesperson-onboarding.md). Says what is outstanding in plain words; the one step they
@@ -36,7 +31,7 @@ export function NotReadyToSellBanner({ compact = false }: { compact?: boolean })
             <>
               <p className="text-xs">Calls, messages, claiming leads, checks, Find Leads and sign-up links are paused until your onboarding is complete.</p>
               {!compact && others.length > 0 && (
-                <p className="text-xs text-muted-foreground">Waiting on: {others.map((k) => BANNER_WORDS[k] ?? MISSING_KEY_WORDS[k] ?? k).join(' · ')}</p>
+                <p className="text-xs text-muted-foreground">Waiting on: {missingItemWords(others, me.startsOn).join(' · ')}</p>
               )}
               {canAckGuide && (
                 <Button size="sm" variant="outline" className="mt-1 h-auto min-h-7 max-w-full whitespace-normal py-1 text-left text-xs" disabled={busy} onClick={async () => {

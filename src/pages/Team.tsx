@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
-import { AttributionReviewsCard, OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel, type AttributionReview } from '@/components/SalespersonOnboardingPanel';
+import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
+import { AttributionReviewsCard } from '@/components/AttributionReviews';
+import type { AttributionPerson, AttributionReview } from '@/lib/attributionReviewView';
 import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
@@ -97,7 +99,9 @@ export default function Team() {
     queryFn: async () => {
       const r = await call('attribution_reviews_list');
       if (!r.ok) throw new Error(String(r.error ?? 'could not load attribution reviews'));
-      return (r.reviews ?? []) as AttributionReview[];
+      /* serverReady: the list came from the admin-users that resolves WITH a chosen seller (it sends people). An older
+         admin-users would confirm the CLAIMED seller whoever was picked, so the card will not resolve against it. */
+      return { reviews: (r.reviews ?? []) as AttributionReview[], people: (r.people ?? []) as AttributionPerson[], serverReady: Array.isArray(r.people) };
     },
   });
   const saveOnboarding = async (userId: string, patch: Partial<OnboardingRecord>): Promise<boolean> => {
@@ -227,17 +231,21 @@ export default function Team() {
         )}
       </Card>
 
-      {reviews.data && reviews.data.some((r) => r.status === 'open') && (
-        <Card className="p-4 space-y-2 border-amber-500/50">
-          <h2 className="font-semibold">Sales needing an attribution review</h2>
-          <p className="text-xs text-muted-foreground">These clients paid on a lead held by a salesperson who was not authorised to create the sale. The seller has not been changed. Decide each one.</p>
-          <AttributionReviewsCard reviews={reviews.data} sellerName={(id) => members.find((x) => x.user_id === id)?.display_name ?? 'A former team member'} call={call} onChanged={(message, error) => {
-            if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
-            else toast({ title: message ?? 'Saved' });
-            void qc.invalidateQueries({ queryKey: ['team', 'attribution-reviews'] });
-          }} />
-        </Card>
-      )}
+      {reviews.error && <p className="text-xs text-destructive">Attribution reviews could not be loaded: {String((reviews.error as Error).message)}</p>}
+      {reviews.data && reviews.data.reviews.length > 0 && (() => {
+        const openCount = reviews.data.reviews.filter((r) => r.status === 'open').length;
+        return (
+          <Card className={openCount ? 'p-4 space-y-2 border-amber-500/50' : 'p-4 space-y-2'}>
+            <h2 className="font-semibold">{openCount ? `Sales needing an attribution review (${openCount})` : 'Attribution reviews'}</h2>
+            {openCount > 0 && <p className="text-xs text-muted-foreground">These clients paid, but who sold it is not clear, so no seller has been recorded. Their payments count as business revenue, never as anyone's sales or commission, until you decide. Check the evidence, then confirm the seller or record Not credited. Each decision is final and kept with the sale.</p>}
+            <AttributionReviewsCard reviews={reviews.data.reviews} people={reviews.data.people} serverReady={reviews.data.serverReady} call={call} onChanged={(message, error) => {
+              if (error) toast({ title: 'Not done', description: error, variant: 'destructive' });
+              else toast({ title: message ?? 'Saved' });
+              void qc.invalidateQueries({ queryKey: ['team', 'attribution-reviews'] });
+            }} />
+          </Card>
+        );
+      })()}
 
       {onboarding.data && (
         <Card className="p-4 space-y-2">

@@ -49,7 +49,7 @@ export interface ProtectionLimits {
 export const GUARD_ACTIONS = [
   'lead_search', 'place_details', 'enrich', 'site_scrape', 'hook_audit', 'hook_preview', 'ai_draft',
   'prospect_preview', 'niche_check', 'audit_manual', 'admin_ai', 'claim', 'lead_add', 'lead_lookup',
-  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check',
+  'copy_numbers', 'export_csv', 'whatsapp_send', 'whatsapp_queue', 'sales_check', 'lead_import',
 ] as const;
 export type GuardAction = typeof GUARD_ACTIONS[number];
 
@@ -89,6 +89,10 @@ export const DEFAULT_PROTECTION_LIMITS: ProtectionLimits = {
        one. Planned with the Apify monthly cap confirmed / raised to about $150 (fixes-07 §6); change it on
        the Security panel once real usage is seen. */
     sales_check: { paid: true, per_day: 30 },
+    /* CSV import (2026-10-05, fn-less: public.import_leads, migration 20261010170000). One guard row per call — the
+       check AND the import each count — with the call's row count as its units. Unpaid (no provider is called), so
+       the prospecting pause never blocks it. max_rows equals import_leads' own per-call ceiling. */
+    lead_import: { paid: false, per_hour: 30, max_rows: 500, rows_per_day: 3000 },
   },
 };
 
@@ -118,8 +122,14 @@ export function isProtectionMode(v: unknown): v is ProtectionMode {
 /** What a salesperson sees for ANY guard refusal — never a cost, never which provider (Paul, 2026-09-29). */
 export const USAGE_PAUSED_DETAIL = 'Usage temporarily paused — contact Paul';
 
-/** The sentence for a refusal. The admin is told which control is holding them; a salesperson never is. */
+/** What a salesperson sees when the guard refused them because their onboarding is incomplete (final sales
+ *  release, 2026-10-05, E2E-02) — the real cause, never "usage paused". Not a cost, not a control. */
+export const NOT_READY_DETAIL = 'Complete your onboarding before using this. Paul can tell you what is still needed.';
+
+/** The sentence for a refusal. The admin is told which control is holding them; a salesperson never is —
+ *  except that an incomplete onboarding ('not_onboarded') is said as itself. */
 export function guardRefusalDetail(reason: string | null | undefined, role: string | null | undefined): string {
+  if (role !== 'admin' && reason === 'not_onboarded') return NOT_READY_DETAIL;
   if (role !== 'admin') return USAGE_PAUSED_DETAIL;
   if (reason === 'all_stop') return 'The emergency stop is on — every paid action is paused. Release it on the API Usage page.';
   if (reason === 'paused') return 'Paid prospecting actions are paused. Resume them on the API Usage page.';

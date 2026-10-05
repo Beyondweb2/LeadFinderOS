@@ -353,8 +353,9 @@ export const BLOCKING_KEYS = [
 ] as const;
 /** Shown to Paul for reference only — never blocking (paperwork handled outside the app; Schedule 2 optional). */
 export const REFERENCE_KEYS = ['agreement', 'privacy_notice', 'schedule2'] as const;
-/** The other keys the server can return: the person is not an active salesperson right now. */
-export const INACTIVE_KEYS = ['not_sales', 'suspended', 'ended'] as const;
+/** The other keys the server can return: the person is not an active salesperson right now.
+ *  'not_started' (final sales release, 2026-10-05, migration 20261011120000): a start date still to come. */
+export const INACTIVE_KEYS = ['not_sales', 'suspended', 'ended', 'not_started'] as const;
 export type ChecklistKey = typeof BLOCKING_KEYS[number] | typeof REFERENCE_KEYS[number];
 
 export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
@@ -404,6 +405,17 @@ export interface LeaverState {
   deletionConfirmed: boolean;
 }
 
+/** "Starts on 12 October" — the year only when it is not this UK year. Pure; the ONE wording for a start date to come. */
+export function startsOnWords(day: string, today: string = ukToday()): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return 'Start date to come';
+  const sameYear = day.slice(0, 4) === today.slice(0, 4);
+  return `Starts on ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }), timeZone: 'UTC' })}`;
+}
+/** Ready from the start date itself: a start date on or before today (UK day). Absent = not started. */
+export function startDateReached(startDate: string | null | undefined, today: string = ukToday()): boolean {
+  return !!startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate <= today;
+}
 const fmt = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 export function leaverStateOf(r: OnboardingRecord | null, member: MemberState, today: string): LeaverState {
@@ -489,8 +501,9 @@ export function onboardingSummary(
       : 'Not asked yet.');
   if (r.contractor_type === 'limited_company') notes.push('Limited company: the checklist says speak to an adviser before they start, because the contract must be with their company.');
 
-  /* 8. Start date. */
-  add('start_date', !!r.start_date, r.start_date ? fmt(r.start_date) : 'Not set.');
+  /* 8. Start date — set AND arrived (final sales release, 2026-10-05): a future start date is not Ready to Sell. */
+  add('start_date', startDateReached(r.start_date, today),
+    !r.start_date ? 'Not set.' : startDateReached(r.start_date, today) ? fmt(r.start_date) : `${startsOnWords(r.start_date, today)} — not Ready to Sell before then.`);
 
   /* 9. Their own LeadFinderOS login — from the live account, never stored. */
   const loginLive = member.role === 'sales' && member.status === 'active';
@@ -545,6 +558,7 @@ export const MISSING_KEY_WORDS: Record<string, string> = {
   not_sales: 'A salesperson login',
   suspended: 'Sales access is suspended',
   ended: 'Your engagement has ended',
+  not_started: 'Your start date has not arrived yet',
 };
 
 /** The error codes fn admin-users can return, in plain words. */

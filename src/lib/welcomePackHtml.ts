@@ -3,7 +3,7 @@
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
 import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
-  FINDABLE_SETUP_PRICE_GBP, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
+  FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
 import { qrSvg } from './qrSvg.ts';
@@ -462,7 +462,9 @@ Thanks,
    always yours"). Each list below says only what that route's agreement says (clauses 3.3, 8, 9.4).
    An unknown route names no ownership or take-down terms at all. */
 const GUARANTEE_KEY_POINT = 'If AI names you no more often at your four-week re-check, you can claim your £99 back within 14 days, and the agreement ends.';
-const MONTHLY_KEY_POINT = 'Monthly payments start six weeks after your first payment.';
+/* v3 Option B (final release, 2026-10-05): the first monthly is the day after the Refund Window — never "six weeks
+   after your first payment", which contradicted the agreement the client signs (clauses 3.1, 5.6). */
+const MONTHLY_KEY_POINT = `Monthly payments start ${MONTHLY_START_V3_WORDS}.`;
 export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', readonly string[]> = {
   build: [
     `Your service has a minimum term: ${totalPaymentsFor('build')} payments, counting your first. The remaining payments are owed even if you stop early.`,
@@ -618,7 +620,7 @@ function planPage1(name: string, totalPayments: number | null | undefined, amoun
               HTML entities — "&pound;" here would print those six letters to a paying client. */''}
         ${!current
           ? lead('Payments.', 'Your agreed payment schedule continues under the terms you signed up to.')
-          : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. Six weeks after your first payment, £${FINDABLE_MONTHLY_GBP} a month begins${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
+          : lead('Payments.', `Your £${FINDABLE_SETUP_PRICE_GBP} covers the measurement, the first round of work and the re-measure. £${FINDABLE_MONTHLY_GBP} a month begins ${MONTHLY_START_V3_WORDS}${termPhrase(totalPayments)}. It pays for the monthly work above, plus ${upkeepPhrase(totalPayments)}. We will email you before it starts.`)}
       </div>`;
 }
 

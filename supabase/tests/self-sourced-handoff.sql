@@ -3,6 +3,35 @@
 -- commit: every fixture (fake auth users on example.invalid, roles, leads, audits, messages) disappears.
 -- How to run: see docs/multi-user.md ("Re-running the security tests").
 begin;
+-- READY-TO-SELL FIXTURE (2026-10-05, E2E certification; inside this suite's own rolled-back transaction). Since
+-- migration 20261010120000 a salesperson who has not finished onboarding is refused claims, calls, campaigns and
+-- queueing, so this suite could no longer reach its own rules. The readiness rule itself is tested by
+-- salesperson-onboarding-rls.sql and ready-to-sell-paperwork.sql. Here: every FAKE salesperson the suite creates
+-- (auth.users email ending .invalid) is onboarded complete, so pre-gate suites exercise their own rules again.
+create function public.qa_tmp_autoonboard() returns trigger language plpgsql security definer set search_path = public as $q$
+begin
+  if new.role = 'sales' and exists (select 1 from auth.users u where u.id = new.user_id and u.email like '%.invalid') then
+    insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+      rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+    values (new.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+      (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date)
+    on conflict (user_id) do nothing;
+  end if;
+  return new;
+end $q$;
+create trigger qa_tmp_autoonboard after insert on public.user_roles for each row execute function public.qa_tmp_autoonboard();
+-- Existing sales accounts (Test, test1) made Ready INSIDE this rolled-back transaction only.
+insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+  rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+select r.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+  (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date
+from public.user_roles r where r.role = 'sales'
+on conflict (user_id) do update set age_18_confirmed_on = excluded.age_18_confirmed_on, rtw_method = excluded.rtw_method,
+  rtw_checked_on = excluded.rtw_checked_on, rtw_checked_by = excluded.rtw_checked_by, rtw_result = excluded.rtw_result,
+  rtw_evidence_ref = excluded.rtw_evidence_ref, bank_details_received_on = excluded.bank_details_received_on,
+  vat_registered = excluded.vat_registered, contractor_type = excluded.contractor_type, start_date = excluded.start_date,
+  team_guide_version = excluded.team_guide_version, team_guide_acknowledged_on = excluded.team_guide_acknowledged_on, end_date = null;
+
 set local lock_timeout = '3s';
 set local statement_timeout = '30s';
 create temp table t_results (n serial, name text, ok boolean, detail text);
@@ -153,16 +182,17 @@ do $$ begin
   exception when others then insert into t_results (name, ok, detail) values ('anon cannot read report events', sqlstate = '42501', sqlerrm); end;
 end $$;
 
--- ── payment (as the webhook / Mark Paid would): the salesperson is stamped, then survives reassignment ──
+-- ── payment (as Mark Paid would, no sign-up): since 2026-10-05 no seller is stamped and the sale is held for review ──
 reset role;
 do $$ declare v record; v_lead uuid := (select val from t_ids where k = 'a_lead'); begin
   update public.outreach_leads set status = 'payment_received', amount_paid = 99, payment_date = current_date where id = v_lead;
   select sold_by_user_id, sold_at into v from public.outreach_leads where id = v_lead;
-  insert into t_results (name, ok, detail) values ('payment stamps the salesperson who held the lead', v.sold_by_user_id = 'eeeeeeee-0000-4000-8000-00000000000a' and v.sold_at is not null, row_to_json(v)::text);
+  insert into t_results (name, ok, detail) values ('payment with no sign-up creator: NO seller (not the holder), decided once, held for review', v.sold_by_user_id is null and v.sold_at is not null
+    and exists (select 1 from public.sale_attribution_reviews r where r.lead_id = v_lead), row_to_json(v)::text);
   update public.outreach_leads set assigned_to_user_id = (select val from t_ids where k = 'admin') where id = v_lead;
   update public.outreach_leads set status = 'in_delivery', sold_by_user_id = (select val from t_ids where k = 'admin') where id = v_lead;
   select sold_by_user_id into v from public.outreach_leads where id = v_lead;
-  insert into t_results (name, ok, detail) values ('reassignment and a direct overwrite never erase it', v.sold_by_user_id = 'eeeeeeee-0000-4000-8000-00000000000a', row_to_json(v)::text);
+  insert into t_results (name, ok, detail) values ('reassignment and a direct overwrite never set a seller (only Paul''s review does)', v.sold_by_user_id is null, row_to_json(v)::text);
   select count(*) into v from public.outreach_leads where id = (select val from t_ids where k = 'a_fb') and sold_by_user_id is not null;
   insert into t_results (name, ok, detail) values ('a prospect has no sale stamp', v.count = 0, v.count::text);
 end $$;

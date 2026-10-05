@@ -36,6 +36,7 @@ import { creditRepliesToSends, SITE_TRACKING_START } from './templateAttribution
 import { onboardingLinkStatus } from './onboardingLinkStatus.ts';
 import { CONVERSATION_OUTCOMES, NOT_INTERESTED_STATUSES, REACHED_OUTCOMES } from './leadState.ts';
 import { holderTimeline } from './holderTimeline.ts';
+import { saleCreditOf } from './saleAttribution.ts';
 import { londonDay, londonMidnightMs } from './reportingPeriod.ts';
 
 export interface PerfLead {
@@ -50,6 +51,8 @@ export interface PerfLead {
   lead_source: string | null;
   /** Stamped once at payment (trg_outreach_leads_sold_by); survives reassignment. Absent on older reads. */
   sold_by_user_id?: string | null;
+  /** Set when attribution was decided — with NO seller while the sale is under review (saleCreditOf). */
+  sold_at?: string | null;
 }
 export interface PerfMessage {
   lead_id: string;
@@ -259,8 +262,11 @@ export function foldSalesPerformanceWithFacts(input: FoldInput): { result: Sales
 
     /* ⛔ A WIN BELONGS TO WHOEVER MADE THE SALE (sold_by_user_id, stamped at payment), not to whoever
        holds the lead now: a client reassigned after payment stays won for the seller and is never
-       counted for the new holder. Older clients with no stamp fall back to the holder, as before. */
-    const won = isPaidLead(lead) && (personId === null || !lead.sold_by_user_id || lead.sold_by_user_id === personId);
+       counted for the new holder. Older clients with no stamp fall back to the holder, as before.
+       ⛔ A sale under ATTRIBUTION REVIEW (or not credited) is no person's win (saleCreditOf: decided, no seller) —
+       not the holder's, not the claimed seller's. It stays a business win on the whole-team view. */
+    const credit = saleCreditOf({ leadSeller: lead.sold_by_user_id ?? null, leadSoldAt: lead.sold_at ?? null });
+    const won = isPaidLead(lead) && (personId === null || credit.kind === 'unstamped' || (credit.kind === 'seller' && credit.userId === personId));
     const status = String(lead.status ?? '');
     const f: LeadFacts = {
       lead,

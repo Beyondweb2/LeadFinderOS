@@ -106,9 +106,11 @@ for (const route of ['build', 'optimise'] as const) {
   ok(cols.plan_tier === planTierForRoute(route) && cols.website_addon === (route === 'build'), `${route}: writes plan_tier=${cols.plan_tier}, website_addon=${cols.website_addon}`);
   ok(serviceRouteFromRow(cols) === route, `${route}: the checkout reads ${route} back off those columns`);
   ok(totalPaymentsFor(serviceRouteFromRow(cols)!) === (route === 'build' ? 12 : 6), `${route}: → ${route === 'build' ? 12 : 6} payments`);
-  /* 2026-10-04 (M-011 / A-29): the minimum term is on the card, and the timing reads "six weeks after sign-up" like offerSummaryFor. */
+  /* 2026-10-04 (M-011 / A-29): the minimum term is on the card. 2026-10-05 (E2E-11): the timing is the v3 Option B
+     words, like offerSummaryFor and the script — the card said "six weeks after sign-up", against the agreement. */
   const n = route === 'build' ? 12 : 6;
-  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99 a month, starting six weeks after sign-up | ${n} payments in total, today's included — a ${n}-month minimum term`, `${route}: the screen shows £99 today / £99 a month from six weeks / ${n} payments, a ${n}-month minimum term`);
+  ok(routeTermsLines(route).join(' | ') === `£99 today | Then £99 a month, starting the day after your 14-day refund window closes (normally about six weeks after you give us access) | ${n} payments in total, today's included — a ${n}-month minimum term`, `${route}: the screen shows £99 today / £99 a month from the day after the refund window / ${n} payments, a ${n}-month minimum term`);
+  ok(!/after sign-?up/i.test(routeTermsLines(route).join(' ')), `${route}: the card never times the monthly from sign-up (E2E-11)`);
   const msg = quickCloseMessage('ABC', 'https://checkout.stripe.com/x', route) + quickCloseScript(route);
   ok(msg.includes(`${route === 'build' ? 12 : 6} payments in total`) && !msg.includes(`${route === 'build' ? 6 : 12} payments`), `${route}: the message and script name ONLY this route's count`);
 }

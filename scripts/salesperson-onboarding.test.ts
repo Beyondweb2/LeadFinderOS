@@ -92,8 +92,9 @@ console.log("\n── the server's answer is the one shown ──");
 
 console.log("\n── the keys match the database rule ──");
 {
-  /* The LIVE definition is the latest migration that replaces the function (20261010140000, paperwork removed). */
-  const LATEST = read("supabase/migrations/20261010140000_ready_to_sell_without_paperwork.sql");
+  /* The LIVE definition is the latest migration that replaces the function (20261011120000: paperwork removed in
+     20261010140000, plus a start date still to come = not_started, final sales release 2026-10-05). */
+  const LATEST = read("supabase/migrations/20261011120000_ready_to_sell_start_date.sql");
   const fn = LATEST.slice(LATEST.indexOf("create or replace function public.salesperson_onboarding_missing"), LATEST.indexOf("revoke all on function public.salesperson_onboarding_missing"));
   const emitted = new Set([...fn.matchAll(/'([a-z_0-9]+)'::text/g)].map((m) => m[1]).concat([...fn.matchAll(/array\['([a-z_]+)'\]/g)].map((m) => m[1])));
   for (const k of [...BLOCKING_KEYS, ...INACTIVE_KEYS]) ok(emitted.has(k), `the database rule can return "${k}"`);
@@ -101,7 +102,7 @@ console.log("\n── the keys match the database rule ──");
   ok(!emitted.has("agreement") && !emitted.has("privacy_notice") && !/contractor_agreement|privacy_notice/.test(fn.replace(/--[^\n]*/g, "")), "the database rule never checks the contractor agreement or privacy notice");
   ok(!/tps|ctps|phone_tps/i.test(fn), "the database rule never reads TPS/CTPS");
   ok((fn.match(/d\.status = 'approved'/g) ?? []).length === 1 && /d\.kind = 'team_guide'/.test(fn), "the only document the rule reads is the current APPROVED team guide");
-  const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.slice(0, 14) > "20261010140000").filter((n) => /salesperson_onboarding_missing/.test(read(`supabase/migrations/${n}`)));
+  const migs = readdirSync(path.join(ROOT, "supabase/migrations")).filter((n) => n.slice(0, 14) > "20261011120000").filter((n) => /salesperson_onboarding_missing/.test(read(`supabase/migrations/${n}`)));
   ok(migs.length === 0, `no later migration redefines the rule (${migs.join(", ") || "none"})`);
   ok(!/schedule2/.test(fn), "Schedule 2 never blocks in the database either");
 }

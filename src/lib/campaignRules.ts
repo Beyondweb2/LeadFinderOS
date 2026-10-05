@@ -11,6 +11,7 @@
    ⛔ Status is DERIVED from the counts, never stored: a stored status freezes at a stale rule (CLAUDE.md §6).
    Pure: no React, no I/O.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
+import { onboardingWordsForPausedRefusal } from './readinessWords.ts';
 
 /** The SAME rule as SQL public.campaign_name_key: trimmed, inner whitespace collapsed, case-folded. */
 export function campaignNameKey(name: string): string {
@@ -158,6 +159,8 @@ export const CAMPAIGN_ERROR_TEXT: Record<string, string> = {
 };
 
 export function campaignErrorText(code: string | undefined | null): string {
+  /* A not-ready salesperson's refusal is said as itself (readinessWords.ts, E2E-02). */
+  if (code === 'usage_paused' || code === 'not_ready_to_sell') { const w = onboardingWordsForPausedRefusal(); if (w) return w; }
   return (code && CAMPAIGN_ERROR_TEXT[code]) || (code ? `Not done (${code}).` : 'Not done.');
 }
 

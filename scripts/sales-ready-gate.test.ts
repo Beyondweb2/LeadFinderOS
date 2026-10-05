@@ -82,7 +82,9 @@ console.log("\n── the database gates ──");
   ok(/update public\.payment_ledger set sold_by_user_id = r\.claimed_seller_user_id where lead_id = _lead_id and sold_by_user_id is null/.test(resolve),
     "confirm: the seller is filled only into this lead's ledger rows that had none (the commission rules then apply as normal)");
   const au = read("supabase/functions/admin-users/index.ts");
-  ok(au.indexOf("'attribution_review_resolve'") > au.indexOf("Not authorized - no admin role") && /resolve_sale_attribution_review/.test(au), "resolve: an explicit admin-only action");
+  /* 2026-10-05 (attribution-review-admin): the action calls resolve_sale_attribution_with_seller (chosen seller, override
+     reason); resolve_sale_attribution_review stays as its wrapper. Pinned in scripts/attribution-review-admin.test.ts. */
+  ok(au.indexOf("'attribution_review_resolve'") > au.indexOf("Not authorized - no admin role") && /resolve_sale_attribution_with_seller/.test(au), "resolve: an explicit admin-only action");
   /* F + H integration (2026-10-05): commission now READS THE HOLD (sale_attribution_holds via saleAttribution.ts) —
      scripts/v3-sales-attribution-integration.test.ts proves what it does with it. It still never re-decides WHO sold
      (no readiness, no creator records): that is the database's stamp. */
@@ -113,7 +115,7 @@ console.log("\n── the screens (presentation; the server decides) ──");
   ok(ready.salesChecks && ready.moveToCampaign && (ready.settableStatuses ?? []).length > 0, "a ready rep's screen is unchanged");
   ok(admin.editLeadRecord && admin.bulkAudits && admin.settableStatuses === null, "the admin is unaffected (the readiness flag is ignored)");
   ok(JSON.stringify(leadPermissions("sales")) === JSON.stringify(ready), "the default is the old behaviour (every existing caller unchanged)");
-  ok(/You are not Ready to Sell yet/.test(refusalText("not_ready_to_sell")), "the refusal reads in plain words");
+  ok(/^Complete your onboarding before using this\./.test(refusalText("not_ready_to_sell")), "the refusal reads in plain words (final sales release: the real cause, E2E-02)");
   ok(/NotReadyToSellBanner/.test(read("src/pages/SalesDashboard.tsx")) && /NotReadyToSellBanner/.test(read("src/components/LeadDetailDialog.tsx")), "the banner is on the Sales dashboard and in the lead workspace");
   ok(/useMyReadiness/.test(read("src/hooks/useLeadPermissions.ts")), "permissions fold in the rep's own readiness");
   const hook = read("src/hooks/useMyReadiness.ts");

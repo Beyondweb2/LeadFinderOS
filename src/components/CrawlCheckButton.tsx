@@ -14,6 +14,8 @@ import { siteInfoHasAnything } from '@/lib/siteInfo';
 import type { CrawlRow } from '@/lib/crawlResult';
 import type { CrawlRequestSource } from '@/lib/fullCrawl';
 import { crawlJobStatus, useCrawlJobWatch } from '@/components/LeadCrawlPanel';
+import { ProspectAuditDialog } from '@/components/ProspectAuditDialog';
+import { PROSPECT_CRAWL_REUSE_MS } from '@/lib/prospectCrawl';
 
 /** The minimal lead shape the crawl button/dialog need — an id to crawl by and a website to gate on.
  *  Both the Outreach row (OutreachLead) and the Inbox thread (its lead-lite) satisfy it. */
@@ -166,6 +168,9 @@ function CrawlCheckDialog(
   const [result, setResult] = useState<Result | null>(null);
   const [url, setUrl] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
+  /* A press inside the reuse window opens the SAVED crawl (prospectCrawl.ts) — said, never passed off as new. */
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [fullOpen, setFullOpen] = useState(false);
   const job = useCrawlJobWatch(open ? jobId : null, async () => {
     if (!jobId) return;
     try {
@@ -185,12 +190,13 @@ function CrawlCheckDialog(
   });
 
   const run = async (body: { lead_id?: string; url?: string; town?: string }) => {
-    setRunning(true); onRunningChange?.(true); setResult(null); onErrorChange?.(false);
+    setRunning(true); onRunningChange?.(true); setResult(null); onErrorChange?.(false); setSavedAt(null);
     try {
       const { data, error } = await supabase.functions.invoke('crawl-check', { body: { ...body, mode: 'full', requested_from: from } });
       if (error) throw new Error(error.message);
       const next = data as Result;
       if (!next?.ok) throw new Error(next?.error || 'check failed');
+      if ((next as { cached?: boolean }).cached) setSavedAt(String((next as { crawled_at?: string }).crawled_at ?? '') || null);
       if ((next as { job_id?: string }).job_id) {
         // The exhaustive job is running on the server; the watcher above finishes the popup.
         setJobId(String((next as { job_id?: string }).job_id));
@@ -244,7 +250,14 @@ function CrawlCheckDialog(
                 Run again
               </Button>
             )}
+            {lead && !urlMode && (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setFullOpen(true)} data-testid="crawl-open-full-audit">
+                Full audit
+              </Button>
+            )}
           </DialogTitle>
+          {lead && !urlMode && <ProspectAuditDialog leadId={lead.id} open={fullOpen} onOpenChange={setFullOpen} />}
+          {savedAt && <p className="text-xs text-muted-foreground" data-testid="crawl-saved-note">Saved crawl from {new Date(savedAt).toLocaleString('en-GB')} reused — this site was crawled within the last {Math.round(PROSPECT_CRAWL_REUSE_MS / 86_400_000)} days, so it was not crawled again.</p>}
         </DialogHeader>
 
         {urlMode && (

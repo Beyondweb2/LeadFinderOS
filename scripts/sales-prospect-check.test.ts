@@ -555,18 +555,21 @@ console.log('── migration, config, limits ──');
 /* ═══ 10. The screens ══════════════════════════════════════════════════════════════════════════ */
 console.log('── the screens ──');
 {
-  const panel = read('src/components/SalesCheckPanel.tsx');
+  /* 2026-10-05 (improve/outreach-compact-audit-rows): the results panel is gone. The rows carry each
+     lead's state and scores, the one-line check bar the counts / allowance / Stop / Open next ready —
+     scripts/outreach-compact-audit-rows.test.ts holds that design; this section keeps the safety lines. */
+  const panel = read('src/components/SalesCheckDialog.tsx') + '\n' + read('src/components/OutreachAiCheck.tsx');
   const hook = read('src/hooks/useSalesChecks.ts');
   const outreach = read('src/pages/Outreach.tsx');
   const table = read('src/components/OutreachTable.tsx');
-  ok(/useCallCardSummaries/.test(panel) && /summary\.headline/.test(panel), 'each ready lead shows the call card\'s own one-line result');
-  ok(/onOpenLead\(it\.lead_id, tab\)/.test(panel) && /setLaunchIntent\(\{ leadId, channel: 'open', tab: 'call' \}\)/.test(outreach) && /setDetailTab\(launchIntent\.tab\)/.test(table), '"Call screen" / "Open the next ready lead" open the lead\'s workspace on the Call tab (v2)');
-  ok(!/invokeEdge\(|functions\.invoke|\.insert\(|\.update\(|\.rpc\(/.test(panel), 'the panel calls nothing and writes nothing (tel: link and the workspace only)');
+  ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckPanel.tsx')) && !/SalesCheckPanel/.test(outreach), 'the big results panel is gone from Outreach');
+  ok(/const openCallScreen = \(l: OutreachLead\) => \{ setDetailTab\('call'\)/.test(table) && /setDetailTab\(launchIntent\.tab\)/.test(table), '"Call screen" / "Open next ready" open the lead\'s workspace on the Call tab (v2)');
+  ok(!/invokeEdge\(|functions\.invoke|\.insert\(|\.update\(|\.rpc\(/.test(panel), 'the row summary, the check bar and the dialog call nothing and write nothing');
   ok((hook.match(/invokeEdge/g) ?? []).length >= 1 && !/send-whatsapp|whatsapp|email/i.test(hook.replace(/\/\*[\s\S]*?\*\//g, '')), 'the hook talks to sales-prospect-check only');
   ok(/client_request_id: pressRef\.current\.id/.test(hook) && /e\.status !== null\) throw e;/.test(hook), 'a dropped connection is retried with the SAME request id (never a second batch)');
   ok(/data-testid="sales-check-button"/.test(table) && /perms\.salesChecks/.test(table), 'the Outreach selection toolbar has "Check before calling" for sales');
   ok(!/\$\{?usd|cost|\bspend\b/i.test(panel.replace(/\/\*[\s\S]*?\*\//g, '')), 'no cost is shown to a salesperson');
-  ok(/readyItems\(items\)/.test(panel), 'only done/reused leads are offered as ready');
+  ok(/nextReadyLead<OutreachLead>\(filteredAndSortedLeads, rowCheck, nextOpened\)/.test(table) && /rowCheckState\(auditsByLead\[l\.id\], checkItemByLead\.get\(l\.id\)\)/.test(table), 'only leads whose check is ready (a finished audit) are offered by Open next ready');
   ok(/SalesChecksAdminCard/.test(read('src/pages/AdminApiUsage.tsx')), 'the admin sees batches, reps, spend and problems on API Usage & Security');
   // One ruler: the panel's line IS the call screen's line.
   const input: PlaybookInput = {

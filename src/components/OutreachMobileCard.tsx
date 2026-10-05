@@ -64,6 +64,8 @@ interface OutreachMobileCardProps {
   // same popup (HookAuditDialog) in every state — run, progress or result.
   auditState?: AuditRowState;
   onOpenAudit?: () => void;
+  /** The row's compact AI check (OutreachAiCheck AiCheckSummary) — the same element as the desktop row. */
+  aiCheck?: React.ReactNode;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
@@ -94,6 +96,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onManageSite,
   auditState = 'none',
   onOpenAudit,
+  aiCheck,
   onUpdateLead,
 }: OutreachMobileCardProps) {
   const perms = useLeadPermissions();
@@ -157,6 +160,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
               {lead.phone}
             </a>
           )}
+          {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
+          {aiCheck}
 
           {/* Per-type contact enrichment (email / facebook / instagram) */}
           {/* Enrichment is admin work (perms.enrichLeads), as on the desktop row. */}

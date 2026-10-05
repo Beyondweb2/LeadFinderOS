@@ -70,7 +70,7 @@ export function HandoffsPanel({ clients, routeOf, onOpen, nowMs = Date.now() }: 
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold">{c.business_name}</span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {c.sold_by_name ? `Sold by ${c.sold_by_name}` : 'Seller not recorded'} · {(c.amount_paid ?? 0) > 0 ? `${gbp(c.amount_paid)} paid` : 'Marked paid'}{c.payment_date ? ` · ${dayMonth(c.payment_date)}` : ''}
+                          {c.seller_pending === 'awaiting_attribution' ? 'Seller: awaiting attribution review' : c.seller_pending === 'not_credited' ? 'Not credited to a salesperson' : c.sold_by_name ? `Sold by ${c.sold_by_name}` : 'Seller not recorded'} · {(c.amount_paid ?? 0) > 0 ? `${gbp(c.amount_paid)} paid` : 'Marked paid'}{c.payment_date ? ` · ${dayMonth(c.payment_date)}` : ''}
                         </span>
                       </span>
                       <span className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -191,7 +191,25 @@ export function TeamPerformanceTable({ o, rows, lines, lastActivity, hidden, onO
           </table>
         </div>
       )}
+      <UnattributedNote o={o} />
     </Panel>
+  );
+}
+
+/** BUSINESS revenue that is no salesperson's (saleCreditOf): an open attribution review, or not credited. It is
+ *  in Payments and commission; it is on no row above. Shown only when there is some. */
+export function UnattributedNote({ o }: { o: O }) {
+  const u = o.money.unattributed;
+  if (!u || (u.awaiting.payments === 0 && u.notCredited.payments === 0)) return null;
+  return (
+    <div className="mt-3 space-y-1 rounded-xl border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs" data-testid="unattributed-revenue">
+      {u.awaiting.payments > 0 && (
+        <p><span className="font-bold">{gbp(u.awaiting.amount)} awaiting attribution</span> · {u.awaiting.clients} client{u.awaiting.clients === 1 ? '' : 's'} ({u.awaiting.names.join(', ')}). Real payments, counted to nobody until you resolve the review on the Team page.</p>
+      )}
+      {u.notCredited.payments > 0 && (
+        <p className="text-muted-foreground"><span className="font-semibold">{gbp(u.notCredited.amount)} not credited to a salesperson</span> · {u.notCredited.clients} client{u.notCredited.clients === 1 ? '' : 's'}. Business revenue only — no one's sales, no commission.</p>
+      )}
+    </div>
   );
 }
 

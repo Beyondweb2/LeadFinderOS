@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { logFeatureUse } from '@/lib/featureUsage';
-import { AlertTriangle, Check, Copy, ExternalLink, Globe, Info, Loader2, PhoneCall, ScrollText, ShieldCheck, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Globe, Info, Loader2, PhoneCall, ScanSearch, ScrollText, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   AI_FRIENDLY_SITE, FOLLOW_UP_VOICE_NOTE, GOOGLE_STILL_MATTERS, HOW_WE_KNOW, HOW_WE_KNOW_CAVEAT, HOW_WE_KNOW_EXAMPLES,
   WEBSITE_MATTERS, WHAT_WE_DO, WHAT_WE_DO_SHORT, WHY_IT_MATTERS, WINNABILITY_ALSO_DEPENDS_ON, spokenSeconds,
 } from '@/lib/salesExplainer';
 import { useHookVisibility } from '@/hooks/useHookVisibility';
+import { ProspectAuditDialog } from '@/components/ProspectAuditDialog';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -308,9 +309,19 @@ function AiCheckCount({ leadId }: { leadId: string }) {
 }
 
 function CallEvidence({ p, leadId, onRunCheck }: { p: ColdCallPlaybook; leadId: string; onRunCheck?: () => void }) {
+  /* The detailed evidence lives in ONE large window (ProspectAuditDialog, 2026-10-05) — the Call tab keeps
+     the short version and opens the rest on request, so the call screen never becomes a technical audit. */
+  const [fullOpen, setFullOpen] = useState(false);
   return (
     <section className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-3" data-testid="call-evidence">
-      <h3 className={EYEBROW}>What we found</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className={EYEBROW}>What we found</h3>
+        <button type="button" onClick={() => setFullOpen(true)} data-testid="open-full-audit"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium hover:bg-muted">
+          <ScanSearch className="h-3.5 w-3.5" /> Full audit &amp; website evidence
+        </button>
+      </div>
+      <ProspectAuditDialog leadId={leadId} open={fullOpen} onOpenChange={setFullOpen} />
       <CallCard p={p} onRunCheck={onRunCheck} compact />
       {p.audit.state !== 'none' && (
         <div className="space-y-1.5" data-testid="call-evidence-ai">

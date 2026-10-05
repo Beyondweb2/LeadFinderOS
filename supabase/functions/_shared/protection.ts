@@ -41,7 +41,8 @@ export type GuardOutcome =
 export interface GuardRefusalBody {
   ok: false;
   success: false;
-  error: "usage_paused";
+  /** 'not_ready_to_sell' when the guard refused an incomplete onboarding (final sales release, 2026-10-05); else 'usage_paused'. */
+  error: "usage_paused" | "not_ready_to_sell";
   detail: string;
   /** Older callers print `message` / `error`; both carry the sentence, never a token or a cost. */
   message: string;
@@ -49,7 +50,8 @@ export interface GuardRefusalBody {
 
 function refusal(reason: string, role: string | null | undefined, status: 429 | 403 | 503): GuardOutcome {
   const detail = guardRefusalDetail(reason, role);
-  return { ok: false, status, reason, body: { ok: false, success: false, error: "usage_paused", detail, message: detail } };
+  const error = reason === "not_onboarded" ? "not_ready_to_sell" as const : "usage_paused" as const;
+  return { ok: false, status, reason, body: { ok: false, success: false, error, detail, message: detail } };
 }
 
 /** Ask the guard. See the header for the rules. */
@@ -72,7 +74,7 @@ export async function guardAction(service: ServiceClient, actorId: string, actio
     }
     const reason = typeof g.reason === "string" ? g.reason : "refused";
     if (reason === "no_role") return refusal(reason, role, 403);
-    if (reason === "suspended" || reason === "not_allowed") return refusal(reason, role, 403);
+    if (reason === "suspended" || reason === "not_allowed" || reason === "not_onboarded") return refusal(reason, role, 403);
     return refusal(reason, role, 429);
   } catch (e) {
     console.error(`[protection] guard_action failed for ${action}: ${e instanceof Error ? e.message : String(e)}`);

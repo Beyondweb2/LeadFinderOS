@@ -110,7 +110,7 @@ import { ContactMethodBadge } from './ContactMethodBadge';
 import { OneStatusPill } from './PipelineStatusSelect';
 import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
-import { CSVImportDialog } from './CSVImportDialog';
+import { CSVImportDialog, type CsvImportResult } from './CSVImportDialog';
 import { townGated } from '@/lib/townVerdict';
 import { Badge } from '@/components/ui/badge';
 import { fetchQueueState, queuedLeadLine } from '@/lib/queueStatus';
@@ -127,6 +127,10 @@ import { isLiveLeadWithoutTrade, OUTREACH_PRESETS, type OutreachPreset } from '@
 import { archiveViewFor, datasetComplete, leadCountLabel, partialResultsSuffix, rowsForArchiveView, visibleWhileLoading, LEAD_LOAD_COMPLETE, type LeadLoadState } from '@/lib/outreachLoad';
 import { useQuery } from '@tanstack/react-query';
 import { auditMapHasRunning, auditRowState, fetchOutreachAuditMap, outreachAuditMapKey, OUTREACH_AUDIT_MAP_POLL_MS, OUTREACH_AUDIT_MAP_STALE_MS, type LeadAuditState } from '@/lib/outreachAuditMap';
+import { nextReadyLead, readyCount, rowCheckState, type RowBatchItem, type RowCheckState } from '@/lib/outreachRowCheck';
+import { useOutreachRowScores } from '@/hooks/useOutreachRowScores';
+import { AiCheckSummary, OutreachCheckBar } from '@/components/OutreachAiCheck';
+import type { SalesCheckView } from '@/hooks/useSalesChecks';
 import { HookAuditDialog } from './HookAuditDialog';
 /** Module-level so an empty map keeps one identity across renders. */
 const EMPTY_AUDIT_MAP: Record<string, LeadAuditState> = {};
@@ -202,7 +206,8 @@ interface OutreachTableProps {
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
-  onImportLeads?: (leads: Array<Partial<OutreachLead>>) => Promise<void>;
+  /** After a CSV import (the dialog runs import_leads itself): the ids it created / filled in. */
+  onImportLeads?: (result: CsvImportResult) => Promise<void> | void;
   onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
@@ -255,6 +260,12 @@ interface OutreachTableProps {
   onSalesCheck?: (leadIds: string[]) => void;
   /** Why the button is off right now (a batch still starting), or null. */
   salesCheckBlocked?: string | null;
+  /** Sales: the rep's newest "Check before calling" batch (useSalesChecks view) — each row reads its own
+   *  item (Waiting / Checking… / failed), the check bar reads the counts and the allowance. */
+  salesCheckView?: SalesCheckView | null;
+  /** Sales: Stop the open batch (leads not started yet are skipped). */
+  onStopSalesCheck?: (batchId: string) => void;
+  salesCheckError?: string | null;
   /** Bulk-move the selected leads to a campaign (null = "No campaign"). Single
    *  batched write, owner-RLS scoped. Demo leads are filtered by the caller. */
   onAssignCampaign?: (leadIds: string[], campaignId: string | null) => Promise<boolean> | void;
@@ -346,6 +357,9 @@ export function OutreachTable({
   bulkJobActive = false,
   onSalesCheck,
   salesCheckBlocked = null,
+  salesCheckView = null,
+  onStopSalesCheck,
+  salesCheckError = null,
   onAssignCampaign,
   onRemoveFromMyLeads,
   ownerScope = DEFAULT_OWNER_SCOPE,
@@ -406,6 +420,26 @@ export function OutreachTable({
   /* The row's audit popup (HookAuditDialog) — the same Hook Audit panel as the workspace, both roles. */
   const [auditLead, setAuditLead] = useState<OutreachLead | null>(null);
   const navigate = useNavigate();
+  /* ── THE ROW'S AI CHECK (2026-10-05, src/lib/outreachRowCheck.ts) ── one state per row: the rep's own
+     batch item first (Waiting / Checking… / failed), then the audit map (ready / checking). */
+  const checkItemByLead = useMemo(() => {
+    const m = new Map<string, RowBatchItem>();
+    for (const it of salesCheckView?.items ?? []) m.set(it.lead_id, it);
+    return m;
+  }, [salesCheckView?.items]);
+  const rowCheck = useCallback((l: { id: string }): RowCheckState => rowCheckState(auditsByLead[l.id], checkItemByLead.get(l.id)), [auditsByLead, checkItemByLead]);
+  /* "Open next ready": the leads opened from the bar this session, per person (a convenience — it decides
+     nothing; Start over clears it). */
+  const nextOpenedKey = `outreach-next-ready-opened:${user?.id ?? ''}`;
+  const [nextOpened, setNextOpened] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try { const v = JSON.parse(window.sessionStorage.getItem(nextOpenedKey) ?? '[]'); setNextOpened(new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [])); }
+    catch { setNextOpened(new Set()); }
+  }, [nextOpenedKey]);
+  const saveNextOpened = useCallback((s: Set<string>) => {
+    setNextOpened(s);
+    try { window.sessionStorage.setItem(nextOpenedKey, JSON.stringify([...s])); } catch { /* storage unavailable — works this visit */ }
+  }, [nextOpenedKey]);
 
 
 
@@ -1999,6 +2033,37 @@ export function OutreachTable({
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  /* The row scores — read for THIS PAGE's ready rows only (useOutreachRowScores), never the whole book. */
+  const scoreLeads = paginatedLeads.filter((l) => !isDemoLead(l.id) && rowCheck(l).kind === 'ready')
+    .map((l) => ({ id: l.id, business_name: l.business_name, website: l.website ?? null }));
+  const rowScores = useOutreachRowScores(scoreLeads, scoreLeads.map((l) => auditsByLead[l.id]?.runId ?? '').join(','));
+  /** The call screen: the lead's workspace on its Call tab (the same door the old results panel used). */
+  const openCallScreen = (l: OutreachLead) => { setDetailTab('call'); setDetailLogContact(false); setDetailLead(l); };
+  /** Retry a failed check: a rep goes through the same confirm dialog as the toolbar (allowance, reuse);
+   *  the admin gets the single AI check popup. */
+  const retryCheck = (l: OutreachLead) => {
+    if (isDemoLead(l.id)) return;
+    if (onSalesCheck && perms.salesChecks) onSalesCheck([l.id]); else setAuditLead(l);
+  };
+  const aiCheckFor = (l: OutreachLead, className?: string) => {
+    const st = rowCheck(l);
+    return (
+      <AiCheckSummary state={st} className={className}
+        score={st.kind === 'ready' ? rowScores.data?.[l.id] : undefined}
+        scoreLoading={rowScores.isFetching}
+        onCallScreen={isDemoLead(l.id) ? undefined : () => openCallScreen(l)}
+        onRetry={readOnly ? undefined : () => retryCheck(l)} />
+    );
+  };
+  /* "Open next ready" walks the list AS SHOWN — owner scope, filters and sort already applied. */
+  const nextReady = nextReadyLead<OutreachLead>(filteredAndSortedLeads, rowCheck, nextOpened);
+  const readyLeft = readyCount<OutreachLead>(filteredAndSortedLeads, rowCheck, nextOpened);
+  const openNextReady = () => {
+    if (!nextReady) return;
+    const s = new Set(nextOpened); s.add(nextReady.id); saveNextOpened(s);
+    openCallScreen(nextReady);
+  };
+  const showCheckBar = !readOnly && !isArchiveView && (perms.salesChecks || readyLeft > 0 || nextOpened.size > 0);
   /* The newest logged contact for the rows on this page only (lead state audit, 2026-09-30) — the
      "Call · Left voicemail · 2h ago" line under the pipeline pill. Read per page, never the whole book. */
   /* The logged contacts behind the row's tooltip and Next Action hint are the same all-leads map as above. */
@@ -2057,6 +2122,22 @@ export function OutreachTable({
           {/* What this view holds, in one sentence (admin) — the ownership model said on the screen, not inferred. */}
           {onOwnerScopeChange && (
             <p data-testid="owner-scope-explainer" className="-mt-1 text-xs text-muted-foreground">{ownerScopeExplainer(ownerScope, memberName)}</p>
+          )}
+          {/* ⛔ ONE LINE, NOT A RESULTS PANEL (2026-10-05): the rep's batch in counts, checks left today, Stop,
+              and "Open next ready". Every result is on its own row. */}
+          {showCheckBar && (
+            <OutreachCheckBar
+              batch={salesCheckView?.batch ?? null}
+              allowance={salesCheckView?.allowance ?? null}
+              onStop={salesCheckView?.batch && onStopSalesCheck ? () => onStopSalesCheck(salesCheckView.batch!.id) : undefined}
+              ready={readyLeft}
+              hasNext={!!nextReady}
+              onOpenNext={openNextReady}
+              openedCount={nextOpened.size}
+              onStartOver={() => saveNextOpened(new Set())}
+              disabled={!listComplete}
+              error={salesCheckError}
+            />
           )}
           
           {/* Actions rows — all buttons equal-weight outline; two tidy rows.
@@ -2802,6 +2883,7 @@ export function OutreachTable({
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
                   auditState={auditRowState(auditsByLead[lead.id])}
                   onOpenAudit={isDemoLead(lead.id) ? undefined : () => setAuditLead(lead)}
+                  aiCheck={isDemoLead(lead.id) ? undefined : aiCheckFor(lead)}
 
                 />
               ))
@@ -2908,6 +2990,8 @@ export function OutreachTable({
                             {campaignNameByLead[lead.id]}
                           </div>
                         )}
+                        {/* The AI check, compact: a state word, or ChatGPT x · Gemini y and Call screen. Scores only. */}
+                        {!isDemoLead(lead.id) && aiCheckFor(lead, 'mt-1 max-w-[260px] font-normal')}
                       </TableCell>
                       <TableCell>
                         {lead.phone ? (
@@ -3174,8 +3258,8 @@ export function OutreachTable({
         <CSVImportDialog
           open={showImportDialog}
           onOpenChange={setShowImportDialog}
-          onImport={onImportLeads}
-          existingLeads={leads}
+          onImported={onImportLeads}
+          isAdmin={isAdmin}
         />
       )}
 

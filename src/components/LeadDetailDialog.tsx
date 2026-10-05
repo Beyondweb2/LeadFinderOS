@@ -13,6 +13,7 @@ import { ColdCallPlaybookInline } from '@/components/ColdCallPlaybook';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProspectFacts } from '@/components/ProspectFacts';
 import { LeadDeliveryCockpit } from '@/components/LeadDeliveryCockpit';
+import { DraftRegistryProvider, ESCAPE_CANCELS_EDIT, escapeBelongsToField, useDraftGuard, useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -207,6 +208,15 @@ export function LeadDetailDialog({
   openLogContact = false,
 }: LeadDetailDialogProps) {
   const { row: fullLead, error: fullLeadError } = useFullLeadRow(lead, open);
+  /* ⛔ ONE GUARD for every way of leaving this lead the person did not save through — Escape, a click
+     outside, the X, Previous / Next (buttons and ← / →). Nothing typed → it happens at once. */
+  const drafts = useDraftGuard();
+  const requestOpenChange = (o: boolean) => { if (o) onOpenChange(true); else drafts.guard(() => onOpenChange(false)); };
+  const guardedStepper: LeadStepper | null | undefined = stepper && {
+    ...stepper,
+    onPrev: stepper.onPrev && (() => drafts.guard(stepper.onPrev!)),
+    onNext: stepper.onNext && (() => drafts.guard(stepper.onNext!)),
+  };
   if (!lead) return null;
   /* ⛔ NEVER THE BODY FROM A LIST ROW. The list downloads 41 columns (src/lib/outreachLeadColumns.ts);
      the body's editors seed their state ONCE, on mount, from fields the list does not carry (payment,
@@ -228,14 +238,20 @@ export function LeadDetailDialog({
     );
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className="sm:max-w-3xl h-[100dvh] max-h-[100dvh] sm:h-[88vh] sm:max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0 max-sm:rounded-none max-sm:border-0"
+        onEscapeKeyDown={(e) => {
+          if (drafts.asking) { e.preventDefault(); drafts.keepEditing(); return; }
+          if (escapeBelongsToField(e.target)) e.preventDefault();
+        }}
+        onInteractOutside={(e) => { if (drafts.asking) e.preventDefault(); }}
         onKeyDown={(e) => {
-          if (!stepper || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
-          if (e.key === 'ArrowRight' && stepper.onNext) { e.preventDefault(); stepper.onNext(); }
-          else if (e.key === 'ArrowLeft' && stepper.onPrev) { e.preventDefault(); stepper.onPrev(); }
+          if (!guardedStepper || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || typingIn(e.target)) return;
+          if (e.key === 'ArrowRight' && guardedStepper.onNext) { e.preventDefault(); guardedStepper.onNext(); }
+          else if (e.key === 'ArrowLeft' && guardedStepper.onPrev) { e.preventDefault(); guardedStepper.onPrev(); }
         }}>
-        {stepper && stepper.total > 1 && <StepperBar s={stepper} />}
+        {guardedStepper && guardedStepper.total > 1 && <StepperBar s={guardedStepper} />}
+        <DraftRegistryProvider registry={drafts.registry}>
         <LeadDetailBody
           initialTab={initialTab}
           openLogContact={openLogContact}
@@ -255,6 +271,8 @@ export function LeadDetailDialog({
           context={context}
           onClose={() => onOpenChange(false)}
         />
+        </DraftRegistryProvider>
+        {drafts.confirm}
       </DialogContent>
     </Dialog>
   );
@@ -308,6 +326,10 @@ function LeadDetailBody({
   // name-edit UX (Pencil → input + Check/X). One field editable at a time.
   const [editingField, setEditingField] = useState<null | 'phone' | 'email' | 'website' | 'address'>(null);
   const [editValue, setEditValue] = useState('');
+  /* Typed-but-unsaved text on this lead (UnsavedDraftGuard): the private note, the name, a contact field. */
+  useUnsavedDraft('private-note', isEditingNotes && notesDirty);
+  useUnsavedDraft('business-name', editingName && editedName.trim() !== (lead.business_name ?? '').trim());
+  useUnsavedDraft('contact-field', editingField !== null && editValue.trim() !== String(lead[editingField as keyof OutreachLead] ?? '').trim());
   /* ⛔ THE SAME DIALOG FOR BOTH ROLES (2026-09-27). A salesperson gets everything that works or closes
      a lead — status (their allowed stages), the CRM panel, contact details, WhatsApp outreach, the
      call playbook, voice-note script, sign-up link — and not the admin's record editing, client
@@ -424,6 +446,7 @@ function LeadDetailBody({
                   onChange={(e) => setEditedName(e.target.value)}
                   className="h-8 text-base font-semibold px-2 flex-1"
                   autoFocus
+                  {...{ [ESCAPE_CANCELS_EDIT]: '' }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveName();
                     if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); }
@@ -607,6 +630,7 @@ function LeadDetailBody({
                                 onChange={(e) => setEditValue(e.target.value)}
                                 autoFocus
                                 className="h-7 flex-1 min-w-0 px-2 text-xs"
+                                {...{ [ESCAPE_CANCELS_EDIT]: '' }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') saveField(field);
                                   if (e.key === 'Escape') cancelEditField();

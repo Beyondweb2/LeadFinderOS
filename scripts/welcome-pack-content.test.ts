@@ -161,7 +161,7 @@ console.log('\n── THE CLIENT’S OWN TERMS AND SCHEDULE (Paul, 2026-10-02) �
   ok(pre.includes('Four weeks after your starting point') && pre.includes('At four weeks'), 'no recorded date → the standard four weeks');
   /* Today’s offer, recorded: route stamped + £99. */
   const cur = text(buildWelcomePackHtml({ ...base, amountPaid: 99, totalPayments: 12, remeasureDueDate: '2026-10-20' }));
-  ok(cur.includes('refund your £99') && cur.includes('Six weeks after your first payment, £99 a month begins'), 'a recorded current client gets today’s guarantee and payments');
+  ok(cur.includes('refund your £99') && cur.includes('£99 a month begins the day after your 14-day refund window closes') && !/six weeks after your first payment/i.test(cur), 'a recorded current client gets today’s guarantee and payments');
   ok(cur.includes('Four weeks after your starting point, due 20 Oct 2026'), 'and their own 28-day date');
   ok(cur.includes('hosting and maintenance of your website'), 'Build route: hosting of the website we built');
   const opt = text(buildWelcomePackHtml({ ...base, amountPaid: 99, totalPayments: 6 }));
@@ -182,7 +182,7 @@ console.log('\n── YOUR AGREEMENT: THE KEY POINTS (Paul, 2026-10-02) ──')
      says the opposite (agreement 9.4) and never claims the client's website. */
   for (const line of [
     'Your service has a minimum term: 12 payments, counting your first. The remaining payments are owed even if you stop early.',
-    'Monthly payments start six weeks after your first payment.',
+    'Monthly payments start the day after your 14-day refund window closes (normally about six weeks after you give us access).',
     'We build, host and manage your new website during the term.',
     'We own the website and our work until your final payment. Then it’s yours.',
     'If a payment is 14 days late, we can take down the website we built until it’s paid. We will tell you first.',

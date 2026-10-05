@@ -22,6 +22,98 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-05-sales-small-fixes', date: '2026-10-05', title: 'Four small fixes: unsaved notes, start dates, clearer refusals, link expiry', audience: 'all',
+    body: 'Escape no longer throws away a note you have not saved. A salesperson is Ready to Sell from their start date, not before. If your onboarding is not finished, the app now says so instead of "usage paused". The sign-up link says "about 30 days", not "715 hours".',
+    report: {
+      added: [
+        'Leaving a lead with something typed but not saved (Escape, clicking outside, the X, Previous / Next) asks "Discard unsaved changes?". Keep editing is the default.',
+      ],
+      changed: [
+        'With nothing typed, Escape and close work exactly as before. No extra question.',
+        'A salesperson whose start date is still to come is not Ready to Sell yet. Their checklist says "Starts on …".',
+        'When onboarding is not finished, Find Leads, adding or claiming a lead, campaigns, checks and CSV import say "Complete your onboarding before using …" and list what is still needed. A real pause or suspension still says so.',
+        'Quick Close shows how long the sign-up link lasts in days ("about 30 days"). The link itself lasts as long as before.',
+      ],
+      removed: ['"Usage temporarily paused" shown to a salesperson whose only problem was unfinished onboarding.'],
+      effect: 'You will not lose a note by pressing Escape, and when something is refused you are told the real reason.',
+    } },
+  { id: '2026-10-05-attribution-review', date: '2026-10-05', title: 'Attribution review: choose the seller from the evidence', audience: 'admin',
+    body: 'A sale waiting for attribution is nobody’s revenue until you decide. It no longer lands on your row or on whoever holds the lead now. The review card shows the evidence, and you choose the seller, override with a reason, or mark it Not credited.',
+    report: {
+      added: [
+        'Team page: the review card shows the payment, who made the paid sign-up, the claimed seller, the owner at payment and every sign-up link made for the client.',
+        '"Who sold it?": a seller from that evidence, someone else with a written reason, or Not credited. Each decision is final and recorded.',
+        'Under the team table: "£X awaiting attribution" and "£X not credited to a salesperson" when there is any.',
+      ],
+      changed: [
+        'A sale under review counts in the business totals but in nobody’s sales, commission or "Sold by" until it is decided.',
+        'Paid Clients and the client card never name the current owner as the seller.',
+      ],
+      removed: ['Crediting an undecided sale to the book owner (you) or to the lead’s current holder.'],
+      effect: 'Business revenue stays complete, and nobody is credited for a sale until you have decided who made it.',
+    } },
+  { id: '2026-10-05-outreach-compact-checks', date: '2026-10-05', title: 'Outreach: the AI check sits on each row', audience: 'all',
+    body: 'The big "Check before calling" results panel is gone. Each checked lead now shows ChatGPT and Gemini scores and a Call screen button on its own row. The detail is on the call screen.',
+    report: {
+      added: [
+        'On every checked row: "ChatGPT 1/3 · Gemini 0/3" and a Call screen button that opens the lead on its Call tab, where "Full audit & website evidence" has the detail.',
+        'One line above the list: how your check is going, checks left today, Stop, and "Open next ready", which opens the next ready lead in the list as you have it filtered.',
+        'Retry on a failed check.',
+      ],
+      changed: [
+        'Selecting leads and pressing "Check before calling" works as before: the same daily allowance, the same reuse of recent results.',
+        'A recently reused result looks the same as a fresh one.',
+      ],
+      removed: ['The large results panel at the top of Outreach that listed the batch again.'],
+      effect: 'The list stays a list. You see who is worth calling at a glance and open the call screen for the detail.',
+    } },
+  { id: '2026-10-05-prospect-full-audit', date: '2026-10-05', title: 'A full audit window for every prospect', audience: 'all',
+    body: 'The AI check details and the website evidence now open in one large window you can read during a call — on a phone it fills the screen. The website crawl checks much more and groups repeated problems.',
+    report: {
+      added: [
+        '"Full audit & website evidence" on the lead’s Call tab, "View full audit" on the AI check card, and "Full audit" on the Crawl check popup — all open the same window.',
+        'For this call: are they showing up in AI, what is wrong with the website, and the strongest point to raise, each with the evidence behind it.',
+        'ChatGPT and Google AI side by side: named or not for each question, who was named instead, the sources each answer cited, and the full answer.',
+        'Website evidence grouped by topic and marked High / Medium / Low / Verified: crawler access (including ChatGPT’s search crawler), robots.txt and sitemap, noindex and canonical problems, broken pages, business name / town / phone / services, thin and copy-paste pages, customer questions answered, reviews and credentials, titles, phone layout and structured data.',
+        'A repeated problem is one line with how many pages it affects, five examples and "Show all".',
+      ],
+      changed: [
+        'A prospect crawl reads up to 500 pages. On a bigger site it says it was capped and how many pages were not read. Paying clients’ crawls still read every page.',
+        'Pressing Crawl site within 7 days of the last full crawl opens the saved result instead of crawling the site again. It says it is saved.',
+        'A crawl that fails says why: the site did not answer, a certificate error, the address does not exist, a redirect loop, or it blocked us.',
+      ],
+      removed: ['The small details overlay that scrolled inside the AI check card.'],
+      effect: 'Before or during a call you can open one window and see whether AI names them, what is wrong with their site and what to say. Crawling never uses your AI checks.',
+    } },
+  { id: '2026-10-05-csv-import-admin', date: '2026-10-05', title: 'CSV import works again', audience: 'admin',
+    body: 'Import on Outreach adds leads from a CSV again. It had been adding nothing while saying it had. Every row is checked first, and new leads are yours. Nobody is messaged.',
+    report: {
+      added: [
+        'A column-matching step: business name, contact, phone, email, website, address, postcode, town, trade, notes and Google Maps link, each picked from your file.',
+        'Check rows before importing. It shows rows found, valid, invalid, repeated in the file, already in the system, new, fill-in-blanks and skipped, with every problem row by its spreadsheet row number and the reason.',
+        'A salesperson who is Ready to Sell can import too. Their new leads are theirs.',
+      ],
+      changed: [
+        'The database decides everything: duplicates, the owner (always the person importing) and what is valid. A duplicate is the same Google Place ID, phone number or Google Maps listing as a lead already in the system — no second lead is made.',
+        'The same business name alone is only a "possible match": the row is still added and flagged, because many businesses share a name across towns. The same website, or the same name and the same postcode or address, is held until you tick "import these too".',
+        'A lead that is already yours only has its blank contact, email, website, address or trade filled in. Nothing is overwritten.',
+        'Someone else’s lead, or an unassigned one, is skipped and listed. It is never taken over. Claim unassigned ones from Unassigned.',
+        'Imported leads show "Source: CSV import" in their history.',
+      ],
+      removed: ['The old import, which wrote leads straight from the browser and was refused by the database every time.'],
+      effect: 'You can bring in a list from a spreadsheet and see exactly what will happen before anything is saved. An import never messages, queues or changes the stage of anyone.',
+    } },
+  { id: '2026-10-05-csv-import-sales', date: '2026-10-05', title: 'Import leads from a CSV', audience: 'sales',
+    body: 'Outreach has an Import button. Bring in a list of businesses from a spreadsheet; the new ones become your leads. Nobody is messaged.',
+    report: {
+      added: [
+        'Import on Outreach: choose a CSV, match its columns, press Check rows to see what will happen, then Import.',
+        'Every row that cannot be added is listed with the reason: no business name, phone or email not valid, repeated in the file, already your lead, or already belongs to another team member.',
+      ],
+      changed: [],
+      removed: [],
+      effect: 'New businesses from your list land in your leads, ready to work. Anything already owned by someone else is left alone.',
+    } },
   { id: '2026-10-05-outreach-my-leads', date: '2026-10-05', title: 'Outreach opens on your own leads', audience: 'admin',
     body: 'Outreach now opens on My leads — only the leads you own. Unassigned leads, a salesperson’s leads or the whole team show only when you choose them, and queueing WhatsApp across several people’s leads asks you first. Leads you add from Find Leads are now yours from the start.',
     report: {

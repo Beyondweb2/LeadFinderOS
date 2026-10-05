@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useUnsavedDraft } from '@/components/UnsavedDraftGuard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BriefcaseBusiness, CalendarClock, Megaphone, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -190,6 +191,11 @@ export function ProspectProfilePanel({ leadId }: { leadId: string }) {
   const lead = crm.data;
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState({ services: '', areas: '', address: '', website: '' });
+  /* Unsaved only when a field differs from what was opened (no prompt for an editor opened and left alone). */
+  const draftId = useId();
+  useUnsavedDraft(`profile-${draftId}`, editing && !!lead && (
+    f.services !== (lead.services_included ?? []).join(', ') || f.areas !== (lead.service_areas ?? []).join(', ')
+    || f.address !== (lead.address ?? '') || f.website !== (lead.website ?? '')));
   if (!lead) return null;
   const services = lead.services_included ?? [];
   const areas = lead.service_areas ?? [];
@@ -576,6 +582,7 @@ function LogContact({ leadId, save, followOn, defaultOpen = false }: { leadId: s
   const [lastOutcome, setLastOutcome] = useState<string | null>(null);
   const [channel, setChannel] = useState<string>('call');
   const [note, setNote] = useState('');
+  useUnsavedDraft(`log-contact-note-${useId()}`, note.trim() !== '');
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<OutcomeResultLine | null>(null);
   /* Opened FOR a call (Outreach's Call, the script's "Log this call"): it sits below the audit card, so it is
@@ -699,6 +706,7 @@ function LogContact({ leadId, save, followOn, defaultOpen = false }: { leadId: s
 
 function InternalNote({ save }: { save: SaveFn }) {
   const [note, setNote] = useState('');
+  useUnsavedDraft(`internal-note-${useId()}`, note.trim() !== '');
   return (
     /* Quiet until used (declutter pass, 2026-10-01): one line to type in; it grows while there is a note. */
     <section className={CARD}>

@@ -36,7 +36,17 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { lookupIdentities, useSalesActions, useTeamDirectory } from '@/hooks/useSalesCrm';
 import { refusalText } from '@/lib/salesCrm';
 import { NotReadyToSellBanner } from '@/components/NotReadyToSellBanner';
-import { useMyReadiness } from '@/hooks/useMyReadiness';
+import { useMyReadiness, type MyReadiness } from '@/hooks/useMyReadiness';
+import { missingItemWords } from '@/lib/readinessWords';
+
+/** Find Leads refused before searching (final sales release, E2E-02): the real cause, with what is still needed.
+ *  Loading / unreadable status is said as such — never claimed to be onboarding. */
+function findLeadsNotReadyToast(r: Pick<MyReadiness, 'loading' | 'failed' | 'missing' | 'startsOn'>) {
+  if (r.loading) return { title: 'Checking your onboarding', description: 'Try again in a moment.' };
+  if (r.failed) return { title: 'Could not check your onboarding', description: 'Try again in a moment, or contact Paul.', variant: 'destructive' as const };
+  const items = missingItemWords(r.missing, r.startsOn);
+  return { title: 'Complete your onboarding before using Find Leads.', description: items.length ? `Still needed: ${items.join(' · ')}.` : undefined, variant: 'destructive' as const };
+}
 import type { OwnershipInfo } from '@/components/FindLeadsOwnership';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
@@ -208,7 +218,7 @@ const Index = () => {
        Search button AND Coverage's "Find leads" both pass through here. The server refuses anyway
        (search-leads → guard_action 'not_onboarded'); this says so plainly. The admin is never gated. */
     if (readiness.gated && !readiness.ready) {
-      toast({ title: 'Find Leads is paused', description: 'You can search once your onboarding is complete.', variant: 'destructive' });
+      toast(findLeadsNotReadyToast(readiness));
       return;
     }
     /* No longer recorded here — the context records it inside search(), which is the one point every
@@ -503,7 +513,7 @@ const Index = () => {
         </div>
       </div>
 
-      {/* READY TO SELL: why Find Leads is paused for a salesperson whose onboarding is incomplete (handleSearch). */}
+      {/* READY TO SELL: why Find Leads is closed to a salesperson whose onboarding is incomplete (handleSearch). */}
       <NotReadyToSellBanner />
 
       {/* Search Section */}

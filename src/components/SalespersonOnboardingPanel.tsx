@@ -207,63 +207,6 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
   );
 }
 
-export interface AttributionReview {
-  lead_id: string;
-  business_name: string | null;
-  claimed_seller_user_id: string | null;
-  reason: 'no_authorised_creator' | 'creator_not_authorised' | 'claimed_seller_mismatch' | 'conflicting_creators' | 'ambiguous_manual_payment';
-  status: 'open' | 'confirmed' | 'not_credited';
-  evidence: { claimed_seller_readiness?: string[] | null };
-  resolution_note: string | null;
-  created_at: string;
-}
-
-/* ATTRIBUTION REVIEW NEEDED (Team page, admin): a client paid but no AUTHORISED creator of the sale is on
-   record (SALE CREATOR ≠ CURRENT LEAD OWNER). No seller was stamped. Paul confirms the claimed seller, or
-   records that nobody is credited. Whether anyone is paid stays with the commission rules. */
-const REVIEW_REASON: Record<AttributionReview['reason'], string> = {
-  no_authorised_creator: 'no sign-up link from an authorised salesperson is on record for this payment',
-  creator_not_authorised: 'the sign-up link was made by someone who was not Ready to Sell at the time',
-  claimed_seller_mismatch: 'the seller written with the payment does not match who created the sign-up link',
-  /* F + H integration (migration 20261010130000): never guessed. */
-  conflicting_creators: 'more than one person made the sign-up link this client paid through (claimed: the first)',
-  ambiguous_manual_payment: 'marked paid by hand, and more than one sign-up is on record for this client (claimed: the latest salesperson)',
-};
-export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }: {
-  reviews: readonly AttributionReview[];
-  sellerName: (id: string) => string;
-  call: (action: string, body?: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  onChanged: (message?: string, error?: string) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const open = reviews.filter((r) => r.status === 'open');
-  const decide = async (r: AttributionReview, decision: 'confirmed' | 'not_credited') => {
-    const note = window.prompt(decision === 'confirmed' ? 'Confirm the claimed seller. They become this sale\'s seller for good. Note (optional):' : 'Record that the salesperson is NOT credited for this sale. Note (optional):', '');
-    if (note === null) return;
-    setBusy(true);
-    try {
-      const res = await call('attribution_review_resolve', { lead_id: r.lead_id, decision, note });
-      if (!res.ok) onChanged(undefined, String(res.error ?? 'failed'));
-      else onChanged(decision === 'confirmed' ? 'Attribution confirmed.' : 'Recorded: not credited to the salesperson.');
-    } finally { setBusy(false); }
-  };
-  if (!open.length) return <p className="text-xs text-muted-foreground">No sales need an attribution review.</p>;
-  return (
-    <ul className="divide-y text-sm" data-testid="attribution-reviews">
-      {open.map((r) => (
-        <li key={r.lead_id} className="flex flex-wrap items-center gap-2 py-2">
-          <div className="min-w-0 mr-auto">
-            <div className="font-medium">{r.business_name || 'A client'} <span className="text-xs font-normal text-amber-700 dark:text-amber-400">ATTRIBUTION REVIEW NEEDED</span></div>
-            <div className="text-xs text-muted-foreground">Claimed seller: {r.claimed_seller_user_id ? sellerName(r.claimed_seller_user_id) : 'nobody'} — {REVIEW_REASON[r.reason] ?? r.reason}. No seller has been recorded.</div>
-          </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || !r.claimed_seller_user_id} onClick={() => void decide(r, 'confirmed')}>Confirm seller</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void decide(r, 'not_credited')}>Not credited</Button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /* DOCUMENTS (Team page, admin): every version of the contractor agreement, the privacy notice and the team
    guide. Paul adds the final version himself (never invented here), clears its outstanding items, and
    approves it — which supersedes the previous approved one. */

@@ -93,7 +93,11 @@ console.log("\n── 3. SPA writes: a short allowlist; outside the editor only 
   ok(unexpected.length === 0, `every SPA writer is on the allowlist (${unexpected.join(", ") || "all listed"})`);
   const hook = strip(read("src/hooks/useOutreach.ts"));
   const inserts = [...hook.matchAll(/next_action:\s*([^,\n]+)/g)].map((m) => m[1].trim());
-  ok(inserts.length >= 2 && inserts.every((v) => /^'none'/.test(v) || v.startsWith("nextAction")), `useOutreach writes a chosen action only in updateNextAction; its inserts write 'none' (${inserts.join(" | ")})`);
+  /* 2026-10-05 (fix/csv-lead-import): the CSV import's insert left this hook for import_leads, which inserts 'none'
+     itself — so the hook keeps ONE insert (addLead), and the server's is checked beside it. */
+  ok(inserts.length >= 1 && inserts.every((v) => /^'none'/.test(v) || v.startsWith("nextAction")), `useOutreach writes a chosen action only in updateNextAction; its inserts write 'none' (${inserts.join(" | ")})`);
+  const imp = read("supabase/migrations/20261010170000_csv_lead_import.sql");
+  ok(/'not_contacted', 'none', 'UK', 'manual'\)/.test(imp) && !/next_action\s*=/.test(imp), "the CSV import (import_leads) inserts next_action 'none' and never sets one");
   ok(/const r = await saveNextAction\(leadId, \{\n\s+nextAction,/.test(hook), "updateNextAction writes exactly what the person picked (through the one write)");
   const dash = strip(read("src/pages/Dashboard.tsx"));
   ok([...dash.matchAll(/next_action:\s*'([a-z_0-9]+)'/g)].every((m) => m[1] === "none"), "the Dashboard only clears");
