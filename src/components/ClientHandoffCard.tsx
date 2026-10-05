@@ -28,6 +28,8 @@ export interface ClientHandoff extends Partial<Omit<SetupHandoff, 'readiness'>> 
   readiness: HandoffReadiness;
   sold_by: string | null;
   sold_by_recorded: boolean;
+  /** Set = the sale is under attribution review (or not credited): no seller is shown. Absent on older reads. */
+  seller_pending?: 'awaiting_attribution' | 'not_credited' | null;
   sold_at: string | null;
   owner_now: string | null;
   added_by: string | null;
@@ -97,9 +99,9 @@ export function ClientHandoffCard({ handoff, leadId, onChanged }: { handoff: Cli
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="text-sm font-semibold">Who sold it · domain · the conversation</p>
           <div className="text-right text-sm">
-            <div className="flex items-center justify-end gap-1.5"><UserRound className="h-4 w-4 text-muted-foreground" />Sold by <span className="font-medium">{handoff.sold_by ?? 'Not recorded'}</span></div>
+            <div className="flex items-center justify-end gap-1.5"><UserRound className="h-4 w-4 text-muted-foreground" />Sold by <span className="font-medium">{handoff.seller_pending === 'awaiting_attribution' ? 'Awaiting attribution review' : handoff.seller_pending === 'not_credited' ? 'Not credited to a salesperson' : handoff.sold_by ?? 'Not recorded'}</span></div>
             <div className="text-xs text-muted-foreground">
-              {handoff.sold_by_recorded ? `Recorded at payment${handoff.sold_at ? ` · ${day(handoff.sold_at)}` : ''}` : 'From the current owner (paid before this was recorded)'}
+              {handoff.seller_pending ? 'Decided on the Team page' : handoff.sold_by_recorded ? `Recorded at payment${handoff.sold_at ? ` · ${day(handoff.sold_at)}` : ''}` : 'From the current owner (paid before this was recorded)'}
               {handoff.owner_now && handoff.owner_now !== handoff.sold_by ? ` · now with ${handoff.owner_now}` : ''}
             </div>
             <div className="text-xs text-muted-foreground">Found via {leadSourceLabel(handoff.lead_source)}{handoff.added_by ? ` · added by ${handoff.added_by}` : ''}</div>

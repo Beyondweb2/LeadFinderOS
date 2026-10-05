@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 
 type Client = { id: string; business_name: string; address?: string | null; search_location?: string | null; derived_town?: string | null; website?: string | null; amount_paid?: number | null; payment_date?: string | null; next_action?: string | null; next_action_date?: string | null; next_action_time?: string | null; baseline_audit_id?: string | null; remeasure_audit_id?: string | null; remeasure_due_date?: string | null; delivery_checklist?: Record<string, boolean> | null; payment_source?: 'recorded' | 'marked_paid' | null;
   /* The handoff (paid-client-hub list, src/lib/handoffReadiness.ts) and who sold it. */
-  handoff?: SetupView | null; sold_by_name?: string | null;
+  handoff?: SetupView | null; sold_by_name?: string | null; seller_pending?: 'awaiting_attribution' | 'not_credited' | null;
   contract?: ClientContract | null };
 /* Every request goes through invokeEdge: a real session first, an explicit Authorization header,
    one refresh-and-retry on 401, and a genuine sign-out routed to /auth. Never the anon key. */
@@ -64,7 +64,8 @@ function ClientCard({ c }: { c: Client }) {
             <div className="truncate font-semibold">{c.business_name}</div>
             <div className="truncate text-muted-foreground">{c.derived_town || c.search_location || c.address || 'Location needed'}</div>
             <div className={c.contract?.name ? 'text-xs font-medium' : 'text-xs font-medium text-amber-600'} data-testid="paid-client-contract">{pkg}</div>
-            {c.sold_by_name && <div className="text-xs text-muted-foreground">Sold by {c.sold_by_name}</div>}
+            {c.seller_pending ? <div className="text-xs text-amber-700 dark:text-amber-400">{c.seller_pending === 'awaiting_attribution' ? 'Seller awaiting attribution review' : 'Not credited to a salesperson'}</div>
+              : c.sold_by_name && <div className="text-xs text-muted-foreground">Sold by {c.sold_by_name}</div>}
           </div>
           <div className="min-w-0">
             {s && <Badge className={cn('max-w-full whitespace-normal text-left text-[11px] leading-tight', STATE_TONE[s.state])} data-testid="paid-client-handoff">{s.state_label}</Badge>}

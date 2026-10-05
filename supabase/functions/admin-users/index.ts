@@ -615,29 +615,75 @@ serve(async (req) => {
        A new version is always a DRAFT; approving needs every outstanding item resolved and supersedes the
        previous approved version of that kind (public.approve_salesperson_document, one transaction). */
     /* ATTRIBUTION REVIEWS (2026-10-05): a client paid with no AUTHORISED sale creator on record, so no seller
-       was stamped (never Paul, never the current owner). Paul decides once: 'confirmed' (the claimed seller
-       becomes the seller, frozen) or 'not_credited'. Commission (Session F) reads sale_attribution_held(). */
+       was stamped (never Paul, never the current owner). Paul decides once (docs/pre-sales-certification/
+       attribution-review-admin.md): CONFIRM SELLER — someone the frozen evidence names (sale_attribution_candidates),
+       or anyone else on the team as an explicit ADMIN OVERRIDE with a written reason — or NOT CREDITED. The database
+       resolver re-checks the admin role, keeps the original claim and evidence, and writes the history.
+       Commission (Session F) reads sale_attribution_held(), unchanged. */
     if (action === 'attribution_reviews_list') {
       const { data, error } = await serviceClient.from('sale_attribution_reviews')
-        .select('lead_id, claimed_seller_user_id, reason, evidence, status, resolution_note, resolved_at, created_at')
+        .select('lead_id, claimed_seller_user_id, reason, evidence, status, resolution_note, resolved_at, resolved_by, resolved_seller_user_id, resolution_basis, override_reason, created_at')
         .order('created_at', { ascending: false }).limit(200);
       if (error) return jsonResponse({ ok: false, error: 'read_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
-      const ids = [...new Set((data ?? []).map((r: { lead_id: string }) => r.lead_id))];
-      const names = new Map<string, string>();
+      const reviews = (data ?? []) as { lead_id: string; status: string }[];
+      const ids = [...new Set(reviews.map((r) => r.lead_id))];
+      const leadsById = new Map<string, Record<string, unknown>>();
+      const firstPayment = new Map<string, { amount_gbp: number; occurred_at: string }>();
+      const historyBy = new Map<string, unknown[]>();
+      const candidatesBy = new Map<string, unknown>();
       if (ids.length) {
-        const { data: leads } = await serviceClient.from('outreach_leads').select('id, business_name').in('id', ids);
-        for (const l of (leads ?? []) as { id: string; business_name: string | null }[]) names.set(l.id, l.business_name ?? '');
+        const [leadsRes, ledgerRes, eventsRes] = await Promise.all([
+          serviceClient.from('outreach_leads').select('id, business_name, amount_paid, payment_date, status, assigned_to_user_id, sold_by_user_id, sold_at, paid_signup_id, paid_checkout_session_id').in('id', ids),
+          serviceClient.from('payment_ledger').select('lead_id, amount_gbp, occurred_at').in('lead_id', ids).eq('kind', 'initial').eq('status', 'succeeded').order('occurred_at'),
+          serviceClient.from('sale_attribution_review_events').select('lead_id, kind, seller_user_id, basis, note, override_reason, actor_user_id, created_at').in('lead_id', ids).order('created_at'),
+        ]);
+        for (const r of [leadsRes, ledgerRes, eventsRes]) if (r.error) return jsonResponse({ ok: false, error: 'read_failed', detail: r.error.message }, 500, corsHeaders, rlHeaders);
+        for (const l of (leadsRes.data ?? []) as Record<string, unknown>[]) leadsById.set(String(l.id), l);
+        for (const p of (ledgerRes.data ?? []) as { lead_id: string; amount_gbp: number; occurred_at: string }[]) if (!firstPayment.has(p.lead_id)) firstPayment.set(p.lead_id, { amount_gbp: Number(p.amount_gbp), occurred_at: p.occurred_at });
+        for (const e of (eventsRes.data ?? []) as { lead_id: string }[]) historyBy.set(e.lead_id, [...(historyBy.get(e.lead_id) ?? []), e]);
+        // The evidence-backed candidates, for every review still open (the database's own list — never rebuilt here).
+        const open = reviews.filter((r) => r.status === 'open');
+        const got = await Promise.all(open.map((r) => serviceClient.rpc('sale_attribution_candidates', { _lead_id: r.lead_id })));
+        for (let i = 0; i < open.length; i++) {
+          if (got[i].error) return jsonResponse({ ok: false, error: 'read_failed', detail: got[i].error!.message }, 500, corsHeaders, rlHeaders);
+          candidatesBy.set(open[i].lead_id, got[i].data ?? []);
+        }
       }
-      return jsonResponse({ ok: true, reviews: (data ?? []).map((r: { lead_id: string }) => ({ ...r, business_name: names.get(r.lead_id) ?? null })) }, 200, corsHeaders, rlHeaders);
+      // Everyone who could be named or chosen: the team, with role and status (the override picker; names in evidence).
+      const [{ data: members }, { data: roleRows }] = await Promise.all([
+        serviceClient.from('team_members').select('user_id, display_name, status, is_book_owner'),
+        serviceClient.from('user_roles').select('user_id, role'),
+      ]);
+      const roleOf = new Map(((roleRows ?? []) as { user_id: string; role: string }[]).map((r) => [r.user_id, r.role]));
+      const people = ((members ?? []) as { user_id: string; display_name: string | null; status: string | null; is_book_owner: boolean | null }[])
+        .map((m) => ({ user_id: m.user_id, name: m.display_name ?? 'Unnamed', status: m.status ?? 'active', role: roleOf.get(m.user_id) ?? null, is_book_owner: !!m.is_book_owner }));
+      return jsonResponse({
+        ok: true, people,
+        reviews: reviews.map((r) => {
+          const l = leadsById.get(r.lead_id) ?? null;
+          return {
+            ...r, business_name: (l?.business_name as string | null) ?? null,
+            lead: l ? { amount_paid: l.amount_paid ?? null, payment_date: l.payment_date ?? null, status: l.status ?? null, owner_now: l.assigned_to_user_id ?? null,
+              sold_by_user_id: l.sold_by_user_id ?? null, sold_at: l.sold_at ?? null, paid_signup_id: l.paid_signup_id ?? null, paid_checkout_session: l.paid_checkout_session_id ?? null } : null,
+            first_payment: firstPayment.get(r.lead_id) ?? null,
+            candidates: r.status === 'open' ? candidatesBy.get(r.lead_id) ?? [] : null,
+            history: historyBy.get(r.lead_id) ?? [],
+          };
+        }),
+      }, 200, corsHeaders, rlHeaders);
     }
     if (action === 'attribution_review_resolve') {
       if (!uuidOk(body.lead_id)) return jsonResponse({ ok: false, error: 'bad_lead' }, 400, corsHeaders, rlHeaders);
-      const { data, error } = await serviceClient.rpc('resolve_sale_attribution_review', {
-        _lead_id: body.lead_id, _decision: String(body.decision ?? ''), _note: typeof body.note === 'string' ? body.note : null, _actor: adminUserId,
+      if (body.seller_user_id != null && !uuidOk(body.seller_user_id)) return jsonResponse({ ok: false, error: 'bad_seller' }, 400, corsHeaders, rlHeaders);
+      // The one resolver (resolve_sale_attribution_with_seller): checks the admin role again, decides evidence vs override.
+      const { data, error } = await serviceClient.rpc('resolve_sale_attribution_with_seller', {
+        _lead_id: body.lead_id, _decision: String(body.decision ?? ''), _seller: body.seller_user_id ?? null,
+        _note: typeof body.note === 'string' ? body.note : null, _override_reason: typeof body.override_reason === 'string' ? body.override_reason : null,
+        _actor: adminUserId,
       });
       if (error) return jsonResponse({ ok: false, error: 'write_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
       const r = data as { ok: boolean; error?: string };
-      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, lead: body.lead_id, decision: body.decision ?? null, result: r, timestamp: new Date().toISOString() }));
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, lead: body.lead_id, decision: body.decision ?? null, seller: body.seller_user_id ?? null, result: r, timestamp: new Date().toISOString() }));
       return jsonResponse(r, r.ok ? 200 : 409, corsHeaders, rlHeaders);
     }
 
