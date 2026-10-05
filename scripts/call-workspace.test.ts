@@ -171,7 +171,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
   ok(p.warnings.some((w) => /Run the AI check first/.test(w) && /ring anyway/.test(w)), 'the warning points at the check, and says ringing first is fine');
   const ui = read('src/components/ColdCallPlaybook.tsx');
   ok(/data-testid="call-card-run-check"/.test(ui) && /p\.audit\.state === 'none' && onRunCheck/.test(ui), 'the call card offers "Run the AI check" when there is none');
-  ok(/onRunCheck=\{\(\) => \{ setTab\('work'\)/.test(read('src/components/LeadDetailDialog.tsx')), '…which opens the Work tab, where the one-lead check is run');
+  ok(/onRunCheck=\{openAiTools\}/.test(read('src/components/LeadDetailDialog.tsx')) && /data-testid="ai-check-tools"[\s\S]{0,400}<LeadHookPanel leadId=\{lead\.id\} \/>/.test(read('src/components/LeadDetailDialog.tsx')), '…which opens the AI check tools on the same Call tab, where the one-lead check is run');
   const ready = buildColdCallPlaybook(base());
   ok(ready.audit.state === 'ready' && /Google AI did not name them — it named Brian Slattery Plumbers Limited and Sunnybank Plumbing Services/.test(ready.audit.headline), 'with an audit: the key finding in one line, from the stored result');
   ok(['call-step-open', 'call-step-ask', 'call-step-close', 'call-step-after', 'call-not-the-owner', 'call-card'].every((id) => ui.includes(`data-testid="${id}"`)), 'the screen: call card, then open → ask → close → after they pay, gatekeeper/voicemail folded');

@@ -204,7 +204,7 @@ console.log("\n── campaign on a lead ──");
   ok(/'details_set'/.test(fnText), "the change is logged with an existing activity kind (no CHECK change)");
   ok(/revoke all on function public\.lead_set_campaign\(uuid, uuid\) from public, anon;/.test(mig) && /grant execute on function public\.lead_set_campaign\(uuid, uuid\) to authenticated;/.test(mig), "anon cannot call it");
   const panel = read("src/components/LeadCrmPanel.tsx");
-  ok(/<LeadCampaign lead=\{lead\} save=\{save\} \/>/.test(panel), "the shared lead workspace shows the campaign control (both roles)");
+  ok(/<LeadCampaign lead=\{lead\} save=\{save\} reached=\{reachedInConversation\(activity\.data\)\} \/>/.test(panel), "the shared lead workspace shows the campaign control (both roles) — with the opener note (v2)");
   ok(/save\('lead_set_campaign', \{ _campaign_id: id \}/.test(panel) && /\{ campaign_id: id \}\)/.test(panel), "it saves through lead_set_campaign and tells Outreach / the Inbox (campaign_id patch)");
   ok(/CampaignPicker mode="assign" hideCreate value=\{lead\.campaign_id\}/.test(panel), "pick only — no New / Manage campaigns inside the workspace");
   ok(/\bcampaign_id\b/.test(panel.match(/const CRM_COLUMNS = '[^']+'/)?.[0] ?? ""), "the workspace reads the lead's current campaign");

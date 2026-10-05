@@ -374,6 +374,22 @@ export function lastLoggedContactOf(rows: ReadonlyArray<ActivityRow> | null | un
   };
 }
 
+/** SALES WORKSPACE V2 (2026-10-05): did a LOGGED contact reach them in a real conversation, and was it by phone?
+ *  The browser mirror of SQL public.lead_reached_contact (migration 20261008100000), which stops the cold
+ *  WhatsApp opener: CONVERSATION_OUTCOMES only — no answer / voicemail / message_sent are attempts, and a dialler
+ *  tap writes nothing at all. A phone conversation wins over any other channel. */
+export function reachedInConversation(rows: ReadonlyArray<ActivityRow> | null | undefined): 'phone' | 'other' | null {
+  let other = false;
+  for (const r of rows ?? []) {
+    if (r.kind !== 'call_outcome' && r.kind !== 'contact_logged') continue;
+    if (!CONVERSATION_OUTCOMES.has(String(r.data?.outcome ?? ''))) continue;
+    const channel = r.data?.channel ? String(r.data.channel) : 'call';
+    if (r.kind === 'call_outcome' || channel === 'call') return 'phone';
+    other = true;
+  }
+  return other ? 'other' : null;
+}
+
 /** WhatsApp as a contact: the newest message either way. */
 export interface WhatsAppTouch { direction: 'inbound' | 'outbound'; at: string; failed?: boolean }
 

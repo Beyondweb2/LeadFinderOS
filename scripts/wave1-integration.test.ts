@@ -31,7 +31,7 @@ import { handoffReadiness, type HandoffEvidence, type HandoffLead, type HandoffO
 import { deliveryStage, type StageInput } from '../src/lib/deliveryStage.ts';
 import { buildCallClose, GUARANTEE_HEADLINE } from '../src/lib/callClose.ts';
 import {
-  adoptLink, answersKey, cleanAnswers, linkStep, planQuickCloseSave, quickCloseClosedRefusal, quickCloseState, QUICK_CLOSE_PROMISE, QUICK_CLOSE_QUESTIONS,
+  adoptLink, answersKey, cleanAnswers, closeFlow, linkStep, planQuickCloseSave, quickCloseClosedRefusal, quickCloseState, QUICK_CLOSE_PROMISE, QUICK_CLOSE_QUESTIONS,
   type QcRecord, type QuickCloseAnswers,
 } from '../src/lib/quickClose.ts';
 import { agreementRouteLock, maySetAgreementRoute } from '../src/lib/agreementRoute.ts';
@@ -78,9 +78,10 @@ const qcSave = (row: QcRow, answers: Record<string, string>, expectRoute: unknow
   if (!plan.ok) return plan;
   return writeQc(row, seen?.rev ?? null, plan.next, plan.cols) ? { ok: true as const } : { ok: false as const, error: 'busy' };
 };
+/* v2 (sales workspace, 2026-10-05): the dialog's counter is closeFlow — only the questions this approach needs. */
 const counter = (a: QuickCloseAnswers) => {
-  const shown = QUICK_CLOSE_QUESTIONS.filter((x) => !(x.key === 'access' && a.manager === 'no_website') && !(x.key === 'authority' && (a.manager === 'owner' || a.manager === 'employee' || a.manager === 'no_website')) && !(x.key === 'build_consents' && a.route !== 'build'));
-  return `${shown.filter((x) => a[x.key]).length}/${shown.length}`;
+  const shown = closeFlow(a);
+  return `${shown.filter((k) => a[k]).length}/${shown.length}`;
 };
 
 /* ── the database a payment lands in (the webhook's own writes) ──────────────────────────────────── */
@@ -118,13 +119,13 @@ const row: QcRow = { status: 'answers_saved', quick_close: null, cols: {} };
   ok(close.guarantee.headline === QUICK_CLOSE_PROMISE && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the call screen and Quick Close say the SAME guarantee line (one copy)');
   ok(close.routes[0].spoken.join(' ').includes(`${totalPaymentsFor('build')} payments in total`) && /six weeks after today/.test(close.routes[0].spoken.join(' ')), 'the spoken Build offer: 12 payments in total, monthly from six weeks');
   let route: unknown = null;
-  for (const [k, v] of [['decision_maker', 'yes'], ['domain', 'no_domain'], ['manager', 'no_website'], ['route', 'build']] as const) {
+  for (const [k, v] of [['decision_maker', 'yes'], ['approach', 'new_template'], ['domain', 'no_domain']] as const) {
     ok(qcSave(row, { [k]: v }, route).ok, `Quick Close saves ${k}=${v} (one answer per call, as the dialog sends it)`);
     route = cleanAnswers(row.quick_close?.answers).route ?? null;
   }
-  ok(counter(cleanAnswers(row.quick_close!.answers)) === '4/5', 'four answers → 4 of 5 (the consents to confirm)');
+  ok(counter(cleanAnswers(row.quick_close!.answers)) === '3/4', 'three answers → 3 of 4 (the consents to confirm; a new site is never asked for site access)');
   ok(qcSave(row, { build_consents: 'yes' }, 'build').ok, 'the Build consents are kept (the M-001 bug cannot recur)');
-  ok(counter(cleanAnswers(row.quick_close!.answers)) === '5/5' && quickCloseState(row.status, row.quick_close, NOW) === 'ready', 'Build reaches 5 of 5 — READY FOR PAYMENT');
+  ok(counter(cleanAnswers(row.quick_close!.answers)) === '4/4' && quickCloseState(row.status, row.quick_close, NOW) === 'ready', 'Build reaches 4 of 4 — READY FOR PAYMENT');
   ok(row.cols.plan_tier === 'new_site', 'the checkout reads Build from the row (plan_tier new_site)');
   // generate the link (claim → Stripe → adopt), as fn quick-close does
   const step = linkStep(row.status, clone(row.quick_close), NOW);

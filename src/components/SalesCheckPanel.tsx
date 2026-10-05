@@ -20,7 +20,8 @@ import { useCallCardSummaries, type CallCardSummary } from '@/hooks/useColdCallP
 import type { SalesCheckItemView, useSalesChecks } from '@/hooks/useSalesChecks';
 
 type Checks = ReturnType<typeof useSalesChecks>;
-export type OpenLeadTab = 'scripts' | 'work';
+/** v2: the call screen and the Next Action are both on the Call tab (the Next Action at its bottom). */
+export type OpenLeadTab = 'call' | 'next_action';
 
 const STATUS_LABEL: Record<string, string> = {
   queued: 'Waiting', starting: 'Starting', running: 'Checking…', done: 'Ready', reused: 'Ready', failed: 'Failed', skipped: 'Skipped',
@@ -71,7 +72,7 @@ export function SalesCheckPanel({ checks, onOpenLead }: { checks: Checks; onOpen
       : `Done — ${c.done + c.reused} ready to call`;
 
   const open = (it: SalesCheckItemView, tab: OpenLeadTab) => {
-    if (tab === 'scripts' && !opened.includes(it.id)) { const n = [...opened, it.id]; setOpened(n); writeLocal(openKey, n); }
+    if (tab === 'call' && !opened.includes(it.id)) { const n = [...opened, it.id]; setOpened(n); writeLocal(openKey, n); }
     onOpenLead(it.lead_id, tab);
   };
   const toggleSkip = (it: SalesCheckItemView) => {
@@ -86,7 +87,7 @@ export function SalesCheckPanel({ checks, onOpenLead }: { checks: Checks; onOpen
         <span className="font-medium text-foreground">Check before calling</span>
         <span className="min-w-0 text-muted-foreground">{headline}</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <Button size="sm" className="h-7 text-xs" disabled={!nextReady} onClick={() => nextReady && open(nextReady, 'scripts')} data-testid="sales-check-next">
+          <Button size="sm" className="h-7 text-xs" disabled={!nextReady} onClick={() => nextReady && open(nextReady, 'call')} data-testid="sales-check-next">
             <PhoneCall className="mr-1 h-3.5 w-3.5" />{nextReady ? 'Open the next ready lead' : 'No ready lead left'}
           </Button>
           {c.queued > 0 && (
@@ -165,13 +166,13 @@ function SalesCheckRow({ it, summary, summaryLoading, skipped, onOpen, onToggleS
       </div>
       {isReady && (
         <div className="flex shrink-0 flex-wrap gap-1.5">
-          <Button size="sm" className="h-7 text-xs" onClick={() => onOpen(it, 'scripts')}><PhoneCall className="mr-1 h-3.5 w-3.5" />Call screen</Button>
+          <Button size="sm" className="h-7 text-xs" onClick={() => onOpen(it, 'call')}><PhoneCall className="mr-1 h-3.5 w-3.5" />Call screen</Button>
           {it.phone && (
             <Button asChild size="sm" variant="outline" className="h-7 text-xs">
               <a href={`tel:${it.phone.replace(/[^\d+]/g, '')}`}><Phone className="mr-1 h-3.5 w-3.5" />Call</a>
             </Button>
           )}
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onOpen(it, 'work')} title="Open the lead to set its Next Action"><CalendarClock className="mr-1 h-3.5 w-3.5" />Next Action</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onOpen(it, 'next_action')} title="Open the lead to set its Next Action"><CalendarClock className="mr-1 h-3.5 w-3.5" />Next Action</Button>
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onToggleSkip(it)}>{skipped ? <><RotateCcw className="mr-1 h-3 w-3" />Undo</> : 'Skip'}</Button>
         </div>
       )}

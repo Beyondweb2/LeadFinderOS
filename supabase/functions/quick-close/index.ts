@@ -3,7 +3,7 @@ import { refusalBody, resolveActor, leadAccess } from "../_shared/access.ts";
 import { recordDenial } from "../_shared/protection.ts";
 import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
-  quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, STRIPE_SESSION_LIFETIME_MS,
+  quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, QC_REVIEW_HEADING, paulFlagText, deliveryApproach, STRIPE_SESSION_LIFETIME_MS,
   stripeSessionIdFromUrl, quickCloseClosedRefusal, type QcLinkShare, type QcRecord, type QuickCloseRecord,
 } from "../../../src/lib/quickClose.ts";
 import { serviceWindowState } from "../../../src/lib/serviceWindow.ts";
@@ -245,7 +245,9 @@ Deno.serve(async (req) => {
         onboarding: row ? { id: row.id, status: row.status, contact_name: row.contact_name, contact_email: row.contact_email, confirmed_phone: row.confirmed_phone, business_website: row.business_website } : null,
         answers, state: closedNow ? "paid" : quickCloseState(row?.status, cur, nowMs), gate: quickCloseGate(answers),
         consents: { lines: buildConsentsFor(answers), wording: buildConsentsWording(answers), confirmed: cur?.build_consents_confirmed ?? null },
-        review: { approved_at: cur?.review_approved_at ?? null, reasons: quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]) },
+        review: { approved_at: cur?.review_approved_at ?? null, reasons: quickCloseGate(answers).review.map((r) => QC_REVIEW_TEXT[r]),
+          /* v2: for Paul after payment, never a stop (domain handoff, an exact copy without confirmed rights). */
+          flags: quickCloseGate(answers).flags.map((f) => paulFlagText(f, answers)), delivery_approach: deliveryApproach(answers) },
         link: cur?.link_url && cur.link_generated_at ? {
           url: usable ? cur.link_url : null, usable, generated_at: cur.link_generated_at,
           expires_at: exp ? new Date(exp).toISOString() : null, usable_until: until ? new Date(until).toISOString() : null, shared: shared.slice(-MAX_SHARES),
@@ -382,7 +384,7 @@ Deno.serve(async (req) => {
           const key = `qc_review:${rowId}:${gate.review.join(",")}`;
           if (owner?.user_id) {
             await service.from("notifications").upsert({
-              user_id: owner.user_id, kind: "quick_close_review", title: "DOMAIN / AGENCY ISSUE — Paul review required",
+              user_id: owner.user_id, kind: "quick_close_review", title: QC_REVIEW_HEADING,
               body: `${lead.business_name ?? "A lead"}: ${gate.review.map((r) => QC_REVIEW_TEXT[r]).join("; ")}.`,
               link: `/inbox?lead=${leadId}`, lead_id: leadId, priority: 2, dedupe_key: key,
             }, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });

@@ -83,16 +83,16 @@ console.log("\n── 3. the screens ──");
 {
   const hook = read("src/hooks/useMyCampaigns.ts");
   ok(!/from\('campaigns'\)|created_by/.test(hook), "the Campaigns screens read only the role-checked functions — no browser filter by owner");
-  const wiz = read("src/components/campaigns/CampaignWizard.tsx");
-  ok(/const STEPS = \['Name', 'Leads', 'Message', 'Review'\] as const;/.test(wiz), "the rep's flow is four steps");
-  ok(!/CAMPAIGN_TYPE_OPTIONS|SALE_TYPES|TRADES|CAMPAIGN_METHOD_OPTIONS|WHATSAPP_TEMPLATES/.test(wiz), "…and asks none of the old settings (type, sale type, trade, method, a template list)");
-  ok(/actions\.create\(name\)/.test(wiz) && /setStep\(0\)/.test(wiz), "a name lost to a race goes back to step 1 with the message");
+  /* Sales workspace v2 (Paul, 2026-10-05): no wizard. A campaign is four fields; leads come from Find Leads. */
+  ok(!fs.existsSync(path.join(root, "src/components/campaigns/CampaignWizard.tsx")) && !fs.existsSync(path.join(root, "src/components/campaigns/LeadChooser.tsx")), "v2: the Name → Leads → Message → Review wizard and its lead chooser are gone");
+  const form = read("src/components/campaigns/CampaignEditDialog.tsx");
+  ok(/campaign-trade/.test(form) && /campaign-method-/.test(form) && /campaign-area/.test(form) && /campaign-name-input/.test(form) && !/LeadChooser|WHATSAPP_TEMPLATES|TemplateSnippet/.test(form), "v2: the one form is name · niche · Call/WhatsApp · optional area — no lead step, no message step");
   const detail = read("src/pages/CampaignDetail.tsx");
-  ok(/admin && adminRow && <Button variant="ghost" onClick=\{\(\) => setAdvanced\(true\)\}>/.test(detail), "the old settings stay, admin-only, behind Advanced settings");
+  ok(/<Navigate to=\{campaignId \? `\/outreach\?campaign=\$\{encodeURIComponent\(campaignId\)\}` : '\/campaigns'\} replace \/>/.test(detail) && !/Advanced settings|CampaignFormDialog/.test(detail), "v2: a campaign link opens Outreach filtered to it — no second lead screen, no admin side settings");
   const picker = read("src/components/CampaignPicker.tsx");
   ok(/\{label\(c\)\}/.test(picker) && /campaignDisplayName\(/.test(picker), "the shared dropdown shows the owner in brackets to the admin");
   const uc = read("src/hooks/useCampaigns.ts");
-  ok(/e\.code === '23505' \? campaignErrorText\('name_taken'\)/.test(uc), "the admin's direct create/edit says a duplicate in the same words");
+  ok(!/\.insert\(|\.update\(|\.delete\(/.test(uc) && /archived_at/.test(uc), "v2: no direct create / edit / hard delete for anyone — every write is a role-checked function; deleted campaigns are hidden from pickers");
   ok(/queryKey = useMemo\(\(\) => \['campaigns', user\?\.id \?\? 'anon'\] as const/.test(uc), "the list cache is per person (RLS returns each a different list)");
   ok(SALES_ROUTE_PATTERNS.includes("/campaigns") && canOpenRoute("sales", "/campaigns/abc") && !SALES_SECONDARY_NAV.includes("/campaigns") && !SALES_NAV_ORDER.includes("/campaigns"), "a salesperson can open Campaigns — from the top right of Find Leads / Outreach, never a menu item (Paul, 2026-10-03)");
   ok(!/url: '\/campaigns'/.test(read("src/components/AppSidebar.tsx")) && !/url: '\/campaigns'/.test(read("src/components/MobileBottomNav.tsx")), "no Campaigns item in the sidebar or the phone menu, for either role");

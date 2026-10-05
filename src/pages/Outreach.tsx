@@ -30,7 +30,7 @@ import { useLeadPermissions } from '@/hooks/useLeadPermissions';
 import { AddLeadDialog } from '@/components/AddLeadDialog';
 import { SalesCheckDialog, SalesCheckPanel } from '@/components/SalesCheckPanel';
 import { useSalesChecks } from '@/hooks/useSalesChecks';
-import type { WorkspaceTab } from '@/components/LeadDetailDialog';
+import type { WorkspaceTabInput } from '@/components/LeadDetailDialog';
 import { UserPlus } from 'lucide-react';
 
 const Outreach = () => {
@@ -115,7 +115,7 @@ const Outreach = () => {
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).
   const location = useLocation();
-  type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null; tab?: WorkspaceTab };
+  type LaunchIntent = { leadId: string; channel: 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null; tab?: WorkspaceTabInput };
   /* ⛔ /outreach?lead=<id> (salesLinks.ts outreachLeadLink, 2026-09-30) is the addressable form: it
      stays in the URL while the lead's workspace is open, so a refresh reopens it and Back returns to
      where the click came from; closing the workspace removes it. Router state is still read for an
@@ -168,7 +168,7 @@ const Outreach = () => {
   const isReadOnly = false;
 
   // Campaign default sale types → map keyed by lead id, for the lead detail modal.
-  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+  const { campaigns, allCampaigns, isLoading: campaignsLoading } = useCampaigns();
 
   // Restore the persisted campaign once campaigns have loaded (so we can validate
   // it still exists). Runs once. A launch intent on this visit takes precedence.
@@ -186,6 +186,15 @@ const Outreach = () => {
       restoredRef.current = true;
     }
   }, [campaignsLoading, campaigns, user?.id]);
+  /* ?campaign=<id> — Manage campaigns' "Open leads" (sales workspace v2). Applied only for a LIVE campaign this
+     person may use (the list is RLS-scoped), then removed from the URL so the filter behaves like a pick. */
+  const urlCampaign = searchParams.get('campaign');
+  useEffect(() => {
+    if (!urlCampaign || campaignsLoading) return;
+    if (campaigns.some((c) => c.id === urlCampaign)) changeCampaignFilter(urlCampaign);
+    const next = new URLSearchParams(searchParams); next.delete('campaign'); setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlCampaign, campaignsLoading, campaigns]);
   const campaignDefaultSaleTypeByLead = useMemo(() => {
     const byCampaign: Record<string, string | null> = {};
     for (const c of campaigns) byCampaign[c.id] = c.default_sale_type;
@@ -201,13 +210,14 @@ const Outreach = () => {
   // shows which campaign it belongs to. Built once from the campaigns list.
   const campaignNameByLead = useMemo(() => {
     const byCampaign: Record<string, string> = {};
-    for (const c of campaigns) byCampaign[c.id] = c.name;
+    /* Every campaign the person can read, so a lead in a DELETED (archived) campaign still says where it came from. */
+    for (const c of allCampaigns) byCampaign[c.id] = c.archived_at ? `${c.name} (deleted)` : c.name;
     const map: Record<string, string | null> = {};
     for (const l of allLeads) {
       map[l.id] = l.campaign_id ? byCampaign[l.campaign_id] ?? null : null;
     }
     return map;
-  }, [campaigns, allLeads]);
+  }, [allCampaigns, allLeads]);
 
   // Listen for WhatsApp status updates from the prompt dialog
   useEffect(() => {
@@ -346,7 +356,7 @@ const Outreach = () => {
       )}
 
       {perms.salesChecks && (
-        <SalesCheckPanel checks={checks} onOpenLead={(leadId, tab) => setLaunchIntent({ leadId, channel: 'open', tab })} />
+        <SalesCheckPanel checks={checks} onOpenLead={(leadId) => setLaunchIntent({ leadId, channel: 'open', tab: 'call' })} />
       )}
       {perms.salesChecks && (
         <SalesCheckDialog

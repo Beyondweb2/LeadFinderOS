@@ -231,6 +231,10 @@ export const QUEUE_SKIP_LABEL: Record<string, string> = {
   client: 'a client',
   not_new: 'already past “new”',
   already_contacted: 'already contacted',
+  /* Sales workspace v2 (sales_queue_opener): a real logged conversation stops the cold opener; the lead keeps
+     its campaign. A dialler tap never gets here — it writes nothing. */
+  contacted_by_phone: 'already contacted by phone — initial opener not queued',
+  contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   no_phone: 'no phone',
   not_a_uk_mobile: 'not a UK or Indian mobile',
   opted_out: 'opted out',

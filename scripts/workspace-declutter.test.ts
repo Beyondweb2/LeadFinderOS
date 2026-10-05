@@ -102,12 +102,12 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   const pill = read("src/components/NextActionPill.tsx");
   const crm = read("src/components/LeadCrmPanel.tsx");
   const table = read("src/components/OutreachTable.tsx");
-  ok(/headerStateShown\(salesState\.view, pipelineStatusLabel\(pillStatusOf\(lead\.status, salesState\.view\)\), salesState\.row\)/.test(dlg) && /<SalesStatePill view=\{salesState\.view\} \/>/.test(dlg), "the extra state pill is drawn only through the one rule");
+  ok(/headerStateShown\(salesState\.view, shown, salesState\.row\)/.test(dlg) && /const shown = pipelineStatusLabel\(pillStatusOf\(lead\.status, salesState\.view\)\);/.test(dlg) && /<SalesStatePill view=\{salesState\.view\} \/>/.test(dlg), "the extra state pill is drawn only through the one rule");
   ok(/<PipelineStatusSelect value=\{lead\.status\} stage=\{salesState\.view\}/.test(dlg) && !/<PipelineStatusBadge/.test(dlg), "the status is the SAME control as Outreach and the Inbox (pillStatusOf inside)");
   ok(!/<ContactMethodBadge/.test(dlg) && /Preferred channel/.test(dlg) && /onUpdateLead\(lead\.id, \{ contact_method: v \}/.test(dlg), "the channel is no longer a pill beside the status: a labelled Preferred channel, same write");
-  ok(/<NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>/.test(strip) && !/<NextActionPill/.test(strip) && /data-testid="next-action-bar"/.test(pill), "the header bar shows the Next Action from the Work tab's own row");
+  ok(/\{onEditNext && <NextActionBar lead=\{row\} onEdit=\{onEditNext\} \/>\}/.test(strip) && !/onEditNext=/.test(dlg) && /<NextActionBar lead=\{lead\} onEdit=\{\(\) => setEditingNext\(true\)\} \/>/.test(crm) && /data-testid="next-action-bar"/.test(pill), "v2: ONE Next Action — the popup header no longer draws it; its display and editor are at the bottom of the Call tab");
   ok(!/onSave|lead_set_follow_up|saveNextAction/.test(pill.slice(pill.indexOf("export function NextActionBar"))), "…and never writes: its Edit only opens the editor");
-  ok(/editNextRequested=\{editNextRequested\} onEditNextHandled=/.test(dlg) && /setEditingNext\(true\);\n\s*onEditNextHandled\?\.\(\);/.test(crm), "Edit on the bar opens the Work tab's ONE editor (requested once, then cleared)");
+  ok(/<NextActionBar lead=\{lead\} onEdit=\{\(\) => setEditingNext\(true\)\} \/>/.test(crm) && /setEditingNext\(true\);\n\s*onEditNextHandled\?\.\(\);/.test(crm), "Edit on the bar opens the ONE editor in place (an outside request is taken once, then cleared)");
   ok((crm.match(/<NextActionForm /g) ?? []).length === 1 && /editingNext \|\| preset \?/.test(crm) && /if \(r\.ok\) \{ setPreset\(null\); setEditingNext\(false\); \}/.test(crm), "the editor opens on demand or on an outcome's suggestion, and closes after Save");
   ok(/const \[open, setOpen\] = useState\(defaultOpen\);/.test(crm) && /defaultOpen=\{logContactOpen\}/.test(crm) && /open=\{open\} onOpenChange=\{setOpen\} testId="log-contact"/.test(crm) && /aria-expanded=\{open\}/.test(read("src/components/WorkSection.tsx")),"Log a contact is collapsed by default and opens on tap");
   const tap = crm.slice(crm.indexOf("const tap = async"), crm.indexOf("const outcomeButton"));
@@ -118,14 +118,14 @@ console.log("\n── the popup: one display, one editor, nothing removed ──
   ok(/setDetailLogContact\(true\);\n\s*setDetailLead\(lead\);/.test(table) && /openLogContact=\{detailLogContact\}/.test(table) && /setDetailLogContact\(false\)/.test(table), "Outreach's Call opens the workspace with Log a contact expanded");
   ok(/data-testid="hook-not-run"/.test(crm) && /data-testid="hook-propose"/.test(crm) && /<HookVisibilityCard /.test(crm) && /data-testid="hook-history"/.test(crm), "the AI check: compact when not run; result, re-run and history unchanged");
   ok(/markPaidIsMain\(lead\.status, salesState\.view\)/.test(dlg) && (dlg.match(/onClick=\{handleMarkPaid\}/g) ?? []).length === 2 && dlg.includes("{perms.clientDelivery && !isPaidLead(lead) && ("), "Mark Paid: the main button at a payment stage, a small one otherwise — admin only, unpaid only, same handler");
-  ok(/<QuickCloseButton leadId=\{lead\.id\} variant="quiet" \/>/.test(dlg), "Quick Close stays in the header as a quieter outline shortcut");
+  ok(!/<QuickCloseButton/.test(dlg) && /<TabsTrigger value="close"/.test(dlg) && /QuickCloseNav\.Provider/.test(dlg), "v2: Quick Close is the Close tab (no second close window from the header); every Quick Close button in the workspace switches to it");
   /* Nothing removed: every tool the header had is still mounted. */
   for (const [what, re] of [
-    ["Find email", /<FindEmailButton leadId=\{lead\.id\}/], ["Find socials", /<SocialLinks lead=\{lead\} withFind \/>/], ["Call script", /openScript\('call'\)/], ["Voice note", /openScript\('voice'\)/],
+    ["Find email", /<FindEmailButton leadId=\{lead\.id\}/], ["Find socials", /<SocialLinks lead=\{lead\} withFind \/>/], ["Call script (the Call tab)", /<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call"/], ["Call (tel)", /data-testid="workspace-call"/],
     ["Crawl site", /<LeadDetailCrawlButton lead=\{lead\} \/>/], ["Welcome pack", /<WelcomePackButton leadId=\{lead\.id\}/], ["Site check", /<LeadSiteCheckButton lead=\{lead\} \/>/],
     ["the star", /<StarToggle /], ["edit name", /setEditingName\(true\)/], ["WhatsApp link", /whatsAppLinkForLead\(lead\.id\)/], ["tabs", /<TabsTrigger value="client"/],
   ] as const) ok(re.test(dlg), `still there: ${what}`);
-  ok(/data-testid="more-tools-toggle"/.test(dlg) && /\{moreTools && !isDemoLead\(lead\.id\) && \(/.test(dlg) && !/DropdownMenu/.test(dlg), "the less frequent tools reveal IN PLACE (not a menu), so their own dialogs stay mounted");
+  ok(/data-testid="more-tools-toggle"/.test(dlg) && /\{moreTools && \(/.test(dlg) && !/DropdownMenu/.test(dlg), "the less frequent tools reveal IN PLACE on Details (not a menu), so their own dialogs stay mounted");
   for (const id of ["learned-agency", "lead-campaign", "domain-control", "meeting-when"]) ok(crm.includes(`data-testid="${id}"`) || crm.includes(`testId="${id}"`), `Work tab keeps ${id}`);
   ok(/<LeadOwnerControl leadId=\{leadId\} \/>/.test(strip) && /<LastContactLine/.test(strip) && /wrong-number-pill/.test(strip), "owner, last contact and Wrong number stay in the header");
 }

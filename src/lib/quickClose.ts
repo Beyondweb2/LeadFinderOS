@@ -7,8 +7,23 @@
    website_platform / authority_confirmed), and in `quick_close` for the rest. Payment is the EXISTING
    findable-checkout: this file prices nothing and no request can change the price or terms.
    ⛔ THE GATE IS POSITIVE. "Not sure" is never a yes; an unanswered question is never safe. A decision-
-   maker "No" stops payment; any domain / agency doubt is "DOMAIN / AGENCY ISSUE — Paul review required"
-   (the opportunity is kept, flagged, and Paul can release it). Sales is never asked to read a contract.
+   maker "No" stops payment. Sales is never asked to read a contract.
+   🔴 SALES WORKSPACE V2 (Paul, 2026-10-05): THE QUESTIONS FOLLOW WHAT THEY WANT. Authority first, then the
+   WEBSITE APPROACH, then only the questions that approach needs (APPROACH_ROUTE maps it onto Build /
+   Optimise; prices and terms never move):
+     improve      → Optimise: site / CMS access, who manages it. No domain question (we edit in place).
+     new_template → Build: the domain only (the new site has to go live somewhere). Never site access.
+     refresh      → Build: rights to reuse content / branding / photos, then the domain.
+     recreation   → Build: rights, who owns the current design / code, then the domain.
+     unsure       → the plan is picked explicitly, then that plan's questions.
+   ⛔ DOMAIN CONTROL IS NOT WEBSITE ACCESS. A new site never needs the old backend. An unresolved domain on
+      Build is "Domain handoff to resolve before launch" — a flag for Paul in the handoff, never a stop: the
+      site is built and previewed; it goes live once they (or an authorised provider) can make the change,
+      or a different domain is agreed.
+   ⛔ "PAUL REVIEW REQUIRED" (the payment stop) is now ONLY for Optimise work on a site we cannot get into:
+      that route IS work on their site. An exact-copy request without confirmed rights is a non-blocking
+      flag and the delivery approach drops to a visual refresh / Findable template — never a promise to
+      copy third-party code or design.
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
@@ -17,18 +32,39 @@ import {
 } from './findableOffer.ts';
 
 export type QcDecisionMaker = 'yes' | 'no';
-export type QcDomain = 'yes' | 'no' | 'not_sure' | 'no_domain';
+/** 'agency' (v2): an agency / provider controls it — a handoff, not a refusal. */
+export type QcDomain = 'yes' | 'agency' | 'no' | 'not_sure' | 'no_domain';
 export type QcManager = 'owner' | 'employee' | 'agency' | 'third_party' | 'no_website' | 'not_sure';
 export type QcAccess = 'yes' | 'no' | 'not_sure' | 'not_applicable';
+/** Legacy (asked before v2 only): authority over a third-party-run site. Still read on old rows. */
 export type QcAuthority = 'yes' | 'no' | 'not_sure' | 'not_applicable';
 export type QcConsents = 'yes' | 'not_yet';
+/** What they want for their website (v2). Captured early: it decides which questions make sense. */
+export type QcApproach = 'improve' | 'new_template' | 'refresh' | 'recreation' | 'unsure';
+export type QcRights = 'yes' | 'no' | 'not_sure';
+export type QcDesignOwner = 'business' | 'agency' | 'not_sure';
+
+/** The approach → the commercial route. 'unsure' maps to nothing: the plan is then picked explicitly. */
+export const APPROACH_ROUTE: Record<Exclude<QcApproach, 'unsure'>, ServiceRoute> = {
+  improve: 'optimise', new_template: 'build', refresh: 'build', recreation: 'build',
+};
+export const APPROACH_LABEL: Record<QcApproach, string> = {
+  improve: 'Improve their current website',
+  new_template: 'New site — Findable template',
+  refresh: 'Rebuild / visual refresh of their current site',
+  recreation: 'Close recreation of their current site',
+  unsure: 'Unsure — Findable to recommend',
+};
 
 export interface QuickCloseAnswers {
   decision_maker?: QcDecisionMaker | null;
+  approach?: QcApproach | null;
   domain?: QcDomain | null;
   manager?: QcManager | null;
   access?: QcAccess | null;
   authority?: QcAuthority | null;
+  rights?: QcRights | null;
+  design_owner?: QcDesignOwner | null;
   /** 🔴 THE WEBSITE ROUTE (Paul, 2026-09-29): Findable Build (12 payments) or Findable Optimise (6).
    *  Required — a Quick Close with no route never reaches a payment link. */
   route?: ServiceRoute | null;
@@ -50,22 +86,39 @@ export const BUILD_CONSENTS: readonly string[] = [
  *  consent becomes the true one; the other two are unchanged. */
 export const BUILD_CONSENT_NO_DOMAIN =
   "They will register a domain in the business's own name (Findable can help), and have the authority to make the changes the new website needs.";
-export type BuildConsentsWording = 'standard' | 'no_domain';
+/** v2: the domain is unresolved (an agency / provider controls it, nobody is sure, or they do not control
+ *  it). The rep cannot truthfully confirm they control it, so the first consent says what IS true. */
+export const BUILD_CONSENT_DOMAIN_PENDING =
+  'They understand the new website can be built and previewed now, and goes live on their domain only once they — or whoever controls it — can authorise the change, or a different domain is agreed.';
+export type BuildConsentsWording = 'standard' | 'no_domain' | 'domain_pending';
 export function buildConsentsWording(a: QuickCloseAnswers): BuildConsentsWording {
-  return a.domain === 'no_domain' ? 'no_domain' : 'standard';
+  if (a.domain === 'no_domain') return 'no_domain';
+  return domainPending(a) ? 'domain_pending' : 'standard';
 }
 /** The three consents exactly as the rep reads them for these answers (and as stored when confirmed). */
 export function buildConsentsFor(a: QuickCloseAnswers): readonly string[] {
-  return buildConsentsWording(a) === 'no_domain' ? [BUILD_CONSENT_NO_DOMAIN, BUILD_CONSENTS[1], BUILD_CONSENTS[2]] : BUILD_CONSENTS;
+  const w = buildConsentsWording(a);
+  if (w === 'no_domain') return [BUILD_CONSENT_NO_DOMAIN, BUILD_CONSENTS[1], BUILD_CONSENTS[2]];
+  if (w === 'domain_pending') return [BUILD_CONSENT_DOMAIN_PENDING, BUILD_CONSENTS[1], BUILD_CONSENTS[2]];
+  return BUILD_CONSENTS;
+}
+/** The domain is not yet in the business's hands (agency / not sure / no). Never a refusal on its own. */
+export function domainPending(a: QuickCloseAnswers): boolean {
+  return a.domain === 'agency' || a.domain === 'not_sure' || a.domain === 'no';
 }
 
 export const QUICK_CLOSE_QUESTIONS: readonly { key: QcKey; text: string; detail?: readonly string[]; options: readonly { value: string; label: string }[] }[] = [
   { key: 'decision_maker', text: 'Are you authorised to make this decision for the business?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
-  { key: 'domain', text: 'Do you own or control the domain name?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no_domain', label: 'No domain' }] },
-  { key: 'manager', text: 'Who currently manages or controls the website?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
-  { key: 'access', text: 'Could you give Findable access to the current website if needed?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
+  { key: 'approach', text: 'What do they want for their website?', options: (Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => ({ value: k, label: APPROACH_LABEL[k] })) },
+  /* Asked only when the approach is "Unsure": the plan they pay for still has to be one of the two. */
+  { key: 'route', text: 'Which plan are they starting on?', options: [{ value: 'build', label: 'Findable Build — a new website' }, { value: 'optimise', label: 'Findable Optimise — improve their current site' }] },
+  { key: 'access', text: 'Can Findable get access to their current website (its CMS / admin)?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
+  { key: 'manager', text: 'Who manages the website day to day?', options: [{ value: 'owner', label: 'Business / owner' }, { value: 'employee', label: 'Employee' }, { value: 'agency', label: 'External agency' }, { value: 'third_party', label: 'Other third party' }, { value: 'no_website', label: 'No website' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'rights', text: 'Do they own, or have the right to reuse, the content, branding and photos on their current site?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'design_owner', text: "Who owns the current site's design and code?", options: [{ value: 'business', label: 'The business' }, { value: 'agency', label: 'An agency, platform or template provider' }, { value: 'not_sure', label: 'Not sure' }] },
+  { key: 'domain', text: 'Who controls their domain name?', options: [{ value: 'yes', label: 'The business controls it' }, { value: 'agency', label: 'An agency / provider controls it' }, { value: 'not_sure', label: 'Not sure' }, { value: 'no', label: 'They do not control it' }, { value: 'no_domain', label: 'No domain yet' }] },
+  /* Legacy: never asked since v2, still a valid stored answer on rows saved before. */
   { key: 'authority', text: 'If an agency or third party manages the site, do you have the authority to replace, move or materially change the website?', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'not_sure', label: 'Not sure' }, { value: 'not_applicable', label: 'Not applicable' }] },
-  { key: 'route', text: 'Website route', options: [{ value: 'build', label: 'Build me a new Findable website' }, { value: 'optimise', label: 'Keep my existing website and optimise it' }] },
   /* Asked ONLY on Build. The three consents the new site cannot go ahead without, read out as written. */
   { key: 'build_consents', text: 'For the new website, can they confirm all three?', detail: BUILD_CONSENTS,
     options: [{ value: 'yes', label: 'Yes — they confirm all three' }, { value: 'not_yet', label: 'Not yet' }] },
@@ -133,88 +186,169 @@ export function mergeAnswers(saved: unknown, incoming: unknown): QuickCloseAnswe
   const prev = cleanAnswers(saved);
   const inc = pickAnswers(incoming);
   const merged: QuickCloseAnswers = { ...prev, ...inc };
-  if (prev.build_consents && inc.domain && inc.build_consents === undefined
-    && buildConsentsWording({ domain: inc.domain }) !== buildConsentsWording(prev)) delete merged.build_consents;
+  /* Consents read with one wording do not carry over to another (No domain / pending / standard). */
+  if (prev.build_consents && inc.build_consents === undefined
+    && buildConsentsWording(cleanAnswers(merged)) !== buildConsentsWording(prev)) delete merged.build_consents;
   return cleanAnswers(merged);
 }
 
-/** Only known values survive, and the cross-answer rules hold. Run it on a COMPLETE set (mergeAnswers). */
+/** Only known values survive, and the cross-answer rules hold. Run it on a COMPLETE set (mergeAnswers).
+ *  v2: a known approach DECIDES the route (APPROACH_ROUTE); only "unsure" keeps an explicitly picked one. */
 export function cleanAnswers(raw: unknown): QuickCloseAnswers {
   const out = pickAnswers(raw);
+  if (out.approach && out.approach !== 'unsure') out.route = withRoute(out).route;
   // An Optimise route for a business with no website is not an answer (there is nothing to optimise).
-  if (out.route && !routeAvailable(out, out.route)) delete out.route;
+  if (out.route && !routeAvailable(out, out.route)) {
+    delete out.route;
+    if (out.approach === 'improve') delete out.approach;
+  }
   // The Build consents belong to Build: on any other route (or none) they are not an answer.
   if (out.route !== 'build') delete out.build_consents;
   return out;
 }
 
 const thirdPartyManaged = (a: QuickCloseAnswers) => a.manager === 'agency' || a.manager === 'third_party';
-const noSite = (a: QuickCloseAnswers) => a.manager === 'no_website';
 
-/** Which questions still need an answer. Access / authority are "not applicable" for some answers. */
-export function missingQuestions(a: QuickCloseAnswers): QcKey[] {
+/** THE one derivation of the plan from the approach (cleanAnswers stores it; every rule below reads it through
+ *  this, so a raw answer set and a cleaned one can never be judged differently). */
+export function withRoute(a: QuickCloseAnswers): QuickCloseAnswers {
+  return a.approach && a.approach !== 'unsure' ? { ...a, route: APPROACH_ROUTE[a.approach] } : a;
+}
+
+/** Which questions still need an answer — only the ones the chosen approach needs (v2 order: authority,
+ *  approach, [plan when unsure], then the approach's own questions, then the Build consents). A row saved
+ *  before v2 has no approach, so the approach is asked; its old answers stay stored and are not re-asked. */
+export function missingQuestions(raw: QuickCloseAnswers): QcKey[] {
+  const a = withRoute(raw);
   const miss: QcKey[] = [];
   if (!a.decision_maker) miss.push('decision_maker');
-  if (!a.domain) miss.push('domain');
-  if (!a.manager) miss.push('manager');
-  if (!a.access && !noSite(a)) miss.push('access');
-  // Authority is asked only where a third party runs the site; "not applicable" does not answer it there.
-  if (thirdPartyManaged(a) ? !(a.authority && a.authority !== 'not_applicable') : !a.authority && !noSite(a) && a.manager !== 'owner' && a.manager !== 'employee') miss.push('authority');
-  if (!a.route) miss.push('route');
+  if (!a.approach) { miss.push('approach'); return miss; }
+  if (!a.route) { miss.push('route'); return miss; }
+  for (const k of routeQuestions(a)) if (!a[k] || (a[k] as string) === 'not_applicable') miss.push(k);
   if (a.route === 'build' && !a.build_consents) miss.push('build_consents');
   return miss;
 }
 
-export type QcReviewReason = 'domain_not_owned' | 'domain_unsure' | 'third_party_no_authority' | 'third_party_authority_unsure' | 'manager_unsure' | 'no_site_access' | 'optimise_access_unsure';
+/** The questions this approach / route asks, in order. ⛔ Build never asks for current-site access; plain
+ *  Optimise never asks who controls the domain (the site is edited in place). */
+export function routeQuestions(raw: QuickCloseAnswers): QcKey[] {
+  const a = withRoute(raw);
+  if (a.route === 'optimise') return ['access', 'manager'];
+  if (a.route !== 'build') return [];
+  if (a.approach === 'recreation') return ['rights', 'design_owner', 'domain'];
+  if (a.approach === 'refresh') return ['rights', 'domain'];
+  return ['domain'];
+}
+
+/** The questions on screen for these answers, in the order they are asked (the progress count reads this):
+ *  authority, approach, the plan when unsure, the approach's own questions, the Build consents. */
+export function closeFlow(raw: QuickCloseAnswers): QcKey[] {
+  const a = withRoute(raw);
+  const keys: QcKey[] = ['decision_maker', 'approach'];
+  if (a.approach === 'unsure') keys.push('route');
+  if (a.route && a.approach) keys.push(...routeQuestions(a));
+  if (a.route === 'build' && a.approach) keys.push('build_consents');
+  return keys;
+}
+
+/** The route an answer WOULD give (for the "this changes the payments" confirmation before saving it). */
+export function routeAfterAnswer(a: QuickCloseAnswers, key: QcKey, value: string): ServiceRoute | null {
+  if (key === 'approach') return value !== 'unsure' && value in APPROACH_ROUTE ? APPROACH_ROUTE[value as Exclude<QcApproach, 'unsure'>] : (a.route ?? null);
+  if (key === 'route') return value === 'build' || value === 'optimise' ? value : (a.route ?? null);
+  return a.route ?? null;
+}
+
+/** The one confirmation for an answer that switches Build ⇄ Optimise (the money changes). */
+export function routeSwitchText(from: ServiceRoute, to: ServiceRoute, hasLink: boolean): string {
+  const extra = [hasLink ? 'The current payment link will be cancelled.' : '', from === 'build' ? 'The Build consents will be cleared.' : ''].filter(Boolean).join(' ');
+  return `Switch to ${SERVICE_ROUTE_NAME[to]}? That is ${totalPaymentsFor(to)} payments in total instead of ${totalPaymentsFor(from)}. ${extra}`.trim();
+}
+
+/** "Paul review required" — the PAYMENT STOP. Since v2 only Optimise work on a site we cannot get into
+ *  (that route IS work on their site). The domain / rights reasons of the old gate are gone from here;
+ *  the legacy authority answers still stop an Optimise on a site an agency runs. */
+export type QcReviewReason = 'third_party_no_authority' | 'third_party_authority_unsure' | 'no_site_access' | 'optimise_access_unsure';
 export const QC_REVIEW_TEXT: Record<QcReviewReason, string> = {
-  domain_not_owned: 'The business says it does not own or control the domain',
-  domain_unsure: 'Not sure who owns or controls the domain',
-  third_party_no_authority: 'An agency / third party runs the site and they do not have authority to replace or move it',
-  third_party_authority_unsure: 'An agency / third party runs the site and authority to replace or move it is unclear',
-  manager_unsure: 'Not sure who manages the website',
-  no_site_access: 'They could not give Findable access to the current website',
+  third_party_no_authority: 'An agency / third party runs the site and they do not have authority to let Findable change it',
+  third_party_authority_unsure: 'An agency / third party runs the site and authority to let Findable change it is unclear',
+  no_site_access: 'Optimise works on their current website, and they could not give Findable access to it',
   optimise_access_unsure: 'Optimise chosen, but an agency / third party runs the site and access to it is not confirmed',
 };
+/** The payment-stop panel's heading (was "DOMAIN / AGENCY ISSUE" — the domain no longer stops a sale). */
+export const QC_REVIEW_HEADING = 'WEBSITE ACCESS ISSUE — Paul review required';
+
+/** For Paul, NEVER a payment stop: settled after payment, carried in the handoff and shown on Close. */
+export type QcPaulFlag = 'domain_handoff' | 'exact_copy_rights';
+export function paulFlagText(f: QcPaulFlag, a: QuickCloseAnswers): string {
+  if (f === 'exact_copy_rights') {
+    return 'A close recreation was asked for, but the right to reproduce the current site is not confirmed — '
+      + `delivery is planned as “${APPROACH_LABEL[deliveryApproach(a)]}” unless Paul confirms the rights. Never promise an exact copy.`;
+  }
+  if (a.domain === 'no') return 'Domain handoff to resolve before launch — they do not control their domain. The site can be built and previewed; it goes live once they get control, an authorised provider makes the DNS change, or a different domain is agreed.';
+  if (a.domain === 'agency') return 'Domain handoff to resolve before launch — an agency / provider controls the domain. The site can be built and previewed; going live needs them (or the business) to authorise the DNS change.';
+  return 'Domain handoff to resolve before launch — not sure who controls the domain. The site can be built and previewed meanwhile.';
+}
+
+/** The delivery approach Findable will actually use. ⛔ An exact copy only when the business owns what is
+ *  being reproduced — the content AND the design / code; otherwise a visual refresh (content theirs) or
+ *  the Findable template. Never a promise to copy third-party-owned code or design. */
+export function deliveryApproach(a: QuickCloseAnswers): QcApproach {
+  if (a.approach !== 'recreation') return a.approach ?? 'unsure';
+  if (a.rights !== 'yes') return 'new_template';
+  return a.design_owner === 'business' ? 'recreation' : 'refresh';
+}
 
 export interface QuickCloseGate {
   complete: boolean;
   missing: QcKey[];
   /** A decision-maker "No": payment is never generated. */
   blocked: boolean;
-  /** Domain / agency doubt: flagged for Paul; payment waits for his release. */
+  /** Optimise on a site we cannot get into: flagged for Paul; payment waits for his release. */
   review: QcReviewReason[];
+  /** For Paul after payment — never a stop. */
+  flags: QcPaulFlag[];
   /** Things to settle after payment — shown in the handoff, never a stop. */
   notes: string[];
   /** Build chosen and the three consents are not confirmed: no link until they are. */
   consentsNeeded: boolean;
 }
 
-export function quickCloseGate(a: QuickCloseAnswers): QuickCloseGate {
+export function quickCloseGate(raw: QuickCloseAnswers): QuickCloseGate {
+  const a = withRoute(raw);
   const missing = missingQuestions(a);
   const review: QcReviewReason[] = [];
-  if (a.domain === 'no') review.push('domain_not_owned');
-  if (a.domain === 'not_sure') review.push('domain_unsure');
-  if (thirdPartyManaged(a)) {
-    if (a.authority === 'no') review.push('third_party_no_authority');
-    else if (a.authority === 'not_sure') review.push('third_party_authority_unsure');
-  }
-  if (a.manager === 'not_sure') review.push('manager_unsure');
-  if (a.access === 'no' && !noSite(a)) review.push('no_site_access');
-  /* ⛔ OPTIMISE IS NEVER SILENTLY SAFE ON A SITE SOMEONE ELSE RUNS (Paul, 2026-09-29): the whole route is
-     work on that site, so an agency / third party site with access not confirmed goes to Paul. */
-  if (a.route === 'optimise' && thirdPartyManaged(a) && a.access !== 'yes' && a.access !== 'no') review.push('optimise_access_unsure');
+  const flags: QcPaulFlag[] = [];
   const notes: string[] = [];
-  if (a.access === 'not_sure') notes.push('Website access to be confirmed after payment');
-  if (a.domain === 'no_domain') notes.push('No domain yet — the business registers one in its own name');
-  if (thirdPartyManaged(a) && a.authority === 'yes') notes.push('An agency / third party runs the site; the client says they may replace or move it');
-  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, notes, consentsNeeded: a.route === 'build' && a.build_consents !== 'yes' };
+  if (a.route === 'optimise') {
+    /* ⛔ OPTIMISE IS NEVER SILENTLY SAFE ON A SITE WE CANNOT GET INTO (Paul, 2026-09-29): the whole route is
+       work on that site. */
+    if (a.access === 'no') review.push('no_site_access');
+    if (thirdPartyManaged(a)) {
+      if (a.authority === 'no') review.push('third_party_no_authority');
+      else if (a.authority === 'not_sure') review.push('third_party_authority_unsure');
+      if (a.access !== 'yes' && a.access !== 'no') review.push('optimise_access_unsure');
+    }
+    if (a.access === 'not_sure' && !thirdPartyManaged(a)) notes.push('Website access to be confirmed after payment');
+    if (a.manager === 'not_sure') notes.push('Who manages the website is to be confirmed');
+    if (thirdPartyManaged(a) && a.access === 'yes') notes.push('An agency / third party runs the site; the client says Findable can get access');
+  }
+  if (a.route === 'build') {
+    if (domainPending(a)) flags.push('domain_handoff');
+    if (a.approach === 'recreation' && (a.rights !== 'yes' || a.design_owner !== 'business')) flags.push('exact_copy_rights');
+    if (a.approach === 'refresh' && a.rights && a.rights !== 'yes') notes.push('Reuse only content, branding and photos the business owns — replace anything else');
+    if (a.domain === 'no_domain') notes.push('No domain yet — the business registers one in its own name');
+  }
+  return { complete: missing.length === 0, missing, blocked: a.decision_maker === 'no', review, flags, notes, consentsNeeded: a.route === 'build' && a.build_consents !== 'yes' };
 }
 
 /** The canonical onboarding columns these answers set (the same ones the self-service form writes). */
-export function onboardingColumnsFor(a: QuickCloseAnswers): Record<string, unknown> {
+export function onboardingColumnsFor(raw: QuickCloseAnswers): Record<string, unknown> {
+  const a = withRoute(raw);
   const out: Record<string, unknown> = {};
   if (a.domain === 'yes' || a.domain === 'no' || a.domain === 'not_sure') { out.domain_status = 'existing'; out.domain_owned = a.domain; }
+  if (a.domain === 'agency') { out.domain_status = 'existing'; out.domain_owned = 'not_sure'; out.domain_third_party = 'yes'; }
   if (a.domain === 'no_domain') { out.domain_status = 'new'; out.domain_owned = null; }
+  if (a.rights === 'yes' || a.rights === 'no' || a.rights === 'not_sure') out.site_rights = a.rights;
   if (a.manager === 'agency' || a.manager === 'third_party') out.website_manager = 'web_company';
   else if (a.manager === 'owner' || a.manager === 'employee') out.website_manager = a.access === 'yes' ? 'direct_access' : 'owner_only';
   if (a.manager === 'no_website') out.website_platform = 'no_website';
@@ -225,10 +359,11 @@ export function onboardingColumnsFor(a: QuickCloseAnswers): Record<string, unkno
      route writes NOTHING — never a default. */
   if (a.route) { out.plan_tier = planTierForRoute(a.route); out.website_addon = a.route === 'build'; }
   /* The Build consents land in the SAME columns the self-service domain pages write. Authority is never
-     turned into a yes over an explicit 'no' / 'not sure' to the authority question. */
+     turned into a yes over an explicit 'no' / 'not sure' to the authority question, nor while the domain is
+     still to be handed over (v2: the pending consent does not say they control it). */
   if (a.route === 'build' && a.build_consents === 'yes') {
     out.dns_permission = true; out.materials_confirmed = true;
-    if (a.authority !== 'no' && a.authority !== 'not_sure') out.authority_confirmed = true;
+    if (a.authority !== 'no' && a.authority !== 'not_sure' && !domainPending(a)) out.authority_confirmed = true;
   }
   return out;
 }
@@ -315,7 +450,11 @@ export function mayGenerateLink(rowStatus: string | null | undefined, qc: QuickC
 
 export const answerLabel = (key: QcKey, value: string | null | undefined) =>
   QUICK_CLOSE_QUESTIONS.find((q) => q.key === key)?.options.find((o) => o.value === value)?.label ?? '—';
-const SHORT_Q: Record<QcKey, string> = { decision_maker: 'Decision maker', domain: 'Owns / controls domain', manager: 'Website managed by', access: 'Can give site access', authority: 'Authority to replace / move site', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)' };
+const SHORT_Q: Record<QcKey, string> = {
+  decision_maker: 'Decision maker', approach: 'Website approach', domain: 'Domain controlled by', manager: 'Website managed by',
+  access: 'Can give site access', authority: 'Authority to replace / move site', rights: 'Rights to reuse content / branding / photos',
+  design_owner: 'Current design / code owned by', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)',
+};
 
 /** The handoff lines for the PAID email when a salesperson Quick-Closed the client. Pure. */
 export function quickCloseHandoffLines(i: {
@@ -329,9 +468,12 @@ export function quickCloseHandoffLines(i: {
   const g = quickCloseGate(a);
   const out: string[] = [];
   out.push(`QUICK CLOSE by ${i.closedBy ?? 'a teammate'}${i.qc.completed_at ? ` on ${i.qc.completed_at.slice(0, 10)}` : ''} — the client did the minimum on the phone; everything else is yours to collect.`);
-  for (const q of QUICK_CLOSE_QUESTIONS) out.push(`  ${SHORT_Q[q.key]}: ${answerLabel(q.key, a[q.key])}`);
+  /* Only the questions that were part of this sale (an unanswered legacy key is noise in Paul's email). */
+  for (const q of QUICK_CLOSE_QUESTIONS) if (a[q.key] || q.key === 'decision_maker' || q.key === 'approach') out.push(`  ${SHORT_Q[q.key]}: ${answerLabel(q.key, a[q.key])}`);
   if (a.route) out.push(`  Sold as: ${SERVICE_ROUTE_NAME[a.route]} — ${totalPaymentsFor(a.route)} payments in total`);
-  if (g.review.length) out.push(`  DOMAIN / AGENCY ISSUE: ${g.review.map((r) => QC_REVIEW_TEXT[r]).join('; ')}${i.qc.review_approved_at ? ` (you released it${i.qc.review_note ? `: ${i.qc.review_note}` : ''})` : ''}`);
+  if (a.approach === 'recreation') out.push(`  Delivery approach: ${APPROACH_LABEL[deliveryApproach(a)]}`);
+  if (g.review.length) out.push(`  WEBSITE ACCESS ISSUE: ${g.review.map((r) => QC_REVIEW_TEXT[r]).join('; ')}${i.qc.review_approved_at ? ` (you released it${i.qc.review_note ? `: ${i.qc.review_note}` : ''})` : ''}`);
+  for (const f of g.flags) out.push(`  FOR PAUL: ${paulFlagText(f, a)}`);
   for (const n of g.notes) out.push(`  Note: ${n}`);
   const c = i.contact;
   const contact = [c.name, c.email, c.phone, c.website].filter((x) => x && String(x).trim()).join(' · ');
@@ -360,7 +502,8 @@ export function answersKey(a: unknown): string {
 }
 
 function notKeptText(k: QcKey, a: QuickCloseAnswers): string {
-  if (k === 'route') return 'Optimise needs a website to work on — with no website only Findable Build is possible.';
+  if (k === 'route' && a.approach && a.approach !== 'unsure') return `The plan follows the website approach (${APPROACH_LABEL[a.approach]}) — change the approach to change the plan.`;
+  if (k === 'route' || k === 'approach') return 'Optimise needs a website to work on — with no website only Findable Build is possible.';
   if (k === 'build_consents') return `The Build consents only apply to Findable Build${a.route ? ` — the route is ${SERVICE_ROUTE_NAME[a.route]}` : ' — choose the route first'}.`;
   return 'That answer could not be saved. Refresh and try again.';
 }
@@ -392,11 +535,13 @@ export function planQuickCloseSave(
       return { ok: false, error: 'stale_route', detail: `The route was changed to ${prev.route ? SERVICE_ROUTE_NAME[prev.route] : 'not chosen'} in another window. The screen has been refreshed — check it before carrying on.` };
     }
   }
-  const routeChange = !!(inc.route && prev.route && inc.route !== prev.route);
+  const answers = mergeAnswers(prev, rawIncoming);
+  /* v2: the approach can move the route (improve → Optimise, a new site → Build), so the change is judged on
+     the MERGED answers, not only on a route the screen sent. Build ⇄ Optimise is never a stray tap. */
+  const routeChange = !!(prev.route && answers.route && answers.route !== prev.route);
   if (routeChange && o.routeChangeConfirmed !== true) {
     return { ok: false, error: 'route_change_unconfirmed', detail: 'Changing the route changes the number of payments. Confirm the change to switch.' };
   }
-  const answers = mergeAnswers(prev, rawIncoming);
   const lost = (Object.keys(inc) as QcKey[]).find((k) => answers[k] !== inc[k]);
   if (lost) return { ok: false, error: 'answer_not_kept', detail: notKeptText(lost, answers) };
   const gate = quickCloseGate(answers);

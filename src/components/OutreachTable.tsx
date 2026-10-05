@@ -118,7 +118,7 @@ import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { SocialLinks, findSocialsForLeads, SOCIAL_BULK_MAX } from './SocialLinks';
 import { CrawlCheckButton } from './CrawlCheckButton';
 import { useLeadCrawls } from '@/hooks/useLeadCrawls';
-import { LeadDetailDialog, type LeadStepper, type WorkspaceTab } from './LeadDetailDialog';
+import { LeadDetailDialog, type LeadStepper, type WorkspaceTabInput } from './LeadDetailDialog';
 import { isWhatsAppWorthTrying, whatsAppCapabilityOf } from '@/lib/whatsAppCapability';
 import { isDemoLead } from '@/lib/demoLeads';
 import { bulkWriteLanded } from '@/lib/bulkWriteResult';
@@ -234,7 +234,7 @@ interface OutreachTableProps {
     templateContent?: string | null;
     shareLink?: string | null;
     /** 'open' only: the workspace tab to land on ("Check before calling" opens the call screen). */
-    tab?: WorkspaceTab;
+    tab?: WorkspaceTabInput;
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
   onLaunchConsumed?: () => void;
@@ -451,7 +451,7 @@ export function OutreachTable({
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   /** Which workspace tab the popup opens on (the call icon opens Work, where the call is logged). */
-  const [detailTab, setDetailTab] = useState<WorkspaceTab | undefined>(undefined);
+  const [detailTab, setDetailTab] = useState<WorkspaceTabInput | undefined>(undefined);
   /* Opened by the Call button: the workspace shows Log a contact expanded (it is collapsed otherwise). */
   const [detailLogContact, setDetailLogContact] = useState(false);
   /* ⛔ KEEP THE OPEN DETAIL DIALOG POINTED AT THE LIVE LEAD ROW, NOT A FROZEN SNAPSHOT (fixed
@@ -739,8 +739,9 @@ export function OutreachTable({
 
   const handleCallClick = useCallback((lead: OutreachLead) => {
     if (onContactGated && !onContactGated('call', lead.id)) return;
-    // Auto-fill contact method
-    if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
+    /* ⛔ SALES WORKSPACE V2 (2026-10-05): the tap writes NOTHING. It used to stamp contact_method = 'call' (admin),
+       which made Find Leads call an untouched business "Already contacted". Opening the dialler proves nobody
+       answered; the logged outcome (lead_log_contact) is the only record of a call. */
     // Always emit walkthrough contact event on click (replay-safe)
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
@@ -756,10 +757,10 @@ export function OutreachTable({
        call"). It used to run executeContact → an attempt with no outcome AND status initial_contact, so a
        number nobody spoke to read "Contacted". Now the dialler opens (the tel: link) and the lead's workspace
        opens on Work, where the person logs what actually happened (lead_log_contact) and sets the Next Action. */
-    setDetailTab('work');
+    setDetailTab('call');
     setDetailLogContact(true);
     setDetailLead(lead);
-  }, [onContactMethodChange]);
+  }, [onContactGated]);
 
   // Launch-pad: when the parent passes a launchIntent (e.g. from Manage), open the
   // matching lead's composer FRESH with the chosen template + that barber's link.
@@ -3422,7 +3423,7 @@ export function OutreachTable({
           const l = leads.find((x) => x.id === playbookLeadId);
           setPlaybookLeadId(null);
           if (!l) return;
-          setDetailTab('work'); setDetailLogContact(true); setDetailLead(l);
+          setDetailTab('call'); setDetailLogContact(true); setDetailLead(l);
         }}
       />
     </Card>
