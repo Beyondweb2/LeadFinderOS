@@ -1,20 +1,13 @@
-/* ══ TPS / CTPS SCREENING — state, verdict and the provider boundary (2026-10-05) ═══════════════════
-   docs/salesperson-onboarding.md §5. The contractor agreement (clause 4.3(a)) and Paul's checklist (Part 2)
-   say every number is checked against the Telephone Preference Service (TPS) and the Corporate TPS (CTPS)
-   before a sales call. LeadFinderOS had NO screening of any kind before this file. No provider is
-   connected yet (TPS_PROVIDERS is empty), so every number reads "no checking service connected".
-   Pure and edge-safe (no imports): a future edge function that calls a provider uses tpsRowFromAnswer;
-   the lead card uses tpsVerdict.
-
-   ⛔ NOTHING HERE CAN SAY "CLEAR" WITHOUT A GENUINE ANSWER. A number is clear only when a connected
-      provider (listed in TPS_PROVIDERS) answered "not registered" for BOTH registers, with the provider's
-      own reference, within TPS_RECHECK_DAYS. No answer, an error, an unknown provider, a blank reference,
-      a manual tick, an old check — all read as NOT screened. The database refuses a row without a provider
-      and a reference too (public.phone_tps_checks).
-   ⛔ BOTH REGISTERS, ALWAYS. CTPS covers companies and LLPs, TPS covers individuals, sole traders and most
-      partnerships; LeadFinderOS often does not know which a business is (src/lib/businessType.ts), so a
-      clear verdict needs both. Never infer "CTPS not relevant" from an unknown business type.
-   ⛔ A VERDICT IS ADVICE TO THE CALLER, NOT A LOCK. Nothing in calling or WhatsApp reads it. */
+/* ══ TPS / CTPS — FUTURE COMPLIANCE ENHANCEMENT, NOT ACTIVE (postponed by Paul, 2026-10-05) ═════════
+   docs/salesperson-onboarding.md §5. Dormant groundwork only: the state shape (public.phone_tps_checks),
+   the provider boundary (tpsRowFromAnswer) and the verdict (tpsVerdict). NOTHING uses it today:
+     · no provider is connected (TPS_PROVIDERS is empty) and no external TPS/CTPS API is ever called;
+     · it is NOT part of Ready to Sell, and it does NOT block the Call button, call logging or any action;
+     · no screen shows it (the lead card has no TPS line while it is inactive).
+   When Paul switches it on, the rules below already hold:
+   ⛔ NOTHING CAN SAY "CLEAR" WITHOUT A GENUINE ANSWER — a connected provider's "not registered" on BOTH
+      registers, with the provider's reference, within TPS_RECHECK_DAYS. Anything else reads not screened.
+   ⛔ BOTH REGISTERS, ALWAYS — LeadFinderOS often does not know a business's legal form. */
 
 /** A new TPS/CTPS registration takes effect 28 days after it is made, so screening at least every 28 days
  *  is the standard practice. Paul may shorten it; never lengthen it without advice. */

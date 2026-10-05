@@ -5,8 +5,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRecordBusinessType, type LeadCompliance } from '@/hooks/useLeadCompliance';
 import { BUSINESS_TYPES, BUSINESS_TYPE_SOURCES, type BusinessType, type BusinessTypeSource } from '@/lib/businessType';
 
-/* The two compliance lines on the Prospect card (2026-10-05, docs/salesperson-onboarding.md §5–6).
-   Display only: neither line allows or blocks a call or a message. */
+/* The business-type line on the Prospect card (2026-10-05, docs/salesperson-onboarding.md §6).
+   Display / evidence only: it never allows or blocks a call, WhatsApp, email or LinkedIn. */
 
 const RECORD_ERRORS: Record<string, string> = {
   evidence_needed: 'Say what the evidence is (for example: "told me on the call", or the company number).',
@@ -55,16 +55,6 @@ export function BusinessTypeValue({ leadId, compliance, canRecord }: { leadId: s
           </span>
         </span>
       )}
-    </span>
-  );
-}
-
-export function TpsValue({ compliance }: { compliance: LeadCompliance }) {
-  const t = compliance.tps;
-  return (
-    <span className="block" data-testid="tps-status" data-tps-state={t.state}>
-      <span className={t.screenedClear ? '' : 'text-muted-foreground'}>{t.label}</span>
-      <span className="block text-[11px] text-muted-foreground">{t.detail}</span>
     </span>
   );
 }

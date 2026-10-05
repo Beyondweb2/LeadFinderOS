@@ -1,112 +1,146 @@
-# Salesperson onboarding, TPS/CTPS state, business type, leavers (2026-10-05)
+# Salesperson onboarding and the Ready to Sell gate (2026-10-05)
 
 Branch `feature/salesperson-onboarding-compliance`. Migration `20261010120000_salesperson_onboarding_compliance.sql`
-(NOT applied — see §9). Sources: the pack of 5 Oct 2026 — *Independent Sales Contractor Agreement v2*,
+(NOT applied — see §9). Sources: the pack of 5 Oct 2026 — *Independent Sales Contractor Agreement draft v2*,
 *Privacy Notice for Salespeople* (draft), *Team Guide change notes*, *Checklist, Risks and Actions for Paul*
 (Part 13 is the onboarding list).
 
-Paul's brief: the minimum practical onboarding record to start using salespeople safely. **WhatsApp
-behaviour is not changed** — the agreement's clause 4.3(c) and the guide's WhatsApp section do not match
-Paul's operating model and are being amended separately, so nothing encodes them.
+Three rounds of instruction from Paul on the same day, in order: (1) the onboarding record; (2) drafts must
+not count, Ready to Sell must be a REAL gate, TPS via TPS Services; (3) **TPS/CTPS POSTPONED** — keep the
+gate, drop every TPS dependency. This record describes the final state.
 
-## 1. The checklist (src/lib/salespersonOnboarding.ts — the one rule file)
+**WhatsApp behaviour is unchanged.** The draft agreement's clause 4.3(c) (call first, WhatsApp only after a
+recorded yes) does not match Paul's operating model and will be amended separately; nothing here encodes it.
+No WhatsApp function, template, queue rule, opt-out or suppression rule was changed. The only effect on
+WhatsApp is the gate itself: a salesperson who is NOT Ready to Sell is refused a send or a queue exactly the
+way a suspended salesperson already is (same guard, same response). Ready reps and Paul: identical behaviour.
 
-Ten items block READY TO SELL; one (Schedule 2) is shown but never blocks:
+## 1. Documents — only the CURRENT APPROVED version counts
 
-| Item | Complete when |
+Table `salesperson_document_versions` (id, kind = contractor_agreement / privacy_notice / team_guide, label,
+**status = draft / approved / superseded**, document_ref, outstanding[], approved/superseded times). One
+approved version per kind (unique index); the database refuses approving a version with anything
+outstanding. `approve_salesperson_document()` approves a draft and supersedes the previous approved version
+in one transaction, and reports how many salespeople had the old one (they stop being Ready to Sell). A version whose id says "draft" (draft v2, the draft notice) can never be approved, even with its notes cleared — the final document is added as its own version.
+
+Seeded:
+- `contractor-agreement-draft-v2` — **draft**. Outstanding: clause 4.3(c) to be amended. Can be RECORDED as
+  what someone signed (history), **never satisfies "current approved contractor agreement signed"**.
+- `salesperson-privacy-notice-draft-2026-10-05` — **draft / provided for review**, 10 outstanding items (§2).
+- `team-guide-2026-10-02` — approved (the current guide).
+
+No final version number is invented. When Paul has the final documents he adds them on the Team page →
+Salesperson documents (Add a document version → Approve as current).
+
+## 2. Privacy notice — outstanding before it can be approved
+
+ICO registration number (s1); right-to-work provider or delete the bracket (s5); overseas-transfer safeguard
+per provider (s5); confirm 6 years for payment/commission/tax and for the agreement (s6); retention for
+LeadFinderOS sales/activity records (s6); confirm 12 months for login logs (s6); "Last updated" date (s9);
+remove the "Words in [square brackets]…" line; sections 2–3 mention "WhatsApp permission records / process"
+from the clause being amended.
+
+## 3. Ready to Sell — the rule and the gate
+
+**The rule** (one place: `public.salesperson_onboarding_missing(uid)` / `salesperson_ready_to_sell(uid)`;
+`src/lib/salespersonOnboarding.ts` mirrors it for the screen with the same keys, and the Team page shows the
+SERVER's answer). Ready = an active, unsuspended sales login, not past an end date, and all ten:
+
+1. current APPROVED contractor agreement signed (+ date + where the signed copy is kept)
+2. current APPROVED salesperson privacy notice given (+ date)
+3. 18+ confirmed
+4. right-to-work check recorded (result pass, method, date, who, evidence location; provider for a certified
+   check; a follow-up date that has fallen due blocks)
+5. bank details received
+6. VAT status (no, or yes + UK VAT number)
+7. individual, or limited company with the contracting entity recorded (name, number, date the contract with
+   the company was confirmed)
+8. start date
+9. own LeadFinderOS login (live account, never stored)
+10. current approved team guide acknowledged (the salesperson can do this one themselves)
+
+Schedule 2 is optional and never blocks. **TPS/CTPS is not part of it.**
+
+**What a not-ready salesperson CAN do:** sign in; see the "You are not Ready to Sell yet" banner (Sales
+dashboard, lead workspace) with what is outstanding; acknowledge the current team guide; read their leads;
+write notes; record an opt-out; give leads back / archive; finish the handoff for a sale already made.
+
+**What they CANNOT do (refused on the server):**
+
+| Action | Where it is refused |
 |---|---|
-| Contractor agreement | a KNOWN version (`CONTRACTOR_AGREEMENT_VERSIONS`) + date signed |
-| Privacy notice | a known **final** version (`PRIVACY_NOTICE_VERSIONS`) + date given — a draft is recorded but never completes it |
-| 18+ | a confirmation date (never the date of birth) |
-| Right to work | result `pass` + method + date + who checked + where the evidence is kept (+ provider name for a certified provider); a follow-up date that has fallen due blocks |
-| Bank details | a received date (the details stay on the signed agreement) |
-| VAT | answered: no, or yes + a UK VAT number (normalised `GB…`) |
-| Individual / limited company | individual, or limited company + company name + number + the date the contract with the company was confirmed (checklist Part 13) |
-| Start date | set |
-| Own login | derived from the live account (sales role, active) — never stored |
-| Team guide | a known version + date acknowledged |
-| Schedule 2 (optional) | received / none listed; shows the 7-day deadline (agreement 4.2) |
+| Claim a lead / add a lead / be assigned one | `guard_action` ('claim'), the assignment trigger on `outreach_leads` (signed-in sessions), admin-users "move all" |
+| Prospect checks, hook audits, searches, enrichment, any guarded action | `guard_action` → `not_onboarded` (refused like `suspended`, one alert per person per day) |
+| Log a call or any other contact, set stages / follow-ups / interest | the `lead_activity` trigger (only their own session; allowlist: note, opted_out, lead_unassigned, archived_set, handoff_saved, details_set, delivery_submitted, client_info_answered) |
+| Queue outreach, send WhatsApp | `guard_action` ('whatsapp_queue', 'whatsapp_send') — no WhatsApp code changed |
+| Quick Close save / payment link / share | fn `quick-close` (`_shared/sales-ready.ts`, fails closed) |
+| Commission-bearing attribution on a new sale | `trg_outreach_leads_sold_by_ready`: a sale on a not-ready rep's lead is credited to the book owner + a security event. Existing stamps never move. Commission code itself unchanged (Session F). |
 
-**READY TO SELL = every blocking item + an active sales login + not suspended + not past an end date.**
-Derived every time, never stored. It is a **display, not a lock**: no claim, call or send reads it (a
-lock would change sending behaviour). Today there are no real salespeople (live, 2026-10-05: Paul + two
-test sales accounts).
+The admin is never gated anywhere. The screens also hide selling actions (`leadPermissions(role, ready)`),
+but the server is what enforces.
 
-Cautions shown (never blocking): the agreement's clause 4.3(c) note; a draft privacy notice; the video
-right-to-work caution; a check dated after the start date; VAT invoices; limited company → adviser;
-leaving notes.
+⚠️ After deploy, every current sales login (today only the two TEST accounts) is not ready until its
+onboarding is recorded with approved documents — and no approved agreement or notice exists yet. That is the
+intended effect.
 
-## 2. Privacy notice — what is outstanding
+## 4. Right to work — factual
 
-Registered as `salesperson-privacy-notice-draft-2026-10-05`, `final: false`. Before it can be issued:
-ICO registration number (s1); the right-to-work provider or delete the bracket (s5); the overseas-transfer
-safeguard per provider (s5); confirm 6 years for payment/commission/tax records and for the agreement (s6);
-the LeadFinderOS sales/activity retention period (s6); confirm 12 months for login logs (s6); the "Last
-updated" date (s9); remove the "Words in [square brackets]…" line; and sections 2–3 mention "WhatsApp
-permission records / process" from the clause being amended. When Paul sends the completed notice, add a
-new entry with `final: true` — that is the only way the item can complete.
+Methods are recorded as one of three categories: **manual / video check recorded** (`manual_video_call`),
+**certified provider check** (`certified_provider`, provider name required), **other approved method**
+(`manual_in_person`, `home_office_share_code`). No screen says a method gives a statutory defence; a video
+check carries the note that it is not certified and that the record does not show a defence. No passport
+number, copy or date of birth is stored; free text that looks like one (or a bank detail) is refused.
 
-## 3. Right to work
+## 5. TPS / CTPS — POSTPONED BY PAUL (2026-10-05). FUTURE COMPLIANCE ENHANCEMENT — NOT ACTIVE
 
-Recorded: method, date, checked by, result, evidence location/reference, provider (certified only), follow-up
-due (only for time-limited permission), notes. **No passport number, copy, or date of birth is stored** —
-`sensitiveTextProblem` refuses text that looks like a passport number, account number, sort code, IBAN or
-date of birth in any free-text field. Methods: `video_call_original_not_held` (Paul's current process; the
-checklist says it gives **no** statutory excuse unless he physically holds the original), `in_person_original`,
-`certified_provider` (IDSP — the replacement Paul plans), `home_office_online` (share code). A tick here is
-a record of what was done, not a legal defence.
+Current implementation:
+- harmless future-ready structures kept: table `phone_tps_checks` (provider + reference required; nothing
+  writes it), `src/lib/tpsCheck.ts` (provider boundary + verdict; `TPS_PROVIDERS` empty);
+- **no live provider, no external API, no credentials needed, no active screening;**
+- **no call block, no Ready to Sell dependency, no screen shows it** (the lead-card line was removed);
+- calling works exactly as before for a ready rep and for Paul.
 
-## 4. Security
+Removed during the day: the TPS line on the lead card and its read. Never built (postponed before it was):
+the TPSAPI adapter, the `tps-check` function, the call-safety gate. Research kept for later: TPS Services'
+TPSAPI is `POST https://service.tpsapi.com/` with an `Authorization` token, `check-tps` / `check-ctps`
+headers and `{"phone_numbers": [...]}`; its response format is NOT publicly documented (the older TPS Checker
+API is), so the adapter must be written against a real response and fail closed on anything else.
 
-- `salesperson_onboarding` and `salesperson_onboarding_log`: RLS on, **zero policies**, every privilege
-  revoked from anon and authenticated. The only reader/writer is fn `admin-users` (`team_onboarding_list`,
-  `team_onboarding_save`), after its admin check. A salesperson cannot read any record — not even their own;
-  the admin's browser session cannot read the table directly either.
-- Every save is validated by the rule file (unknown fields refused, versions must be registered, dates
-  real, cross-field rules) and backed by database CHECKs (end date ⇔ reason, VAT number ⇒ registered,
-  company fields ⇒ limited company).
-- The change log is append-only and server-timed (who, when, which fields, new values); admin-users logs
-  field NAMES only.
+## 6. Business type — display / evidence only
 
-## 5. TPS / CTPS
-
-**Before this branch LeadFinderOS had no TPS or CTPS screening of any kind** — the agreement's clause
-4.3(a) "(LeadFinderOS supports this)" was not true. Built: `phone_tps_checks` (genuine answers only;
-provider + provider reference required by the database; service-role writes; admin reads all, sales reads
-own leads), `src/lib/tpsCheck.ts` (the provider boundary `tpsRowFromAnswer` and the verdict `tpsVerdict`),
-and a TPS/CTPS line on the Prospect card. **`TPS_PROVIDERS` is empty**, so every number reads "Not screened:
-no TPS/CTPS checking service is connected yet". Clear needs a connected provider's "not registered" on
-BOTH registers within `TPS_RECHECK_DAYS` (28). To connect one: a licensed TPS/CTPS data provider, its
-secret, an edge function using `tpsRowFromAnswer`, and an entry in `TPS_PROVIDERS`. Nothing reads the
-verdict to block a call.
-
-## 6. Business type
-
-`src/lib/businessType.ts`: limited company / LLP / sole trader / partnership / unknown. Evidence only — a
-STRONG Companies House match on an ACTIVE company (labelled "not confirmed by a person"), or a person's
-record via `lead_record_business_type` (sales: own leads; a note of the evidence is required; append-only;
-newest wins; a disagreement with Companies House is shown). A missing match is never "sole trader".
-Nothing uses it for channel permissions yet. (This partly reopens Paul's 2026-10-02 "no classification"
-decision, at his request in this brief — read-only, no channel rule.)
+Limited company / LLP / sole trader / partnership / unknown (`src/lib/businessType.ts`): a strong Companies
+House match on an active company (labelled "not confirmed by a person"), or a person's record with evidence
+(`lead_record_business_type`). A missing Companies House match is never "sole trader". **Nothing uses it to
+allow or block calls, WhatsApp, email or LinkedIn**; enforcement can be added later if Paul chooses.
 
 ## 7. Leavers
 
-Recorded on the onboarding row: end date + reason (`resigned`, `ended_on_notice`, `misconduct`), note,
-misconduct found later (within 6 months of the end, agreement 13.3), data-deletion confirmation (12.3).
-Recording an end does **not** remove access — Disable on the Team page still does (role removed, user
-banned, `team_engagement_events` 'ended'), and the panel says when the end date has passed with the login
-still on. **Commission does not read any of it** (another session owns commission).
+On the onboarding row: end date + reason (resigned / ended by Findable on notice / misconduct), note,
+misconduct found later (within 6 months, agreement 13.3), data-deletion confirmation (12.3). From the end
+date the person is no longer Ready to Sell (sales actions stop); Disable on the Team page still removes the
+login. Commission does not read any of it.
 
-## 8. Tests
+## 8. Security and tests
 
-`scripts/salesperson-onboarding.test.ts`, `scripts/tps-check.test.ts`, `scripts/business-type.test.ts`
-(in `npm test`); `supabase/tests/salesperson-onboarding-rls.sql` — run live 2026-10-05 with the migration
-prepended inside the same rolled-back transaction: **26/26**, and a read-back afterwards showed no table,
-function, fake user or borrowed lead left behind. `pre-sales-final.test.ts` lists the migration under LATER.
+- `salesperson_onboarding`, `_log`, `salesperson_document_versions`: RLS on, no policy, every privilege
+  revoked — fn `admin-users` is the only reader/writer. A salesperson sees only their own status keys
+  (`my_onboarding_status`), never a stored value. The readiness functions are service-role only.
+- `scripts/salesperson-onboarding.test.ts` (documents, checklist, keys = the database rule, validation),
+  `scripts/sales-ready-gate.test.ts` (every enforcement point, admin exempt, WhatsApp untouched, business type
+  display-only), `scripts/tps-check.test.ts` (postponed: no provider, no API, not in the gate, no call block),
+  `scripts/business-type.test.ts`.
+- `supabase/tests/salesperson-onboarding-rls.sql` — run live 2026-10-05 with the migration prepended inside
+  one rolled-back transaction: **47/47**. Read back afterwards: no table, function, fake user, borrowed lead or
+  security event left; the live `guard_action` unchanged.
+- ⚠️ Older live SQL tests that act as fake salespeople (`supabase/tests/*.sql`) will now see those fake
+  users refused as not onboarded; give their fixtures a complete onboarding row before re-running them.
 
-## 9. To ship (not done in this branch)
+## 9. To ship (NOT done — no merge, no deploy)
 
-1. Apply the migration (additive), read back the four tables, the function, the grants and `pg_policies`.
-2. Deploy fn `admin-users` only (the only edge function changed; it now imports
-   `src/lib/salespersonOnboarding.ts`).
-3. Then the SPA (Team page panel, Prospect card lines).
+1. Apply the migration; read back the tables, the five functions, the three triggers, the grants,
+   `pg_policies`, and that `guard_action` contains `not_onboarded`.
+2. Deploy fns `admin-users` and `quick-close` (the only edge functions changed; `quick-close` now imports
+   `_shared/sales-ready.ts`).
+3. Release the SPA (Team panel + Documents, the banner, permissions).
+4. Before any real salesperson starts: add and approve the final contractor agreement and the completed
+   privacy notice, then record each person's onboarding.

@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 import { recordDenial } from '../_shared/protection.ts';
 import { OPERATOR_APP_URL } from '../../../src/config/operatorApp.ts';
-import { validateOnboardingPatch, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
+import { validateNewDocument, validateOnboardingPatch, type DocumentVersion, type OnboardingRecord } from '../../../src/lib/salespersonOnboarding.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -563,6 +563,13 @@ serve(async (req) => {
           serviceClient.from('user_roles').select('role').eq('user_id', to).in('role', ['admin', 'sales']),
         ]);
         if (!tm || tm.status !== 'active' || !(tr ?? []).length) return jsonResponse({ ok: false, error: 'not_an_active_member' }, 409, corsHeaders, rlHeaders);
+        /* ⛔ READY TO SELL (2026-10-05): leads never move to a salesperson who has not finished onboarding
+           (the same rule the database applies to a signed-in assignment). The admin is never gated. */
+        const roles = new Set((tr ?? []).map((r: { role: string }) => r.role));
+        if (!roles.has('admin')) {
+          const { data: ready, error: rdErr } = await serviceClient.rpc('salesperson_ready_to_sell', { _user_id: to });
+          if (rdErr || ready !== true) return jsonResponse({ ok: false, error: 'not_ready_to_sell' }, 409, corsHeaders, rlHeaders);
+        }
       }
       const { data: moved, error: mvErr } = await serviceClient.from('outreach_leads')
         .update({ assigned_to_user_id: to, assigned_at: to ? new Date().toISOString() : null })
@@ -581,10 +588,54 @@ serve(async (req) => {
        file (src/lib/salespersonOnboarding.ts): unknown fields refused, versions must be known documents,
        text that looks like a bank, passport or birth-date detail refused. READY TO SELL is never stored —
        the Team page derives it from this record and the live login. Commission does not read any of it. */
+    const loadDocuments = async (): Promise<DocumentVersion[] | null> => {
+      const { data, error } = await serviceClient.from('salesperson_document_versions')
+        .select('id, kind, label, status, document_ref, outstanding, note, created_at, approved_at, superseded_at').order('created_at');
+      return error ? null : ((data ?? []) as DocumentVersion[]);
+    };
+
     if (action === 'team_onboarding_list') {
-      const { data, error } = await serviceClient.from('salesperson_onboarding').select('*');
-      if (error) return jsonResponse({ ok: false, error: 'read_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
-      return jsonResponse({ ok: true, rows: data ?? [] }, 200, corsHeaders, rlHeaders);
+      const [{ data, error }, docs, { data: members }] = await Promise.all([
+        serviceClient.from('salesperson_onboarding').select('*'),
+        loadDocuments(),
+        serviceClient.from('team_members').select('user_id'),
+      ]);
+      if (error || !docs) return jsonResponse({ ok: false, error: 'read_failed', detail: error?.message ?? 'documents' }, 500, corsHeaders, rlHeaders);
+      /* THE GATE'S OWN ANSWER per member (public.salesperson_onboarding_missing) — the panel shows it as the
+         verdict that applies, so the screen can never claim Ready while the server refuses. */
+      const missing: Record<string, string[] | null> = {};
+      await Promise.all(((members ?? []) as { user_id: string }[]).map(async (mm) => {
+        const { data: keys, error: kErr } = await serviceClient.rpc('salesperson_onboarding_missing', { _user_id: mm.user_id });
+        missing[mm.user_id] = kErr ? null : ((keys ?? []) as string[]);
+      }));
+      return jsonResponse({ ok: true, rows: data ?? [], documents: docs, missing }, 200, corsHeaders, rlHeaders);
+    }
+
+    /* DOCUMENT VERSIONS (2026-10-05): Paul adds the final agreement / notice himself and approves it.
+       A new version is always a DRAFT; approving needs every outstanding item resolved and supersedes the
+       previous approved version of that kind (public.approve_salesperson_document, one transaction). */
+    if (action === 'team_document_add') {
+      const v = validateNewDocument(body.document);
+      if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400, corsHeaders, rlHeaders);
+      const { error } = await serviceClient.from('salesperson_document_versions').insert({ ...v.doc, status: 'draft' });
+      if (error) return jsonResponse({ ok: false, error: /duplicate|unique/i.test(error.message) ? 'document_exists' : 'write_failed', detail: error.message }, 400, corsHeaders, rlHeaders);
+      return jsonResponse({ ok: true }, 200, corsHeaders, rlHeaders);
+    }
+    if (action === 'team_document_outstanding') {
+      const id = String(body.id ?? '');
+      const items = Array.isArray(body.outstanding) ? body.outstanding.map((x: unknown) => String(x ?? '').trim()).filter(Boolean) : null;
+      if (!items || items.length > 30 || items.some((o: string) => o.length > 300)) return jsonResponse({ ok: false, error: 'too_long' }, 400, corsHeaders, rlHeaders);
+      const { data, error } = await serviceClient.from('salesperson_document_versions').update({ outstanding: items }).eq('id', id).eq('status', 'draft').select('id');
+      if (error) return jsonResponse({ ok: false, error: 'write_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
+      if (!(data ?? []).length) return jsonResponse({ ok: false, error: 'not_draft' }, 409, corsHeaders, rlHeaders);
+      return jsonResponse({ ok: true }, 200, corsHeaders, rlHeaders);
+    }
+    if (action === 'team_document_approve') {
+      const { data, error } = await serviceClient.rpc('approve_salesperson_document', { _id: String(body.id ?? ''), _actor: adminUserId });
+      if (error) return jsonResponse({ ok: false, error: 'write_failed', detail: error.message }, 500, corsHeaders, rlHeaders);
+      const r = data as { ok: boolean; error?: string };
+      console.log(JSON.stringify({ level: 'info', admin_user_id: adminUserId, action, id: body.id ?? null, result: r, timestamp: new Date().toISOString() }));
+      return jsonResponse(r, r.ok ? 200 : 409, corsHeaders, rlHeaders);
     }
 
     if (action === 'team_onboarding_save') {
@@ -596,7 +647,9 @@ serve(async (req) => {
       if (m.is_book_owner || isAdminRow) return jsonResponse({ ok: false, error: 'not_a_salesperson' }, 400, corsHeaders, rlHeaders);
       const { data: current, error: cErr } = await serviceClient.from('salesperson_onboarding').select('*').eq('user_id', uid).maybeSingle();
       if (cErr) return jsonResponse({ ok: false, error: 'read_failed', detail: cErr.message }, 500, corsHeaders, rlHeaders);
-      const v = validateOnboardingPatch(body.patch, (current as OnboardingRecord | null) ?? null);
+      const docs = await loadDocuments();
+      if (!docs) return jsonResponse({ ok: false, error: 'read_failed', detail: 'documents' }, 500, corsHeaders, rlHeaders);
+      const v = validateOnboardingPatch(body.patch, (current as OnboardingRecord | null) ?? null, docs);
       if (!v.ok) return jsonResponse({ ok: false, error: v.error, field: v.field ?? null }, 400, corsHeaders, rlHeaders);
       const { data: saved, error: sErr } = await serviceClient.from('salesperson_onboarding')
         .upsert({ ...v.clean, user_id: uid, updated_by: adminUserId }, { onConflict: 'user_id' })

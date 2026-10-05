@@ -1,8 +1,9 @@
--- Salesperson onboarding, TPS/CTPS state and business type (2026-10-05, migration 20261010120000).
+-- Salesperson onboarding + the READY TO SELL gate (2026-10-05, migration 20261010120000).
 -- RUN AGAINST THE LIVE DATABASE; ALWAYS ROLLED BACK — the last statement raises the results as JSON, so
--- nothing commits (fake users on example.invalid; two real leads borrowed and changed only inside this
+-- nothing commits (fake users on example.invalid; real leads borrowed and changed only inside this
 -- transaction). Before the migration is applied, prepend the migration's text after `begin;` — DDL is
 -- transactional, so it is rolled back with everything else.
+-- Sales A = fully onboarded (approved documents). Sales B = incomplete. The admin = the book owner.
 begin;
 create temp table t_results (n serial, name text, ok boolean, detail text);
 grant all on t_results to authenticated, anon, service_role; grant usage, select on sequence t_results_n_seq to authenticated, anon, service_role;
@@ -13,131 +14,193 @@ insert into public.user_roles (user_id, role) values ('ffffffff-0000-4000-8000-0
 insert into public.team_members (user_id, display_name) values ('ffffffff-0000-4000-8000-0000000005a1', 'ONB A'), ('ffffffff-0000-4000-8000-0000000005b1', 'ONB B');
 
 create temp table t_fx as select
-  (select id from public.outreach_leads l where l.assigned_to_user_id is null and l.is_archived is not true and not public.lead_is_client(l.amount_paid, l.status) order by created_at limit 1) as lead_a,
-  (select id from public.outreach_leads l where l.assigned_to_user_id is null and l.is_archived is not true and not public.lead_is_client(l.amount_paid, l.status) order by created_at limit 1 offset 1) as lead_b,
-  (select user_id from public.team_members where is_book_owner limit 1) as admin_id;
+  (select user_id from public.team_members where is_book_owner limit 1) as admin_id,
+  array(select l.id from public.outreach_leads l where l.assigned_to_user_id is null and l.is_archived is not true
+          and not public.lead_is_client(l.amount_paid, l.status) and coalesce(l.status, '') = 'not_contacted'
+          and public.lead_contact_attempt_at(l.id) is null
+        order by l.created_at limit 6) as leads;
 grant select on t_fx to authenticated, anon, service_role;
-update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005a1', assigned_at = now() where id = (select lead_a from t_fx);
-update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005b1', assigned_at = now() where id = (select lead_b from t_fx);
-insert into t_results (name, ok) select 'fixtures: two leads, the admin', lead_a is not null and lead_b is not null and admin_id is not null from t_fx;
+insert into t_results (name, ok, detail) select 'fixtures: the admin and six untouched unassigned leads', admin_id is not null and cardinality(leads) = 6, cardinality(leads)::text from t_fx;
+-- leads[1] → A (own lead, to call), leads[2] → B (own lead), leads[3] claim target, leads[4]/[5] payment, leads[6] admin assign
+update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005a1', assigned_at = now() where id = (select leads[1] from t_fx);
+update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005b1', assigned_at = now() where id = (select leads[2] from t_fx);
+update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005b1', assigned_at = now() where id = (select leads[4] from t_fx);
+update public.outreach_leads set assigned_to_user_id = 'ffffffff-0000-4000-8000-0000000005a1', assigned_at = now() where id = (select leads[5] from t_fx);
 
--- ── what admin-users does (service role): write both onboarding records, and two genuine-looking TPS rows ──
+-- ── documents: the seeds, then approved QA versions (what Paul does when the final documents arrive) ──
+insert into t_results (name, ok, detail) select 'seed: agreement draft v2 is a DRAFT, the privacy notice is a DRAFT with 10 outstanding, the team guide is approved',
+  (select status from public.salesperson_document_versions where id = 'contractor-agreement-draft-v2') = 'draft'
+  and (select status = 'draft' and cardinality(outstanding) = 10 from public.salesperson_document_versions where id = 'salesperson-privacy-notice-draft-2026-10-05')
+  and (select status from public.salesperson_document_versions where id = 'team-guide-2026-10-02') = 'approved', null;
+insert into t_results (name, ok, detail) select 'no contractor agreement or privacy notice is approved yet', not exists (
+  select 1 from public.salesperson_document_versions where kind in ('contractor_agreement', 'privacy_notice') and status = 'approved'), null;
 set local role service_role;
-insert into public.salesperson_onboarding (user_id, agreement_version, agreement_signed_on, rtw_method, rtw_result, rtw_evidence_ref, vat_registered, updated_by)
-values ('ffffffff-0000-4000-8000-0000000005a1', 'contractor-agreement-v2', '2026-10-06', 'video_call_original_not_held', 'pass', 'Secure folder / RTW / A', false, (select admin_id from t_fx)),
-       ('ffffffff-0000-4000-8000-0000000005b1', 'contractor-agreement-v2', '2026-10-06', null, null, null, true, (select admin_id from t_fx));
-insert into t_results (name, ok, detail) values ('service role (admin-users) reads every onboarding record', (select count(*) from public.salesperson_onboarding where user_id::text like 'ffffffff-0000-4000-8000-0000000005%') = 2, null);
-update public.salesperson_onboarding set start_date = '2026-10-07', updated_by = (select admin_id from t_fx) where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-insert into t_results (name, ok, detail) select 'every change is logged (insert + update), with who and which fields',
-  count(*) = 2 and bool_and(actor_user_id = (select admin_id from t_fx)) and bool_or(changed ? 'start_date' and not changed ? 'agreement_version'), string_agg(changed::text, ' | ')
-  from public.salesperson_onboarding_log where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
+insert into public.salesperson_document_versions (id, kind, label, status, outstanding) values ('qa-notice-with-gap', 'privacy_notice', 'QA notice with a blank', 'draft', array['a blank']);
+insert into t_results (name, ok, detail) select 'a draft with outstanding items cannot be approved',
+  r ->> 'error' = 'has_outstanding', r::text from (select public.approve_salesperson_document('qa-notice-with-gap', (select admin_id from t_fx)) r) x;
+insert into t_results (name, ok, detail) select 'the draft privacy notice can never be approved as it is',
+  r ->> 'ok' = 'false', r::text from (select public.approve_salesperson_document('salesperson-privacy-notice-draft-2026-10-05', (select admin_id from t_fx)) r) x;
+update public.salesperson_document_versions set outstanding = '{}' where id = 'contractor-agreement-draft-v2';
+insert into t_results (name, ok, detail) select 'draft v2 can never be approved, even with its outstanding note cleared',
+  (public.approve_salesperson_document('contractor-agreement-draft-v2', (select admin_id from t_fx)) ->> 'error') = 'draft_named_version', null;
+insert into public.salesperson_document_versions (id, kind, label, status, outstanding) values
+  ('qa-agreement-final-1', 'contractor_agreement', 'QA agreement final 1', 'draft', '{}'),
+  ('qa-agreement-final-2', 'contractor_agreement', 'QA agreement final 2', 'draft', '{}'),
+  ('qa-notice-final-1', 'privacy_notice', 'QA notice final 1', 'draft', '{}');
+insert into t_results (name, ok, detail) select 'approving a complete draft works', (public.approve_salesperson_document('qa-agreement-final-1', (select admin_id from t_fx)) ->> 'ok')::boolean
+  and (public.approve_salesperson_document('qa-notice-final-1', (select admin_id from t_fx)) ->> 'ok')::boolean, null;
+
+-- Sales A: complete, but on the DRAFT agreement and the DRAFT notice first.
+insert into public.salesperson_onboarding (user_id, agreement_version, agreement_signed_on, agreement_ref, privacy_notice_version, privacy_notice_given_on,
+  age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result, rtw_evidence_ref, bank_details_received_on, vat_registered,
+  contractor_type, start_date, team_guide_version, team_guide_acknowledged_on, updated_by)
+values ('ffffffff-0000-4000-8000-0000000005a1', 'contractor-agreement-draft-v2', '2026-10-06', 'Secure folder / A', 'salesperson-privacy-notice-draft-2026-10-05', '2026-10-06',
+  '2026-10-06', 'manual_video_call', '2026-10-06', 'Paul James Sales', 'pass', 'Secure folder / RTW / A', '2026-10-06', false,
+  'individual', '2026-10-06', 'team-guide-2026-10-02', '2026-10-06', (select admin_id from t_fx));
+insert into t_results (name, ok, detail) select 'DOCS: draft agreement v2 + draft notice do NOT satisfy Ready to Sell',
+  m @> array['agreement', 'privacy_notice'] and cardinality(m) = 2, m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+update public.salesperson_onboarding set agreement_version = 'qa-agreement-final-1' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
+insert into t_results (name, ok, detail) select 'DOCS: the approved agreement counts; the draft notice still does not',
+  m = array['privacy_notice'], m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+update public.salesperson_onboarding set privacy_notice_version = 'qa-notice-final-1' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
+insert into t_results (name, ok, detail) select 'DOCS: approved agreement + approved notice = READY TO SELL (no TPS/CTPS needed)',
+  public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1'), public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1')::text;
+insert into t_results (name, ok, detail) select 'approving a newer agreement supersedes the old one and reports who is affected',
+  (r ->> 'superseded') = 'qa-agreement-final-1' and (r ->> 'affected')::int = 1, r::text
+  from (select public.approve_salesperson_document('qa-agreement-final-2', (select admin_id from t_fx)) r) x;
+insert into t_results (name, ok, detail) select 'DOCS: a SUPERSEDED agreement does not satisfy Ready to Sell',
+  m = array['agreement'], m::text from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005a1') m) x;
+update public.salesperson_onboarding set agreement_version = 'qa-agreement-final-2' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
+insert into t_results (name, ok) values ('…and signing the new approved one restores it', public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005a1'));
 do $$ begin
   begin
-    update public.salesperson_onboarding_log set changed = '{}' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-    insert into t_results (name, ok) values ('the change log cannot be edited', false);
-  exception when others then insert into t_results (name, ok, detail) values ('the change log cannot be edited', sqlerrm like '%append-only%', sqlerrm); end;
+    update public.salesperson_onboarding set privacy_notice_version = 'qa-agreement-final-2' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
+    insert into t_results (name, ok) values ('a version of the wrong kind is refused', false);
+  exception when others then insert into t_results (name, ok, detail) values ('a version of the wrong kind is refused', sqlstate = '23514', sqlerrm); end;
   begin
-    insert into public.salesperson_onboarding (user_id, vat_number, vat_registered) values ('ffffffff-0000-4000-8000-0000000005b1', 'GB123456789', false)
-      on conflict (user_id) do update set vat_number = excluded.vat_number, vat_registered = excluded.vat_registered;
-    insert into t_results (name, ok) values ('the database refuses a VAT number on someone not VAT registered', false);
-  exception when others then insert into t_results (name, ok, detail) values ('the database refuses a VAT number on someone not VAT registered', sqlstate = '23514', sqlerrm); end;
-  begin
-    update public.salesperson_onboarding set end_date = '2026-11-01' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-    insert into t_results (name, ok) values ('the database refuses an end date without a reason', false);
-  exception when others then insert into t_results (name, ok, detail) values ('the database refuses an end date without a reason', sqlstate = '23514', sqlerrm); end;
-  begin
-    insert into public.phone_tps_checks (lead_id, phone, register, result, provider, provider_reference) values ((select lead_a from t_fx), '+441234567890', 'tps', 'not_registered', 'test-provider', '');
-    insert into t_results (name, ok) values ('the database refuses a TPS answer with no provider reference', false);
-  exception when others then insert into t_results (name, ok, detail) values ('the database refuses a TPS answer with no provider reference', sqlstate = '23514', sqlerrm); end;
+    update public.salesperson_document_versions set status = 'approved' where id = 'salesperson-privacy-notice-draft-2026-10-05';
+    insert into t_results (name, ok) values ('the database itself refuses an approved version with outstanding items (even written directly)', false);
+  exception when others then insert into t_results (name, ok, detail) values ('the database itself refuses an approved version with outstanding items (even written directly)', sqlstate = '23514', sqlerrm); end;
 end $$;
-update public.salesperson_onboarding set end_date = '2026-11-01', end_reason = 'resigned', updated_by = (select admin_id from t_fx) where user_id = 'ffffffff-0000-4000-8000-0000000005b1';
-insert into t_results (name, ok) values ('a leaver (end date + reason) is recorded', (select end_reason from public.salesperson_onboarding where user_id = 'ffffffff-0000-4000-8000-0000000005b1') = 'resigned');
-insert into public.phone_tps_checks (lead_id, phone, register, result, provider, provider_reference)
-values ((select lead_a from t_fx), '+441111111111', 'tps', 'not_registered', 'test-provider', 'QA-A'),
-       ((select lead_b from t_fx), '+442222222222', 'tps', 'not_registered', 'test-provider', 'QA-B');
+-- Sales B: only part of it.
+insert into public.salesperson_onboarding (user_id, agreement_version, agreement_signed_on, age_18_confirmed_on, updated_by)
+values ('ffffffff-0000-4000-8000-0000000005b1', 'contractor-agreement-draft-v2', '2026-10-06', '2026-10-06', (select admin_id from t_fx));
+insert into t_results (name, ok, detail) select 'Sales B (incomplete) is not ready; TPS/CTPS is never one of the reasons',
+  not public.salesperson_ready_to_sell('ffffffff-0000-4000-8000-0000000005b1') and not (m::text ~* 'tps'), m::text
+  from (select public.salesperson_onboarding_missing('ffffffff-0000-4000-8000-0000000005b1') m) x;
+insert into t_results (name, ok, detail) select 'the change log recorded the edits', count(*) >= 5, count(*)::text from public.salesperson_onboarding_log where user_id::text like 'ffffffff-0000-4000-8000-0000000005%';
 reset role;
 
--- ── as Sales A ──
+-- ── as Sales B (NOT ready) ──
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"ffffffff-0000-4000-8000-0000000005b1","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-4000-8000-0000000005b1', true);
+do $$ declare r jsonb; begin
+  r := public.my_onboarding_status();
+  insert into t_results (name, ok, detail) values ('GATE: an incomplete rep can still sign in and see their own onboarding status', (r ->> 'gated')::boolean and not (r ->> 'ready')::boolean and jsonb_array_length(r -> 'missing') > 0, r::text);
+  begin
+    perform 1 from public.salesperson_onboarding;
+    insert into t_results (name, ok) values ('…but never the stored record itself (theirs or anyone''s)', false);
+  exception when others then insert into t_results (name, ok, detail) values ('…but never the stored record itself (theirs or anyone''s)', sqlstate = '42501', sqlerrm); end;
+  r := public.claim_lead((select leads[3] from t_fx));
+  insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot claim a lead', r ->> 'error' = 'usage_paused'
+    and (select assigned_to_user_id from public.outreach_leads where id = (select leads[3] from t_fx)) is null, r::text);
+  r := public.sales_queue_opener(array[(select leads[2] from t_fx)], 'initial_opener_v2');
+  insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot queue outreach', r ->> 'error' = 'usage_paused', r::text);
+  begin
+    r := public.lead_record_call((select leads[2] from t_fx), 'spoke_to_owner', null);
+    insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot use the sales call action (even on their own lead)', false, r::text);
+  exception when others then insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot use the sales call action (even on their own lead)', sqlerrm = 'not_ready_to_sell', sqlerrm); end;
+  begin
+    r := public.lead_log_contact((select leads[2] from t_fx), 'email', 'message_sent', null);
+    insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot log other outreach either', false, r::text);
+  exception when others then insert into t_results (name, ok, detail) values ('GATE: an incomplete rep cannot log other outreach either', sqlerrm = 'not_ready_to_sell', sqlerrm); end;
+  r := public.lead_add_note((select leads[2] from t_fx), 'onboarding QA note');
+  insert into t_results (name, ok, detail) values ('an incomplete rep may still write a note on their own lead', coalesce((r ->> 'ok')::boolean, false), r::text);
+  r := public.my_acknowledge_team_guide();
+  insert into t_results (name, ok, detail) values ('an incomplete rep can complete their own team-guide acknowledgement', (r ->> 'ok')::boolean and r ->> 'version' = 'team-guide-2026-10-02', r::text);
+end $$;
+reset role;
+set local role service_role;
+insert into t_results (name, ok, detail) select 'GATE: the usage guard refuses an incomplete rep''s prospect check (not_onboarded)',
+  r ->> 'reason' = 'not_onboarded' and not (r ->> 'ok')::boolean, r::text
+  from (select public.guard_action('ffffffff-0000-4000-8000-0000000005b1', 'sales_check', null, 0, 1, 'qa') r) x;
+insert into t_results (name, ok, detail) select 'GATE: …and its Quick Close / search / WhatsApp-send actions (same refusal as a suspended account)',
+  bool_and(r ->> 'reason' = 'not_onboarded'), string_agg(a || '=' || (r ->> 'reason'), ', ')
+  from (select a, public.guard_action('ffffffff-0000-4000-8000-0000000005b1', a, null, 0, 1, 'qa') r from unnest(array['lead_search', 'whatsapp_send', 'claim', 'whatsapp_queue']) a) x;
+insert into t_results (name, ok, detail) select '…nothing was queued, claimed or logged for them (read back as the server)',
+  (select status from public.outreach_leads where id = (select leads[2] from t_fx)) = 'not_contacted'
+  and (select assigned_to_user_id from public.outreach_leads where id = (select leads[3] from t_fx)) is null
+  and not exists (select 1 from public.lead_activity where actor_user_id = 'ffffffff-0000-4000-8000-0000000005b1' and kind in ('bulk_queued', 'call_outcome', 'contact_logged', 'lead_claimed')), null;
+insert into t_results (name, ok, detail) select 'the team guide acknowledgement was stored as the current guide', team_guide_version = 'team-guide-2026-10-02' and team_guide_acknowledged_on is not null, null
+  from public.salesperson_onboarding where user_id = 'ffffffff-0000-4000-8000-0000000005b1';
+reset role;
+
+-- ── as Sales A (fully onboarded) — works normally, with NO TPS/CTPS check on file ──
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"ffffffff-0000-4000-8000-0000000005a1","role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'ffffffff-0000-4000-8000-0000000005a1', true);
 do $$ declare r jsonb; begin
-  begin
-    perform 1 from public.salesperson_onboarding where user_id = 'ffffffff-0000-4000-8000-0000000005b1';
-    insert into t_results (name, ok) values ('Sales A cannot read Sales B''s onboarding record', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot read Sales B''s onboarding record', sqlstate = '42501', sqlerrm); end;
-  begin
-    perform 1 from public.salesperson_onboarding where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-    insert into t_results (name, ok) values ('Sales A cannot read even its own onboarding record', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot read even its own onboarding record', sqlstate = '42501', sqlerrm); end;
-  begin
-    perform 1 from public.salesperson_onboarding_log;
-    insert into t_results (name, ok) values ('Sales A cannot read the onboarding change log', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot read the onboarding change log', sqlstate = '42501', sqlerrm); end;
-  begin
-    update public.salesperson_onboarding set rtw_result = 'pass' where user_id = 'ffffffff-0000-4000-8000-0000000005a1';
-    insert into t_results (name, ok) values ('Sales A cannot tick its own onboarding', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot tick its own onboarding', sqlstate = '42501', sqlerrm); end;
-  begin
-    insert into public.phone_tps_checks (lead_id, phone, register, result, provider, provider_reference) values ((select lead_a from t_fx), '+441234567890', 'ctps', 'not_registered', 'test-provider', 'FAKE');
-    insert into t_results (name, ok) values ('Sales A cannot write a TPS/CTPS answer (not even on its own lead)', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot write a TPS/CTPS answer (not even on its own lead)', sqlstate = '42501', sqlerrm); end;
-  insert into t_results (name, ok, detail) values ('Sales A reads its own lead''s TPS answer and not Sales B''s',
-    (select count(*) from public.phone_tps_checks where provider_reference = 'QA-A') = 1 and (select count(*) from public.phone_tps_checks where provider_reference = 'QA-B') = 0, null);
-  r := public.lead_record_business_type((select lead_a from t_fx), 'sole_trader', 'stated_by_business', 'told me on the call');
-  insert into t_results (name, ok, detail) values ('Sales A records a business type on its own lead, with evidence', (r ->> 'ok')::boolean, r::text);
-  r := public.lead_record_business_type((select lead_a from t_fx), 'limited_company', 'website', '');
-  insert into t_results (name, ok, detail) values ('a business type with no evidence note is refused', r ->> 'error' = 'evidence_needed', r::text);
-  begin
-    r := public.lead_record_business_type((select lead_b from t_fx), 'sole_trader', 'stated_by_business', 'x');
-    insert into t_results (name, ok, detail) values ('Sales A cannot record a business type on Sales B''s lead', false, r::text);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot record a business type on Sales B''s lead', sqlstate = '42501', sqlerrm); end;
-  insert into t_results (name, ok, detail) values ('the record carries Sales A as the recorder and the database time',
-    exists (select 1 from public.lead_business_type_records where lead_id = (select lead_a from t_fx) and recorded_by = 'ffffffff-0000-4000-8000-0000000005a1'), null);
-  begin
-    insert into public.lead_business_type_records (lead_id, business_type, source, evidence_note) values ((select lead_a from t_fx), 'llp', 'website', 'direct');
-    insert into t_results (name, ok) values ('Sales A cannot write business-type records directly (only through the function)', false);
-  exception when others then insert into t_results (name, ok, detail) values ('Sales A cannot write business-type records directly (only through the function)', sqlstate = '42501', sqlerrm); end;
+  r := public.my_onboarding_status();
+  insert into t_results (name, ok, detail) values ('a fully onboarded rep sees READY', (r ->> 'ready')::boolean, r::text);
+  insert into t_results (name, ok, detail) values ('no TPS/CTPS answer exists for their lead (no provider)', not exists (select 1 from public.phone_tps_checks where lead_id = (select leads[1] from t_fx)), null);
+  r := public.lead_record_call((select leads[1] from t_fx), 'no_answer', null);
+  insert into t_results (name, ok, detail) values ('CALL: a ready rep logs a call with no TPS provider and no TPS result (calling unchanged)', (r ->> 'ok')::boolean, r::text);
+  r := public.lead_log_contact((select leads[1] from t_fx), 'call', 'left_voicemail', null);
+  insert into t_results (name, ok, detail) values ('CALL: …and through the Log contact path', (r ->> 'ok')::boolean, r::text);
+  r := public.claim_lead((select leads[3] from t_fx));
+  insert into t_results (name, ok, detail) values ('a ready rep can claim a lead', (r ->> 'ok')::boolean, r::text);
 end $$;
 reset role;
-
--- ── as Sales B: never sees A's business-type record ──
-set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"ffffffff-0000-4000-8000-0000000005b1","role":"authenticated"}', true);
-select set_config('request.jwt.claim.sub', 'ffffffff-0000-4000-8000-0000000005b1', true);
-insert into t_results (name, ok, detail) values ('Sales B cannot see the business type recorded on Sales A''s lead',
-  (select count(*) from public.lead_business_type_records where lead_id = (select lead_a from t_fx)) = 0, null);
+set local role service_role;
+insert into t_results (name, ok, detail) select 'the usage guard does not refuse a ready rep for onboarding',
+  bool_and(coalesce(r ->> 'reason', '') <> 'not_onboarded' and not coalesce((r ->> 'not_onboarded')::boolean, false)), string_agg(a || '=' || coalesce(r ->> 'reason', 'ok'), ', ')
+  from (select a, public.guard_action('ffffffff-0000-4000-8000-0000000005a1', a, null, 0, 1, 'qa') r from unnest(array['sales_check', 'whatsapp_send', 'whatsapp_queue']) a) x;
+insert into t_results (name, ok, detail) select 'the admin is never refused for onboarding',
+  coalesce(r ->> 'reason', '') <> 'not_onboarded', r::text from (select public.guard_action((select admin_id from t_fx), 'whatsapp_send', null, 0, 1, 'qa') r) x;
 reset role;
 
--- ── as the admin (a signed-in session): reads lead facts; onboarding only through admin-users ──
+-- ── as the admin ──
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', (select admin_id from t_fx), 'role', 'authenticated')::text, true);
 select set_config('request.jwt.claim.sub', (select admin_id::text from t_fx), true);
-do $$ begin
-  insert into t_results (name, ok, detail) values ('the admin reads every lead''s TPS answers and business-type records',
-    (select count(*) from public.phone_tps_checks where provider_reference in ('QA-A', 'QA-B')) = 2
-    and (select count(*) from public.lead_business_type_records where lead_id = (select lead_a from t_fx)) = 1, null);
+do $$ declare r jsonb; begin
   begin
-    perform 1 from public.salesperson_onboarding;
-    insert into t_results (name, ok) values ('even the admin''s browser session cannot read onboarding directly (only fn admin-users)', false);
-  exception when others then insert into t_results (name, ok, detail) values ('even the admin''s browser session cannot read onboarding directly (only fn admin-users)', sqlstate = '42501', sqlerrm); end;
+    r := public.assign_lead((select leads[6] from t_fx), 'ffffffff-0000-4000-8000-0000000005b1');
+    insert into t_results (name, ok, detail) values ('the admin cannot hand a lead to an incomplete rep', false, r::text);
+  exception when others then insert into t_results (name, ok, detail) values ('the admin cannot hand a lead to an incomplete rep', sqlerrm = 'not_ready_to_sell', sqlerrm); end;
+  r := public.assign_lead((select leads[6] from t_fx), 'ffffffff-0000-4000-8000-0000000005a1');
+  insert into t_results (name, ok, detail) values ('the admin can hand a lead to a ready rep', (r ->> 'ok')::boolean, r::text);
+  r := public.lead_record_call((select leads[2] from t_fx), 'no_answer', null);
+  insert into t_results (name, ok, detail) values ('the admin is unaffected: logs a call on any lead', (r ->> 'ok')::boolean, r::text);
+  r := public.my_onboarding_status();
+  insert into t_results (name, ok, detail) values ('the admin is never gated', not (r ->> 'gated')::boolean and (r ->> 'ready')::boolean, r::text);
 end $$;
 reset role;
 
--- ── anon ──
+-- ── attribution at payment (stripe-webhook runs as the service role) ──
+set local role service_role;
+update public.outreach_leads set amount_paid = 99, status = 'payment_received', payment_date = now() where id in ((select leads[4] from t_fx), (select leads[5] from t_fx));
+insert into t_results (name, ok, detail) select 'ATTRIBUTION: a sale on an incomplete rep''s lead is credited to the book owner, not them',
+  sold_by_user_id = user_id and sold_by_user_id <> 'ffffffff-0000-4000-8000-0000000005b1', sold_by_user_id::text from public.outreach_leads where id = (select leads[4] from t_fx);
+insert into t_results (name, ok, detail) select '…with a security event saying why', exists (select 1 from public.security_events where alert_key = 'attribution_withheld:' || (select leads[4] from t_fx)::text), null;
+insert into t_results (name, ok, detail) select 'ATTRIBUTION: a ready rep''s sale is theirs', sold_by_user_id = 'ffffffff-0000-4000-8000-0000000005a1', sold_by_user_id::text from public.outreach_leads where id = (select leads[5] from t_fx);
+reset role;
+
+-- ── anon, and the structure ──
 set local role anon;
 do $$ begin
   begin perform 1 from public.salesperson_onboarding; insert into t_results (name, ok) values ('anon cannot read onboarding', false);
   exception when others then insert into t_results (name, ok, detail) values ('anon cannot read onboarding', sqlstate = '42501', sqlerrm); end;
-  begin perform 1 from public.phone_tps_checks; insert into t_results (name, ok) values ('anon cannot read TPS answers', false);
-  exception when others then insert into t_results (name, ok, detail) values ('anon cannot read TPS answers', sqlstate = '42501', sqlerrm); end;
-  begin perform 1 from public.lead_business_type_records; insert into t_results (name, ok) values ('anon cannot read business-type records', false);
-  exception when others then insert into t_results (name, ok, detail) values ('anon cannot read business-type records', sqlstate = '42501', sqlerrm); end;
+  begin perform 1 from public.salesperson_document_versions; insert into t_results (name, ok) values ('anon cannot read document versions', false);
+  exception when others then insert into t_results (name, ok, detail) values ('anon cannot read document versions', sqlstate = '42501', sqlerrm); end;
 end $$;
 reset role;
-
-insert into t_results (name, ok, detail) select 'no policy exists on salesperson_onboarding or its log', count(*) = 0, string_agg(policyname, ', ')
-  from pg_policies where schemaname = 'public' and tablename in ('salesperson_onboarding', 'salesperson_onboarding_log');
+insert into t_results (name, ok, detail) select 'no policy exists on the onboarding tables (admin-users only)', count(*) = 0, string_agg(policyname, ', ')
+  from pg_policies where schemaname = 'public' and tablename in ('salesperson_onboarding', 'salesperson_onboarding_log', 'salesperson_document_versions');
+insert into t_results (name, ok, detail) select 'signed-in users cannot call the readiness functions for someone else',
+  not has_function_privilege('authenticated', 'public.salesperson_ready_to_sell(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.salesperson_onboarding_missing(uuid)', 'execute'), null;
 
 do $$ declare r jsonb; begin
   select jsonb_build_object('passed', count(*) filter (where ok), 'failed', count(*) filter (where not ok or ok is null),

@@ -139,28 +139,33 @@ export interface LeadPermissions {
  *  star (lead_mark_interested). scripts/sales-shared-workflow.test.ts holds it to the migration. */
 export const SALES_SETTABLE_PIPELINE = ['interested', 'price_given', 'not_interested', 'won_pending_onboarding'] as const;
 
-export function leadPermissions(role: AppRole | null): LeadPermissions {
+/** `readyToSell` (2026-10-05, docs/salesperson-onboarding.md): a salesperson who has not finished onboarding
+ *  keeps reading and giving leads back, but loses every selling action on screen. PRESENTATION — the
+ *  server refuses the same actions (guard_action 'not_onboarded', the lead_activity gate, quick-close).
+ *  The admin is never gated. */
+export function leadPermissions(role: AppRole | null, readyToSell = true): LeadPermissions {
   const admin = role === 'admin';
+  const sellingSales = role === 'sales' && readyToSell;
   return {
     editLeadRecord: admin,
     removeLeads: admin,
     importLeads: admin,
     enrichLeads: admin,
     bulkAudits: admin,
-    salesChecks: role === 'sales',
+    salesChecks: sellingSales,
     campaigns: admin,
-    moveToCampaign: admin || role === 'sales',
+    moveToCampaign: admin || sellingSales,
     removeFromMyLeads: role === 'sales',
     product: admin,
     crawlSite: admin,
-    crawlOwnLead: admin || role === 'sales',
+    crawlOwnLead: admin || sellingSales,
     clientDelivery: admin,
     queueControls: admin,
     assignOwner: admin,
     auditAdmin: admin,
     privateNote: admin,
     exportData: admin,
-    settableStatuses: admin ? null : role === 'sales' ? SALES_SETTABLE_PIPELINE : [],
+    settableStatuses: admin ? null : sellingSales ? SALES_SETTABLE_PIPELINE : [],
   };
 }
 

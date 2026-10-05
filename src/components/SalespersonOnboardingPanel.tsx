@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  CONTRACTOR_AGREEMENT_VERSIONS, CONTRACTOR_TYPES, LEAVER_REASONS, PRIVACY_NOTICE_VERSIONS, RTW_METHODS, SCHEDULE2_STATUSES,
-  TEAM_GUIDE_VERSIONS, documentVersion, emptyOnboardingRecord, onboardingSummary,
-  type ChecklistKey, type MemberState, type OnboardingField, type OnboardingRecord, type OnboardingSummary,
+  CONTRACTOR_TYPES, DOCUMENT_STATUSES, LEAVER_REASONS, RTW_CATEGORIES, RTW_METHODS, SCHEDULE2_STATUSES,
+  documentVersion, emptyOnboardingRecord, onboardingSummary,
+  type ChecklistKey, type DocumentKind, type DocumentVersion, type MemberState, type OnboardingField, type OnboardingRecord, type OnboardingSummary,
 } from '@/lib/salespersonOnboarding';
 
 /* SALESPERSON ONBOARDING — one person's checklist on the Team page (admin only, 2026-10-05).
    docs/salesperson-onboarding.md. What is missing shows first; everything else is one line. Every save
    goes to fn admin-users (team_onboarding_save), which validates it with the same rule file; READY TO
-   SELL is worked out from the record and the live login every time, never stored.
+   SELL is the SERVER's answer (public.salesperson_onboarding_missing) — it is enforced, not a label.
+   Only an APPROVED document version counts; drafts and superseded versions can be recorded for history.
    ⛔ Bank details, passport numbers and copies are never typed here — only that they were received,
    when, and where the evidence is kept. The server refuses text that looks like one. */
 
@@ -27,20 +28,22 @@ interface FieldSpec {
   showIf?: (d: OnboardingRecord) => boolean;
 }
 
-const versions = (list: typeof CONTRACTOR_AGREEMENT_VERSIONS) => list.map((v) => ({ value: v.id, label: `${v.label}${v.final ? '' : ' — DRAFT, not final'}` }));
+const versions = (docs: readonly DocumentVersion[], kind: DocumentKind) => docs.filter((d) => d.kind === kind)
+  .map((v) => ({ value: v.id, label: `${v.label} — ${DOCUMENT_STATUSES[v.status]}${v.status === 'approved' ? '' : ' (does not count)'}` }));
 
-const EDITORS: Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> = {
+const editorsFor = (docs: readonly DocumentVersion[]): Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> => ({
   agreement: [
-    { field: 'agreement_version', label: 'Version signed', kind: 'select', options: versions(CONTRACTOR_AGREEMENT_VERSIONS) },
+    { field: 'agreement_version', label: 'Version signed', kind: 'select', options: versions(docs, 'contractor_agreement'), hint: 'Only the approved (current) version counts. A draft can be recorded for history.' },
     { field: 'agreement_signed_on', label: 'Date signed', kind: 'date' },
+    { field: 'agreement_ref', label: 'Where the signed copy is kept', kind: 'text', placeholder: 'e.g. Secure folder › Agreements › Jane Smith' },
   ],
   privacy_notice: [
-    { field: 'privacy_notice_version', label: 'Version given', kind: 'select', options: versions(PRIVACY_NOTICE_VERSIONS), hint: 'Record the version they actually received. A draft is recorded honestly but does not complete this item.' },
+    { field: 'privacy_notice_version', label: 'Version given', kind: 'select', options: versions(docs, 'privacy_notice'), hint: 'Record the version they actually received. A draft (provided for review) is recorded but does not count.' },
     { field: 'privacy_notice_given_on', label: 'Date given', kind: 'date' },
   ],
   age_18: [{ field: 'age_18_confirmed_on', label: 'Date confirmed', kind: 'date', hint: 'Record only that it was confirmed — never the date of birth.' }],
   right_to_work: [
-    { field: 'rtw_method', label: 'Method', kind: 'select', options: Object.entries(RTW_METHODS).map(([value, m]) => ({ value, label: m.label })) },
+    { field: 'rtw_method', label: 'Method actually used', kind: 'select', options: Object.entries(RTW_METHODS).map(([value, m]) => ({ value, label: `${RTW_CATEGORIES[m.category]}: ${m.label}` })) },
     { field: 'rtw_provider', label: 'Provider name', kind: 'text', showIf: (d) => d.rtw_method === 'certified_provider' },
     { field: 'rtw_checked_on', label: 'Date checked', kind: 'date' },
     { field: 'rtw_checked_by', label: 'Checked by', kind: 'text', placeholder: 'Paul James Sales' },
@@ -62,7 +65,7 @@ const EDITORS: Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> 
   ],
   start_date: [{ field: 'start_date', label: 'Start date', kind: 'date' }],
   team_guide: [
-    { field: 'team_guide_version', label: 'Guide version', kind: 'select', options: versions(TEAM_GUIDE_VERSIONS) },
+    { field: 'team_guide_version', label: 'Guide version', kind: 'select', options: versions(docs, 'team_guide'), hint: 'The salesperson can also acknowledge the current guide themselves.' },
     { field: 'team_guide_acknowledged_on', label: 'Date acknowledged', kind: 'date' },
   ],
   schedule2: [
@@ -77,7 +80,7 @@ const EDITORS: Partial<Record<ChecklistKey | 'leaving' | 'notes', FieldSpec[]>> 
     { field: 'data_deletion_confirmed_on', label: 'They confirmed deleting Findable data on', kind: 'date', showIf: (d) => !!d.end_date },
   ],
   notes: [{ field: 'notes', label: 'Notes', kind: 'text' }],
-};
+});
 
 function FieldInput({ spec, value, onChange }: { spec: FieldSpec; value: unknown; onChange: (v: unknown) => void }) {
   if (spec.kind === 'select' || spec.kind === 'yesno') {
@@ -94,7 +97,7 @@ function FieldInput({ spec, value, onChange }: { spec: FieldSpec; value: unknown
   return <Input className="h-8 text-sm" type={spec.kind === 'date' ? 'date' : 'text'} value={value === null || value === undefined ? '' : String(value)} placeholder={spec.placeholder} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)} />;
 }
 
-function Editor({ specs, record, onSave, onCancel }: { specs: FieldSpec[]; record: OnboardingRecord; onSave: (patch: Partial<OnboardingRecord>) => Promise<boolean>; onCancel: () => void }) {
+function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[]; record: OnboardingRecord; docs: readonly DocumentVersion[]; onSave: (patch: Partial<OnboardingRecord>) => Promise<boolean>; onCancel: () => void }) {
   const [draft, setDraft] = useState<OnboardingRecord>(record);
   const [busy, setBusy] = useState(false);
   const visible = specs.filter((s) => !s.showIf || s.showIf(draft));
@@ -109,7 +112,8 @@ function Editor({ specs, record, onSave, onCancel }: { specs: FieldSpec[]; recor
     setBusy(true);
     try { if (await onSave(patch as Partial<OnboardingRecord>)) onCancel(); } finally { setBusy(false); }
   };
-  const notice = documentVersion(PRIVACY_NOTICE_VERSIONS, draft.privacy_notice_version);
+  const notice = documentVersion(docs, draft.privacy_notice_version, 'privacy_notice');
+  const agreement = documentVersion(docs, draft.agreement_version, 'contractor_agreement');
   const method = draft.rtw_method ? RTW_METHODS[draft.rtw_method] : null;
   return (
     <div className="mt-2 space-y-2 rounded-md border bg-muted/30 p-3">
@@ -120,12 +124,12 @@ function Editor({ specs, record, onSave, onCancel }: { specs: FieldSpec[]; recor
           {s.hint && <span className="block text-[11px] text-muted-foreground">{s.hint}</span>}
         </label>
       ))}
-      {specs.some((s) => s.field === 'privacy_notice_version') && notice && !notice.final && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
-          <p className="font-medium">This notice is a draft. Before it can be issued:</p>
-          <ul className="ml-4 list-disc">{notice.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>
+      {([['privacy_notice_version', notice], ['agreement_version', agreement]] as const).map(([f, d]) => specs.some((s) => s.field === f) && d && d.status !== 'approved' && (
+        <div key={f} className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+          <p className="font-medium">This version is {d.status === 'draft' ? 'a draft' : 'superseded'} and does not count{d.outstanding.length ? '. Outstanding:' : '.'}</p>
+          {d.outstanding.length > 0 && <ul className="ml-4 list-disc">{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>}
         </div>
-      )}
+      ))}
       {specs.some((s) => s.field === 'rtw_method') && method?.caution && <p className="text-xs text-amber-700 dark:text-amber-400">{method.caution}</p>}
       <div className="flex gap-2">
         <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}</Button>
@@ -141,20 +145,24 @@ export function OnboardingBadge({ summary }: { summary: OnboardingSummary }) {
   return <Badge variant="outline" title={summary.inactiveReason ?? `${summary.missing.length} onboarding items missing`}>{summary.inactiveReason ? `Not active · ${summary.done}/${summary.total}` : `Onboarding ${summary.done}/${summary.total}`}</Badge>;
 }
 
-export function SalespersonOnboardingPanel({ userId, record, member, onSave }: {
+export function SalespersonOnboardingPanel({ userId, record, member, docs, serverMissing, onSave }: {
   userId: string;
   record: OnboardingRecord | null;
   member: MemberState;
+  docs: readonly DocumentVersion[];
+  /** The gate's own answer for this person (null = could not be read). */
+  serverMissing: readonly string[] | null;
   onSave: (patch: Partial<OnboardingRecord>) => Promise<boolean>;
 }) {
   const r = record ?? emptyOnboardingRecord(userId);
-  const summary = onboardingSummary(record, member);
+  const summary = onboardingSummary(record, member, docs, undefined, serverMissing);
+  const EDITORS = editorsFor(docs);
   const [editing, setEditing] = useState<string | null>(null);
   const ordered = [...summary.items.filter((i) => i.blocking && !i.done), ...summary.items.filter((i) => !(i.blocking && !i.done))];
   return (
     <div className="w-full space-y-3 rounded-md border p-3" data-testid="salesperson-onboarding">
       <div className="flex flex-wrap items-baseline gap-x-3">
-        <span className={`text-sm font-semibold tracking-wide ${summary.readyToSell ? '' : 'text-muted-foreground'}`}>{summary.readyToSell ? 'READY TO SELL' : 'NOT READY TO SELL'}</span>
+        <span className={`text-sm font-semibold tracking-wide ${summary.readyToSell ? '' : 'text-muted-foreground'}`}>{summary.readyToSell ? 'READY TO SELL' : 'NOT READY TO SELL — sales actions are blocked'}</span>
         <span className="text-sm">{summary.done} / {summary.total} complete</span>
         {summary.inactiveReason && <span className="text-xs text-destructive">{summary.inactiveReason}</span>}
       </div>
@@ -173,7 +181,7 @@ export function SalespersonOnboardingPanel({ userId, record, member, onSave }: {
               </div>
               {EDITORS[i.key] && editing !== i.key && <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditing(i.key)}><Pencil className="h-3.5 w-3.5" /></Button>}
             </div>
-            {editing === i.key && EDITORS[i.key] && <Editor specs={EDITORS[i.key]!} record={r} onSave={onSave} onCancel={() => setEditing(null)} />}
+            {editing === i.key && EDITORS[i.key] && <Editor specs={EDITORS[i.key]!} record={r} docs={docs} onSave={onSave} onCancel={() => setEditing(null)} />}
           </li>
         ))}
       </ul>
@@ -189,9 +197,87 @@ export function SalespersonOnboardingPanel({ userId, record, member, onSave }: {
       </div>
       {(editing === 'leaving' || editing === 'notes') && (
         <>
-          {editing === 'leaving' && <p className="text-xs text-muted-foreground">Recording an end does not remove access — press Disable on their end date. Commission is not changed here.</p>}
-          <Editor specs={EDITORS[editing]!} record={r} onSave={onSave} onCancel={() => setEditing(null)} />
+          {editing === 'leaving' && <p className="text-xs text-muted-foreground">From the end date they are no longer Ready to Sell, so sales actions stop. Their login stays until you press Disable. Commission is not changed here.</p>}
+          <Editor specs={EDITORS[editing]!} record={r} docs={docs} onSave={onSave} onCancel={() => setEditing(null)} />
         </>
+      )}
+    </div>
+  );
+}
+
+/* DOCUMENTS (Team page, admin): every version of the contractor agreement, the privacy notice and the team
+   guide. Paul adds the final version himself (never invented here), clears its outstanding items, and
+   approves it — which supersedes the previous approved one. */
+export function SalespersonDocumentsCard({ docs, call, onChanged }: {
+  docs: readonly DocumentVersion[];
+  call: (action: string, body?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  onChanged: (message?: string, error?: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const blank = { kind: 'contractor_agreement', id: '', label: '', document_ref: '', outstanding: '' };
+  const [form, setForm] = useState(blank);
+  const [busy, setBusy] = useState(false);
+  const run = async (action: string, body: Record<string, unknown>, ok: string) => {
+    setBusy(true);
+    try {
+      const r = await call(action, body);
+      if (!r.ok) { onChanged(undefined, String(r.error ?? 'failed')); return false; }
+      const affected = typeof r.affected === 'number' ? r.affected : 0;
+      onChanged(affected > 0 ? `${ok} ${affected} salesperson(s) had the old version and are not Ready to Sell until they have the new one.` : ok);
+      return true;
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-3" data-testid="salesperson-documents">
+      <ul className="divide-y text-sm">
+        {docs.map((d) => (
+          <li key={d.id} className="py-2">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-medium">{d.label}</span>
+              <Badge variant={d.status === 'approved' ? 'secondary' : 'outline'}>{DOCUMENT_STATUSES[d.status]}</Badge>
+              <span className="text-xs text-muted-foreground">{d.id}{d.document_ref ? ` · ${d.document_ref}` : ''}</span>
+            </div>
+            {d.outstanding.length > 0 && (
+              <ul className="ml-4 mt-1 list-disc text-xs text-amber-700 dark:text-amber-400">{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>
+            )}
+            {d.status === 'draft' && (
+              <div className="mt-1 flex flex-wrap gap-2">
+                {d.outstanding.length > 0 ? (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => {
+                    if (!window.confirm(`Mark all ${d.outstanding.length} outstanding items on "${d.label}" as resolved? Only do this once the document itself has been fixed.`)) return;
+                    void run('team_document_outstanding', { id: d.id, outstanding: [] }, 'Outstanding items cleared.');
+                  }}>Mark outstanding items resolved</Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => {
+                    if (!window.confirm(`Approve "${d.label}" as the current version? The previous approved version (if any) becomes superseded, and anyone who only has that one stops being Ready to Sell.`)) return;
+                    void run('team_document_approve', { id: d.id }, 'Approved.');
+                  }}>Approve as current</Button>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {!adding ? <Button size="sm" variant="outline" onClick={() => setAdding(true)}>Add a document version</Button> : (
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
+            <option value="contractor_agreement">Contractor agreement</option>
+            <option value="privacy_notice">Salesperson privacy notice</option>
+            <option value="team_guide">Team guide</option>
+          </select>
+          <Input className="h-8 text-sm" placeholder="Version id, as on the document (e.g. contractor-agreement-v3)" value={form.id} onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))} />
+          <Input className="h-8 text-sm" placeholder="Name (e.g. Independent Sales Contractor Agreement v3)" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
+          <Input className="h-8 text-sm" placeholder="Where the document is kept (file name or folder)" value={form.document_ref} onChange={(e) => setForm((f) => ({ ...f, document_ref: e.target.value }))} />
+          <textarea className="min-h-[60px] w-full rounded-md border border-input bg-background px-2 py-1 text-sm" placeholder="Anything still outstanding, one per line (leave empty if it is final)" value={form.outstanding} onChange={(e) => setForm((f) => ({ ...f, outstanding: e.target.value }))} />
+          <p className="text-xs text-muted-foreground">A new version starts as a draft. Approve it once it is final.</p>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={busy || !form.id.trim() || !form.label.trim()} onClick={async () => {
+              const ok = await run('team_document_add', { document: { ...form, outstanding: form.outstanding.split('\n') } }, 'Version added as a draft.');
+              if (ok) { setAdding(false); setForm(blank); }
+            }}>Add as draft</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </div>
       )}
     </div>
   );

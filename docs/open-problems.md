@@ -1086,3 +1086,12 @@ semantics — until cleaning works again. The all-named-hook guard (`hook_no_vis
 
 ---
 
+
+## Future compliance enhancement: TPS/CTPS screening (postponed by Paul, 2026-10-05)
+
+Not a launch blocker. The contractor agreement's clause 4.3(a) and Paul's checklist (Part 2) describe checking numbers
+against the TPS and CTPS before sales calls; Paul chose to start the sales operation first. Groundwork only:
+`phone_tps_checks`, `src/lib/tpsCheck.ts` (no provider, nothing writes or reads it). To switch on: a licensed
+provider (TPS Services' TPSAPI was the target; its response format must be confirmed against a real response),
+its secret, an edge function using `tpsRowFromAnswer`, and Paul's decision on whether it gates calls.
+Record: `docs/salesperson-onboarding.md` §5.

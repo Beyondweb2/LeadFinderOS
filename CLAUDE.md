@@ -1179,6 +1179,9 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `noindex, nofollow, noarchive, nosnippet`, a Discovery code and an unknown code answer 404 "Welcome pack
   unavailable", `/r/<code>` is unchanged. The stale primary findable-site checkout's two dirty edits are already
   on `master` (`b9286ad`); nothing unique is left in it.
+- **TPS/CTPS screening is POSTPONED by Paul (2026-10-05)** — a future compliance enhancement, not a launch blocker.
+  Dormant groundwork only (`phone_tps_checks`, `src/lib/tpsCheck.ts`); no provider, no call block, not in Ready to
+  Sell (`docs/salesperson-onboarding.md` §5).
 - Deep clean Phase 3, steps 4–10 are owed: `docs/deep-clean-phase3-plan.md` has the order, the file
   lists and Paul's decisions. (The `instantly-poll-run` cron is gone.) Step 5 is SPA-only but Paul's standing
   decision is to see the file list before any deletion; step 6 redeploys `stripe-webhook` and eight others.
@@ -1250,7 +1253,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Directory listings / profile presence, its confidence and recheck rules, the hub integration still owed | `docs/directory-presence.md` |
 | Lead statuses, the sales state, Log Contact outcomes, Last contact, outcome → Next Action | `docs/lead-state-model.md` |
 | WhatsApp outreach compliance (PECR questions, the non-blocking decision, when to reopen) | `docs/whatsapp-outreach-compliance.md` |
-| Salesperson onboarding (Ready to Sell, right to work, privacy-notice blanks), TPS/CTPS state (no provider yet), business type, leavers | `docs/salesperson-onboarding.md` — onboarding rows are admin-only by having NO policy; only fn `admin-users` reads them |
+| Salesperson onboarding, the ENFORCED Ready to Sell gate, approved-only documents, right to work, business type (display only), leavers, TPS/CTPS (postponed) | `docs/salesperson-onboarding.md` — the rule is `public.salesperson_onboarding_missing()`; onboarding rows are admin-only by having NO policy |
 | The deep clean: what is done, what is next, Paul's standing decisions | `docs/deep-clean-phase3-plan.md` (+ `INVENTORY_DEEP_CLEAN.md`, untracked, the Phase 1 evidence) |
 | The Client Service Agreement: its words (v1, pinned), the checkout tick, the agree page, the evidence tables (write-once), the signed PDF | `docs/client-agreement.md` |
 

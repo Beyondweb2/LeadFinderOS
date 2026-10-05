@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { refusalBody, resolveActor, leadAccess } from "../_shared/access.ts";
 import { recordDenial } from "../_shared/protection.ts";
+import { NOT_READY_BODY, salesReadiness } from "../_shared/sales-ready.ts";
 import {
   adoptLink, answersKey, buildConsentsFor, buildConsentsWording, cleanAnswers, linkExpiresAtMs, linkStep, linkUsable, linkUsableUntilMs, planQuickCloseSave,
   quickCloseEmail, quickCloseGate, quickCloseMessage, quickCloseState, QC_REVIEW_TEXT, QC_REVIEW_HEADING, paulFlagText, deliveryApproach, STRIPE_SESSION_LIFETIME_MS,
@@ -150,6 +151,16 @@ Deno.serve(async (req) => {
     const actor = who.actor;
     const body = await req.json().catch(() => ({}));
     const mode = typeof body.mode === "string" ? body.mode : "load";
+    /* ⛔ READY TO SELL (2026-10-05, docs/salesperson-onboarding.md): a salesperson who has not finished
+       onboarding cannot start or advance a sale — no Quick Close answers, no payment link, no sharing it.
+       Reading, and finishing the handoff for a sale ALREADY made, stay open. The admin is never gated. */
+    if (actor.role === "sales" && (mode === "save" || mode === "generate_link" || mode === "share_link")) {
+      const readiness = await salesReadiness(service, actor.id);
+      if (!readiness.ready) {
+        await recordDenial(service, actor.id, `quick-close:${mode}:not_ready`, typeof body.lead_id === "string" ? body.lead_id : null, { missing: readiness.missing });
+        return json(NOT_READY_BODY, 403);
+      }
+    }
     /* MY SALES THAT STILL OWE A HANDOFF (2026-10-02): the caller's OWN paid sales since handoffs existed —
        names and states only, never an amount or anything else of the client's.
        ⛔ An ARCHIVED sale is not listed (M-008, 2026-10-04): a rep is never told to finish a lead they binned. */

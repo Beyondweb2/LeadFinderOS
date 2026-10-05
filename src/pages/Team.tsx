@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { PERMISSION_MATRIX } from '@/lib/access';
-import { OnboardingBadge, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
-import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type OnboardingRecord } from '@/lib/salespersonOnboarding';
+import { OnboardingBadge, SalespersonDocumentsCard, SalespersonOnboardingPanel } from '@/components/SalespersonOnboardingPanel';
+import { ONBOARDING_SAVE_ERRORS, onboardingSummary, type DocumentVersion, type OnboardingRecord } from '@/lib/salespersonOnboarding';
 
 /* TEAM — admin only (multi-user, 2026-09-27). The route is admin-only in src/lib/access.ts, and every
  * action below goes to admin-users, which refuses anyone without the admin role. No password is ever
@@ -43,6 +43,7 @@ const ERR: Record<string, string> = {
   cannot_change_self: 'You cannot disable your own account.',
   cannot_change_book_owner: 'The book owner cannot be disabled.',
   cannot_change_admin: 'An admin cannot be disabled here.',
+  not_ready_to_sell: 'That salesperson is not Ready to Sell, so leads cannot be moved to them.',
   not_an_active_member: 'Pick an active team member.',
 };
 
@@ -83,7 +84,12 @@ export default function Team() {
     queryFn: async () => {
       const r = await call('team_onboarding_list');
       if (!r.ok) throw new Error(String(r.error ?? 'could not load onboarding'));
-      return new Map(((r.rows ?? []) as OnboardingRecord[]).map((x) => [x.user_id, x]));
+      return {
+        rows: new Map(((r.rows ?? []) as OnboardingRecord[]).map((x) => [x.user_id, x])),
+        documents: (r.documents ?? []) as DocumentVersion[],
+        /** The gate's own answer per member (null = could not be read). */
+        missing: (r.missing ?? {}) as Record<string, string[] | null>,
+      };
     },
   });
   const saveOnboarding = async (userId: string, patch: Partial<OnboardingRecord>): Promise<boolean> => {
@@ -117,7 +123,7 @@ export default function Team() {
       <div>
         <h1 className="text-xl font-semibold">Team</h1>
         <p className="text-sm text-muted-foreground">Salespeople get their own login. They see only their own leads and never delivery, clients, money or settings.</p>
-        <p className="text-xs text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing before they are ready to sell. Only you can see these records.</p>
+        <p className="text-xs text-muted-foreground">Click a salesperson's onboarding badge to see what is still missing. Until they are Ready to Sell they can sign in and see their onboarding, but every sales action is blocked. Only you can see these records.</p>
         {onboarding.error && <p className="text-xs text-destructive">Onboarding records could not be loaded: {String((onboarding.error as Error).message)}</p>}
       </div>
 
@@ -149,7 +155,7 @@ export default function Team() {
                 {m.status === 'active' && m.suspended_at && <Badge variant="destructive" title={`Suspended ${new Date(m.suspended_at).toLocaleString('en-GB', { timeZone: 'Europe/London' })}`}>suspended</Badge>}
                 {m.role !== 'admin' && !m.is_book_owner && onboarding.data && (
                   <button type="button" onClick={() => setOpenOnboarding((o) => (o === m.user_id ? null : m.user_id))} aria-expanded={openOnboarding === m.user_id}>
-                    <OnboardingBadge summary={onboardingSummary(onboarding.data.get(m.user_id) ?? null, m)} />
+                    <OnboardingBadge summary={onboardingSummary(onboarding.data.rows.get(m.user_id) ?? null, m, onboarding.data.documents, undefined, onboarding.data.missing[m.user_id] ?? null)} />
                   </button>
                 )}
                 {m.role !== 'admin' && !m.is_book_owner && (
@@ -186,7 +192,7 @@ export default function Team() {
                 )}
                 {openOnboarding === m.user_id && onboarding.data && m.role !== 'admin' && !m.is_book_owner && (
                   <div className="w-full pl-11">
-                    <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.get(m.user_id) ?? null} member={m} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
+                    <SalespersonOnboardingPanel userId={m.user_id} record={onboarding.data.rows.get(m.user_id) ?? null} member={m} docs={onboarding.data.documents} serverMissing={onboarding.data.missing[m.user_id] ?? null} onSave={(patch) => saveOnboarding(m.user_id, patch)} />
                   </div>
                 )}
                 {m.assigned_leads > 0 && (
@@ -212,6 +218,18 @@ export default function Team() {
           </ul>
         )}
       </Card>
+
+      {onboarding.data && (
+        <Card className="p-4 space-y-2">
+          <h2 className="font-semibold">Salesperson documents</h2>
+          <p className="text-xs text-muted-foreground">Only the approved (current) contractor agreement and privacy notice count towards Ready to Sell. Drafts can be recorded for history but never count.</p>
+          <SalespersonDocumentsCard docs={onboarding.data.documents} call={call} onChanged={(message, error) => {
+            if (error) toast({ title: 'Not done', description: ONBOARDING_SAVE_ERRORS[error] ?? error, variant: 'destructive' });
+            else toast({ title: message ?? 'Saved' });
+            void qc.invalidateQueries({ queryKey: ['team', 'onboarding'] });
+          }} />
+        </Card>
+      )}
 
       <Card className="p-4 space-y-2">
         <h2 className="font-semibold">What each role can do</h2>
