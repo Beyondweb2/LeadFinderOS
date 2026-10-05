@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { leadRpc, type RpcResult } from '@/lib/leadRpc';
-import type { CampaignSummary } from '@/lib/campaignRules';
+import type { CampaignMethod, CampaignSummary } from '@/lib/campaignRules';
 import { announceQueueChanged, MY_QUEUE_KEY } from '@/components/MyWhatsAppQueuePanel';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -11,14 +11,7 @@ import { announceQueueChanged, MY_QUEUE_KEY } from '@/components/MyWhatsAppQueue
    by owner in the browser.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-export interface CampaignLeadRow {
-  id: string; business_name: string | null; status: string | null; town: string | null; trade: string | null;
-  interested: boolean; contacted: boolean; replied: boolean;
-}
-export interface CandidateLead {
-  id: string; business_name: string | null; status: string | null; town: string | null; trade: string | null;
-  in_this: boolean; campaign_id: string | null; campaign_name: string | null; in_other_campaign: boolean; sendable: boolean;
-}
+export interface CampaignFields { name: string; trade: string; method: CampaignMethod; area?: string | null }
 
 const failed = (r: RpcResult) => { const e = new Error(String(r.error ?? 'failed')); (e as Error & { code?: string }).code = String(r.error ?? ''); return e; };
 
@@ -48,31 +41,6 @@ export function useCampaignDetail(id: string | undefined) {
   });
 }
 
-export function useCampaignLeads(id: string | undefined) {
-  return useQuery({
-    queryKey: ['campaign-leads', id],
-    enabled: !!id,
-    queryFn: async () => {
-      const r = await leadRpc('campaign_leads', { _campaign_id: id });
-      if (!r.ok) throw failed(r);
-      return (r.leads ?? []) as CampaignLeadRow[];
-    },
-  });
-}
-
-export function useCampaignCandidates(campaignId: string | null, enabled: boolean) {
-  return useQuery({
-    queryKey: ['campaign-candidates', campaignId],
-    enabled,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const r = await leadRpc('campaign_candidates', { _campaign_id: campaignId, _search: null });
-      if (!r.ok) throw failed(r);
-      return (r.leads ?? []) as CandidateLead[];
-    },
-  });
-}
-
 /** The writes. Each returns the server's answer; the caller words a refusal with campaignErrorText. */
 export function useCampaignActions() {
   const qc = useQueryClient();
@@ -90,24 +58,15 @@ export function useCampaignActions() {
   }, [qc]);
 
   const nameAvailable = useCallback((name: string, except?: string) => leadRpc('campaign_name_available', { _name: name, _except: except ?? null }), []);
-  const create = useCallback(async (name: string) => { const r = await leadRpc('campaign_create', { _name: name }); if (r.ok) await refresh(); return r; }, [refresh]);
-  const rename = useCallback(async (id: string, name: string) => { const r = await leadRpc('campaign_rename', { _campaign_id: id, _name: name }); if (r.ok) await refresh(id); return r; }, [refresh]);
-  const remove = useCallback(async (id: string) => { const r = await leadRpc('campaign_delete', { _campaign_id: id }); if (r.ok) await refresh(); return r; }, [refresh]);
-  /** Adds in chunks of the server's own limit (500); the totals are summed. */
-  const addLeads = useCallback(async (id: string, leadIds: string[]) => {
-    let moved = 0; let unchanged = 0; const skipped: Record<string, number> = {};
-    for (let i = 0; i < leadIds.length; i += 500) {
-      const r = await leadRpc('campaign_add_leads', { _campaign_id: id, _lead_ids: leadIds.slice(i, i + 500) });
-      if (!r.ok) { await refresh(id); return r; }
-      moved += Number(r.moved ?? 0); unchanged += Number(r.unchanged ?? 0);
-      for (const [k, n] of Object.entries((r.skipped ?? {}) as Record<string, number>)) skipped[k] = (skipped[k] ?? 0) + n;
-    }
-    await refresh(id);
-    return { ok: true, moved, unchanged, skipped } as RpcResult;
-  }, [refresh]);
+  /* Sales workspace v2: a campaign is made from four fields (campaign_new) and edited the same way. */
+  const create = useCallback(async (f: CampaignFields) => { const r = await leadRpc('campaign_new', { _name: f.name, _trade: f.trade, _method: f.method, _area: f.area || null }); if (r.ok) await refresh(); return r; }, [refresh]);
+  const update = useCallback(async (id: string, f: CampaignFields) => { const r = await leadRpc('campaign_update', { _campaign_id: id, _name: f.name, _trade: f.trade, _method: f.method, _area: f.area || null }); if (r.ok) await refresh(id); return r; }, [refresh]);
+  /** ⛔ Delete never deletes leads or history: the campaign is archived, its queued openers are paused,
+   *  its leads keep their campaign (campaign_archive). */
+  const remove = useCallback(async (id: string) => { const r = await leadRpc('campaign_archive', { _campaign_id: id }); if (r.ok) await refresh(); return r; }, [refresh]);
   /** Launch: one call; the server walks every new lead of the campaign through the queue's safeguards. */
   const launch = useCallback(async (id: string) => { const r = await leadRpc('campaign_launch', { _campaign_id: id }); await refresh(id); return r; }, [refresh]);
   const stop = useCallback(async (id: string) => { const r = await leadRpc('campaign_stop', { _campaign_id: id }); await refresh(id); return r; }, [refresh]);
 
-  return { nameAvailable, create, rename, remove, addLeads, launch, stop, refresh };
+  return { nameAvailable, create, update, remove, launch, stop, refresh };
 }

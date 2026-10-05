@@ -18,9 +18,9 @@ const bar = play.slice(play.indexOf("function LogCallBar"), play.indexOf("export
 ok(!/leadRpc|supabase|invoke|fetch\(/.test(bar), "Log this call writes nothing and calls nothing — it only navigates");
 
 const dlg = read("src/components/LeadDetailDialog.tsx");
-ok(/const logThisCall = \(\) => \{ setLogCallRequested\(true\); setTab\('work'\); \};/.test(dlg), "the workspace switches to Work and asks for Log a contact");
-ok(/logContactOpen=\{openLogContact \|\| logCallRequested\}/.test(dlg), "…the Work panel opens Log a contact for it");
-ok(/<ColdCallPlaybookInline key=\{scriptTab\} leadId=\{lead\.id\} initialScript=\{scriptTab\} onLogCall=\{logThisCall\} onRunCheck=\{/.test(dlg), "the Scripts tab passes it (and the way to the AI check)");
+ok(/const logThisCall = \(\) => \{ setLogCallRequested\(\(n\) => n \+ 1\); requestAnimationFrame\(\(\) => actionsRef\.current\?\.scrollIntoView/.test(dlg), "v2: Log this call goes to the bottom of the SAME Call tab and asks for Log a contact");
+ok(/<LeadWorkPanel key=\{[^\n]*?\} part="call"[^>]*logContactOpen=\{openLogContact \|\| logCallRequested > 0\}/.test(dlg), "…the Call tab's panel (remounted) opens Log a contact for it");
+ok(/<ColdCallPlaybookInline leadId=\{lead\.id\} initialScript="call" onLogCall=\{logThisCall\} onRunCheck=\{openAiTools\} \/>/.test(dlg), "the Call tab passes it (and the way to the AI check tools on the same tab)");
 ok(/key=\{fullLead\.id\}/.test(dlg), "the body is keyed per lead, so the request never carries to the next lead");
 
 const crm = read("src/components/LeadCrmPanel.tsx");
@@ -29,6 +29,6 @@ ok(/useEffect\(\(\) => \{ if \(defaultOpen\) rootRef\.current\?\.scrollIntoView/
 
 const out = read("src/components/OutreachTable.tsx");
 const sheet = out.slice(out.indexOf("<ColdCallPlaybookSheet"), out.indexOf("<ColdCallPlaybookSheet") + 700);
-ok(/onLogCall=\{\(\) => \{[\s\S]*setDetailTab\('work'\); setDetailLogContact\(true\); setDetailLead\(l\);/.test(sheet), "the Outreach row's sheet opens the lead on Work with Log a contact — the same as the Call button");
+ok(/onLogCall=\{\(\) => \{[\s\S]*setDetailTab\('call'\); setDetailLogContact\(true\); setDetailLead\(l\);/.test(sheet), "the Outreach row's sheet opens the lead on Call with Log a contact — the same as the Call button");
 if (f) { console.log(`\n${f} failure(s)`); process.exit(1); }
 console.log("\nall log-this-call checks passed");

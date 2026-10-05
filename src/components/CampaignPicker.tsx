@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Settings2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { NewCampaignNameDialog } from '@/components/campaigns/NewCampaignNameDialog';
+import { CampaignEditDialog } from '@/components/campaigns/CampaignEditDialog';
 
 const NEW_CAMPAIGN = '__new__';
 const MANAGE_CAMPAIGNS = '__manage__';
@@ -70,8 +70,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
       setDialogOpen(true);
       return;
     }
-    /* Manage = the Campaigns page (2026-10-03): the same page and wizard for both roles, each seeing only what the
-       server returns them (their own; the admin, every campaign). */
+    /* Manage = the Manage campaigns page: both roles, each seeing only what the server returns them. */
     if (v === MANAGE_CAMPAIGNS) {
       navigate('/campaigns');
       return;
@@ -83,12 +82,11 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
     onChange(v);
   };
 
-  /* New = a name, through campaign_create (the owner and the defaults are the server's; a taken name is refused
-     there). Both roles. The admin's extra settings live on the campaign page under Advanced settings. */
+  /* New = the one campaign form (name, niche, Call / WhatsApp, optional area — campaign_new). Both roles. */
   /* The create action has already refreshed the shared list (useCampaignActions awaits it). */
   const handleCreated = (created: { id: string }) => {
     {
-      // Auto-select the new campaign. createCampaign already added it to the list,
+      // Auto-select the new campaign. The create action already refreshed the shared list,
       // so defer the selection by a tick: this lets the new <SelectItem> mount and
       // register in Radix's item collection BEFORE it becomes the value. Selecting
       // it in the same commit it's added leaves the trigger blank until the user
@@ -139,7 +137,7 @@ export function CampaignPicker({ value, onChange, mode, className, hideCreate = 
         </SelectContent>
       </Select>
 
-      <NewCampaignNameDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreated={handleCreated} />
+      <CampaignEditDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={handleCreated} />
     </>
   );
 }

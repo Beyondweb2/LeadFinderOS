@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, ClipboardCopy, Copy, Loader2, Mail, MessageCircle, Pencil, PoundSterling, RefreshCw, ShieldAlert, ShieldCheck, Zap,
@@ -12,9 +12,9 @@ import { useToast } from '@/hooks/use-toast';
 import { invokeEdge, edgeErrorMessage, EdgeFunctionError } from '@/lib/edgeInvoke';
 import { notifyLeadChanged } from '@/lib/leadSync';
 import {
-  QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
-  missingQuestions, quickCloseMessage, quickCloseScript, routeAvailable, routeOwnershipLine, routePaymentsShort, routeTermsLines,
-  type QcKey, type QcLinkShare, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
+  APPROACH_LABEL, APPROACH_ROUTE, QC_REVIEW_HEADING, QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_GUARANTEE_LINES, QUICK_CLOSE_QUESTIONS, QUICK_CLOSE_STATE_LABEL,
+  closeFlow, missingQuestions, quickCloseMessage, quickCloseScript, routeAfterAnswer, routeAvailable, routeSwitchText, routeOwnershipLine, routePaymentsShort, routeTermsLines,
+  type QcApproach, type QcKey, type QcLinkShare, type QuickCloseAnswers, type QuickCloseGate, type QuickCloseState,
 } from '@/lib/quickClose';
 import { FINDABLE_SETUP_PRICE_GBP, SERVICE_ROUTE_NAME, totalPaymentsFor, type ServiceRoute } from '@/lib/findableOffer';
 import { cn } from '@/lib/utils';
@@ -31,7 +31,12 @@ import { firstContactDueLabel, type FirstContactState } from '@/lib/firstContact
    and the LINK sit first (M-013) — price, payment count, minimum term, ownership, guarantee, agreement
    tick (M-011); an expired link is never shown as ready and has a "Create fresh payment link" button
    (M-014); the link can be emailed, sent on WhatsApp (window open) or copied, and each is recorded (M-015);
-   a route change asks first and the server refuses a stale one (route integrity). */
+   a route change asks first and the server refuses a stale one (route integrity).
+   ⛔ SALES WORKSPACE V2 (2026-10-05): ONE CLOSE UI. QuickClosePanel is the lead workspace's CLOSE tab; the
+   dialog below is only that panel in a frame (for screens outside the workspace). The questions follow the
+   website approach (quickClose.ts closeFlow): a new site is never asked for current-site access, plain
+   Optimise is never asked who controls the domain, and an unresolved domain is a handoff note for Paul, not
+   a stop. Inside the workspace every Quick Close button switches to the Close tab (QuickCloseNav). */
 
 interface View {
   ok: true; canEdit: boolean;
@@ -41,7 +46,8 @@ interface View {
   onboarding: { id: string; status: string; contact_name: string | null; contact_email: string | null; confirmed_phone: string | null; business_website: string | null } | null;
   answers: QuickCloseAnswers; state: QuickCloseState; gate: QuickCloseGate;
   consents?: { lines: string[]; wording: string; confirmed: { wording: string; at: string } | null };
-  review: { approved_at: string | null; reasons: string[] };
+  /** reasons = the payment stop (Optimise on a site we cannot get into); flags = for Paul, never a stop (v2). */
+  review: { approved_at: string | null; reasons: string[]; flags?: string[]; delivery_approach?: QcApproach };
   /** url is null unless the link is safe to hand over right now (usable). */
   link: { url: string | null; usable: boolean; generated_at: string | null; expires_at: string | null; usable_until?: string | null; shared: QcLinkShare[] } | null;
   share?: { email: string | null; hasPhone: boolean };
@@ -89,11 +95,31 @@ function timeLeft(iso: string | null | undefined): string {
 }
 const SHARE_WORDS: Record<QcLinkShare['channel'], string> = { copy: 'Copied', email: 'Emailed', whatsapp: 'Sent on WhatsApp' };
 
+/** Inside the lead workspace, a Quick Close button goes to the CLOSE tab instead of opening a second window. */
+export const QuickCloseNav = createContext<{ openClose: (leadId: string) => void } | null>(null);
+
+/** The lead has no website on file: improving / refreshing / recreating one is not possible. */
+const NEEDS_CURRENT_SITE: ReadonlySet<string> = new Set(['improve', 'refresh', 'recreation']);
+
 export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
+        <DialogTitle className="sr-only">Quick Close</DialogTitle>
+        <DialogDescription className="sr-only">Close this lead: the questions, the terms and the payment link</DialogDescription>
+        <QuickClosePanel leadId={leadId} active={open} framed />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** THE CLOSE — one UI. framed = inside the dialog (its own scroll area); otherwise it flows in the workspace tab. */
+export function QuickClosePanel({ leadId, active = true, framed = false }: { leadId: string; active?: boolean; framed?: boolean }) {
   const { role } = useSubscription();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const q = useQuickClose(leadId, open);
+  const q = useQuickClose(leadId, active);
+  const open = active;
   const v = q.data;
   const [step, setStep] = useState<QcKey | 'review' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -110,7 +136,9 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
   const missing = useMemo(() => missingQuestions(answers), [answers]);
   // A decision-maker "No" ends the questions (nothing after it can lead to payment).
   const current: QcKey | null = step && step !== 'review' ? step : answers.decision_maker === 'no' ? null : (missing[0] ?? null);
-  const shownQs = QUICK_CLOSE_QUESTIONS.filter((x) => !(x.key === 'access' && answers.manager === 'no_website') && !(x.key === 'authority' && (answers.manager === 'owner' || answers.manager === 'employee' || answers.manager === 'no_website')) && !(x.key === 'build_consents' && answers.route !== 'build'));
+  /* v2: only the questions this approach needs, in order (closeFlow). */
+  const shownQs = closeFlow(answers).map((k) => QUICK_CLOSE_QUESTIONS.find((x) => x.key === k)!).filter(Boolean);
+  const hasSite = !!(v?.onboarding?.business_website || v?.lead.website);
   useEffect(() => { if (!open) { setStep(null); setEditing(false); setCopied(null); } }, [open]);
   useEffect(() => { if (v?.onboarding) setFix({ contact_name: v.onboarding.contact_name ?? v.lead.contact_name ?? '', contact_email: v.onboarding.contact_email ?? v.lead.email ?? '', confirmed_phone: v.onboarding.confirmed_phone ?? v.lead.phone ?? '', business_website: v.onboarding.business_website ?? v.lead.website ?? '' }); }, [v?.onboarding?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -132,10 +160,10 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
        The server also refuses it unless route_change is true, and refuses any save from a screen showing
        a different route than the saved one (expect_route). */
     let routeChange = false;
-    if (key === 'route' && route && value !== route) {
-      const to = value as ServiceRoute;
-      const extra = [v?.link ? 'The current payment link will be cancelled.' : '', route === 'build' ? 'The Build consents will be cleared.' : ''].filter(Boolean).join(' ');
-      if (!window.confirm(`Switch to ${SERVICE_ROUTE_NAME[to]}? That is ${totalPaymentsFor(to)} payments in total instead of ${totalPaymentsFor(route)}. ${extra}`.trim())) return;
+    /* v2: the approach can move the route too (improve → Optimise, a new site → Build). */
+    const nextRoute = routeAfterAnswer(answers, key, value);
+    if (route && nextRoute && nextRoute !== route) {
+      if (!window.confirm(routeSwitchText(route, nextRoute, !!v?.link))) return;
       routeChange = true;
     }
     const before = qc.getQueryData<View>(quickCloseKey(leadId));
@@ -171,7 +199,7 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
 
   const saveHandoff = async (h: SalesHandoffFields) => !!(await run('handoff', { mode: 'save_handoff', handoff: h }));
   const submitDelivery = async () => { const r = await run('submit', { mode: 'submit_delivery' }); if (r) toast({ title: 'Submitted for delivery', description: 'Paul has been told.' }); };
-  const answeredCount = shownQs.filter((x) => answers[x.key] && !(x.key === 'authority' && answers.authority === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party'))).length;
+  const answeredCount = shownQs.filter((x) => answers[x.key] && answers[x.key] !== 'not_applicable').length;
   const known: [string, string | null | undefined][] = v ? [
     ['Business', v.lead.business_name], ['Trade', v.lead.trade], ['Town', v.lead.town], ['Phone', v.onboarding?.confirmed_phone || v.lead.phone],
     ['Email', v.onboarding?.contact_email || v.lead.email], ['Website', v.onboarding?.business_website || v.lead.website], ['Contact', v.onboarding?.contact_name || v.lead.contact_name],
@@ -183,19 +211,18 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
   const currentQ = current ? QUICK_CLOSE_QUESTIONS.find((x) => x.key === current)! : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
-        <DialogHeader className="shrink-0 border-b border-border/60 px-4 py-3 text-left">
-          <DialogTitle className="flex min-w-0 items-center gap-2 pr-8 text-base"><Zap className="h-5 w-5 shrink-0 text-emerald-500" /><span className="shrink-0 whitespace-nowrap">Quick Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></DialogTitle>
-          <DialogDescription className="flex flex-wrap items-center gap-2 text-xs">
+    <div className={cn('flex min-h-0 flex-col', framed && 'h-full')} data-testid="quick-close-panel">
+        <div className={cn('shrink-0 text-left', framed ? 'border-b border-border/60 px-4 py-3' : 'pb-3')}>
+          <p className="flex min-w-0 items-center gap-2 pr-8 text-base font-semibold"><Zap className="h-5 w-5 shrink-0 text-emerald-500" /><span className="shrink-0 whitespace-nowrap">Close</span><span className="min-w-0 truncate font-normal text-muted-foreground">· {v?.lead.business_name ?? '…'}</span></p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {v && <span className={cn('rounded-full px-2 py-0.5 font-semibold', STATE_TONE[v.state])}>{QUICK_CLOSE_STATE_LABEL[v.state]}</span>}
             {v && route && <span className="rounded-full border border-emerald-600/40 px-2 py-0.5 font-semibold text-emerald-800 dark:text-emerald-200" data-testid="qc-route-chip">{SERVICE_ROUTE_NAME[route]} · {totalPaymentsFor(route)} payments</span>}
             {v && v.state !== 'paid' && <span>{answeredCount} of {shownQs.length} answered · saved as you go</span>}
-          </DialogDescription>
+          </div>
           {v && v.state !== 'paid' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${Math.round((answeredCount / Math.max(1, shownQs.length)) * 100)}%` }} /></div>}
-        </DialogHeader>
+        </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div className={cn('space-y-4', framed && 'min-h-0 flex-1 overflow-y-auto px-4 py-4')}>
           {q.isLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading what we already know…</p>}
           {q.isError && <p className="text-sm text-destructive">{edgeErrorMessage(q.error)}</p>}
 
@@ -235,17 +262,20 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
                   {(v.consents?.lines ?? currentQ.detail ?? []).map((d) => <li key={d}>{d}</li>)}
                 </ul>
               )}
-              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' ? 'grid-cols-1' : 'grid-cols-2')}>
+              <div className={cn('mt-3 grid gap-2', current === 'route' || current === 'build_consents' || current === 'approach' || current === 'domain' || current === 'design_owner' ? 'grid-cols-1' : 'grid-cols-2')}>
                 {currentQ.options
                   .filter((o) => !(current === 'authority' && o.value === 'not_applicable' && (answers.manager === 'agency' || answers.manager === 'third_party')))
                   .map((o) => {
-                    const off = current === 'route' && !routeAvailable(answers, o.value as ServiceRoute);
+                    const off = (current === 'route' && !routeAvailable(answers, o.value as ServiceRoute))
+                      || (current === 'approach' && !hasSite && NEEDS_CURRENT_SITE.has(o.value));
+                    const planOf = current === 'approach' && o.value !== 'unsure' ? APPROACH_ROUTE[o.value as Exclude<QcApproach, 'unsure'>] : null;
                     return (
                       <button key={o.value} type="button" disabled={!!busy || off} onClick={() => void answer(current!, o.value)}
                         className={cn('flex min-h-[56px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50',
                           answers[current!] === o.value ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200' : 'border-border bg-background hover:bg-muted')}>
                         {o.label}
                         {current === 'route' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — they have no website' : `${SERVICE_ROUTE_NAME[o.value as ServiceRoute]} · ${routePaymentsShort(o.value as ServiceRoute)}`}</span>}
+                        {current === 'approach' && <span className="mt-0.5 text-xs font-normal text-muted-foreground">{off ? 'Not possible — no website on file' : planOf ? `${SERVICE_ROUTE_NAME[planOf]} · ${routePaymentsShort(planOf)}` : 'Pick the plan next'}</span>}
                       </button>
                     );
                   })}
@@ -268,11 +298,24 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
           )}
           {v && v.state === 'needs_review' && (
             <section className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />DOMAIN / AGENCY ISSUE — Paul review required</p>
+              <p className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200"><ShieldAlert className="h-4 w-4" />{QC_REVIEW_HEADING}</p>
               <ul className="mt-1 list-disc pl-5 text-muted-foreground">{v.review.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
               <p className="mt-2 text-muted-foreground">You do not need to sort this out or interpret any agreement. Paul has been told and will look at it; the lead stays yours.</p>
               {role === 'admin' && <Button size="sm" className="mt-2 h-10" onClick={() => void run('approve', { mode: 'approve_review' })} disabled={busy === 'approve'}>Release for payment</Button>}
             </section>
+          )}
+
+          {/* v2: for Paul, never a stop — the sale and the preview build go ahead; it is settled after payment. */}
+          {v && (v.review.flags?.length ?? 0) > 0 && v.state !== 'paid' && (
+            <section className="rounded-xl border border-sky-500/40 bg-sky-500/5 p-3 text-sm" data-testid="qc-paul-flags">
+              <p className="font-semibold text-sky-800 dark:text-sky-200">For Paul after payment — this does not stop the sale</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{v.review.flags!.map((r) => <li key={r}>{r}</li>)}</ul>
+              <p className="mt-1.5 text-xs text-muted-foreground">Never promise to take over a domain or copy someone else's design. Paul sorts this out with them.</p>
+            </section>
+          )}
+          {v && answers.approach && v.state !== 'paid' && (
+            <p className="text-xs text-muted-foreground" data-testid="qc-approach-summary">Website approach: <span className="font-medium text-foreground">{APPROACH_LABEL[answers.approach]}</span>
+              {v.review.delivery_approach && v.review.delivery_approach !== answers.approach && <> · delivered as <span className="font-medium text-foreground">{APPROACH_LABEL[v.review.delivery_approach]}</span> unless Paul confirms the rights</>}</p>
           )}
 
           {/* ── THE CLOSE: terms, then the link (first on screen once the route is chosen — M-013) ── */}
@@ -402,10 +445,9 @@ export function QuickCloseDialog({ leadId, open, onOpenChange }: { leadId: strin
             </label>
           )}
 
-          {v && v.state !== 'paid' && <p className="text-center text-[11px] text-muted-foreground">Prefer they fill it in themselves? The self-service sign-up link is still in the lead's Scripts tab.</p>}
+          {v && v.state !== 'paid' && framed && <p className="text-center text-[11px] text-muted-foreground">Prefer they fill it in themselves? The self-service sign-up link is on the lead's Close tab.</p>}
         </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
 
@@ -413,17 +455,73 @@ function FragmentRow({ k, v }: { k: string; v: string | null | undefined }) {
   return (<><dt className="text-muted-foreground">{k}</dt><dd className={cn('min-w-0 truncate font-medium', !v && 'font-normal text-muted-foreground/70')} title={v ?? undefined}>{v || 'not known'}</dd></>);
 }
 
+/* ══ THE WEBSITE APPROACH, CAPTURED EARLY (sales workspace v2) ═══════════════════════════════════════
+   The DETAILS tab's field and the Close tab's question are ONE stored answer (quick_close.answers.approach,
+   saved by fn quick-close like every other answer). It decides the plan (Build / Optimise) and which Close
+   questions make sense, so a switch of plan asks first, exactly as on the Close tab. */
+export function WebsiteApproachField({ leadId }: { leadId: string }) {
+  const q = useQuickClose(leadId);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const v = q.data;
+  if (q.isLoading) return <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading…</p>;
+  if (!v) return null;
+  const a = v.answers ?? {};
+  const hasSite = !!(v.onboarding?.business_website || v.lead.website);
+  const choose = async (value: string) => {
+    const route = a.route ?? null;
+    const next = routeAfterAnswer(a, 'approach', value);
+    let routeChange = false;
+    if (route && next && next !== route) {
+      if (!window.confirm(routeSwitchText(route, next, !!v.link))) return;
+      routeChange = true;
+    }
+    setBusy(true);
+    try {
+      const r = await invokeEdge<View>('quick-close', { lead_id: leadId, mode: 'save', answers: { approach: value }, expect_route: route, ...(routeChange ? { route_change: true } : {}) });
+      qc.setQueryData(quickCloseKey(leadId), r);
+      notifyLeadChanged(leadId);
+      toast({ title: 'Website approach saved' });
+    } catch (e) {
+      toast({ title: 'Not saved', description: edgeErrorMessage(e), variant: 'destructive' });
+      if (e instanceof EdgeFunctionError && REFRESH_ON.has(e.code)) void q.refetch();
+    } finally { setBusy(false); }
+  };
+  const plan = a.approach && a.approach !== 'unsure' ? APPROACH_ROUTE[a.approach] : a.route ?? null;
+  return (
+    <div className="space-y-1.5" data-testid="website-approach">
+      <label className="block text-[11px] font-medium text-muted-foreground">Website approach — what do they want?</label>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {(Object.keys(APPROACH_LABEL) as QcApproach[]).map((k) => {
+          const off = !v.canEdit || busy || (!hasSite && NEEDS_CURRENT_SITE.has(k));
+          return (
+            <button key={k} type="button" disabled={off} onClick={() => void choose(k)} aria-pressed={a.approach === k}
+              className={cn('rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-colors disabled:opacity-50',
+                a.approach === k ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' : 'border-border/60 hover:bg-muted')}>
+              {APPROACH_LABEL[k]}
+              <span className="block text-[10px] font-normal text-muted-foreground">{!hasSite && NEEDS_CURRENT_SITE.has(k) ? 'No website on file' : k === 'unsure' ? 'Paul recommends after payment' : SERVICE_ROUTE_NAME[APPROACH_ROUTE[k]]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground">{plan ? `Plan: ${SERVICE_ROUTE_NAME[plan]} · ${routePaymentsShort(plan)}. ` : ''}This decides which questions the Close tab asks.{v.canEdit ? '' : ' (Locked — this lead has paid or ended.)'}</p>
+    </div>
+  );
+}
+
 /** The button that opens it (the lead workspace header, Focus Mode). */
 /** variant 'quiet' (the lead workspace header, 2026-10-01): an outline shortcut that does not compete with
  *  the Next Action — the same dialog, the same payment path. */
 export function QuickCloseButton({ leadId, className, size = 'sm', variant = 'solid' }: { leadId: string; className?: string; size?: 'sm' | 'lg'; variant?: 'solid' | 'quiet' }) {
   const [open, setOpen] = useState(false);
+  const nav = useContext(QuickCloseNav);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
+      <button type="button" onClick={() => (nav ? nav.openClose(leadId) : setOpen(true))} className={cn('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', variant === 'quiet' ? 'border border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700', size === 'lg' ? 'h-11 px-4 text-sm rounded-xl' : 'h-8 px-2.5 text-xs', className)} aria-label="Quick Close: take payment now">
         <Zap className="h-3.5 w-3.5" />Quick Close
       </button>
-      {open && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}
+      {open && !nav && <QuickCloseDialog leadId={leadId} open={open} onOpenChange={setOpen} />}
     </>
   );
 }

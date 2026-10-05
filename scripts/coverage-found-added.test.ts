@@ -70,10 +70,11 @@ const cell = read('src/components/CoverageFoundAdded.tsx');
 ok(/Breakdown not recorded/.test(cell) && /Not searched/.test(cell) && /with website/.test(cell) && /without/.test(cell), 'the cell: four numbers, or "Breakdown not recorded" / "Not searched"');
 
 console.log('── 4. QUICK CLOSE: BUILD CONSENTS BEFORE THE LINK ──');
-const base = { decision_maker: 'yes', domain: 'yes', manager: 'owner', access: 'yes' } as const;
+/* v2: a NEW Findable site (approach new_template) is Build; it is asked the domain, never current-site access. */
+const base = { decision_maker: 'yes', approach: 'new_template', domain: 'yes' } as const;
 ok(QUICK_CLOSE_QUESTIONS.some((q) => q.key === 'build_consents' && q.detail?.length === 3) && BUILD_CONSENTS.length === 3, 'one Build-only question listing the three consents');
 ok(/own or control the domain, or have the authority/.test(BUILD_CONSENTS[0]) && /domain \/ DNS changes/.test(BUILD_CONSENTS[1]) && /right to provide and use the business content/.test(BUILD_CONSENTS[2]), 'domain authority · DNS permission · rights to content');
-const build = cleanAnswers({ ...base, route: 'build' });
+const build = cleanAnswers({ ...base });
 ok(missingQuestions(build).includes('build_consents') && !mayGenerateLink('answers_saved', { answers: build }), 'Build with the consents unanswered → no link');
 ok(quickCloseState('answers_saved', { answers: { ...build, build_consents: 'not_yet' } }) === 'consents_needed' && !mayGenerateLink('answers_saved', { answers: { ...build, build_consents: 'not_yet' } }), '"Not yet" → Build consents needed, no link');
 ok(quickCloseState('answers_saved', { answers: { ...build, build_consents: 'not_yet' }, review_approved_at: '2026-09-29T10:00:00Z' }) === 'consents_needed', 'Paul\'s review release does not stand in for the consents');
@@ -81,7 +82,8 @@ ok(mayGenerateLink('answers_saved', { answers: { ...build, build_consents: 'yes'
 const cols = onboardingColumnsFor(cleanAnswers({ ...build, build_consents: 'yes' }));
 ok(cols.dns_permission === true && cols.materials_confirmed === true && cols.authority_confirmed === true, 'confirmed → the same consent columns the self-service pages write');
 ok(onboardingColumnsFor(cleanAnswers({ ...build, manager: 'agency', authority: 'not_sure', build_consents: 'yes' })).authority_confirmed === undefined, 'an explicit "not sure" to authority is never turned into a yes');
-ok(cleanAnswers({ ...base, route: 'optimise', build_consents: 'yes' }).build_consents === undefined && !missingQuestions(cleanAnswers({ ...base, route: 'optimise' })).includes('build_consents'), 'Optimise never asks or keeps the Build consents (existing checks only)');
+ok(onboardingColumnsFor(cleanAnswers({ ...build, domain: 'agency', build_consents: 'yes' })).authority_confirmed === undefined, 'v2: a domain still to be handed over never becomes authority_confirmed');
+ok(cleanAnswers({ ...base, approach: 'improve', build_consents: 'yes' }).build_consents === undefined && !missingQuestions(cleanAnswers({ ...base, approach: 'improve' })).includes('build_consents'), 'Optimise never asks or keeps the Build consents (existing checks only)');
 /* 2026-10-04: the save decision moved into planQuickCloseSave (src/lib/quickClose.ts), which fn quick-close runs. */
 ok(/if \(prev\.build_consents === 'yes' && answers\.build_consents !== 'yes'\) \{\s*cols\.dns_permission = null; cols\.materials_confirmed = null;/.test(code('src/lib/quickClose.ts')) && /planQuickCloseSave\(/.test(code('supabase/functions/quick-close/index.ts')), 'withdrawing the consents clears the columns they set');
 

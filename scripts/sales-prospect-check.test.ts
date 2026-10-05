@@ -560,7 +560,7 @@ console.log('── the screens ──');
   const outreach = read('src/pages/Outreach.tsx');
   const table = read('src/components/OutreachTable.tsx');
   ok(/useCallCardSummaries/.test(panel) && /summary\.headline/.test(panel), 'each ready lead shows the call card\'s own one-line result');
-  ok(/onOpenLead\(it\.lead_id, tab\)/.test(panel) && /setLaunchIntent\(\{ leadId, channel: 'open', tab \}\)/.test(outreach) && /setDetailTab\(launchIntent\.tab\)/.test(table), '"Call screen" / "Open the next ready lead" open the lead\'s workspace on the call script');
+  ok(/onOpenLead\(it\.lead_id, tab\)/.test(panel) && /setLaunchIntent\(\{ leadId, channel: 'open', tab: 'call' \}\)/.test(outreach) && /setDetailTab\(launchIntent\.tab\)/.test(table), '"Call screen" / "Open the next ready lead" open the lead\'s workspace on the Call tab (v2)');
   ok(!/invokeEdge\(|functions\.invoke|\.insert\(|\.update\(|\.rpc\(/.test(panel), 'the panel calls nothing and writes nothing (tel: link and the workspace only)');
   ok((hook.match(/invokeEdge/g) ?? []).length >= 1 && !/send-whatsapp|whatsapp|email/i.test(hook.replace(/\/\*[\s\S]*?\*\//g, '')), 'the hook talks to sales-prospect-check only');
   ok(/client_request_id: pressRef\.current\.id/.test(hook) && /e\.status !== null\) throw e;/.test(hook), 'a dropped connection is retried with the SAME request id (never a second batch)');

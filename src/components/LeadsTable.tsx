@@ -104,7 +104,11 @@ interface LeadsTableProps {
    *  ACTIVE CRM, and if so whether it's still fresh/removable + the row id. When
    *  provided, the action cell shows a three-state Add / Remove / In-CRM toggle;
    *  when absent, falls back to the legacy "ever added" indicator. */
-  getCrmState?: (lead: Lead) => { inCrm: boolean; isFresh: boolean; crmLeadId: string | null };
+  getCrmState?: (lead: Lead) => { inCrm: boolean; isFresh: boolean; crmLeadId: string | null; campaignId?: string | null };
+  /** Sales workspace v2: the campaign selected at the top of Find Leads. A business ALREADY in the CRM can be
+   *  put into it from its row (lead_set_campaign) — membership never depends on contact history. */
+  activeCampaign?: { id: string; name: string } | null;
+  onMoveToCampaign?: (crmLeadId: string) => void;
   /** Multi-user: the server's ownership state for a result (lead_identity_lookup). */
   ownership?: (lead: Lead) => OwnershipInfo | null;
   onClaim?: (leadId: string) => void;
@@ -115,7 +119,7 @@ interface LeadsTableProps {
   onRemoveFromCrm?: (leadId: string, businessName: string) => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails, addCampaignTooltip = 'Add to CRM', getCrmState, onRemoveFromCrm, ownership, onClaim, claiming, viewerRole, activeCampaign, onMoveToCampaign }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { user } = useAuth();
@@ -916,6 +920,16 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         // Without getCrmState (other callers), keep the legacy
                         // "In your list" indicator for the ever-added case.
                         const crm = getCrmState?.(lead);
+                        /* v2: in the CRM but not in the campaign picked above → offer to put it there. */
+                        const moveBtn = crm?.inCrm && crm.crmLeadId && activeCampaign && onMoveToCampaign && crm.campaignId !== activeCampaign.id
+                          ? <Button variant="outline" size="sm" className="h-8 px-2 text-xs" data-testid="crm-move-to-campaign"
+                              title={`Put this lead into ${activeCampaign.name}`} onClick={() => onMoveToCampaign(crm.crmLeadId!)}>
+                              → {activeCampaign.name.length > 18 ? `${activeCampaign.name.slice(0, 17)}…` : activeCampaign.name}
+                            </Button>
+                          : null;
+                        if (crm?.inCrm && moveBtn) {
+                          return <div className="flex items-center gap-1.5">{moveBtn}</div>;
+                        }
                         if (crm?.inCrm) {
                           if (crm.isFresh && crm.crmLeadId && onRemoveFromCrm) {
                             return (
@@ -943,7 +957,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                                   In CRM
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent>Already contacted — manage on the Outreach page</TooltipContent>
+                              <TooltipContent>In your CRM and already being worked (status, star, note or Next Action) — manage it on the Outreach page</TooltipContent>
                             </Tooltip>
                           );
                         }

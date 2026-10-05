@@ -1,52 +1,81 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, Loader2, Megaphone, Plus, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle, ListFilter, Loader2, Megaphone, MessageCircle, Pause, Pencil, Phone, Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { CampaignWizard } from '@/components/campaigns/CampaignWizard';
-import { useMyCampaigns } from '@/hooks/useMyCampaigns';
-import { CAMPAIGN_STATUS_LABEL, campaignDisplayName, campaignNextStep, campaignStatus, type CampaignStatus, type CampaignSummary } from '@/lib/campaignRules';
+import { CampaignEditDialog } from '@/components/campaigns/CampaignEditDialog';
+import { useCampaignActions, useMyCampaigns } from '@/hooks/useMyCampaigns';
+import {
+  CAMPAIGN_METHOD_LABEL, campaignDisplayName, campaignErrorText, campaignStats, launchSkipLine, type CampaignSummary,
+} from '@/lib/campaignRules';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
-   CAMPAIGNS (2026-10-03). A salesperson's own campaigns — the server returns nothing else (my_campaigns).
-   The admin sees every campaign, with the owner in brackets beside any that is not theirs, and an Owner
-   filter. One clear "New campaign"; each card says its status, its leads and the one thing to do next.
+   MANAGE CAMPAIGNS (sales workspace v2, Paul, 2026-10-05). A campaign is a container: a niche, a contact
+   method (Call / WhatsApp) and an optional area. This page lists them with the numbers that matter, in the
+   channel's own words, and offers Edit / Send openers · Pause sending (WhatsApp only) / Delete. It is NOT a
+   lead screen: "Open leads" goes to Outreach filtered to the campaign; leads join from Find Leads.
+   ⛔ Delete archives (campaign_archive): leads, their history and their campaign link all stay.
+   A salesperson sees only their own campaigns (my_campaigns); the admin sees all, owner in brackets.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-
-export const STATUS_TONE: Record<CampaignStatus, string> = {
-  draft: 'bg-slate-500 hover:bg-slate-500', ready: 'bg-sky-700 hover:bg-sky-700', sending: 'bg-indigo-600 hover:bg-indigo-600',
-  partly_sent: 'bg-amber-700 hover:bg-amber-700', sent: 'bg-emerald-700 hover:bg-emerald-700',
-};
 
 const MINE = '__mine__';
 const ALL = '';
 
-function CampaignCard({ c, admin }: { c: CampaignSummary; admin: boolean }) {
-  const st = campaignStatus(c);
-  return <Link to={`/campaigns/${c.id}`} className="block min-w-0" data-testid="campaign-card">
-    <Card className="h-full transition-colors hover:border-primary/60">
-      <CardContent className="space-y-2 p-4 text-sm">
-        <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 break-words font-semibold" data-testid="campaign-name">{campaignDisplayName(c, admin)}</span>
-          <Badge className={cn('shrink-0 text-[11px] text-white', STATUS_TONE[st])}>{CAMPAIGN_STATUS_LABEL[st]}</Badge>
+function CampaignCard({ c, admin, onEdit }: { c: CampaignSummary; admin: boolean; onEdit: (c: CampaignSummary) => void }) {
+  const actions = useCampaignActions();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const method = c.method ?? 'whatsapp';
+  const run = async (key: string, fn: () => Promise<{ ok?: boolean; error?: unknown } & Record<string, unknown>>, done: (r: Record<string, unknown>) => string) => {
+    setBusy(key);
+    try {
+      const r = await fn();
+      if (!r.ok) toast({ title: 'Not done', description: campaignErrorText(String(r.error)), variant: 'destructive' });
+      else toast({ title: done(r) });
+    } finally { setBusy(null); }
+  };
+  const send = () => run('send', () => actions.launch(c.id), (r) => `${r.queued} ${Number(r.queued) === 1 ? 'opener' : 'openers'} queued. ${launchSkipLine(r.skipped as Record<string, number>)}`.trim());
+  const pause = () => { if (window.confirm(`Pause sending? The ${c.queued} ${c.queued === 1 ? 'lead' : 'leads'} still waiting go back to how they were. Messages already sent are not affected.`)) void run('pause', () => actions.stop(c.id), (r) => `Paused: ${r.stopped} taken out of the queue.`); };
+  const del = () => {
+    if (!window.confirm(`Delete “${c.name}”? Its ${c.leads} ${c.leads === 1 ? 'lead stays' : 'leads stay'} in your CRM with their history — only the campaign is removed.${c.queued ? ` The ${c.queued} waiting ${c.queued === 1 ? 'opener is' : 'openers are'} paused first.` : ''}`)) return;
+    void run('delete', () => actions.remove(c.id), () => 'Campaign deleted — its leads and history are kept');
+  };
+  const Icon = method === 'call' ? Phone : MessageCircle;
+  const spin = (k: string, I: typeof Send) => busy === k ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <I className="mr-1 h-3.5 w-3.5" />;
+
+  return <Card className="min-w-0" data-testid="campaign-card">
+    <CardContent className="space-y-3 p-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="break-words font-semibold" data-testid="campaign-name">{campaignDisplayName(c, admin)}</p>
+          <p className="truncate text-xs text-muted-foreground">{[c.trade, c.area].filter(Boolean).join(' · ') || 'No niche set'}</p>
         </div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>{c.leads} {c.leads === 1 ? 'lead' : 'leads'}</span>
-          <span>{c.contacted} messaged</span>
-          <span>{c.replied} replied</span>
-          {c.interested > 0 && <span>{c.interested} interested</span>}
-        </div>
-        <p className="text-xs font-medium">Next: {campaignNextStep(c)}</p>
-      </CardContent>
-    </Card>
-  </Link>;
+        <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white',
+          method === 'call' ? 'bg-sky-700' : 'bg-emerald-700')} data-testid="campaign-method"><Icon className="h-3 w-3" />{CAMPAIGN_METHOD_LABEL[method]}</span>
+      </div>
+      <dl className="grid grid-cols-5 gap-1 text-center" data-testid="campaign-stats">
+        {campaignStats({ ...c, method }).map((s) => <div key={s.label} className="min-w-0 rounded-md bg-muted/50 px-1 py-1.5">
+          <dd className="text-base font-semibold leading-none">{s.value}</dd><dt className="mt-1 truncate text-[10px] text-muted-foreground">{s.label}</dt>
+        </div>)}
+      </dl>
+      {method === 'whatsapp' && c.queued > 0 && <p className="text-xs text-muted-foreground">{c.queued} {c.queued === 1 ? 'opener' : 'openers'} waiting to send in the send window.</p>}
+      <div className="flex flex-wrap gap-1.5">
+        <Button asChild size="sm" variant="outline"><Link to={`/outreach?campaign=${c.id}`} data-testid="campaign-open-leads"><ListFilter className="mr-1 h-3.5 w-3.5" />Open leads</Link></Button>
+        <Button size="sm" variant="ghost" onClick={() => onEdit(c)} disabled={!!busy} data-testid="campaign-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Edit</Button>
+        {method === 'whatsapp' && c.ready > 0 && <Button size="sm" variant="ghost" onClick={() => void send()} disabled={!!busy} data-testid="campaign-send">{spin('send', Send)}Send openers ({c.ready})</Button>}
+        {method === 'whatsapp' && c.queued > 0 && <Button size="sm" variant="ghost" onClick={pause} disabled={!!busy} data-testid="campaign-pause">{spin('pause', Pause)}Pause sending</Button>}
+        <Button size="sm" variant="ghost" className="text-destructive" onClick={del} disabled={!!busy} data-testid="campaign-delete">{spin('delete', Trash2)}Delete</Button>
+      </div>
+    </CardContent>
+  </Card>;
 }
 
 export default function Campaigns() {
   const q = useMyCampaigns();
-  const [wizard, setWizard] = useState(false);
+  const [editing, setEditing] = useState<CampaignSummary | null>(null);
+  const [creating, setCreating] = useState(false);
   const [owner, setOwner] = useState<string>(ALL);
   const admin = q.data?.admin === true;
   const all = q.data?.campaigns ?? [];
@@ -57,13 +86,13 @@ export default function Campaigns() {
   }, [all]);
   const shown = !admin || owner === ALL ? all : owner === MINE ? all.filter((c) => c.is_mine) : all.filter((c) => c.owner_id === owner);
 
-  return <div className="mx-auto max-w-6xl space-y-5 py-6">
+  return <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-0">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold"><Megaphone className="h-6 w-6" />Campaigns</h1>
-        <p className="text-sm text-muted-foreground">{admin ? 'Every campaign. Ones created by someone else show who in brackets.' : 'Your campaigns: a group of your leads and the first message they get.'}</p>
+      <div className="min-w-0">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold"><Megaphone className="h-6 w-6" />Manage campaigns</h1>
+        <p className="text-sm text-muted-foreground">A campaign groups leads for one niche and one way of contacting them. Add leads from Find Leads; work them in Outreach.</p>
       </div>
-      <Button onClick={() => setWizard(true)} data-testid="new-campaign"><Plus className="mr-1 h-4 w-4" />New campaign</Button>
+      <Button onClick={() => setCreating(true)} data-testid="new-campaign"><Plus className="mr-1 h-4 w-4" />New campaign</Button>
     </div>
 
     {admin && owners.length > 0 && <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -77,12 +106,13 @@ export default function Campaigns() {
 
     {q.isLoading && <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
     {q.isError && <Card><CardContent className="flex flex-wrap items-center gap-2 p-6 text-sm text-destructive"><AlertCircle className="h-4 w-4" />Could not load campaigns.<Button size="sm" variant="outline" onClick={() => void q.refetch()}><RefreshCw className="mr-1 h-4 w-4" />Try again</Button></CardContent></Card>}
-    {q.data && shown.length === 0 && <Card><CardContent className="space-y-3 p-6 text-sm">
+    {q.data && shown.length === 0 && <Card><CardContent className="space-y-2 p-6 text-sm">
       <p className="font-medium">{all.length === 0 ? 'No campaigns yet.' : 'No campaigns for this owner.'}</p>
-      {all.length === 0 && <p className="text-muted-foreground">A campaign is a group of your leads that get the first message together. Name it, pick the leads, launch.</p>}
+      {all.length === 0 && <p className="text-muted-foreground">Create one (niche, Call or WhatsApp, optional area), then pick it in Find Leads before you add businesses.</p>}
     </CardContent></Card>}
-    {shown.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shown.map((c) => <CampaignCard key={c.id} c={c} admin={admin} />)}</div>}
+    {shown.length > 0 && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{shown.map((c) => <CampaignCard key={c.id} c={c} admin={admin} onEdit={setEditing} />)}</div>}
 
-    <CampaignWizard open={wizard} onOpenChange={setWizard} opener={q.data?.opener ?? null} />
+    <CampaignEditDialog open={creating} onOpenChange={setCreating} />
+    <CampaignEditDialog open={!!editing} onOpenChange={(v) => { if (!v) setEditing(null); }} campaign={editing} />
   </div>;
 }

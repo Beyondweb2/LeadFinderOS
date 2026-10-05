@@ -16,6 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { isFreshLead } from '@/lib/leadStatus';
+import { leadRpc } from '@/lib/leadRpc';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -239,6 +240,16 @@ const Index = () => {
     () => campaigns.find((c) => c.id === activeCampaign)?.name ?? null,
     [campaigns, activeCampaign],
   );
+  /* Sales workspace v2: a business already in the CRM joins the selected campaign from its row. One rule for both
+     roles (lead_set_campaign): own, non-client leads into a campaign the person may use. Contact history never
+     stops it — sending an opener is a separate decision with its own reasons. */
+  const handleMoveToCampaign = useCallback(async (crmLeadId: string) => {
+    if (!activeCampaign) return;
+    const r = await leadRpc('lead_set_campaign', { _lead_id: crmLeadId, _campaign_id: activeCampaign });
+    if (!r.ok) { toast({ title: 'Not moved', description: refusalText(String(r.error)), variant: 'destructive' }); return; }
+    toast({ title: `Added to ${activeCampaignName ?? 'the campaign'}`, description: 'It keeps its status and history.' });
+    refetchCrm();
+  }, [activeCampaign, activeCampaignName, toast, refetchCrm]);
   // Tooltip text for the Add buttons: names the silent target, or signals a prompt.
   const addCampaignTooltip = askCampaignEachTime
     ? 'Choose a campaign…'
@@ -289,15 +300,15 @@ const Index = () => {
   // Match a search result to its ACTIVE CRM lead row (mirrors addLead's dedup:
   // google_maps_url OR business_name OR place_id). Returns whether it's in the CRM,
   // whether it's still fresh (removable), and the row id — LeadsTable renders from this.
-  const getCrmState = useCallback((lead: Lead): { inCrm: boolean; isFresh: boolean; crmLeadId: string | null } => {
+  const getCrmState = useCallback((lead: Lead): { inCrm: boolean; isFresh: boolean; crmLeadId: string | null; campaignId: string | null } => {
     const match = crmLeads.find(
       (l) =>
         (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl) ||
         l.business_name === lead.name ||
         (lead.id && (l as { place_id?: string | null }).place_id === lead.id),
     );
-    if (!match) return { inCrm: false, isFresh: false, crmLeadId: null };
-    return { inCrm: true, isFresh: isFreshLead(match), crmLeadId: match.id };
+    if (!match) return { inCrm: false, isFresh: false, crmLeadId: null, campaignId: null };
+    return { inCrm: true, isFresh: isFreshLead(match), crmLeadId: match.id, campaignId: match.campaign_id ?? null };
   }, [crmLeads]);
 
   // Remove confirm dialog (fresh leads). Holds the pending lead id + name.
@@ -639,6 +650,8 @@ const Index = () => {
                 addCampaignTooltip={addCampaignTooltip}
                 getCrmState={getCrmState}
                 onRemoveFromCrm={handleRequestRemove}
+                activeCampaign={activeCampaign && activeCampaignName ? { id: activeCampaign, name: activeCampaignName } : null}
+                onMoveToCampaign={(id) => void handleMoveToCampaign(id)}
                 ownership={ownership}
                 onClaim={(id) => void handleClaim(id)}
                 claiming={salesActions.claim.isPending}

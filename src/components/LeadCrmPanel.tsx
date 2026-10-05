@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BriefcaseBusiness, CalendarClock, Megaphone, Check, ChevronDown, Clock, Globe, Link2, Lock, Loader2, PhoneCall, RefreshCw, Sparkles, UserMinus, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -20,6 +20,7 @@ import { HookVisibilityCard } from '@/components/HookVisibilityCard';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { callBookedSummaryOf } from '@/lib/workspaceHeader';
+import { campaignOpenerNote } from '@/lib/campaignRules';
 import { OwnerAvatar } from '@/components/OwnerBadge';
 import { leadRpc, salesRemoveLeads, type RpcResult } from '@/lib/leadRpc';
 import { leadSourceFor } from '@/lib/outreachLeadColumns';
@@ -34,7 +35,7 @@ import { CONTACT_METHODS, SOCIAL_CONTACT_METHODS, contactMethodLabel } from '@/l
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { DOMAIN_CONTROL_OPTIONS, SALES_DOMAIN_LINE } from '@/lib/domainAuthority';
-import { meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, CONVERSATION_OUTCOMES, type SalesStateView } from '@/lib/leadState';
+import { reachedInConversation, meetingWhen, lastLoggedContactOf, offeredOutcomes, outcomeLabel, outcomeRule, salesStateOf, stateChangeText, stateChangedWords, suggestNextAction, LOGGED_CONTACT_KINDS, CONVERSATION_OUTCOMES, type SalesStateView } from '@/lib/leadState';
 import { applyOutcome } from '@/lib/leadOutcome';
 import { askLostReason } from '@/lib/lostReasonAsk';
 import { DetectedAgency } from '@/components/DetectedAgency';
@@ -43,7 +44,8 @@ import { NextActionForm, londonDayPlus, type NextActionPreset } from '@/componen
 import { bookMeeting, saveNextAction, type WriteResult } from '@/lib/nextActionWrite';
 import { londonInstant, londonLocalInput, meetingDayTime } from '@/lib/nextActionView';
 import { SalesStatePill } from '@/components/SalesStatePill';
-import { QuickCloseButton } from '@/components/QuickCloseDialog';
+import { NextActionBar } from '@/components/NextActionPill';
+import { QuickCloseButton, WebsiteApproachField } from '@/components/QuickCloseDialog';
 import { WorkSection } from '@/components/WorkSection';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -252,7 +254,12 @@ type FollowUpPreset = NextActionPreset;
 
 /** logContactOpen: the person came to log a contact (Outreach's Call) — Log a contact starts expanded.
  *  editNextRequested: the header's Next Action bar asked for the editor; taken, then cleared (onEditNextHandled). */
-export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editNextRequested = false, onEditNextHandled }: { leadId: string; onRemoved?: () => void; logContactOpen?: boolean; editNextRequested?: boolean; onEditNextHandled?: () => void }) {
+/** part (sales workspace v2, 2026-10-05): 'call' = the bottom of the CALL tab (log the call, why they said no, the
+ *  meeting, THE Next Action — its one display and its one editor); 'details' = the DETAILS tab (campaign, note,
+ *  website & domain, remove). 'all' keeps the old single panel for any other mount. */
+export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editNextRequested = false, onEditNextHandled, part = 'all', statusControl }: { leadId: string; onRemoved?: () => void; logContactOpen?: boolean; editNextRequested?: boolean; onEditNextHandled?: () => void; part?: 'all' | 'call' | 'details'; statusControl?: ReactNode }) {
+  const showCall = part !== 'details';
+  const showDetails = part !== 'call';
   const crm = useLeadCrmRow(leadId);
   const activity = useLeadActivity(leadId);
   const wrong = useWrongNumber(leadId);
@@ -347,11 +354,16 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
   const agency = lead.website_control === 'agency_controls';
   return (
     <div className="space-y-3">
-      <LogContact leadId={leadId} save={save} followOn={followOn} defaultOpen={logContactOpen} />
+      {showCall && statusControl && (
+        <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="call-status">
+          <span className={LABEL}>Status</span>{statusControl}
+        </section>
+      )}
+      {showCall && <LogContact leadId={leadId} save={save} followOn={followOn} defaultOpen={logContactOpen} />}
 
       {/* Why they said no: shown only while the lead is Not interested. Add one (skipped, or before this
           existed: "Reason not recorded", never guessed) or correct it; History keeps every version. */}
-      {lead.status === 'not_interested' && (
+      {showCall && lead.status === 'not_interested' && (
         <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="lost-reason">
           <span className="min-w-0 text-xs">
             <span className="text-muted-foreground">Why they said no · </span>
@@ -365,7 +377,7 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
         </section>
       )}
 
-      {askWhen && (
+      {showCall && askWhen && (
         <section className={cn(CARD, 'flex flex-wrap items-end gap-2 border-blue-500/50')} data-testid="meeting-when">
           <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">When is the call / meeting? (UK time)
             <Input type="datetime-local" className="mt-1 h-9 text-xs" id={`meeting-at-${lead.id}`} defaultValue={lead.call_booked_at ? londonLocalInput(lead.call_booked_at) : ''} />
@@ -380,8 +392,8 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
       )}
 
       {/* ⛔ AN ATTRIBUTE, NOT AN OUTCOME: who runs their site changes how it is sold, whatever the call's
-          outcome was. One tap here; the full choice stays under "Call booked · who controls the website". */}
-      <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="learned-agency">
+          outcome was. One tap here; the full choice is under "Website & domain". */}
+      {showDetails && <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-2 py-2.5')} data-testid="learned-agency">
         <span className="text-xs text-muted-foreground">Learned on the call</span>
         <button type="button" data-testid="agency-chip" aria-pressed={agency}
           className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium', agency ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-border/60 text-muted-foreground hover:bg-muted')}
@@ -392,9 +404,9 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
         <DetectedAgency website={lead.website} websiteControl={lead.website_control}
           onConfirm={() => void save('lead_set_website_control', { _value: 'agency_controls', _note: lead.website_control_note }, 'Saved: an agency runs their site', { website_control: 'agency_controls' })}
           onReject={() => void save('lead_set_website_control', { _value: 'client_controls', _note: lead.website_control_note }, 'Saved: they control the website', { website_control: 'client_controls' })} />
-      </section>
+      </section>}
 
-      <section className={cn(CARD, preset && 'border-amber-500/50', !(editingNext || preset) && 'py-2.5')} ref={nextRef} data-testid="next-action-section">
+      {showCall && <section className={cn(CARD, preset && 'border-amber-500/50', !(editingNext || preset) && 'py-2.5')} ref={nextRef} data-testid="next-action-section">
         {editingNext || preset ? (<>
           <div className="mb-2.5 flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span>
             {!preset && <button type="button" className="ml-auto text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditingNext(false)} data-testid="next-action-close">Close</button>}
@@ -408,26 +420,28 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
               const r = afterWrite(await saveNextAction(leadId, a, stateLead()), a.nextAction === 'none' ? 'Next action cleared' : a.nextAction === 'meeting' && a.time && a.date ? 'Meeting booked · Next Action set' : 'Next action saved', before);
               if (r.ok) { setPreset(null); setEditingNext(false); } return r; }} />
         </>) : (
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span>
-              <span className="text-[11px] text-muted-foreground">· shown at the top</span></span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingNext(true)} data-testid="next-action-open">
-              {lead.next_action && lead.next_action !== 'none' ? 'Edit' : 'Set one'}
-            </Button>
+          /* ⛔ ONE NEXT ACTION (v2): this is its ONE display and its ONE editor — the popup header no longer
+             repeats it. Stale-tab protection is the editor's own (lead_set_follow_up's _expected). */
+          <div className="space-y-1.5">
+            <span className="inline-flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-primary" /><span className={LABEL}>Next action</span></span>
+            <NextActionBar lead={lead} onEdit={() => setEditingNext(true)} />
           </div>
         )}
-      </section>
+      </section>}
 
-      <LeadCampaign lead={lead} save={save} />
+      {showDetails && <LeadCampaign lead={lead} save={save} reached={reachedInConversation(activity.data)} />}
 
-      <InternalNote save={save} />
+      {showDetails && <InternalNote save={save} />}
 
       {/* Folded to its summary (declutter pass 2): who controls the site and domain.
           ⛔ ONE NEXT ACTION (2026-10-02): the "Call booked for" time box that lived here was a SECOND editor of the
           meeting — it could set a booking with no Next Action ("+ Set" over "Meeting · Fri 2 Oct 15:15"). A meeting
           is booked, moved and completed as the Next Action "Meeting" only. */}
-      <WorkSection icon={BriefcaseBusiness} title="Call booked · website" testId="call-booked" summary={callBookedSummary(lead)}>
-        <div className="grid gap-3 sm:grid-cols-2">
+      {/* v2: renamed from "Call booked · website" — it records the website and the domain, nothing about a call.
+          The website APPROACH comes first: it decides which Close questions make sense (the same stored answer). */}
+      {showDetails && <WorkSection icon={BriefcaseBusiness} title="Website & domain" testId="call-booked" summary={callBookedSummary(lead)}>
+        <WebsiteApproachField leadId={leadId} />
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="block text-[11px] font-medium text-muted-foreground">Who controls the website?</label>
             <Select value={lead.website_control ?? ''} onValueChange={(v) => void save('lead_set_website_control', { _value: v, _note: lead.website_control_note }, 'Saved', { website_control: v })}>
@@ -453,11 +467,12 @@ export function LeadWorkPanel({ leadId, onRemoved, logContactOpen = false, editN
             </Select>
             {(() => { const o = DOMAIN_CONTROL_OPTIONS.find((x) => x.value === lead.domain_control); return o ? <p className={cn('text-[11px]', o.value === 'third_party_owns' || o.value === 'unknown' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{o.guidance}</p> : null; })()}
             <p className="text-[11px] text-muted-foreground">Say: “{SALES_DOMAIN_LINE}”</p>
+            <p className="text-[11px] text-muted-foreground">Who controls the domain is not the same as who can log in to the website. A new site never needs the old website's login.</p>
           </div>
         </div>
-      </WorkSection>
+      </WorkSection>}
 
-      {leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
+      {showDetails && leadPermissions(role).removeFromMyLeads && <RemoveFromMyLeads leadId={lead.id} onRemoved={onRemoved} />}
     </div>
   );
 }
@@ -520,14 +535,21 @@ function RemoveFromMyLeads({ leadId, onRemoved }: { leadId: string; onRemoved?: 
    campaign" writes and the Sales dashboard groups by. lead_set_campaign checks the lead is the
    caller's to work (a salesperson: assigned to them, not a client) and that the campaign exists. Picking
    only: creating, renaming or deleting a campaign stays on the admin's campaign screens (hideCreate). */
-function LeadCampaign({ lead, save }: { lead: CrmRow; save: SaveFn }) {
-  const { campaigns } = useCampaigns();
-  const name = lead.campaign_id ? campaigns.find((c) => c.id === lead.campaign_id)?.name ?? 'Campaign set' : 'No campaign';
+function LeadCampaign({ lead, save, reached }: { lead: CrmRow; save: SaveFn; reached: 'phone' | 'other' | null }) {
+  const { allCampaigns } = useCampaigns();
+  const c = lead.campaign_id ? allCampaigns.find((x) => x.id === lead.campaign_id) : null;
+  const name = lead.campaign_id ? (c ? (c.archived_at ? `${c.name} (deleted)` : c.name) : 'Campaign set') : 'No campaign';
+  /* v2: membership never depends on the opener. When the cold opener will not go, say why — the lead stays. */
+  const note = c && !c.archived_at ? campaignOpenerNote({ method: c.method === 'call' ? 'call' : 'whatsapp', status: lead.status, reached }) : null;
   return (
-    <WorkSection icon={Megaphone} title="Campaign" testId="lead-campaign" summary={name}>
-      <CampaignPicker mode="assign" hideCreate value={lead.campaign_id} className="h-8 w-full text-xs sm:w-[260px]"
-        onChange={(id) => { if (id !== lead.campaign_id) void save('lead_set_campaign', { _campaign_id: id }, id ? 'Campaign saved' : 'Removed from its campaign', { campaign_id: id }); }} />
-    </WorkSection>
+    <div className="space-y-1.5">
+      <WorkSection icon={Megaphone} title="Campaign" testId="lead-campaign" summary={name}>
+        <CampaignPicker mode="assign" hideCreate value={lead.campaign_id} className="h-8 w-full text-xs sm:w-[260px]"
+          onChange={(id) => { if (id !== lead.campaign_id) void save('lead_set_campaign', { _campaign_id: id }, id ? 'Campaign saved' : 'Removed from its campaign', { campaign_id: id }); }} />
+      </WorkSection>
+      {/* Always visible (never folded away): why the cold opener will not go, while the lead stays in the campaign. */}
+      {note && <p className="px-1 text-xs text-amber-700 dark:text-amber-300" data-testid="campaign-opener-note">{note}</p>}
+    </div>
   );
 }
 

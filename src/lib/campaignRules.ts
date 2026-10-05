@@ -19,6 +19,54 @@ export function campaignNameKey(name: string): string {
 
 export const CAMPAIGN_NAME_MAX = 80;
 
+/* ── SALES WORKSPACE V2 (Paul, 2026-10-05): A CAMPAIGN IS A CONTAINER ──────────────────────────────
+   Created with a name, a niche / trade, a contact method and an optional area (campaign_new) — never a
+   lead chooser, never a message step. Leads enter from Find Leads (the campaign selector) or are moved in
+   from Outreach / the lead. ⛔ Membership never depends on message eligibility; a CALL campaign never sends
+   an opener (campaign_launch refuses it). Delete = campaign_archive: leads and history stay. */
+export type CampaignMethod = 'call' | 'whatsapp';
+export const CAMPAIGN_METHOD_LABEL: Record<CampaignMethod, string> = { call: 'Call', whatsapp: 'WhatsApp' };
+export const CAMPAIGN_FIELD_MAX = 60;
+
+/** A sensible default name the person may overwrite: "Plumbers · Halifax · Call". */
+export function suggestCampaignName(trade: string, area: string | null | undefined, method: CampaignMethod): string {
+  const tidy = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ');
+  return [tidy(trade), tidy(area), CAMPAIGN_METHOD_LABEL[method]].filter(Boolean).join(' · ').slice(0, CAMPAIGN_NAME_MAX);
+}
+
+/** The campaign form, checked before it is sent (the server re-checks every rule). */
+export function campaignFormError(f: { name: string; trade: string; method: CampaignMethod | null; area?: string | null }): string | null {
+  if (!f.name.trim()) return CAMPAIGN_ERROR_TEXT.name_required;
+  if (f.name.trim().length > CAMPAIGN_NAME_MAX) return CAMPAIGN_ERROR_TEXT.name_too_long;
+  if (!f.trade.trim()) return CAMPAIGN_ERROR_TEXT.trade_required;
+  if (!f.method) return CAMPAIGN_ERROR_TEXT.method_required;
+  if (f.trade.trim().length > CAMPAIGN_FIELD_MAX || (f.area ?? '').trim().length > CAMPAIGN_FIELD_MAX) return CAMPAIGN_ERROR_TEXT.too_long;
+  return null;
+}
+
+/** The stats a Manage Campaigns card shows, in the channel's own words (a call campaign is never "messaged"). */
+export function campaignStats(c: Pick<CampaignSummary, 'method' | 'leads' | 'contacted' | 'replied' | 'interested' | 'called' | 'spoke' | 'won'>): { label: string; value: number }[] {
+  const call = c.method === 'call';
+  return [
+    { label: 'Leads', value: c.leads },
+    call ? { label: 'Called', value: c.called ?? 0 } : { label: 'Messaged', value: c.contacted },
+    call ? { label: 'Spoke', value: c.spoke ?? 0 } : { label: 'Replied', value: c.replied },
+    { label: 'Interested', value: c.interested },
+    { label: 'Won', value: c.won ?? 0 },
+  ];
+}
+
+/** What the lead's campaign means for its opener, in words (the workspace's Campaign section). Membership is
+ *  never in question here — only whether the cold opener will go. Mirrors sales_queue_opener's reasons. */
+export function campaignOpenerNote(i: { method: CampaignMethod | null | undefined; status: string | null | undefined; reached: 'phone' | 'other' | null }): string | null {
+  if (i.method === 'call') return 'Call campaign — no WhatsApp opener is ever sent from it.';
+  if (i.method !== 'whatsapp') return null;
+  if ((i.status ?? '') !== 'not_contacted') return null;
+  if (i.reached === 'phone') return 'Already contacted by phone — initial opener not queued. The lead stays in this campaign.';
+  if (i.reached === 'other') return 'Already in conversation (a logged contact) — initial opener not queued. The lead stays in this campaign.';
+  return null;
+}
+
 /** One campaign as my_campaigns / campaign_detail return it. Owner fields come only to the admin. */
 export interface CampaignSummary {
   id: string;
@@ -26,6 +74,13 @@ export interface CampaignSummary {
   created_at: string;
   default_template: string | null;
   is_mine: boolean;
+  /** v2. Legacy campaigns (no method stored) read as WhatsApp — that is what they were made for. */
+  method?: CampaignMethod;
+  trade?: string | null;
+  area?: string | null;
+  called?: number;
+  spoke?: number;
+  won?: number;
   leads: number;
   ready: number;
   queued: number;
@@ -90,6 +145,11 @@ export const CAMPAIGN_ERROR_TEXT: Record<string, string> = {
   name_too_long: `Keep the name under ${CAMPAIGN_NAME_MAX} characters.`,
   not_found: 'That campaign is not available.',
   has_leads: 'Only an empty campaign can be deleted. Take its leads out first.',
+  trade_required: 'Say which niche / trade this campaign is for.',
+  method_required: 'Choose Call or WhatsApp.',
+  too_long: `Keep the niche and area under ${CAMPAIGN_FIELD_MAX} characters.`,
+  stop_sending_first: 'Openers are waiting to send in this campaign. Pause sending first, then switch it to Call.',
+  call_campaign: 'This is a Call campaign — it never sends WhatsApp openers.',
   no_approved_opener: 'There is no approved first message to send right now. Ask Paul.',
   usage_paused: 'Usage temporarily paused — contact Paul',
   too_many: 'Too many leads at once (500 at most).',
@@ -105,6 +165,8 @@ export function campaignErrorText(code: string | undefined | null): string {
 export const LAUNCH_SKIP_TEXT: Record<string, string> = {
   not_found: 'not found', not_yours: 'not your lead', archived: 'archived', client: 'already a client',
   not_new: 'already in progress', already_contacted: 'already contacted', no_phone: 'no phone number',
+  contacted_by_phone: 'already contacted by phone — initial opener not queued',
+  contacted_logged: 'already in conversation (a logged contact) — initial opener not queued',
   not_a_uk_mobile: 'not a mobile number', opted_out: 'asked not to be contacted', daily_limit: 'over your daily limit',
 };
 

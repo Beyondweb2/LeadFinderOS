@@ -52,15 +52,15 @@ ok(/Last contact: \$\{lc\.method\}/.test(table), 'the last contact moved to the 
 /* 2026-10-02: no derived "what is coming" line (nextUpHint is gone) — scripts/one-next-action.test.ts. */
 ok(!/data-testid="row-next-up"/.test(table) && !/nextUpHint/.test(table), 'the Next Action column carries only the saved Next Action');
 ok(nextActionViewOf('call', '2026-09-28', null, '2026-10-01')?.bucket === 'overdue' && nextActionViewOf('call', '2026-10-01', null, '2026-10-01')?.bucket === 'today' && nextActionViewOf('none', '2026-10-01', null, '2026-10-01') === null, 'overdue / today / cleared (UK days, the existing rule)');
-ok(!/executeContact\(lead, 'call'\)/.test(table) && /setDetailTab\('work'\)/.test(table), 'tapping Call never logs a call; it opens the workspace on Work');
+ok(!/executeContact\(lead, 'call'\)/.test(table) && /setDetailTab\('call'\)/.test(table) && !/onContactMethodChange\(lead\.id, 'call'/.test(table), 'tapping Call never logs a call — nor stamps a contact method (v2); it opens the workspace on Call');
 
 const inboxSrc = read('src/pages/Inbox.tsx');
 ok(inboxSrc.includes('const allLogged = useAllLoggedContacts();') && inboxSrc.includes('reached: lc.everReached'), 'the Inbox list reads the same logged contacts, so list and header agree (Contacted) — every contact since 2026-10-02, so the filter can read them too');
 
 console.log('\n── Audits from Outreach (the same engine) ──');
 const dlg = read('src/components/LeadDetailDialog.tsx');
-const work = dlg.slice(dlg.indexOf('TabsContent value="work"'), dlg.indexOf('TabsContent value="scripts"'));
-ok(/<LeadHookPanel leadId=\{lead\.id\} \/>/.test(work), 'the audit card is on the Work tab');
+const work = dlg.slice(dlg.indexOf('TabsContent value="call"'), dlg.indexOf('TabsContent value="details"'));
+ok(/<LeadHookPanel leadId=\{lead\.id\} \/>/.test(work), 'the audit card is on the Call tab (v2: the AI check tools)');
 const crm = read('src/components/LeadCrmPanel.tsx');
 ok(/data-testid="hook-rerun"/.test(crm) && /data-testid="hook-history"/.test(crm) && /data-testid="hook-need-details"/.test(crm), 're-run, previous checks, and trade/town asked where it is needed');
 ok((crm.match(/invokeEdge<[^>]*>\('create-ai-audit'/g) ?? []).length === 2 && !/question_count: [0-9]/.test(crm), 'the one create-ai-audit hook path (preview + run), no new engine');

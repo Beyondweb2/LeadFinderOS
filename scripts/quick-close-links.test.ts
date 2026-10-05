@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   adoptLink, answersKey, buildConsentsFor, BUILD_CONSENT_NO_DOMAIN, BUILD_CONSENTS, cleanAnswers, LINK_CLAIM_MS, LINK_REUSE_MS, linkStep, linkUsable, linkUsableUntilMs,
-  mergeAnswers, missingQuestions, planQuickCloseSave, quickCloseEmail, quickCloseGreeting, quickCloseMessage, quickCloseScript, quickCloseState,
+  closeFlow, mergeAnswers, missingQuestions, planQuickCloseSave, quickCloseEmail, quickCloseGreeting, quickCloseMessage, quickCloseScript, quickCloseState,
   QUICK_CLOSE_AGREEMENT_LINE, QUICK_CLOSE_PROMISE, QUICK_CLOSE_QUESTIONS, routeOwnershipLine, routeTermsLines, stripeSessionIdFromUrl,
   type QcRecord, type QuickCloseAnswers,
 } from "../src/lib/quickClose.ts";
@@ -88,8 +88,9 @@ function generate(row: Row) {
 const state = (row: Row) => quickCloseState(row.status, row.quick_close, clock);
 /** The dialog's counter: questions shown for these answers, and how many are answered. */
 function counter(a: QuickCloseAnswers) {
-  const shown = QUICK_CLOSE_QUESTIONS.filter((x) => !(x.key === "access" && a.manager === "no_website") && !(x.key === "authority" && (a.manager === "owner" || a.manager === "employee" || a.manager === "no_website")) && !(x.key === "build_consents" && a.route !== "build"));
-  return `${shown.filter((x) => a[x.key]).length}/${shown.length}`;
+  /* v2: the questions on screen are closeFlow — only the ones this website approach needs. */
+  const shown = closeFlow(a);
+  return `${shown.filter((k) => a[k]).length}/${shown.length}`;
 }
 const newRow = (): Row => ({ status: "answers_saved", quick_close: null, cols: {} });
 
@@ -98,10 +99,10 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
 {
   // The bug, documented: cleaning the lone answer before the merge threw the consent away.
   ok(cleanAnswers({ build_consents: "yes" }).build_consents === undefined, "(the old bug) cleaning the single incoming answer drops build_consents — why the server must never do it");
-  ok(mergeAnswers({ decision_maker: "yes", domain: "no_domain", manager: "no_website", route: "build" }, { build_consents: "yes" }).build_consents === "yes", "mergeAnswers keeps the consent: it is merged OVER the saved set before the cross-answer rules run");
+  ok(mergeAnswers({ decision_maker: "yes", approach: "new_template", domain: "no_domain" }, { build_consents: "yes" }).build_consents === "yes", "mergeAnswers keeps the consent: it is merged OVER the saved set before the cross-answer rules run");
 
   const row = newRow();
-  const steps: [string, string][] = [["decision_maker", "yes"], ["domain", "no_domain"], ["manager", "no_website"], ["route", "build"]];
+  const steps: [string, string][] = [["decision_maker", "yes"], ["approach", "new_template"], ["domain", "no_domain"]];
   let route: unknown = null;
   for (const [k, v] of steps) {
     const r = save(row, { [k]: v }, { expectRoute: route });
@@ -109,17 +110,17 @@ console.log("── BUILD: one answer per call, exactly as the dialog sends them
     route = cleanAnswers(row.quick_close?.answers).route ?? null;
   }
   const a4 = cleanAnswers(row.quick_close!.answers);
-  ok(counter(a4) === "4/5" && state(row) === "in_progress" && missingQuestions(a4).join() === "build_consents", "after four answers: 4 of 5, the consents still to confirm");
+  ok(counter(a4) === "3/4" && state(row) === "in_progress" && missingQuestions(a4).join() === "build_consents", "after three answers: 3 of 4, the consents still to confirm (a new site is never asked for current-site access)");
   ok(buildConsentsFor(a4)[0] === BUILD_CONSENT_NO_DOMAIN && !/own or control the domain/.test(buildConsentsFor(a4)[0]), "M-012: with No domain the first consent says they WILL register one — not that they own one");
   const r5 = save(row, { build_consents: "yes" }, { expectRoute: "build" });
   ok(r5.ok, "the final answer \"Yes — they confirm all three\" is accepted");
   const a5 = cleanAnswers(row.quick_close!.answers);
-  ok(a5.build_consents === "yes" && counter(a5) === "5/5" && state(row) === "ready", "it PERSISTS: 5 of 5, Ready for payment");
+  ok(a5.build_consents === "yes" && counter(a5) === "4/4" && state(row) === "ready", "it PERSISTS: 4 of 4, Ready for payment");
   ok((row.quick_close!.build_consents_confirmed as { wording: string; lines: string[] }).wording === "no_domain" && (row.quick_close!.build_consents_confirmed as { lines: string[] }).lines[0] === BUILD_CONSENT_NO_DOMAIN, "the stored consent records WHICH wording was read out");
   ok(row.cols.dns_permission === true && row.cols.materials_confirmed === true && row.cols.plan_tier === "new_site" && row.cols.website_addon === true, "the canonical columns the checkout reads: Build, DNS permission, materials");
   // Refresh = a new load of the stored row.
   const reloaded = clone(row.quick_close);
-  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "5/5", "refresh: still 5 of 5, still ready");
+  ok(quickCloseState(row.status, reloaded, clock) === "ready" && counter(cleanAnswers(reloaded!.answers)) === "4/4", "refresh: still 4 of 4, still ready");
   // Double submit of the final answer.
   const rev = row.quick_close!.rev;
   const again = save(row, { build_consents: "yes" }, { expectRoute: "build" });
@@ -139,12 +140,12 @@ console.log("\n── OPTIMISE still reaches ready ──");
 {
   const row = newRow();
   let route: unknown = null;
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) {
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) {
     ok(save(row, { [k]: v }, { expectRoute: route }).ok, `save ${k}=${v}`);
     route = cleanAnswers(row.quick_close?.answers).route ?? null;
   }
   const a = cleanAnswers(row.quick_close!.answers);
-  ok(counter(a) === "5/5" && state(row) === "ready" && row.cols.plan_tier === "keep" && row.cols.website_addon === false, "Optimise: 5 of 5, ready, sold as Optimise");
+  ok(counter(a) === "4/4" && state(row) === "ready" && row.cols.plan_tier === "keep" && row.cols.website_addon === false, "Optimise: 4 of 4, ready, sold as Optimise (no domain question)");
   const bad = save(row, { build_consents: "yes" }, { expectRoute: "optimise" });
   ok(!bad.ok && bad.error === "answer_not_kept" && /only apply to Findable Build/.test(bad.detail), "Build consents sent on Optimise are REFUSED out loud (never silently kept or dropped)");
   ok(generate(row) === "stored" && state(row) === "link_generated", "Optimise link generated");
@@ -154,14 +155,14 @@ console.log("\n── OPTIMISE still reaches ready ──");
 console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' ──");
 {
   const row = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) save(row, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row, { [k]: v });
   checkoutCalls = 0;
   ok(generate(row) === "stored" && generate(row) === "reuse" && checkoutCalls === 1, "double generation → one Checkout Session, the second press reuses it");
   const first = row.quick_close!.link_url;
 
   // Two tabs press at the same moment: one claims, the other is told to wait for that link.
   const row2 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) save(row2, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row2, { [k]: v });
   checkoutCalls = 0;
   const tabA = claim(row2);
   const tabB = claim(row2);
@@ -169,7 +170,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
   ok(adopt(row2, tabA.key!, checkout()) === "stored" && claim(row2).kind === "reuse" && checkoutCalls === 1, "…and then reuses the first tab's link");
   // A claim abandoned past LINK_CLAIM_MS is taken over; if both sessions come back, only one becomes THE link.
   const row3 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) save(row3, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row3, { [k]: v });
   const slow = claim(row3);
   clock += LINK_CLAIM_MS + 1000;
   const fast = claim(row3);
@@ -193,14 +194,14 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
 
   // An answer changed while Stripe was making the session: that session is cancelled, nothing stored.
   const row4 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) save(row4, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row4, { [k]: v });
   const c4 = claim(row4);
   save(row4, { manager: "employee" });
   const s4 = checkout();
   ok(adopt(row4, c4.key!, s4) === "answers_changed" && !row4.quick_close!.link_url && expired.includes(s4.session), "answers changed during generation → the new session is expired, no link stored");
   // Paid while the session was being made.
   const row5 = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "optimise"]] as const) save(row5, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(row5, { [k]: v });
   const c5 = claim(row5); row5.status = "paid";
   const s5 = checkout();
   ok(adopt(row5, c5.key!, s5) === "paid" && expired.includes(s5.session), "paid meanwhile → the new session is expired");
@@ -211,7 +212,7 @@ console.log("\n── PAYMENT LINK: one current link, stale links never 'ready' 
 console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberate ──");
 {
   const row = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "yes"], ["manager", "owner"], ["access", "yes"], ["route", "build"], ["build_consents", "yes"]] as const) save(row, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "unsure"], ["route", "build"], ["domain", "yes"], ["build_consents", "yes"]] as const) save(row, { [k]: v });
   generate(row);
   const buildSession = row.quick_close!.link_session_id as string;
   const silent = save(row, { route: "optimise" }, { expectRoute: "build" });
@@ -227,14 +228,23 @@ console.log("\n── ROUTE: Build and Optimise never mix; changes are deliberat
   const back = save(row, { route: "build" }, { expectRoute: "optimise", routeChange: true });
   ok(back.ok && state(row) === "in_progress" && missingQuestions(cleanAnswers(row.quick_close!.answers)).includes("build_consents"), "back to Build → the consents must be confirmed again (never carried over from earlier)");
   const nosite = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "no_domain"], ["manager", "no_website"]] as const) save(nosite, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "unsure"], ["manager", "no_website"]] as const) save(nosite, { [k]: v });
   const opt = save(nosite, { route: "optimise" }, { expectRoute: null });
   ok(!opt.ok && opt.error === "answer_not_kept" && /only Findable Build is possible/.test(opt.detail), "no website + Optimise is refused out loud");
   // Consents read with one domain situation do not survive a change to the other.
   const dom = newRow();
-  for (const [k, v] of [["decision_maker", "yes"], ["domain", "no_domain"], ["manager", "no_website"], ["route", "build"], ["build_consents", "yes"]] as const) save(dom, { [k]: v });
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "new_template"], ["domain", "no_domain"], ["build_consents", "yes"]] as const) save(dom, { [k]: v });
   save(dom, { domain: "yes" }, { expectRoute: "build" });
   ok(cleanAnswers(dom.quick_close!.answers).build_consents === undefined && buildConsentsFor(cleanAnswers(dom.quick_close!.answers))[0] === BUILD_CONSENTS[0], "No domain → own a domain: the consents are asked again, with the standard wording");
+  /* v2: the APPROACH moves the plan, so it is a route change too — confirmed, never a stray tap. */
+  const ap = newRow();
+  for (const [k, v] of [["decision_maker", "yes"], ["approach", "improve"], ["access", "yes"], ["manager", "owner"]] as const) save(ap, { [k]: v });
+  const apSilent = save(ap, { approach: "new_template" }, { expectRoute: "optimise" });
+  ok(!apSilent.ok && apSilent.error === "route_change_unconfirmed" && cleanAnswers(ap.quick_close!.answers).route === "optimise", "improve → a new site WITHOUT confirming is refused; still Optimise");
+  const apSw = save(ap, { approach: "new_template" }, { expectRoute: "optimise", routeChange: true });
+  ok(apSw.ok && cleanAnswers(ap.quick_close!.answers).route === "build" && missingQuestions(cleanAnswers(ap.quick_close!.answers)).join() === "domain,build_consents", "confirmed → Build, and now the domain and consents are asked (never site access)");
+  const apRoute = save(ap, { route: "optimise" }, { expectRoute: "build", routeChange: true });
+  ok(!apRoute.ok && apRoute.error === "answer_not_kept" && /follows the website approach/.test(apRoute.detail), "a plan that contradicts the approach is refused out loud — change the approach instead");
   const fn = read("supabase/functions/quick-close/index.ts");
   ok(/if \(plan\.routeChange\)/.test(fn) && /lead\.contract_total_payments != null\) return json\(\{ ok: false, error: "route_locked"/.test(fn) && /from\("client_agreement_acceptances"\)/.test(fn) && /error: "route_lock_unreadable"[^\n]*503/.test(fn), "locked route: a contract or ANY agreement acceptance refuses a route change; an unreadable record refuses too (fails closed)");
   ok(/if \(row\.status === "paid"\) return json\(\{ ok: false, error: "already_paid"/.test(fn), "after payment nothing in Quick Close can change");

@@ -810,6 +810,19 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
   `CONTINUATION_TEMPLATES` or it is refused for its whole audience. The queue is template-blind on
   "already sent" — it structurally cannot send a second message to a lead; second messages go from
   the Inbox. `contact_check` fails CLOSED.
+- **A tap is not a call; only a logged CONVERSATION stops the cold opener** (sales workspace v2,
+  `docs/pre-sales-certification/sales-workspace-v2.md`): tapping Call / `tel:` writes nothing (not even
+  `contact_method`). `sales_queue_opener` refuses `contacted_by_phone` / `contacted_logged` only for an outcome in
+  `CONVERSATION_OUTCOMES` — SQL `lead_conversation_outcomes()` is the same list (tested); no answer / voicemail
+  never stop it. Campaign MEMBERSHIP never reads contact history; the reason the opener will not go is said on the lead.
+- **A campaign is a container** (name · niche · Call/WhatsApp · optional area; `campaign_new`/`campaign_update`):
+  no lead-choosing wizard, leads join from Find Leads. A Call campaign never sends (`campaign_launch` →
+  `call_campaign`). Delete = `campaign_archive` (leads, `campaign_id` and history stay) — never a hard delete.
+- **The Close follows the website approach** (`quickClose.ts` `closeFlow`): a new site never asks for (or is
+  blocked by) old-site access; plain Optimise never asks the domain; an unresolved domain on Build is a
+  non-blocking FLAG for Paul ("Domain handoff to resolve before launch"); "Paul review required" is only Optimise
+  on a site we cannot get into. `withRoute` is the one approach → plan derivation; an approach change is a
+  confirmed route change. The lead popup is Call · Details · Close · History; ONE Next Action, at the bottom of Call.
 - ⛔ **An explicit opt-out (`contact_suppressions.reason = 'opted_out'`) blocks every MARKETING send,
   paying clients included** — the automated senders refuse any suppressed row; the Inbox refuses a
   marketing template (`src/lib/marketingConsent.ts`; only `SERVICE_TEMPLATES` and free-text replies go).
@@ -1160,6 +1173,7 @@ positive allowlist of `baseline`; `isColdOutreachTemplate` treats unknown as COL
 | Domain ownership / authority, the domain onboarding pages, ending a service over a dispute, the terms / refunds carve-out | `docs/domain-authority.md` (+ `supabase/tests/domain-authority.sql`) |
 | Add a lead, services/areas on a prospect, the Sales Hook Audit / crawl / report share, sold_by, READY / MISSING, the PAID email's handoff lines | `docs/self-sourced-handoff.md` (+ `supabase/tests/self-sourced-handoff.sql`, re-runnable, always rolled back) |
 | A salesperson's bulk pre-call check, its allowance, reuse windows, the job model | `docs/pre-sales-certification/fixes-07-sales-bulk-audit.md` (+ `fixes-07-rollback-qa.sql`, always rolled back) |
+| Campaigns, the lead popup's four tabs, the Close branching, the sales talking points and their sources, tap ≠ contact | `docs/pre-sales-certification/sales-workspace-v2.md` |
 | Auth, roles, RLS, a lead read/write, any function a salesperson can reach, the Team page | `docs/multi-user.md` (+ `supabase/tests/multi-user-*.sql`, re-runnable, always rolled back) |
 | The price, the guarantee, checkout, Stripe, the site origin, the report CTA | `docs/business-and-offer.md` (§1, §11, §12, §13, §13b, §26) |
 | Baselines, replays, the pointer, the results sender, the noise band, named-by-model | `docs/measurement.md` (§17, §18, §19, §24, §25, §31) |

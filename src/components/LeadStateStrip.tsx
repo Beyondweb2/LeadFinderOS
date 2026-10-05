@@ -34,7 +34,9 @@ import { cn } from '@/lib/utils';
         workspaceHeader.headerStateShown says it adds something), then the owner and the attribute chips;
      2. NEXT ACTION   — NextActionBar, the display; its Edit opens the ONE editor on the Work tab;
      3. LAST CONTACT  — one quiet line. */
-export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string; onEditNext: () => void; status?: ReactNode }) {
+/** onEditNext absent (sales workspace v2: the lead popup) = the Next Action is NOT drawn here — its one display
+ *  and editor are at the bottom of the Call tab. */
+export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string; onEditNext?: () => void; status?: ReactNode }) {
   const crm = useLeadCrmRow(leadId);
   const team = useTeamDirectory();
   const row = crm.data;
@@ -76,7 +78,7 @@ export function LeadStateStrip({ leadId, onEditNext, status }: { leadId: string;
           </span>
         )}
       </div>
-      <NextActionBar lead={row} onEdit={onEditNext} />
+      {onEditNext && <NextActionBar lead={row} onEdit={onEditNext} />}
       <p className="flex min-w-0 items-center text-muted-foreground/90"><LastContactLine v={last} actorName={last?.actorId ? team.byId.get(last.actorId)?.display_name ?? 'someone' : null} /></p>
     </div>
   );

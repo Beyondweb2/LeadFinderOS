@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, Mic, ChevronDown } from 'lucide-react';
+import { StickyNote, Save, Check, X, Pencil, Calendar as CalendarIconLucide, PoundSterling, Mail, Copy, Share2, Globe, Phone, MapPin, Loader2, PhoneCall, ChevronDown, MessageCircle, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { whatsAppLinkForLead } from '@/lib/salesLinks';
-import { QuickCloseButton } from '@/components/QuickCloseDialog';
+import { QuickCloseNav, QuickClosePanel } from '@/components/QuickCloseDialog';
 import { LeadQuestionnaireSection } from '@/components/LeadQuestionnaireSection';
 import { LeadSiteCheckButton } from '@/components/LeadSiteCheckButton';
 import { CrawlCheckButton } from '@/components/CrawlCheckButton';
@@ -144,9 +144,9 @@ interface LeadDetailDialogProps {
   /** Which page mounted the dialog — drives the cockpit's "Go to Inbox conversation" (Outreach
    *  only) and back-link labels. Defaults to 'outreach'. */
   context?: 'outreach' | 'inbox';
-  /** Which workspace tab opens first. Default: Work (a paying client opens on Client for the admin). */
-  initialTab?: WorkspaceTab;
-  /** The person came to log a contact (Outreach's Call button): the Work tab opens with Log a contact expanded. */
+  /** Which workspace tab opens first. Default: Call (a paying client opens on Client for the admin). */
+  initialTab?: WorkspaceTabInput;
+  /** The person came to log a contact (Outreach's Call button): the Call tab opens with Log a contact expanded. */
   openLogContact?: boolean;
   /** Previous / Next through the list the popup was opened from (Focus Mode's stepping, moved here
    *  2026-10-01). Omitted = no stepping. ← / → step too, except while typing. */
@@ -172,7 +172,18 @@ function StepperBar({ s }: { s: LeadStepper }) {
   );
 }
 
-export type WorkspaceTab = 'work' | 'scripts' | 'prospect' | 'history' | 'client';
+/* ⛔ SALES WORKSPACE V2 (Paul, 2026-10-05): FOUR TABS — CALL (everything needed while talking, the status and the ONE
+   Next Action at the bottom), DETAILS (what was learned: campaign, services, website & domain, note), CLOSE (the
+   one close UI — QuickClosePanel), HISTORY. CLIENT stays the admin's delivery tab. */
+export type WorkspaceTab = 'call' | 'details' | 'close' | 'history' | 'client';
+/** Older callers and links named the tabs Work / Scripts / Prospect (before v2): they open the matching new tab. */
+export type WorkspaceTabInput = WorkspaceTab | 'work' | 'scripts' | 'prospect';
+export function workspaceTabOf(t: WorkspaceTabInput | string | null | undefined): WorkspaceTab | undefined {
+  if (t === 'work' || t === 'scripts' || t === 'call') return 'call';
+  if (t === 'prospect' || t === 'details') return 'details';
+  if (t === 'close' || t === 'history' || t === 'client') return t;
+  return undefined;
+}
 
 export function LeadDetailDialog({
   open,
@@ -272,19 +283,18 @@ function LeadDetailBody({
   openLogContact = false,
 }: LeadDetailBodyProps) {
   const permsForTab = useLeadPermissions();
-  /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Work. */
-  const [tab, setTab] = useState<WorkspaceTab>(() => initialTab ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'work'));
-  const [scriptTab, setScriptTab] = useState<'call' | 'voice'>('call');
+  /* A paying client opens on Client for the admin (delivery is the work then); everyone else on Call. */
+  const [tab, setTab] = useState<WorkspaceTab>(() => workspaceTabOf(initialTab) ?? (permsForTab.clientDelivery && isPaidLead(lead) ? 'client' : 'call'));
   const bodyRef = useRef<HTMLDivElement>(null);
-  const openScript = (which: 'call' | 'voice') => { setScriptTab(which); setTab('scripts'); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const aiToolsRef = useRef<HTMLDetailsElement>(null);
   const [moreTools, setMoreTools] = useState(false);
-  /* The header bar's Edit opens the ONE Next Action editor on the Work tab. A request the Work panel takes and
-     clears, so it opens once per tap — not again every time the tab is revisited. */
-  const [editNextRequested, setEditNextRequested] = useState(false);
-  const editNextAction = () => { setTab('work'); setEditNextRequested(true); };
-  /* The script's "Log this call": Work, with Log a contact open (the Work tab mounts fresh on the switch). */
-  const [logCallRequested, setLogCallRequested] = useState(false);
-  const logThisCall = () => { setLogCallRequested(true); setTab('work'); };
+  /* The script's "Log this call": the bottom of this same Call tab, with Log a contact open (remounted by key). */
+  const [logCallRequested, setLogCallRequested] = useState(0);
+  const logThisCall = () => { setLogCallRequested((n) => n + 1); requestAnimationFrame(() => actionsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })); };
+  /* "Run the AI check" on the evidence card: the AI check tools just below, opened. */
+  const openAiTools = () => { if (aiToolsRef.current) { aiToolsRef.current.open = true; aiToolsRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' }); } };
+  const goTab = (next: WorkspaceTab) => { setTab(next); if (bodyRef.current) bodyRef.current.scrollTop = 0; };
 
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -439,10 +449,16 @@ function LeadDetailBody({
               where the conversation is already open beside this panel. */}
           {/* QUICK CLOSE (2026-09-29): take the £99 on the call — every context (Outreach, the WhatsApp Inbox). */}
           <div className="flex shrink-0 items-center gap-1.5">
-          <QuickCloseButton leadId={lead.id} variant="quiet" />
+          {/* ⛔ A TAP IS NOT A CALL: tel: opens the phone's own dialler and writes nothing. What happened is logged at
+              the bottom of the Call tab (lead_log_contact) — that is the only record of a call. */}
+          {lead.phone && (
+            <a href={`tel:${lead.phone}`} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300" title={`Call ${lead.phone}`} data-testid="workspace-call">
+              <PhoneCall className="h-3.5 w-3.5" /><span className="hidden sm:inline">Call</span>
+            </a>
+          )}
           {context !== 'inbox' && lead.phone && (
             <Link to={whatsAppLinkForLead(lead.id)} onClick={() => onClose?.()} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 px-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-500/20 dark:text-blue-300" aria-label={`Open ${lead.business_name} on WhatsApp`}>
-              <Phone className="h-3.5 w-3.5" />WhatsApp
+              <MessageCircle className="h-3.5 w-3.5" /><span className="hidden sm:inline">WhatsApp</span>
             </Link>
           )}
           </div>
@@ -464,40 +480,17 @@ function LeadDetailBody({
                             welcome pack before they pay, the site check, the channel) under More tools.
             ⛔ REMOVED 2026-09-29: the Playbook pill (the delivery checklist — unused, Paul). ── */}
         {(() => {
-          const statusSelect = (
-            <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-              askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
-              triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
-          );
-          const extraState = salesState.view && headerStateShown(salesState.view, pipelineStatusLabel(pillStatusOf(lead.status, salesState.view)), salesState.row)
+          const shown = pipelineStatusLabel(pillStatusOf(lead.status, salesState.view));
+          const statusPill = <span className="inline-flex h-7 items-center rounded-full border border-border/60 bg-muted/50 px-2.5 text-xs font-semibold" data-testid="workspace-status-pill" title="Change it at the bottom of the Call tab">{shown}</span>;
+          const extraState = salesState.view && headerStateShown(salesState.view, shown, salesState.row)
             ? <SalesStatePill view={salesState.view} /> : null;
-          if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{statusSelect}<NextActionPill lead={lead} /></div>;
-          return <LeadStateStrip leadId={lead.id} status={<span className="inline-flex flex-wrap items-center gap-1.5">{statusSelect}{extraState}</span>} onEditNext={editNextAction} />;
+          if (isDemoLead(lead.id)) return <div className="mt-3 flex flex-wrap items-center gap-2">{statusPill}<NextActionPill lead={lead} /></div>;
+          /* ⛔ ONE NEXT ACTION (v2): not drawn here — its one display and editor are at the bottom of the Call tab. */
+          return <LeadStateStrip leadId={lead.id} status={<span className="inline-flex flex-wrap items-center gap-1.5">{statusPill}{extraState}</span>} />;
         })()}
 
-        {/* Reach them + the everyday tools. Plain links, not pills: the pills above are state, these are actions. */}
-        {(() => {
-          /* The welcome pack is client delivery: one tap once they have paid, under More tools before then. */
-          const welcomePack = perms.clientDelivery && !isDemoLead(lead.id) && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />;
-          const channel = perms.editLeadRecord ? (
-            <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
-              <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Preferred channel">
-                <span className="text-muted-foreground">Preferred channel:</span>
-                <span className="font-medium">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? 'not set'}</span>
-              </SelectTrigger>
-              <SelectContent className="pointer-events-auto">
-                {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          ) : lead.contact_method ? <span className="text-muted-foreground">Preferred channel: <span className="font-medium text-foreground">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? lead.contact_method}</span></span> : null;
-          return (<>
-        <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs" data-testid="workspace-tools">
-          {lead.phone && (
-            <a href={`tel:${lead.phone}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline dark:text-emerald-300" title="Call this number">
-              <Phone className="h-3.5 w-3.5" />{lead.phone}
-            </a>
-          )}
-          {lead.email && (
+        {lead.email && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-border/40 pt-2 text-xs" data-testid="workspace-tools">
             <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <a href={`mailto:${lead.email}`} className="truncate text-foreground/80 hover:text-primary hover:underline">{lead.email}</a>
@@ -505,44 +498,8 @@ function LeadDetailBody({
                 {emailCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
               </button>
             </span>
-          )}
-          {/* Admin only (2026-10-02): email outreach is not used, so a salesperson's tools row carries no Find email —
-              their next step is the Next Action above. The email itself still shows when there is one. */}
-          {!lead.email && !isDemoLead(lead.id) && perms.enrichLeads && <FindEmailButton leadId={lead.id} website={lead.website} />}
-          {!isDemoLead(lead.id) && <SocialLinks lead={lead} withFind />}
-          {!isDemoLead(lead.id) && (
-            <button type="button" onClick={() => openScript('call')} className="inline-flex items-center gap-1 font-medium text-sky-700 hover:underline dark:text-sky-300">
-              <PhoneCall className="h-3.5 w-3.5" />Call script
-            </button>
-          )}
-          {!isDemoLead(lead.id) && (
-            <button type="button" onClick={() => openScript('voice')} className="inline-flex items-center gap-1 font-medium text-violet-700 hover:underline dark:text-violet-300">
-              <Mic className="h-3.5 w-3.5" />Voice note
-            </button>
-          )}
-          {isPaidLead(lead) && welcomePack}
-          {!isDemoLead(lead.id) && (
-            <button type="button" onClick={() => setMoreTools((v) => !v)} aria-expanded={moreTools} data-testid="more-tools-toggle"
-              className="inline-flex items-center gap-0.5 font-medium text-muted-foreground hover:text-foreground">
-              More tools<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', moreTools && 'rotate-180')} />
-            </button>
-          )}
-        </div>
-        {/* Revealed in place (not a menu), so a crawl or a welcome pack's own dialog stays mounted while it works. */}
-        {moreTools && !isDemoLead(lead.id) && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-2 text-xs" data-testid="more-tools">
-            {/* Free crawlability check — both roles: a salesperson crawls a lead they work (crawl-check
-                checks it server-side). Fetches only (£0), never the Apify SEO scanner. */}
-            {perms.crawlOwnLead && <LeadDetailCrawlButton lead={lead} />}
-            {/* CLIENT WELCOME PACK — one PDF: cover, plan, get more reviews, then their audit report. */}
-            {!isPaidLead(lead) && welcomePack}
-            {/* Site check on engagement — only for a replied-or-beyond lead whose audit skipped the SEO scan. */}
-            {perms.clientDelivery && <LeadSiteCheckButton lead={lead} />}
-            {channel}
           </div>
         )}
-          </>);
-        })()}
       </div>
 
       {/* ══ THE PROSPECT WORKSPACE (2026-09-28, Paul: "open one prospect and do the job"). ONE dialog
@@ -551,37 +508,72 @@ function LeadDetailBody({
           sign-up link, WhatsApp), SCRIPTS (call script / voice note), PROSPECT (who they are, the AI
           check, contact), HISTORY (everything recorded), CLIENT (admin only: delivery, payment, private
           note). Every write in here is the same server function Outreach uses. Full screen on a phone. ══ */}
-      <Tabs value={tab} onValueChange={(v) => { setTab(v as WorkspaceTab); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} className="flex min-h-0 flex-1 flex-col">
+      <QuickCloseNav.Provider value={{ openClose: () => goTab('close') }}>
+      <Tabs value={tab} onValueChange={(v) => goTab(v as WorkspaceTab)} className="flex min-h-0 flex-1 flex-col">
         <TabsList className={cn('mx-3 mt-2.5 grid h-9 shrink-0 sm:mx-5', perms.clientDelivery ? 'grid-cols-5' : 'grid-cols-4')}>
-          <TabsTrigger value="work" className="text-xs">Work</TabsTrigger>
-          <TabsTrigger value="scripts" className="text-xs">Scripts</TabsTrigger>
-          <TabsTrigger value="prospect" className="text-xs">Prospect</TabsTrigger>
+          <TabsTrigger value="call" className="text-xs">Call</TabsTrigger>
+          <TabsTrigger value="details" className="text-xs">Details</TabsTrigger>
+          <TabsTrigger value="close" className="text-xs">Close</TabsTrigger>
           <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
           {perms.clientDelivery && <TabsTrigger value="client" className="text-xs">Client</TabsTrigger>}
         </TabsList>
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto thin-scrollbar px-3 py-3 sm:px-5 sm:py-4">
-          <TabsContent value="work" className="mt-0 space-y-4" data-testid="workspace-work">
-            {/* ⛔ THE AUDIT IS WHERE THE CALL IS WORKED (2026-10-01): score, who AI names instead, the report,
-                re-run and previous checks — the SAME card and the same create-ai-audit hook path as the Inbox. */}
-            {!isDemoLead(lead.id) && <LeadHookPanel leadId={lead.id} />}
-            {/* The latest WhatsApp messages (moved from Focus Mode). Not in the Inbox, which shows the thread itself. */}
+          {/* ── CALL: A evidence → B script → C why it matters → D what Findable does → E how we build → F questions
+                (the playbook, read-only), then the AI check tools, the recent WhatsApp, and G STATUS + THE NEXT ACTION. ── */}
+          <TabsContent value="call" className="mt-0 space-y-4" data-testid="workspace-call">
+            {!isDemoLead(lead.id) && <ColdCallPlaybookInline leadId={lead.id} initialScript="call" onLogCall={logThisCall} onRunCheck={openAiTools} />}
+            {!isDemoLead(lead.id) && (
+              <details ref={aiToolsRef} className="rounded-xl border border-border/60 bg-card/60 px-3.5 py-2.5" data-testid="ai-check-tools">
+                <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI check — run, re-run, report, earlier checks</summary>
+                <div className="mt-2.5"><LeadHookPanel leadId={lead.id} /></div>
+              </details>
+            )}
             {!isDemoLead(lead.id) && context !== 'inbox' && <RecentWhatsApp leadId={lead.id} />}
-            {!isDemoLead(lead.id) && <LeadWorkPanel leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact || logCallRequested} editNextRequested={editNextRequested} onEditNextHandled={() => setEditNextRequested(false)} />}
-            {/* Sign-up link: sent / opened, copy, preview, "sent another way". */}
-            {!isDemoLead(lead.id) && <OnboardingLinkCard lead={lead} />}
-            {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
-            {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
+            <div ref={actionsRef} className="scroll-mt-2" data-testid="call-actions">
+              {!isDemoLead(lead.id) && <LeadWorkPanel key={`call-${logCallRequested}`} part="call" leadId={lead.id} onRemoved={onClose} logContactOpen={openLogContact || logCallRequested > 0}
+                statusControl={
+                  <PipelineStatusSelect value={lead.status} stage={salesState.view} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+                    askReasonFor={{ leadId: lead.id, businessName: lead.business_name }}
+                    triggerProps={{ 'aria-label': 'Status', 'data-testid': 'workspace-status' }} />
+                } />}
+            </div>
           </TabsContent>
 
-          <TabsContent value="scripts" className="mt-0" data-testid="workspace-scripts">
-            {/* The call script and the voice-note script, one switch, one lead context. */}
-            {!isDemoLead(lead.id) && <ColdCallPlaybookInline key={scriptTab} leadId={lead.id} initialScript={scriptTab} onLogCall={logThisCall} onRunCheck={() => { setTab('work'); if (bodyRef.current) bodyRef.current.scrollTop = 0; }} />}
-          </TabsContent>
-
-          <TabsContent value="prospect" className="mt-0 space-y-4" data-testid="workspace-prospect">
+          {/* ── DETAILS: what was learned on the call, recorded — never a script. ── */}
+          <TabsContent value="details" className="mt-0 space-y-4" data-testid="workspace-details">
             <ProspectFacts lead={lead} />
-            {!isDemoLead(lead.id) && <SocialProfilesPanel lead={lead} />}
             {!isDemoLead(lead.id) && <ProspectProfilePanel leadId={lead.id} />}
+            {!isDemoLead(lead.id) && <LeadWorkPanel part="details" leadId={lead.id} onRemoved={onClose} />}
+            {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
+            {!isDemoLead(lead.id) && <SocialProfilesPanel lead={lead} />}
+            {!isDemoLead(lead.id) && (
+              <section className={CARD} data-testid="details-tools">
+                <button type="button" onClick={() => setMoreTools((v) => !v)} aria-expanded={moreTools} data-testid="more-tools-toggle"
+                  className="flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-foreground/70">
+                  <Wrench className="h-3.5 w-3.5" />More tools<ChevronDown className={cn('ml-auto h-3.5 w-3.5 transition-transform', moreTools && 'rotate-180')} />
+                </button>
+                {moreTools && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs" data-testid="more-tools">
+                    {!lead.email && perms.enrichLeads && <FindEmailButton leadId={lead.id} website={lead.website} />}
+                    <SocialLinks lead={lead} withFind />
+                    {perms.crawlOwnLead && <LeadDetailCrawlButton lead={lead} />}
+                    {perms.clientDelivery && <WelcomePackButton leadId={lead.id} businessName={lead.business_name} />}
+                    {perms.clientDelivery && <LeadSiteCheckButton lead={lead} />}
+                    {perms.editLeadRecord && (
+                      <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
+                        <SelectTrigger className="h-7 w-auto gap-1 border-border/60 px-2 text-xs" aria-label="Preferred channel">
+                          <span className="text-muted-foreground">Preferred channel:</span>
+                          <span className="font-medium">{CONTACT_METHOD_OPTIONS.find((o) => o.value === lead.contact_method)?.label ?? 'not set'}</span>
+                        </SelectTrigger>
+                        <SelectContent className="pointer-events-auto">
+                          {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
             {(() => {
               /* Social profiles live in ONE place, SocialProfilesPanel above (2026-09-30) — never a second
                  list of the same links here. This card is the admin's editable contact fields only. */
@@ -658,6 +650,18 @@ function LeadDetailBody({
                 </section>
               );
             })()}
+          </TabsContent>
+
+          {/* ── CLOSE: the one close UI (QuickClosePanel), then — before payment only — the self-service sign-up link. ── */}
+          <TabsContent value="close" className="mt-0 space-y-4" data-testid="workspace-close">
+            {!isDemoLead(lead.id) && <QuickClosePanel leadId={lead.id} active={tab === 'close'} />}
+            {!isDemoLead(lead.id) && !isPaidLead(lead) && (
+              <div className="space-y-1.5" data-testid="close-self-service">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Or let them do it themselves</p>
+                <p className="text-xs text-muted-foreground">The sign-up link takes them through the same questions, the client agreement and the same £99 payment page. The full setup questions come from Paul after they pay.</p>
+                <OnboardingLinkCard lead={lead} />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="history" className="mt-0 space-y-4" data-testid="workspace-history">
@@ -787,6 +791,7 @@ function LeadDetailBody({
           )}
         </div>
       </Tabs>
+      </QuickCloseNav.Provider>
 
       {/* Footer: Mark Paid is my revenue/convert action and shows ONLY while UNPAID — once
           amount_paid > 0 it hides (the Payment block is then the editor). Mark Lost removed from

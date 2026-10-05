@@ -1,6 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { logFeatureUse } from '@/lib/featureUsage';
-import { AlertTriangle, Check, Copy, ExternalLink, Globe, Loader2, PhoneCall, ScrollText, ShieldCheck, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Globe, Info, Loader2, PhoneCall, ScrollText, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  AI_FRIENDLY_SITE, FOLLOW_UP_VOICE_NOTE, GOOGLE_STILL_MATTERS, HOW_WE_KNOW, HOW_WE_KNOW_CAVEAT, HOW_WE_KNOW_EXAMPLES,
+  WEBSITE_MATTERS, WHAT_WE_DO, WHAT_WE_DO_SHORT, WHY_IT_MATTERS, WINNABILITY_ALSO_DEPENDS_ON, spokenSeconds,
+} from '@/lib/salesExplainer';
 import { useHookVisibility } from '@/hooks/useHookVisibility';
 import { VoiceNoteScriptBody } from '@/components/VoiceNoteScriptButton';
 import { QuickCloseButton } from '@/components/QuickCloseDialog';
@@ -164,7 +168,7 @@ function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId:
         {tab === 'email' && <span className="ml-auto flex gap-1"><CopyButton text={p.messages.email.subject} label="Copy subject" /><CopyButton text={p.messages.email.body} label="Copy email" onCopied={() => logFeatureUse('email_script', leadId)} /></span>}
       </div>
       {tab === 'call' && <CallFlow p={p} leadId={leadId} />}
-      {tab === 'voice' && <VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} />}
+      {tab === 'voice' && <div className="space-y-3"><VoiceNoteScriptBody leadId={leadId} currentAuditId={p.auditId} /><VoiceCoaching /></div>}
       {tab === 'linkedin' && <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed" data-testid="playbook-linkedin">{p.messages.linkedin}</p>}
       {tab === 'email' && (
         <div className="space-y-2" data-testid="playbook-email">
@@ -188,7 +192,9 @@ export function callFlowText(p: ColdCallPlaybook): string {
   const c = p.close;
   return [
     ...p.callScript,
-    'Questions:\n' + p.qualify.map((q) => '- ' + q).join('\n'),
+    'First question:\n- ' + (p.qualify[0] ?? ''),
+    'What we do:\n' + WHAT_WE_DO_SHORT,
+    'Discuss:\n' + p.qualify.slice(1).map((q) => '- ' + q).join('\n'),
     'If they\'re interested:\n' + c.routes.map((r) => r.name + ' (' + r.summary + '): ' + r.spoken.join(' ')).join('\n') + '\n' + c.guarantee.headline + ' ' + c.guarantee.spoken + '\n' + c.closeLine,
     'After they pay:\n' + c.afterPayment.map((l) => '- ' + l).join('\n'),
   ].join('\n\n');
@@ -203,12 +209,21 @@ function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
         <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>
         <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="call-fallback">{p.fallback}</p>
       </section>
+      {p.qualify[0] && <section className="space-y-1.5" data-testid="call-step-first">
+        <h4 className={STEP}>{stepNo(2)}First question</h4>
+        <p className="text-[15px] font-medium leading-relaxed">{p.qualify[0]}</p>
+      </section>}
+      <section className="space-y-1.5" data-testid="call-step-explain">
+        <h4 className={STEP}>{stepNo(3)}What we do, in a sentence</h4>
+        <p className="text-[15px] leading-relaxed">{WHAT_WE_DO_SHORT}</p>
+        <p className="text-[11px] text-muted-foreground">The longer version is in “What Findable actually does” below.</p>
+      </section>
       <section className="space-y-1.5" data-testid="call-step-ask">
-        <h4 className={STEP}>{stepNo(2)}Ask</h4>
-        <ul className="list-disc space-y-1 pl-5 text-sm">{p.qualify.map((q) => <li key={q}>{q}</li>)}</ul>
+        <h4 className={STEP}>{stepNo(4)}Discuss</h4>
+        <ul className="list-disc space-y-1 pl-5 text-sm">{p.qualify.slice(1).map((q) => <li key={q}>{q}</li>)}</ul>
       </section>
       <section className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="call-step-close">
-        <h4 className={STEP}>{stepNo(3)}If they're interested</h4>
+        <h4 className={STEP}>{stepNo(5)}Offer and close</h4>
         {c.routeNote && <p className="text-xs text-muted-foreground">{c.routeNote}</p>}
         <div className={cn('grid gap-2', c.routes.length > 1 && 'sm:grid-cols-2')}>
           {c.routes.map((r, i) => (
@@ -232,7 +247,7 @@ function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
         </div>
       </section>
       <section className="space-y-1.5" data-testid="call-step-after">
-        <h4 className={STEP}>{stepNo(4)}After they pay</h4>
+        <h4 className={STEP}>{stepNo(6)}After they pay</h4>
         <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">{c.afterPayment.map((l) => <li key={l}>{l}</li>)}</ul>
       </section>
       <details className="rounded-md border border-border/60 px-2.5 py-1.5 text-sm" data-testid="call-not-the-owner">
@@ -246,7 +261,9 @@ function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
 
 /** Business, phone, website and the AI check in one strip — the first thing a rep sees on a laptop or a phone.
  *  "No audit yet" is said plainly, with the way to run one; nothing is invented when there is no result. */
-function CallCard({ p, onRunCheck }: { p: ColdCallPlaybook; onRunCheck?: () => void }) {
+/** compact (the Call tab's evidence card): the AI line and the website line are said by the sections below it,
+ *  so the strip keeps only how to reach them — and, with no result yet, the way to run one. */
+function CallCard({ p, onRunCheck, compact = false }: { p: ColdCallPlaybook; onRunCheck?: () => void; compact?: boolean }) {
   const c = p.context;
   const tone = p.audit.state === 'ready' ? (p.evidence.named ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300') : 'text-muted-foreground';
   return (
@@ -264,7 +281,7 @@ function CallCard({ p, onRunCheck }: { p: ColdCallPlaybook; onRunCheck?: () => v
         </span>
         {(c.trade || c.town) && <span className="text-xs text-muted-foreground">{[c.trade, c.town].filter(Boolean).join(', ')}</span>}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {!(compact && p.audit.state !== 'none') && <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={cn('flex min-w-0 items-center gap-1.5 text-sm font-semibold', tone)} data-testid="call-card-audit">
           <Sparkles className="h-4 w-4 shrink-0" />
           <span className="min-w-0">{p.audit.headline}{p.audit.finding && <span className="block text-xs font-normal text-muted-foreground">Website: {p.audit.finding}</span>}</span>
@@ -272,9 +289,105 @@ function CallCard({ p, onRunCheck }: { p: ColdCallPlaybook; onRunCheck?: () => v
         {p.audit.state === 'none' && onRunCheck && (
           <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onRunCheck} data-testid="call-card-run-check">Run the AI check (about a minute)</Button>
         )}
-      </div>
+      </div>}
       {p.audit.state === 'none' && <p className="text-[11px] text-muted-foreground">No problem if you ring first — the script below does not claim a result.</p>}
     </section>
+  );
+}
+
+/* ══ SALES WORKSPACE V2 (Paul, 2026-10-05): THE CALL TAB — everything needed while talking, in one scroll:
+   A evidence → B script → C why it matters → D what Findable does → E how we build for AI → F questions.
+   ⛔ The evidence is only what is STORED (the hook audit and the crawl); the explainer words are
+   src/lib/salesExplainer.ts, the one source the voice-note coaching reads too. */
+function AiCheckCount({ leadId }: { leadId: string }) {
+  const q = useHookVisibility(leadId);
+  const score = q.data?.card?.score;
+  if (!score || score.expected === 0) return null;
+  const named = score.results.filter((r) => r.status === 'named').length;
+  return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold" data-testid="ai-check-count">{named} / {score.expected} answers named this business</span>;
+}
+
+function CallEvidence({ p, leadId, onRunCheck }: { p: ColdCallPlaybook; leadId: string; onRunCheck?: () => void }) {
+  return (
+    <section className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-3" data-testid="call-evidence">
+      <h3 className={EYEBROW}>What we found</h3>
+      <CallCard p={p} onRunCheck={onRunCheck} compact />
+      {p.audit.state !== 'none' && (
+        <div className="space-y-1.5" data-testid="call-evidence-ai">
+          <div className="flex flex-wrap items-center gap-2"><span className={EYEBROW}>AI check</span><AiCheckCount leadId={leadId} /></div>
+          <AiOpportunity p={p} />
+          <details className="rounded-md border border-border/60 px-2.5 py-1.5" data-testid="playbook-evidence-toggle">
+            <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">The questions and what AI said</summary>
+            <div className="mt-2"><AuditEvidence leadId={leadId} /></div>
+          </details>
+        </div>
+      )}
+      <div className="space-y-1.5" data-testid="call-evidence-website">
+        <span className={EYEBROW}>Website</span>
+        <TalkAbout p={p} />
+      </div>
+      <ReportLinks p={p} />
+    </section>
+  );
+}
+
+function SourceNote({ source, url }: { source: string; url: string }) {
+  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:underline" title={source} data-testid="source-note"><Info className="h-3 w-3" />{source}</a>;
+}
+
+function WhyItMatters() {
+  return (
+    <Block title="Why this matters">
+      <ul className="space-y-1.5 text-sm" data-testid="why-it-matters">
+        {WHY_IT_MATTERS.map((pt) => <li key={pt.text}>{pt.text}<br /><SourceNote source={pt.source} url={pt.url} /></li>)}
+        <li className="text-muted-foreground">{GOOGLE_STILL_MATTERS}</li>
+      </ul>
+    </Block>
+  );
+}
+
+function WhatWeDo() {
+  return (
+    <Block title="What Findable actually does">
+      <ul className="list-disc space-y-1 pl-5 text-sm" data-testid="what-we-do">{WHAT_WE_DO.map((l) => <li key={l}>{l}</li>)}</ul>
+      <details className="rounded-md border border-border/60 px-2.5 py-1.5 text-sm" data-testid="how-we-know">
+        <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">If they ask “how do you know what's winnable?”</summary>
+        <div className="mt-1.5 space-y-1.5">
+          {HOW_WE_KNOW.map((l) => <p key={l}>{l}</p>)}
+          <ul className="space-y-0.5">{HOW_WE_KNOW_EXAMPLES.map((e) => <li key={e.text}><span className="font-semibold">{e.label}:</span> {e.text}</li>)}</ul>
+          <p className="text-muted-foreground">It also depends on {WINNABILITY_ALSO_DEPENDS_ON.join(', ')}.</p>
+          <p className="text-[11px] text-amber-700 dark:text-amber-300">{HOW_WE_KNOW_CAVEAT}</p>
+        </div>
+      </details>
+    </Block>
+  );
+}
+
+function HowWeBuild() {
+  return (
+    <details className="rounded-md border border-border/60 px-2.5 py-1.5 text-sm" data-testid="ai-friendly-site">
+      <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">How we build for AI visibility</summary>
+      <ul className="mt-1.5 list-disc space-y-0.5 pl-5">{AI_FRIENDLY_SITE.map((l) => <li key={l}>{l}</li>)}</ul>
+      <p className="mt-1.5 text-muted-foreground" data-testid="website-matters">{WEBSITE_MATTERS}</p>
+    </details>
+  );
+}
+
+/** Beside the voice note: what we do, how it works, and the optional 20–30 second "how does it work?" follow-up. */
+function VoiceCoaching() {
+  const secs = spokenSeconds(FOLLOW_UP_VOICE_NOTE);
+  return (
+    <div className="space-y-2 rounded-md border border-border/60 bg-background/60 p-2.5 text-sm" data-testid="voice-coaching">
+      <p className={EYEBROW}>Keep the first voice note short. If they ask more:</p>
+      <p><span className="font-semibold">What we do: </span>{WHAT_WE_DO_SHORT}</p>
+      <details><summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">How it works</summary>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">{WHAT_WE_DO.map((l) => <li key={l}>{l}</li>)}</ul></details>
+      <div className="space-y-1" data-testid="voice-follow-up">
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-semibold">Follow-up voice note: “How does it actually work?” (about {secs} seconds)</span><CopyButton text={FOLLOW_UP_VOICE_NOTE} label="Copy" /></div>
+        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{FOLLOW_UP_VOICE_NOTE}</p>
+        <p className="text-[11px] text-muted-foreground">Put your own name in place of {'{rep}'}.</p>
+      </div>
+    </div>
   );
 }
 
@@ -361,16 +474,12 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript, onRunCheck }: { 
             {p.warnings.map((w) => <p key={w} className="flex gap-1.5"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{w}</p>)}
           </div>
         )}
-        <CallCard p={p} onRunCheck={onRunCheck} />
+        <CallEvidence p={p} leadId={leadId} onRunCheck={onRunCheck} />
         <Scripts p={p} leadId={leadId} initial={initialScript} />
-        <Block title="AI opportunity" tone="primary"><AiOpportunity p={p} /></Block>
-        <Block title="What I'd talk about"><TalkAbout p={p} /></Block>
+        <WhyItMatters />
+        <WhatWeDo />
+        <HowWeBuild />
         <Block title="Questions they may ask"><Questions p={p} /></Block>
-        <details className="rounded-md border border-border/60 px-2.5 py-1.5" data-testid="playbook-evidence-toggle">
-          <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audit evidence</summary>
-          <div className="mt-2"><AuditEvidence leadId={leadId} /></div>
-        </details>
-        <ReportLinks p={p} />
       </div>
     );
   }

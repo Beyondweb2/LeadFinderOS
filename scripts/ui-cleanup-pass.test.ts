@@ -134,7 +134,7 @@ console.log("\n── Find email ──");
   ok(btn.indexOf("'lead_find_email'") > 0 && btn.indexOf("'extract-email'") > btn.indexOf("'lead_find_email'") && /'lead_set_email'/.test(btn), "our records first, then the free website scrape, saved through the lead function");
   ok(/isAggregatorUrl\(site\)/.test(btn), "a directory listing is not their website — never scraped as one");
   /* 2026-10-02: admin only, and gone from the Inbox header (the Next Action is there instead). */
-  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && !isDemoLead\(lead\.id\) && perms\.enrichLeads && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /perms\.enrichLeads && <FindEmailButton leadId=\{lead\.id\}/]] as const) {
+  for (const [p, re] of [["src/components/LeadDetailDialog.tsx", /!lead\.email && perms\.enrichLeads && <FindEmailButton/], ["src/components/ProspectFacts.tsx", /perms\.enrichLeads && <FindEmailButton leadId=\{lead\.id\}/]] as const) {
     ok(re.test(read(p)), `${p}: admin only, beside the email option, only when there is none`);
   }
   ok(!/FindEmailButton/.test(read("src/pages/Inbox.tsx")), "src/pages/Inbox.tsx: no Find email in the conversation header");

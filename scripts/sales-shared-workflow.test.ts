@@ -130,7 +130,7 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(/<HookAuditDialog lead=\{auditLead\}/.test(table) && /setAuditLead\(lead\)/.test(table), "every role's audit button opens the Hook Audit popup (2026-09-28; the AI Audit page is the admin's advanced link inside it)");
   ok(/lead\.assigned_to_user_id && lead\.assigned_to_user_id !== user\?\.id/.test(table), "the row shows who owns a lead that is not yours");
   const dialog = read("src/components/LeadDetailDialog.tsx");
-  ok(/<LeadWorkPanel leadId=\{lead\.id\}( onRemoved=\{onClose\})?( onOutcome=\{handleOutcome\})?( logContactOpen=\{openLogContact( \|\| logCallRequested)?\} editNextRequested=\{editNextRequested\} onEditNextHandled=\{[^}]*\})? \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\}( older=\{activities\})? \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox)");
+  ok(/<LeadWorkPanel key=\{[^\n]*?\} part="call" leadId=\{lead\.id\}/.test(dialog) && /<LeadWorkPanel part="details" leadId=\{lead\.id\} onRemoved=\{onClose\} \/>/.test(dialog) && /<LeadHistoryPanel leadId=\{lead\.id\}( older=\{activities\})? \/>/.test(dialog) && /<LeadHookPanel leadId=\{lead\.id\} \/>/.test(dialog), "the shared lead detail carries the CRM panels (both roles, Outreach and Inbox) — split across Call and Details (v2)");
   for (const g of ["perms.clientDelivery && !isDemoLead(lead.id) && (\n          <LeadDeliveryCockpit", "{perms.clientDelivery && (\n            <section className={CARD}>\n              <SectionLabel icon={PoundSterling}", "{perms.privateNote && (", "{perms.clientDelivery && !isPaidLead(lead) && ("]) {
     ok(dialog.includes(g), `the detail withholds: ${g.split("\n")[0].slice(0, 60)}`);
   }
@@ -147,7 +147,7 @@ console.log("\n── one Outreach, one Inbox, no second CRM ──");
   ok(/\{perms\.queueControls && <AutoReplyToggle \/>\}/.test(inboxPage), "the Inbox's automation settings are admin-only");
   ok(/perms\.queueControls && <SelectItem value=\{HOOK_DUE_FILTER\}>/.test(inboxPage) && /perms\.queueControls && <SelectItem value=\{CONTACT_DUE_FILTER\}>/.test(inboxPage), "…and the follow-up lanes (they stamp lead rows)");
   ok(/active\.leadId && maySetStatus\(perms, 'closed'\) && \(/.test(inboxPage), "Remove-from-inbox (mark Closed) is not offered to a salesperson");
-  ok(!/<WelcomePackButton/.test(inboxPage) && /perms\.clientDelivery && !isDemoLead\(lead\.id\) && <WelcomePackButton/.test(read("src/components/LeadDetailDialog.tsx")), "the welcome pack is client delivery — admin only, in the prospect workspace (no longer repeated on the Inbox header)");
+  ok(!/<WelcomePackButton/.test(inboxPage) && /perms\.clientDelivery && <WelcomePackButton/.test(read("src/components/LeadDetailDialog.tsx")), "the welcome pack is client delivery — admin only, in the prospect workspace (no longer repeated on the Inbox header)");
 }
 
 console.log("\n── Review Replies: admin only, at the server too ──");
