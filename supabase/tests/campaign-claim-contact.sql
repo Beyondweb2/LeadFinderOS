@@ -2,6 +2,35 @@
 -- ALWAYS ROLLED BACK — the last statement raises the results as JSON, so nothing commits (fake users on
 -- example.invalid, fixture campaigns, logged contacts, messages, audits). docs/multi-user.md §6.
 begin;
+-- READY-TO-SELL FIXTURE (2026-10-05, E2E certification; inside this suite's own rolled-back transaction). Since
+-- migration 20261010120000 a salesperson who has not finished onboarding is refused claims, calls, campaigns and
+-- queueing, so this suite could no longer reach its own rules. The readiness rule itself is tested by
+-- salesperson-onboarding-rls.sql and ready-to-sell-paperwork.sql. Here: every FAKE salesperson the suite creates
+-- (auth.users email ending .invalid) is onboarded complete, so pre-gate suites exercise their own rules again.
+create function public.qa_tmp_autoonboard() returns trigger language plpgsql security definer set search_path = public as $q$
+begin
+  if new.role = 'sales' and exists (select 1 from auth.users u where u.id = new.user_id and u.email like '%.invalid') then
+    insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+      rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+    values (new.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+      (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date)
+    on conflict (user_id) do nothing;
+  end if;
+  return new;
+end $q$;
+create trigger qa_tmp_autoonboard after insert on public.user_roles for each row execute function public.qa_tmp_autoonboard();
+-- Existing sales accounts (Test, test1) made Ready INSIDE this rolled-back transaction only.
+insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+  rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+select r.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+  (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date
+from public.user_roles r where r.role = 'sales'
+on conflict (user_id) do update set age_18_confirmed_on = excluded.age_18_confirmed_on, rtw_method = excluded.rtw_method,
+  rtw_checked_on = excluded.rtw_checked_on, rtw_checked_by = excluded.rtw_checked_by, rtw_result = excluded.rtw_result,
+  rtw_evidence_ref = excluded.rtw_evidence_ref, bank_details_received_on = excluded.bank_details_received_on,
+  vat_registered = excluded.vat_registered, contractor_type = excluded.contractor_type, start_date = excluded.start_date,
+  team_guide_version = excluded.team_guide_version, team_guide_acknowledged_on = excluded.team_guide_acknowledged_on, end_date = null;
+
 -- sales_pool lost its authenticated grant on 2026-09-29 (no caller; it paged the whole pool). This suite still
 -- uses it as the oracle for "is this lead in the claimable pool" -- a TEST-ONLY grant, rolled back with the rest.
 grant execute on function public.sales_pool(text, integer, integer) to authenticated;
@@ -63,10 +92,14 @@ do $$ declare r jsonb; n int; begin
   delete from public.campaigns where id = 'dddddddd-0000-4000-8000-0000000000c1';
   get diagnostics n = row_count;
   insert into t_results (name, ok, detail) values ('campaigns: Sales DELETE denied', n = 0, n::text);
-  insert into t_results (name, ok, detail) values ('campaigns: Sales still SEES the campaigns', (select count(*) from public.campaigns) > 1, null);
+  -- Since campaign ownership (20261006120000) a salesperson sees and uses only campaigns THEY own (updated 2026-10-05).
+  insert into t_results (name, ok, detail) values ('campaigns: Sales SEES its own campaign and not Paul''s', exists (select 1 from public.campaigns where id = 'dddddddd-0000-4000-8000-0000000000c1')
+    and not exists (select 1 from public.campaigns where id = (select camp from t_fx)), null);
+  r := public.lead_set_campaign((select lead from t_case where k = 'own_campaign'), 'dddddddd-0000-4000-8000-0000000000c1');
+  insert into t_results (name, ok, detail) values ('campaigns: Sales assigns its own campaign to its OWN lead', (r ->> 'ok')::boolean
+    and (select campaign_id from public.sales_leads where id = (select lead from t_case where k = 'own_campaign')) = 'dddddddd-0000-4000-8000-0000000000c1', r::text);
   r := public.lead_set_campaign((select lead from t_case where k = 'own_campaign'), (select camp from t_fx));
-  insert into t_results (name, ok, detail) values ('campaigns: Sales assigns an existing campaign to its OWN lead', (r ->> 'ok')::boolean
-    and (select campaign_id from public.sales_leads where id = (select lead from t_case where k = 'own_campaign')) = (select camp from t_fx), r::text);
+  insert into t_results (name, ok, detail) values ('campaigns: Sales cannot put its lead into Paul''s campaign', r ->> 'error' = 'unknown_campaign', r::text);
   begin perform public.lead_set_campaign((select lead from t_case where k = 'b_lead'), (select camp from t_fx)); insert into t_results (name, ok) values ('campaigns: Sales cannot set another rep''s lead', false);
   exception when others then insert into t_results (name, ok, detail) values ('campaigns: Sales cannot set another rep''s lead', sqlerrm = 'not_your_lead', sqlerrm); end;
 
@@ -162,7 +195,7 @@ do $$ declare n int; begin
   update public.campaigns set name = 'CCC renamed by admin' where id = 'dddddddd-0000-4000-8000-0000000000c2';
   get diagnostics n = row_count;
   insert into t_results (name, ok, detail) values ('campaigns: admin EDIT of own campaign allowed', n = 1, n::text);
-  update public.campaigns set name = 'CCC renamed by admin' where id = 'dddddddd-0000-4000-8000-0000000000c1';
+  update public.campaigns set name = 'CCC renamed by admin 2' where id = 'dddddddd-0000-4000-8000-0000000000c1';
   get diagnostics n = row_count;
   insert into t_results (name, ok, detail) values ('campaigns: admin EDIT of a campaign a rep created allowed', n = 1, n::text);
   delete from public.campaigns where id in ('dddddddd-0000-4000-8000-0000000000c1', 'dddddddd-0000-4000-8000-0000000000c2');

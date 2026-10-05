@@ -3,6 +3,35 @@
 -- results as JSON, so nothing (fake users on example.invalid, claims, adds, campaign changes) commits.
 -- How to run: send this file as one query to the Management API (docs/multi-user.md §6).
 begin;
+-- READY-TO-SELL FIXTURE (2026-10-05, E2E certification; inside this suite's own rolled-back transaction). Since
+-- migration 20261010120000 a salesperson who has not finished onboarding is refused claims, calls, campaigns and
+-- queueing, so this suite could no longer reach its own rules. The readiness rule itself is tested by
+-- salesperson-onboarding-rls.sql and ready-to-sell-paperwork.sql. Here: every FAKE salesperson the suite creates
+-- (auth.users email ending .invalid) is onboarded complete, so pre-gate suites exercise their own rules again.
+create function public.qa_tmp_autoonboard() returns trigger language plpgsql security definer set search_path = public as $q$
+begin
+  if new.role = 'sales' and exists (select 1 from auth.users u where u.id = new.user_id and u.email like '%.invalid') then
+    insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+      rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+    values (new.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+      (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date)
+    on conflict (user_id) do nothing;
+  end if;
+  return new;
+end $q$;
+create trigger qa_tmp_autoonboard after insert on public.user_roles for each row execute function public.qa_tmp_autoonboard();
+-- Existing sales accounts (Test, test1) made Ready INSIDE this rolled-back transaction only.
+insert into public.salesperson_onboarding (user_id, age_18_confirmed_on, rtw_method, rtw_checked_on, rtw_checked_by, rtw_result,
+  rtw_evidence_ref, bank_details_received_on, vat_registered, contractor_type, start_date, team_guide_version, team_guide_acknowledged_on)
+select r.user_id, current_date, 'manual_video_call', current_date, 'QA', 'pass', 'QA', current_date, false, 'individual', current_date,
+  (select id from public.salesperson_document_versions where kind = 'team_guide' and status = 'approved' order by id desc limit 1), current_date
+from public.user_roles r where r.role = 'sales'
+on conflict (user_id) do update set age_18_confirmed_on = excluded.age_18_confirmed_on, rtw_method = excluded.rtw_method,
+  rtw_checked_on = excluded.rtw_checked_on, rtw_checked_by = excluded.rtw_checked_by, rtw_result = excluded.rtw_result,
+  rtw_evidence_ref = excluded.rtw_evidence_ref, bank_details_received_on = excluded.bank_details_received_on,
+  vat_registered = excluded.vat_registered, contractor_type = excluded.contractor_type, start_date = excluded.start_date,
+  team_guide_version = excluded.team_guide_version, team_guide_acknowledged_on = excluded.team_guide_acknowledged_on, end_date = null;
+
 -- sales_pool lost its authenticated grant on 2026-09-29 (no caller; it paged the whole pool). This suite still
 -- uses it as the oracle for "is this lead in the claimable pool" -- a TEST-ONLY grant, rolled back with the rest.
 grant execute on function public.sales_pool(text, integer, integer) to authenticated;
@@ -13,6 +42,8 @@ insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, ra
   ('cccccccc-0000-4000-8000-00000000000b', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'test-sfr-b@example.invalid', '{}', '{}', now(), now());
 insert into public.user_roles (user_id, role) values ('cccccccc-0000-4000-8000-00000000000a', 'sales'), ('cccccccc-0000-4000-8000-00000000000b', 'sales');
 insert into public.team_members (user_id, display_name) values ('cccccccc-0000-4000-8000-00000000000a', 'SFR A'), ('cccccccc-0000-4000-8000-00000000000b', 'SFR B');
+-- Campaigns are owner-scoped since 20261006120000: rep A uses two of its own (Paul's are refused).
+insert into public.campaigns (name, created_by) values ('SFR QA campaign 1', 'cccccccc-0000-4000-8000-00000000000a'), ('SFR QA campaign 2', 'cccccccc-0000-4000-8000-00000000000a');
 create temp table t_fx as select
   (select l.id from public.outreach_leads l
     where l.assigned_to_user_id is null and l.is_archived is not true and l.status = 'not_contacted'
@@ -24,8 +55,8 @@ create temp table t_fx as select
     order by l.created_at offset 1 limit 1) as touched,
   (select l.id from public.outreach_leads l where l.assigned_to_user_id = l.user_id and not public.lead_is_client(l.amount_paid, l.status) order by l.created_at limit 1) as pauls,
   (select l.id from public.outreach_leads l where public.lead_is_client(l.amount_paid, l.status) order by l.created_at limit 1) as client,
-  (select id from public.campaigns order by created_at limit 1) as camp,
-  (select id from public.campaigns order by created_at offset 1 limit 1) as camp2,
+  (select id from public.campaigns where name = 'SFR QA campaign 1') as camp,
+  (select id from public.campaigns where name = 'SFR QA campaign 2') as camp2,
   (select user_id from public.team_members where is_book_owner limit 1) as admin_id,
   (select count(*) from public.outreach_leads) as leads_before;
 alter table t_fx add column mine_name text, add column touched_name text, add column pauls_name text;
