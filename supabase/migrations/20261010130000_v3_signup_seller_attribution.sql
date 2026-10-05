@@ -131,6 +131,12 @@ begin
     'signup', v_key,
     'signups_on_lead', v_signups,
     'signup_creators', coalesce(to_jsonb(v_creators), '[]'::jsonb),
+    -- H's key, kept: the first creation record of the sign-up the decision rested on (null when none).
+    'creation', (select jsonb_build_object('event_id', s.event_id, 'session', s.checkout_session_id, 'signup', s.onboarding_id, 'creator', s.creator_user_id,
+                   'creator_role', s.creator_role, 'creator_ready', s.creator_ready, 'creator_missing', to_jsonb(s.creator_missing), 'at', s.created_at)
+                   from public.sale_creations s
+                  where s.lead_id = _lead.id and v_key is not null and coalesce(s.onboarding_id::text, 'event:' || s.event_id::text) = v_key
+                  order by s.created_at limit 1),
     'owner_at_payment', v_owner,
     'all_links', (select coalesce(jsonb_agg(jsonb_build_object('creator', s.creator_user_id, 'role', s.creator_role, 'signup', s.onboarding_id, 'session', s.checkout_session_id, 'ready', s.creator_ready, 'missing', to_jsonb(s.creator_missing), 'at', s.created_at) order by s.created_at), '[]'::jsonb)
                     from public.sale_creations s where s.lead_id = _lead.id),

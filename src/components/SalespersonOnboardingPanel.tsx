@@ -209,7 +209,7 @@ export interface AttributionReview {
   lead_id: string;
   business_name: string | null;
   claimed_seller_user_id: string | null;
-  reason: 'no_authorised_creator' | 'creator_not_authorised' | 'claimed_seller_mismatch';
+  reason: 'no_authorised_creator' | 'creator_not_authorised' | 'claimed_seller_mismatch' | 'conflicting_creators' | 'ambiguous_manual_payment';
   status: 'open' | 'confirmed' | 'not_credited';
   evidence: { claimed_seller_readiness?: string[] | null };
   resolution_note: string | null;
@@ -223,6 +223,9 @@ const REVIEW_REASON: Record<AttributionReview['reason'], string> = {
   no_authorised_creator: 'no sign-up link from an authorised salesperson is on record for this payment',
   creator_not_authorised: 'the sign-up link was made by someone who was not Ready to Sell at the time',
   claimed_seller_mismatch: 'the seller written with the payment does not match who created the sign-up link',
+  /* F + H integration (migration 20261010130000): never guessed. */
+  conflicting_creators: 'more than one person made the sign-up link this client paid through (claimed: the first)',
+  ambiguous_manual_payment: 'marked paid by hand, and more than one sign-up is on record for this client (claimed: the latest salesperson)',
 };
 export function AttributionReviewsCard({ reviews, sellerName, call, onChanged }: {
   reviews: readonly AttributionReview[];
