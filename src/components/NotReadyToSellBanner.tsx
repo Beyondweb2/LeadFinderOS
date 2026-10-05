@@ -39,7 +39,7 @@ export function NotReadyToSellBanner({ compact = false }: { compact?: boolean })
                 <p className="text-xs text-muted-foreground">Waiting on: {others.map((k) => BANNER_WORDS[k] ?? MISSING_KEY_WORDS[k] ?? k).join(' · ')}</p>
               )}
               {canAckGuide && (
-                <Button size="sm" variant="outline" className="mt-1 h-7 text-xs" disabled={busy} onClick={async () => {
+                <Button size="sm" variant="outline" className="mt-1 h-auto min-h-7 max-w-full whitespace-normal py-1 text-left text-xs" disabled={busy} onClick={async () => {
                   setBusy(true);
                   try {
                     const r = await me.acknowledgeTeamGuide();

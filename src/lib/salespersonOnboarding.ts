@@ -358,8 +358,8 @@ export const INACTIVE_KEYS = ['not_sales', 'suspended', 'ended'] as const;
 export type ChecklistKey = typeof BLOCKING_KEYS[number] | typeof REFERENCE_KEYS[number];
 
 export const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
-  agreement: 'Contractor agreement (handled outside LeadFinderOS — reference only)',
-  privacy_notice: 'Salesperson privacy notice (handled outside LeadFinderOS — reference only)',
+  agreement: 'Contractor agreement · handled outside LeadFinderOS',
+  privacy_notice: 'Salesperson privacy notice · handled outside LeadFinderOS',
   age_18: 'Confirmed 18 or over',
   right_to_work: 'Right to work check recorded',
   bank_details: 'Bank details received',
