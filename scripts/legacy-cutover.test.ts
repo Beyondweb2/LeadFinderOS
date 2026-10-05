@@ -105,6 +105,10 @@ async function main() {
   const text = r.text;
   ok(/^LEGACY FINDABLE CHECKOUT CUTOVER\n\nOpen legacy Checkout Sessions: 3\nActive legacy Payment Links: 2\nStored legacy Quick Close links: 2 \(still payable: 1\)\nOther bypass paths: 1/.test(text), 'the report reads exactly as specified');
   ok(/EXPIRE session cs_live_LEGACY_QC \(Quick Close link already sent\)/.test(text) && /DEACTIVATE Payment Link plink_FOUNDER/.test(text) && /REVIEW Payment Link plink_MYSTERY/.test(text), 'it names exactly which objects need invalidating');
+  /* Integration (2026-10-05): each DEACTIVATE says what it sells and WHICH evidence classified it, so a person can
+     confirm before executing; a price-only match says so. Display only — the hash covers ids. */
+  ok(/DEACTIVATE Payment Link plink_FOUNDER .* names Findable .*: AI visibility sprint \(founder price\) 4999 gbp/.test(text)
+    && /DEACTIVATE Payment Link plink_99 .*\(price match only\).*: Setup 9900 gbp/.test(text), 'a DEACTIVATE line shows the items and whether a name or only a price matched');
 
   console.log('\n── EXECUTE: only the reviewed plan ──');
   const bad = await executeCutover(db.svc, { fetcher, secret: 'sk', planHash: r.planHash, confirm: 'yes' });

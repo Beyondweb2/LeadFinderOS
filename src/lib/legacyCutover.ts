@@ -70,8 +70,9 @@ const sessionFromUrl = (url: string | null) => /\/(cs_(?:live|test)_[A-Za-z0-9]+
 export interface CutoverPlan {
   /** Open legacy Findable Checkout Sessions → EXPIRE. */
   expireSessions: Array<{ id: string; onboarding_id: string | null; lead_id: string | null; created: number | null; amount_total: number | null; quick_close: boolean }>;
-  /** Active Findable Payment Links → DEACTIVATE. Their open sessions are expired too. */
-  deactivateLinks: Array<{ id: string; url: string | null; why: string }>;
+  /** Active Findable Payment Links → DEACTIVATE. Their open sessions are expired too. `items` = what the link
+   *  sells (description, pence, currency), so a person can confirm the classification before executing. */
+  deactivateLinks: Array<{ id: string; url: string | null; why: string; items?: string[] }>;
   /** Active Payment Links nobody could classify → Paul must decide before READY. */
   unclassifiedLinks: Array<{ id: string; url: string | null; items: string[] }>;
   storedQuickClose: { total: number; payable: number; rows: Array<{ onboarding_id: string; lead_id: string | null; session: string | null; payable: boolean }> };
@@ -104,8 +105,12 @@ export function buildCutoverPlan(input: { openSessions: StripeSessionLite[]; act
   for (const l of input.activeLinks) {
     if (l.active === false) continue;
     const c = linkClass.get(l.id)!;
-    if (c === 'findable') deactivateLinks.push({ id: l.id, url: l.url ?? null, why: 'a Findable price or name — payable outside the signed sign-up' });
-    else if (c === 'unclassified') unclassifiedLinks.push({ id: l.id, url: l.url ?? null, items: l.line_items.map((li) => `${li.description ?? '?'} ${li.price?.unit_amount ?? '?'} ${li.price?.currency ?? ''}`.trim()) });
+    const items = l.line_items.map((li) => `${li.description ?? '?'} ${li.price?.unit_amount ?? '?'} ${li.price?.currency ?? ''}`.trim());
+    /* Say WHICH evidence classified it (F + H integration, 2026-10-05): a name is strong; a price alone is weaker
+       and a person confirms it from `items` before executing. Display only — the plan hash covers ids. */
+    const byName = FINDABLE_WORDS.test(Object.values(l.metadata ?? {}).join(' ')) || l.line_items.some((li) => FINDABLE_WORDS.test(li.description ?? ''));
+    if (c === 'findable') deactivateLinks.push({ id: l.id, url: l.url ?? null, why: `${byName ? 'names Findable' : 'charges a historic Findable first-payment price (price match only)'} — payable outside the signed sign-up`, items });
+    else if (c === 'unclassified') unclassifiedLinks.push({ id: l.id, url: l.url ?? null, items });
     else notFindableLinks++;
   }
   const openLegacyIds = new Set(expireSessions.map((s) => s.id));
@@ -140,7 +145,7 @@ export function cutoverReportText(p: CutoverPlan, planHash: string): string {
     `Other bypass paths: ${p.otherBypassPaths}`,
     '',
     ...p.expireSessions.map((s) => `  EXPIRE session ${s.id}${s.quick_close ? ' (Quick Close link already sent)' : ''} · lead ${s.lead_id ?? '-'} · sign-up ${s.onboarding_id ?? '-'}`),
-    ...p.deactivateLinks.map((l) => `  DEACTIVATE Payment Link ${l.id} ${l.url ?? ''} — ${l.why}`),
+    ...p.deactivateLinks.map((l) => `  DEACTIVATE Payment Link ${l.id} ${l.url ?? ''} — ${l.why}${l.items?.length ? `: ${l.items.join('; ')}` : ''}`),
     ...p.unclassifiedLinks.map((l) => `  REVIEW Payment Link ${l.id} ${l.url ?? ''} — could not tell if it is Findable: ${l.items.join('; ')}`),
     '',
     `Left alone: ${p.untouched.v3SignedSessions} signed v3 session(s), ${p.untouched.notFindableSessions} non-Findable session(s), ${p.untouched.notFindableLinks} non-Findable Payment Link(s). Completed payments are history and are never listed.`,
