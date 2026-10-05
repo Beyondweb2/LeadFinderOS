@@ -101,4 +101,15 @@ auto-deploy. No edge function deployed (`whatsapp-status` untouched), no Meta / 
 
 ## Production verification
 
-Recorded in the commit that follows the merge (see below).
+- `main` merge `037d1e17` (parents `b812af1f` + integration `f771f571`), pushed after proving `origin/main` unmoved.
+  The primary `LeadFinderOS-current` fast-forwarded to it (clean).
+- Live bundle, resolved file by file (HTML → entry chunk → `WebsiteBuild` chunk + its 14 imported chunks), on
+  **https://app.leadfinderos.com** and **https://leadfinderos-next.pages.dev** — the same build on both (entry
+  `index-BZtqZS_o.js`, `WebsiteBuild-DolQxDPv.js`): PRESENT "Research only: ", "not confirmed as the client",
+  "No confirmed current website for this client", "Not settled: the client"; GONE the old "No current website is
+  recorded for this client". The previous build (`WebsiteBuild-CWrlOtxT.js`) was checked first and lacked them — the
+  check can tell old from new. Live about one minute after the push. `leadfinderos.pages.dev` was not used.
+- Not done on production: rendering the Advanced page with QA data behind a real sign-in. No QA client has a Website
+  Build record, and creating one would mean writing to the live database; the behaviour was proved by the fixture
+  render of the same code (above) plus the live-bundle markers.
+- No edge function deployed (`whatsapp-status` untouched), no SQL, no Meta / WhatsApp / Stripe / database change.
