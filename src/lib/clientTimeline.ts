@@ -272,10 +272,10 @@ export interface MinimumTerm {
   /** A fixed-term client (v4 Optimise) whose final minimum-term payment has actually been collected:
    *  the payment plan is complete and nothing more is ever charged. */
   planComplete: boolean;
-  /** v4 Optimise (Paul, 2026-10-06): the Optimise End Date (clause 9B.2) — one month after the sixth payment,
-   *  clamped to the month's last day like every payment date (3.1). The sixth payment covers this final month of
-   *  work; the agreement then ends automatically. Expected from the real payments until the sixth is collected.
-   *  Null for any client with a Continuing Service (and when the final payment day is unknown). */
+  /** v4 Optimise (Paul, 2026-10-06): the Optimise End Date (clause 9B.2) — one calendar month after the day the
+   *  sixth payment ACTUALLY succeeded (payment_ledger, Stripe's paid_at), clamped to the month's last day like every
+   *  payment date (3.1). The sixth payment covers this final month of work; the agreement then ends automatically.
+   *  Null until the sixth payment is collected, and for any client with a Continuing Service. */
   serviceEndDay: string | null;
 }
 
@@ -321,7 +321,9 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
     return {
       recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,
       continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: actual,
-      serviceEndDay: addMonthsClamped(finalDay, 1),
+      /* ⛔ ONLY FROM THE ACTUAL SIXTH PAYMENT (Paul, 2026-10-06): the day Stripe reports it paid, as recorded
+         in payment_ledger — never the due date. No countdown starts before it is collected. */
+      serviceEndDay: actual ? addMonthsClamped(finalDay, 1) : null,
     };
   }
   const continuingStart = addMonthsClamped(anchor, needed);

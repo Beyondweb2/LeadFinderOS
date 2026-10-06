@@ -33,6 +33,7 @@ const EVENT_WORDS: Record<string, string> = {
   access_email_failed: 'Access Date email NOT sent', guarantee_ceased: 'Guarantee recorded as not applying', payment_start_scheduled: 'Payment Start Date set in Stripe',
   payment_start_refused: 'Payment Start Date not set', continuing_prepared: 'Continuing Service prepared', continuing_reminder_sent: 'Client reminder recorded as sent',
   continuing_will_continue: 'Client will continue', continuing_will_cancel: 'Client will cancel', paid_without_v3_agreement: 'Paid without the v3 agreement',
+  fixed_term_final_payment: 'Final Optimise payment received: final month running, Stripe set to close on the Optimise End Date',
 };
 
 function Row({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -122,13 +123,13 @@ export function ClientTimelineCard({ leadId, ended = false }: { leadId: string; 
         <p className="text-sm font-semibold">{v.serviceEnded
           ? `Service ended ${ukDayWords(mt.serviceEndDay)}`
           : mt.planComplete
-            ? `Payment plan complete · final month of work until ${ukDayWords(mt.serviceEndDay)}`
+            ? `Payment plan complete · final month of service until ${ukDayWords(mt.serviceEndDay)}`
             : `Fixed term · ${mt.recurringNeeded + 1} payments in total, then one final month of work`}</p>
         <p className="text-xs text-muted-foreground">{v.serviceEnded
           ? `All ${mt.recurringNeeded + 1} payments were collected and the final month of work has finished. The agreement has ended; nothing more is charged.`
           : mt.planComplete
             ? `All ${mt.recurringNeeded + 1} payments have been collected${mt.finalPaymentDay ? ` (the last on ${ukDayWords(mt.finalPaymentDay)})` : ''}. Keep doing the included monthly work until the Optimise End Date; the service then ends automatically. Nothing more is charged.`
-            : `No Continuing Service on this agreement. The last payment is the ${mt.recurringNeeded + 1}th${mt.serviceEndDay ? ` (expected ${ukDayWords(mt.finalPaymentDay)})` : ''}; it covers one final month of work${mt.serviceEndDay ? `, to about ${ukDayWords(mt.serviceEndDay)}` : ''}, and then the service ends. Nothing to ask the client.`}</p>
+            : `No Continuing Service on this agreement. The ${mt.recurringNeeded + 1}th payment is the last; once it has actually gone through, it covers one final month of work and the service then ends automatically. The final-month date appears only after that payment succeeds. Nothing to ask the client.`}</p>
       </div>}
 
       {mt.continuingApplies && <div className="space-y-1.5 rounded-lg border p-3" data-testid="continuing-service">

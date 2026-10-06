@@ -176,7 +176,7 @@ async function main() {
     ok(addMonthsClamped('2027-01-31', 1) === '2027-02-28' && minimumTerm({ ...sixth, recurringPaidAt: ['2026-12-31','2027-01-31','2027-02-28','2027-03-31','2027-08-31'].map((d) => d + 'T10:00:00Z') }).serviceEndDay === '2027-09-30', 'month-end handling: 31 Aug → 30 Sep (the payment-date rule, clause 3.1)');
     ok(minimumTerm(facts(COMMERCIAL_TERMS_V4, 'build', 11)).serviceEndDay === null && minimumTerm(facts(COMMERCIAL_TERMS_V3, 'optimise', 5)).serviceEndDay === null, 'only v4 Optimise has an Optimise End Date (Build and v3 continue)');
     ok(subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, commercial_terms: COMMERCIAL_TERMS_V4, service_route: 'optimise' }) && !subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, commercial_terms: COMMERCIAL_TERMS_V4, service_route: 'build' }) && !subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, service_route: 'optimise' }), 'a fixed-term subscription is v4 Optimise only');
-    ok(/Payment plan complete · final month of work until/.test(card) && /Service ended/.test(card) && /v\.serviceEnded/.test(card), 'the Paid Client card shows the final month, then "Service ended"');
+    ok(/Payment plan complete · final month of service until/.test(card) && /Service ended/.test(card) && /v\.serviceEnded/.test(card), 'the Paid Client card shows the final month, then "Service ended"');
   }
 
   console.log('── 8. BILLING AND CLIENT-FACING WORDS ──');

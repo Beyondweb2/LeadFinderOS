@@ -26,7 +26,7 @@ import { createTemplateSnapshot } from "../../../src/lib/whatsappTemplateSnapsho
 import { leadForPayment, recordLedger, stripeIdOf } from "../_shared/payment-ledger.ts";
 import { quickCloseHandoffLines } from "../../../src/lib/quickClose.ts";
 import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
-import { appendTermsEvent } from "../_shared/client-terms.ts";
+import { appendTermsEvent, finaliseFixedTerm } from "../_shared/client-terms.ts";
 import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
 import { isOptionBTerms, OPTION_B_TIMING, subscriptionContinuesAfterTerm, subscriptionIsFixedTerm } from "../../../src/lib/clientTimeline.ts";
@@ -1674,6 +1674,19 @@ Deno.serve(async (req) => {
            on it is 0 — commission.ts reads the client's end), never reactivated, and Paul is told. */
         const paidMinorAfter = Number((inv as { amount_paid?: number }).amount_paid ?? 0);
         if (wrote === "closed" && paidMinorAfter > 0) await alertPaymentAfterClose(leadId, String(inv.id ?? subId), paidMinorAfter / 100);
+        /* 🔴 v4 OPTIMISE, THE SIXTH PAYMENT (Paul, 2026-10-06): when the ledger now holds the sixth successful payment,
+           Stripe is set so nothing more can be charged (pause_collection void) and closes on the ACTUAL Optimise End
+           Date (one month after this payment's paid_at), read back, and the client is told once. Skips everyone else
+           without a Stripe call. ⛔ A failure THROWS: the handler answers 500 and Stripe retries this event — the
+           ledger, the status write and the finalise itself are all idempotent. */
+        if (wrote !== "closed" && paidMinorAfter > 0) {
+          const fin = await finaliseFixedTerm(service, leadId);
+          if (fin.kind === "failed") {
+            await recordPaymentFailure("fixed_term_finalise_failed", { lead_id: leadId, subscription: subId, invoice: inv.id, reason: fin.reason });
+            throw new Error(`fixed-term final payment not finalised for ${leadId}: ${fin.reason}`);
+          }
+          if (fin.kind === "finalised") console.log(`[stripe-webhook] v4 Optimise ${leadId}: final payment recorded; service ends ${fin.endDay} (Stripe ${fin.stripeWritten ? "set" : "already right"}, emailed ${fin.emailed})`);
+        }
         break;
       }
       case "invoice.payment_failed": {

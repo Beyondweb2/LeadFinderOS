@@ -16,10 +16,11 @@
 // ⛔ THE CONTINUING SERVICE PRICE IS NEVER CHARGED FROM HERE. The minimum term's cancel_at is kept at its end; the Continuing
 //    Service is Paul's manual step until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is turned on.
 import {
-  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
+  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, continuingServiceApplies, isOptionBTerms, minimumTerm, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
   type TimelineFacts,
 } from "../../../src/lib/clientTimeline.ts";
-import { recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { paymentPlanCompleteEmail, recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, totalPaymentsFor, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
+import { qaEmailHold } from "./qa-guard.ts";
 import { minimumTermCancelAt } from "./delayed-subscription.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -34,7 +35,7 @@ export { OPTION_B_TIMING };
 export const TERMS_EVENT_KINDS = [
   "terms_stamped", "access_confirmed", "access_email_sent", "access_email_failed", "guarantee_ceased",
   "payment_start_scheduled", "payment_start_refused", "continuing_prepared", "continuing_reminder_sent",
-  "continuing_will_continue", "continuing_will_cancel", "paid_without_v3_agreement",
+  "continuing_will_continue", "continuing_will_cancel", "paid_without_v3_agreement", "fixed_term_final_payment",
 ] as const;
 export type TermsEventKind = typeof TERMS_EVENT_KINDS[number];
 
@@ -294,3 +295,124 @@ export const todayUk = (nowIso: string = new Date().toISOString()) => ukDay(nowI
 
 /** The automation switches, re-exported so every server path reads the same object. */
 export { CONTINUING_SERVICE_AUTOMATION };
+
+/* ══ v4 OPTIMISE: THE SIXTH PAYMENT, THE FINAL MONTH AND THE END (Paul, 2026-10-06; agreement 9B.1–9B.3) ══════
+   PAYMENT 6 SUCCEEDS → no further charge → the service runs one final month → it ends automatically on the
+   Optimise End Date = one calendar month after the day payment 6 ACTUALLY succeeded (month-end clamped).
+   ⛔ THE AUTHORITATIVE DATE is payment_ledger's occurred_at for the sixth successful payment — Stripe's own
+      status_transitions.paid_at, written by stripe-webhook invoice.paid, unique per invoice. Never the due date,
+      the invoice's creation or the subscription's anchor; nothing typed in a screen feeds it (minimumTerm()).
+   ⛔ PAYMENT 7 IS IMPOSSIBLE, TWICE OVER: Stripe pause_collection = void (every invoice Stripe creates from now on
+      is voided the moment it is created, so it is never attempted), and cancel_at = the Optimise End Date (the
+      subscription closes itself then). A late sixth payment can put the End Date past the next billing boundary;
+      the renewal invoice Stripe generates there is voided, never charged.
+   ⛔ IDEMPOTENT: a stable Idempotency-Key per subscription and end second; a re-run where Stripe already agrees
+      writes nothing; the "plan complete" email is claimed ONCE by a unique index on client_service_events
+      (lead_id) WHERE kind = 'fixed_term_final_payment' — a duplicate webhook can neither double-write nor re-email.
+   ⛔ A FAILED STRIPE WRITE THROWS UPWARD (the webhook answers 500 and Stripe retries the whole event; every step
+      before it is idempotent). Nothing here can charge anyone. */
+export const FIXED_TERM_EVENT = "fixed_term_final_payment" as const;
+
+export interface FixedTermSubscriptionView extends StripeSubscriptionView {
+  pause_collection?: { behavior?: string | null } | null;
+}
+
+export type FixedTermPlan =
+  | { ok: true; endDay: string; finalPaymentDay: string; cancelAtSec: number; write: boolean; idempotencyKey: string | null }
+  | { ok: false; skip: true; reason: string }
+  | { ok: false; skip: false; reason: string };
+
+/** Pure: what Stripe must say once the sixth Optimise payment has succeeded, or why nothing applies. */
+export function planFixedTermEnd(facts: TimelineFacts, leadId: string, sub: FixedTermSubscriptionView | null, nowIso: string): FixedTermPlan {
+  if (!isOptionBTerms(facts.terms) || continuingServiceApplies(facts.terms, facts.route)) return { ok: false, skip: true, reason: "not a fixed-term (v4 Optimise) client" };
+  if (facts.refundedAt || facts.endedAt) return { ok: false, skip: true, reason: "the agreement has ended (refunded or ended)" };
+  const mt = minimumTerm(facts);
+  if (!mt.planComplete || !mt.serviceEndDay || !mt.finalPaymentDay) return { ok: false, skip: true, reason: "the sixth payment has not been collected yet" };
+  const endDay = mt.serviceEndDay;
+  const endSec = Math.floor(Date.parse(ukDayAtHourIso(endDay)) / 1000);
+  const nowSec = Math.floor(Date.parse(nowIso) / 1000);
+  /* No subscription, or one Stripe has already closed: nothing can be charged — nothing to write. */
+  if (!sub || !sub.id || sub.status === "canceled" || sub.status === "incomplete_expired") {
+    return { ok: true, endDay, finalPaymentDay: mt.finalPaymentDay, cancelAtSec: endSec, write: false, idempotencyKey: null };
+  }
+  if ((sub.metadata?.lead_id ?? "") !== leadId) return { ok: false, skip: false, reason: "The stored Stripe subscription does not belong to this client (its lead id differs)." };
+  /* Processed after the End Date (a very late event): close at the next safe moment, never in the past. */
+  const cancelAtSec = Math.max(endSec, nowSec + 60);
+  const write = sub.cancel_at !== cancelAtSec || sub.pause_collection?.behavior !== "void" || sub.metadata?.optimise_end_date !== endDay;
+  return { ok: true, endDay, finalPaymentDay: mt.finalPaymentDay, cancelAtSec, write, idempotencyKey: write ? `findable-fixed-term-end-${sub.id}-${cancelAtSec}` : null };
+}
+
+export type FinaliseOutcome =
+  | { kind: "skipped"; reason: string }
+  | { kind: "finalised"; endDay: string; cancelAtSec: number; emailed: boolean; stripeWritten: boolean }
+  | { kind: "already"; endDay: string; stripeWritten: boolean }
+  | { kind: "failed"; reason: string };
+
+/**
+ * Run on every successful recurring payment (stripe-webhook invoice.paid). For anyone but a v4 Optimise client
+ * whose sixth payment has succeeded it returns "skipped" without touching Stripe.
+ */
+export async function finaliseFixedTerm(service: Service, leadId: string, opts: { fetcher?: FetchLike; secret?: string; nowIso?: string; send?: (to: string, mail: { subject: string; text: string }) => Promise<{ ok: boolean; detail: string }> } = {}): Promise<FinaliseOutcome> {
+  const fetcher = opts.fetcher ?? ((u: string, i?: RequestInit) => fetch(u, i));
+  const secret = opts.secret ?? (Deno.env.get("STRIPE_SECRET_KEY") ?? "");
+  const nowIso = opts.nowIso ?? new Date().toISOString();
+  const loaded = await loadTimelineFacts(service, leadId);
+  if (!loaded) return { kind: "skipped", reason: "no agreement-first terms" };
+  /* Cheap pure check first: no Stripe call for anyone this cannot apply to. */
+  const pre = planFixedTermEnd(loaded.facts, leadId, null, nowIso);
+  if (!pre.ok && pre.skip) return { kind: "skipped", reason: pre.reason };
+  const subId = String(loaded.lead.stripe_subscription_id ?? "").trim();
+  let sub: FixedTermSubscriptionView | null = null;
+  if (subId) {
+    if (!secret) return { kind: "failed", reason: "STRIPE_SECRET_KEY is not set" };
+    const got = await stripeCall(fetcher, secret, "GET", `subscriptions/${encodeURIComponent(subId)}`);
+    if (!got.ok) return { kind: "failed", reason: `Could not read the Stripe subscription: ${got.text.slice(0, 200)}` };
+    sub = got.json as FixedTermSubscriptionView;
+  }
+  const plan = planFixedTermEnd(loaded.facts, leadId, sub, nowIso);
+  if (!plan.ok) return plan.skip ? { kind: "skipped", reason: plan.reason } : { kind: "failed", reason: plan.reason };
+  if (plan.write && sub?.id) {
+    const upd = await stripeCall(fetcher, secret, "POST", `subscriptions/${encodeURIComponent(sub.id)}`, new URLSearchParams({
+      "pause_collection[behavior]": "void",
+      cancel_at: String(plan.cancelAtSec),
+      proration_behavior: "none",
+      "metadata[optimise_end_date]": plan.endDay,
+      "metadata[final_payment_day]": plan.finalPaymentDay,
+      "metadata[fixed_term_cancel_at]": String(plan.cancelAtSec),
+    }), plan.idempotencyKey ?? undefined);
+    if (!upd.ok) return { kind: "failed", reason: `Stripe refused the final-month end: ${upd.text.slice(0, 300)}` };
+    /* ⛔ READ BACK — the only proof that payment 7 cannot be taken. */
+    const back = await stripeCall(fetcher, secret, "GET", `subscriptions/${encodeURIComponent(sub.id)}`);
+    const b = back.json as FixedTermSubscriptionView;
+    if (!back.ok || b.cancel_at !== plan.cancelAtSec || b.pause_collection?.behavior !== "void") {
+      return { kind: "failed", reason: `Stripe did not confirm the final-month end (read back cancel_at ${String(b.cancel_at ?? "none")}, pause ${String(b.pause_collection?.behavior ?? "none")}).` };
+    }
+  }
+  /* ⛔ CLAIM ONCE (unique index): the first delivery records it and emails; every other one stops here. */
+  const { error: claimErr } = await service.from("client_service_events").insert({
+    lead_id: leadId, kind: FIXED_TERM_EVENT, actor_user_id: null,
+    detail: { final_payment_day: plan.finalPaymentDay, end_day: plan.endDay, cancel_at: plan.cancelAtSec, subscription: sub?.id ?? null, stripe_written: plan.write },
+  });
+  if (claimErr) {
+    if (String(claimErr.code) === "23505") return { kind: "already", endDay: plan.endDay, stripeWritten: plan.write };
+    return { kind: "failed", reason: `The final payment could not be recorded: ${claimErr.message}` };
+  }
+  if (plan.write) await service.from("outreach_leads").update({ subscription_renews_at: null }).eq("id", leadId);
+  /* Message 1 of 2: the plan is complete and the final month is running (paymentPlanCompleteEmail). */
+  let emailed = false;
+  const { data: obRows } = await service.from("onboarding_responses").select("contact_email,status,updated_at").eq("lead_id", leadId).order("updated_at", { ascending: false }).limit(5);
+  const to = ((((obRows ?? []) as { contact_email: string | null; status: string | null }[]).find((r) => r.status === "paid")?.contact_email)
+    ?? String(loaded.lead.email ?? "")).trim().toLowerCase();
+  if (to && to.includes("@")) {
+    const held = await qaEmailHold(service, leadId, to);
+    if (!held) {
+      const m = paymentPlanCompleteEmail({ totalPayments: loaded.facts.route ? totalPaymentsFor(loaded.facts.route) : 6, endDayWords: ukDayWords(plan.endDay) });
+      const sent = await (opts.send ?? sendAccessDateEmail)(to, { subject: m.subject, text: m.paragraphs.join("\n\n") });
+      emailed = sent.ok;
+      if (!sent.ok) {
+        try { await service.from("client_error_reports").insert({ error_id: "fixed_term_email_failed", context: { lead_id: leadId, to, detail: sent.detail.slice(0, 300) } }); } catch { /* best effort */ }
+      }
+    }
+  }
+  return { kind: "finalised", endDay: plan.endDay, cancelAtSec: plan.cancelAtSec, emailed, stripeWritten: plan.write };
+}

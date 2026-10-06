@@ -449,12 +449,13 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean; siteKind:
 /* 🔴 ROUTE-AWARE (2026-09-29): the count comes from the subscription's own record (its metadata
    total_payments, written when it was created), so a 6-payment Optimise client is never told twelve.
    An unknown count names no number at all. */
-/* 🔴 v4 Optimise (Paul, 2026-10-06): this email fires when Stripe's cancel_at is reached — one month after the
-   sixth payment, i.e. the Optimise End Date (9B.2) — so for that client it says the final month has finished. */
+/* 🔴 v4 Optimise (Paul, 2026-10-06): this email fires when Stripe's cancel_at is reached — moved, when the sixth
+   payment succeeds, to the Optimise End Date (9B.2) — so for that client it says the final month has finished. The
+   OTHER message, sent when the sixth payment succeeds, is paymentPlanCompleteEmail below. */
 export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null; finalMonthEnded?: boolean }): { subject: string; paragraphs: string[] } {
   const route = serviceRouteForTotal(i.totalPayments);
   return {
-    subject: "Your Findable payments are complete",
+    subject: i.finalMonthEnded ? "Your Findable service has now ended" : "Your Findable payments are complete",
     paragraphs: [
       `Hi,`,
       route && i.finalMonthEnded
@@ -465,6 +466,23 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
       ...(i.siteKind === 'findable_built'
         ? [`As set out in our terms, the website build we made for you now transfers to you. Reply to this email and we'll arrange the handover.`]
         : []),
+      `Thank you for being a Findable client. Any questions, just reply to this email.`,
+      `Paul, findable`,
+    ],
+  };
+}
+
+/* 🔴 v4 Optimise, MESSAGE 1 OF 2 (Paul, 2026-10-06): sent once, when the sixth (final) payment ACTUALLY succeeds
+   (_shared/client-terms.ts finaliseFixedTerm). It says the plan is complete and the final month is NOW running,
+   with its real end date — never that the final month has finished (that is termCompleteEmail, at the end). */
+export function paymentPlanCompleteEmail(i: { totalPayments: number; endDayWords: string }): { subject: string; paragraphs: string[] } {
+  return {
+    subject: "Your Findable payments are complete",
+    paragraphs: [
+      `Hi,`,
+      `Your ${i.totalPayments}th and final payment has gone through, so your payment plan is complete and nothing more will be charged.`,
+      `As agreed, we carry on your monthly work for one final month, until ${i.endDayWords}. Your service then ends automatically, and there is nothing you need to do.`,
+      `The work we have done for you is now yours, and your website was always yours.`,
       `Thank you for being a Findable client. Any questions, just reply to this email.`,
       `Paul, findable`,
     ],

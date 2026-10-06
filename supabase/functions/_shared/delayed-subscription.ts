@@ -130,6 +130,11 @@ export function subscriptionEndedByTerm(
   if (typeof s.cancel_at !== "number" || typeof s.trial_end !== "number" || typeof s.ended_at !== "number") return false;
   const total = subscriptionTotalPayments(s);
   if (!total) return false;
+  /* v4 Optimise (2026-10-06): when the sixth payment succeeded late, finaliseFixedTerm moved cancel_at to the
+     ACTUAL Optimise End Date and wrote that exact second to metadata[fixed_term_cancel_at] — still our date. */
+  const m = (s.metadata && typeof s.metadata === "object" ? s.metadata : {}) as Record<string, unknown>;
+  const moved = Number(m.fixed_term_cancel_at);
+  if (Number.isInteger(moved) && moved > 0 && s.cancel_at === moved) return s.ended_at >= s.cancel_at - 60;
   return s.cancel_at === minimumTermCancelAt(s.trial_end, total - 1) && s.ended_at >= s.cancel_at - 60;
 }
 

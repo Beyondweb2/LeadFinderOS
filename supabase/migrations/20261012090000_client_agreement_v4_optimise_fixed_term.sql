@@ -47,6 +47,20 @@ alter table public.client_agreement_acceptances
     and (agreement_version <> 'v4' or commercial_terms = 'csa_v4_option_b')
   );
 
+-- ── 5. The sixth Optimise payment, recorded ONCE (Paul, 2026-10-06; clause 9B.2) ───────────────────────
+-- finaliseFixedTerm (_shared/client-terms.ts) claims this event before it emails the client that the plan is
+-- complete and the final month is running; the unique index makes a duplicate webhook a no-op.
+alter table public.client_service_events
+  drop constraint if exists client_service_events_kind_check;
+alter table public.client_service_events
+  add constraint client_service_events_kind_check check (kind in (
+    'terms_stamped', 'access_confirmed', 'access_email_sent', 'access_email_failed', 'guarantee_ceased',
+    'payment_start_scheduled', 'payment_start_refused', 'continuing_prepared', 'continuing_reminder_sent',
+    'continuing_will_continue', 'continuing_will_cancel', 'paid_without_v3_agreement', 'fixed_term_final_payment'
+  ));
+create unique index if not exists client_service_events_one_fixed_term_final
+  on public.client_service_events (lead_id) where kind = 'fixed_term_final_payment';
+
 -- The one-signature-per-sign-up index (onboarding_id, agreement_version) already covers v4: a sign-up can
 -- hold at most one v4 signature. client_agreement_versions gets its 'v4' row from the first v4 acceptance
 -- (ensureAgreementVersion), exactly as v3 would have.
@@ -56,4 +70,6 @@ alter table public.client_agreement_acceptances
 --     → CHECK ((commercial_terms = ANY (ARRAY['csa_v3_option_b'::text, 'csa_v4_option_b'::text])))
 --   select conname from pg_constraint where conname in ('v4_optimise_has_no_continuing_service', 'v4_acceptance_is_complete', 'agreement_first_terms_match_version');
 --     → 3 rows
+--   select pg_get_constraintdef(oid) from pg_constraint where conname = 'client_service_events_kind_check';   -- includes fixed_term_final_payment
+--   select indexname from pg_indexes where indexname = 'client_service_events_one_fixed_term_final';           -- 1 row
 --   select agreement_version, count(*) from public.client_agreement_acceptances group by 1;   -- unchanged (v1: 8)
