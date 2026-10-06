@@ -143,7 +143,7 @@ function offerHtml(route: AgreementRoute): string {
   const n = totalPaymentsFor(route);
   const after = continuingServiceAfterTerm(route)
     ? `then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice.`
-    : 'then the payments stop and nothing more is charged.';
+    : `then nothing more is charged: the ${n}th payment is the last, it covers one final month of work, and then the service ends.`;
   return `<div class="offer"><b>Your offer: ${esc(SERVICE_ROUTE_NAME[route])}</b><br/>
     £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${esc(MONTHLY_START_V3_WORDS)}.
     ${n} payments in total (the minimum term), ${after}</div>`;

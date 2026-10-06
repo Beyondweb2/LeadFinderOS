@@ -497,7 +497,7 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
 export function afterTermKeyPoint(route: 'build' | 'optimise' | null | undefined, afterTerm: 'continues' | 'stops' | null | undefined): string | null {
   if (!route || !afterTerm) return null;
   const n = totalPaymentsFor(route);
-  if (afterTerm === 'stops') return `After your ${n}th payment the payments stop. Nothing more is charged.`;
+  if (afterTerm === 'stops') return `Your ${n}th payment is the last. Nothing more is charged: we carry on the monthly work for one final month after it, and then the service ends.`;
   return route === 'build'
     ? `After your ${n}th payment the website is yours, and hosting and monitoring continue at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days’ notice.`
     : `After your ${n}th payment your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days’ notice.`;

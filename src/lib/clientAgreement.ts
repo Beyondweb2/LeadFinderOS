@@ -414,20 +414,29 @@ type V4Amendment =
   | { op: 'replaceHeading'; from: string; to: string }
   | { op: 'insertAfter'; num: string; blocks: AgreementBlock[] };
 
+/* 🔴 Paul's review (2026-10-06): the sixth Optimise payment is the LAST charge, but it pays for one final
+   month of the included monthly work; the agreement then ends automatically on the Optimise End Date (9B.2).
+   Ownership of Our Work still passes on the sixth payment (9B.3). The inherited v3 wording that said "the
+   website" passes to an Optimise client is corrected (4.3, 5.5), and Schedule 1's Build hosting reference
+   now names clause 9.2 for the minimum term. */
 export const V4_AMENDMENTS: readonly V4Amendment[] = [
+  { op: 'replace', num: '2.6', block: { kind: 'clause', num: '2.6', lead: 'Monthly work.', text: 'Each month during your minimum term (and, for Findable Optimise, until the Optimise End Date in clause 9B.2), we will review your AI visibility data and make the updates we judge most useful for that month, such as adding new pages, updating existing pages, improving your listings or making technical fixes. The amount and type of work will vary from month to month, depending on what the data shows. We will send you a short monthly update on what we have done.' } },
   { op: 'replace', num: '3.1', block: { kind: 'clause', num: '3.1', text: 'You pay a £99 initial payment, then £99 a month until the total number of payments for your service has been made (12 for Build, 6 for Optimise, counting the initial payment). Your first monthly payment is taken on the Payment Start Date (clause 5.6). Each later monthly payment is taken on the same date each month as your first monthly payment, or on the last day of the month if that date does not exist in that month. After that, clause 9A applies to Findable Build and clause 9B applies to Findable Optimise.' } },
   { op: 'replace', num: '3.2', block: { kind: 'clause', num: '3.2', text: 'You authorise us to take, through our payment provider (currently Stripe), the initial payment, each monthly payment on its due date and, for Findable Build after your minimum term, the Continuing Service payments in clause 9A until you cancel. You agree to keep a valid payment method in place while payments are due. Except under the guarantee in clause 5, or where the law requires, payments are non-refundable.' } },
-  { op: 'replace', num: '9.3', block: { kind: 'clause', num: '9.3', text: 'When your minimum term ends, a Findable Build service continues as the Continuing Service under clause 9A, unless you cancel. A Findable Optimise service ends under clause 9B.' } },
+  { op: 'replace', num: '4.3', block: { kind: 'clause', num: '4.3', text: 'Ownership of Our Work only passes to you once every payment for your minimum term has been made (clause 8). For Findable Build, Our Work includes the website we built for you. For Findable Optimise, your existing website was always yours (clause 9.4), and only Our Work passes to you. If this agreement ends early for any reason other than a guarantee refund under clause 5, and all remaining payments for your minimum term are then paid, ownership passes to you under clause 8.4 when we receive that final payment.' } },
+  { op: 'replace', num: '5.5', block: { kind: 'clause', num: '5.5', text: 'If you make a valid claim, we will refund your £99 initial payment to the card you paid with. This agreement then ends straight away and no further payments are owed. Because the agreement ends before your final payment, Our Work does not pass to you (clause 8.6): for Findable Build, that includes the website we built; for Findable Optimise, your existing website was always yours and stays yours, and only the pages and content we added are affected.' } },
+  { op: 'replace', num: '9.3', block: { kind: 'clause', num: '9.3', text: 'When your minimum term ends, a Findable Build service continues as the Continuing Service under clause 9A, unless you cancel. A Findable Optimise service continues for one final month after your sixth payment and then ends under clause 9B.' } },
   { op: 'replaceHeading', from: '9A. CONTINUING SERVICE AFTER THE MINIMUM TERM', to: '9A. CONTINUING SERVICE AFTER THE MINIMUM TERM (FINDABLE BUILD ONLY)' },
   { op: 'replace', num: '9A.1', block: { kind: 'clause', num: '9A.1', text: 'When the minimum term of a Findable Build service ends, your service continues on a rolling monthly basis (the "Continuing Service") at £29.99 a month, taken on the same date as your previous monthly payments, until you cancel.' } },
   { op: 'replace', num: '9A.2', block: { kind: 'clause', num: '9A.2', text: 'The Continuing Service includes hosting your website, ongoing AI visibility monitoring and reasonable updates to keep your website clear and current for AI tools. It does not include substantial new work, which we can quote for separately.' } },
   { op: 'replace', num: '9A.4', block: { kind: 'clause', num: '9A.4', text: 'If you cancel the Continuing Service, we will give you your website files and help you move the website to your own hosting. We will keep your website live on our hosting for 30 days after the Continuing Service ends, so you have time to move it. After that, we may take it down.' } },
   { op: 'insertAfter', num: '9A.5', blocks: [
     { kind: 'heading', text: '9B. FINDABLE OPTIMISE: THE END OF THE MINIMUM TERM' },
-    { kind: 'clause', num: '9B.1', text: 'Findable Optimise is a fixed term. When we receive your sixth payment (the final payment for your minimum term), your payment plan is complete and we will not take any further payment. There is no Continuing Service for Findable Optimise, and we will not start any new charge without your separate written agreement.' },
-    { kind: 'clause', num: '9B.2', text: 'Our monthly work under clause 2.6 ends with your minimum term. Your website was always yours (clause 9.4), and our work passes to you under clause 8.4 when we receive your final payment.' },
+    { kind: 'clause', num: '9B.1', text: 'Findable Optimise is a fixed term of 6 payments. Your sixth payment is the final payment: we will not take any further payment, there is no Continuing Service for Findable Optimise, and we will not start any new charge without your separate written agreement.' },
+    { kind: 'clause', num: '9B.2', text: 'Your sixth payment also covers one final month of service. We continue the monthly work in clause 2.6 until the date one month after your sixth payment is taken, or the last day of that month if that date does not exist in it (the "Optimise End Date"). On the Optimise End Date this agreement ends automatically, with nothing further to pay.' },
+    { kind: 'clause', num: '9B.3', text: 'Your existing website was always yours (clause 9.4). Our Work passes to you under clause 8.4 when we receive your sixth payment; this does not wait for the Optimise End Date.' },
   ] },
-  { op: 'replace', num: '15.1', block: { kind: 'clause', num: '15.1', text: 'For Findable Build, this agreement continues after your minimum term under clause 9A until it is cancelled. For Findable Optimise, it ends when every payment for your minimum term has been made (clause 9B). Either may end earlier under clauses 4, 5 or this clause 15.' } },
+  { op: 'replace', num: '15.1', block: { kind: 'clause', num: '15.1', text: 'For Findable Build, this agreement continues after your minimum term under clause 9A until it is cancelled. For Findable Optimise, it ends automatically on the Optimise End Date (clause 9B.2). Either may end earlier under clauses 4, 5 or this clause 15.' } },
 ];
 
 function applyV4Amendments(body: readonly AgreementBlock[]): AgreementBlock[] {
@@ -454,22 +463,26 @@ const V4: AgreementVersion = {
   version: 'v4',
   services: {
     build: V3.services.build,
-    optimise: { name: 'Findable Optimise', description: 'We improve your existing website. £99 initial payment, then £99 a month. 6 payments in total (1 initial + 5 monthly). Then the payments stop: nothing further is charged (clause 9B).' },
+    optimise: { name: 'Findable Optimise', description: 'We improve your existing website. £99 initial payment, then £99 a month. 6 payments in total (1 initial + 5 monthly). Your sixth payment is the last: nothing further is charged. We carry on the monthly work for one final month after it, then the service ends (clause 9B).' },
   },
   keyPoints: {
     title: V3.keyPoints!.title,
     points: [
-      V3.keyPoints!.points[0],
+      'Minimum term: 12 payments (Build) or 6 payments (Optimise). If you end early, the remaining payments are still due (clause 4). Monthly payments normally start the day after your refund window closes (clause 5.6).',
       V3.keyPoints!.points[1],
-      'After the minimum term: Findable Build continues at £29.99 a month for hosting and monitoring until you cancel with 30 days\' notice (clause 9A); Findable Optimise ends with your sixth payment and nothing further is charged (clause 9B). We own the website and our work until you have paid in full (clause 8).',
+      'After the minimum term: Findable Build continues at £29.99 a month for hosting and monitoring until you cancel with 30 days\' notice (clause 9A). Findable Optimise: your sixth payment is the last; we carry on the monthly work for one final month, then the service ends with nothing further to pay (clause 9B). We own our work (and, for Findable Build, the website we build) until you have paid in full (clause 8).',
     ],
   },
   body: applyV4Amendments(V3.body),
   schedule: {
     ...V3.schedule,
     rows: [
-      ...V3.schedule.rows,
-      ['After the minimum term', '£29.99 a month for hosting, monitoring and reasonable updates, until you cancel (clause 9A)', 'Nothing further to pay: the payment plan is complete (clause 9B)'],
+      ...V3.schedule.rows.map((r): [string, string, string] => {
+        if (r[0] === 'Hosting') return ['Hosting', 'Included during the minimum term (clause 9.2), and in the Continuing Service after it (clause 9A)', r[2]];
+        if (r[0] === 'Ongoing monthly work') return [r[0], r[1], 'Monthly review and updates (clause 2.6), including one final month after your sixth payment (clause 9B)'];
+        return r;
+      }),
+      ['After the minimum term', '£29.99 a month for hosting, monitoring and reasonable updates, until you cancel (clause 9A)', 'Nothing further to pay: your sixth payment is the last, we carry on the monthly work for one final month, then the service ends (clause 9B)'],
     ],
   },
 };

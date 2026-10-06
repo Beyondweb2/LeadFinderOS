@@ -29,7 +29,7 @@ import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 import { appendTermsEvent } from "../_shared/client-terms.ts";
 import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
-import { isOptionBTerms, OPTION_B_TIMING, subscriptionContinuesAfterTerm } from "../../../src/lib/clientTimeline.ts";
+import { isOptionBTerms, OPTION_B_TIMING, subscriptionContinuesAfterTerm, subscriptionIsFixedTerm } from "../../../src/lib/clientTimeline.ts";
 import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
 import { loadQaPaymentFacts, qaSendHold } from "../_shared/qa-guard.ts";
 
@@ -1734,7 +1734,7 @@ Deno.serve(async (req) => {
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
           /* The count this client is told is the one this subscription was created for (its metadata). */
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: subscriptionContinuesAfterTerm((sub as { metadata?: Record<string, unknown> }).metadata) });
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: subscriptionContinuesAfterTerm((sub as { metadata?: Record<string, unknown> }).metadata), fixedTermFinalMonth: subscriptionIsFixedTerm((sub as { metadata?: Record<string, unknown> }).metadata) });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1851,7 +1851,7 @@ Deno.serve(async (req) => {
             await emailClientForLead(
               leadId,
               termComplete ? "term_complete" : "monthly_ended",
-              termComplete ? termCompleteEmail({ siteKind, totalPayments: termTotal }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
+              termComplete ? termCompleteEmail({ siteKind, totalPayments: termTotal, finalMonthEnded: subscriptionIsFixedTerm((sub as { metadata?: Record<string, unknown> }).metadata) }) : subscriptionEndedEmail({ becauseOfPayment, siteKind }),
               {
                 subscription: sub.id,
                 cancellation_reason: reason || "(none given)",

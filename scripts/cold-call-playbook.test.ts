@@ -308,7 +308,7 @@ console.log('── 12. SIMPLIFIED PLAYBOOK (Paul, 2026-09-27) ──');
 
   // "What happens after?" is the v4 rule: Optimise stops, Build continues at £29.99 for hosting.
   const after = p.objections.find((o) => o.objection === 'What happens after?')?.answer ?? '';
-  ok(/On Optimise, nothing — after the 6th £99 payment the payments stop\./.test(after) && /On Build, it's £29\.99 a month after that for hosting and monitoring, until you cancel\./.test(after),
+  ok(/On Optimise, nothing more to pay — the 6th £99 payment is the last, we do one final month of work, then it finishes\./.test(after) && /On Build, it's £29\.99 a month after that for hosting and monitoring, until you cancel\./.test(after),
     '"What happens after?": Optimise stops after the 6th payment; Build continues at £29.99 for hosting (v4)');
 
   // The panel: the new hierarchy, the old A–H headings gone.

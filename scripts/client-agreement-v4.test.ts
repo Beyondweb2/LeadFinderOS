@@ -26,13 +26,15 @@ import { checkoutAgreementGate, webhookV3Verdict, type GateAcceptance } from '..
 import { agreementPageHtml } from '../src/lib/agreementPageHtml.ts';
 import { afterTermKeyPoint } from '../src/lib/welcomePackHtml.ts';
 import { resultsEmailParagraphs } from '../src/lib/remeasureResults.ts';
+import { addMonthsClamped, serviceEndedOn, subscriptionIsFixedTerm, ukDayAtHourIso } from '../src/lib/clientTimeline.ts';
+import { minimumTermCancelAt } from '../supabase/functions/_shared/delayed-subscription.ts';
 
 let f = 0;
 const ok = (cond: unknown, msg: string) => { if (cond) console.log('  PASS ' + msg); else { f++; console.log('  FAIL ' + msg); } };
 const read = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 
 /** The v4 template's fingerprint. A changed word is a NEW version (v5), never an edit of v4. */
-const V4_TEMPLATE_SHA = '2d81cebd76727238153884042d8dc2f2d0a2184ec790c3a003263629ce894eab';
+const V4_TEMPLATE_SHA = 'bc0061eae2d95128cfd41dba3a3dea245ea123ce02a0679324c71670fbf22423';
 const V3_TEMPLATE_SHA = '3e1edf3b7ee6ca38704dbfb3dc4fdce67c1c73863b62c689510d304b3c2e6bc2';
 
 async function main() {
@@ -48,24 +50,39 @@ async function main() {
   console.log('── 2. v4 = v3 + THE LISTED AMENDMENTS, NOTHING ELSE ──');
   const v3 = agreementVersion('v3'); const v4 = agreementVersion('v4');
   const replaced = V4_AMENDMENTS.filter((a) => a.op === 'replace').map((a) => (a as { num: string }).num);
-  ok(replaced.join() === '3.1,3.2,9.3,9A.1,9A.2,9A.4,15.1', 'replaced clauses: 3.1, 3.2, 9.3, 9A.1, 9A.2, 9A.4, 15.1');
+  ok(replaced.join() === '2.6,3.1,3.2,4.3,5.5,9.3,9A.1,9A.2,9A.4,15.1', 'replaced clauses: 2.6, 3.1, 3.2, 4.3, 5.5, 9.3, 9A.1, 9A.2, 9A.4, 15.1 (Paul\'s review added 2.6, 4.3, 5.5)');
   const v4Text = new Set(v4.body.map(blockText));
   const untouched = v3.body.filter((b) => !(b.kind === 'clause' && replaced.includes(b.num)) && !(b.kind === 'heading' && b.text.startsWith('9A.')));
   ok(untouched.every((b) => v4Text.has(blockText(b))), 'every other v3 block is in v4 word for word (' + untouched.length + ')');
-  ok(v4.body.length === v3.body.length + 3, 'v4 adds exactly three blocks (the 9B heading, 9B.1, 9B.2)');
+  ok(v4.body.length === v3.body.length + 4, 'v4 adds exactly four blocks (the 9B heading, 9B.1, 9B.2, 9B.3)');
   ok(v4.body.findIndex((b) => b.kind === 'clause' && b.num === '9B.1') === v4.body.findIndex((b) => b.kind === 'clause' && b.num === '9A.5') + 2, '9B follows 9A.5');
   ok(v4.intro === v3.intro && v4.services.build.description === v3.services.build.description && JSON.stringify(v4.findableDetails) === JSON.stringify(v3.findableDetails), 'intro, Build service box and Findable details unchanged');
-  ok(v4.schedule.rows.length === v3.schedule.rows.length + 1 && JSON.stringify(v4.schedule.rows.slice(0, -1)) === JSON.stringify(v3.schedule.rows), 'Schedule 1 keeps every v3 row and adds one');
+  const changedRows = ['Hosting', 'Ongoing monthly work'];
+  ok(v4.schedule.rows.length === v3.schedule.rows.length + 1 && v3.schedule.rows.every((r, i) => changedRows.includes(r[0]) || JSON.stringify(v4.schedule.rows[i]) === JSON.stringify(r)), 'Schedule 1: every v3 row kept except Hosting and Ongoing monthly work, plus one new row');
 
   console.log('── 3. THE v4 WORDS ──');
   const all = renderAgreementText({ businessName: 'Acme', route: 'optimise' }, 'v4');
-  ok(/6 payments in total \(1 initial \+ 5 monthly\)\. Then the payments stop: nothing further is charged \(clause 9B\)\./.test(v4.services.optimise.description) && !/29\.99/.test(v4.services.optimise.description), 'Optimise box: 6 payments, then the payments stop — no £29.99');
+  ok(v4.services.optimise.description === 'We improve your existing website. £99 initial payment, then £99 a month. 6 payments in total (1 initial + 5 monthly). Your sixth payment is the last: nothing further is charged. We carry on the monthly work for one final month after it, then the service ends (clause 9B).', 'Optimise box: 6 payments, the sixth is the last, one final month of work, then the service ends — no £29.99');
   ok(/12 payments in total \(1 initial \+ 11 monthly\)\. Then £29\.99 a month for hosting and monitoring/.test(v4.services.build.description), 'Build box: 12 payments, then £29.99 for hosting and monitoring');
-  ok(/Findable Build continues at £29\.99 a month .*Findable Optimise ends with your sixth payment and nothing further is charged \(clause 9B\)/.test(v4.keyPoints!.points[2]), 'key point: Build continues, Optimise ends');
+  ok(/Findable Build continues at £29\.99 a month .*Findable Optimise: your sixth payment is the last; we carry on the monthly work for one final month, then the service ends with nothing further to pay \(clause 9B\)\. We own our work \(and, for Findable Build, the website we build\)/.test(v4.keyPoints!.points[2]), 'key point 3: Build continues; Optimise has one final month then ends; only Build\'s website is ours until paid');
+  ok(v4.keyPoints!.points[0].endsWith('Monthly payments normally start the day after your refund window closes (clause 5.6).'), 'key point 1: monthly payments NORMALLY start the day after the refund window (5.6 stays authoritative)');
   ok(/^9A\. CONTINUING SERVICE AFTER THE MINIMUM TERM \(FINDABLE BUILD ONLY\)$/m.test(all) && /^9A\.1 When the minimum term of a Findable Build service ends/m.test(all), '9A is Findable Build only');
-  ok(/^9B\.1 Findable Optimise is a fixed term\. When we receive your sixth payment .*we will not take any further payment\. There is no Continuing Service for Findable Optimise/m.test(all), '9B.1: the fixed term, no further payment, no Continuing Service');
+  ok(/^9B\.1 Findable Optimise is a fixed term of 6 payments\. Your sixth payment is the final payment: we will not take any further payment, there is no Continuing Service for Findable Optimise, and we will not start any new charge without your separate written agreement\.$/m.test(all), '9B.1: six payments, the sixth is the final payment, no Continuing Service, no new charge');
   ok(!/^9A\.1 When your minimum term ends, your service continues/m.test(all) && !/for Findable Optimise, ongoing AI visibility monitoring and reasonable updates to your website/.test(all), 'v3\'s "both continue" words are not in v4');
-  ok(/^After the minimum term \| £29\.99 a month .* \| Nothing further to pay: the payment plan is complete \(clause 9B\)$/m.test(all), 'Schedule 1: what happens after the minimum term, per service');
+  ok(/^After the minimum term \| £29\.99 a month .* \| Nothing further to pay: your sixth payment is the last, we carry on the monthly work for one final month, then the service ends \(clause 9B\)$/m.test(all), 'Schedule 1: what happens after the minimum term, per service');
+
+  console.log('── 3b. PAUL\'S REVIEW: THE FINAL OPTIMISE MONTH, OWNERSHIP, INHERITED WORDING ──');
+  ok(/^9B\.2 Your sixth payment also covers one final month of service\. We continue the monthly work in clause 2\.6 until the date one month after your sixth payment is taken, or the last day of that month if that date does not exist in it \(the "Optimise End Date"\)\. On the Optimise End Date this agreement ends automatically, with nothing further to pay\.$/m.test(all), '9B.2: the sixth payment covers one final month; the Optimise End Date is one month later (month-end clamped); the agreement then ends automatically');
+  ok(/^2\.6 Monthly work\. Each month during your minimum term \(and, for Findable Optimise, until the Optimise End Date in clause 9B\.2\), we will review/m.test(all), '2.6: the monthly work is owed through the final Optimise month');
+  ok(/^9B\.3 Your existing website was always yours \(clause 9\.4\)\. Our Work passes to you under clause 8\.4 when we receive your sixth payment; this does not wait for the Optimise End Date\.$/m.test(all), '9B.3: ownership of Our Work passes on the SIXTH payment, not at the end of the final month');
+  ok(/^15\.1 For Findable Build, .* For Findable Optimise, it ends automatically on the Optimise End Date \(clause 9B\.2\)\./m.test(all) && /^9\.3 .*A Findable Optimise service continues for one final month after your sixth payment and then ends under clause 9B\.$/m.test(all), '15.1 and 9.3: Optimise ends automatically on the Optimise End Date');
+  ok(/^4\.3 Ownership of Our Work only passes to you .* For Findable Build, Our Work includes the website we built for you\. For Findable Optimise, your existing website was always yours \(clause 9\.4\), and only Our Work passes to you\./m.test(all), '4.3: Build — Our Work includes the website we built; Optimise — only Our Work passes');
+  ok(/^5\.5 .*Our Work does not pass to you \(clause 8\.6\): for Findable Build, that includes the website we built; for Findable Optimise, your existing website was always yours and stays yours, and only the pages and content we added are affected\.$/m.test(all), '5.5: a guarantee refund never implies Findable owns an Optimise client\'s existing website');
+  const optimiseOnly = [all.match(/^4\.3 .*$/m)![0], all.match(/^5\.5 .*$/m)![0], ...all.split('\n').filter((l) => /^9B/.test(l))].join('\n');
+  ok(!/the website (and our work )?(only )?passes? to you|website and our work do not pass/i.test(optimiseOnly), 'no Optimise clause says the client\'s website passes to them from Findable');
+  ok(/^Hosting \| Included during the minimum term \(clause 9\.2\), and in the Continuing Service after it \(clause 9A\) \| Not included \(your own hosting\)$/m.test(all), 'Schedule 1 Build hosting cites clause 9.2 for the minimum term and 9A after it');
+  ok(/^Ongoing monthly work \| Monthly review and updates \(clause 2\.6\) \| Monthly review and updates \(clause 2\.6\), including one final month after your sixth payment \(clause 9B\)$/m.test(all), 'Schedule 1 Optimise monthly work includes the final month');
+  ok(!/seventh|7th payment|7 payments/i.test(all) && !/Optimise[^\n]*£29\.99/.test(all.replace(/^(After the minimum term|- After the minimum term).*$/gm, '')), 'no seventh payment and no Optimise £29.99 anywhere in v4');
   ok(/^5\.6 Payment Start Date\. Your first monthly payment is taken on the day after your Refund Window ends/m.test(all) && /^5\.8 The guarantee does not apply if: \(a\) you have not given us the access/m.test(all), 'the v3 timing (5.6) and the no-access fallback (5.8) are kept, separately');
 
   console.log('── 4. HISTORICAL SIGNATURES STILL VALIDATE AGAINST THEIR OWN TEXT ──');
@@ -136,21 +153,48 @@ async function main() {
   ok(/not \(commercial_terms = 'csa_v4_option_b' and service_route = 'optimise'\)\s*or \(continuing_prepared_at is null and continuing_reminder_sent_at is null and continuing_decision is null\)/.test(mig), 'migration: the database itself refuses a Continuing Service state on v4 Optimise');
   ok(/v4_acceptance_is_complete/.test(mig) && /agreement_first_terms_match_version/.test(mig) && !/\b(drop table|delete from|truncate|update public)\b/i.test(mig.replace(/--[^\n]*/g, '')), 'migration: a v4 signature is as complete as v3 and names its own terms; additive only');
 
+  console.log('── 7b. THE FINAL OPTIMISE MONTH: BILLING MATCHES THE CONTRACT ──');
+  {
+    /* Payment Start Date 22 Dec 2026 → monthly payments 22 Dec, 22 Jan, 22 Feb, 22 Mar, 22 Apr = payments 2–6. */
+    const startDay = '2026-12-22';
+    const trialEndSec = Math.floor(Date.parse(ukDayAtHourIso(startDay)) / 1000);
+    const recurring = recurringPaymentsFor('optimise');
+    const cancelAt = minimumTermCancelAt(trialEndSec, recurring);
+    /* Stripe charges at trial_end and on each monthly boundary strictly BEFORE cancel_at (no proration). The
+       boundaries are the same month-clamped arithmetic the subscription uses; list the next 12 and keep those. */
+    const boundaries = Array.from({ length: 12 }, (_, k) => (k === 0 ? trialEndSec : minimumTermCancelAt(trialEndSec, k)));
+    const charges = boundaries.filter((at) => at < cancelAt).map((at) => new Date(at * 1000).toISOString().slice(0, 10));
+    ok(recurring === 5 && charges.length === 5 && charges[4] === '2027-04-22', 'Stripe takes exactly 5 monthly £99 after the sign-up £99 — the sixth payment (22 Apr 2027) is the LAST charge (' + charges.join(', ') + ')');
+    ok(!charges.some((d) => d > '2027-04-22'), 'no seventh £99 payment is ever scheduled');
+    const sixth = facts(COMMERCIAL_TERMS_V4, 'optimise', 5);
+    const mt6 = minimumTerm(sixth);
+    ok(mt6.finalPaymentDay === '2027-04-22' && mt6.planComplete && mt6.serviceEndDay === '2027-05-22', 'after the sixth payment: plan complete; Optimise End Date = one month later (22 May 2027)');
+    ok(new Date(cancelAt * 1000).toISOString().slice(0, 10) === mt6.serviceEndDay, 'Stripe\'s own end (cancel_at) is the Optimise End Date — the subscription closes itself then, with no charge');
+    ok(!serviceEndedOn(sixth, '2027-04-23T09:00:00Z') && !serviceEndedOn(sixth, '2027-05-21T21:00:00Z') && !timelineView(sixth, '2027-05-10T09:00:00Z').serviceEnded, 'the service stays ACTIVE for the final month after payment 6 (monthly work still owed under 2.6)');
+    ok(serviceEndedOn(sixth, '2027-05-22T09:00:00Z') && timelineView(sixth, '2027-06-01T09:00:00Z').serviceEnded && timelineActions(sixth, '2027-06-01T09:00:00Z').length === 0, 'on the Optimise End Date the service ends automatically; nothing is asked of Paul after it');
+    ok(!serviceEndedOn(facts(COMMERCIAL_TERMS_V4, 'optimise', 4), '2027-12-01T09:00:00Z'), 'an EXPECTED end date never ends a service — only after the sixth payment is actually collected');
+    ok(addMonthsClamped('2027-01-31', 1) === '2027-02-28' && minimumTerm({ ...sixth, recurringPaidAt: ['2026-12-31','2027-01-31','2027-02-28','2027-03-31','2027-08-31'].map((d) => d + 'T10:00:00Z') }).serviceEndDay === '2027-09-30', 'month-end handling: 31 Aug → 30 Sep (the payment-date rule, clause 3.1)');
+    ok(minimumTerm(facts(COMMERCIAL_TERMS_V4, 'build', 11)).serviceEndDay === null && minimumTerm(facts(COMMERCIAL_TERMS_V3, 'optimise', 5)).serviceEndDay === null, 'only v4 Optimise has an Optimise End Date (Build and v3 continue)');
+    ok(subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, commercial_terms: COMMERCIAL_TERMS_V4, service_route: 'optimise' }) && !subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, commercial_terms: COMMERCIAL_TERMS_V4, service_route: 'build' }) && !subscriptionIsFixedTerm({ payment_timing: OPTION_B_TIMING, service_route: 'optimise' }), 'a fixed-term subscription is v4 Optimise only');
+    ok(/Payment plan complete · final month of work until/.test(card) && /Service ended/.test(card) && /v\.serviceEnded/.test(card), 'the Paid Client card shows the final month, then "Service ended"');
+  }
+
   console.log('── 8. BILLING AND CLIENT-FACING WORDS ──');
-  ok(!/29\.99/.test(cardSavedNoticeFor('optimise')) && /After your 6th payment the payments stop and nothing more is charged/.test(cardSavedNoticeFor('optimise')), 'checkout card notice (Optimise): the payments stop');
+  ok(!/29\.99/.test(cardSavedNoticeFor('optimise')) && /Your 6th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends/.test(cardSavedNoticeFor('optimise')), 'checkout card notice (Optimise): the 6th payment is the last; one final month of work; then it ends');
   ok(/continues at £29\.99 a month for hosting and monitoring/.test(cardSavedNoticeFor('build')), 'checkout card notice (Build): £29.99 for hosting and monitoring');
-  ok(/then nothing more$/.test(checkoutLineNameFor('optimise')) && /then £29\.99\/month until cancelled$/.test(checkoutLineNameFor('build')), 'the Stripe line item says the same');
-  ok(/6 payments in total, a 6-month minimum term, then the payments stop and nothing more is charged\.$/.test(offerSummaryFor('optimise')), 'offer summary (Optimise)');
+  ok(/then one final month of work, nothing more charged$/.test(checkoutLineNameFor('optimise')) && /then £29\.99\/month until cancelled$/.test(checkoutLineNameFor('build')), 'the Stripe line item says the same');
+  ok(/6 payments in total, a 6-month minimum term, then the payments stop: the 6th payment is the last, we carry on the monthly work for one final month, and then the service ends\.$/.test(offerSummaryFor('optimise')), 'offer summary (Optimise)');
   ok(afterTermWordsFor('build') === `then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel`, 'after-term words (Build)');
   const signOpt = agreementPageHtml({ mode: 'sign', businessName: 'Acme', route: 'optimise', values: {}, errors: [], signupId: 'OB' });
-  ok(/6 payments in total \(the minimum term\), then the payments stop and nothing more is charged\./.test(signOpt) && /Agreement version v4\./.test(signOpt), 'the sign-up page: Optimise offer says the payments stop, above the v4 text');
-  ok(afterTermKeyPoint('optimise', 'stops') === 'After your 6th payment the payments stop. Nothing more is charged.', 'Welcome Pack (v4 Optimise): the payments stop');
+  ok(/6 payments in total \(the minimum term\), then nothing more is charged: the 6th payment is the last, it covers one final month of work, and then the service ends\./.test(signOpt) && /Agreement version v4\./.test(signOpt), 'the sign-up page: Optimise offer says the payments stop, above the v4 text');
+  ok(afterTermKeyPoint('optimise', 'stops') === 'Your 6th payment is the last. Nothing more is charged: we carry on the monthly work for one final month after it, and then the service ends.', 'Welcome Pack (v4 Optimise): the 6th payment is the last; one final month; then it ends');
   ok(/continue at £29\.99 a month/.test(afterTermKeyPoint('build', 'continues') ?? '') && afterTermKeyPoint('optimise', null) === null && afterTermKeyPoint(null, 'stops') === null, 'Welcome Pack: Build continues; no terms → nothing said');
   ok(/from\("client_service_terms"\)[\s\S]{0,200}commercial_terms,service_route/.test(read('supabase/functions/_shared/welcome-pack-render.ts')), 'the Welcome Pack reads THIS client\'s stamped terms (read only)');
   const email = resultsEmailParagraphs({ businessName: 'A', town: 'T', beforeNamed: 1, beforeAnswered: 10, afterNamed: 3, afterAnswered: 10, questions: 20, documentUrl: 'u', wentUp: true, withinNoise: false, monthlyStartsOn: '22 December 2026', totalPayments: totalPaymentsFor('optimise'), v3Terms: true, continuingService: false }).join(' ');
-  ok(/After your 6th payment the payments stop and nothing more is charged\./.test(email) && !/29\.99/.test(email), 'the four-week results email (v4 Optimise): the payments stop');
+  ok(/Your 6th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends\./.test(email) && !/29\.99/.test(email), 'the four-week results email (v4 Optimise): the 6th payment is the last; one final month; then it ends');
   ok(/continuingServiceApplies\(v3\.facts\.terms, v3\.facts\.route\)/.test(read('supabase/functions/_shared/remeasure-results.ts')), '…decided from the client\'s own terms');
-  ok(/All 6 of your payments are complete/.test(termCompleteEmail({ siteKind: 'client_owned', totalPayments: 6 }).paragraphs.join(' ')), 'after the 6th Optimise payment the client is told the payments are complete');
+  ok(/All 6 of your payments are complete and your final month of work has finished, so your service has now ended\. Nothing more will be charged\./.test(termCompleteEmail({ siteKind: 'client_owned', totalPayments: 6, finalMonthEnded: true }).paragraphs.join(' ')), 'at the Optimise End Date the client is told the final month has finished and the service has ended');
+  ok(/finalMonthEnded: subscriptionIsFixedTerm\(/.test(wh) && /fixedTermFinalMonth: subscriptionIsFixedTerm\(/.test(wh), 'the webhook words both emails from the subscription\'s own terms');
   ok(/if \(termComplete && subscriptionContinuesAfterTerm\(/.test(wh), 'the webhook only raises the manual Continuing Service step where the subscription\'s terms carry one — v4 Optimise gets the term-complete email');
   ok(/isOptionBTerms\(termsRow\.terms\)/.test(read('src/lib/commission.ts')), 'commission treats a v4 sale exactly like a v3 sale (Option B approval)');
 }

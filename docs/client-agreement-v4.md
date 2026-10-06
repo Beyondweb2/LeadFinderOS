@@ -7,7 +7,7 @@ Branch `improve/sales-script-commercial-alignment` (LeadFinderOS) and `commercia
 
 | | Payments | After the last payment |
 |---|---|---|
-| **Findable Optimise** (keeps their site) | £99 + 5 × £99 = **6 in total** | **The payments stop.** No £29.99, no continuation state, reminder, question or charge. |
+| **Findable Optimise** (keeps their site) | £99 + 5 × £99 = **6 in total** | **The sixth payment is the last.** It covers ONE FINAL MONTH of the included work; the agreement then ends automatically on the Optimise End Date (one month after payment 6, month-end clamped). No 7th payment, no £29.99, no continuation state, reminder, question or charge. Ownership of our work passes on payment 6. |
 | **Findable Build** (we build, host, manage) | £99 + 11 × £99 = **12 in total** | The site is theirs; £29.99/month hosting + monitoring until cancelled (30 days' notice). |
 
 Timing is unchanged (Option B): £99 → Access Date → results (about four weeks) → 14-day Refund Window → first
@@ -39,6 +39,13 @@ unchanged (any increase in the named count, or the £99 back within the refund w
   version. A v3 signature never opens a NEW checkout after the cutover (re-sign v4); a v3 Stripe session opened before
   the cutover and paid after it is still accepted by the webhook **on v3 terms** (`webhookV3Verdict` takes
   `AGREEMENT_FIRST_TERMS`, version → terms, and checks the session's terms match its signature's version).
+
+## Paul's review of the wording (2026-10-06, second pass)
+
+- Optimise final month: 9B.1 (sixth payment is final), 9B.2 (it covers one final month; Optimise End Date; ends automatically), 9B.3 (Our Work passes on the sixth payment, not at the end date); 2.6 extended to the final month; 9.3 and 15.1 point to the End Date.
+- Inherited v3 wording fixed in v4 only: 4.3 and 5.5 no longer say "the website" passes to an Optimise client; Schedule 1 Build hosting cites 9.2 (term) and 9A (after); key point 1 says monthly payments "normally" start the day after the refund window.
+- Billing already matched: Stripe's cancel_at is the boundary one month after payment 6, so there is no 7th charge and the subscription closes itself on the End Date. `minimumTerm().serviceEndDay`, `serviceEndedOn()` and `timelineView().serviceEnded` derive the end (only once payment 6 is actually collected); the Paid Client card shows the final month, then "Service ended"; the term-complete email (sent at cancel_at) says the final month has finished. Edge: if payment 6 is collected late after retries, Stripe still ends on its anchor date while the contract end is one month after the actual payment — Paul extends by hand if that ever happens.
+- v4 fingerprint now `bc0061ea…`; parity 147 paragraphs.
 
 ## Billing and continuing service
 

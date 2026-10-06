@@ -40,7 +40,7 @@ ok(contractTotalGbpFor('build') === 1188 && contractTotalGbpFor('optimise') === 
 /* 2026-10-05 (v3 Client Service Agreement): the monthly starts the day after the refund window (5.6), and the
    Continuing Service follows the minimum term (9A). */
 /* 2026-10-06 (v4): Build continues at £29.99 for hosting and monitoring; Optimise stops after its sixth payment. */
-ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from the day after your 14-day refund window closes (normally about six weeks after you give us access) — 12 payments in total if we build you a new website, then £29.99 a month for hosting and monitoring until you cancel; 6 payments in total if we optimise the one you have, then the payments stop.',
+ok(FINDABLE_OFFER_SUMMARY === '£99 to start, then £99 a month from the day after your 14-day refund window closes (normally about six weeks after you give us access) — 12 payments in total if we build you a new website, then £29.99 a month for hosting and monitoring until you cancel; 6 payments in total if we optimise the one you have, then one final month of work and the service ends, with nothing more to pay.',
   'the one-line (pre-choice) offer: ' + FINDABLE_OFFER_SUMMARY);
 ok(!/FINDABLE_NEW_SITE_|CARD_SAVED_NOTICE_NEW_SITE|export const FINDABLE_TOTAL_PAYMENTS|export const CARD_SAVED_NOTICE\b/.test(read('src/lib/findableOffer.ts')), 'the retired constants (two-tier and single-plan) are gone');
 
@@ -52,9 +52,9 @@ for (const r of SERVICE_ROUTES) {
   ok(notice.includes(`${n} payments in total, including today's`) && !/six weeks from today/.test(notice)
     && (r === 'build'
       ? /continues at £29\.99 a month for hosting and monitoring until you cancel with 30 days' notice/.test(notice)
-      : /After your 6th payment the payments stop and nothing more is charged/.test(notice) && !/29\.99/.test(notice)),
-    `card notice (${r}) counts today's £99 inside the ${n}, then ${r === 'build' ? 'names the £29.99 continuing service' : 'says the payments stop — no £29.99'} (v4)`);
-  ok(r === 'build' ? /then £29\.99\/month until cancelled$/.test(checkoutLineNameFor(r)) : /then nothing more$/.test(checkoutLineNameFor(r)) && !/29\.99/.test(checkoutLineNameFor(r)), `Stripe line item (${r}) ends with the v4 after-term rule`);
+      : /Your 6th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends/.test(notice) && !/29\.99/.test(notice)),
+    `card notice (${r}) counts today's £99 inside the ${n}, then ${r === 'build' ? 'names the £29.99 continuing service' : 'says the 6th payment is the last and one final month of work follows — no £29.99'} (v4)`);
+  ok(r === 'build' ? /then £29\.99\/month until cancelled$/.test(checkoutLineNameFor(r)) : /then one final month of work, nothing more charged$/.test(checkoutLineNameFor(r)) && !/29\.99/.test(checkoutLineNameFor(r)), `Stripe line item (${r}) ends with the v4 after-term rule`);
   ok(checkoutLineNameFor(r).includes(`/month from the day after your refund window, ${n} payments in total (${termMonthsFor(r)}-month minimum)`), `Stripe line item (${r}) names the monthly, ${n} payments and the minimum`);
 }
 const checkout = code('supabase/functions/findable-checkout/index.ts');
@@ -131,7 +131,7 @@ ok(/12 months/.test(pb.offer.monthly) && /after the 12th payment/.test(pb.offer.
 for (const [label, text] of [['card notice (build)', cardSavedNoticeFor('build')], ['card notice (optimise)', cardSavedNoticeFor('optimise')], ['offer summary', FINDABLE_OFFER_SUMMARY], ['playbook offer', JSON.stringify(pb.offer)]] as const) {
   ok(!/(12|6) (more|further|monthly) payments|then (12|6) payments|plus (12|6)\b|13 payments|7 payments/i.test(text), label + ': no wording that implies an extra payment');
 }
-ok(pb.offer.lines[0] === FINDABLE_OFFER_SUMMARY && /On Optimise, nothing/.test(pb.objections.find((o) => o.objection === 'What happens after?')?.answer ?? ''), 'the call screen carries the current offer, and "What happens after?" says Optimise stops');
+ok(pb.offer.lines[0] === FINDABLE_OFFER_SUMMARY && /On Optimise, nothing more to pay/.test(pb.objections.find((o) => o.objection === 'What happens after?')?.answer ?? ''), 'the call screen carries the current offer, and "What happens after?" says Optimise stops');
 
 console.log('── 5. NO STALE CURRENT-OFFER WORDING ──');
 const ACTIVE = [

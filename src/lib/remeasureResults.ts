@@ -307,7 +307,9 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     const route = serviceRouteForTotal(i.totalPayments);
     const after = i.continuingService
       ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`
-      : `After your ${route ? `${totalPaymentsFor(route)}th` : 'last'} payment the payments stop and nothing more is charged.`;
+      : route
+        ? `Your ${totalPaymentsFor(route)}th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends.`
+        : 'After your last payment nothing more is charged.';
     out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. ${after}`);
   } else if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);

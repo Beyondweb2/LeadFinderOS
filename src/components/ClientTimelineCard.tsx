@@ -117,10 +117,18 @@ export function ClientTimelineCard({ leadId, ended = false }: { leadId: string; 
       {/* 🔴 v4 (2026-10-06): a fixed-term client (Findable Optimise) has NO Continuing Service — no £29.99 step,
          no reminder, no continue/cancel question. Their card ends at the payment plan. */}
       {!mt.continuingApplies && <div className="space-y-1 rounded-lg border p-3" data-testid="fixed-term-plan">
-        <p className="text-sm font-semibold">{mt.planComplete ? 'Payment plan complete' : `Fixed term · ${mt.recurringNeeded + 1} payments in total, then the payments stop`}</p>
-        <p className="text-xs text-muted-foreground">{mt.planComplete
-          ? `All ${mt.recurringNeeded + 1} payments have been collected${mt.finalPaymentDay ? ` (the last on ${ukDayWords(mt.finalPaymentDay)})` : ''}. Nothing more is charged and there is no Continuing Service on this agreement.`
-          : 'No Continuing Service on this agreement: after the last payment nothing more is charged and there is nothing to ask the client.'}</p>
+        {/* Paul, 2026-10-06 (clause 9B.2): the last payment covers ONE FINAL MONTH of work; the service then
+            ends automatically on the Optimise End Date. Three states, all derived. */}
+        <p className="text-sm font-semibold">{v.serviceEnded
+          ? `Service ended ${ukDayWords(mt.serviceEndDay)}`
+          : mt.planComplete
+            ? `Payment plan complete · final month of work until ${ukDayWords(mt.serviceEndDay)}`
+            : `Fixed term · ${mt.recurringNeeded + 1} payments in total, then one final month of work`}</p>
+        <p className="text-xs text-muted-foreground">{v.serviceEnded
+          ? `All ${mt.recurringNeeded + 1} payments were collected and the final month of work has finished. The agreement has ended; nothing more is charged.`
+          : mt.planComplete
+            ? `All ${mt.recurringNeeded + 1} payments have been collected${mt.finalPaymentDay ? ` (the last on ${ukDayWords(mt.finalPaymentDay)})` : ''}. Keep doing the included monthly work until the Optimise End Date; the service then ends automatically. Nothing more is charged.`
+            : `No Continuing Service on this agreement. The last payment is the ${mt.recurringNeeded + 1}th${mt.serviceEndDay ? ` (expected ${ukDayWords(mt.finalPaymentDay)})` : ''}; it covers one final month of work${mt.serviceEndDay ? `, to about ${ukDayWords(mt.serviceEndDay)}` : ''}, and then the service ends. Nothing to ask the client.`}</p>
       </div>}
 
       {mt.continuingApplies && <div className="space-y-1.5 rounded-lg border p-3" data-testid="continuing-service">

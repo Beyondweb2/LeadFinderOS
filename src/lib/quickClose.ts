@@ -640,7 +640,7 @@ export function adoptLink(
    Continuing Service follows the minimum term (9A).
    🔴 v4 (2026-10-06): on BUILD only — an Optimise client is told the payments stop (continuingServiceAfterTerm). */
 const priceSentence = (route: ServiceRoute) =>
-  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. ${continuingServiceAfterTerm(route) ? `After that it continues at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice.` : 'After that the payments stop and nothing more is charged.'}`;
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. ${continuingServiceAfterTerm(route) ? `After that it continues at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice.` : `Your ${totalPaymentsFor(route)}th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends.`}`;
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */

@@ -79,7 +79,7 @@ export function continuingServiceAfterTerm(route: ServiceRoute): boolean {
 export function afterTermWordsFor(route: ServiceRoute): string {
   return continuingServiceAfterTerm(route)
     ? `then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel`
-    : 'then the payments stop and nothing more is charged';
+    : `then the payments stop: the ${totalPaymentsFor(route)}th payment is the last, we carry on the monthly work for one final month, and then the service ends`;
 }
 
 /** When the first £99 monthly payment is taken under the v3 agreement, in words (clauses 5.6, 3.1). */
@@ -223,7 +223,7 @@ export function remeasureWeeksFor(_row?: { plan_tier?: unknown; website_route?: 
    Salespeople quote ONLY these (contractor checklist Part 2, "Prices and terms"). */
 /* 🔴 v4 (2026-10-06): Optimise stops after its sixth payment; only Build continues at FINDABLE_CONTINUING_GBP. */
 export const FINDABLE_OFFER_SUMMARY =
-  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel; ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total if we optimise the one you have, then the payments stop.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} to start, then £${FINDABLE_MONTHLY_GBP} a month from ${MONTHLY_START_V3_WORDS} — ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total if we build you a new website, then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel; ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total if we optimise the one you have, then one final month of work and the service ends, with nothing more to pay.`;
 
 /** The offer in one line for ONE route. */
 export function offerSummaryFor(route: ServiceRoute): string {
@@ -449,13 +449,17 @@ export function subscriptionEndedEmail(i: { becauseOfPayment: boolean; siteKind:
 /* 🔴 ROUTE-AWARE (2026-09-29): the count comes from the subscription's own record (its metadata
    total_payments, written when it was created), so a 6-payment Optimise client is never told twelve.
    An unknown count names no number at all. */
-export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null }): { subject: string; paragraphs: string[] } {
+/* 🔴 v4 Optimise (Paul, 2026-10-06): this email fires when Stripe's cancel_at is reached — one month after the
+   sixth payment, i.e. the Optimise End Date (9B.2) — so for that client it says the final month has finished. */
+export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments: number | null; finalMonthEnded?: boolean }): { subject: string; paragraphs: string[] } {
   const route = serviceRouteForTotal(i.totalPayments);
   return {
     subject: "Your Findable payments are complete",
     paragraphs: [
       `Hi,`,
-      route
+      route && i.finalMonthEnded
+        ? `All ${totalPaymentsFor(route)} of your payments are complete and your final month of work has finished, so your service has now ended. Nothing more will be charged.`
+        : route
         ? `All ${totalPaymentsFor(route)} of your payments are complete, so your ${termMonthsFor(route)}-month term has finished and nothing more will be charged.`
         : `All of your payments are complete, so your term has finished and nothing more will be charged.`,
       ...(i.siteKind === 'findable_built'
@@ -477,12 +481,14 @@ export function termCompleteEmail(i: { siteKind: FindableSiteKind; totalPayments
    minimum term now, so offering a free exit here would contradict what was sold. `cancelUrl` stays in
    the signature for the caller and is deliberately not printed.
    🔴 ROUTE-AWARE (2026-09-29): `route` is the subscription's own (its metadata); null names no count. */
-export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean }): { subject: string; paragraphs: string[] } {
+export function monthlyStartingSoonEmail(i: { businessName: string; startsOn: string; cancelUrl: string | null; route: ServiceRoute | null; continuingService?: boolean; fixedTermFinalMonth?: boolean }): { subject: string; paragraphs: string[] } {
   /* 🔴 v3 (clause 9A): the minimum term is followed by the Continuing Service (FINDABLE_CONTINUING_GBP), so "then it stops"
      is only true for a legacy subscription. The caller says which (the subscription's own marker). */
   const after = i.continuingService
     ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before it starts.`
-    : 'then it stops.';
+    : i.fixedTermFinalMonth && i.route
+      ? `then it stops: your ${totalPaymentsFor(i.route)}th payment is the last, and we carry on the monthly work for one final month after it.`
+      : 'then it stops.';
   return {
     subject: `Your Findable monthly starts on ${i.startsOn}`,
     paragraphs: [
@@ -526,13 +532,13 @@ export function cardSavedNoticeFor(route: ServiceRoute): string {
   const n = totalPaymentsFor(route);
   const after = continuingServiceAfterTerm(route)
     ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice, as your signed agreement says.`
-    : `After your ${n}th payment the payments stop and nothing more is charged, as your signed agreement says.`;
+    : `Your ${n}th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends, as your signed agreement says.`;
   return `You pay £${FINDABLE_SETUP_PRICE_GBP} today. We save your card. £${FINDABLE_MONTHLY_GBP} a month starts ${MONTHLY_START_V3_WORDS}, for a ${termMonthsFor(route)}-month minimum term — ${n} payments in total, including today's. ${after}`;
 }
 /** The Stripe line-item name for a route — what the payer sees on the Stripe page and the receipt. */
 export function checkoutLineNameFor(route: ServiceRoute): string {
   const what = route === 'build' ? 'AI visibility + a new website we build and manage' : 'AI visibility on your existing website';
-  const after = continuingServiceAfterTerm(route) ? `then £${FINDABLE_CONTINUING_GBP}/month until cancelled` : 'then nothing more';
+  const after = continuingServiceAfterTerm(route) ? `then £${FINDABLE_CONTINUING_GBP}/month until cancelled` : 'then one final month of work, nothing more charged';
   return `${SERVICE_ROUTE_NAME[route]} — ${what}: £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP}/month from the day after your refund window, ${totalPaymentsFor(route)} payments in total (${termMonthsFor(route)}-month minimum), ${after}`;
 }
 

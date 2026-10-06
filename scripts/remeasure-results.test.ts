@@ -177,7 +177,7 @@ console.log("-- The monthly: Stripe's date from sign-up, not the claim window (2
     ok(!/maintain|maintenance/i.test(text), `no "maintain": "${text.slice(0, 44)}"`);
   }
   ok(/today/.test(CARD_SAVED_NOTICE) && /12-month minimum term/.test(CARD_SAVED_NOTICE) && /continues at £29\.99 a month for hosting and monitoring until you cancel/.test(CARD_SAVED_NOTICE), 'the card notice says what is taken today, the term, and the Build continuing service after it (v4 clause 9A)');
-  ok(/the payments stop and nothing more is charged/.test(cardSavedNoticeFor('optimise')) && !/29\.99/.test(cardSavedNoticeFor('optimise')), 'the Optimise card notice says the payments stop — no £29.99 (v4)');
+  ok(/Your 6th payment is the last and nothing more is charged: it covers one final month of work/.test(cardSavedNoticeFor('optimise')) && !/29\.99/.test(cardSavedNoticeFor('optimise')), 'the Optimise card notice says the payments stop — no £29.99 (v4)');
 }
 
 console.log("-- Billing notices: the right message, and never the wrong one --");
@@ -224,7 +224,7 @@ console.log('── The words ──');
   const v3Up = resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: false, monthlyStartsOn: '22 December 2026', totalPayments: 6, v3Terms: true, continuingService: true }).join(' ');
   ok(/first monthly payment of £99 is on 22 December 2026, the day after your 14-day refund window closes/.test(v3Up) && /continues at £29\.99 a month until you cancel/.test(v3Up) && !/nothing is charged after/i.test(v3Up), 'v3 terms: the email names the Payment Start Date and the Continuing Service they signed');
   const v4Opt = resultsEmailParagraphs({ ...base, wentUp: true, withinNoise: false, monthlyStartsOn: '22 December 2026', totalPayments: 6, v3Terms: true, continuingService: false }).join(' ');
-  ok(/first monthly payment of £99 is on 22 December 2026/.test(v4Opt) && /After your 6th payment the payments stop and nothing more is charged\./.test(v4Opt) && !/29\.99/.test(v4Opt), 'v4 Optimise: the email says the payments stop after the 6th — no £29.99');
+  ok(/first monthly payment of £99 is on 22 December 2026/.test(v4Opt) && /Your 6th payment is the last and nothing more is charged: it covers one final month of work, and then the service ends\./.test(v4Opt) && !/29\.99/.test(v4Opt), 'v4 Optimise: the email says the payments stop after the 6th — no £29.99');
   /* ⛔ PAUL'S ORDER, 2026-09-13: verdict, then entitlement, then mechanism — never the offer first.
      The lead-in is ours; the sentence it introduces is the locked one, whole and unedited. */
   const verdictAt = notUp.findIndex((p) => p.includes('has not gone up'));

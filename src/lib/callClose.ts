@@ -78,11 +78,11 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
     }
     : {
       route, name: SERVICE_ROUTE_NAME.optimise,
-      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total, then they stop`,
+      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total, then one final month of work`,
       spoken: [
         `You keep your own website and it stays yours. We work on it with your access, and we never take it offline. ${spokenPrice}`,
         /* 🔴 v4 (2026-10-06): Optimise is a fixed term — the payments stop, there is no £29.99 after it. */
-        `${spokenTerm} After the ${total}th payment the payments stop. There's nothing more to pay.`,
+        `${spokenTerm} The ${total}th payment is the last. We keep working on it for one more month after that, then it finishes. There's nothing more to pay.`,
       ],
       site: 'They keep their existing website and its ownership',
     };

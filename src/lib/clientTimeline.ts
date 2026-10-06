@@ -65,6 +65,13 @@ export const OPTION_B_TIMING = 'option_b';
  *  webhook's "starting soon" email and its term-complete branch, which have only the subscription in hand.
  *  Its metadata names the terms (written from v4 on, _shared/delayed-subscription.ts) and the route; an
  *  option_b subscription with no terms marker was created before v4, so it is a v3 sale. Legacy → false. */
+/** A fixed-term subscription (v4 Optimise): agreement-first terms with NO Continuing Service after them. */
+export function subscriptionIsFixedTerm(meta: Record<string, unknown> | null | undefined): boolean {
+  const m = meta ?? {};
+  const route: ServiceRoute | null = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
+  return !!route && isOptionBTerms(m.commercial_terms) && !continuingServiceApplies(m.commercial_terms, route);
+}
+
 export function subscriptionContinuesAfterTerm(meta: Record<string, unknown> | null | undefined): boolean {
   const m = meta ?? {};
   const route: ServiceRoute | null = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
@@ -265,6 +272,11 @@ export interface MinimumTerm {
   /** A fixed-term client (v4 Optimise) whose final minimum-term payment has actually been collected:
    *  the payment plan is complete and nothing more is ever charged. */
   planComplete: boolean;
+  /** v4 Optimise (Paul, 2026-10-06): the Optimise End Date (clause 9B.2) — one month after the sixth payment,
+   *  clamped to the month's last day like every payment date (3.1). The sixth payment covers this final month of
+   *  work; the agreement then ends automatically. Expected from the real payments until the sixth is collected.
+   *  Null for any client with a Continuing Service (and when the final payment day is unknown). */
+  serviceEndDay: string | null;
 }
 
 /**
@@ -274,10 +286,18 @@ export interface MinimumTerm {
  * ⛔ Unknown inputs give nulls, never a date: a reminder sent on a guessed date is worse than an
  * action that says "not known yet".
  */
+/** Has a fixed-term (v4 Optimise) agreement ended on its Optimise End Date? Only once the sixth payment has
+ *  actually been collected — an expected date never ends a service. */
+export function serviceEndedOn(f: TimelineFacts, todayIso: string): boolean {
+  const mt = minimumTerm(f);
+  const today = ukDay(todayIso);
+  return mt.planComplete && !!mt.serviceEndDay && !!today && today >= mt.serviceEndDay;
+}
+
 export function minimumTerm(f: TimelineFacts): MinimumTerm {
   const route = f.route;
   const continuingApplies = continuingServiceApplies(f.terms, route);
-  const empty: MinimumTerm = { recurringNeeded: route ? recurringPaymentsFor(route) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: false };
+  const empty: MinimumTerm = { recurringNeeded: route ? recurringPaymentsFor(route) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: false, serviceEndDay: null };
   if (!route) return empty;
   const needed = recurringPaymentsFor(route);
   const paid = [...(f.recurringPaidAt ?? [])].map((x) => ukDay(x)).filter((x): x is string => !!x).sort();
@@ -301,6 +321,7 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
     return {
       recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,
       continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: actual,
+      serviceEndDay: addMonthsClamped(finalDay, 1),
     };
   }
   const continuingStart = addMonthsClamped(anchor, needed);
@@ -309,7 +330,7 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
   return {
     recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,
     continuingStartDay: cs, clientReminderDueDay: reminderDue, paulActionDay: addDays(reminderDue, -PAUL_REMINDER_LEAD_DAYS),
-    continuingApplies, planComplete: false,
+    continuingApplies, planComplete: false, serviceEndDay: null,
   };
 }
 
@@ -329,6 +350,8 @@ export interface TimelineAction { kind: TimelineActionKind; dueDay: string; urge
  *  on v3 terms, and for an ended or refunded agreement. */
 export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAction[] {
   if (!isOptionBTerms(f.terms) || f.refundedAt || f.endedAt) return [];
+  /* v4 Optimise: once the Optimise End Date is reached the agreement has ended (9B.2) — nothing is asked of Paul. */
+  if (serviceEndedOn(f, todayIso)) return [];
   const today = ukDay(todayIso)!;
   const out: TimelineAction[] = [];
   const initialDay = ukDay(f.initialPaidAt);
@@ -419,6 +442,8 @@ export interface TimelineView {
   paymentStart: PaymentStart;
   paymentStartConfirmed: boolean;
   minimumTerm: MinimumTerm;
+  /** v4 Optimise: the agreement has ended automatically on its Optimise End Date (9B.2). Derived from today. */
+  serviceEnded: boolean;
   /** FINDABLE_CONTINUING_GBP when the Continuing Service applies to this client, null when it does not
    *  (a v4 Optimise client is never shown a £29.99 step). */
   continuingGbp: number | null;
@@ -431,6 +456,7 @@ export function timelineView(f: TimelineFacts, todayIso: string): TimelineView {
   const mt = minimumTerm(f);
   return {
     onV3: isOptionBTerms(f.terms),
+    serviceEnded: serviceEndedOn(f, todayIso),
     initialPaidDay,
     accessDate: f.accessDate,
     accessDeadlineDay: initialPaidDay ? accessDeadlineDay(initialPaidDay) : null,

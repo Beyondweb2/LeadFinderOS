@@ -154,7 +154,7 @@ ok(!/body\.(plan_tier|route|service_route|total_payments)/.test(checkout), 'the 
 ok(/line_items\[0\]\[price_data\]\[unit_amount\]", String\(Math\.round\(offer\.gbp \* 100\)\)/.test(checkout), 'the £99 line is unchanged (inline price_data, the guarantee\'s carrier)');
 for (const r of ['build', 'optimise'] as const) {
   const n = totalPaymentsFor(r);
-  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && (r === 'build' ? /continues at £29\.99 a month for hosting and monitoring until you cancel/.test(cardSavedNoticeFor(r)) : /the payments stop/.test(cardSavedNoticeFor(r))), `card notice (${r}): ${n} payments including today's, then ${r === 'build' ? 'the £29.99 continuing service' : 'the payments stop'} (v4)`);
+  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && (r === 'build' ? /continues at £29\.99 a month for hosting and monitoring until you cancel/.test(cardSavedNoticeFor(r)) : /is the last and nothing more is charged: it covers one final month of work/.test(cardSavedNoticeFor(r))), `card notice (${r}): ${n} payments including today's, then ${r === 'build' ? 'the £29.99 continuing service' : 'the payments stop'} (v4)`);
   ok(checkoutLineNameFor(r).startsWith(r === 'build' ? 'Findable Build' : 'Findable Optimise') && checkoutLineNameFor(r).includes(`${n} payments in total`), `Stripe line name (${r}) names the route and ${n}`);
 }
 
@@ -258,7 +258,7 @@ ok(opt.name === 'Findable Optimise' && opt.totalPayments === 6 && opt.paymentsMa
 ok(clientContract({ lead: { contract_total_payments: 12, amount_paid: 99 }, onboarding: { plan_tier: 'new_site' } }).note?.includes('No live monthly schedule'), 'a contracted client with no live subscription is flagged');
 
 console.log('── WORDING ──');
-ok(FINDABLE_OFFER_SUMMARY.includes('12 payments in total if we build you a new website') && FINDABLE_OFFER_SUMMARY.includes('6 payments in total if we optimise the one you have, then the payments stop'), 'the pre-choice summary names both lengths, and that Optimise stops (v4)');
+ok(FINDABLE_OFFER_SUMMARY.includes('12 payments in total if we build you a new website') && FINDABLE_OFFER_SUMMARY.includes('6 payments in total if we optimise the one you have, then one final month of work and the service ends'), 'the pre-choice summary names both lengths, and that Optimise stops (v4)');
 ok(offerSummaryFor('optimise').includes('6 payments in total, a 6-month minimum term') && !offerSummaryFor('optimise').includes('12'), 'a route\'s summary names only its own length');
 const allCopy = [FINDABLE_OFFER_SUMMARY, offerSummaryFor('build'), offerSummaryFor('optimise'), cardSavedNoticeFor('build'), cardSavedNoticeFor('optimise'), quickCloseScript('build'), quickCloseScript('optimise'), ...routeTermsLines('optimise')].join(' ');
 ok(!/no commitment|cancel any ?time|stop any ?time|no minimum/i.test(allCopy), 'nothing describes either route as "no commitment" or cancel-any-time');

@@ -179,7 +179,7 @@ console.log('── 12. THE END OF THE TERM IS RECOGNISED, AND ONLY THE END ─�
   ok(!subscriptionEndedByTerm({ ...done, cancel_at: cancelAt + 86400, ended_at: cancelAt + 86400 }, false), 'a hand-set cancel_at → not ours, not complete');
   ok(!subscriptionEndedByTerm({ trial_end: trialEnd, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, ended_at: cancelAt }, false) && !subscriptionEndedByTerm({ cancel_at: cancelAt, trial_end: trialEnd }, false), 'any date absent → not complete');
   const wh = code('supabase/functions/stripe-webhook/index.ts');
-  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
+  ok(/subscriptionEndedByTerm\(/.test(wh) && /termCompleteEmail\(\{ siteKind, totalPayments: termTotal(, finalMonthEnded: subscriptionIsFixedTerm\([^)]*\)\.metadata\))? \}\)/.test(wh) && /const termTotal = subscriptionTotalPayments\(sub/.test(wh) && /subscriptionEndedEmail\(\{ becauseOfPayment, siteKind \}\)/.test(wh), 'the webhook branches on it and passes the site kind to both endings');
 }
 
 console.log('── FOUR WEEKS FOR EVERY NEW CLIENT (Paul, 2026-10-02; the 2026-09-23 new-domain eight weeks is gone) ──');
