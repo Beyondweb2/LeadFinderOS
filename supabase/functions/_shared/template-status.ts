@@ -22,24 +22,50 @@ export const OTHER_TTL_MS = 3 * 60_000;
 export const FAILED_TTL_MS = 60_000;
 
 let wabaMemo: string | null = null;
+let wabaWhy = "";
 
+const graph = async (path: string, token: string): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> => {
+  try {
+    const r = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+  } catch (e) { return { ok: false, status: 0, data: { error: { message: (e as Error)?.message } } }; }
+};
+
+/** THE WHATSAPP BUSINESS ACCOUNT WE SEND FROM — never guessed. WHATSAPP_BUSINESS_ACCOUNT_ID when set; otherwise the
+ *  candidates the token can see (its debug_token scopes, and the businesses it belongs to), and the ONE whose phone
+ *  numbers include WHATSAPP_PHONE_NUMBER_ID (the number every send uses). Why it failed is kept for the cache row. */
 async function wabaId(token: string): Promise<string | null> {
   const fromEnv = (Deno.env.get("WHATSAPP_BUSINESS_ACCOUNT_ID") ?? "").trim();
   if (fromEnv) return fromEnv;
   if (wabaMemo) return wabaMemo;
-  try {
-    const r = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`);
-    const d = await r.json().catch(() => ({}));
-    const scopes = (d?.data?.granular_scopes ?? []) as Array<{ scope?: string; target_ids?: string[] }>;
-    const ids = scopes.find((s) => s.scope === "whatsapp_business_management")?.target_ids ?? [];
-    /* Exactly one account, or we don't guess (two accounts = which one sends is not ours to pick). */
-    if (ids.length === 1) { wabaMemo = String(ids[0]); return wabaMemo; }
-    console.error(`[template-status] could not identify ONE WhatsApp Business Account from the token (${ids.length} found) — set WHATSAPP_BUSINESS_ACCOUNT_ID`);
-    return null;
-  } catch (e) {
-    console.error("[template-status] debug_token failed:", (e as Error)?.message ?? e);
-    return null;
+  const phoneId = (Deno.env.get("WHATSAPP_PHONE_NUMBER_ID") ?? "").trim();
+  const cands = new Set<string>();
+  const notes: string[] = [];
+  const dbg = await graph(`debug_token?input_token=${encodeURIComponent(token)}`, token);
+  const scopes = ((dbg.data?.data as { granular_scopes?: Array<{ scope?: string; target_ids?: string[] }> } | undefined)?.granular_scopes) ?? [];
+  for (const s of scopes) if (s.scope === "whatsapp_business_management" || s.scope === "whatsapp_business_messaging") for (const id of s.target_ids ?? []) cands.add(String(id));
+  notes.push(`debug_token:${dbg.status}:${scopes.length}scopes:${cands.size}ids`);
+  if (!cands.size) {
+    const biz = await graph("me/businesses?fields=id&limit=10", token);
+    const bizIds = ((biz.data?.data as Array<{ id?: string }> | undefined) ?? []).map((b) => String(b.id)).filter(Boolean);
+    notes.push(`me/businesses:${biz.status}:${bizIds.length}`);
+    for (const b of bizIds) {
+      for (const edge of ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"]) {
+        const w = await graph(`${b}/${edge}?fields=id&limit=25`, token);
+        for (const x of (w.data?.data as Array<{ id?: string }> | undefined) ?? []) if (x.id) cands.add(String(x.id));
+      }
+    }
   }
+  /* The account that owns the number we send from — exactly one, or nothing. */
+  const owners: string[] = [];
+  for (const w of cands) {
+    const p = await graph(`${w}/phone_numbers?fields=id&limit=50`, token);
+    if (((p.data?.data as Array<{ id?: string }> | undefined) ?? []).some((x) => String(x.id) === phoneId)) owners.push(w);
+  }
+  if (owners.length === 1) { wabaMemo = owners[0]; wabaWhy = ""; return wabaMemo; }
+  wabaWhy = `${notes.join(";")};candidates=${cands.size};owning_send_number=${owners.length}`;
+  console.error(`[template-status] could not identify the sending WhatsApp Business Account (${wabaWhy}) — set WHATSAPP_BUSINESS_ACCOUNT_ID`);
+  return null;
 }
 
 /** Ask Meta now. Exact-name match only (Meta's `name` filter is a substring match). */
@@ -47,7 +73,7 @@ async function probe(name: string): Promise<{ status: MetaTemplateStatus; catego
   const token = Deno.env.get("WHATSAPP_ACCESS_TOKEN") ?? "";
   if (!token) return { status: "UNKNOWN", category: null, language: null, error: "no_token" };
   const waba = await wabaId(token);
-  if (!waba) return { status: "UNKNOWN", category: null, language: null, error: "no_waba" };
+  if (!waba) return { status: "UNKNOWN", category: null, language: null, error: `no_waba:${wabaWhy}`.slice(0, 300) };
   try {
     const r = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${waba}/message_templates?name=${encodeURIComponent(name)}&fields=name,status,category,language&limit=25`, {
       headers: { Authorization: `Bearer ${token}` },
