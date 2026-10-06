@@ -482,6 +482,11 @@ const SHORT_Q: Record<QcKey, string> = {
   design_owner: 'Current design / code owned by', route: 'Website route', build_consents: 'Build consents (domain, DNS, content)',
 };
 
+/** The answered Quick Close questions as label / answer pairs (the Paid Client intake shows them). Pure. */
+export function quickCloseAnswerPairs(a: QuickCloseAnswers): { key: QcKey; label: string; answer: string }[] {
+  return QUICK_CLOSE_QUESTIONS.filter((q) => !!a[q.key]).map((q) => ({ key: q.key, label: SHORT_Q[q.key], answer: answerLabel(q.key, a[q.key]) }));
+}
+
 /** The handoff lines for the PAID email when a salesperson Quick-Closed the client. Pure. */
 export function quickCloseHandoffLines(i: {
   qc: (QuickCloseRecord & { completed_at?: string | null; review_approved_at?: string | null; review_note?: string | null }) | null;

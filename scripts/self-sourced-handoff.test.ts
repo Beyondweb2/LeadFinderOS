@@ -188,7 +188,7 @@ ok(/_channel not in \('email', 'linkedin', 'sms', 'in_person', 'other'\)/.test(M
   ok(/if \(!wl \|\| isClientLead\(wl\) \|\| !canWorkLead\(\{ id: userId!, role \}, wl\)\) return json\(\{ ok: false, error: "not_your_lead" \}, 403\);/.test(fn), "sales may crawl only a lead they work, never a client");
   ok(/if \(body\?\.url \|\| body\?\.audit_id\) return json\(\{ ok: false, error: "lead_website_only"/.test(fn), "…only its own website (no url / audit_id override)");
   ok(/if \(!targetLead\) return json\(\{ ok: false, error: "lead_required"/.test(fn), "…and never the paste-a-URL check");
-  ok(/const rowOwnerId: string \| null = salesLead \? salesLead\.user_id : userId;/.test(fn) && /user_id: rowOwnerId/.test(fn) && /userId: rowOwnerId/.test(fn), "the crawl row is filed under the book, never the rep");
+  ok(/const rowOwnerId: string \| null = salesLead \? salesLead\.user_id : userId;/.test(fn) && /user_id: rowOwnerId/.test(fn) && /userId: (intakeCrawl \? intakeOwnerId : )?rowOwnerId/.test(fn) && /intakeOwnerId = \(lr\?\.user_id/.test(fn), "the crawl row is filed under the book, never the rep (the paid-client intake's job: the lead's owner)");
   ok(leadPermissions("sales").crawlOwnLead && leadPermissions("admin").crawlOwnLead && !leadPermissions("sales").crawlSite, "workspace crawl for both roles; paste-a-URL / row buttons stay admin");
   const btn = read("src/components/CrawlCheckButton.tsx");
   ok(/These may make it harder for search engines or AI systems to crawl, understand or verify the business\./.test(btn), "findings carry the careful wording");

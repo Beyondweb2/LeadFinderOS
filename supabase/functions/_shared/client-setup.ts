@@ -141,7 +141,10 @@ export type LeadEventKind =
   | "discovery_run" | "baseline_approved" | "baseline_run" | "build_started" | "launched"
   /* Client missing-info actions (2026-10-05, _shared/client-info-request.ts): Paul asked the seller, the
      seller answered, Paul opened the client's contact (never "a message was sent"). */
-  | "client_info_requested" | "client_info_answered" | "client_contact_opened";
+  | "client_info_requested" | "client_info_answered" | "client_contact_opened"
+  /* Paid client auto-intake (2026-10-06, _shared/client-intake.ts): the handoff was sent to Paul (once per
+     client), the automatic intake finished (once), Paul confirmed / corrected / rejected a fact. */
+  | "handoff_sent" | "client_intake" | "client_fact_set";
 export async function recordLeadEvent(
   service: Service, leadId: string, kind: LeadEventKind,
   opts: { actor?: string | null; source: "system" | "client" | "sales" | "admin"; body?: string | null; data?: Row },
