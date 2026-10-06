@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { CheckCircle2, Circle, Loader2, Pencil } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, FileText, Loader2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { ActionBar, Callout, EDGE, SubSection, ToneChip, TONE, type Tone } from '@/components/operator/ui';
 import {
   CONTRACTOR_TYPES, DOCUMENT_STATUSES, LEAVER_REASONS, RTW_CATEGORIES, RTW_METHODS, SCHEDULE2_STATUSES,
   documentVersion, emptyOnboardingRecord, onboardingSummary,
@@ -90,14 +91,14 @@ function FieldInput({ spec, value, onChange }: { spec: FieldSpec; value: unknown
     const options = spec.kind === 'yesno' ? [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] : spec.options ?? [];
     const v = value === null || value === undefined ? '' : String(value);
     return (
-      <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm" value={v}
+      <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={v}
         onChange={(e) => onChange(e.target.value === '' ? null : spec.kind === 'yesno' ? e.target.value === 'true' : e.target.value)}>
         <option value="">—</option>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     );
   }
-  return <Input className="h-8 text-sm" type={spec.kind === 'date' ? 'date' : 'text'} value={value === null || value === undefined ? '' : String(value)} placeholder={spec.placeholder} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)} />;
+  return <Input className="h-9 text-sm" type={spec.kind === 'date' ? 'date' : 'text'} value={value === null || value === undefined ? '' : String(value)} placeholder={spec.placeholder} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)} />;
 }
 
 function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[]; record: OnboardingRecord; docs: readonly DocumentVersion[]; onSave: (patch: Partial<OnboardingRecord>) => Promise<boolean>; onCancel: () => void }) {
@@ -118,33 +119,32 @@ function Editor({ specs, record, docs, onSave, onCancel }: { specs: FieldSpec[];
   const guide = documentVersion(docs, draft.team_guide_version, 'team_guide');
   const method = draft.rtw_method ? RTW_METHODS[draft.rtw_method] : null;
   return (
-    <div className="mt-2 space-y-2 rounded-md border bg-muted/30 p-3">
+    <div className="mt-3 space-y-3 border-t border-border/50 pt-3">
       {visible.map((s) => (
         <label key={s.field} className="block space-y-1">
-          <span className="text-xs text-muted-foreground">{s.label}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</span>
           <FieldInput spec={s} value={draft[s.field]} onChange={(v) => setDraft((d) => ({ ...d, [s.field]: v }))} />
           {s.hint && <span className="block text-[11px] text-muted-foreground">{s.hint}</span>}
         </label>
       ))}
       {([['team_guide_version', guide]] as const).map(([f, d]) => specs.some((s) => s.field === f) && d && d.status !== 'approved' && (
-        <div key={f} className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
-          <p className="font-medium">This version is {d.status === 'draft' ? 'a draft' : 'superseded'} and does not count{d.outstanding.length ? '. Outstanding:' : '.'}</p>
+        <Callout key={f} tone="amber" icon={AlertTriangle} className="text-xs" title={<>This version is {d.status === 'draft' ? 'a draft' : 'superseded'} and does not count{d.outstanding.length ? '. Outstanding:' : '.'}</>}>
           {d.outstanding.length > 0 && <ul className="ml-4 list-disc">{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>}
-        </div>
+        </Callout>
       ))}
-      {specs.some((s) => s.field === 'rtw_method') && method?.caution && <p className="text-xs text-amber-700 dark:text-amber-400">{method.caution}</p>}
-      <div className="flex gap-2">
-        <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}</Button>
+      {specs.some((s) => s.field === 'rtw_method') && method?.caution && <Callout tone="amber" icon={AlertTriangle} className="text-xs">{method.caution}</Callout>}
+      <ActionBar>
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </div>
+        <Button size="sm" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}</Button>
+      </ActionBar>
     </div>
   );
 }
 
 /** The badge on the Team row. */
 export function OnboardingBadge({ summary }: { summary: OnboardingSummary }) {
-  if (summary.readyToSell) return <Badge variant="secondary" title="Every onboarding item is on file and the login is live">Ready to sell</Badge>;
-  return <Badge variant="outline" title={summary.inactiveReason ?? `${summary.missing.length} onboarding items missing`}>{summary.inactiveReason ? `Not active · ${summary.done}/${summary.total}` : `Onboarding ${summary.done}/${summary.total}`}</Badge>;
+  if (summary.readyToSell) return <ToneChip tone="green" icon={CheckCircle2} title="Every onboarding item is on file and the login is live">Ready to sell</ToneChip>;
+  return <ToneChip tone={summary.inactiveReason ? 'red' : 'amber'} icon={ClipboardCheck} title={summary.inactiveReason ?? `${summary.missing.length} onboarding items missing`}>{summary.inactiveReason ? `Not active · ${summary.done}/${summary.total}` : `Onboarding ${summary.done}/${summary.total}`}</ToneChip>;
 }
 
 export function SalespersonOnboardingPanel({ userId, record, member, docs, serverMissing, onSave }: {
@@ -162,37 +162,52 @@ export function SalespersonOnboardingPanel({ userId, record, member, docs, serve
   const [editing, setEditing] = useState<string | null>(null);
   const ordered = [...summary.items.filter((i) => i.blocking && !i.done), ...summary.items.filter((i) => !(i.blocking && !i.done))];
   return (
-    <div className="w-full space-y-3 rounded-md border p-3" data-testid="salesperson-onboarding">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <span className={`text-sm font-semibold tracking-wide ${summary.readyToSell ? '' : 'text-muted-foreground'}`}>{summary.readyToSell ? 'READY TO SELL' : 'NOT READY TO SELL — sales actions are blocked'}</span>
-        <span className="text-sm">{summary.done} / {summary.total} complete</span>
-        {summary.inactiveReason && <span className="text-xs text-destructive">{summary.inactiveReason}</span>}
-      </div>
-      {summary.missing.length > 0 && (
-        <p className="text-xs text-muted-foreground">Missing: {summary.missing.map((m) => m.label).join(' · ')}</p>
-      )}
-      <ul className="divide-y text-sm">
-        {ordered.map((i) => (
-          <li key={i.key} className="py-1.5">
-            <div className="flex items-start gap-2">
-              {i.done ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Circle className={`mt-0.5 h-4 w-4 shrink-0 ${i.blocking ? 'text-destructive' : 'text-muted-foreground'}`} />}
-              <div className="min-w-0 flex-1">
-                <span className={i.done ? 'text-muted-foreground' : 'font-medium'}>{i.label}</span>
-                {!i.blocking && <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
-                <span className="block text-xs text-muted-foreground">{i.detail}</span>
+    <div className="w-full min-w-0 space-y-3 border-t border-border/50 pt-3" data-testid="salesperson-onboarding">
+      <SubSection title="Onboarding" icon={ClipboardCheck} tone={summary.readyToSell ? 'green' : 'amber'}
+        action={<span className="text-xs font-semibold tabular-nums text-muted-foreground">{summary.done} / {summary.total} complete</span>}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* The headline wraps (a ToneChip truncates, and this line must be read whole on a phone). */}
+          <span className={cn('inline-flex max-w-full items-start gap-1 rounded-2xl px-2.5 py-1 text-xs font-semibold tracking-wide ring-1 ring-inset', TONE[summary.readyToSell ? 'green' : 'amber'].soft, TONE[summary.readyToSell ? 'green' : 'amber'].text, TONE[summary.readyToSell ? 'green' : 'amber'].ring)}>
+            {summary.readyToSell ? <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />}
+            <span className="min-w-0 break-words">{summary.readyToSell ? 'READY TO SELL' : 'NOT READY TO SELL — sales actions are blocked'}</span>
+          </span>
+          {summary.inactiveReason && <span className={cn('min-w-0 break-words text-xs', TONE.red.text)}>{summary.inactiveReason}</span>}
+        </div>
+        {summary.missing.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">Missing: {summary.missing.map((m) => m.label).join(' · ')}</p>
+        )}
+      </SubSection>
+      <ul className="space-y-1.5 text-sm">
+        {ordered.map((i) => {
+          /* done = green · a missing item that blocks selling = amber · an optional one not on file = grey */
+          const tone: Tone = i.done ? 'green' : i.blocking ? 'amber' : 'grey';
+          return (
+            <li key={i.key} className={cn('min-w-0 rounded-xl border border-border/60 bg-muted/20 px-3 py-2', EDGE[tone])}>
+              <div className="flex items-start gap-2">
+                {i.done ? <CheckCircle2 className={cn('mt-0.5 h-4 w-4 shrink-0', TONE.green.text)} /> : <Circle className={cn('mt-0.5 h-4 w-4 shrink-0', TONE[tone].text)} />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={i.done ? 'text-muted-foreground' : 'font-semibold'}>{i.label}</span>
+                    {!i.blocking && <ToneChip tone="grey">optional</ToneChip>}
+                    {i.blocking && !i.done && <ToneChip tone="amber" dot>missing</ToneChip>}
+                  </div>
+                  <span className="block break-words text-xs text-muted-foreground">{i.detail}</span>
+                </div>
+                {EDITORS[i.key] && editing !== i.key && <Button size="sm" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={`Edit ${i.label}`} onClick={() => setEditing(i.key)}><Pencil className="h-3.5 w-3.5" /></Button>}
               </div>
-              {EDITORS[i.key] && editing !== i.key && <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditing(i.key)}><Pencil className="h-3.5 w-3.5" /></Button>}
-            </div>
-            {editing === i.key && EDITORS[i.key] && <Editor specs={EDITORS[i.key]!} record={r} docs={docs} onSave={onSave} onCancel={() => setEditing(null)} />}
-          </li>
-        ))}
+              {editing === i.key && EDITORS[i.key] && <Editor specs={EDITORS[i.key]!} record={r} docs={docs} onSave={onSave} onCancel={() => setEditing(null)} />}
+            </li>
+          );
+        })}
       </ul>
       {summary.notes.length > 0 && (
-        <ul className="ml-4 list-disc space-y-0.5 text-xs text-amber-700 dark:text-amber-400">{summary.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        <Callout tone="amber" icon={AlertTriangle} className="text-xs">
+          <ul className="ml-4 list-disc space-y-0.5">{summary.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        </Callout>
       )}
-      <div className="flex flex-wrap gap-2 border-t pt-2">
+      <div className="flex flex-wrap gap-2">
         {(['leaving', 'notes'] as const).map((k) => editing === k ? null : (
-          <Button key={k} size="sm" variant="outline" onClick={() => setEditing(k)}>
+          <Button key={k} size="sm" variant="outline" className="h-auto min-h-9 whitespace-normal text-left" onClick={() => setEditing(k)}>
             {k === 'leaving' ? (summary.leaver.recorded ? `Leaving: ${LEAVER_REASONS[summary.leaver.reason!]}, ${summary.leaver.endDate}` : 'Record leaving') : (r.notes ? 'Edit notes' : 'Add notes')}
           </Button>
         ))}
@@ -232,26 +247,29 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
   };
   return (
     <div className="space-y-3" data-testid="salesperson-documents">
-      <ul className="divide-y text-sm">
-        {docs.map((d) => (
-          <li key={d.id} className="py-2">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-medium">{d.label}</span>
-              <Badge variant={d.status === 'approved' ? 'secondary' : 'outline'}>{DOCUMENT_STATUSES[d.status]}</Badge>
-              <span className="text-xs text-muted-foreground">{d.id}{d.document_ref ? ` · ${d.document_ref}` : ''}</span>
+      <ul className="space-y-2 text-sm">
+        {docs.map((d) => {
+          /* approved = current (green) · draft = still to finish (amber) · superseded = history (grey) */
+          const tone: Tone = d.status === 'approved' ? 'green' : d.status === 'draft' ? 'amber' : 'grey';
+          return (
+          <li key={d.id} className={cn('min-w-0 rounded-xl border border-border/60 bg-muted/20 p-3', EDGE[tone])}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words font-semibold">{d.label}</span>
+              <ToneChip tone={tone} dot>{DOCUMENT_STATUSES[d.status]}</ToneChip>
             </div>
+            <p className="mt-0.5 break-all text-xs text-muted-foreground">{d.id}{d.document_ref ? ` · ${d.document_ref}` : ''}</p>
             {d.outstanding.length > 0 && (
-              <ul className="ml-4 mt-1 list-disc text-xs text-amber-700 dark:text-amber-400">{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>
+              <ul className={cn('ml-4 mt-1.5 list-disc text-xs', TONE.amber.text)}>{d.outstanding.map((o) => <li key={o}>{o}</li>)}</ul>
             )}
             {d.status === 'draft' && (
-              <div className="mt-1 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {d.outstanding.length > 0 ? (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy} onClick={() => {
+                  <Button size="sm" variant="ghost" className="h-9 text-xs" disabled={busy} onClick={() => {
                     if (!window.confirm(`Mark all ${d.outstanding.length} outstanding items on "${d.label}" as resolved? Only do this once the document itself has been fixed.`)) return;
                     void run('team_document_outstanding', { id: d.id, outstanding: [] }, 'Outstanding items cleared.');
                   }}>Mark outstanding items resolved</Button>
                 ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => {
+                  <Button size="sm" variant="outline" className="h-9 text-xs" disabled={busy} onClick={() => {
                     if (!window.confirm(d.kind === 'team_guide'
                       ? `Approve "${d.label}" as the current team guide? The previous guide becomes superseded, and anyone who only acknowledged that one stops being Ready to Sell until they acknowledge this one.`
                       : `Mark "${d.label}" as the current version for your records? This paperwork is handled outside LeadFinderOS and does not affect Ready to Sell.`)) return;
@@ -261,27 +279,29 @@ export function SalespersonDocumentsCard({ docs, call, onChanged }: {
               </div>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
       {!adding ? <Button size="sm" variant="outline" onClick={() => setAdding(true)}>Add a document version</Button> : (
-        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-          <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
+        <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
+          <SubSection title="Add a document version" icon={FileText} tone="blue" />
+          <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
             <option value="contractor_agreement">Contractor agreement</option>
             <option value="privacy_notice">Salesperson privacy notice</option>
             <option value="team_guide">Team guide</option>
           </select>
-          <Input className="h-8 text-sm" placeholder="Version id, as on the document (e.g. contractor-agreement-v3)" value={form.id} onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))} />
-          <Input className="h-8 text-sm" placeholder="Name (e.g. Independent Sales Contractor Agreement v3)" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
-          <Input className="h-8 text-sm" placeholder="Where the document is kept (file name or folder)" value={form.document_ref} onChange={(e) => setForm((f) => ({ ...f, document_ref: e.target.value }))} />
+          <Input className="h-9 text-sm" placeholder="Version id, as on the document (e.g. contractor-agreement-v3)" value={form.id} onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))} />
+          <Input className="h-9 text-sm" placeholder="Name (e.g. Independent Sales Contractor Agreement v3)" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
+          <Input className="h-9 text-sm" placeholder="Where the document is kept (file name or folder)" value={form.document_ref} onChange={(e) => setForm((f) => ({ ...f, document_ref: e.target.value }))} />
           <textarea className="min-h-[60px] w-full rounded-md border border-input bg-background px-2 py-1 text-sm" placeholder="Anything still outstanding, one per line (leave empty if it is final)" value={form.outstanding} onChange={(e) => setForm((f) => ({ ...f, outstanding: e.target.value }))} />
           <p className="text-xs text-muted-foreground">A new version starts as a draft. Approve it once it is final.</p>
-          <div className="flex gap-2">
+          <ActionBar>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
             <Button size="sm" disabled={busy || !form.id.trim() || !form.label.trim()} onClick={async () => {
               const ok = await run('team_document_add', { document: { ...form, outstanding: form.outstanding.split('\n') } }, 'Version added as a draft.');
               if (ok) { setAdding(false); setForm(blank); }
             }}>Add as draft</Button>
-            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
-          </div>
+          </ActionBar>
         </div>
       )}
     </div>

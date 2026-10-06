@@ -42,11 +42,13 @@ export function SectionToggle({ open, onToggle, label, className }: { open: bool
  * below. `summary` is shown beside the title when shut (so a closed section still says something).
  * `persistKey` omitted = not remembered (a list inside a dialog that should open fresh each time).
  */
-export function CollapsibleBlock({ persistKey, title, summary, actions, defaultOpen = true, children, className, headerClassName, titleClassName, as: Tag = 'section', forceOpen = false, id }: {
+export function CollapsibleBlock({ persistKey, title, summary, actions, defaultOpen = true, children, className, headerClassName, titleClassName, as: Tag = 'section', forceOpen = false, id, leading }: {
   persistKey?: string; title: ReactNode; summary?: ReactNode; actions?: ReactNode; defaultOpen?: boolean; children: ReactNode;
   className?: string; headerClassName?: string; titleClassName?: string; as?: 'section' | 'div';
   /** A deep link names this block (e.g. ClientHub ?section=): open it, whatever was remembered. */
   forceOpen?: boolean; id?: string;
+  /** Before the title, after the chevron: the stage's icon tile (operator/ui.tsx IconTile). */
+  leading?: ReactNode;
 }) {
   const [open, setOpen] = useSectionOpenMaybe(persistKey, defaultOpen);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -56,6 +58,7 @@ export function CollapsibleBlock({ persistKey, title, summary, actions, defaultO
     <Tag className={className} id={id}>
       <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-1', headerClassName)}>
         <SectionToggle open={open} onToggle={() => setOpen(!open)} label={label} className="-ml-1.5" />
+        {leading}
         <button type="button" onClick={() => setOpen(!open)} className={cn('min-w-0 text-left font-medium', titleClassName)}>{title}</button>
         {summary && <span className="min-w-0 text-xs text-muted-foreground">{summary}</span>}
         {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}

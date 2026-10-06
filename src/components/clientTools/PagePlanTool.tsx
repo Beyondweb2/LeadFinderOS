@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { SEOHead } from '@/components/SEOHead';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -9,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistedState } from '@/hooks/usePersistedState';
-import { Loader2, ListOrdered, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight, FileDown, Hammer } from 'lucide-react';
+import { Loader2, Sparkles, ArrowUp, ArrowDown, Pause, Play, Trash2, GitMerge, AlertTriangle, ChevronDown, ChevronRight, FileDown, Hammer, Layers, Archive, Database, AlertCircle } from 'lucide-react';
 import { renderPagePlanHtml, type PagePlanReportItem, type PlanLabelKind } from '@/lib/pagePlanReportHtml';
-import { resolveHandoff, handoffUrl } from '@/lib/pagePlanHandoff';
+import { resolveHandoff, handoffUrl, type HandoffTarget } from '@/lib/pagePlanHandoff';
 import { useNavigate } from 'react-router-dom';
 import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
+import { Callout, EDGE, Empty, SubSection } from '@/components/operator/ui';
+import { cn } from '@/lib/utils';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
    PAGE-PLAN QUEUE (Stage 1) — the per-client months-long working plan: measured questions clustered
@@ -22,6 +22,13 @@ import { downloadHtmlDocAsPdf } from '@/lib/aiAuditReportDownload';
    here yet (Stage 3 hands rows to the generator). Build/Rebuild is the one priced action (~2p, one
    clustering call) and REPLACES the stored plan — the confirm says so. Holds and near-dup flags are
    always itemised with reasons, never silent (house rule).
+
+   📍 WHERE IT LIVES (2026-10-06): inside Paid Clients. The list's Tools tab renders it with the
+   client picker (every client with a baseline — lead-less national clients included); a client's own
+   page renders it SCOPED (`scopeAuditId` = that client's baseline, no picker, and the picked client
+   remembered for the Tools tab is left alone). The old /page-plan URL redirects to the Tools tab.
+   "Build this page" hands off to the generator in the same place (`onHandoff`), or — unscoped — to
+   the Tools tab's generator (handoffUrl). Same edge function, same actions, same data.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
 interface QaClient { audit_id: string; business_name: string; business_type: string | null }
@@ -105,12 +112,20 @@ const pillFor = (r: PlanRow): string | null => {
   return r.winnability.replace(/_/g, ' ');
 };
 
-const PagePlanQueue = () => {
+export function PagePlanTool({ scopeAuditId, onHandoff }: {
+  /** A client's own page: their baseline audit. Omitted = the Tools tab, with the picker. */
+  scopeAuditId?: string;
+  /** Where "Build this page" goes when the generator sits beside this tool (a client's page). */
+  onHandoff?: (target: HandoffTarget) => void;
+} = {}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clients, setClients] = useState<QaClient[]>([]);
-  const [clientId, setClientId] = usePersistedState<string>('pageplan-client', '', { tier: 'both', scope: user?.id });
+  const [storedClientId, setStoredClientId] = usePersistedState<string>('pageplan-client', '', { tier: 'both', scope: user?.id });
+  const clientId = scopeAuditId ?? storedClientId;
+  /* Scoped: the client is fixed by the page, and the Tools tab's remembered pick is not touched. */
+  const setClientId = (id: string) => { if (!scopeAuditId) setStoredClientId(id); };
   const [rows, setRows] = useState<PlanRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -130,6 +145,9 @@ const PagePlanQueue = () => {
       if (res?.ok) setClients(res.clients ?? []);
     })();
   }, []);
+  /* A client's page can change its scope without unmounting (another client opened): reload. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (scopeAuditId) void load(scopeAuditId); }, [scopeAuditId]);
 
   const load = async (auditId: string) => {
     setClientId(auditId);
@@ -153,7 +171,7 @@ const PagePlanQueue = () => {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (clientId) void load(clientId); }, []);
+  useEffect(() => { if (!scopeAuditId && clientId) void load(clientId); }, []);
 
   const build = async () => {
     if (!clientId) return;
@@ -216,7 +234,7 @@ const PagePlanQueue = () => {
         return;
       }
       if (target.mode === 'qa' && target.note) toast({ title: 'Opening as a Q&A article', description: target.note });
-      navigate(handoffUrl(target)!);
+      if (onHandoff) onHandoff(target); else navigate(handoffUrl(target)!);
     } catch (e) {
       toast({ title: "Couldn't match this row to a page", description: e instanceof Error ? e.message : 'Open the page generator manually.', variant: 'destructive' });
     } finally {
@@ -263,14 +281,14 @@ const PagePlanQueue = () => {
   const row = (r: PlanRow, siblings: PlanRow[]) => {
     const idx = siblings.findIndex((s) => s.id === r.id);
     return (
-      <div key={r.id} className={`rounded-md border p-3 space-y-1.5 ${r.status === 'held' ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/60'}`}>
+      <div key={r.id} data-status={r.status} className={cn('space-y-1.5 rounded-xl border p-3', r.status === 'held' ? cn('border-amber-500/30 bg-amber-500/[0.06]', EDGE.amber) : isGeminiGapRow(r) ? cn('border-border/60 bg-muted/20', EDGE.purple) : cn('border-border/60 bg-muted/20', EDGE.blue))}>
         <div className="flex flex-wrap items-center gap-2">
           <button className="text-muted-foreground" onClick={() => setOpen((o) => ({ ...o, [r.id]: !o[r.id] }))}>
             {open[r.id] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
           {editing?.id === r.id ? (
             <>
-              <Input className="h-7 w-64 text-sm" value={editing.job} onChange={(e) => setEditing({ id: r.id, job: e.target.value })} />
+              <Input className="h-7 w-full text-sm sm:w-64" value={editing.job} onChange={(e) => setEditing({ id: r.id, job: e.target.value })} />
               <Button size="sm" className="h-7" onClick={async () => { if (await update(r.id, { set: { job: editing.job } })) setEditing(null); }}>Save</Button>
               <Button size="sm" variant="ghost" className="h-7" onClick={() => setEditing(null)}>Cancel</Button>
             </>
@@ -294,7 +312,7 @@ const PagePlanQueue = () => {
           {r.near_dup_of && (
             <span className="flex items-center gap-1 text-[10px] text-amber-600"><AlertTriangle className="h-3 w-3" /> near-duplicate of “{jobOf(r.near_dup_of) ?? 'another page'}”</span>
           )}
-          <span className="ml-auto flex items-center gap-1">
+          <span className="flex w-full flex-wrap items-center gap-1 sm:ml-auto sm:w-auto">
             {r.status === 'planned' && (
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={handingOff === r.id}
                 title="Open the page generator pre-filled for this page (nothing generates until you press Generate there)"
@@ -323,10 +341,10 @@ const PagePlanQueue = () => {
         )}
         {r.status === 'held' && r.held_reason && <p className="text-xs text-amber-600 dark:text-amber-500">held: {r.held_reason}</p>}
         {mergeFrom === r.id && (
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-muted-foreground">Merge “{r.job}” into:</span>
             <Select onValueChange={async (target) => { setMergeFrom(''); await update(r.id, { merge_into: target }); }}>
-              <SelectTrigger className="h-7 w-72 text-xs"><SelectValue placeholder="pick the page that keeps the job…" /></SelectTrigger>
+              <SelectTrigger className="h-7 w-full text-xs sm:w-72"><SelectValue placeholder="pick the page that keeps the job…" /></SelectTrigger>
               <SelectContent>
                 {active.filter((x) => x.id !== r.id).map((x) => <SelectItem key={x.id} value={x.id}>{x.job}</SelectItem>)}
               </SelectContent>
@@ -351,110 +369,94 @@ const PagePlanQueue = () => {
     );
   };
 
+  const heldCount = active.filter((r) => r.status === 'held').length;
+  const scopedName = scopeAuditId ? clients.find((c) => c.audit_id === scopeAuditId)?.business_name : null;
+
   return (
-    <div className="space-y-5 max-w-5xl">
-      <SEOHead title="Page plan | LeadFinder Pro" description="The per-client page queue: distinct jobs, scored and waved." canonical="/page-plan" noindex />
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Page plan</h1>
-        <p className="text-sm text-muted-foreground">
-          Measured questions clustered into distinct-job pages, scored by the evidence, released in
-          waves — siblings publish together. Edit freely; nothing is built from here yet.
-        </p>
+    <div className="space-y-5" data-testid="page-plan-tool">
+      <p className="text-sm text-muted-foreground">
+        Measured questions clustered into distinct-job pages, scored by the evidence, released in
+        waves — siblings publish together. Edit freely; nothing is built from here yet.
+      </p>
+
+      {/* The controls row: the client (picker on the Tools tab, fixed on a client's page), the one
+          priced action, and the printable plan. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {scopeAuditId
+          ? <span className="text-sm font-semibold">{scopedName ?? 'This client'}{active.length > 0 && <span className="ml-2 font-normal text-muted-foreground">{active.length} page{active.length === 1 ? '' : 's'}{heldCount ? ` · ${heldCount} held` : ''}</span>}</span>
+          : <Select value={clientId} onValueChange={load}>
+              <SelectTrigger className="w-full sm:w-72" aria-label="Client"><SelectValue placeholder="Pick a client with a baseline…" /></SelectTrigger>
+              <SelectContent>
+                {clients.map((c) => <SelectItem key={c.audit_id} value={c.audit_id}>{c.business_name}{c.business_type ? ` — ${c.business_type}` : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>}
+        {clientId && (
+          <Button size="sm" disabled={building} onClick={build}>
+            {building ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+            {rows.length ? 'Rebuild plan · ~2p' : 'Build plan · ~2p'}
+          </Button>
+        )}
+        {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {active.length > 0 && (
+          <span className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {/* Same Client/Internal toggle semantics as the audit report: Client is the default,
+                Download prints whichever view is selected. */}
+            <span className="inline-flex rounded-full bg-muted/70 p-0.5 text-xs ring-1 ring-inset ring-border/50" role="group" aria-label="Report view">
+              <button
+                type="button" aria-pressed={!showInternal}
+                className={cn('h-7 rounded-full px-3 font-semibold transition-colors', !showInternal ? 'bg-card text-foreground shadow-sm ring-1 ring-border/60' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setShowInternal(false)}
+              >Client</button>
+              <button
+                type="button" aria-pressed={showInternal}
+                className={cn('h-7 rounded-full px-3 font-semibold transition-colors', showInternal ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => setShowInternal(true)}
+              >Internal</button>
+            </span>
+            <Button size="sm" variant="outline" onClick={downloadPdf}>
+              <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF{showInternal ? ' (internal)' : ''}
+            </Button>
+          </span>
+        )}
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <ListOrdered className="h-4 w-4 text-primary" /> Client
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Select value={clientId} onValueChange={load}>
-            <SelectTrigger className="w-72"><SelectValue placeholder="Pick a client with a baseline…" /></SelectTrigger>
-            <SelectContent>
-              {clients.map((c) => <SelectItem key={c.audit_id} value={c.audit_id}>{c.business_name}{c.business_type ? ` — ${c.business_type}` : ''}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {clientId && (
-            <Button size="sm" disabled={building} onClick={build}>
-              {building ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
-              {rows.length ? 'Rebuild plan · ~2p' : 'Build plan · ~2p'}
-            </Button>
-          )}
-          {active.length > 0 && (
-            <span className="flex items-center gap-2 ml-auto">
-              {/* Same Client/Internal toggle semantics as the audit report: Client is the default,
-                  Download prints whichever view is selected. */}
-              <span className="inline-flex overflow-hidden rounded-md border border-border text-xs" role="group" aria-label="Report view">
-                <button
-                  type="button" aria-pressed={!showInternal}
-                  className={`px-2.5 h-7 font-medium transition-colors ${!showInternal ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'}`}
-                  onClick={() => setShowInternal(false)}
-                >Client</button>
-                <button
-                  type="button" aria-pressed={showInternal}
-                  className={`px-2.5 h-7 font-medium transition-colors ${showInternal ? 'bg-amber-500 text-white' : 'bg-background text-muted-foreground hover:text-foreground'}`}
-                  onClick={() => setShowInternal(true)}
-                >Internal</button>
-              </span>
-              <Button size="sm" variant="outline" onClick={downloadPdf}>
-                <FileDown className="mr-1.5 h-3.5 w-3.5" /> Download PDF{showInternal ? ' (internal)' : ''}
-              </Button>
-            </span>
-          )}
-          {busy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        </CardContent>
-      </Card>
-
       {tablesMissing && (
-        <Card className="border-amber-500/40 bg-amber-500/5">
-          <CardContent className="p-4 text-sm">
-            The plan schema isn't in place yet (a table or one of its columns is missing) — run
-            <code className="mx-1">supabase/migrations/20260828130000_page_plan_reconcile.sql</code>
-            in the Supabase SQL editor (it's idempotent and also covers a fresh database after the
-            base migration), then press Build.
-          </CardContent>
-        </Card>
+        <Callout tone="amber" icon={Database} title="The plan schema isn't in place yet">
+          A table or one of its columns is missing — run
+          <code className="mx-1">supabase/migrations/20260828130000_page_plan_reconcile.sql</code>
+          in the Supabase SQL editor (it's idempotent and also covers a fresh database after the
+          base migration), then press Build.
+        </Callout>
       )}
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/10">
-          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
-        </Card>
-      )}
+      {error && <Callout tone="red" icon={AlertCircle} title="Something went wrong">{error}</Callout>}
 
       {waves.map((w) => {
         const members = active.filter((r) => r.wave === w).sort((a, b) => a.position - b.position);
+        const held = members.filter((m) => m.status === 'held').length;
         return (
-          <Card key={w}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Wave {w} — {members.length} page{members.length === 1 ? '' : 's'}
-                {members.some((m) => m.status === 'held') && ` (${members.filter((m) => m.status === 'held').length} held)`}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">{members.map((r) => row(r, members))}</CardContent>
-          </Card>
+          <SubSection key={w} tone={w === 1 ? 'blue' : 'purple'} icon={Layers} title={`Wave ${w}`}
+            hint={`${members.length} page${members.length === 1 ? '' : 's'}${held ? ` · ${held} held` : ''}`}>
+            <div className="space-y-2">{members.map((r) => row(r, members))}</div>
+          </SubSection>
         );
       })}
 
       {gone.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Merged / removed — kept for the record</CardTitle></CardHeader>
-          <CardContent className="space-y-1 text-xs text-muted-foreground">
+        <SubSection tone="grey" icon={Archive} title="Merged / removed" hint="kept for the record">
+          <div className="space-y-1 text-xs text-muted-foreground">
             {gone.map((r) => (
               <p key={r.id}>“{r.job}” — {r.status}{r.near_dup_of && r.status === 'merged' ? ` into “${jobOf(r.near_dup_of) ?? '?'}”` : ''}
-                <Button size="sm" variant="ghost" className="h-6 px-2 ml-1 text-xs" onClick={() => update(r.id, { set: { status: 'planned' } })}>restore</Button>
+                <Button size="sm" variant="ghost" className="ml-1 h-6 px-2 text-xs" onClick={() => update(r.id, { set: { status: 'planned' } })}>restore</Button>
               </p>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </SubSection>
       )}
 
       {clientId && !busy && !tablesMissing && rows.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground">No plan yet for this client — press Build.</p>
+        <Empty icon={Layers}>No plan yet for this client — press Build.</Empty>
       )}
+      {!clientId && !scopeAuditId && <Empty icon={Layers}>Pick a client with a baseline to see their page plan.</Empty>}
     </div>
   );
-};
-
-export default PagePlanQueue;
+}

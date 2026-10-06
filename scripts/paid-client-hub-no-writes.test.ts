@@ -94,14 +94,15 @@ console.log('\n── 28. THE EXISTING PUBLIC REPORT ROUTES ARE UNCHANGED ──
 
 console.log('\n── SECTION 5 KEEPS WHAT IT HAD ──');
 ok(/Planned pages/.test(clientHub), 'the planned-pages list is still in Section 5');
-ok(/to="\/page-generator"/.test(clientHub), 'the page generator link is still in Section 5');
+/* 2026-10-06: the generator lives in this page's "Pages & reviews" (src/lib/paidClientTools.ts); the link stays. */
+ok(clientHub.includes("to={clientToolUrl(lead.id, 'page-generator')}"), 'the page generator link is still in the Website Build stage');
 {
   /* Both must sit INSIDE the Website Build stage, not merely somewhere on the page. */
   const start = clientHub.indexOf('function WebsiteBuildStage');
   const end = clientHub.indexOf('export default function ClientHub');
   const stage = clientHub.slice(start, end);
   ok(start > -1 && stage.includes('Planned pages'), 'planned pages render inside WebsiteBuildStage');
-  ok(stage.includes('/page-generator'), 'the page generator link renders inside WebsiteBuildStage');
+  ok(stage.includes("clientToolUrl(lead.id, 'page-generator')"), 'the page generator link renders inside WebsiteBuildStage');
   ok(stage.includes('/website-build'), 'alongside the link to the Website Build command centre');
 }
 ok(/<Stage k="build" title="4. Website Build"/.test(clientHub), 'Section 4 is titled Website Build (renumbered 2026-09-29 when the Action Plan step left)');

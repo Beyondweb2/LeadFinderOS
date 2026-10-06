@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { ExternalLink, Loader2, UserRound } from 'lucide-react';
+import { ExternalLink, FileSearch, Globe, Loader2, MessagesSquare, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { edgeErrorMessage, invokeEdge } from '@/lib/edgeInvoke';
 import { serviceEndView } from '@/lib/serviceEnd';
 import { DOMAIN_CONTROL_OPTIONS, DOMAIN_REASON_TEXT } from '@/lib/domainAuthority';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { EDGE, Fact, IconTile, SubSection, SURFACE, TONE, ToneChip, type Tone } from '@/components/operator/ui';
 import { ACTIVITY_LABEL, activityDetail } from '@/lib/salesCrm';
 import { leadSourceLabel } from '@/lib/salesPerformance';
 import { shortReportUrl } from '@/lib/reportSlug';
@@ -64,25 +63,27 @@ function DomainBlock({ leadId, handoff, onChanged }: { leadId: string; handoff: 
     finally { setBusy(false); }
   };
   if (!d) return null;
+  const domainTone: Tone = d.label === 'DOMAIN READY' ? 'green' : d.label === 'NOT NEEDED' ? 'grey' : 'amber';
   return (
-    <div className="space-y-2 rounded-lg border p-3 text-sm" data-testid="handoff-domain">
+    <div className={cn('space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3 text-sm', EDGE[domainTone])} data-testid="handoff-domain">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className={cn('text-xs', d.label === 'DOMAIN READY' ? 'bg-emerald-600 hover:bg-emerald-600' : d.label === 'NOT NEEDED' ? 'bg-slate-500 hover:bg-slate-500' : 'bg-amber-600 hover:bg-amber-600')}>{d.label}</Badge>
-        {d.applies && <span className="text-xs text-muted-foreground">{d.mayReuseExistingSite ? 'Client says they own / may reuse the current site' : 'Fresh build: no confirmed rights to reuse the current site'}</span>}
+        <Globe className={cn('h-4 w-4 shrink-0', TONE[domainTone].text)} />
+        <ToneChip tone={domainTone} className="text-xs">{d.label}</ToneChip>
+        {d.applies && <span className="min-w-0 text-xs text-muted-foreground">{d.mayReuseExistingSite ? 'Client says they own / may reuse the current site' : 'Fresh build: no confirmed rights to reuse the current site'}</span>}
       </div>
-      {d.reasons.length > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">{d.reasons.map((x) => DOMAIN_REASON_TEXT[x]).join(' · ')}</p>}
+      {d.reasons.length > 0 && <p className={cn('text-xs', TONE.amber.text)}>{d.reasons.map((x) => DOMAIN_REASON_TEXT[x]).join(' · ')}</p>}
       {sales && <p className="text-xs text-muted-foreground">Sales heard: {sales.label}</p>}
-      {handoff.domain_escalated_at && <p className="text-xs text-amber-700 dark:text-amber-300">They asked us to check their domain setup ({day(handoff.domain_escalated_at)}).</p>}
+      {handoff.domain_escalated_at && <p className={cn('text-xs', TONE.amber.text)}>They asked us to check their domain setup ({day(handoff.domain_escalated_at)}).</p>}
       {handoff.terminated
-        ? <p className={cn('text-xs font-semibold', handoff.terminated.reason === 'client_ended_early' ? 'text-muted-foreground' : 'text-destructive')}>{serviceEndView({ service_terminated_at: handoff.terminated.at, service_termination_reason: handoff.terminated.reason })?.stateLabel === 'COMPLETED' ? `Completed ${day(handoff.terminated.at)}: the client ended the engagement early.` : `Service ended ${day(handoff.terminated.at)} (domain / authority dispute)${handoff.terminated.note ? `: ${handoff.terminated.note}` : ''}. Guarantee re-measure and results are off; cancel the subscription in Stripe if not done.`}</p>
+        ? <p className={cn('text-xs font-semibold', handoff.terminated.reason === 'client_ended_early' ? 'text-muted-foreground' : TONE.red.text)}>{serviceEndView({ service_terminated_at: handoff.terminated.at, service_termination_reason: handoff.terminated.reason })?.stateLabel === 'COMPLETED' ? `Completed ${day(handoff.terminated.at)}: the client ended the engagement early.` : `Service ended ${day(handoff.terminated.at)} (domain / authority dispute)${handoff.terminated.note ? `: ${handoff.terminated.note}` : ''}. Guarantee re-measure and results are off; cancel the subscription in Stripe if not done.`}</p>
         : !ending
-          ? <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEnding(true)}>End service (domain / authority dispute)…</Button>
-          : <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Use only where a third party credibly disputes the client’s ownership or authority and it cannot reasonably be resolved (terms: “If someone else disputes your authority”). The £99 is not refunded for this reason, the guarantee does not cover it, and no further monthly payments may be taken — you cancel the subscription in Stripe.</p>
+          ? <Button size="sm" variant="outline" className="h-auto min-h-9 whitespace-normal text-left text-xs" onClick={() => setEnding(true)}>End service (domain / authority dispute)…</Button>
+          : <div className={cn('space-y-2 rounded-xl p-3', TONE.red.tint)}>
+              <p className="text-xs text-foreground/85">Use only where a third party credibly disputes the client’s ownership or authority and it cannot reasonably be resolved (terms: “If someone else disputes your authority”). The £99 is not refunded for this reason, the guarantee does not cover it, and no further monthly payments may be taken — you cancel the subscription in Stripe.</p>
               <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What is the dispute? (who raised it, what they claim)" className="text-sm" />
-              <div className="flex gap-2">
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEnding(false)} disabled={busy}>Cancel</Button>
-                <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={busy || note.trim().length < 10} onClick={() => void end()}>{busy && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}End the service</Button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button size="sm" variant="ghost" className="text-xs" onClick={() => setEnding(false)} disabled={busy}>Cancel</Button>
+                <Button size="sm" variant="destructive" className="text-xs" disabled={busy || note.trim().length < 10} onClick={() => void end()}>{busy && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}End the service</Button>
               </div>
             </div>}
     </div>
@@ -93,49 +94,53 @@ export function ClientHandoffCard({ handoff, leadId, onChanged }: { handoff: Cli
   const audit = handoff.prospect_audit;
   const auditUrl = audit ? (audit.short_code ? shortReportUrl(audit.short_code) : `https://findable.live/report/${audit.id}`) : null;
   return (
-    <Card data-testid="client-handoff">
-      <CardContent className="space-y-4 p-5">
-        {/* The checklist and READY TO SUBMIT / READY FOR DELIVERY / WAITING moved to ClientSetupCard (2026-10-02) — drawn once. */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <p className="text-sm font-semibold">Who sold it · domain · the conversation</p>
-          <div className="text-right text-sm">
-            <div className="flex items-center justify-end gap-1.5"><UserRound className="h-4 w-4 text-muted-foreground" />Sold by <span className="font-medium">{handoff.seller_pending === 'awaiting_attribution' ? 'Awaiting attribution review' : handoff.seller_pending === 'not_credited' ? 'Not credited to a salesperson' : handoff.sold_by ?? 'Not recorded'}</span></div>
-            <div className="text-xs text-muted-foreground">
-              {handoff.seller_pending ? 'Decided on the Team page' : handoff.sold_by_recorded ? `Recorded at payment${handoff.sold_at ? ` · ${day(handoff.sold_at)}` : ''}` : 'From the current owner (paid before this was recorded)'}
-              {handoff.owner_now && handoff.owner_now !== handoff.sold_by ? ` · now with ${handoff.owner_now}` : ''}
-            </div>
-            <div className="text-xs text-muted-foreground">Found via {leadSourceLabel(handoff.lead_source)}{handoff.added_by ? ` · added by ${handoff.added_by}` : ''}</div>
-          </div>
-        </div>
-        {leadId && <DomainBlock leadId={leadId} handoff={handoff} onChanged={onChanged} />}
-        {auditUrl && (
-          <p className="text-sm">
-            Prospect audit · {day(audit!.created_at)} ·{' '}
-            <a className="inline-flex items-center gap-1 text-primary hover:underline" href={`${auditUrl}${auditUrl.includes('?') ? '&' : '?'}preview=1`} target="_blank" rel="noreferrer">
-              Open report <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </p>
-        )}
-        <div>
-          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sales notes and contact</div>
-          {handoff.activity.length === 0
-            ? <p className="text-xs text-muted-foreground">Nothing recorded by Sales.</p>
-            : (
-              <ul className="max-h-64 space-y-1.5 overflow-y-auto text-xs">
-                {handoff.activity.map((a) => {
-                  const detail = activityDetail(a, () => 'Someone');
-                  return (
-                    <li key={a.id}>
-                      <span className="font-medium">{ACTIVITY_LABEL[a.kind] ?? a.kind}</span>
-                      <span className="text-muted-foreground"> · {a.actor} · {day(a.created_at)}</span>
-                      {detail && <div className="whitespace-pre-wrap text-muted-foreground">{detail}</div>}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-        </div>
-      </CardContent>
-    </Card>
+    <section data-testid="client-handoff" className={cn(SURFACE, 'min-w-0 space-y-4 p-4 sm:p-5')}>
+      {/* The checklist and READY TO SUBMIT / READY FOR DELIVERY / WAITING moved to ClientSetupCard (2026-10-02) — drawn once. */}
+      <header className="flex min-w-0 items-center gap-3">
+        <IconTile icon={UserRound} tone="blue" />
+        <h2 className="min-w-0 text-base font-bold leading-tight tracking-tight">Who sold it · domain · the conversation</h2>
+      </header>
+      <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        <Fact label="Sold by">
+          <span className="font-semibold">{handoff.seller_pending === 'awaiting_attribution' ? 'Awaiting attribution review' : handoff.seller_pending === 'not_credited' ? 'Not credited to a salesperson' : handoff.sold_by ?? 'Not recorded'}</span>
+          <span className="block text-xs text-muted-foreground">
+            {handoff.seller_pending ? 'Decided on the Team page' : handoff.sold_by_recorded ? `Recorded at payment${handoff.sold_at ? ` · ${day(handoff.sold_at)}` : ''}` : 'From the current owner (paid before this was recorded)'}
+            {handoff.owner_now && handoff.owner_now !== handoff.sold_by ? ` · now with ${handoff.owner_now}` : ''}
+          </span>
+        </Fact>
+        <Fact label="Found via">
+          {leadSourceLabel(handoff.lead_source)}
+          {handoff.added_by && <span className="block text-xs text-muted-foreground">added by {handoff.added_by}</span>}
+        </Fact>
+      </dl>
+      {leadId && <DomainBlock leadId={leadId} handoff={handoff} onChanged={onChanged} />}
+      {auditUrl && (
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+          <FileSearch className={cn('h-4 w-4 shrink-0', TONE.purple.text)} />
+          Prospect audit · {day(audit!.created_at)} ·{' '}
+          <a className="inline-flex items-center gap-1 font-medium text-primary hover:underline" href={`${auditUrl}${auditUrl.includes('?') ? '&' : '?'}preview=1`} target="_blank" rel="noreferrer">
+            Open report <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </p>
+      )}
+      <SubSection title="Sales notes and contact" icon={MessagesSquare} tone="blue" className="border-t border-border/60 pt-4">
+        {handoff.activity.length === 0
+          ? <p className="text-xs text-muted-foreground">Nothing recorded by Sales.</p>
+          : (
+            <ul className="max-h-64 divide-y divide-border/50 overflow-y-auto text-xs">
+              {handoff.activity.map((a) => {
+                const detail = activityDetail(a, () => 'Someone');
+                return (
+                  <li key={a.id} className="py-1.5">
+                    <span className="font-medium">{ACTIVITY_LABEL[a.kind] ?? a.kind}</span>
+                    <span className="text-muted-foreground"> · {a.actor} · {day(a.created_at)}</span>
+                    {detail && <div className="whitespace-pre-wrap break-words text-muted-foreground">{detail}</div>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+      </SubSection>
+    </section>
   );
 }

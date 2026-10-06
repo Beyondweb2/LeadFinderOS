@@ -22,6 +22,33 @@ export interface WhatsNewEntry { id: string; date: string; title: string; body: 
 export const WHATS_NEW_REPORT_FROM = '2026-10-01';
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: '2026-10-06-paid-client-tools', date: '2026-10-06', title: 'Page plan, page generator and review replies are inside Paid clients', audience: 'admin',
+    body: 'The three tools are no longer separate menu items. They are in Paid clients: the switch at the top of the list (every client), and "Pages & reviews" on each client\'s page (that client only). Old links still work.',
+    report: {
+      added: [
+        'Paid clients has a switch at the top: Clients · Page plan · Page generator · Review replies.',
+        'Each client\'s page has a "Pages & reviews" section with the same three tools, already set to that client.',
+        '"Build this page" on a client\'s page plan opens the generator right there, on that page.',
+      ],
+      changed: [
+        'Old links to Review replies, Page generator and Page plan open the same tool inside Paid clients, with the same client and page.',
+        'Paid clients is in the phone menu (More).',
+      ],
+      removed: ['Review replies, Page generator and Page plan from the side menu.'],
+      effect: 'Everything about a paying client is in one place. Nothing the tools could do has gone.',
+    } },
+  { id: '2026-10-06-one-look', date: '2026-10-06', title: 'One look across the app', audience: 'all',
+    body: 'Pop-ups, the Paid client pages, Team and the admin cards now use the same colours, icons and cards as the Sales dashboard.',
+    report: {
+      added: ['Coloured status chips, and a coloured edge on cards that need attention (amber), are done (teal) or are blocked (red).'],
+      changed: [
+        'Pop-ups have a clear header with an icon, rounder corners, and their buttons sit side by side on a phone instead of stacking.',
+        'Tabs look like the Sales dashboard\'s switches.',
+        'Fewer grey boxes inside grey boxes: sections inside a card are marked by a coloured line and a heading.',
+      ],
+      removed: [],
+      effect: 'The whole app reads as one product. Nothing works differently.',
+    } },
   { id: '2026-10-05-sales-small-fixes', date: '2026-10-05', title: 'Four small fixes: unsaved notes, start dates, clearer refusals, link expiry', audience: 'all',
     body: 'Escape no longer throws away a note you have not saved. A salesperson is Ready to Sell from their start date, not before. If your onboarding is not finished, the app now says so instead of "usage paused". The sign-up link says "about 30 days", not "715 hours".',
     report: {

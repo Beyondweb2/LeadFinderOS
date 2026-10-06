@@ -18,6 +18,8 @@
    (the caller must show it and not navigate), distinct from an empty-but-read plan.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
+import { paidClientToolUrl } from './paidClientTools.ts';
+
 export interface HandoffRow {
   lead_id: string | null;
   baseline_audit_id: string;
@@ -66,9 +68,17 @@ export function resolveHandoff(
   };
 }
 
-/** The generator URL for a resolved target — one place builds it so the seed params can't drift. */
-export function handoffUrl(t: HandoffTarget): string | null {
-  if (t.mode === 'service') return `/page-generator?mode=service&client=${encodeURIComponent(t.clientId)}&page_key=${encodeURIComponent(t.pageKey)}`;
-  if (t.mode === 'qa') return `/page-generator?mode=qa&client=${encodeURIComponent(t.clientId)}&question=${encodeURIComponent(t.question)}`;
+/** The seed a resolved target hands the generator (mode / client / page_key / question). */
+export function handoffSeed(t: HandoffTarget): Record<string, string> | null {
+  if (t.mode === 'service') return { mode: 'service', client: t.clientId, page_key: t.pageKey };
+  if (t.mode === 'qa') return { mode: 'qa', client: t.clientId, question: t.question };
   return null;
+}
+
+/** The generator URL for a resolved target — one place builds it so the seed params can't drift.
+ *  2026-10-06: the generator lives in Paid Clients (src/lib/paidClientTools.ts); this is its Tools tab,
+ *  with the seed. A client's own page hands off in place instead (PagePlanTool onHandoff). */
+export function handoffUrl(t: HandoffTarget): string | null {
+  const seed = handoffSeed(t);
+  return seed ? paidClientToolUrl('page-generator', seed) : null;
 }

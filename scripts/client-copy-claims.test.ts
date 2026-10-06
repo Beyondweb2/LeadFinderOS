@@ -144,7 +144,7 @@ const OPERATOR_SCREENS: Array<[string, string]> = [
   ["delivery cockpit (operator)", "src/components/LeadDeliveryCockpit.tsx"],
   ["audit pills (operator)", "src/components/audit/AuditPills.tsx"],
   ["page-plan queue logic (operator)", "src/lib/pagePlanQueue.ts"],
-  ["page-plan queue screen (operator)", "src/pages/PagePlanQueue.tsx"],
+  ["page-plan queue screen (operator)", "src/components/clientTools/PagePlanTool.tsx"],
   ["dashboard tasks (operator)", "src/lib/dashboardTasks.ts"],
   ["admin control centre (operator)", "src/components/admin/controlCentre.tsx"],
   ["admin control centre: sales intelligence (operator)", "src/components/admin/intelligence.tsx"],
