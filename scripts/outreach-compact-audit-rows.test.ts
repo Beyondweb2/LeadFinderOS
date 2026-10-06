@@ -122,18 +122,27 @@ console.log('── the big panel is gone; bulk checking stays ──');
   ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckPanel.tsx')), 'SalesCheckPanel.tsx is deleted');
   ok(!/SalesCheckPanel|sales-check-panel|sales-check-items/.test(outreach + table), 'nothing renders the results panel');
   ok(/data-testid="sales-check-button"/.test(table) && /onSalesCheck\(Array\.from\(selectedIds\)\)/.test(table), 'select leads → "Check before calling" is still on the selection toolbar');
-  ok(/<SalesCheckDialog/.test(outreach) && /checks\.start\(checkIds, refresh\)/.test(outreach), 'the press still opens the confirm dialog and starts the server batch');
-  const dialog = read('src/components/SalesCheckDialog.tsx');
-  ok(/SALES_CHECK_BATCH_MAX/.test(dialog) && /tooMany/.test(dialog) && SALES_CHECK_BATCH_MAX === 20, 'max per batch is still SALES_CHECK_BATCH_MAX (20), refused above it');
-  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 30 && Number(DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day) === 30, 'fresh checks per rep per day still default to 30');
-  ok(/SALES_CHECK_AUDIT_REUSE_DAYS/.test(dialog), 'the dialog still says recent results are reused');
+  /* ONE CLICK (Paul, 2026-10-06, improve/one-click-checks-50): the press starts the batch. */
+  ok(!existsSync(path.join(ROOT, 'src/components/SalesCheckDialog.tsx')) && !/SalesCheckDialog|checkIds|sales-check-confirm/.test(outreach + table), 'no confirmation dialog: SalesCheckDialog is deleted and nothing renders a second "Check N leads" button');
+  ok(/onSalesCheck=\{perms\.salesChecks \? startSalesCheck : undefined\}/.test(outreach) && /const startSalesCheck = useCallback\(\(ids: string\[\]\) => \{[\s\S]{0,160}void checks\.start\(live\);/.test(code('src/pages/Outreach.tsx')), 'pressing "Check before calling" calls checks.start straight away (demo rows dropped)');
+  const hook = code('src/hooks/useSalesChecks.ts');
+  ok(/const start = useCallback\(async \(leadIds: string\[\]\)/.test(hook) && /refresh: false/.test(hook) && !/Check again even/.test(read('src/hooks/useSalesChecks.ts') + outreach + table), 'no "Check again even if checked recently" option: refresh is always false, recent results are reused');
+  ok(!/<Dialog\b/.test(code('src/components/OutreachAiCheck.tsx')), 'the check bar is not a modal');
+  ok(SALES_CHECK_BATCH_MAX === 20, 'max per batch is still SALES_CHECK_BATCH_MAX (20) — the server refuses above it');
+  ok(SALES_CHECK_DEFAULT_PER_REP_PER_DAY === 50 && Number(DEFAULT_PROTECTION_LIMITS.actions.sales_check.per_day) === 50, 'fresh checks per rep per day default to 50 (was 30)');
   ok(/salesCheckView=\{perms\.salesChecks \? checks\.view : null\}/.test(outreach), 'the batch view reaches the table only for the selling salesperson');
   ok(/allowance=\{salesCheckView\?\.allowance \?\? null\}/.test(table), 'checks left today are on the one-line bar');
   const bar = text(renderToStaticMarkup(createElement(OutreachCheckBar, {
     batch: { status: 'waiting', counts: { total: 12, queued: 3, running: 4, done: 4, reused: 1, failed: 0, skipped: 0 } },
-    allowance: { limit: 30, remaining: 22 }, onStop: () => {}, ready: 5, hasNext: true, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {},
+    allowance: { limit: 50, remaining: 43 }, onStop: () => {}, ready: 5, hasNext: true, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {},
   })));
-  ok(/Checking 12 ?: 5 ready · 4 checking · 3 waiting/.test(bar) && /Checks left today: 22 ?\/30/.test(bar) && /Stop/.test(bar) && /Open next ready \(5\)/.test(bar), `the bar: counts, allowance, Stop, Open next ready ("${bar}")`);
+  ok(/Checking 12 ?: 5 ready · 4 checking · 3 waiting/.test(bar) && /Checks left today: 43 ?\/50/.test(bar) && /Stop/.test(bar) && /Open next ready \(5\)/.test(bar), `the bar: counts, allowance, Stop, Open next ready ("${bar}")`);
+  ok(!/limit reached/i.test(bar), '…no limit message while checks are left');
+  const full = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: { limit: 50, remaining: 50 }, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {} })));
+  ok(/Checks left today: 50 ?\/50/.test(full), `a fresh day reads "Checks left today: 50/50" ("${full}")`);
+  const zero = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: { limit: 50, remaining: 0 }, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 0, onStartOver: () => {} })));
+  ok(/Checks left today: 0 ?\/50/.test(zero) && /Daily check limit reached/.test(zero) && zero.length < 120, `at 0: "0/50" and one short line, "Daily check limit reached" ("${zero}")`);
+  ok(/disabled=\{!!salesCheckBlocked\}/.test(table) && !/remaining\s*<=?\s*0/.test(read('src/pages/Outreach.tsx')), 'the button is NOT disabled at 0 — a press can still reuse recent results');
   ok(!/\$|£|usd|cost|spend/i.test(bar), 'no cost on the bar');
   const empty = text(renderToStaticMarkup(createElement(OutreachCheckBar, { batch: null, allowance: null, ready: 0, hasNext: false, onOpenNext: () => {}, openedCount: 2, onStartOver: () => {} })));
   ok(/No ready lead left/.test(empty) && /Start over/.test(empty), 'nothing left → "No ready lead left" and Start over');

@@ -52,7 +52,7 @@
   client email goes only to the QA inbox (`qaEmailHold`).
 - **Archived leads** — off both Outreach and Inbox lists, skipped by sales checks, never claimable; archiving stops contact
   in both queues and the reply/audit paths.
-- **Bulk-audit permissions** — sales bulk checks only via `sales-prospect-check` (own active leads, 30/day, 20/batch,
+- **Bulk-audit permissions** — sales bulk checks only via `sales-prospect-check` (own active leads, 50/day, 20/batch,
   prospecting pool, guard row per check); the admin `bulk-jobs` stays admin-only.
 - **Admin-only functionality** — Team (invite / disable), API Usage & Security (limits, pause modes, suspension), Paid
   Clients, Website Build, AI Audit, Coverage niche check Run, paid Enrich, payment / delivery / client tab.

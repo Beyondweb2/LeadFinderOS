@@ -84,10 +84,12 @@ export function useSalesChecks(enabled: boolean) {
     }
   }, [signature, qc]);
 
-  const start = useCallback(async (leadIds: string[], refresh: boolean): Promise<{ ok: boolean; message?: string }> => {
-    const key = `${refresh ? 'r' : 'n'}:${[...leadIds].sort().join(',')}`;
+  /** ONE CLICK (2026-10-06): the toolbar press calls this directly — no confirm dialog, no "check again"
+   *  option. refresh is always false, so a recent result is reused automatically (free). */
+  const start = useCallback(async (leadIds: string[]): Promise<{ ok: boolean; message?: string }> => {
+    const key = [...leadIds].sort().join(',');
     if (!pressRef.current || pressRef.current.key !== key) pressRef.current = { id: newRequestId(), key };
-    const body = { action: 'start', lead_ids: leadIds, refresh, client_request_id: pressRef.current.id };
+    const body = { action: 'start', lead_ids: leadIds, refresh: false, client_request_id: pressRef.current.id };
     setStarting(true); setLastError(null);
     try {
       let r: { view: SalesCheckView } | null = null;
