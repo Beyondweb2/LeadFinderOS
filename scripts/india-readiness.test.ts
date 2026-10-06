@@ -62,7 +62,9 @@ ok(!/^44/.test(toWhatsAppDigits('098765 43210', 'India') ?? ''), 'an India lead\
 
 console.log('\n── UK +44: the new leaf is identical to the old rule on every UK input ──');
 const ukInputs = ['07700 900123', '+44 7700 900123', '0044 7700 900123', '447700900123', '01632 960001', '+44 (0)20 7946 0000', '', ' ', '-', '+', '7700900123', '(01234) 567890'];
-for (const c of ['UK', 'GB', null, undefined, 'USA', 'Australia']) {
+/* 'Australia' left this loop on 2026-10-07 ON PURPOSE: an Australia lead's national number now gets 61 and an
+   unplaceable one answers null (scripts/au-location-parity.test.ts pins that). Every UK input is still identical. */
+for (const c of ['UK', 'GB', null, undefined, 'USA']) {
   const diffs = ukInputs.filter((r) => toWhatsAppDigits(r, c as string | null) !== legacyToWhatsAppNumber(r, c as string | null));
   ok(diffs.length === 0, `country ${String(c)}: identical on ${ukInputs.length} inputs${diffs.length ? ' — differs on ' + JSON.stringify(diffs) : ''}`);
 }
@@ -120,7 +122,8 @@ for (const [loc, c, want] of [['Reading', 'UK', 'GB'], ['Reading', undefined, 'G
   ok(resolveGeoBias(loc, c) === want, `UK/other unchanged: ${loc} (${String(c)}) → ${String(want)}`);
 {
   const sl = read('supabase/functions/search-leads/index.ts');
-  ok(/keyBias && keyBias !== 'GB' \? `\$\{location\}##\$\{keyBias\}` : location/.test(sl), 'a non-GB bias is part of the results cache key; a GB one adds nothing (UK keys unchanged)');
+  /* 2026-10-07: + the picked-country suffix (geobias pickedCountryKeySuffix; '' for every UK input). */
+  ok(/keyBias && keyBias !== 'GB' \? `\$\{location\}##\$\{keyBias\}` : (pickSuffix \? `\$\{location\}##\$\{pickSuffix\}` : )?location/.test(sl), 'a non-GB bias is part of the results cache key; a GB one adds nothing (UK keys unchanged)');
 }
 
 console.log('\n── Hook Audit: "Pune India", never "Pune UK"; UK wording unchanged ──');
@@ -176,7 +179,7 @@ console.log('\n── Sales can queue an Indian mobile; UK rule unchanged ──
   ok(m.includes("elsif not ((coalesce(v_lead.country, 'UK') = 'UK' and v_pk ~ '^7[0-9]{9}$') or v_pk ~ '^91[6-9][0-9]{9}$') then v_reason := 'not_a_uk_mobile';"), 'the one changed line: UK mobile as before, OR an Indian mobile by number');
   ok(!m.includes("<> 'UK' or v_pk !~"), 'the old UK-only line is gone from the new definition');
   for (const g of ["'not_yours'", "'archived'", "'client'", "'not_new'", "'already_contacted'", "'opted_out'", "'daily_limit'", "'no_phone'"]) ok(m.includes(g), `…every other guard kept: ${g}`);
-  ok(/'not a UK or Indian mobile'/.test(read('src/lib/salesCrm.ts')), 'the refusal reads "not a UK or Indian mobile"');
+  ok(/'not a UK or Indian mobile/.test(read('src/lib/salesCrm.ts')), 'the refusal reads "not a UK or Indian mobile" (2026-10-07: + that Australia is not switched on)');
 }
 
 console.log('\n── Dedupe: names never collide across countries; place id stays the identity ──');

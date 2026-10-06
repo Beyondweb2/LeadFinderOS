@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 interface SingleWhatsAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null;
+  lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string; country?: string | null } | null;
   /** Called when user clicks "Open WhatsApp" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'whatsapp') => void;
   /** Launch-pad: pre-fill this template content fresh on open (overrides saved/localStorage). */
@@ -131,7 +131,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, initial
     setIsSending(true);
     
     const message = fillTemplate(template, { businessName: lead.business_name, link: resolvedLink });
-    const url = generateWhatsAppUrl(lead.phone, message);
+    const url = generateWhatsAppUrl(lead.phone, message, lead.country);
 
     // Store pending WhatsApp check markers in localStorage
     if (lead.id && (!lead.whatsapp_status || lead.whatsapp_status === 'unknown')) {
