@@ -52,7 +52,8 @@ ok(/<NotReadyToSellBanner \/>/.test(index) && /if \(readiness\.gated && !readine
 console.log('\n── the CLIENT agreement is untouched ──');
 const co = read('supabase/functions/findable-checkout/index.ts');
 ok(/checkoutAgreementGate\(\{/.test(co) && /kind: "agreement_required"/.test(co), 'the client v3 agreement-before-payment gate is still in findable-checkout');
-const newer = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((n) => n.slice(0, 14) >= '20261010140000');
+/* Bounded to THIS change's window: agreement v4 (20261012090000, 2026-10-06) is a later, deliberate client-agreement change. */
+const newer = readdirSync(path.join(ROOT, 'supabase/migrations')).filter((n) => n.slice(0, 14) >= '20261010140000' && n.slice(0, 14) < '20261012000000');
 ok(newer.every((n) => !/client_agreement|client_service|checkout/i.test(read(`supabase/migrations/${n}`).replace(/--[^\n]*/g, ''))), 'this change touches no client agreement / checkout object');
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');

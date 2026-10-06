@@ -32,6 +32,7 @@ import { isShortCode } from "../../../src/lib/reportSlug.ts";
 import { agreementUrl } from "../../../src/lib/clientAgreement.ts";
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { serviceRouteForTotal } from "../../../src/lib/findableOffer.ts";
+import { continuingServiceApplies, isOptionBTerms } from "../../../src/lib/clientTimeline.ts";
 
 /** ⛔ CLIENT-SAFE LEAD COLUMNS. Operator columns are absent by construction, not by discipline. */
 export const LEAD_CLIENT_COLUMNS =
@@ -176,7 +177,7 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
   const { data: agreeLink, error: agreeLinkErr } = await service.from("client_agreement_links")
     .select("token,service_route").eq("lead_id", leadId).maybeSingle();
   if (agreeLinkErr) throw agreeLinkErr;
-  let agreement: { url: string | null; route: "build" | "optimise" | null; termsKnown: boolean; acceptedAtIso: string | null; acceptedBy: string | null } | null = null;
+  let agreement: { url: string | null; route: "build" | "optimise" | null; termsKnown: boolean; acceptedAtIso: string | null; acceptedBy: string | null; afterTerm: "continues" | "stops" | null } | null = null;
   if (agreeLink) {
     const { data: signed, error: signedErr } = await service.from("client_agreement_acceptances")
       .select("accepted_at,typed_name").eq("lead_id", leadId).eq("method", "agree_page")
@@ -185,6 +186,16 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
     /* ⛔ THE CURRENT AGREEMENT'S TERMS ARE SHOWN ONLY WHEN THE RECORD SAYS THEY APPLY (Paul, a general
        rule for older clients): a route on the link (today's checkout, or Paul's Build / Optimise) or a
        route stamped by today's checkout. The same test the agreement page itself uses to open. */
+    /* 🔴 v4 (2026-10-06): what follows the minimum term comes from THIS client's own stamped terms
+       (client_service_terms) — never from today's offer. No terms row = nothing said about after the term. */
+    const { data: termsRow, error: termsErr } = await service.from("client_service_terms")
+      .select("commercial_terms,service_route").eq("lead_id", leadId).maybeSingle();
+    if (termsErr) throw termsErr;
+    const stamped = termsRow as { commercial_terms?: string | null; service_route?: string | null } | null;
+    const stampedRoute = stamped?.service_route === "build" || stamped?.service_route === "optimise" ? stamped.service_route : null;
+    const afterTerm: "continues" | "stops" | null = stamped && isOptionBTerms(stamped.commercial_terms) && stampedRoute
+      ? (continuingServiceApplies(stamped.commercial_terms, stampedRoute) ? "continues" : "stops")
+      : null;
     const linkRoute = (agreeLink as { service_route?: string | null }).service_route;
     const termsKnown = linkRoute === "build" || linkRoute === "optimise"
       || serviceRouteForTotal((lead as { contract_total_payments?: unknown }).contract_total_payments) !== null;
@@ -196,6 +207,7 @@ export async function renderWelcomePack(service: any, slug: string): Promise<Wel
       termsKnown,
       acceptedAtIso: (signed as { accepted_at?: string } | null)?.accepted_at ?? null,
       acceptedBy: (signed as { typed_name?: string | null } | null)?.typed_name ?? null,
+      afterTerm,
     };
   }
 

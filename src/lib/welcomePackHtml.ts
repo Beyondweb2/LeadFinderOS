@@ -2,7 +2,7 @@
    (render-welcome-pack, via _shared/welcome-pack-render.ts), and Deno cannot resolve an
    extensionless specifier — CLAUDE.md §3. scripts/check-import-graph.mjs fences it. */
 import { renderReportHtml, esc, type AiAuditReportData } from './aiAuditReportHtml.ts';
-import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
+import { FINDABLE_CONTACT_EMAIL, FINDABLE_CONTACT_WHATSAPP, FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP,
   FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, findableContactPhoneDisplay, serviceRouteForTotal, termMonthsFor, totalPaymentsFor,
   GBP_ACCESS_ASK, GBP_ADD_STEPS, GBP_ACCESS_REASSURANCE, GBP_ACCESS_CONSEQUENCE } from './findableOffer.ts';
 import type { BaselineSummary } from './baselineSummary.ts';
@@ -77,6 +77,10 @@ export interface WelcomePackAgreement {
   termsKnown?: boolean;
   acceptedAtIso?: string | null;
   acceptedBy?: string | null;
+  /** 🔴 v4 (2026-10-06): what follows the minimum term on THIS client's own terms (client_service_terms →
+   *  clientTimeline.continuingServiceApplies): 'continues' at FINDABLE_CONTINUING_GBP, or 'stops' (a v4
+   *  Optimise fixed term). Absent/null (legacy, or no terms row) names nothing about after the term. */
+  afterTerm?: 'continues' | 'stops' | null;
 }
 
 /** Client-safe business facts. ⛔ NOTHING OPERATOR-ONLY BELONGS IN THIS SHAPE — no notes, no
@@ -488,6 +492,16 @@ export const AGREEMENT_KEY_POINTS: Record<'build' | 'optimise' | 'unknown', read
     GUARANTEE_KEY_POINT,
   ],
 };
+/** 🔴 v4 (2026-10-06): the key point for what follows the minimum term — only when the client's OWN terms say
+ *  (afterTerm). A v4 Optimise client is told the payments stop; nobody is told a £29.99 their agreement lacks. */
+export function afterTermKeyPoint(route: 'build' | 'optimise' | null | undefined, afterTerm: 'continues' | 'stops' | null | undefined): string | null {
+  if (!route || !afterTerm) return null;
+  const n = totalPaymentsFor(route);
+  if (afterTerm === 'stops') return `After your ${n}th payment the payments stop. Nothing more is charged.`;
+  return route === 'build'
+    ? `After your ${n}th payment the website is yours, and hosting and monitoring continue at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days’ notice.`
+    : `After your ${n}th payment your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days’ notice.`;
+}
 const AGREEMENT_ALWAYS_YOURS = 'Your domain, logo and photos are always yours.';
 
 function agreementPage(a: WelcomePackAgreement): string {
@@ -516,7 +530,7 @@ function agreementPage(a: WelcomePackAgreement): string {
       <h1 class="wp-h1">Your agreement: the key points</h1>
       <p>Your Findable Client Service Agreement sets out exactly what we do and what you pay. In short:</p>
       <ul class="wp-keys">
-        ${AGREEMENT_KEY_POINTS[a.route ?? 'unknown'].map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
+        ${[...AGREEMENT_KEY_POINTS[a.route ?? 'unknown'], afterTermKeyPoint(a.route, a.afterTerm)].filter((l): l is string => !!l).map((l) => `<li>${esc(l)}</li>`).join('\n        ')}
       </ul>
       <p><b>${esc(AGREEMENT_ALWAYS_YOURS)}</b></p>
       ${action}`;

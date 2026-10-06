@@ -60,6 +60,7 @@ const NOT_A_LIST_READ: Record<string, { files: string[]; why: string }> = {
   lead_source: { files: ["src/lib/salesPerformance.ts"], why: "the Sales Dashboard fold's own rows, read on the server by sales-performance; Outreach imports it only for LEAD_SOURCE_LABELS (2026-09-28)" },
   sold_by_user_id: { files: ["src/lib/salesPerformance.ts"], why: "the same fold: who made the sale, read on the server by sales-performance (2026-09-28)" },
   sold_at: { files: ["src/lib/salesPerformance.ts"], why: "the same fold: a sale decided with NO seller (attribution review) is nobody's win — read on the server by sales-performance, whose select names sold_at (2026-10-05)" },
+  service_areas: { files: ["src/lib/clientTimeline.ts"], why: "ACCESS_REQUIREMENTS lists setup-checklist ITEM KEYS ('service_areas' is a handoffReadiness item), never a lead column; reached from the call screen since callScript.ts reads the refund-window constants (2026-10-06)" },
   service_terminated_at: { files: ["src/lib/quickClose.ts"], why: "quickCloseClosedRefusal is run only by fn quick-close and fn findable-checkout, each on its OWN lead row (both selects name service_terminated_at) — never on a list row (wave 1 integration, 2026-10-04; checkout, pre-sales final 2026-10-05)" },
 };
 

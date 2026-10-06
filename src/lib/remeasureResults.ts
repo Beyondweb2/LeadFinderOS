@@ -241,6 +241,10 @@ export interface ResultsCopyInput {
   /** v3 terms (2026-10-05): the Continuing Service (FINDABLE_CONTINUING_GBP) follows the minimum term (clause 9A), and the
    *  first monthly payment is the Payment Start Date, the day after the Refund Window (5.6). */
   v3Terms?: boolean;
+  /** 🔴 v4 (2026-10-06): does the Continuing Service follow THIS client's minimum term
+   *  (clientTimeline.continuingServiceApplies — v3 both routes, v4 Build only)? Absent/false on agreement-first
+   *  terms → the email says the payments stop after the last one. */
+  continuingService?: boolean;
 }
 
 /* ⛔ THE CLAIM PARAGRAPH — ONE SENTENCE OF OURS IN FRONT OF ONE SENTENCE THAT IS LOCKED.
@@ -301,7 +305,10 @@ export function resultsEmailParagraphs(i: ResultsCopyInput): string[] {
     /* v3: the date is the Payment Start Date (the day after the 14-day Refund Window); after the minimum
        term the Continuing Service follows (9A) — never "nothing is charged after". */
     const route = serviceRouteForTotal(i.totalPayments);
-    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`);
+    const after = i.continuingService
+      ? `After that your service continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice, and we will remind you at least 30 days before.`
+      : `After your ${route ? `${totalPaymentsFor(route)}th` : 'last'} payment the payments stop and nothing more is charged.`;
+    out.push(`Your first monthly payment of £${FINDABLE_MONTHLY_GBP} is on ${i.monthlyStartsOn}, the day after your 14-day refund window closes. The monthly covers ${monthlyCoversPhrase(route)}${route ? `, for the rest of your ${termMonthsFor(route)}-month minimum term (${totalPaymentsFor(route)} payments, counting the £${FINDABLE_SETUP_PRICE_GBP} you paid at sign-up)` : ''}. ${after}`);
   } else if (i.wentUp && i.monthlyStartsOn) {
     const route = serviceRouteForTotal(i.totalPayments);
     out.push(route

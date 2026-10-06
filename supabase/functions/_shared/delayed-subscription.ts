@@ -3,7 +3,7 @@ import {
   serviceRouteForTotal, totalPaymentsFor, type ServiceRoute,
 } from "../../../src/lib/findableOffer.ts";
 import { FIRST_PAYMENT_FILTERS, subscriptionRefusal } from "../../../src/lib/paymentState.ts";
-import { OPTION_B_TIMING, PAYMENT_START_HOLD_DAYS } from "../../../src/lib/clientTimeline.ts";
+import { OPTION_B_TIMING, PAYMENT_START_HOLD_DAYS, isOptionBTerms } from "../../../src/lib/clientTimeline.ts";
 
 /** The provisional first-charge instant for a v3 subscription: PAYMENT_START_HOLD_DAYS after sign-up. */
 export function paymentStartHoldIso(signupIso: string | null | undefined): string | null {
@@ -202,6 +202,10 @@ export async function createDelayedSubscription(
   route: ServiceRoute | null,
   claimKey: string,
   timing: SubscriptionTiming = "legacy",
+  /** v4 on: the sale's commercial terms (csa_v3_option_b / csa_v4_option_b), written to the subscription so
+   *  the webhook can tell from the subscription alone whether a Continuing Service follows its last payment
+   *  (clientTimeline.subscriptionContinuesAfterTerm). Anything else is not written. */
+  commercialTerms: string | null = null,
 ): Promise<DelayedSubscriptionOutcome> {
   if (lead.stripe_subscription_id) return { kind: "skipped", reason: `already subscribed (${lead.stripe_subscription_id})` };
   const refusal = subscriptionRefusal(lead);
@@ -261,6 +265,7 @@ export async function createDelayedSubscription(
     "metadata[checkout_session]": claimKey,
     /* v3: the marker the Payment Start scheduler requires before it will move this subscription. */
     ...(timing === OPTION_B_TIMING ? { "metadata[payment_timing]": OPTION_B_TIMING, "metadata[payment_start]": "on_hold_until_set" } : {}),
+    ...(timing === OPTION_B_TIMING && isOptionBTerms(commercialTerms) ? { "metadata[commercial_terms]": commercialTerms } : {}),
   }), { "Idempotency-Key": subscriptionIdempotencyKey(claimKey) });
   /* 409 = another delivery of this same checkout is creating it with the same key right now. It is not a
      failure: that delivery stores the id. Reported as skipped so no false "no schedule" alarm goes out. */

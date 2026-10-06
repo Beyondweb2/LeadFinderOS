@@ -2,13 +2,15 @@
    THE FINDABLE CLIENT SERVICE AGREEMENT — the ONE copy of its words (Paul, 2026-10-02).
 
    ⛔ THE WORDING IS PAUL'S, TAKEN VERBATIM: version "v1" from Findable_Client_Service_Agreement.pdf
-   (2026-10-02), version "v3" from Findable_Client_Service_Agreement_v3_clean.docx (2026-10-05).
-   Do not edit a word of a published version. A change is a NEW version: copy the block, give it a new
+   (2026-10-02), version "v3" from Findable_Client_Service_Agreement_v3_clean.docx (2026-10-05), and
+   version "v4" = v3 plus the listed V4_AMENDMENTS (2026-10-06: Optimise ends after six payments; only
+   Build continues at £29.99). Do not edit a word of a published version. A change is a NEW version: copy the block, give it a new
    id, and point CLIENT_AGREEMENT_VERSION at it. scripts/client-agreement.test.ts pins v1's fingerprint
    and scripts/client-agreement-v3.test.ts pins v3's, so an edit that forgets to bump fails the gate.
-   🔴 v3 IS SIGNED BEFORE PAYMENT, ON THE AGREEMENT PAGE ONLY (its clause 1.2). There is no checkout tick
-   under v3: findable-checkout refuses to create a Stripe session until a v3 acceptance exists for THAT
-   sign-up (src/lib/signupGate.ts). v1 stays readable so the copies already signed render exactly.
+   🔴 v3 AND v4 ARE SIGNED BEFORE PAYMENT, ON THE AGREEMENT PAGE ONLY (clause 1.2). There is no checkout
+   tick: findable-checkout refuses to create a Stripe session until an acceptance of the CURRENT version
+   exists for THAT sign-up (src/lib/signupGate.ts). v1 and v3 stay readable so the copies already signed
+   render exactly.
 
    ⛔ ONE SOURCE, THREE RENDERINGS. The agreement page (client-agreement edge function), the PDF copy
    (agreementPdf.ts) and the evidence fingerprint all read THESE blocks, so what the client saw, what
@@ -19,7 +21,9 @@
 
 import { REPORT_PUBLIC_ORIGIN } from './findableOffer.ts';
 
-export const CLIENT_AGREEMENT_VERSION = 'v3';
+/* 🔴 v4 SINCE 2026-10-06 (Optimise is a fixed six-payment term; only Build continues at £29.99). Every
+   NEW sign-up signs v4; v3 and v1 signatures stay readable and verifiable against their own text. */
+export const CLIENT_AGREEMENT_VERSION = 'v4';
 
 /** A client's own agreement page: findable.live/agree/<token> (findable-site proxies it). */
 export function agreementUrl(token: string): string {
@@ -389,7 +393,97 @@ const V3: AgreementVersion = {
   },
 };
 
-const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3 };
+/* ════════════════════════════════════════════════════════════════════════════════════════════════
+   VERSION v4 — v3 WITH THE OPTIMISE FIXED TERM (Paul's commercial decision, 2026-10-06).
+   v3 said BOTH services continue at £29.99 a month after the minimum term (clause 9A). Paul corrected the
+   product: FINDABLE OPTIMISE is six £99 payments in total and then the payments STOP; FINDABLE BUILD is
+   twelve £99 payments, the website is the client's, then £29.99 a month for hosting and monitoring until
+   cancelled. Everything else — acceptance before payment (1.2), the Access Date (5.1), the Results Date
+   and Refund Window (5.3, 5.4), the Payment Start Date (5.6) and its fallback (5.8), ownership, data — is
+   v3's, word for word.
+   ⛔ v3 IS NOT EDITED. v4 is v3 plus the amendments listed in V4_AMENDMENTS below and nothing else, so a
+      reviewer can read exactly what changed, and v3's pinned fingerprint
+      (scripts/client-agreement-v3.test.ts) still proves no v3 word moved. A v3 signature keeps rendering,
+      emailing and validating against v3's own text (every acceptance row names its version).
+   ⚠️ DRAFTED IN CODE, NOT FROM A .docx (v1 and v3 were Paul's documents). Paul reviews the wording before
+      it is deployed; findable-site src/lib/clientAgreementV4.ts carries the public copy and
+      scripts/check-agreement-parity.ts compares the two paragraph by paragraph.
+   ════════════════════════════════════════════════════════════════════════════════════════════════ */
+type V4Amendment =
+  | { op: 'replace'; num: string; block: AgreementBlock }
+  | { op: 'replaceHeading'; from: string; to: string }
+  | { op: 'insertAfter'; num: string; blocks: AgreementBlock[] };
+
+export const V4_AMENDMENTS: readonly V4Amendment[] = [
+  { op: 'replace', num: '3.1', block: { kind: 'clause', num: '3.1', text: 'You pay a £99 initial payment, then £99 a month until the total number of payments for your service has been made (12 for Build, 6 for Optimise, counting the initial payment). Your first monthly payment is taken on the Payment Start Date (clause 5.6). Each later monthly payment is taken on the same date each month as your first monthly payment, or on the last day of the month if that date does not exist in that month. After that, clause 9A applies to Findable Build and clause 9B applies to Findable Optimise.' } },
+  { op: 'replace', num: '3.2', block: { kind: 'clause', num: '3.2', text: 'You authorise us to take, through our payment provider (currently Stripe), the initial payment, each monthly payment on its due date and, for Findable Build after your minimum term, the Continuing Service payments in clause 9A until you cancel. You agree to keep a valid payment method in place while payments are due. Except under the guarantee in clause 5, or where the law requires, payments are non-refundable.' } },
+  { op: 'replace', num: '9.3', block: { kind: 'clause', num: '9.3', text: 'When your minimum term ends, a Findable Build service continues as the Continuing Service under clause 9A, unless you cancel. A Findable Optimise service ends under clause 9B.' } },
+  { op: 'replaceHeading', from: '9A. CONTINUING SERVICE AFTER THE MINIMUM TERM', to: '9A. CONTINUING SERVICE AFTER THE MINIMUM TERM (FINDABLE BUILD ONLY)' },
+  { op: 'replace', num: '9A.1', block: { kind: 'clause', num: '9A.1', text: 'When the minimum term of a Findable Build service ends, your service continues on a rolling monthly basis (the "Continuing Service") at £29.99 a month, taken on the same date as your previous monthly payments, until you cancel.' } },
+  { op: 'replace', num: '9A.2', block: { kind: 'clause', num: '9A.2', text: 'The Continuing Service includes hosting your website, ongoing AI visibility monitoring and reasonable updates to keep your website clear and current for AI tools. It does not include substantial new work, which we can quote for separately.' } },
+  { op: 'replace', num: '9A.4', block: { kind: 'clause', num: '9A.4', text: 'If you cancel the Continuing Service, we will give you your website files and help you move the website to your own hosting. We will keep your website live on our hosting for 30 days after the Continuing Service ends, so you have time to move it. After that, we may take it down.' } },
+  { op: 'insertAfter', num: '9A.5', blocks: [
+    { kind: 'heading', text: '9B. FINDABLE OPTIMISE: THE END OF THE MINIMUM TERM' },
+    { kind: 'clause', num: '9B.1', text: 'Findable Optimise is a fixed term. When we receive your sixth payment (the final payment for your minimum term), your payment plan is complete and we will not take any further payment. There is no Continuing Service for Findable Optimise, and we will not start any new charge without your separate written agreement.' },
+    { kind: 'clause', num: '9B.2', text: 'Our monthly work under clause 2.6 ends with your minimum term. Your website was always yours (clause 9.4), and our work passes to you under clause 8.4 when we receive your final payment.' },
+  ] },
+  { op: 'replace', num: '15.1', block: { kind: 'clause', num: '15.1', text: 'For Findable Build, this agreement continues after your minimum term under clause 9A until it is cancelled. For Findable Optimise, it ends when every payment for your minimum term has been made (clause 9B). Either may end earlier under clauses 4, 5 or this clause 15.' } },
+];
+
+function applyV4Amendments(body: readonly AgreementBlock[]): AgreementBlock[] {
+  const out = [...body];
+  const at = (num: string) => {
+    const i = out.findIndex((b) => b.kind === 'clause' && b.num === num);
+    if (i < 0) throw new Error(`clientAgreement v4: clause ${num} not found in v3`);
+    return i;
+  };
+  for (const a of V4_AMENDMENTS) {
+    if (a.op === 'replace') out[at(a.num)] = a.block;
+    else if (a.op === 'insertAfter') out.splice(at(a.num) + 1, 0, ...a.blocks);
+    else {
+      const i = out.findIndex((b) => b.kind === 'heading' && b.text === a.from);
+      if (i < 0) throw new Error(`clientAgreement v4: heading "${a.from}" not found in v3`);
+      out[i] = { kind: 'heading', text: a.to };
+    }
+  }
+  return out;
+}
+
+const V4: AgreementVersion = {
+  ...V3,
+  version: 'v4',
+  services: {
+    build: V3.services.build,
+    optimise: { name: 'Findable Optimise', description: 'We improve your existing website. £99 initial payment, then £99 a month. 6 payments in total (1 initial + 5 monthly). Then the payments stop: nothing further is charged (clause 9B).' },
+  },
+  keyPoints: {
+    title: V3.keyPoints!.title,
+    points: [
+      V3.keyPoints!.points[0],
+      V3.keyPoints!.points[1],
+      'After the minimum term: Findable Build continues at £29.99 a month for hosting and monitoring until you cancel with 30 days\' notice (clause 9A); Findable Optimise ends with your sixth payment and nothing further is charged (clause 9B). We own the website and our work until you have paid in full (clause 8).',
+    ],
+  },
+  body: applyV4Amendments(V3.body),
+  schedule: {
+    ...V3.schedule,
+    rows: [
+      ...V3.schedule.rows,
+      ['After the minimum term', '£29.99 a month for hosting, monitoring and reasonable updates, until you cancel (clause 9A)', 'Nothing further to pay: the payment plan is complete (clause 9B)'],
+    ],
+  },
+};
+
+const VERSIONS: Record<string, AgreementVersion> = { v1: V1, v3: V3, v4: V4 };
+
+/** The agreement-first versions (signed on the agreement page BEFORE payment, bound to one sign-up) and
+ *  the commercial terms each one puts a sale on. v1 is not here: it was accepted at or after payment.
+ *  ⛔ The string values are clientTimeline.ts's COMMERCIAL_TERMS_V3 / _V4 — written out here because that
+ *  file imports nothing but findableOffer.ts; scripts/client-agreement-v4.test.ts asserts they agree. */
+export const AGREEMENT_FIRST_TERMS: Readonly<Record<string, string>> = { v3: 'csa_v3_option_b', v4: 'csa_v4_option_b' };
+export function isAgreementFirstVersion(version: unknown): boolean {
+  return typeof version === 'string' && Object.prototype.hasOwnProperty.call(AGREEMENT_FIRST_TERMS, version);
+}
 
 export function agreementVersion(version: string = CLIENT_AGREEMENT_VERSION): AgreementVersion {
   const v = VERSIONS[version];

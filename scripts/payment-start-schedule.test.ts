@@ -45,7 +45,7 @@ console.log('\n── THE PLAN (pure) ──');
   }
   const refuse = (f: TimelineFacts, s: typeof sub | null, why: RegExp, m: string) => { const r = planPaymentStart(f, LEAD, s as never, NOW); ok(!r.ok && why.test(r.reason), m + (r.ok ? '' : ` — "${r.reason.slice(0, 70)}"`)); };
   refuse({ ...facts, resultsSentAt: null }, sub, /Refund Window/, 'no Results Date → refused (nothing to set)');
-  refuse({ ...facts, terms: null }, sub, /not on the v3/, 'a legacy client → refused');
+  refuse({ ...facts, terms: null }, sub, /not on the agreement-first/, 'a legacy client → refused');
   refuse({ ...facts, refundedAt: 'x' }, sub, /ended/, 'a refunded client → refused');
   refuse(facts, { ...sub, metadata: { lead_id: 'other', payment_timing: OPTION_B_TIMING } }, /does not belong/, 'another client\'s subscription → refused');
   refuse(facts, { ...sub, metadata: { lead_id: LEAD } as never }, /option_b/, 'a subscription made under the old timing → refused');

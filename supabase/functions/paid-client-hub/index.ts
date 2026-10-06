@@ -29,7 +29,7 @@ import { weeklyStart } from "../../../src/lib/weeklyCheck.ts";
 import { loadQaExclusions, qaEmailHold } from "../_shared/qa-guard.ts";
 import { saleCreditOf } from "../../../src/lib/saleAttribution.ts";
 import { accessDateEmail, appendTermsEvent, loadTimelineFacts, schedulePaymentStart, sendAccessDateEmail, todayUk } from "../_shared/client-terms.ts";
-import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, RESULTS_TARGET_DAYS, accessReadiness, addDays, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
+import { CONTINUING_SERVICE_AUTOMATION, GUARANTEE_CEASED_REASONS, continuingServiceApplies, RESULTS_TARGET_DAYS, accessReadiness, addDays, timelineView, ukDay, type AccessItem, type GuaranteeCeasedReason } from "../../../src/lib/clientTimeline.ts";
 import { clientContactRoutes, clientInfoRequestView, clientItems, missingInformation, sellerAskState, sellerItems, cleanInfoKeys, gatherKnown, patchForCandidate, type MissingInfoItem } from "../../../src/lib/clientMissingInfo.ts";
 import { whatsAppCapabilityOf } from "../../../src/lib/whatsAppCapability.ts";
 import { toWhatsAppDigits } from "../../../src/lib/waNumber.ts";
@@ -930,6 +930,12 @@ Deno.serve(async (req) => {
       }
 
       /* ── 9A, MANUAL: bookkeeping only. ⛔ Nothing here touches Stripe or charges the Continuing Service price. ── */
+      /* 🔴 v4 (2026-10-06): a client whose terms carry NO Continuing Service (v4 Optimise — a fixed six-payment
+         term) can never be given a Continuing Service state, reminder or decision. */
+      if ((action === "continuing_prepared" || action === "continuing_reminder_sent" || action === "continuing_decision")
+        && !continuingServiceApplies(facts.terms, facts.route)) {
+        return json({ ok: false, error: "no_continuing_service", detail: "This client's agreement has no Continuing Service: Findable Optimise ends after its last payment, and nothing more is charged." }, 409);
+      }
       if (action === "continuing_prepared") {
         await service.from("client_service_terms").update({ continuing_prepared_at: nowIso }).eq("lead_id", leadId);
         await appendTermsEvent(service, leadId, "continuing_prepared", user.id, {});

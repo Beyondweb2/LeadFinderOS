@@ -97,8 +97,10 @@ console.log('\n── 3. THE CALL TAB ──');
   ok(/<AiOpportunity p=\{p\} \/>/.test(ev) && /<AuditEvidence leadId=\{leadId\} \/>/.test(ev) && /<TalkAbout p=\{p\} \/>/.test(ev) && !/'[A-Z][a-z]+ (Plumbing|Locksmiths|Ltd)'/.test(ev), 'evidence = the stored audit (named, competitors, questions) and the stored crawl — nothing hard-coded');
   ok(/score\.results\.filter\(\(r\) => r\.status === 'named'\)\.length/.test(ui) && /\{named\} \/ \{score\.expected\} answers named this business/.test(ui), 'the "X / N named" count comes from the scored stored results');
   const body = ui.slice(ui.indexOf('if (scriptsFirst) {'), ui.indexOf('return (\n    <div className="space-y-4 pb-6"'));
-  const order = ['<CallEvidence', '<Scripts', '<WhyItMatters', '<WhatWeDo', '<HowWeBuild', 'Questions they may ask'].map((s) => body.indexOf(s));
-  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), 'order: evidence → script → why it matters → what Findable does → how we build → questions');
+  /* 2026-10-06: the objections live INSIDE the call script now (its OBJECTIONS section), not in a block below it. */
+  const order = ['<CallEvidence', '<Scripts', '<WhyItMatters', '<WhatWeDo', '<HowWeBuild'].map((s) => body.indexOf(s));
+  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && !/Questions they may ask/.test(body), 'order: evidence → script (with its objections) → why it matters → what Findable does → how we build');
+  ok(/data-testid="call-step-objections"[\s\S]{0,120}<Questions p=\{p\} \/>/.test(ui), 'the objections are a section of the call flow');
   ok(/36\.7% of UK consumers had used AI for local search in the previous month/.test(WHY_IT_MATTERS[0].text) && /2026 Yext study/.test(WHY_IT_MATTERS[0].text) && /24% had tried a new local business because of an AI recommendation/.test(WHY_IT_MATTERS[1].text), 'the UK talking point, exactly as sourced');
   ok(YEXT_SOURCE === 'Yext — 2026 UK Consumer Search Behaviours, n=600 UK consumers' && WHY_IT_MATTERS.every((p) => p.source === YEXT_SOURCE && /^https:\/\/www\.yext\.com\//.test(p.url)) && /data-testid="source-note"/.test(ui), '…with its source on screen');
   const words = [WHY_IT_MATTERS.map((p) => p.text).join(' '), GOOGLE_STILL_MATTERS, WHAT_WE_DO.join(' '), WHAT_WE_DO_SHORT, HOW_WE_KNOW.join(' '), AI_FRIENDLY_SITE.join(' '), WEBSITE_MATTERS, FOLLOW_UP_VOICE_NOTE].join(' ');

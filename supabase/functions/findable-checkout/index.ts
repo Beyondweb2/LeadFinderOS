@@ -6,7 +6,7 @@ import { offerPrice } from "../_shared/offer-price.ts";
 import { agreementUrl, CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
 import { checkoutAgreementGate, type GateAcceptance } from "../../../src/lib/signupGate.ts";
 import { SIGNUP_LINK_LIFETIME_MS } from "../../../src/lib/quickClose.ts";
-import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
+import { COMMERCIAL_TERMS_CURRENT, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
 import { openHoldFor } from "../_shared/payment-hold.ts";
 /* ⚠️ IMPORTED FROM onboarding-followup.ts ON PURPOSE, despite the module name. That file is where
    "where does the public site live" was settled after the pages.dev incident, and it applies the
@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
        hold and LeadFinder sets the real Payment Start Date later — _shared/client-terms.ts). */
     form.set("metadata[agreement_version]", CLIENT_AGREEMENT_VERSION);
     form.set("metadata[agreement_acceptance_id]", gateResult.acceptanceId);
-    form.set("metadata[commercial_terms]", COMMERCIAL_TERMS_V3);
+    form.set("metadata[commercial_terms]", COMMERCIAL_TERMS_CURRENT);
     form.set("metadata[payment_timing]", OPTION_B_TIMING);
     /* ⛔ THE SALE CREATOR, FOR TRACING ONLY (F + H integration, 2026-10-05). Stripe session → onboarding_id (THE
        sign-up) → agreement_acceptance_id → the person who CREATED that sign-up (sale_creations, append-only).

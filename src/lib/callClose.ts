@@ -17,7 +17,7 @@
    ⛔ AFTER PAYMENT reads QUICK_CLOSE_AFTER_PAYMENT (quickClose.ts) — the dialog's own list, not a copy.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, REMEASURE_WEEKS_STANDARD,
+  FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS,
   SERVICE_ROUTE_NAME, termMonthsFor, totalPaymentsFor, type ServiceRoute,
 } from './findableOffer.ts';
 import { QUICK_CLOSE_AFTER_PAYMENT, QUICK_CLOSE_PROMISE } from './quickClose.ts';
@@ -30,9 +30,11 @@ export const GUARANTEE_HEADLINE = QUICK_CLOSE_PROMISE;
 
 /** The first monthly payment, said aloud. 🔴 v3 (2026-10-05, clause 5.6): the day after the refund window
  *  closes — never "six weeks after today" any more (FINDABLE_MONTHLY_DELAY_DAYS is legacy timing). */
-const WEEKS_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 export const MONTHLY_STARTS_SPOKEN = MONTHLY_START_V3_WORDS;
-const REMEASURE_SPOKEN = `${WEEKS_WORDS[REMEASURE_WEEKS_STANDARD] ?? REMEASURE_WEEKS_STANDARD} weeks`;
+
+/** The guarantee said on a call (Paul's plain wording, 2026-10-06). ⛔ No noise band, no promise that AI will
+ *  name them: the count before and after on the same questions, or the £99 back within the refund window. */
+export const GUARANTEE_SPOKEN = `We measure how many of those answers name you before we start, then run the same questions again. If that number hasn't increased, you can claim the initial £${FINDABLE_SETUP_PRICE_GBP} back within the refund window.`;
 
 export interface CallRouteOffer {
   route: ServiceRoute;
@@ -67,7 +69,7 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
   return route === 'build'
     ? {
       route, name: SERVICE_ROUTE_NAME.build,
-      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
+      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total, then £${FINDABLE_CONTINUING_GBP}/month`,
       spoken: [
         `We build you a new website, host it and look after it. ${spokenPrice}`,
         `${spokenTerm} Once the ${total} payments are done the site is yours, and it carries on at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel.`,
@@ -76,10 +78,11 @@ export function routeOffer(route: ServiceRoute): CallRouteOffer {
     }
     : {
       route, name: SERVICE_ROUTE_NAME.optimise,
-      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total`,
+      summary: `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${total} payments in total, then they stop`,
       spoken: [
         `You keep your own website and it stays yours. We work on it with your access, and we never take it offline. ${spokenPrice}`,
-        `${spokenTerm} After that it carries on at £${FINDABLE_CONTINUING_GBP} a month for monitoring until you cancel.`,
+        /* 🔴 v4 (2026-10-06): Optimise is a fixed term — the payments stop, there is no £29.99 after it. */
+        `${spokenTerm} After the ${total}th payment the payments stop. There's nothing more to pay.`,
       ],
       site: 'They keep their existing website and its ownership',
     };
@@ -103,7 +106,7 @@ export function buildCallClose(source: SiteSource | null | undefined): CallClose
     routeNote: note,
     guarantee: {
       headline: GUARANTEE_HEADLINE,
-      spoken: `We measure how often AI names you before we start, then ask the same questions again after ${REMEASURE_SPOKEN}. If that number hasn't gone up, you email us within 14 days of your results and get your £${FINDABLE_SETUP_PRICE_GBP} back.`,
+      spoken: GUARANTEE_SPOKEN,
       caution: 'Never promise a ranking, a recommendation or that AI will name them. The promise is the measured number, or the £' + FINDABLE_SETUP_PRICE_GBP + ' back.',
     },
     monthly: `The monthly is a new page every month, a monthly check of what AI says about you, adjustments as we go, and ${routes[0] === 'build' ? 'hosting and looking after the website' : 'keeping your site right'}.`,

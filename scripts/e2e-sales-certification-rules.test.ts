@@ -19,7 +19,7 @@ import {
 } from '../src/lib/commission.ts';
 import { ATTRIBUTION_HELD_STATUSES, isAttributionHeld } from '../src/lib/saleAttribution.ts';
 import {
-  ACCESS_DEADLINE_DAYS, COMMERCIAL_TERMS_V3, CONTINUING_SERVICE_AUTOMATION, CONTINUING_SERVICE_GBP, FALLBACK_START_WEEKS, OPTION_B_TIMING,
+  ACCESS_DEADLINE_DAYS, COMMERCIAL_TERMS_CURRENT, COMMERCIAL_TERMS_V3, CONTINUING_SERVICE_AUTOMATION, CONTINUING_SERVICE_GBP, FALLBACK_START_WEEKS, OPTION_B_TIMING,
   REFUND_WINDOW_DAYS, approvalDay, approvalDayFromResults, chargeAllowedOn, guaranteeNumberWentUp, minimumTerm, minimumTermPayments,
   paymentStart, refundWindowEndDay, timelineActions, timelineView, ukDay, ukDayAtHourIso, type TimelineFacts,
 } from '../src/lib/clientTimeline.ts';
@@ -31,7 +31,7 @@ import { HEALTH_ENGINES, measurementHealth, type HealthRow, type HealthRun } fro
 import { EDITABLE_BASELINE_STATUS_FILTER, isFrozenBaselineStatus } from '../src/lib/paidBaselineState.ts';
 import { judgeRemeasure } from '../src/lib/baselineReplay.ts';
 import { checkoutAgreementGate, webhookV3Verdict, type GateAcceptance } from '../src/lib/signupGate.ts';
-import { CLIENT_AGREEMENT_VERSION, sha256Hex } from '../src/lib/clientAgreement.ts';
+import { AGREEMENT_FIRST_TERMS, CLIENT_AGREEMENT_VERSION, sha256Hex } from '../src/lib/clientAgreement.ts';
 import { agreementPageHtml } from '../src/lib/agreementPageHtml.ts';
 import { accessDateEmail, planPaymentStart } from '../supabase/functions/_shared/client-terms.ts';
 import { minimumTermCancelAt, paymentStartHoldIso } from '../supabase/functions/_shared/delayed-subscription.ts';
@@ -201,7 +201,7 @@ async function main() {
     ok(initialOf(legLines, 'H2').rate === 0.30 && legLines.find((l) => l.id === 'pay:' + leg29.id)!.commission === 6.0,
       'J8c pre-v3 unstamped sale keeps the flat 30%, and its £29.99 monthly still earns 20% (£6.00) under the old rule');
     const src = read('src/lib/commission.ts');
-    ok(/const v3 = !!termsRow && isV3Terms\(termsRow\.terms\);/.test(src), 'J8d source: v3 vs historical is decided ONLY by a client_service_terms stamp of COMMERCIAL_TERMS_V3 (isV3Terms)');
+    ok(/const v3 = !!termsRow && isOptionBTerms\(termsRow\.terms\);/.test(src), 'J8d source: agreement-first vs historical is decided ONLY by a client_service_terms stamp of v3 or v4 (isOptionBTerms)');
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -419,13 +419,14 @@ async function main() {
     const gate = (a: GateAcceptance | null, over: Partial<{ leadId: string; onboardingId: string; route: 'build' | 'optimise' }> = {}) =>
       checkoutAgreementGate({ acceptance: a, leadId: over.leadId ?? 'L1', onboardingId: over.onboardingId ?? 'OB1', route: over.route ?? 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: a ? sha : null });
     const refusal = (r: ReturnType<typeof gate>) => ('refusal' in r ? r.refusal : 'ok');
-    ok(CLIENT_AGREEMENT_VERSION === 'v3' && gate(good).ok === true, 'G1 signed v3 acceptance for this sign-up → checkout permitted');
+    ok(CLIENT_AGREEMENT_VERSION === 'v4' && gate(good).ok === true, 'G1 signed current (v4) acceptance for this sign-up → checkout permitted');
+    ok(refusal(gate({ ...good, agreement_version: 'v3' })) === 'old_version', 'G1b a v3 signature never opens a NEW checkout once v4 is current (re-sign v4)');
     ok(refusal(gate(null)) === 'not_signed', 'G2 unsigned → refused (not_signed)');
     ok(refusal(gate({ ...good, agreement_version: 'v1', method: 'checkout' })) === 'wrong_method' && refusal(gate({ ...good, agreement_version: 'v1' })) === 'old_version',
       'G3 a v1 / legacy acceptance (checkout tick, or v1 on the page) → refused');
     ok(refusal(gate(good, { onboardingId: 'OB2' })) === 'other_signup' && refusal(gate(good, { leadId: 'L2' })) === 'other_client' && refusal(gate(good, { route: 'optimise' })) === 'other_route',
       'G4 an acceptance belonging to another sign-up / client / route → refused');
-    ok(refusal(gate({ ...good, authority_confirmed: false })) === 'no_authority' && refusal(checkoutAgreementGate({ acceptance: good, leadId: 'L1', onboardingId: 'OB1', route: 'build', currentVersion: 'v3', recomputedSha: 'x' })) === 'tampered',
+    ok(refusal(gate({ ...good, authority_confirmed: false })) === 'no_authority' && refusal(checkoutAgreementGate({ acceptance: good, leadId: 'L1', onboardingId: 'OB1', route: 'build', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: 'x' })) === 'tampered',
       'G5 no authority tick, or a tampered record → refused');
     const page = agreementPageHtml({ mode: 'sign', businessName: 'Acme Plumbing', route: 'build', values: {}, errors: [], signupId: 'OB1' });
     const boxes = page.match(/<input[^>]*type="checkbox"[^>]*>/g) ?? [];
@@ -435,8 +436,9 @@ async function main() {
     const stripeAt = co.indexOf('https://api.stripe.com/v1/checkout/sessions');
     ok(gateAt > 0 && gateAt < stripeAt && /if \(!gateResult\.ok\) \{[\s\S]{0,300}kind: "agreement_required"/.test(co) && (co.match(/api\.stripe\.com\/v1\/checkout\/sessions/g) ?? []).length === 1,
       'G7 source: findable-checkout runs the gate before its ONLY Stripe session create, and answers agreement_required');
-    const meta = { commercial_terms: COMMERCIAL_TERMS_V3, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: 'acc1', service_route: 'build' };
-    const v = (m: Record<string, string | undefined>, a: GateAcceptance | null = good) => webhookV3Verdict({ metadata: m, acceptance: a, leadId: 'L1', onboardingId: 'OB1', currentVersion: CLIENT_AGREEMENT_VERSION, recomputedSha: sha, v3Terms: COMMERCIAL_TERMS_V3 });
+    const meta = { commercial_terms: COMMERCIAL_TERMS_CURRENT, agreement_version: CLIENT_AGREEMENT_VERSION, agreement_acceptance_id: 'acc1', service_route: 'build' };
+    const v = (m: Record<string, string | undefined>, a: GateAcceptance | null = good) => webhookV3Verdict({ metadata: m, acceptance: a, leadId: 'L1', onboardingId: 'OB1', recomputedSha: sha, termsByVersion: AGREEMENT_FIRST_TERMS });
+    ok(v({ ...meta, commercial_terms: COMMERCIAL_TERMS_V3 }).ok === false, 'F1b a v4 session naming v3 terms → HELD (terms must match the signed version)');
     ok(v(meta).ok === true && v({}).ok === false && v({ ...meta, agreement_version: 'v1' }).ok === false && v(meta, { ...good, onboarding_id: 'OB9' }).ok === false,
       'F1 webhook backstop: a legacy / v1 / other-sign-up payment is NOT a v3 sale (it is held)');
     const inserted: string[] = [];

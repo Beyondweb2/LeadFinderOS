@@ -16,7 +16,8 @@ import { cutoverReport, executeCutover } from '../supabase/functions/_shared/leg
 import { checkoutAgreementGate, webhookV3Verdict, type GateAcceptance } from '../src/lib/signupGate.ts';
 import { holdPayment } from '../supabase/functions/_shared/payment-hold.ts';
 import { linkUsable, quickCloseState } from '../src/lib/quickClose.ts';
-import { COMMERCIAL_TERMS_V3 } from '../src/lib/clientTimeline.ts';
+import { COMMERCIAL_TERMS_V3, COMMERCIAL_TERMS_V4 } from '../src/lib/clientTimeline.ts';
+import { AGREEMENT_FIRST_TERMS } from '../src/lib/clientAgreement.ts';
 
 let failures = 0;
 const ok = (c: boolean, m: string) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) failures++; };
@@ -149,9 +150,11 @@ async function main() {
   ok(/status \?\? 'open'\) !== 'open'\) continue; \/\/ complete \/ expired = history/.test(site), 'completed sessions are skipped by the plan (history is never listed)');
 
   console.log('\n── THE WEBHOOK BACKSTOP ──');
-  const v = (meta: Record<string, string | undefined>, acc: GateAcceptance | null, sha = 'h') => webhookV3Verdict({ metadata: meta, acceptance: acc, leadId: 'L', onboardingId: 'OB', currentVersion: 'v3', recomputedSha: sha, v3Terms: COMMERCIAL_TERMS_V3 });
+  const v = (meta: Record<string, string | undefined>, acc: GateAcceptance | null, sha = 'h') => webhookV3Verdict({ metadata: meta, acceptance: acc, leadId: 'L', onboardingId: 'OB', recomputedSha: sha, termsByVersion: AGREEMENT_FIRST_TERMS });
   const META = { commercial_terms: COMMERCIAL_TERMS_V3, agreement_version: 'v3', agreement_acceptance_id: 'A1', service_route: 'build' };
-  ok(v(META, good).ok, 'a valid v3 checkout is processed as a sale');
+  ok(v(META, good).ok, 'a valid v3 checkout is processed as a sale — also after v4 became current (a v3 session paid late keeps v3 terms)');
+  ok(v({ ...META, commercial_terms: COMMERCIAL_TERMS_V4, agreement_version: 'v4' }, { ...good, agreement_version: 'v4' }).ok, 'a valid v4 checkout is processed as a sale');
+  ok(!v({ ...META, commercial_terms: COMMERCIAL_TERMS_V4 }, good).ok, 'a v3 signature with v4 terms on the session → HELD');
   ok(!v({ onboarding_id: 'OB', agreement_version: 'v1' }, null).ok, 'a pre-cutover (v1 / tick) session is HELD');
   ok(!v({ ...META, agreement_acceptance_id: 'OTHER' }, good).ok, 'a session naming a signature that is not the one read back → HELD');
   ok(!v(META, { ...good, lead_id: 'OTHER' }).ok && !v(META, { ...good, onboarding_id: 'OB-OLD' }).ok && !v({ ...META, service_route: 'optimise' }, good).ok, 'wrong client / wrong sign-up / wrong service → HELD');

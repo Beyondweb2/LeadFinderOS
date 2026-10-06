@@ -25,18 +25,53 @@
    write is _shared/client-terms.ts, and it refuses any date this file does not produce.
    Pure; no imports beyond findableOffer.ts. ⚠️ Edge-reachable — explicit .ts on every relative import.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { FINDABLE_CONTINUING_GBP, recurringPaymentsFor, totalPaymentsFor, type ServiceRoute } from './findableOffer.ts';
+import { continuingServiceAfterTerm, FINDABLE_CONTINUING_GBP, recurringPaymentsFor, totalPaymentsFor, type ServiceRoute } from './findableOffer.ts';
 
 /** The commercial terms a sale was made on. Stamped once per client (client_service_terms) from the
  *  agreement version they signed; every v3 rule below applies ONLY to a client stamped with it.
  *  ⛔ A client with no stamp is on the terms they bought under (Ronnie, MCL, RG, the QA clients) and is
  *  never re-ruled by this file — Paul migrates someone explicitly or not at all. */
 export const COMMERCIAL_TERMS_V3 = 'csa_v3_option_b';
-export type CommercialTerms = typeof COMMERCIAL_TERMS_V3;
-export function isV3Terms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3; }
+/** v4 (2026-10-06): the same Option B timing as v3; the Continuing Service is Findable Build only. */
+export const COMMERCIAL_TERMS_V4 = 'csa_v4_option_b';
+/** The terms every NEW sale is stamped with (the agreement version new sign-ups sign). */
+export const COMMERCIAL_TERMS_CURRENT = COMMERCIAL_TERMS_V4;
+export type CommercialTerms = typeof COMMERCIAL_TERMS_V3 | typeof COMMERCIAL_TERMS_V4;
+/** Strictly the v3 stamp. Only the per-client Continuing Service rule needs to tell v3 from v4. */
+export function isV3Terms(v: unknown): v is typeof COMMERCIAL_TERMS_V3 { return v === COMMERCIAL_TERMS_V3; }
+/** ⛔ THE AGREEMENT-FIRST, OPTION B CLIENT: signed before paying, Access Date, Refund Window, Payment Start
+ *  Date. True for v3 AND v4 — every timeline, scheduling and commission rule that used to say "v3" means
+ *  this. A client with no stamp (Ronnie, MCL, RG, the QA clients) is false and is never re-ruled. */
+export function isOptionBTerms(v: unknown): v is CommercialTerms { return v === COMMERCIAL_TERMS_V3 || v === COMMERCIAL_TERMS_V4; }
+
+/**
+ * 🔴 DOES THIS CLIENT'S SERVICE CONTINUE AT FINDABLE_CONTINUING_GBP AFTER THE MINIMUM TERM? — the ONE rule.
+ *  · v3 (clause 9A as signed): yes, Build and Optimise alike — a v3 signature is honoured as signed.
+ *  · v4 (2026-10-06): Build only (findableOffer.ts continuingServiceAfterTerm). Optimise is a fixed term:
+ *    after the sixth payment the plan is complete — no £29.99 state, no reminder, no decision, no charge.
+ *  · No stamp (legacy) or no route: no — those subscriptions stop at their last payment, as sold.
+ */
+export function continuingServiceApplies(terms: unknown, route: ServiceRoute | null | undefined): boolean {
+  if (!route) return false;
+  if (isV3Terms(terms)) return true;
+  if (terms === COMMERCIAL_TERMS_V4) return continuingServiceAfterTerm(route);
+  return false;
+}
 /** The marker a v3 checkout and its Stripe subscription carry (metadata payment_timing): the monthly is
  *  created on a hold and its first charge is set later to the Payment Start Date. */
 export const OPTION_B_TIMING = 'option_b';
+
+/** Does a Stripe subscription's OWN record say the Continuing Service follows its minimum term? Read by the
+ *  webhook's "starting soon" email and its term-complete branch, which have only the subscription in hand.
+ *  Its metadata names the terms (written from v4 on, _shared/delayed-subscription.ts) and the route; an
+ *  option_b subscription with no terms marker was created before v4, so it is a v3 sale. Legacy → false. */
+export function subscriptionContinuesAfterTerm(meta: Record<string, unknown> | null | undefined): boolean {
+  const m = meta ?? {};
+  const route: ServiceRoute | null = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
+  if (isOptionBTerms(m.commercial_terms)) return continuingServiceApplies(m.commercial_terms, route);
+  if (m.payment_timing === OPTION_B_TIMING) return continuingServiceApplies(COMMERCIAL_TERMS_V3, route);
+  return false;
+}
 
 /** 5.4 — the Refund Window ends this many days after the Results Date. */
 export const REFUND_WINDOW_DAYS = 14;
@@ -225,6 +260,11 @@ export interface MinimumTerm {
   clientReminderDueDay: string | null;
   /** Paul's own action appears on this day. */
   paulActionDay: string | null;
+  /** continuingServiceApplies(terms, route). False → the three Continuing Service days above are null. */
+  continuingApplies: boolean;
+  /** A fixed-term client (v4 Optimise) whose final minimum-term payment has actually been collected:
+   *  the payment plan is complete and nothing more is ever charged. */
+  planComplete: boolean;
 }
 
 /**
@@ -236,7 +276,8 @@ export interface MinimumTerm {
  */
 export function minimumTerm(f: TimelineFacts): MinimumTerm {
   const route = f.route;
-  const empty: MinimumTerm = { recurringNeeded: route ? recurringPaymentsFor(route) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null };
+  const continuingApplies = continuingServiceApplies(f.terms, route);
+  const empty: MinimumTerm = { recurringNeeded: route ? recurringPaymentsFor(route) : 0, recurringPaid: f.recurringPaidAt?.length ?? 0, finalPaymentDay: null, finalPaymentActual: false, continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: false };
   if (!route) return empty;
   const needed = recurringPaymentsFor(route);
   const paid = [...(f.recurringPaidAt ?? [])].map((x) => ukDay(x)).filter((x): x is string => !!x).sort();
@@ -254,12 +295,21 @@ export function minimumTerm(f: TimelineFacts): MinimumTerm {
     const fromLatest = addMonthsClamped(paid[paid.length - 1], needed - paid.length);
     if (fromLatest > finalDay) finalDay = fromLatest;
   }
+  /* ⛔ A FIXED TERM HAS NO CONTINUING SERVICE DATES (v4 Optimise): no start day, no reminder, no action —
+     so nothing downstream (timelineActions, cron notices, the client card) can raise a £29.99 step. */
+  if (!continuingApplies) {
+    return {
+      recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,
+      continuingStartDay: null, clientReminderDueDay: null, paulActionDay: null, continuingApplies, planComplete: actual,
+    };
+  }
   const continuingStart = addMonthsClamped(anchor, needed);
   const cs = continuingStart > finalDay ? continuingStart : addMonthsClamped(finalDay, 1);
   const reminderDue = addDays(cs, -CLIENT_REMINDER_NOTICE_DAYS);
   return {
     recurringNeeded: needed, recurringPaid: paid.length, finalPaymentDay: finalDay, finalPaymentActual: actual,
     continuingStartDay: cs, clientReminderDueDay: reminderDue, paulActionDay: addDays(reminderDue, -PAUL_REMINDER_LEAD_DAYS),
+    continuingApplies, planComplete: false,
   };
 }
 
@@ -278,7 +328,7 @@ export interface TimelineAction { kind: TimelineActionKind; dueDay: string; urge
 /** Everything Paul must do on this client today or soon. Derived; never stored. Empty for a client not
  *  on v3 terms, and for an ended or refunded agreement. */
 export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAction[] {
-  if (!isV3Terms(f.terms) || f.refundedAt || f.endedAt) return [];
+  if (!isOptionBTerms(f.terms) || f.refundedAt || f.endedAt) return [];
   const today = ukDay(todayIso)!;
   const out: TimelineAction[] = [];
   const initialDay = ukDay(f.initialPaidAt);
@@ -299,7 +349,7 @@ export function timelineActions(f: TimelineFacts, todayIso: string): TimelineAct
     out.push({ kind: 'payment_start_unscheduled', dueDay: ps.day, urgent: daysBetween(today, ps.day) <= 3, text: `Payment Start Date ${ps.day} is not yet confirmed in Stripe. Set it from this client's page — until then Stripe holds the monthly payment and charges nothing.` });
   }
   const mt = minimumTerm(f);
-  if (mt.continuingStartDay && mt.clientReminderDueDay && mt.paulActionDay && f.continuingDecision == null) {
+  if (mt.continuingApplies && mt.continuingStartDay && mt.clientReminderDueDay && mt.paulActionDay && f.continuingDecision == null) {
     if (!f.continuingReminderSentAt) {
       if (today > mt.clientReminderDueDay) out.push({ kind: 'continuing_reminder_overdue', dueDay: mt.clientReminderDueDay, urgent: true, text: `The 30-day Continuing Service reminder was due by ${mt.clientReminderDueDay} (clause 9A.3). Send it and record it; the £${CONTINUING_SERVICE_GBP} service starts ${mt.continuingStartDay}.` });
       else if (today >= mt.paulActionDay) out.push({ kind: 'continuing_prepare', dueDay: mt.clientReminderDueDay, urgent: daysBetween(today, mt.clientReminderDueDay) <= 3, text: `Minimum term completes ${mt.finalPaymentDay}. Email the client their Continuing Service reminder by ${mt.clientReminderDueDay} (at least 30 days before £${CONTINUING_SERVICE_GBP}/month starts on ${mt.continuingStartDay}).` });
@@ -337,7 +387,7 @@ export function accessReadiness(route: ServiceRoute | null, items: readonly Acce
 /** 5.2 — may the paid baseline start? A v3 client waits for the confirmed Access Date; a client with no
  *  terms row (sold before v3) is never held by this rule. */
 export function baselineMayStart(terms: { commercial_terms?: string | null; access_date?: string | null } | null | undefined): boolean {
-  if (!terms || !isV3Terms(terms.commercial_terms)) return true;
+  if (!terms || !isOptionBTerms(terms.commercial_terms)) return true;
   return !!terms.access_date;
 }
 
@@ -369,15 +419,18 @@ export interface TimelineView {
   paymentStart: PaymentStart;
   paymentStartConfirmed: boolean;
   minimumTerm: MinimumTerm;
-  continuingGbp: number;
+  /** FINDABLE_CONTINUING_GBP when the Continuing Service applies to this client, null when it does not
+   *  (a v4 Optimise client is never shown a £29.99 step). */
+  continuingGbp: number | null;
   actions: TimelineAction[];
 }
 export function timelineView(f: TimelineFacts, todayIso: string): TimelineView {
   const initialPaidDay = ukDay(f.initialPaidAt);
   const resultsDay = ukDay(f.resultsSentAt);
   const ps = paymentStart(f);
+  const mt = minimumTerm(f);
   return {
-    onV3: isV3Terms(f.terms),
+    onV3: isOptionBTerms(f.terms),
     initialPaidDay,
     accessDate: f.accessDate,
     accessDeadlineDay: initialPaidDay ? accessDeadlineDay(initialPaidDay) : null,
@@ -388,8 +441,8 @@ export function timelineView(f: TimelineFacts, todayIso: string): TimelineView {
     guaranteeApplies: !f.guaranteeCeasedAt,
     paymentStart: ps,
     paymentStartConfirmed: !!ps.day && f.paymentStartScheduledDay === ps.day && !!f.paymentStartConfirmedAt,
-    minimumTerm: minimumTerm(f),
-    continuingGbp: CONTINUING_SERVICE_GBP,
+    minimumTerm: mt,
+    continuingGbp: mt.continuingApplies ? CONTINUING_SERVICE_GBP : null,
     actions: timelineActions(f, todayIso),
   };
 }

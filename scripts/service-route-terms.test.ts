@@ -154,7 +154,7 @@ ok(!/body\.(plan_tier|route|service_route|total_payments)/.test(checkout), 'the 
 ok(/line_items\[0\]\[price_data\]\[unit_amount\]", String\(Math\.round\(offer\.gbp \* 100\)\)/.test(checkout), 'the £99 line is unchanged (inline price_data, the guarantee\'s carrier)');
 for (const r of ['build', 'optimise'] as const) {
   const n = totalPaymentsFor(r);
-  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && /continues at £29\.99 a month until you cancel/.test(cardSavedNoticeFor(r)), `card notice (${r}): ${n} payments including today's, then the Continuing Service (v3 clause 9A)`);
+  ok(cardSavedNoticeFor(r).includes(`${n} payments in total, including today's`) && (r === 'build' ? /continues at £29\.99 a month for hosting and monitoring until you cancel/.test(cardSavedNoticeFor(r)) : /the payments stop/.test(cardSavedNoticeFor(r))), `card notice (${r}): ${n} payments including today's, then ${r === 'build' ? 'the £29.99 continuing service' : 'the payments stop'} (v4)`);
   ok(checkoutLineNameFor(r).startsWith(r === 'build' ? 'Findable Build' : 'Findable Optimise') && checkoutLineNameFor(r).includes(`${n} payments in total`), `Stripe line name (${r}) names the route and ${n}`);
 }
 
@@ -189,7 +189,8 @@ ok(resolvePaidRoute({}, 'build').route === null && /created before routes existe
 const wh = code('supabase/functions/stripe-webhook/index.ts');
 ok(/const paid = resolvePaidRoute\(s\.metadata \?\? null, rowReadOk \? rowRoute : undefined\)/.test(wh), 'the webhook resolves the route from the session + row');
 /* 2026-10-05: + the timing (v3 hold vs legacy six weeks) after the claim key. */
-ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
+/* 2026-10-06 (v4): + the sale's own commercial terms, so the subscription can say whether a Continuing Service follows. */
+ok(/createDelayedSubscription\([\s\S]{0,500}paid\.route,\s*s\.id,\s*v3Checkout && s\.metadata\?\.payment_timing === OPTION_B_TIMING \? OPTION_B_TIMING : "legacy",\s*sessionTerms,\s*\)/.test(wh), 'and creates the subscription for THAT route (claimed by this checkout, pre-sales fix 03)');
 ok(/\.update\(\{ contract_total_payments: totalPaymentsFor\(paid\.route\) \}\)[\s\S]{0,80}\.is\("contract_total_payments", null\)/.test(wh), 'the contract is stamped once, only when resolved, never over an existing one');
 ok(/NO MONTHLY SCHEDULE WAS CREATED/.test(wh), 'a payment with no schedule says so in Paul\'s PAID email');
 ok(/await recordLedger\(service, \{\s*lead_id: findableLeadId, kind: "initial"/.test(wh) && wh.indexOf('kind: "initial"') < wh.indexOf('contract_total_payments: totalPaymentsFor'), 'the initial payment is still written to the ledger first (attribution from sold_by at payment)');
@@ -257,7 +258,7 @@ ok(opt.name === 'Findable Optimise' && opt.totalPayments === 6 && opt.paymentsMa
 ok(clientContract({ lead: { contract_total_payments: 12, amount_paid: 99 }, onboarding: { plan_tier: 'new_site' } }).note?.includes('No live monthly schedule'), 'a contracted client with no live subscription is flagged');
 
 console.log('── WORDING ──');
-ok(FINDABLE_OFFER_SUMMARY.includes('12 payments in total if we build you a new website, 6 if we optimise the one you have'), 'the pre-choice summary names both lengths');
+ok(FINDABLE_OFFER_SUMMARY.includes('12 payments in total if we build you a new website') && FINDABLE_OFFER_SUMMARY.includes('6 payments in total if we optimise the one you have, then the payments stop'), 'the pre-choice summary names both lengths, and that Optimise stops (v4)');
 ok(offerSummaryFor('optimise').includes('6 payments in total, a 6-month minimum term') && !offerSummaryFor('optimise').includes('12'), 'a route\'s summary names only its own length');
 const allCopy = [FINDABLE_OFFER_SUMMARY, offerSummaryFor('build'), offerSummaryFor('optimise'), cardSavedNoticeFor('build'), cardSavedNoticeFor('optimise'), quickCloseScript('build'), quickCloseScript('optimise'), ...routeTermsLines('optimise')].join(' ');
 ok(!/no commitment|cancel any ?time|stop any ?time|no minimum/i.test(allCopy), 'nothing describes either route as "no commitment" or cancel-any-time');

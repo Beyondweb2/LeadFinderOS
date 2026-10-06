@@ -93,7 +93,7 @@ export function websiteManagerFromBranch(agency: AgencyManages | null): 'web_com
 export function accessConsequenceText(answer: SiteAccessAnswer | null): string {
   return answer !== 'yes_access'
     ? `No problem, we'll build and manage a new website for you as part of the service: ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total. It transfers to you once all ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments are complete.`
-    : `We'll work on your existing website as part of the service: ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total. Your website stays yours.`;
+    : `We'll work on your existing website as part of the service: ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total, then the payments stop. Your website stays yours.`;
 }
 /** findable-site siteAccess.ts permissionAckText — three states, the unanswered one names no site. */
 export function permissionAckText(answer: SiteAccessAnswer | null): string {

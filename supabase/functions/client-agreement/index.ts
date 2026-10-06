@@ -26,7 +26,7 @@ import { agreementPageHtml, agreementUnavailableHtml, type AgreementFormValues }
 import { resolveAgreementRoute } from "../../../src/lib/agreementRoute.ts";
 import { clientClosed } from "../../../src/lib/paymentState.ts";
 import { serviceRouteFromRow } from "../../../src/lib/findableOffer.ts";
-import { COMMERCIAL_TERMS_V3 } from "../../../src/lib/clientTimeline.ts";
+import { COMMERCIAL_TERMS_CURRENT } from "../../../src/lib/clientTimeline.ts";
 import { ACCEPTANCE_COLUMNS, agreementPdfForRow, reportAgreementError, storeAndSendAcceptance } from "../_shared/client-agreement.ts";
 import { qaEmailHold } from "../_shared/qa-guard.ts";
 
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
       const row = acceptanceRowFrom({
         leadId: ctx.lead.id, fill, method: "agree_page", agreedText, sha256: await sha256Hex(agreedText), version: CLIENT_AGREEMENT_VERSION,
         ip: clientIp(req), userAgent: req.headers.get("user-agent")?.slice(0, 500) ?? null,
-        v3: { onboardingId: signup.id, authorityConfirmed: true, marketingOptOut: values.marketingOptOut === true, commercialTerms: COMMERCIAL_TERMS_V3 },
+        v3: { onboardingId: signup.id, authorityConfirmed: true, marketingOptOut: values.marketingOptOut === true, commercialTerms: COMMERCIAL_TERMS_CURRENT },
       });
       const stored = await storeAndSendAcceptance(service, row);
       /* A double submit: the first signature stands (unique per sign-up); show it. */

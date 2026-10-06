@@ -196,6 +196,14 @@ Full history and reasoning: `docs/business-and-offer.md`, `docs/measurement.md`.
   (`client_payment_holds` — no lifecycle, no subscription, no ledger/commission). Pre-switch Stripe objects are closed by
   fn `legacy-checkout-cutover` (report → execute with the reviewed plan hash). The signing copy and findable.live's
   public `/agreement` must stay word-for-word equal: `npx tsx scripts/check-agreement-parity.ts --site-ref <ref>`.
+- ⛔ **Agreement v4 (Paul, 2026-10-06; record `docs/client-agreement-v4.md`): FINDABLE OPTIMISE IS A FIXED TERM** —
+  `FINDABLE_OPTIMISE_TOTAL_PAYMENTS` payments in total, then the payments STOP (no `FINDABLE_CONTINUING_GBP`, no
+  continuation state, reminder or question). Only Build continues. ONE rule: `continuingServiceApplies(terms, route)`
+  (`clientTimeline.ts`) — v3 signers keep v3's rule (both routes continue), v4 is Build only. v3 is never edited;
+  a word change is a new version. New sales stamp `COMMERCIAL_TERMS_CURRENT`; `isOptionBTerms` = v3 or v4.
+- ⛔ **The call script is Paul's tested opener** (`src/lib/callScript.ts`): "Hi mate, I was looking for …, so I asked
+  Google AI and it mentioned …, but not you." Never "from Findable", "I messaged you" or a day/date in the words said;
+  FIRST question always `FIRST_QUESTION`; competitors and website points only from the stored evidence.
 
 - **Offer (Paul, 2026-09-29): £99 to start, then £99/month from six weeks after sign-up — TWO ROUTES,
   same price, different LENGTH** (`docs/business-and-offer.md` §00). **Findable Build** (we build, host

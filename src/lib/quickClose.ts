@@ -27,7 +27,7 @@
    Pure, no imports beyond the offer constants: read by fn quick-close, the SPA and the tests.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 import {
-  FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
+  continuingServiceAfterTerm, FINDABLE_CONTINUING_GBP, FINDABLE_GUARANTEE, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, planTierForRoute, termMonthsFor, totalPaymentsFor,
   type ServiceRoute,
 } from './findableOffer.ts';
 
@@ -637,9 +637,10 @@ export function adoptLink(
    the timing (MONTHLY_START_V3_WORDS, as offerSummaryFor), no nested brackets (A-29).
    🔴 v3 (2026-10-05): the link is the SIGN-UP link — the client reads and signs the Client Service Agreement
    on it BEFORE paying (clause 1.2); the timing is the day after the refund window (5.6); the the Continuing Service price
-   Continuing Service follows the minimum term (9A). */
+   Continuing Service follows the minimum term (9A).
+   🔴 v4 (2026-10-06): on BUILD only — an Optimise client is told the payments stop (continuingServiceAfterTerm). */
 const priceSentence = (route: ServiceRoute) =>
-  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. After that it continues at £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.`;
+  `£${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${MONTHLY_START_V3_WORDS} — ${totalPaymentsFor(route)} payments in total, so a ${termMonthsFor(route)}-month minimum term. ${continuingServiceAfterTerm(route) ? `After that it continues at £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice.` : 'After that the payments stop and nothing more is charged.'}`;
 /** What happens on the link, in the client's words. */
 export const SIGNUP_LINK_SENTENCE = "On the link you'll check your details, read and sign the Client Service Agreement, and then pay securely.";
 /** The ownership sentence in the CLIENT's words ("you"). Same facts as routeOwnershipLine. */

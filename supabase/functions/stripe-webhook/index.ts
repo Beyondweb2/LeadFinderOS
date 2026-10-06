@@ -29,7 +29,7 @@ import { recordCheckoutAcceptance } from "../_shared/client-agreement.ts";
 import { appendTermsEvent } from "../_shared/client-terms.ts";
 import { holdPayment, paymentAlreadyRecorded, verifyV3Checkout } from "../_shared/payment-hold.ts";
 import { sendOperatorAlert } from "../_shared/operator-alert.ts";
-import { COMMERCIAL_TERMS_V3, OPTION_B_TIMING } from "../../../src/lib/clientTimeline.ts";
+import { isOptionBTerms, OPTION_B_TIMING, subscriptionContinuesAfterTerm } from "../../../src/lib/clientTimeline.ts";
 import { qaPaymentEventShapeRefusal, qaPaymentFactsRefusal } from "../../../src/lib/qaSafety.ts";
 import { loadQaPaymentFacts, qaSendHold } from "../_shared/qa-guard.ts";
 
@@ -1130,7 +1130,10 @@ Deno.serve(async (req) => {
             /* 🔴 v3 (2026-10-05): a v3 checkout has NO tick — the agreement was signed on the agreement page
                BEFORE this session could exist (findable-checkout, src/lib/signupGate.ts), and that row is the
                record. Only a legacy (pre-v3) session is recorded here, on ITS OWN version (its metadata). */
-            const v3Checkout = s.metadata?.commercial_terms === COMMERCIAL_TERMS_V3;
+            /* 🔴 v4 (2026-10-06): v3 AND v4 are agreement-first. The terms the session names are the terms the
+               sale is stamped on — the backstop above has already checked them against the signature's version. */
+            const sessionTerms = isOptionBTerms(s.metadata?.commercial_terms) ? s.metadata!.commercial_terms! : null;
+            const v3Checkout = sessionTerms !== null;
             if (findableLeadId && !closedBefore && !v3Checkout) {
               try {
                 const { data: agreeLead } = await service.from("outreach_leads").select("id, business_name").eq("id", findableLeadId).maybeSingle();
@@ -1330,7 +1333,7 @@ Deno.serve(async (req) => {
               if (ownsPayment && v3Checkout) {
                 const paidAtIso = new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
                 const { error: tErr } = await service.from("client_service_terms").upsert({
-                  lead_id: findableLeadId, commercial_terms: COMMERCIAL_TERMS_V3,
+                  lead_id: findableLeadId, commercial_terms: sessionTerms,
                   agreement_acceptance_id: s.metadata?.agreement_acceptance_id ?? null,
                   service_route: paid.route, initial_paid_at: paidAtIso,
                 }, { onConflict: "lead_id", ignoreDuplicates: true });
@@ -1391,6 +1394,7 @@ Deno.serve(async (req) => {
                   paid.route,
                   s.id,
                   v3Checkout && s.metadata?.payment_timing === OPTION_B_TIMING ? OPTION_B_TIMING : "legacy",
+                  sessionTerms,
                 );
                 if (subscription.kind === "failed") {
                   billingProblem = paid.route ? subscription.reason : paid.problem;
@@ -1730,7 +1734,7 @@ Deno.serve(async (req) => {
           }
           const cancelUrl = await portalCancelUrl(idFrom((sub as { customer?: unknown }).customer));
           /* The count this client is told is the one this subscription was created for (its metadata). */
-          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING });
+          const mail = monthlyStartingSoonEmail({ businessName: (lead?.business_name ?? "").trim(), startsOn, cancelUrl, route: subscriptionRoute(sub as { metadata?: unknown }), continuingService: subscriptionContinuesAfterTerm((sub as { metadata?: Record<string, unknown> }).metadata) });
           const sent = await postResend({
             from: "Findable <reports@findable.live>", to: [to], reply_to: ADMIN_EMAIL,
             subject: mail.subject,
@@ -1828,8 +1832,11 @@ Deno.serve(async (req) => {
             const termTotal = subscriptionTotalPayments(sub as { metadata?: unknown });
             /* 🔴 v3 (clause 9A): the minimum term ending is NOT the end — the Continuing Service (FINDABLE_CONTINUING_GBP) follows
                until the client cancels. It is manual for now (CONTINUING_SERVICE_AUTOMATION), so the client is
-               NOT sent "it stops": Paul is told to set up or close the Continuing Service by hand. */
-            if (termComplete && (sub as { metadata?: Record<string, string> }).metadata?.payment_timing === OPTION_B_TIMING) {
+               NOT sent "it stops": Paul is told to set up or close the Continuing Service by hand.
+               🔴 v4 (2026-10-06): only where THIS subscription's terms carry a Continuing Service (v3 both routes,
+               v4 Build only). A v4 Optimise term is simply complete: it falls through to the term-complete
+               email ("All 6 of your payments are complete … nothing more will be charged"), no operator step. */
+            if (termComplete && subscriptionContinuesAfterTerm((sub as { metadata?: Record<string, unknown> }).metadata)) {
               await recordPaymentFailure("v3_minimum_term_complete", { lead_id: leadId, subscription: sub.id });
               await sendOperatorAlert("Minimum term complete - Continuing Service is manual", [
                 `The minimum-term subscription ${sub.id} has ended after its last £${FINDABLE_MONTHLY_GBP} payment.`,

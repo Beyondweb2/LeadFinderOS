@@ -75,29 +75,35 @@ export function checkoutAgreementGate(args: {
 }
 
 /* ══ THE WEBHOOK BACKSTOP (defence in depth — the gate above is the real block) ══════════════════════
-   When Stripe reports a completed Findable checkout, the payment is treated as a v3 sale ONLY if the
-   session says it is (commercial_terms v3, the current agreement version, an acceptance id) AND that
-   acceptance, read back from the database, passes the same gate for the lead, sign-up and service the
-   session names. Anything else is HELD. */
+   When Stripe reports a completed Findable checkout, the payment is treated as an agreement-first sale ONLY
+   if the session says it is (an agreement-first version, the commercial terms THAT version puts a sale on,
+   an acceptance id) AND that acceptance, read back from the database, passes the same gate — on the
+   session's OWN version — for the lead, sign-up and service the session names. Anything else is HELD.
+   🔴 v4 (2026-10-06): a v3 session (signed and opened before the v4 cutover, paid after it) is still a valid
+   v3 sale on v3 terms; the CHECKOUT only ever opens new sessions on the current version. */
 export type WebhookVerdict = { ok: true; acceptanceId: string } | { ok: false; reason: string };
 export function webhookV3Verdict(args: {
   metadata: Record<string, string | undefined> | null | undefined;
   acceptance: GateAcceptance | null;
   leadId: string | null;
   onboardingId: string;
-  currentVersion: string;
   recomputedSha: string | null;
-  v3Terms: string;
+  /** Agreement-first version → the commercial terms it puts a sale on (clientAgreement.ts AGREEMENT_FIRST_TERMS). */
+  termsByVersion: Readonly<Record<string, string>>;
 }): WebhookVerdict {
   const m = args.metadata ?? {};
-  if (m.commercial_terms !== args.v3Terms) return { ok: false, reason: 'not_a_v3_checkout: the session was not created by the agreement-first checkout' };
-  if (m.agreement_version !== args.currentVersion) return { ok: false, reason: `old_version: the session names agreement version ${m.agreement_version ?? 'none'}` };
+  const knownTerms = Object.values(args.termsByVersion);
+  if (!m.commercial_terms || !knownTerms.includes(m.commercial_terms)) return { ok: false, reason: 'not_a_v3_checkout: the session was not created by the agreement-first checkout' };
+  const version = m.agreement_version ?? '';
+  const expectedTerms = Object.prototype.hasOwnProperty.call(args.termsByVersion, version) ? args.termsByVersion[version] : null;
+  if (!expectedTerms) return { ok: false, reason: `old_version: the session names agreement version ${m.agreement_version ?? 'none'}` };
+  if (m.commercial_terms !== expectedTerms) return { ok: false, reason: `terms_mismatch: version ${version} puts a sale on ${expectedTerms}, the session says ${m.commercial_terms}` };
   if (!m.agreement_acceptance_id) return { ok: false, reason: 'no_acceptance_id: the session names no signature' };
   if (!args.leadId) return { ok: false, reason: 'no_lead: the session names no client' };
   if (!args.acceptance || args.acceptance.id !== m.agreement_acceptance_id) return { ok: false, reason: 'acceptance_not_found: the named signature does not exist' };
   const route = m.service_route === 'build' || m.service_route === 'optimise' ? m.service_route : null;
   if (!route) return { ok: false, reason: 'no_route: the session names no service' };
-  const g = checkoutAgreementGate({ acceptance: args.acceptance, leadId: args.leadId, onboardingId: args.onboardingId, route, currentVersion: args.currentVersion, recomputedSha: args.recomputedSha });
+  const g = checkoutAgreementGate({ acceptance: args.acceptance, leadId: args.leadId, onboardingId: args.onboardingId, route, currentVersion: version, recomputedSha: args.recomputedSha });
   if ('refusal' in g) return { ok: false, reason: `${g.refusal}: ${g.reason}` };
   return { ok: true, acceptanceId: g.acceptanceId };
 }

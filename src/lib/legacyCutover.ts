@@ -16,7 +16,7 @@
       (report by default; executing needs the exact plan hash of the report Paul reviewed).
    ⚠️ Edge-reachable — explicit .ts on every relative import.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
-import { COMMERCIAL_TERMS_V3 } from './clientTimeline.ts';
+import { isOptionBTerms } from './clientTimeline.ts';
 import { FINDABLE_SETUP_PRICE_GBP } from './findableOffer.ts';
 
 export interface StripeSessionLite {
@@ -41,7 +41,7 @@ const OTHER_PRODUCT_WORDS = /barber|salon|website hosting only|domain only/i;
  *  Payment Link's own session (classified with its link), or not Findable at all (never touched). */
 export function classifySession(s: StripeSessionLite): SessionClass {
   const m = s.metadata ?? {};
-  if (m.onboarding_id) return m.commercial_terms === COMMERCIAL_TERMS_V3 ? 'findable_v3_signed' : 'findable_legacy';
+  if (m.onboarding_id) return isOptionBTerms(m.commercial_terms) ? 'findable_v3_signed' : 'findable_legacy';
   if (s.payment_link) return 'payment_link_session';
   return 'not_findable';
 }

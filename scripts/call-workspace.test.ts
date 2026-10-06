@@ -94,8 +94,10 @@ console.log('── 2. THE OFFER, BOTH ROUTES, FROM THE CONSTANTS ──');
 {
   const b = routeOffer('build');
   const o = routeOffer('optimise');
-  ok(b.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total` && FINDABLE_BUILD_TOTAL_PAYMENTS === 12, 'Build: £99 now · £99/month · 12 payments in total');
-  ok(o.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total` && FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6, 'Optimise: £99 now · £99/month · 6 payments in total');
+  /* 2026-10-06 (v4): Build continues at £29.99; Optimise stops after its sixth payment. */
+  ok(b.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_BUILD_TOTAL_PAYMENTS} payments in total, then £29.99/month` && FINDABLE_BUILD_TOTAL_PAYMENTS === 12, 'Build: £99 now · £99/month · 12 payments in total, then £29.99/month');
+  ok(o.summary === `£${FINDABLE_SETUP_PRICE_GBP} now · £${FINDABLE_MONTHLY_GBP}/month · ${FINDABLE_OPTIMISE_TOTAL_PAYMENTS} payments in total, then they stop` && FINDABLE_OPTIMISE_TOTAL_PAYMENTS === 6, 'Optimise: £99 now · £99/month · 6 payments in total, then they stop');
+  ok(/After the 6th payment the payments stop\. There's nothing more to pay\./.test(o.spoken.join(' ')) && !/29\.99/.test(o.spoken.join(' ') + o.summary), 'Optimise never names £29.99 — the payments stop after the sixth (v4)');
   ok(/new website, host it and look after it/.test(b.spoken.join(' ')) && /built, hosted and managed by Findable/.test(b.site), 'Build: a new Findable-built, hosted and managed website');
   ok(/keep your own website and it stays yours/.test(o.spoken.join(' ')) && /never take it offline/.test(o.spoken.join(' ')) && /keep their existing website and its ownership/.test(o.site), 'Optimise: they keep their existing site and its ownership; we never take it offline');
   ok(/12 payments in total, the £99 today included, so a 12-month minimum/.test(b.spoken.join(' ')) && /6 payments in total, the £99 today included, so a 6-month minimum/.test(o.spoken.join(' ')), 'both say the total counts the £99 today and name the minimum term');
@@ -129,30 +131,32 @@ console.log('── 3. NO FALSE GUARANTEE ──');
     ok(!/has not named a business without a website/.test(JSON.stringify(p)), 'the absolute "no website is never named" claim is gone (A-05)');
   }
   const g = buildCallClose('own_site').guarantee;
-  ok(/before we start/.test(g.spoken) && /four weeks/.test(g.spoken) && /14 days of your results/.test(g.spoken) && g.spoken.includes('£' + FINDABLE_SETUP_PRICE_GBP + ' back'), 'the guarantee said plainly: measured before, re-checked at four weeks, 14 days to claim, the £99 back');
+  ok(g.spoken === "We measure how many of those answers name you before we start, then run the same questions again. If that number hasn't increased, you can claim the initial £" + FINDABLE_SETUP_PRICE_GBP + ' back within the refund window.' && !/5 ?(pp|points|percentage)|noise/i.test(g.spoken), "the guarantee in Paul's plain words: the count before, the same questions again, the initial £99 back within the refund window — no ±5 rule");
   ok(/Never promise a ranking, a recommendation or that AI will name them/.test(g.caution), 'and the rep is told what never to promise');
-  const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll appear?")?.answer ?? '';
-  ok(/^Nobody can promise AI will name you/.test(appear) && /get your £99 back\.$/.test(appear), '"Can you guarantee I\'ll appear?" — nobody can promise a placement; the number or the £99 back, with no hedge after it');
+  const appear = buildColdCallPlaybook(base()).objections.find((o) => o.objection === "Can you guarantee I'll show up?")?.answer ?? '';
+  ok(/^No one can promise AI will name you/.test(appear) && /get your £99 back\.$/.test(appear), '"Can you guarantee I\'ll show up?" — nobody can promise a placement; the number or the £99 back, with no hedge after it');
 }
 
 console.log('── 4. WHO IS CALLING COMES FIRST ──');
 {
   const cold = buildColdCallPlaybook(base());
-  ok(/^Hi, is that .+\? It's Sam from Findable\.$/.test(cold.callScript[0]), 'cold call: "Hi, is that …? It\'s Sam from Findable." (the rep\'s own name)');
+  /* 2026-10-06 (Paul): the tested opener — the reason for ringing IS the first line; no name, no company. */
+  ok(/^Hi mate, I was looking for a plumber in Halifax, so I asked Google AI and it mentioned /.test(cold.callScript[0]) && !/from Findable/.test(cold.callScript.join(' ')), 'cold call: "Hi mate, I was looking for a plumber in Halifax, so I asked Google AI…" — never "It\'s Sam from Findable"');
   const sent: PlaybookMessage = { id: 'm1', created_at: iso(NOW - 3_600_000 * 3), direction: 'outbound', body: 'Hi is this Calder Plumbing?', message_type: 'text', template_name: null, status: 'read' };
   const who: PlaybookMessage = { id: 'm2', created_at: iso(NOW - 3_600_000), direction: 'inbound', body: "Yeah it is mate, who's this?", message_type: 'text', template_name: null, status: 'received' };
   const fu = buildColdCallPlaybook(base({ messages: [sent, who] }));
   const opening = fu.callScript.join(' ');
-  ok(/^Hi, is that .+\? It's Sam from Findable\. You asked who I was when I messaged earlier today/.test(fu.callScript[0]), 'after "who\'s this?": the name and Findable first, answering the question');
-  ok(!/Quick recap/.test(opening) && /I'm ringing because I asked Google AI for a plumber in Halifax/.test(opening), '…no "Quick recap" (no pitch went out) — the reason for ringing instead');
+  ok(fu.callScript[0] === cold.callScript[0] && !/You asked who I was|messaged|WhatsApp|earlier today/.test(opening), 'after an earlier WhatsApp: the SAME opener — never "I messaged you", never the day');
+  ok(/been in touch with them before/.test(fu.script.openerNote ?? ''), '…the rep is told in a note beside the script instead');
+  ok(!/Quick recap/.test(opening) && /I was looking for a plumber in Halifax/.test(opening), '…no "Quick recap" — the reason for ringing instead');
   ok(!/2026/.test(opening), '…and no year read out for today');
   const report: PlaybookMessage = { id: 'm3', created_at: iso(NOW - 2 * DAY), direction: 'outbound', body: 'x', message_type: 'template', template_name: 'competitor_hook', status: 'read' };
-  ok(/Quick recap: /.test(buildColdCallPlaybook(base({ messages: [report] })).callScript.join(' ')), '"Quick recap" only when a report-carrying message actually went out');
+  ok(!/Quick recap|I sent you the report/.test(buildColdCallPlaybook(base({ messages: [report] })).callScript.join(' ')), 'a report sent earlier is not read out either (2026-10-06)');
   for (const t of ["who's this?", 'Who is this', 'who are you', 'who dis', 'how did you get my number', 'is this a scam']) ok(WHO_ASKED_RE.test(t), 'recognised as "who is this": ' + t);
   for (const t of ['yeah go on then', 'not interested thanks', 'who would do that for £99']) ok(!WHO_ASKED_RE.test(t) || t.startsWith('who would'), 'not a "who is this": ' + t);
   ok(spokenDay(NOW - 3_600_000, NOW) === 'earlier today' && spokenDay(NOW - DAY, NOW) === 'yesterday' && spokenDay(NOW - 3 * DAY, NOW) === 'on Friday' && spokenDay(NOW - 20 * DAY, NOW) === 'on 15 Sep' && spokenDay(NOW - 400 * DAY, NOW) === 'on 31 Aug 2025',
     'days said aloud: earlier today / yesterday / on Friday / on 15 Sep / on 31 Aug 2025 (the year only when it is not this year)');
-  ok(/It's Sam from Findable/.test(cold.gatekeeper) && /^Hi, it's Sam from Findable/.test(cold.voicemail), 'gatekeeper and voicemail lines say who is calling');
+  ok(/^Hi, it's Sam\./.test(cold.voicemail) && !/from Findable|messaged|WhatsApp/.test(cold.gatekeeper + cold.voicemail), 'the voicemail says the rep\'s name; neither line says "from Findable" or mentions an earlier message');
   ok(cold.voicemail.split(/\s+/).length <= 50, 'voicemail is under 20 seconds (' + cold.voicemail.split(/\s+/).length + ' words)');
   const short = shortVoiceNote({ engineLabel: 'Google AI', competitors: ['Brian Slattery Plumbers', 'Sunnybank Plumbing'], trade: 'Plumbers', area: 'Halifax', site: { mode: 'no_website', source: 'none', sourceLabel: null }, caller: 'Sam Rep' })!;
   ok(/^hi mate, it's Sam from Findable\./.test(short) && !/quick one/.test(short) && /have you got a website i missed/.test(short), 'the 20-second voice note says who is speaking, drops "quick one", and confirms rather than interrogates about the website');
@@ -170,7 +174,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
   const p = buildColdCallPlaybook(base({ report: null, reportAudit: null, messages: [] }));
   ok(p.mode === 'cold' && p.followUp === null, 'no WhatsApp ever sent → a first call');
   ok(p.audit.state === 'none' && p.audit.headline === 'No audit yet', 'the call card says "No audit yet"');
-  ok(p.callScript.length >= 3 && /^Hi, is that /.test(p.callScript[0]) && !/didn't come up|it named|named you|but not you/.test(p.callScript.join(' ')), 'the opening works and claims no AI result');
+  ok(p.callScript.length >= 3 && /^Hi mate, I look at how local businesses come up/.test(p.callScript[0]) && !/didn't come up|it mentioned|it named|named you|but not you/.test(p.callScript.join(' ')), 'the opening works and claims no AI result');
   ok(p.qualify.length >= 4 && p.close.routes.length >= 1 && p.close.guarantee.spoken.length > 0 && p.close.afterPayment.length > 0, '…and every later step (ask, close, after they pay) is still there');
   ok(p.warnings.some((w) => /Run the AI check first/.test(w) && /ring anyway/.test(w)), 'the warning points at the check, and says ringing first is fine');
   const ui = read('src/components/ColdCallPlaybook.tsx');
@@ -186,8 +190,7 @@ console.log('── 5. THE CALL FLOW WORKS WITH NO AUDIT AND NO WHATSAPP ──'
     ok(p2.objections.every((o) => o.answer.split(/(?<=[.?!])\s+/).length <= 5), 'every objection answer is five sentences or fewer');
   }
   const objections = buildColdCallPlaybook(base()).objections.map((o) => o.objection);
-  for (const o of ['I need to think about it', 'Who are you? Is this a scam?', 'Can I cancel?', 'How long does it take?']) ok(objections.includes(o), 'objection covered: ' + o);
-  ok(objections.some((o) => /^That's a lot/.test(o)), 'objection covered: that\'s a lot / £99?');
+  for (const o of ['I need to think about it', 'Is this a scam?', 'Can I cancel?', 'Why £99?']) ok(objections.includes(o), 'objection covered: ' + o);
 }
 
 console.log('── 6. LOGGING THE CALL ROUTES NATURALLY ──');

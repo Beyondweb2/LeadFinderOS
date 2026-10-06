@@ -19,7 +19,7 @@ import {
   agreementSectionTitles, agreementVersion, agreeConsentSentence, clientDetailRows, CLIENT_AGREEMENT_TITLE, CLIENT_AGREEMENT_VERSION, NOT_PROVIDED, ukDateTime,
   type AgreementFill, type AgreementRoute,
 } from './clientAgreement.ts';
-import { FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, totalPaymentsFor } from './findableOffer.ts';
+import { continuingServiceAfterTerm, FINDABLE_CONTINUING_GBP, FINDABLE_MONTHLY_GBP, FINDABLE_SETUP_PRICE_GBP, MONTHLY_START_V3_WORDS, SERVICE_ROUTE_NAME, totalPaymentsFor } from './findableOffer.ts';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 /** Escaped text with any email address kept out of Cloudflare's obfuscation (see the note below). */
@@ -137,11 +137,16 @@ function agreementHtml(fill: AgreementFill | null, version: string = CLIENT_AGRE
 
 /** The chosen offer in plain figures, shown above the agreement on the sign-up (v3). Derived from the
  *  offer constants — the same figures the agreement's own service box states. */
+/* 🔴 v4 (2026-10-06): the sign-up is always on the CURRENT agreement, so its tail is the current rule —
+   Build continues at FINDABLE_CONTINUING_GBP, Optimise stops after its last payment (continuingServiceAfterTerm). */
 function offerHtml(route: AgreementRoute): string {
   const n = totalPaymentsFor(route);
+  const after = continuingServiceAfterTerm(route)
+    ? `then £${FINDABLE_CONTINUING_GBP} a month for hosting and monitoring until you cancel with 30 days' notice.`
+    : 'then the payments stop and nothing more is charged.';
   return `<div class="offer"><b>Your offer: ${esc(SERVICE_ROUTE_NAME[route])}</b><br/>
     £${FINDABLE_SETUP_PRICE_GBP} today, then £${FINDABLE_MONTHLY_GBP} a month starting ${esc(MONTHLY_START_V3_WORDS)}.
-    ${n} payments in total (the minimum term), then £${FINDABLE_CONTINUING_GBP} a month until you cancel with 30 days' notice.</div>`;
+    ${n} payments in total (the minimum term), ${after}</div>`;
 }
 
 /** The authority sentence (clause 1.4), its own box beside the signature. */

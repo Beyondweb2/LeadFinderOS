@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useColdCallPlaybook } from '@/hooks/useColdCallPlaybook';
 import { playbookDate, usableExcerpt, OPENING_COMPETITORS, type ColdCallPlaybook } from '@/lib/coldCallPlaybook';
+import { afterFirstQuestion, type WebsiteManager } from '@/lib/callScript';
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════════
    COLD CALL PLAYBOOK — the one shared UI, opened from BOTH Inbox and Outreach (2026-09-23).
@@ -181,50 +182,104 @@ function Scripts({ p, leadId, initial = 'call' }: { p: ColdCallPlaybook; leadId:
   );
 }
 
-/* ── THE CALL, IN ORDER (fix workstream 5, 2026-10-04) ───────────────────────────────────────────────
-   1 Open (who is calling, then why — the opening read), 2 Ask (the questions worth asking), 3 If they're
-   interested (the route that fits: price, payments, what they get; the guarantee; "I'll send you the link
-   now" beside Quick Close), 4 After they pay. The gatekeeper and voicemail lines fold underneath. Short
-   blocks, not a monologue: the rep glances, says it in their own words, moves on. */
-const STEP = 'flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
-const stepNo = (n: number) => <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{n}</span>;
-
+/** The script as plain text for the Copy button — the same sections, in the same order, as the screen. */
 export function callFlowText(p: ColdCallPlaybook): string {
+  const s = p.script;
   const c = p.close;
   return [
-    ...p.callScript,
-    'First question:\n- ' + (p.qualify[0] ?? ''),
-    'What we do:\n' + WHAT_WE_DO_SHORT,
-    'Discuss:\n' + p.qualify.slice(1).map((q) => '- ' + q).join('\n'),
-    'If they\'re interested:\n' + c.routes.map((r) => r.name + ' (' + r.summary + '): ' + r.spoken.join(' ')).join('\n') + '\n' + c.guarantee.headline + ' ' + c.guarantee.spoken + '\n' + c.closeLine,
+    'OPENER\n' + s.opener.join('\n'),
+    ...(s.found.lines.length ? ['WHAT WE FOUND\n' + s.found.lines.join('\n')] : []),
+    s.bridge.join('\n'),
+    'FIRST QUESTION\n' + s.firstQuestion.question,
+    'IF THEY USE AN AGENCY\n- ' + s.ifAgency.questions.join('\n- ') + '\nPRICE ANGLE (only if they pay more than about £' + s.ifAgency.priceAngle.overGbp + ' a month): ' + s.ifAgency.priceAngle.line,
+    'DISCOVERY\n' + s.discovery.map((q) => '- ' + q).join('\n'),
+    'WHAT WE DO\n' + s.whatWeDo.say,
+    'PRICE\n' + c.routes.map((r) => r.name + ' (' + r.summary + '): ' + r.spoken.join(' ')).join('\n') + '\n' + s.price.timing.join(' ') + '\n' + s.price.guarantee + '\n' + s.price.closeLine,
+    'OBJECTIONS\n' + s.objections.map((o) => o.objection + ' — ' + o.answer).join('\n'),
     'After they pay:\n' + c.afterPayment.map((l) => '- ' + l).join('\n'),
   ].join('\n\n');
 }
 
+/** A section label the rep can find at a glance. */
+function Label({ children, tone }: { children: ReactNode; tone?: 'first' | 'agency' }) {
+  return <h4 className={cn('text-[11px] font-bold uppercase tracking-wider', tone === 'first' ? 'text-primary' : tone === 'agency' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>{children}</h4>;
+}
+
+/* ── THE CALL, IN SECTIONS (Paul's tested opener, 2026-10-06 — src/lib/callScript.ts) ───────────────
+   OPENER → WHAT WE FOUND → FIRST QUESTION → IF THEY USE AN AGENCY → DISCOVERY → WHAT WE DO → PRICE →
+   OBJECTIONS. Short blocks: the rep glances, says it in their own words, moves on. The agency answer is
+   tapped, and the £ they pay is typed only to decide whether the PRICE ANGLE may be offered — nothing is
+   saved, sent or charged. */
 function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
+  const s = p.script;
   const c = p.close;
+  const [manager, setManager] = useState<WebsiteManager | null>(null);
+  const [agencyGbp, setAgencyGbp] = useState('');
+  const after = manager ? afterFirstQuestion(manager, agencyGbp.trim() === '' ? null : Number(agencyGbp)) : null;
+  const choice = (on: boolean) => cn('rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:bg-muted');
   return (
     <div className="space-y-4" data-testid="playbook-call-flow">
       <section className="space-y-2" data-testid="call-step-open">
-        <h4 className={STEP}>{stepNo(1)}Open: who you are, why you're ringing</h4>
-        <div className="space-y-2.5 text-[15px] leading-relaxed" data-testid="playbook-call-script">{p.callScript.map((line) => <p key={line}>{line}</p>)}</div>
+        <Label>Opener</Label>
+        <div className="space-y-2 text-[15px] leading-relaxed" data-testid="playbook-call-script">{s.opener.map((line) => <p key={line}>{line}</p>)}</div>
+        {s.openerNote && <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="call-opener-note">{s.openerNote}</p>}
+      </section>
+
+      {(s.found.lines.length > 0 || s.found.note) && <section className="space-y-1.5" data-testid="call-step-found">
+        <Label>What we found</Label>
+        {s.found.lines.length > 0 && <ul className="space-y-1 text-[15px] leading-relaxed">{s.found.lines.map((l) => <li key={l} className="border-l-2 border-primary/40 pl-2.5">{l}</li>)}</ul>}
+        {s.found.note && <p className="text-xs text-muted-foreground">{s.found.note}</p>}
+      </section>}
+
+      <section className="space-y-1.5" data-testid="call-step-bridge">
+        <div className="space-y-1.5 text-[15px] leading-relaxed">{s.bridge.map((l) => <p key={l}>{l}</p>)}</div>
         <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground" data-testid="call-fallback">{p.fallback}</p>
       </section>
-      {p.qualify[0] && <section className="space-y-1.5" data-testid="call-step-first">
-        <h4 className={STEP}>{stepNo(2)}First question</h4>
-        <p className="text-[15px] font-medium leading-relaxed">{p.qualify[0]}</p>
-      </section>}
-      <section className="space-y-1.5" data-testid="call-step-explain">
-        <h4 className={STEP}>{stepNo(3)}What we do, in a sentence</h4>
-        <p className="text-[15px] leading-relaxed">{WHAT_WE_DO_SHORT}</p>
-        <p className="text-[11px] text-muted-foreground">The longer version is in “What Findable actually does” below.</p>
+
+      <section className="space-y-2 rounded-lg border-2 border-primary/60 bg-primary/5 p-3" data-testid="call-step-first">
+        <Label tone="first">First question</Label>
+        <p className="text-base font-semibold leading-snug">{s.firstQuestion.question}</p>
+        {s.firstQuestion.hint && <p className="text-xs text-muted-foreground">{s.firstQuestion.hint}</p>}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Their answer">
+          <button type="button" className={choice(manager === 'self')} onClick={() => setManager('self')} data-testid="answer-self">They manage it</button>
+          <button type="button" className={choice(manager === 'agency')} onClick={() => setManager('agency')} data-testid="answer-agency">An agency does it</button>
+        </div>
+        {manager === 'self' && after && <p className="text-sm leading-relaxed" data-testid="call-if-self">{after.say.join(' ')} <span className="text-muted-foreground">Then on to discovery.</span></p>}
       </section>
+
+      <section className={cn('space-y-1.5 rounded-lg border p-3', manager === 'agency' ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/60')} data-testid="call-step-agency">
+        <Label tone="agency">If they use an agency</Label>
+        <ol className="list-decimal space-y-1 pl-5 text-[15px] leading-relaxed">{s.ifAgency.questions.map((q) => <li key={q}>{q}</li>)}</ol>
+        <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          What they pay a month (£)
+          <input type="number" inputMode="decimal" min={0} value={agencyGbp} onChange={(e) => { setAgencyGbp(e.target.value); if (!manager) setManager('agency'); }}
+            className="h-7 w-24 rounded-md border bg-background px-2 text-sm text-foreground" aria-label="What they pay their agency a month" data-testid="agency-monthly" />
+        </label>
+        {after?.priceAngle
+          ? <div className="rounded-md border border-emerald-500/50 bg-emerald-500/5 p-2" data-testid="call-price-angle">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Price angle</p>
+              <p className="text-sm leading-relaxed">“{after.priceAngle}”</p>
+            </div>
+          : <p className="text-[11px] text-muted-foreground">{s.ifAgency.priceAngle.caution}</p>}
+        <ul className="list-disc space-y-0.5 pl-5 text-[11px] text-muted-foreground">{s.ifAgency.coaching.map((l) => <li key={l}>{l}</li>)}</ul>
+      </section>
+
       <section className="space-y-1.5" data-testid="call-step-ask">
-        <h4 className={STEP}>{stepNo(4)}Discuss</h4>
-        <ul className="list-disc space-y-1 pl-5 text-sm">{p.qualify.slice(1).map((q) => <li key={q}>{q}</li>)}</ul>
+        <Label>Discovery</Label>
+        <ul className="list-disc space-y-1 pl-5 text-sm">{s.discovery.map((q) => <li key={q}>{q}</li>)}</ul>
+        <p className="text-[11px] text-muted-foreground">A conversation, not a questionnaire — pick the ones that fit.</p>
       </section>
+
+      <section className="space-y-1.5" data-testid="call-step-explain">
+        <Label>What we do</Label>
+        <p className="text-[15px] leading-relaxed">{s.whatWeDo.say}</p>
+        <details className="text-sm"><summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">If they ask how</summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">{s.whatWeDo.ifAsked.map((l) => <li key={l}>{l}</li>)}</ul>
+        </details>
+      </section>
+
       <section className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3" data-testid="call-step-close">
-        <h4 className={STEP}>{stepNo(5)}Offer and close</h4>
+        <Label>Price</Label>
         {c.routeNote && <p className="text-xs text-muted-foreground">{c.routeNote}</p>}
         <div className={cn('grid gap-2', c.routes.length > 1 && 'sm:grid-cols-2')}>
           {c.routes.map((r, i) => (
@@ -232,23 +287,30 @@ function CallFlow({ p, leadId }: { p: ColdCallPlaybook; leadId: string }) {
               <p className="text-sm font-semibold">{r.name}{c.routes.length > 1 && i === 0 && <span className="ml-1.5 text-[10px] font-medium uppercase text-emerald-700 dark:text-emerald-300">keeps their site</span>}</p>
               <p className="text-xs font-medium">{r.summary}</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">{r.site}</p>
-              <div className="mt-1.5 space-y-1 text-sm leading-relaxed">{r.spoken.map((s) => <p key={s}>{s}</p>)}</div>
+              <div className="mt-1.5 space-y-1 text-sm leading-relaxed">{r.spoken.map((x) => <p key={x}>{x}</p>)}</div>
             </div>
           ))}
         </div>
+        <ol className="list-decimal space-y-0.5 pl-5 text-sm" data-testid="call-timing">{s.price.timing.map((l) => <li key={l}>{l}</li>)}</ol>
+        <p className="text-[11px] text-muted-foreground">{s.price.fallbackNote}</p>
         <div className="rounded-md bg-background/60 p-2.5 text-sm" data-testid="call-guarantee">
           <p className="flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-600" />{c.guarantee.headline}</p>
-          <p className="mt-1 leading-relaxed">{c.guarantee.spoken}</p>
-          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{c.guarantee.caution}</p>
+          <p className="mt-1 leading-relaxed">{s.price.guarantee}</p>
+          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{s.price.guaranteeCaution}</p>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">{c.monthly}</p>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/30 pt-2">
-          <p className="min-w-0 flex-1 text-[15px] font-medium">“{c.closeLine}”</p>
+          <p className="min-w-0 flex-1 text-[15px] font-medium">“{s.price.closeLine}”</p>
           <QuickCloseButton leadId={leadId} />
         </div>
       </section>
+
+      <section className="space-y-1.5" data-testid="call-step-objections">
+        <Label>Objections</Label>
+        <Questions p={p} />
+      </section>
+
       <section className="space-y-1.5" data-testid="call-step-after">
-        <h4 className={STEP}>{stepNo(6)}After they pay</h4>
+        <Label>After they pay</Label>
         <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">{c.afterPayment.map((l) => <li key={l}>{l}</li>)}</ul>
       </section>
       <details className="rounded-md border border-border/60 px-2.5 py-1.5 text-sm" data-testid="call-not-the-owner">
@@ -490,7 +552,6 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript, onRunCheck }: { 
         <WhyItMatters />
         <WhatWeDo />
         <HowWeBuild />
-        <Block title="Questions they may ask"><Questions p={p} /></Block>
       </div>
     );
   }
@@ -510,7 +571,6 @@ function PlaybookBody({ p, leadId, scriptsFirst, initialScript, onRunCheck }: { 
       <Block title="AI opportunity" tone="primary"><AiOpportunity p={p} /></Block>
       <Block title="What I'd talk about"><TalkAbout p={p} /></Block>
       <Scripts p={p} leadId={leadId} />
-      <Block title="Questions they may ask"><Questions p={p} /></Block>
       <details className="rounded-md border border-border/60 px-2.5 py-1.5" data-testid="playbook-evidence-toggle">
         <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">Audit evidence</summary>
         <div className="mt-2"><AuditEvidence leadId={leadId} /></div>

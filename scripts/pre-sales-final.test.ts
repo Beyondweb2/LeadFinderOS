@@ -170,7 +170,8 @@ console.log('── 3. 6/6: bulk result → call screen (WS-5) → status untouc
   ok(pb.audit.headline === STRONG_VISIBILITY_HEADLINE, 'the call screen top line is the same helper (one copy)');
   const script = pb.callScript.join(' ');
   ok(!/did(?:n't| not) name (?:you|them)|not named|isn't naming|aren't naming|missing from|left out|never mentions/i.test(script), `the WS-5 call script makes no "AI missed you" claim on 6/6 ("${script.slice(0, 120)}…")`);
-  ok(/ZZ QA Final Elland Drains|Elland Drains/.test(pb.opening.join(' ') + script), 'identity-first: the opening names the business');
+  /* Superseded 2026-10-06 (Paul's tested opener): the call opens with the search, not "is that <business>?". */
+  ok(/^Hi mate, I was looking for /.test(pb.opening[0] ?? '') && /it did mention you/.test(pb.opening[0] ?? ''), 'the opening is the search, and on 6/6 says they were mentioned');
   ok(pb.close.guarantee.headline === 'We improve AI visibility or you get your money back.' && GUARANTEE_HEADLINE === QUICK_CLOSE_PROMISE, 'the close carries the one guarantee line (shared with Quick Close)');
   // The single check: the queue holds no status rule and no edge code writes not_interested.
   const queue = stripComments(read('supabase/functions/process-ai-audit-queue/index.ts'));
@@ -281,7 +282,9 @@ console.log('── 7. migrations (static) and the Meta hold ──');
     /* attribution review: Paul chooses the seller from the evidence or overrides with a reason (2026-10-05) */
     '20261011100000_attribution_review_admin.sql',
     /* the final sales release: a future start date is not Ready to Sell (2026-10-05) */
-    '20261011120000_ready_to_sell_start_date.sql'];
+    '20261011120000_ready_to_sell_start_date.sql',
+    /* agreement v4: Optimise is a fixed six-payment term, only Build continues (2026-10-06) */
+    '20261012090000_client_agreement_v4_optimise_fixed_term.sql'];
   const candidate = newer.filter((n) => !ON_MAIN.includes(n) && !LATER.includes(n));
   ok(candidate.length === FINAL.length && candidate.every((n) => FINAL.includes(n)), `exactly the ten candidate migrations are new in this release (${candidate.length}: ${candidate.map((n) => n.slice(0, 14)).join(' ')})`);
   const sc = read('supabase/migrations/20261006070000_sales_prospect_checks.sql');

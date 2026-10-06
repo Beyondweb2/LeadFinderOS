@@ -16,7 +16,7 @@
 // ⛔ THE CONTINUING SERVICE PRICE IS NEVER CHARGED FROM HERE. The minimum term's cancel_at is kept at its end; the Continuing
 //    Service is Paul's manual step until CONTINUING_SERVICE_AUTOMATION.stripeSwitch is turned on.
 import {
-  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isV3Terms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
+  CONTINUING_SERVICE_AUTOMATION, OPTION_B_TIMING, chargeAllowedOn, isOptionBTerms, paymentStart, timelineActions, ukDay, ukDayAtHourIso, ukDayWords,
   type TimelineFacts,
 } from "../../../src/lib/clientTimeline.ts";
 import { recurringPaymentsFor, serviceRouteForTotal, isServiceRoute, type ServiceRoute } from "../../../src/lib/findableOffer.ts";
@@ -124,7 +124,7 @@ export interface StripeSubscriptionView {
  *    later than the contract allows is acceptable, EARLIER never is.
  */
 export function planPaymentStart(facts: TimelineFacts, leadId: string, sub: StripeSubscriptionView | null, nowIso: string): PaymentStartPlan {
-  if (!isV3Terms(facts.terms)) return { ok: false, reason: "This client is not on the v3 agreement — their payments keep the timing they signed up to." };
+  if (!isOptionBTerms(facts.terms)) return { ok: false, reason: "This client is not on the agreement-first (v3/v4) terms — their payments keep the timing they signed up to." };
   if (facts.refundedAt || facts.endedAt) return { ok: false, reason: "The agreement has ended (refunded or ended) — no monthly payment may be scheduled." };
   const ps = paymentStart(facts);
   if (!ps.day) return { ok: false, reason: ps.why };

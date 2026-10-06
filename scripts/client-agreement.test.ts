@@ -24,7 +24,7 @@ async function main() {
   const tsha = await sha256Hex(versionTemplateText('v1'));
   ok(tsha === V1_TEMPLATE_SHA, `v1 template fingerprint is unchanged (got ${tsha.slice(0, 12)}…)`);
   /* 2026-10-05: v3 is current (scripts/client-agreement-v3.test.ts pins it); v1 stays readable, unchanged. */
-  ok(CLIENT_AGREEMENT_VERSION === 'v3', 'the current version is v3');
+  ok(CLIENT_AGREEMENT_VERSION === 'v4', 'the current version is v4 (2026-10-06)');
   ok(renderAgreementText(full, 'v1').includes('four weeks after the baseline'), 'v1 still renders its own words exactly');
   const t = renderAgreementText(full);
   ok(t.includes('[X] Findable Optimise') && t.includes('[ ] Findable Build'), 'the recorded route is the ticked one');

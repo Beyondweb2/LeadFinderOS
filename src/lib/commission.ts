@@ -72,7 +72,7 @@
    The money facts come ONLY from payment_ledger (Stripe); never from a CRM status.
    ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
-import { isV3Terms, ukDayAtHourIso } from './clientTimeline.ts';
+import { isOptionBTerms, ukDayAtHourIso } from './clientTimeline.ts';
 import { FINDABLE_MONTHLY_GBP } from './findableOffer.ts';
 import { isAttributionHeld } from './saleAttribution.ts';
 
@@ -365,7 +365,7 @@ export function commissionLines(input: CommissionInput): { lines: CommissionLine
   }
   for (const [leadId, rows] of byLead) {
     const termsRow = input.termsOf?.get(leadId) ?? null;
-    const v3 = !!termsRow && isV3Terms(termsRow.terms);
+    const v3 = !!termsRow && isOptionBTerms(termsRow.terms);
     const approvalDay = v3 ? termsRow!.approvalDay : null;
     /* The instant the initial commission is approved: 00:00 UK on the Approval Date. */
     const approvalIso = approvalDay ? ukDayAtHourIso(approvalDay, 0) : null;

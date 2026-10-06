@@ -7,8 +7,7 @@
 //    payment_ledger row (so no commission), no baseline, no client emails. Paul is told loudly and
 //    resolves it by hand (refund in Stripe, or have them sign and migrate).
 // ⛔ HISTORICAL PAYMENTS ARE NEVER HELD: a replay of a payment the ledger already recorded is not re-judged.
-import { CLIENT_AGREEMENT_VERSION, sha256Hex } from "../../../src/lib/clientAgreement.ts";
-import { COMMERCIAL_TERMS_V3 } from "../../../src/lib/clientTimeline.ts";
+import { AGREEMENT_FIRST_TERMS, sha256Hex } from "../../../src/lib/clientAgreement.ts";
 import { webhookV3Verdict, type GateAcceptance, type WebhookVerdict } from "../../../src/lib/signupGate.ts";
 import { sendOperatorAlert } from "./operator-alert.ts";
 
@@ -46,8 +45,8 @@ export async function verifyV3Checkout(service: Service, s: HoldSession, leadId:
     acceptance = data ?? null;
   }
   return webhookV3Verdict({
-    metadata: s.metadata, acceptance, leadId, onboardingId, currentVersion: CLIENT_AGREEMENT_VERSION,
-    recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null, v3Terms: COMMERCIAL_TERMS_V3,
+    metadata: s.metadata, acceptance, leadId, onboardingId,
+    recomputedSha: acceptance ? await sha256Hex(acceptance.agreed_text) : null, termsByVersion: AGREEMENT_FIRST_TERMS,
   });
 }
 
