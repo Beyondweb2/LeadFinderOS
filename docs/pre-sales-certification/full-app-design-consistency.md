@@ -100,3 +100,9 @@ cut off); the phone Import button had no accessible name. The harness was delete
   account is his call). Their live state is proven by the chunk markers above and by the fixture QA; nobody has yet
   *seen* the signed-in production screens with this release.
 - `whatsapp-status` read after: **v114**, updated 2026-09-30 — untouched. Nothing was sent, called or charged.
+
+## Follow-up (Paul, 2026-10-06): campaign chip + Outreach tips
+- The campaign card contact-method chip (Call was solid sky, WhatsApp solid emerald) is now `ToneChip tone="blue"` with its icon for every method — green stays for success / money. Checked in a throwaway harness on the real Campaigns page at 1440 and 390 px with a Call, a WhatsApp and a legacy (no method → WhatsApp) campaign: all blue, icon shown, no overflow.
+- Outreach tips `tip1Desc` said the Initial Contact template "auto-rotates between 6 proven casual openers" — stale since 2026-09-27 (choose a template → that exact template is sent; no rotation, pinned by `initial-opener-select.test.ts`). Now: "Choose one of the approved opening templates and send it. The one you choose is exactly what goes out — nothing is rotated or swapped." No behaviour changed.
+- Same stale claim left in two legacy-only places (shown only in an old auto mode / walkthrough): `SingleWhatsAppDialog` (`autoOn`) and `TemplatePicker` (`isWalkthrough`). Not changed — noted for the tour cleanup.
+- `OutreachIntroModal` stays dead and deferred.

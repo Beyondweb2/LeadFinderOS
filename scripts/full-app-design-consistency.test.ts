@@ -99,6 +99,14 @@ console.log('── 3b. the fixes found in visual QA ──');
   ok(/<IconTile\b/.test(read('src/pages/Inbox.tsx')) && /WhatsApp Inbox<\/h1>/.test(read('src/pages/Inbox.tsx')), 'WhatsApp keeps a compact header WITH the shared icon tile (the recorded exception above)');
 }
 
+console.log('── 3c. follow-up (Paul, 2026-10-06): colour means something; the tips say what really happens ──');
+{
+  const camp = read('src/pages/Campaigns.tsx');
+  ok(/<ToneChip tone="blue" icon=\{Icon\} testId="campaign-method"/.test(camp) && !/emerald|bg-sky-700|bg-green/.test(camp), 'the campaign contact-method chip is the blue information pill for every method — never green (green = success / money)');
+  const tips = JSON.parse(read('src/i18n/locales/en.json')).outreachTips.tip1Desc as string;
+  ok(!/auto-rotat|rotates between|6 proven/i.test(tips) && /exactly what goes out/.test(tips), 'Outreach tips: no "auto-rotates between 6 proven openers" — the chosen template is exactly what is sent (no rotation since 2026-09-27)');
+}
+
 console.log('── 4. nothing was taken away ──');
 {
   const app = read('src/App.tsx');
